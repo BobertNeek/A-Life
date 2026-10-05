@@ -69,7 +69,6 @@ use crate::{
 };
 
 mod camera_navigation;
-mod camera_terrain;
 mod creature_grounding;
 mod god_hand;
 mod graphics_capture;
@@ -1365,7 +1364,6 @@ pub(crate) struct Fvr04CreatureSpawnContext {
 #[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
     terrain: Option<alife_world::WorldTerrain>,
-    backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
 }
@@ -2118,7 +2116,6 @@ pub fn spawn_fvr03_production_voxel_scene(
             god_hand::animate.after(island::constrain_camera),
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
-            camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
             island::constrain_camera.after(sync_fvr04_camera_follow),
             island::update.after(island::constrain_camera),
             sync_fvr04_creature_label,
@@ -2289,7 +2286,6 @@ fn load_fvr04_runtime_state_from_save(
             production_save.world.terrain,
             production_save.world.terrain_state.as_ref(),
         )?,
-        backend,
         snapshot,
         creatures,
     })
@@ -2625,7 +2621,7 @@ fn prepare_fvr04_creature_batch(
             base_scale.to_array(),
             bevy::math::Mat3::IDENTITY.to_cols_array(),
         );
-        let base_translation = Vec3::new(visual.position.x, base_height, visual.position.y);
+        let base_translation = Vec3::new(visual.position.x, base_height, visual.position.z);
         let root_transform = Transform::from_translation(base_translation).with_scale(base_scale);
         let phase = (index as f32 * 0.37) + (visual.stable_id.raw() % 17) as f32 * 0.11;
         prepared.push(Fvr04PreparedCreature {
@@ -2930,13 +2926,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         world.remove_resource::<island::IslandActive>();
         island::stop(world);
     }
-    world.insert_resource(camera_terrain::CameraTerrainStream::new(
-        runtime_state.backend.clone(),
-        snapshot
-            .creatures
-            .first()
-            .map(|creature| creature.stable_id),
-    ));
     let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         world,
         &assets.terrain_materials,
@@ -4421,9 +4410,9 @@ fn project_authoritative_creature_root_transform(
         return false;
     }
 
-    // The simulation moves in XY; Bevy uses XZ for the ground plane.
+    // Current world objects and Bevy both use a Y-up, X/Z ground plane.
     let x = object.position.x;
-    let z = object.position.y;
+    let z = object.position.z;
     if transform.translation.x != x {
         transform.translation.x = x;
     }
@@ -4634,13 +4623,9 @@ fn advance_fvr04_animation_phase(
     current_seconds + delta_seconds.max(0.0) * speed.max(0.0)
 }
 
-// Legacy saves use X/Y ground coordinates; bound Highlands worlds are Y-up.
-fn world_position_for_render(position: Vec3f, highlands: bool) -> Vec3 {
-    if highlands {
-        Vec3::new(position.x, position.y, position.z)
-    } else {
-        Vec3::new(position.x, position.z, position.y)
-    }
+// Terrain binding selects grounding, not the current world's coordinate convention.
+fn world_position_for_render(position: Vec3f, _terrain_bound: bool) -> Vec3 {
+    Vec3::new(position.x, position.y, position.z)
 }
 
 fn live_agent_ground_position(
@@ -7732,12 +7717,12 @@ mod tests {
                 retryable,
             } => {
                 assert!(cause.contains("durable publication refresh failed"));
-                assert!(cause.contains("retry the retained operation"));
+                assert!(cause.contains("manual recovery is required"));
                 assert_eq!(proposed_save_digest, "refresh-proposed-digest");
                 assert_eq!(*archive_count, 4);
                 assert_eq!(*save_state, CuratedFounderSaveState::Unknown);
                 assert_eq!(*gpu_residency, CuratedFounderGpuResidencyState::Pending);
-                assert!(*retryable);
+                assert!(!retryable);
             }
             other => panic!("durable refresh must not project as pre-commit: {other:?}"),
         }
@@ -7816,14 +7801,14 @@ mod tests {
     }
 
     #[test]
-    fn authoritative_projection_preserves_fractional_xy_motion_and_root_state() {
+    fn authoritative_projection_preserves_fractional_xz_motion_and_root_state() {
         let stable_id = WorldEntityId(41);
         let organism_id = OrganismId(7);
         let frame = presentation_frame(
             WorldObjectKind::Agent,
             stable_id,
             Some(organism_id),
-            Vec3f::new(1.6, -2.6, 99.0),
+            Vec3f::new(1.6, 99.0, -2.6),
         );
         let rotation = Quat::from_rotation_x(0.4);
         let scale = Vec3::new(2.0, 3.0, 4.0);
@@ -7844,7 +7829,7 @@ mod tests {
             WorldObjectKind::Agent,
             stable_id,
             Some(organism_id),
-            Vec3f::new(1.6, -2.5, 99.0),
+            Vec3f::new(1.6, 99.0, -2.5),
         );
         assert!(project_authoritative_creature_root_transform(
             stable_id,

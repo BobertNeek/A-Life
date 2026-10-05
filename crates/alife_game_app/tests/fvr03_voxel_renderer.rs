@@ -1,41 +1,36 @@
 #![cfg(feature = "bevy-app")]
 
-use std::{
-    collections::BTreeSet,
-    fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::BTreeSet, fs, path::PathBuf};
 
-use alife_core::{ActionKind, BrainTickStatus, OrganismId, Tick, Vec3f, WorldEntityId};
+use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_game_app::bevy_shell::{LiveBrainPresentationFrame, LiveBrainPresentationFrameResource};
 #[cfg(not(feature = "vfx-hanabi"))]
 use alife_game_app::Fvr07ProductionVfxKind;
 use alife_game_app::{
-    default_environment_manifest_path, run_production_voxel_frontend_dry_run, CreaturePartSlot,
-    Fvr03ProductionVoxelCamera, Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelCreatureMarker,
-    Fvr03ProductionVoxelMaterialKind, Fvr03ProductionVoxelSceneResource,
-    Fvr03ProductionVoxelSelectionMarker, Fvr03ProductionVoxelSelectionResource,
-    Fvr03ProductionVoxelTerrainBatch, Fvr04ProductionCreatureFollowResource,
-    Fvr04ProductionCreatureVisualMarker, Fvr04ProductionCreatureWorldLabel,
-    Fvr05ProductionInspectorTab, Fvr05ProductionRightInspectorPanel,
-    Fvr05ProductionUxStateResource, Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker,
-    Fvr07ProductionVisualDressing, Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker,
-    Fvr09MesherMode, Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker,
-    Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
-    Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, LiveBrainCausalStage,
-    LiveBrainTickSummary, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
+    run_production_voxel_frontend_dry_run, Fvr03ProductionVoxelCamera,
+    Fvr03ProductionVoxelCameraMode, Fvr03ProductionVoxelMaterialKind,
+    Fvr03ProductionVoxelSceneResource, Fvr03ProductionVoxelSelectionMarker,
+    Fvr03ProductionVoxelSelectionResource, Fvr03ProductionVoxelTerrainBatch,
+    Fvr04ProductionCreatureFollowResource, Fvr04ProductionCreatureVisualMarker,
+    Fvr04ProductionCreatureWorldLabel, Fvr05ProductionInspectorTab,
+    Fvr05ProductionRightInspectorPanel, Fvr05ProductionUxStateResource,
+    Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVisualDressing,
+    Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker, Fvr09MesherMode,
+    Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow,
+    Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainLightingMarker,
+    Fvr11ProductionTerrainMaterialContract, Fvr11ProductionTerrainSceneResource,
+    Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
     ProductionCreaturePartMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
     V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
     FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
-    persistence::PortableSaveFile, CreatureAppearanceGenome, HeadlessActionIds,
-    StableVoxelObjectRef, StableVoxelRefKind, WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT,
+    persistence::PortableSaveFile, CreatureAppearanceGenome, StableVoxelObjectRef,
+    StableVoxelRefKind, WorldObjectKind, CREATURE_APPEARANCE_SPECIES_COUNT,
     FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA,
 };
 use bevy::{
+    color::ColorToComponents,
     mesh::VertexAttributeValues,
     prelude::{
         AlphaMode, AmbientLight, Assets, ButtonInput, DirectionalLight, Entity, KeyCode, Mesh,
@@ -43,63 +38,26 @@ use bevy::{
     },
 };
 
-fn successful_gpu_move_summary(
-    organism_id: alife_core::OrganismId,
-    target_entity: alife_core::WorldEntityId,
-) -> LiveBrainTickSummary {
-    LiveBrainTickSummary {
-        schema: alife_game_app::G03_LIVE_BRAIN_LOOP_SCHEMA,
-        schema_version: alife_game_app::G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
-        organism_id,
-        tick_before: Tick::new(7),
-        tick_after: Tick::new(8),
-        world_tick_before: Tick::new(7),
-        world_tick_after: Tick::new(8),
-        status: BrainTickStatus::Normal,
-        selected_action_kind: Some(ActionKind::Move),
-        selected_action_id: Some(HeadlessActionIds::APPROACH),
-        target_entity: Some(target_entity),
-        patch_sealed: true,
-        patch_sequence_id: Some(7),
-        patch_success: Some(true),
-        physical_contact: None,
-        action_failure: None,
-        motor_execution: None,
-        sealed_patch_count: 1,
-        packed_record_count: 1,
-        memory_updates: 1,
-        topology_updates: 0,
-        learning_updates: 1,
-        invalid_or_rejected_action_count: 0,
-        last_diagnostic: None,
-        causal_stages: vec![
-            LiveBrainCausalStage::GpuBrainTick,
-            LiveBrainCausalStage::ExecuteAction,
-            LiveBrainCausalStage::MeasureOutcome,
-            LiveBrainCausalStage::SealPatch,
-            LiveBrainCausalStage::ApplyLearning,
-        ],
-    }
+#[path = "support/current_production_launch.rs"]
+mod current_production_launch;
+
+fn production_ground_position(world_position: Vec3f) -> (f32, f32) {
+    (world_position.x, world_position.z)
 }
 
-fn production_voxel_center(world_position: Vec3f) -> (f32, f32) {
-    (
-        world_position.x.round() as i32 as f32 + 0.5,
-        world_position.z.round() as i32 as f32 + 0.5,
-    )
-}
-
-fn production_launch(profile_id: ProductionFrontendProfileId) -> ProductionVoxelLaunchConfig {
-    let mut launch = ProductionVoxelLaunchConfig::from_manifest(
-        default_environment_manifest_path(),
-        None,
-        profile_id,
-    )
-    .unwrap();
+fn production_launch(
+    profile_id: ProductionFrontendProfileId,
+) -> (
+    current_production_launch::CurrentProductionLaunchFixture,
+    ProductionVoxelLaunchConfig,
+) {
+    let fixture = current_production_launch::CurrentProductionLaunchFixture::new();
+    let mut launch = fixture.launch.clone();
+    launch.profile_id = profile_id;
     launch.population = Some(profile_id.budget().default_population);
     launch.smoke_seconds = Some(1);
     launch.dry_run = true;
-    launch
+    (fixture, launch)
 }
 
 fn quantized_rgba(color: [f32; 4]) -> [i32; 4] {
@@ -111,127 +69,217 @@ fn quantized_rgba(color: [f32; 4]) -> [i32; 4] {
     ]
 }
 
-#[test]
-fn dry_run_rebuilds_an_incompatible_derived_runtime_save_before_gpu_launch() {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "alife-fvr03-incompatible-runtime-save-{}-{nonce}",
-        std::process::id()
-    ));
-    let mut launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
-    launch.manifest_path = root.join("crates/alife_game_app/environment_manifest.json");
-
-    let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
-    let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
-    fs::create_dir_all(runtime_save_path.parent().unwrap()).unwrap();
-    fs::write(&runtime_save_path, br#"{"schema":"stale-derived-runtime"}"#).unwrap();
-
-    let result = alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch);
-    assert!(
-        result.is_ok(),
-        "dry-run launch must rebuild an incompatible derived runtime save: {:?}",
-        result.as_ref().err()
+/// CPU preflight of shipping asset bytes. This does not prove scene loading or rendering.
+fn shipping_glb(relative_path: &str) -> serde_json::Value {
+    let bytes = fs::read(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("assets")
+            .join(relative_path),
+    )
+    .unwrap();
+    assert_eq!(&bytes[..4], b"glTF");
+    assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().unwrap()), 2);
+    assert_eq!(
+        u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize,
+        bytes.len()
     );
-    drop(result);
+    assert_eq!(&bytes[16..20], b"JSON");
+    let length = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    serde_json::from_slice(&bytes[20..20 + length]).unwrap()
+}
 
-    let rebuilt = PortableSaveFile::from_json_file(&runtime_save_path).unwrap();
-    rebuilt
-        .validate_with_asset_root(&summary.asset_root)
-        .unwrap();
-    fs::remove_dir_all(root).unwrap();
+fn shipping_hearthling() -> serde_json::Value {
+    let doc = shipping_glb("creatures/hearthling/hearthling.glb");
+    assert_eq!(doc["skins"].as_array().unwrap().len(), 1);
+    assert_eq!(doc["meshes"].as_array().unwrap().len(), 1);
+    assert_eq!(doc["materials"].as_array().unwrap().len(), 6);
+    let clips = doc["animations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["name"].as_str().unwrap())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        clips,
+        BTreeSet::from([
+            "Hearthling_CuriousIdle",
+            "Hearthling_Walk",
+            "Hearthling_Sleep"
+        ])
+    );
+    let joints = doc["skins"][0]["joints"].as_array().unwrap();
+    let names = joints
+        .iter()
+        .map(|i| {
+            doc["nodes"][i.as_u64().unwrap() as usize]["name"]
+                .as_str()
+                .unwrap()
+        })
+        .collect::<BTreeSet<_>>();
+    for name in [
+        "head",
+        "eye.L",
+        "eye.R",
+        "ear.L",
+        "ear.R",
+        "foot.L",
+        "foot.R",
+        "tail.00",
+        "lid_upper.L",
+        "lid_upper.R",
+    ] {
+        assert!(names.contains(name), "missing authored joint {name}");
+    }
+    let bind = doc["skins"][0]["inverseBindMatrices"].as_u64().unwrap() as usize;
+    assert_eq!(
+        doc["accessors"][bind]["count"].as_u64().unwrap() as usize,
+        joints.len()
+    );
+    assert_eq!(doc["accessors"][bind]["type"], "MAT4");
+    let primitives = doc["meshes"][0]["primitives"].as_array().unwrap();
+    assert_eq!(primitives.len(), 6);
+    let mut triangles = 0;
+    for primitive in primitives {
+        let attributes = primitive["attributes"].as_object().unwrap();
+        let position = &doc["accessors"][attributes["POSITION"].as_u64().unwrap() as usize];
+        let count = position["count"].as_u64().unwrap();
+        assert!(count >= 24);
+        for attribute in ["NORMAL", "TEXCOORD_0", "COLOR_0", "JOINTS_0", "WEIGHTS_0"] {
+            let accessor = attributes[attribute].as_u64().unwrap() as usize;
+            assert_eq!(doc["accessors"][accessor]["count"].as_u64().unwrap(), count);
+        }
+        for axis in 0..3 {
+            let min = position["min"][axis].as_f64().unwrap();
+            let max = position["max"][axis].as_f64().unwrap();
+            assert!(min.is_finite() && max.is_finite() && max > min);
+        }
+        assert!(primitive["material"].as_u64().unwrap() < 6);
+        let indices = primitive["indices"].as_u64().unwrap() as usize;
+        triangles += doc["accessors"][indices]["count"].as_u64().unwrap() / 3;
+    }
+    assert!((10_000..=32_768).contains(&triangles));
+    doc
 }
 
 #[test]
-fn modular_creature_renderer_spawns_shared_heritable_part_hierarchies() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
+fn runtime_checkpoint_corruption_is_explicit_and_never_overwritten() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
+    let runtime_save_path = PathBuf::from(&summary.ui_settings.runtime_save_path);
+    let source_before = fs::read(&summary.save_path).unwrap();
+    fs::create_dir_all(runtime_save_path.parent().unwrap()).unwrap();
+    let corrupt = br#"{"schema":"stale-derived-runtime"}"#;
+    fs::write(&runtime_save_path, corrupt).unwrap();
+    assert!(matches!(
+        PortableSaveFile::from_json_file(&runtime_save_path),
+        Err(alife_world::persistence::PersistenceError::Schema { expected, actual })
+            if expected == alife_world::persistence::P34_SAVE_FILE_SCHEMA
+                && actual == "stale-derived-runtime"
+    ));
+    #[cfg(feature = "gpu-runtime")]
+    {
+        let result = alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch);
+        assert!(matches!(
+            result,
+            Err(alife_game_app::GameAppShellError::GpuRuntime(
+                alife_game_app::GpuRuntimeError::Persistence(
+                    alife_world::persistence::PersistenceError::Schema { expected, actual }
+                )
+            )) if expected == alife_world::persistence::P34_SAVE_FILE_SCHEMA
+                && actual == "stale-derived-runtime"
+        ));
+    }
+    #[cfg(not(feature = "gpu-runtime"))]
+    {
+        let (mut app, _) =
+            alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
+        app.update();
+    }
+    assert_eq!(fs::read(&runtime_save_path).unwrap(), corrupt);
+    assert_eq!(fs::read(&summary.save_path).unwrap(), source_before);
+    PortableSaveFile::from_json_file(&summary.save_path)
+        .unwrap()
+        .validate_with_asset_root(&summary.asset_root)
+        .unwrap();
+}
+
+#[test]
+fn hearthling_renderer_preserves_stable_roots_without_generated_part_hierarchies() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
-
-    let mut root_query = app
-        .world_mut()
-        .query::<(&ProductionCreatureAssemblyRoot, &bevy::prelude::Visibility)>();
-    let roots = root_query
-        .iter(app.world())
-        .map(|(root, visibility)| (*root, *visibility))
-        .collect::<Vec<_>>();
-    assert_eq!(roots.len(), 30);
-    assert!(roots.iter().all(|(root, visibility)| root.display_only
-        && *visibility == bevy::prelude::Visibility::Inherited));
-
-    let mut part_query = app.world_mut().query::<(
-        &ProductionCreaturePartMarker,
-        &Mesh3d,
-        &MeshMaterial3d<StandardMaterial>,
+    let save = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    let mut query = app.world_mut().query::<(
+        &ProductionCreatureAssemblyRoot,
+        &Fvr04ProductionCreatureVisualMarker,
+        &Fvr10CreatureSpeciesMarker,
+        &Visibility,
         &Transform,
     )>();
-    let parts = part_query
-        .iter(app.world())
-        .map(|(marker, mesh, material, transform)| {
-            (
-                marker.clone(),
-                mesh.0.id(),
-                material.0.id(),
-                transform.translation,
-            )
-        })
-        .collect::<Vec<_>>();
-    let mut slots_by_root = std::collections::BTreeMap::new();
-    let mut meshes_by_root = std::collections::BTreeMap::new();
-    let mut families = BTreeSet::new();
-    let mut mesh_handles = BTreeSet::new();
-    let mut material_handles = BTreeSet::new();
-    for (marker, mesh_id, material_id, translation) in &parts {
-        slots_by_root
-            .entry(marker.stable_id.raw())
-            .or_insert_with(BTreeSet::new)
-            .insert(marker.slot);
-        meshes_by_root
-            .entry(marker.stable_id.raw())
-            .or_insert_with(std::collections::BTreeMap::new)
-            .insert(marker.slot, *mesh_id);
-        assert!(translation.is_finite());
-        families.insert(marker.family);
-        mesh_handles.insert(*mesh_id);
-        material_handles.insert(*material_id);
-    }
-    assert_eq!(slots_by_root.len(), roots.len());
-    assert!(slots_by_root.values().all(|slots| {
-        CreaturePartSlot::REQUIRED_RUNTIME_SLOTS
+    let roots = query.iter(app.world()).collect::<Vec<_>>();
+    assert_eq!(roots.len(), 30);
+    assert_eq!(
+        roots
             .iter()
-            .all(|slot| slots.contains(slot))
-    }));
-    assert!(meshes_by_root.values().all(|meshes| {
-        meshes[&CreaturePartSlot::LeftArm] != meshes[&CreaturePartSlot::RightArm]
-            && meshes[&CreaturePartSlot::LeftLeg] != meshes[&CreaturePartSlot::RightLeg]
-    }));
-    assert!(families.len() >= 8);
-    assert!(mesh_handles.len() < parts.len() / 3);
-    assert!(material_handles.len() < parts.len() / 3);
-
-    let mut cover_query = app
+            .map(|(r, _, _, _, _)| r.stable_id.raw())
+            .collect::<BTreeSet<_>>()
+            .len(),
+        30
+    );
+    for (root, visual, species, visibility, pose) in roots {
+        assert!(root.display_only);
+        assert_eq!(*visibility, Visibility::Inherited);
+        assert_eq!(root.stable_id, visual.stable_id);
+        assert_eq!(root.organism_id, visual.organism_id);
+        let object = save
+            .world
+            .objects
+            .iter()
+            .find(|o| o.id == root.stable_id)
+            .unwrap();
+        assert_eq!(
+            (pose.translation.x, pose.translation.z),
+            (object.position.x, object.position.z)
+        );
+        let saved = save
+            .creatures
+            .iter()
+            .find(|c| c.organism_id == root.organism_id)
+            .unwrap();
+        assert_eq!(
+            species.species_archetype,
+            saved.appearance.species_archetype
+        );
+        assert_eq!(
+            species.body_plan_signature,
+            saved.appearance.body_plan_signature()
+        );
+        assert!(
+            pose.translation.is_finite()
+                && pose.scale.is_finite()
+                && pose.scale.min_element() > 0.0
+        );
+    }
+    let mut parts = app.world_mut().query::<&ProductionCreaturePartMarker>();
+    assert_eq!(parts.iter(app.world()).count(), 0);
+    let mut covers = app
         .world_mut()
         .query::<&ProductionCreatureJoinCoverMarker>();
-    let covers = cover_query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert!(covers.is_empty());
-
+    assert_eq!(covers.iter(app.world()).count(), 0);
     let scene = app
         .world()
         .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
-    assert_eq!(scene.visual_profile, "modular-heritable-part-assembly-v1");
-    assert_eq!(scene.creature_root_count, roots.len());
-    assert_eq!(scene.creature_part_entity_count, parts.len());
+    assert_eq!(scene.visual_profile, "approved-hearthling-skinned-v2");
+    assert_eq!(scene.creature_root_count, 30);
+    assert_eq!(scene.creature_part_entity_count, 0);
     assert_eq!(scene.creature_join_cover_count, 0);
-    assert!(scene.creature_mixed_assembly_count <= scene.creature_root_count);
     assert!(scene.production_visuals_display_only);
 }
 
 #[test]
 fn fvr11_terrain_contract_is_display_only() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -250,7 +298,7 @@ fn fvr11_terrain_contract_is_display_only() {
 
 #[test]
 fn fvr11_terrain_contract_is_display_only_and_layered() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -283,7 +331,7 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
 
 #[test]
 fn fvr11_terrain_material_contract_binds_lit_layers_and_water() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -335,7 +383,7 @@ fn fvr11_terrain_material_contract_binds_lit_layers_and_water() {
 #[test]
 fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     let lighting = |profile_id| {
-        let launch = production_launch(profile_id);
+        let (_fixture, launch) = production_launch(profile_id);
         let (mut app, _summary) =
             alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
         app.update();
@@ -394,7 +442,7 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     assert!(minimum.distance_fog);
     assert!(minimum_ambient_brightness >= 260.0);
     assert!(minimum_vertical_area <= 19.0);
-    assert!(minimum_sun_illuminance <= 6_000.0);
+    assert!(minimum_sun_illuminance == 8_500.0);
 
     assert_eq!(comfort.tonemapping, "tony-mc-mapface");
     assert!(comfort.directional_shadows);
@@ -407,12 +455,12 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     assert!(comfort.no_renderer_authority_over_world_actions_or_cognition);
     assert!(comfort_ambient_brightness >= 360.0);
     assert!(comfort_vertical_area <= 17.5);
-    assert!(comfort_sun_illuminance <= 6_000.0);
+    assert!(comfort_sun_illuminance == 8_500.0);
 }
 
 #[test]
 fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -597,7 +645,7 @@ fn fvr03_profiles_scale_renderer_residency_lod_and_camera_modes() {
 
 #[test]
 fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -628,255 +676,113 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
 }
 
 #[test]
-fn fvr04_live_world_projection_moves_matching_creature_and_creates_newborn_by_stable_id() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
-    let (mut app, launch_summary) =
+fn fvr04_live_projection_preserves_identity_and_rejects_unregistered_newborns() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
         .resource_mut::<Fvr05ProductionUxStateResource>()
         .settings
         .paused = true;
     app.update();
-
-    let (stable_id, organism_id, initial_translation) = {
-        let mut roots = app.world_mut().query::<(
-            &ProductionCreatureAssemblyRoot,
-            &Fvr04ProductionCreatureVisualMarker,
-            &Transform,
-        )>();
-        roots
-            .iter(app.world())
-            .map(|(root, visual, transform)| {
-                (root.stable_id, visual.organism_id, transform.translation)
-            })
-            .next()
-            .expect("production voxel scene must spawn a creature root")
-    };
-    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
-    let initial_object = save
-        .world
-        .objects
-        .iter()
-        .find(|object| object.id == stable_id)
-        .cloned()
-        .expect("production creature root must have a matching saved world object");
-    assert_eq!(initial_object.id, stable_id);
-    assert_eq!(initial_object.organism_id, Some(organism_id));
-    let target_entity = save
-        .world
-        .objects
-        .iter()
-        .find(|object| object.id != stable_id && object.kind == WorldObjectKind::Food)
-        .map(|object| object.id)
-        .expect("launch save must contain a non-self food target");
-    let mut authoritative_post_action_object = initial_object.clone();
-    authoritative_post_action_object.position = Vec3f::new(
-        initial_object.position.x + 2.0,
-        initial_object.position.y,
-        initial_object.position.z + 1.0,
-    );
-    let summary = successful_gpu_move_summary(organism_id, target_entity);
-    assert_eq!(
-        summary.selected_action_id,
-        Some(HeadlessActionIds::APPROACH)
-    );
-    assert_eq!(summary.selected_action_kind, Some(ActionKind::Move));
-    assert_eq!(summary.target_entity, Some(target_entity));
-    let expected_world_position_a = authoritative_post_action_object.position;
-    let (expected_x_a, expected_z_a) = production_voxel_center(expected_world_position_a);
-    let expected_y = initial_translation.y;
-    let live_tick_after_a = summary.world_tick_after.raw();
-    assert!(
-        (expected_x_a - initial_translation.x).abs() > f32::EPSILON
-            || (expected_z_a - initial_translation.z).abs() > f32::EPSILON,
-        "authoritative production position must differ from the initial rendered position"
-    );
-    let frame_a = LiveBrainPresentationFrame::try_new(
-        vec![summary.clone()],
-        summary.world_tick_after,
-        vec![authoritative_post_action_object.clone().into()],
-    )
-    .unwrap();
-    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        frame_a,
-    ));
-    app.update();
-
-    let actual_translation_a = {
+    let initial_roots = {
         let mut roots = app
             .world_mut()
             .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
         roots
             .iter(app.world())
-            .find(|(root, _)| root.stable_id == stable_id)
-            .map(|(_, transform)| transform.translation)
-            .expect("matching production creature root must remain present after update")
+            .map(|(r, t)| (r.stable_id, r.organism_id, t.translation))
+            .collect::<Vec<_>>()
     };
-    assert!(
-        (actual_translation_a.x - expected_x_a).abs() < f32::EPSILON
-            && (actual_translation_a.y - expected_y).abs() < f32::EPSILON
-            && (actual_translation_a.z - expected_z_a).abs() < f32::EPSILON,
-        "stable creature {} did not project the authoritative live position at live tick {}: initial=({:.3},{:.3},{:.3}) expected=({:.3},{:.3},{:.3}) actual=({:.3},{:.3},{:.3})",
-        stable_id.raw(),
-        live_tick_after_a,
-        initial_translation.x,
-        initial_translation.y,
-        initial_translation.z,
-        expected_x_a,
-        expected_y,
-        expected_z_a,
-        actual_translation_a.x,
-        actual_translation_a.y,
-        actual_translation_a.z,
-    );
-
-    let mismatched_organism_id = OrganismId(organism_id.raw() + 20_000);
-    let mut mismatched_identity_object = authoritative_post_action_object.clone();
-    mismatched_identity_object.organism_id = Some(mismatched_organism_id);
-    mismatched_identity_object.position = Vec3f::new(
-        initial_object.position.x + 5.0,
-        initial_object.position.y,
-        initial_object.position.z - 2.0,
-    );
-    let mismatched_frame = LiveBrainPresentationFrame::try_new(
-        vec![summary.clone()],
-        Tick::new(summary.world_tick_after.raw() + 1),
-        vec![mismatched_identity_object.into()],
-    )
-    .unwrap();
+    assert_eq!(initial_roots.len(), 30);
+    let (stable_id, organism_id, initial_position) = initial_roots[0];
+    let save = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    let mut object = save
+        .world
+        .objects
+        .iter()
+        .find(|o| o.id == stable_id)
+        .unwrap()
+        .clone();
+    object.position.x += 2.25;
+    object.position.z += 1.25; // Current worlds preserve continuous X/Z ground coordinates.
+    object.position.y += 3.5; // Height must never be mistaken for the ground Z axis.
+    object.body_yaw = 0.7;
+    object.head_yaw = -0.2;
+    let expected = production_ground_position(object.position);
+    let frame =
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![object.clone().into()])
+            .unwrap();
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        mismatched_frame,
+        frame,
     ));
     app.update();
-
-    let child_id = WorldEntityId(stable_id.raw() + 10_000);
-    let child_organism_id = OrganismId(organism_id.raw() + 10_000);
-    let mut child_object = initial_object.clone();
-    child_object.id = child_id;
-    child_object.organism_id = Some(child_organism_id);
-    child_object.label = "newborn-child".to_string();
-    child_object.position = Vec3f::new(
-        initial_object.position.x - 3.0,
-        initial_object.position.y,
-        initial_object.position.z + 4.0,
-    );
-    let second_child_id = WorldEntityId(stable_id.raw() + 20_000);
-    let second_child_organism_id = OrganismId(organism_id.raw() + 30_000);
-    let mut second_child_object = initial_object.clone();
-    second_child_object.id = second_child_id;
-    second_child_object.organism_id = Some(second_child_organism_id);
-    second_child_object.label = "newborn-second-child".to_string();
-    second_child_object.position = Vec3f::new(
-        initial_object.position.x + 6.0,
-        initial_object.position.y,
-        initial_object.position.z - 3.0,
-    );
-    let expected_child_world_position = child_object.position;
-    let (expected_child_x, expected_child_z) =
-        production_voxel_center(expected_child_world_position);
-    let expected_second_child_world_position = second_child_object.position;
-    let (expected_second_child_x, expected_second_child_z) =
-        production_voxel_center(expected_second_child_world_position);
-    let frame_b = LiveBrainPresentationFrame::try_new(
-        vec![summary.clone()],
-        Tick::new(summary.world_tick_after.raw() + 2),
-        vec![
-            authoritative_post_action_object.into(),
-            child_object.into(),
-            second_child_object.into(),
-        ],
-    )
-    .unwrap();
-    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        frame_b.clone(),
-    ));
-    app.update();
-
-    let projected_roots = {
+    let projected = {
         let mut roots = app.world_mut().query::<(
             &ProductionCreatureAssemblyRoot,
-            &Fvr03ProductionVoxelCreatureMarker,
             &Fvr04ProductionCreatureVisualMarker,
             &Transform,
         )>();
-        roots
+        let (root, visual, pose) = roots
             .iter(app.world())
-            .map(|(root, voxel, visual, transform)| {
-                (
-                    root.stable_id,
-                    voxel.stable_id,
-                    visual.stable_id,
-                    visual.organism_id,
-                    transform.translation,
-                )
-            })
-            .collect::<Vec<_>>()
+            .find(|(r, _, _)| r.stable_id == stable_id)
+            .unwrap();
+        assert_eq!(root.organism_id, organism_id);
+        assert_eq!(visual.organism_id, organism_id);
+        assert_eq!(visual.body_yaw, object.body_yaw);
+        assert_eq!(visual.head_yaw, object.head_yaw);
+        assert_eq!((pose.translation.x, pose.translation.z), expected);
+        assert_ne!(
+            (pose.translation.x, pose.translation.z),
+            (initial_position.x, initial_position.z)
+        );
+        pose.translation
     };
-    assert_eq!(
-        projected_roots.len(),
-        4,
-        "mismatched identity plus snapshot B must create three distinct roots"
-    );
-    let existing_root = projected_roots
-        .iter()
-        .find(|(root_id, _, _, _, _)| *root_id == stable_id)
-        .expect("snapshot B must retain the existing root by stable world identity");
-    assert_eq!(existing_root.0, stable_id);
-    assert_eq!(existing_root.1, stable_id);
-    assert_eq!(existing_root.2, stable_id);
-    assert_eq!(existing_root.3, organism_id);
-    let mismatched_root = projected_roots
-        .iter()
-        .find(|(root_id, _, _, root_organism_id, _)| {
-            *root_id == stable_id && *root_organism_id == mismatched_organism_id
-        })
-        .expect("a mismatched organism identity must not deduplicate the existing root");
-    assert_eq!(mismatched_root.0, stable_id);
-    assert_eq!(mismatched_root.1, stable_id);
-    assert_eq!(mismatched_root.2, stable_id);
-    assert_eq!(mismatched_root.3, mismatched_organism_id);
-    let child_root = projected_roots
-        .iter()
-        .find(|(root_id, _, _, _, _)| *root_id == child_id)
-        .expect("snapshot B must create the child root by stable world identity");
-    assert_eq!(child_root.0, child_id);
-    assert_eq!(child_root.1, child_id);
-    assert_eq!(child_root.2, child_id);
-    assert_eq!(child_root.3, child_organism_id);
-    assert_eq!(child_root.4.x, expected_child_x);
-    assert_eq!(child_root.4.y, expected_y);
-    assert_eq!(child_root.4.z, expected_child_z);
-    let second_child_root = projected_roots
-        .iter()
-        .find(|(root_id, _, _, _, _)| *root_id == second_child_id)
-        .expect("snapshot B must create the second child root");
-    assert_eq!(second_child_root.0, second_child_id);
-    assert_eq!(second_child_root.1, second_child_id);
-    assert_eq!(second_child_root.2, second_child_id);
-    assert_eq!(second_child_root.3, second_child_organism_id);
-    assert_eq!(second_child_root.4.x, expected_second_child_x);
-    assert_eq!(second_child_root.4.y, expected_y);
-    assert_eq!(second_child_root.4.z, expected_second_child_z);
-
-    app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        frame_b,
-    ));
-    app.update();
-
-    let root_count = {
-        let mut roots = app.world_mut().query::<&ProductionCreatureAssemblyRoot>();
-        roots.iter(app.world()).count()
-    };
-    assert_eq!(
-        root_count, 4,
-        "reapplying snapshot B must remain idempotent"
-    );
+    let mut wrong_identity = object.clone();
+    wrong_identity.organism_id = Some(OrganismId(organism_id.raw() + 20_000));
+    wrong_identity.position.x += 4.0;
+    let mut unregistered = object.clone();
+    unregistered.id = WorldEntityId(stable_id.raw() + 10_000);
+    unregistered.organism_id = Some(OrganismId(organism_id.raw() + 10_000));
+    let frame = LiveBrainPresentationFrame::try_new(
+        Vec::new(),
+        Tick::new(9),
+        vec![wrong_identity.into(), unregistered.clone().into()],
+    )
+    .unwrap();
+    for _ in 0..2 {
+        app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
+            frame.clone(),
+        ));
+        app.update();
+        let mut roots = app
+            .world_mut()
+            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+        assert_eq!(roots.iter(app.world()).count(), initial_roots.len());
+        let roots = roots.iter(app.world()).collect::<Vec<_>>();
+        assert_eq!(
+            roots
+                .iter()
+                .map(|(r, _)| r.stable_id.raw())
+                .collect::<BTreeSet<_>>()
+                .len(),
+            initial_roots.len()
+        );
+        assert!(!roots.iter().any(|(r, _)| r.stable_id == unregistered.id));
+        let (root, pose) = roots
+            .iter()
+            .find(|(r, _)| r.stable_id == stable_id)
+            .unwrap();
+        assert_eq!(root.organism_id, organism_id);
+        assert_eq!(pose.translation, projected);
+    }
 }
 
 #[test]
+#[cfg(feature = "gpu-runtime")]
 fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publishes_matching_live_frame(
 ) {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -964,7 +870,7 @@ fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publis
         .object(stable_id)
         .expect("current live frame must retain the receipt-bound stable ID");
     assert_eq!(current_object.position, post_action_object.position);
-    let (expected_x, expected_z) = production_voxel_center(current_object.position);
+    let (expected_x, expected_z) = production_ground_position(current_object.position);
     let actual_translation = {
         let mut roots = app
             .world_mut()
@@ -987,7 +893,7 @@ fn curated_first_gpu_action_consumes_receipt_updates_registered_world_and_publis
 
 #[test]
 fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1098,174 +1004,150 @@ fn fvr04_live_world_projection_ignores_unmatched_and_non_agent_objects() {
 }
 
 #[test]
-fn fvr04_selection_marker_follows_the_moved_projected_creature_root() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
-    let (mut app, launch_summary) =
+fn fvr04_selection_uses_current_root_position_without_retired_tile_ring() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
         .resource_mut::<Fvr05ProductionUxStateResource>()
         .settings
         .paused = true;
     app.update();
-
     let selected = app
         .world()
         .resource::<Fvr03ProductionVoxelSelectionResource>()
         .selected
-        .expect("production voxel scene should select a creature at boot");
+        .unwrap();
     assert_eq!(selected.kind, StableVoxelRefKind::Creature);
-    let stable_id = selected
-        .stable_id
-        .expect("boot creature selection must have a stable id");
-    let initial_translation = {
-        let mut roots = app
-            .world_mut()
-            .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
-        roots
-            .iter(app.world())
-            .find(|(root, _)| root.stable_id == stable_id)
-            .map(|(_, transform)| transform.translation)
-            .expect("selected creature must have a production assembly root")
-    };
-    let launch_scene_position = app
+    let stable_id = selected.stable_id.unwrap();
+    let initial = app
         .world()
         .resource::<Fvr03ProductionVoxelSceneResource>()
         .selection_position(stable_id)
-        .expect("scene must retain the launch-time creature position for static metadata");
-    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
-    let mut moved_object = save
+        .unwrap();
+    let save = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    let mut object = save
         .world
         .objects
         .iter()
-        .find(|object| object.id == stable_id)
-        .cloned()
-        .expect("selected creature must have a matching saved world object");
-    moved_object.position = alife_core::Vec3f::new(
-        moved_object.position.x + 2.0,
-        moved_object.position.y,
-        moved_object.position.z + 1.0,
-    );
-    let (expected_x, expected_z) = production_voxel_center(moved_object.position);
-    assert_ne!(
-        (expected_x, expected_z),
-        (launch_scene_position.x, launch_scene_position.z),
-        "the authoritative move must differ from the launch-time scene map"
-    );
-
+        .find(|o| o.id == stable_id)
+        .unwrap()
+        .clone();
+    object.position.x += 2.25;
+    object.position.z += 1.25;
+    let expected = production_ground_position(object.position);
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![moved_object.into()])
-            .unwrap(),
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![object.into()]).unwrap(),
     ));
     app.update();
-
-    let marker_translation = {
-        let mut markers = app
-            .world_mut()
-            .query::<(&Fvr03ProductionVoxelSelectionMarker, &Transform)>();
-        markers
-            .iter(app.world())
-            .next()
-            .map(|(_, transform)| transform.translation)
-            .expect("production selection marker must exist")
-    };
-    assert_eq!(marker_translation.y, 1.45);
     assert_eq!(
-        (marker_translation.x, marker_translation.z),
-        (expected_x, expected_z)
+        app.world()
+            .resource::<Fvr03ProductionVoxelSelectionResource>()
+            .selected,
+        Some(selected)
     );
-    assert_ne!(
-        (marker_translation.x, marker_translation.z),
-        (launch_scene_position.x, launch_scene_position.z),
-        "selection marker must not keep the launch-time creature position"
-    );
-    assert_ne!(initial_translation.x, marker_translation.x);
-    assert_ne!(initial_translation.z, marker_translation.z);
+    let position = app
+        .world()
+        .resource::<Fvr03ProductionVoxelSceneResource>()
+        .selection_position(stable_id)
+        .unwrap();
+    assert_eq!((position.x, position.z), expected);
+    assert_ne!((position.x, position.z), (initial.x, initial.z));
+    let mut roots = app
+        .world_mut()
+        .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
+    let pose = roots
+        .iter(app.world())
+        .find(|(r, _)| r.stable_id == stable_id)
+        .unwrap()
+        .1;
+    assert_eq!(position, pose.translation);
+    let mut rings = app
+        .world_mut()
+        .query::<(&Fvr03ProductionVoxelSelectionMarker, &Visibility)>();
+    assert!(rings
+        .iter(app.world())
+        .all(|(_, v)| *v == Visibility::Hidden));
 }
 
 #[test]
-fn fvr04_camera_follow_recomputes_from_the_moved_projected_creature_root() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
-    let (mut app, launch_summary) =
+fn fvr04_camera_follow_preserves_framing_after_continuous_live_projection() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (mut app, summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
         .resource_mut::<Fvr05ProductionUxStateResource>()
         .settings
         .paused = true;
     app.update();
-
-    let selected = app
+    let stable_id = app
         .world()
         .resource::<Fvr03ProductionVoxelSelectionResource>()
         .selected
-        .expect("production voxel scene should select a creature at boot");
-    assert_eq!(selected.kind, StableVoxelRefKind::Creature);
-    let stable_id = selected
+        .unwrap()
         .stable_id
-        .expect("boot creature selection must have a stable id");
-    let initial_translation = {
+        .unwrap();
+    {
+        let mut follow = app
+            .world_mut()
+            .resource_mut::<Fvr04ProductionCreatureFollowResource>();
+        follow.enabled = true;
+        follow.target_stable_id = Some(stable_id);
+    }
+    app.update();
+    let camera_pose = |app: &mut bevy::prelude::App| {
+        let mut cameras = app
+            .world_mut()
+            .query::<(&Fvr03ProductionVoxelCamera, &Transform)>();
+        *cameras.iter(app.world()).next().unwrap().1
+    };
+    let root_pose = |app: &mut bevy::prelude::App| {
         let mut roots = app
             .world_mut()
             .query::<(&ProductionCreatureAssemblyRoot, &Transform)>();
         roots
             .iter(app.world())
-            .find(|(root, _)| root.stable_id == stable_id)
-            .map(|(_, transform)| transform.translation)
-            .expect("selected creature must have a production assembly root")
+            .find(|(r, _)| r.stable_id == stable_id)
+            .unwrap()
+            .1
+            .translation
     };
-    app.world_mut()
-        .resource_mut::<Fvr04ProductionCreatureFollowResource>()
-        .enabled = true;
-    app.world_mut()
-        .resource_mut::<Fvr04ProductionCreatureFollowResource>()
-        .target_stable_id = Some(stable_id);
-    app.update();
-
-    let save = PortableSaveFile::from_json_file(&launch_summary.save_path).unwrap();
-    let mut moved_object = save
+    let before_camera = camera_pose(&mut app);
+    let before_root = root_pose(&mut app);
+    let save = PortableSaveFile::from_json_file(&summary.save_path).unwrap();
+    let mut object = save
         .world
         .objects
         .iter()
-        .find(|object| object.id == stable_id)
-        .cloned()
-        .expect("selected creature must have a matching saved world object");
-    moved_object.position = alife_core::Vec3f::new(
-        moved_object.position.x + 2.0,
-        moved_object.position.y,
-        moved_object.position.z + 1.0,
-    );
-    let (expected_x, expected_z) = production_voxel_center(moved_object.position);
+        .find(|o| o.id == stable_id)
+        .unwrap()
+        .clone();
+    object.position.x += 2.25;
+    object.position.z += 1.25;
+    let expected = production_ground_position(object.position);
     app.insert_resource(LiveBrainPresentationFrameResource::from_current_frame(
-        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![moved_object.into()])
-            .unwrap(),
+        LiveBrainPresentationFrame::try_new(Vec::new(), Tick::new(8), vec![object.into()]).unwrap(),
     ));
     app.update();
-
-    let camera_transform = {
-        let mut cameras = app
-            .world_mut()
-            .query::<(&Fvr03ProductionVoxelCamera, &Transform)>();
-        cameras
-            .iter(app.world())
-            .next()
-            .map(|(_, transform)| *transform)
-            .expect("production terrain camera must exist")
-    };
-    let target = Vec3::new(expected_x, 0.0, expected_z);
-    let expected_transform =
-        Transform::from_translation(target + Vec3::new(17.2 * 0.56, 17.2 * 0.82, 17.2 * 0.58))
-            .looking_at(target, Vec3::Y);
-    assert!((camera_transform.translation - expected_transform.translation).length() < 1.0e-5);
-    assert!((camera_transform.rotation.x - expected_transform.rotation.x).abs() < 1.0e-5);
-    assert!((camera_transform.rotation.y - expected_transform.rotation.y).abs() < 1.0e-5);
-    assert!((camera_transform.rotation.z - expected_transform.rotation.z).abs() < 1.0e-5);
-    assert!((camera_transform.rotation.w - expected_transform.rotation.w).abs() < 1.0e-5);
-    assert_ne!(camera_transform.translation.x, initial_translation.x);
-    assert_ne!(camera_transform.translation.z, initial_translation.z);
+    let after_root = root_pose(&mut app);
+    let after_camera = camera_pose(&mut app);
+    assert_eq!((after_root.x, after_root.z), expected);
+    assert!(
+        ((after_camera.translation - before_camera.translation) - (after_root - before_root))
+            .length()
+            < 1e-5
+    );
+    let focus = after_root + Vec3::Y * 0.70;
+    assert!(
+        (after_camera.rotation * Vec3::NEG_Z).dot((focus - after_camera.translation).normalize())
+            > 0.99999
+    );
+    assert!(after_camera.rotation.dot(before_camera.rotation).abs() > 0.99999);
 }
 
 #[test]
 fn fvr04_missing_selected_creature_root_hides_marker_without_stale_scene_coordinates() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1340,7 +1222,7 @@ fn fvr04_missing_selected_creature_root_hides_marker_without_stale_scene_coordin
 
 #[test]
 fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1416,7 +1298,7 @@ fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
         "the selected label must follow the projected root for stable creature {}",
         stable_id.raw()
     );
-    assert_eq!(label_translation.0.y, 2.35);
+    assert_eq!(label_translation.0.y, root_translation.y + 1.55);
     assert_ne!(
         (label_translation.0.x, label_translation.0.z),
         (initial_label_translation.x, initial_label_translation.z),
@@ -1426,7 +1308,7 @@ fn fvr04_live_world_label_tracks_projected_root_by_stable_id() {
 
 #[test]
 fn fvr04_live_world_label_hides_when_selected_creature_root_missing() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1485,7 +1367,7 @@ fn fvr04_live_world_label_hides_when_selected_creature_root_missing() {
 
 #[test]
 fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     {
@@ -1493,6 +1375,8 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
             .world_mut()
             .resource_mut::<Fvr05ProductionUxStateResource>();
         ux.settings.paused = true;
+        ux.debug_mode = true;
+        ux.settings.show_menu = true;
         ux.settings.active_inspector_tab = Fvr05ProductionInspectorTab::Creature;
     }
     app.update();
@@ -1554,7 +1438,7 @@ fn fvr04_live_creature_inspectors_report_current_authoritative_position_and_tick
 
 #[test]
 fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, launch_summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     {
@@ -1562,6 +1446,8 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
             .world_mut()
             .resource_mut::<Fvr05ProductionUxStateResource>();
         ux.settings.paused = true;
+        ux.debug_mode = true;
+        ux.settings.show_menu = true;
         ux.settings.active_inspector_tab = Fvr05ProductionInspectorTab::Creature;
     }
     app.update();
@@ -1633,7 +1519,7 @@ fn fvr04_live_creature_inspectors_reject_stable_id_mismatch() {
 
 #[test]
 fn fvr04_non_creature_selection_keeps_the_static_scene_coordinate_path() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.world_mut()
@@ -1675,7 +1561,7 @@ fn fvr04_non_creature_selection_keeps_the_static_scene_coordinate_path() {
 
 #[test]
 fn fvr04_selection_marker_has_explicit_visibility_for_root_readers() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     let marker_entity = {
@@ -1696,7 +1582,7 @@ fn fvr04_selection_marker_has_explicit_visibility_for_root_readers() {
 
 #[test]
 fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1719,8 +1605,15 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
     let panels = panel_query.iter(app.world()).collect::<Vec<_>>();
     assert_eq!(panels.len(), 1);
     assert_ne!(*panels[0].2, Visibility::Hidden);
-    let panel_text = panels[0].1 .0.as_str();
-    for real_state_heading in ["NEEDS", "LEARNING", "SOCIAL"] {
+    let panel_text = panels[0].1 .0.clone();
+    for real_state_heading in [
+        "Hunger",
+        "Energy",
+        "Tiredness",
+        "Safety",
+        "Sleepiness",
+        "Praise",
+    ] {
         assert!(panel_text.contains(real_state_heading), "{panel_text}");
     }
     for debug_term in ["backend", "chunk", "wgpu", "GPU"] {
@@ -1733,12 +1626,15 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
     let controls = controls_query.iter(app.world()).collect::<Vec<_>>();
     assert_eq!(controls.len(), 1);
     assert_ne!(*controls[0].2, Visibility::Hidden);
-    assert!(controls[0].1 .0.contains("R Recover view"));
+    assert!(controls[0].1 .0.contains("F1 Help"));
+    assert!(controls[0].1 .0.contains("Space Pause"));
+    assert!(panel_text.contains("Energy  unavailable"));
+    assert!(!panel_text.contains("LEARNING") && !panel_text.contains("SOCIAL"));
 }
 
 #[test]
 fn v0_recovery_key_restores_the_clean_isometric_player_view() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1781,34 +1677,56 @@ fn v0_recovery_key_restores_the_clean_isometric_player_view() {
 
 #[test]
 fn v0_render_world_direction_is_warm_readable_and_creature_led() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
 
-    let terrain_handles = {
+    let layers = {
         let mut query = app.world_mut().query::<(
             &Fvr11ProductionTerrainLayer,
+            &Mesh3d,
             &MeshMaterial3d<StandardMaterial>,
         )>();
         query
             .iter(app.world())
-            .filter(|(layer, _)| layer.role == Fvr11TerrainSurfaceRole::Top)
-            .map(|(layer, material)| (layer.material, material.0.clone()))
-            .collect::<std::collections::BTreeMap<_, _>>()
+            .filter(|(layer, _, _)| layer.role == Fvr11TerrainSurfaceRole::Top)
+            .map(|(layer, mesh, material)| (layer.material, mesh.0.clone(), material.0.clone()))
+            .collect::<Vec<_>>()
     };
+    let meshes = app.world().resource::<Assets<Mesh>>();
     let materials = app.world().resource::<Assets<StandardMaterial>>();
-    let terrain_color = |kind| {
-        materials
-            .get(&terrain_handles[&kind])
-            .expect("terrain material remains resident")
-            .base_color
-            .to_srgba()
+    let mean_color = |kind| {
+        let mut sum = [0.0; 3];
+        let mut count = 0;
+        for (_, mesh, material) in layers.iter().filter(|(material, _, _)| *material == kind) {
+            let material = materials.get(material).unwrap();
+            assert!(material
+                .base_color
+                .to_srgba()
+                .to_f32_array()
+                .iter()
+                .all(|v| (*v - 1.0).abs() < 1e-6));
+            assert!(!material.unlit);
+            let Some(VertexAttributeValues::Float32x4(colors)) =
+                meshes.get(mesh).unwrap().attribute(Mesh::ATTRIBUTE_COLOR)
+            else {
+                panic!("terrain vertex colors missing")
+            };
+            for color in colors {
+                for axis in 0..3 {
+                    sum[axis] += color[axis];
+                }
+                count += 1;
+            }
+        }
+        assert!(count >= 24);
+        sum.map(|value| value / count as f32)
     };
-    let grass = terrain_color(Fvr03ProductionVoxelMaterialKind::SafeGrass);
-    let soil = terrain_color(Fvr03ProductionVoxelMaterialKind::Soil);
-    assert!(grass.green > grass.red * 1.05 && grass.green > grass.blue * 1.12);
-    assert!(soil.red > soil.green * 1.10 && soil.green > soil.blue * 1.08);
+    let grass = mean_color(Fvr03ProductionVoxelMaterialKind::SafeGrass);
+    let soil = mean_color(Fvr03ProductionVoxelMaterialKind::Soil);
+    assert!(grass[1] > grass[0] * 1.05 && grass[1] > grass[2] * 1.12);
+    assert!(soil[0] > soil[1] * 1.10 && soil[1] > soil[2] * 1.08);
 
     let (ambient, vertical_area) = {
         let mut query = app.world_mut().query::<(&AmbientLight, &Projection)>();
@@ -1819,13 +1737,13 @@ fn v0_render_world_direction_is_warm_readable_and_creature_led() {
         (ambient.clone(), orthographic.area.height())
     };
     let ambient_color = ambient.color.to_srgba();
-    assert!(ambient_color.red >= ambient_color.blue * 0.92);
+    assert!(ambient_color.blue > ambient_color.red);
     assert!(ambient.brightness >= 700.0);
     assert!(vertical_area <= 16.0);
     let mut sun_query = app.world_mut().query::<&DirectionalLight>();
     let sun = sun_query.iter(app.world()).next().expect("warm sun");
     assert!(sun.shadows_enabled);
-    assert!((5_600.0..=6_000.0).contains(&sun.illuminance));
+    assert!(sun.illuminance == 8_500.0);
 
     let mut roots = app.world_mut().query::<(
         &ProductionCreatureAssemblyRoot,
@@ -1833,30 +1751,15 @@ fn v0_render_world_direction_is_warm_readable_and_creature_led() {
     )>();
     assert!(roots
         .iter(app.world())
-        .all(|(root, creature)| root.display_only && creature.base_scale.z >= 1.20));
-    let creature_material_handle = {
-        let mut parts = app.world_mut().query::<(
-            &ProductionCreaturePartMarker,
-            &MeshMaterial3d<StandardMaterial>,
-        )>();
-        parts
-            .iter(app.world())
-            .next()
-            .map(|(_, material)| material.0.clone())
-            .expect("visible creature part")
-    };
-    let creature_material = app
-        .world()
-        .resource::<Assets<StandardMaterial>>()
-        .get(&creature_material_handle)
-        .expect("creature material remains resident");
-    assert!(creature_material.perceptual_roughness <= 0.70);
-    assert!(creature_material.reflectance >= 0.30);
+        .all(|(root, creature)| root.display_only
+            && creature.base_scale.is_finite()
+            && creature.base_scale.min_element() > 0.0));
+    shipping_hearthling();
 }
 
 #[test]
 fn fvr09_layered_grid_mesher_records_visible_face_reduction() {
-    let launch = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinimumSettings30x30);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1929,7 +1832,7 @@ fn fvr09_material_palette_uses_natural_top_side_texture_slots_not_debug_colors()
 
 #[test]
 fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -1945,17 +1848,18 @@ fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
 
     assert_eq!(
         creature_scene.visual_profile,
-        "modular-heritable-part-assembly-v1"
+        "approved-hearthling-skinned-v2"
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "modular-textured-part-material-v1"
+        "approved-blender-vertex-color-v2"
     );
     assert_eq!(
         creature_scene.rendered_creature_count,
         scene.creature_render_count
     );
-    assert!(creature_scene.mesh_pool_count >= 3);
+    assert_eq!(creature_scene.mesh_pool_count, 0); // Dry-run roots load no mesh assets.
+    shipping_hearthling();
     assert!(creature_scene.expression_buffer_is_read_only_projection);
     assert!(creature_scene.no_renderer_authority_over_actions_or_cognition);
 
@@ -1971,7 +1875,7 @@ fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
 
 #[test]
 fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_only() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2018,70 +1922,13 @@ fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_onl
 }
 
 #[test]
-fn fvr10_creature_mesh_is_readable_low_poly_rig_not_cuboid_stack() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let creature_scene = app
-        .world()
-        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>()
-        .clone();
-    assert_eq!(
-        creature_scene.visual_profile,
-        "modular-heritable-part-assembly-v1"
-    );
-    assert_eq!(
-        creature_scene.mesh_material_version,
-        "modular-textured-part-material-v1"
-    );
-    assert!(creature_scene.mesh_pool_count >= 5);
-
-    let mut query = app
-        .world_mut()
-        .query::<(&ProductionCreaturePartMarker, &Mesh3d)>();
-    let mesh_handle = query
-        .iter(app.world())
-        .find(|(marker, _)| marker.slot == CreaturePartSlot::Head)
-        .map(|(_, mesh)| mesh.0.clone())
-        .expect("at least one visible creature head part should spawn");
-    let meshes = app.world().resource::<Assets<Mesh>>();
-    let mesh = meshes
-        .get(&mesh_handle)
-        .expect("creature rig mesh should remain resident");
-    let Some(VertexAttributeValues::Float32x3(positions)) =
-        mesh.attribute(Mesh::ATTRIBUTE_POSITION)
-    else {
-        panic!("creature rig mesh is missing positions");
-    };
-    assert!(
-        positions.len() >= 24,
-        "sliced source mesh must retain useful geometry"
-    );
-    let (mut min_x, mut max_x) = (f32::MAX, f32::MIN);
-    let (mut min_y, mut max_y) = (f32::MAX, f32::MIN);
-    let (mut min_z, mut max_z) = (f32::MAX, f32::MIN);
-    for position in positions {
-        min_x = min_x.min(position[0]);
-        max_x = max_x.max(position[0]);
-        min_y = min_y.min(position[1]);
-        max_y = max_y.max(position[1]);
-        min_z = min_z.min(position[2]);
-        max_z = max_z.max(position[2]);
-    }
-    assert!(
-        max_x > min_x && max_z > min_z && max_y > min_y,
-        "creature part mesh must have three-dimensional bounds, spans=({:.2},{:.2},{:.2})",
-        max_x - min_x,
-        max_y - min_y,
-        max_z - min_z
-    );
+fn approved_hearthling_asset_retains_low_poly_skin_and_animation_contract() {
+    shipping_hearthling();
 }
 
 #[test]
-fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+fn hearthling_species_markers_preserve_inherited_body_plans_with_a_shared_skin() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2096,16 +1943,11 @@ fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
     );
     assert_eq!(
         creature_scene.mesh_material_version,
-        "modular-textured-part-material-v1"
+        "approved-blender-vertex-color-v2"
     );
-    assert!(
-        creature_scene.mesh_pool_count >= CREATURE_APPEARANCE_SPECIES_COUNT as usize,
-        "selected sheet requires distinct species body-plan meshes, not one recolored rig"
-    );
-    assert!(
-        creature_scene.material_bucket_count >= CREATURE_APPEARANCE_SPECIES_COUNT as usize,
-        "selected sheet requires species-specific inherited body materials, not shared expression color buckets"
-    );
+    assert_eq!(creature_scene.mesh_pool_count, 0);
+    assert_eq!(creature_scene.material_bucket_count, 0);
+    shipping_hearthling();
 
     let mut query = app.world_mut().query::<&Fvr10CreatureSpeciesMarker>();
     let markers = query.iter(app.world()).copied().collect::<Vec<_>>();
@@ -2139,8 +1981,8 @@ fn fvr10_creatures_use_all_selected_bipedal_caveman_species_not_color_swaps() {
 }
 
 #[test]
-fn fvr12_creatures_render_only_the_seven_authored_body_parts() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+fn hearthling_roots_use_no_retired_parts_face_overlays_or_surface_patches() {
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2169,7 +2011,8 @@ fn fvr12_creatures_render_only_the_seven_authored_body_parts() {
     };
 
     assert!(root_count > 0);
-    assert_eq!(part_count, root_count * CreaturePartSlot::ALL.len());
+    assert_eq!(part_count, 0);
+    shipping_hearthling();
     assert_eq!(join_cover_count, 0);
     assert_eq!(face_overlay_count, 0);
     assert_eq!(surface_patch_count, 0);
@@ -2223,7 +2066,7 @@ fn fvr10_creature_appearance_genes_cover_sixteen_species_and_mutate_offspring() 
 
 #[test]
 fn fvr10_default_product_view_starts_clean_without_debug_panels_or_overlays() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2245,7 +2088,7 @@ fn fvr10_default_product_view_starts_clean_without_debug_panels_or_overlays() {
 
 #[test]
 fn fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
@@ -2275,260 +2118,59 @@ fn fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures()
         transform.translation.y
     );
 
-    let mut head_query = app.world_mut().query::<&ProductionCreaturePartMarker>();
-    assert!(head_query
-        .iter(app.world())
-        .any(|part| part.slot == CreaturePartSlot::Head));
-    let mut face_overlay_query = app.world_mut().query::<&Fvr09CreatureFaceFeatureMarker>();
-    assert_eq!(face_overlay_query.iter(app.world()).count(), 0);
+    shipping_hearthling();
+    let mut legacy_heads = app.world_mut().query::<&ProductionCreaturePartMarker>();
+    assert_eq!(legacy_heads.iter(app.world()).count(), 0);
 }
 
 #[test]
-fn fvr03_geneforge_children_preserve_real_asset_groups_and_one_coat_handle() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let mut query = app.world_mut().query::<(
-        &ProductionCreaturePartMarker,
-        &Mesh3d,
-        &MeshMaterial3d<StandardMaterial>,
-        &Transform,
-    )>();
-    let parts = query
-        .iter(app.world())
-        .map(|(marker, mesh, material, transform)| {
-            (
-                marker.stable_id.raw(),
-                marker.asset_id.clone(),
-                marker.runtime_group.clone(),
-                marker.authored_matrix,
-                mesh.0.id(),
-                material.0.id(),
-                *transform,
-            )
-        })
-        .collect::<Vec<_>>();
-    assert!(!parts.is_empty());
-    assert!(parts
-        .iter()
-        .all(|(_, asset_id, group, matrix, _, _, transform)| {
-            !asset_id.0.starts_with("legacy-family-")
-                && !group.is_empty()
-                && matrix[12..] == [0.0, 0.0, 0.0, 1.0]
-                && matrix.iter().all(|value| value.is_finite())
-                && transform.scale.is_finite()
-                && transform.scale.min_element() > 0.0
-        }));
-
-    let mut materials_by_assembly = std::collections::BTreeMap::<u64, BTreeSet<_>>::new();
-    for (stable_id, _, _, _, _, material_id, _) in &parts {
-        materials_by_assembly
-            .entry(*stable_id)
-            .or_default()
-            .insert(*material_id);
+fn hearthling_skin_primitives_preserve_authored_material_and_vertex_color_bindings() {
+    let doc = shipping_hearthling();
+    let primitives = doc["meshes"][0]["primitives"].as_array().unwrap();
+    assert_eq!(
+        primitives
+            .iter()
+            .map(|p| p["material"].as_u64().unwrap())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([0, 1, 2, 3, 4, 5])
+    );
+    for material in doc["materials"].as_array().unwrap() {
+        assert!(material["name"]
+            .as_str()
+            .unwrap()
+            .starts_with("Hearthling |"));
+        assert!(material["pbrMetallicRoughness"]["baseColorTexture"].is_null());
+        assert_eq!(
+            material["pbrMetallicRoughness"]["metallicFactor"]
+                .as_f64()
+                .unwrap_or(1.0),
+            0.0
+        );
+        let roughness = material["pbrMetallicRoughness"]["roughnessFactor"]
+            .as_f64()
+            .unwrap_or(1.0);
+        assert!(roughness > 0.0 && roughness <= 1.0);
     }
-    assert!(materials_by_assembly
-        .values()
-        .all(|handles| handles.len() == 1));
+    assert!(doc["materials"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|m| m["normalTexture"].is_object()));
 }
 
 #[test]
-fn fvr03_geneforge_head_owns_face_and_renderer_is_display_only() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
+fn hearthling_face_is_authored_in_the_skin_and_renderer_remains_display_only() {
+    shipping_hearthling();
+    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
+    let (mut app, _) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
     app.update();
-
-    let mut head_query = app
-        .world_mut()
-        .query::<(&ProductionCreaturePartMarker, &Mesh3d)>();
-    let heads = head_query
-        .iter(app.world())
-        .filter(|(marker, _)| marker.slot == CreaturePartSlot::Head)
-        .map(|(_, mesh)| mesh.0.clone())
-        .collect::<Vec<_>>();
-    let meshes = app.world().resource::<Assets<Mesh>>();
-    let head_bounds = heads
-        .into_iter()
-        .map(|mesh| {
-            let Some(VertexAttributeValues::Float32x3(positions)) = meshes
-                .get(&mesh)
-                .expect("head mesh is resident")
-                .attribute(Mesh::ATTRIBUTE_POSITION)
-            else {
-                panic!("head mesh is missing positions");
-            };
-            let mut min = bevy::prelude::Vec3::splat(f32::INFINITY);
-            let mut max = bevy::prelude::Vec3::splat(f32::NEG_INFINITY);
-            for position in positions {
-                min = min.min(bevy::prelude::Vec3::from_array(*position));
-                max = max.max(bevy::prelude::Vec3::from_array(*position));
-            }
-            (min, max)
-        })
-        .collect::<Vec<_>>();
-    assert!(!head_bounds.is_empty());
-    assert!(head_bounds.iter().all(|(min, max)| {
-        min.is_finite() && max.is_finite() && (*max - *min).min_element() > 0.0
-    }));
-
-    let mut face_query = app.world_mut().query::<&Fvr09CreatureFaceFeatureMarker>();
-    assert_eq!(face_query.iter(app.world()).count(), 0);
-
+    let mut overlay = app.world_mut().query::<&Fvr09CreatureFaceFeatureMarker>();
+    assert_eq!(overlay.iter(app.world()).count(), 0);
     let scene = app
         .world()
         .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
     assert!(scene.production_visuals_display_only);
     assert!(scene.no_renderer_authority_over_actions_or_cognition);
     assert!(scene.expression_buffer_is_read_only_projection);
-}
-
-#[test]
-fn fvr10_scene_dressing_uses_composite_vertical_props_not_unit_debug_cubes() {
-    let launch = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let mut creature_query = app
-        .world_mut()
-        .query::<(&Fvr09CuteBipedCreatureMarker, &Transform)>();
-    let creature_positions = creature_query
-        .iter(app.world())
-        .map(|(_, transform)| transform.translation)
-        .collect::<Vec<_>>();
-    assert!(!creature_positions.is_empty());
-    let mut creature_tile_query = app
-        .world_mut()
-        .query::<&Fvr04ProductionCreatureVisualMarker>();
-    let occupied_creature_tiles = creature_tile_query
-        .iter(app.world())
-        .map(|marker| marker.tile)
-        .collect::<BTreeSet<_>>();
-    let creature_center = creature_positions
-        .iter()
-        .fold(bevy::prelude::Vec3::ZERO, |acc, position| acc + *position)
-        / creature_positions.len() as f32;
-
-    let mut query = app.world_mut().query::<(
-        &Fvr07ProductionVisualDressing,
-        &Mesh3d,
-        &MeshMaterial3d<StandardMaterial>,
-        &Transform,
-    )>();
-    let dressing_entries = query
-        .iter(app.world())
-        .map(|(dressing, mesh, material, transform)| {
-            (
-                dressing.tile,
-                dressing.kind,
-                mesh.0.clone(),
-                material.0.clone(),
-                transform.scale.y,
-                transform.translation,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let meshes = app.world().resource::<Assets<Mesh>>();
-    let materials = app.world().resource::<Assets<StandardMaterial>>();
-    let mut composite_prop_count = 0_usize;
-    let mut vertical_prop_count = 0_usize;
-    let mut hero_cluster_prop_count = 0_usize;
-    let mut lit_material_count = 0_usize;
-    let mut new_biome_kinds = BTreeSet::new();
-    for (tile, kind, mesh_handle, material_handle, scale_y, translation) in dressing_entries {
-        assert!(
-            !occupied_creature_tiles.contains(&tile),
-            "dressing {kind:?} overlaps creature tile {tile:?}"
-        );
-        let mesh = meshes
-            .get(&mesh_handle)
-            .expect("dressing mesh should remain resident");
-        let material = materials
-            .get(&material_handle)
-            .expect("dressing material should remain resident");
-        let Some(VertexAttributeValues::Float32x3(positions)) =
-            mesh.attribute(Mesh::ATTRIBUTE_POSITION)
-        else {
-            panic!("dressing mesh is missing positions");
-        };
-        if positions.len() > 24 {
-            composite_prop_count = composite_prop_count.saturating_add(1);
-        }
-        if scale_y >= 0.75
-            && matches!(
-                kind,
-                Fvr07ProductionDressingKind::LeafPatch
-                    | Fvr07ProductionDressingKind::MushroomCluster
-                    | Fvr07ProductionDressingKind::FoodResource
-                    | Fvr07ProductionDressingKind::FlowerPatch
-                    | Fvr07ProductionDressingKind::ReedCluster
-                    | Fvr07ProductionDressingKind::HazardFungus
-                    | Fvr07ProductionDressingKind::AlienFern
-                    | Fvr07ProductionDressingKind::CrimsonSpire
-                    | Fvr07ProductionDressingKind::GlowBulbCluster
-            )
-        {
-            vertical_prop_count = vertical_prop_count.saturating_add(1);
-        }
-        let distance_to_creatures = bevy::prelude::Vec2::new(
-            translation.x - creature_center.x,
-            translation.z - creature_center.z,
-        )
-        .length();
-        if scale_y >= 1.10
-            && distance_to_creatures <= 8.0
-            && matches!(
-                kind,
-                Fvr07ProductionDressingKind::LeafPatch
-                    | Fvr07ProductionDressingKind::MushroomCluster
-                    | Fvr07ProductionDressingKind::FoodResource
-                    | Fvr07ProductionDressingKind::FlowerPatch
-                    | Fvr07ProductionDressingKind::ReedCluster
-                    | Fvr07ProductionDressingKind::HazardFungus
-                    | Fvr07ProductionDressingKind::AlienFern
-                    | Fvr07ProductionDressingKind::CrimsonSpire
-                    | Fvr07ProductionDressingKind::GlowBulbCluster
-            )
-        {
-            hero_cluster_prop_count = hero_cluster_prop_count.saturating_add(1);
-        }
-        if !material.unlit {
-            lit_material_count = lit_material_count.saturating_add(1);
-        }
-        if matches!(
-            kind,
-            Fvr07ProductionDressingKind::FlowerPatch
-                | Fvr07ProductionDressingKind::ReedCluster
-                | Fvr07ProductionDressingKind::LichenRock
-                | Fvr07ProductionDressingKind::HazardFungus
-                | Fvr07ProductionDressingKind::DeadLeafPatch
-                | Fvr07ProductionDressingKind::AlienFern
-                | Fvr07ProductionDressingKind::CrimsonSpire
-                | Fvr07ProductionDressingKind::GlowBulbCluster
-        ) {
-            new_biome_kinds.insert(kind);
-        }
-    }
-
-    assert!(
-        composite_prop_count >= 24,
-        "FVR10 scene dressing should use composite art meshes, found {composite_prop_count}"
-    );
-    assert!(
-        vertical_prop_count >= 12,
-        "FVR10 product screenshot needs visible upright flora/food props, found {vertical_prop_count}"
-    );
-    assert!(
-        hero_cluster_prop_count >= 12,
-        "FVR10 product screenshot needs hero-scale props near creatures, found {hero_cluster_prop_count}"
-    );
-    assert!(
-        lit_material_count == composite_prop_count,
-        "FVR11 composite props must use lit materials: lit={lit_material_count} composite={composite_prop_count}"
-    );
-    assert_eq!(new_biome_kinds.len(), 8);
 }

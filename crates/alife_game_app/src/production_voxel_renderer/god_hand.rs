@@ -214,11 +214,7 @@ pub(super) fn input(
         }
         if hand.held.is_some() {
             if let Some(p) = hand.ground {
-                let ground = if runtime.runtime.world().terrain().is_some() {
-                    Vec3f::new(p.x, p.y, p.z)
-                } else {
-                    Vec3f::new(p.x, p.z, 0.0)
-                };
+                let ground = Vec3f::new(p.x, p.y, p.z);
                 let _ = runtime.runtime.move_player_hold(ground);
             }
             if let Some(frame) = frame.as_deref_mut() {
@@ -388,13 +384,13 @@ mod tests {
             Quat::from_euler(EulerRot::YXZ, -2.2, -1.1, -0.4),
         ] {
             for extent in [2.4, 24.0, 240.0] {
-                for state in 0..5 {
+                for (state, pose_contact) in POSE_CONTACTS.iter().enumerate() {
                     let transform = pose_transform(camera, contact, extent, state);
                     let camera_relative = camera.inverse() * transform.rotation;
                     assert!((camera_relative * Vec3::Y - Vec3::Y).length() < 1e-5);
                     assert!((camera_relative * -Vec3::Z - Vec3::Z).length() < 1e-5);
                     assert!((camera_relative * Vec3::X + Vec3::X).length() < 1e-5);
-                    let actual = transform.transform_point(POSE_CONTACTS[state]);
+                    let actual = transform.transform_point(*pose_contact);
                     let lift = if matches!(state, 2 | 3) {
                         0.0
                     } else {
