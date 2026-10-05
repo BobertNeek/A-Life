@@ -446,6 +446,9 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
         .unwrap();
     assert!(grabbed.execution.succeeded);
 
+    // Grab establishes the body-local front grip instead of preserving the
+    // food's previous lateral offset.
+    assert_eq!(world.entity(berry).unwrap().position, pos(0.5, 0.0));
     let moved = world
         .apply_command(&command(
             ActionKind::Move.canonical_id(),
@@ -456,12 +459,12 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
         .unwrap();
     assert!(moved.execution.succeeded);
     assert_eq!(world.entity(agent).unwrap().position, pos(0.1, 0.0));
-    assert_eq!(world.entity(berry).unwrap().position, pos(0.6, 0.25));
+    assert_eq!(world.entity(berry).unwrap().position, pos(0.6, 0.0));
     assert_eq!(world.entity(berry).unwrap().carried_by, Some(organism()));
-    assert_eq!(
-        world.entity(berry).unwrap().grounded_physical.velocity,
-        moved.execution.physical.displacement
-    );
+    let held_velocity = world.entity(berry).unwrap().grounded_physical.velocity;
+    assert!((held_velocity.x - moved.execution.physical.displacement.x).abs() < 0.000001);
+    assert_eq!(held_velocity.y, 0.0);
+    assert_eq!(held_velocity.z, 0.0);
 
     let save = PortableSaveFile::from_headless_world(
         "n020-carried-object",
@@ -486,7 +489,6 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
 
     let before_agent = restored.entity(agent).unwrap().position;
-    let before_berry = restored.entity(berry).unwrap().position;
     let resumed = restored
         .apply_command(&command(
             ActionKind::Move.canonical_id(),
@@ -506,19 +508,12 @@ fn carried_object_follows_carrier_across_move_and_save_restore() {
             before_agent.z + displacement.z,
         )
     );
-    assert_eq!(
-        restored.entity(berry).unwrap().position,
-        Vec3f::new(
-            before_berry.x + displacement.x,
-            before_berry.y + displacement.y,
-            before_berry.z + displacement.z,
-        )
-    );
+    assert_eq!(restored.entity(berry).unwrap().position, pos(0.7, 0.0));
     assert_eq!(restored.entity(berry).unwrap().carried_by, Some(organism()));
-    assert_eq!(
-        restored.entity(berry).unwrap().grounded_physical.velocity,
-        displacement
-    );
+    let held_velocity = restored.entity(berry).unwrap().grounded_physical.velocity;
+    assert!((held_velocity.x - displacement.x).abs() < 0.000001);
+    assert_eq!(held_velocity.y, 0.0);
+    assert_eq!(held_velocity.z, 0.0);
 }
 
 #[test]

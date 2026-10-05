@@ -1,8 +1,8 @@
 //! One bounded asynchronous prior service; no action, target or memory authority.
 use alife_core::{
     CompressedSemanticCode, Confidence, ContextFeatureFlags, ExperienceSequenceId,
-    NormalizedScalar, PerceptionFrameDraft, SemanticContextRef, SemanticPriorPacket,
-    SemanticPriorRequest, BASIC_VOCABULARY_V1,
+    NormalizedScalar, PerceptionFrame, PerceptionFrameDraft, SemanticContextRef,
+    SemanticPriorPacket, SemanticPriorRequest, BASIC_VOCABULARY_V1,
 };
 use alife_semantic::{
     DevelopmentalPriorController, LlamaCppSlmPriorConfig, LocalSlmPriorAsyncQueue,
@@ -14,6 +14,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct SemanticPriorMetrics {
     pub model: String,
     pub provider_identity: String,
@@ -29,7 +30,62 @@ pub struct SemanticPriorMetrics {
     pub prime_wait_ms: u64,
     pub prime_timeouts: u64,
     pub empty_hint_frames: u64,
+    pub rich_information_required: bool,
+    pub validated_provider_replies: u64,
+    pub decision_inputs: VecDeque<PriorDecisionInput>,
+    pub decision_frames: u64,
+    pub decision_frames_with_prior: u64,
+    pub decision_frames_without_prior: u64,
+    pub decision_frames_with_heard_language: u64,
+    pub provider_failures: VecDeque<PriorProviderFailure>,
 }
+const MAX_RECEIPTS: usize = 256;
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PriorInputStatus {
+    #[default]
+    Unavailable,
+    Delivered,
+    UnsupportedProfile,
+    DeliberateDropout,
+    Pending,
+    ProviderFailure,
+    EmptyHints,
+    DevelopmentalGainZero,
+    NoSemanticEncoder,
+}
+
+/// Confirmed inference input, never evidence that the creature used the hint.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PriorDecisionInput {
+    pub organism: u64,
+    pub sequence: u64,
+    pub tick: u64,
+    pub dispatch_generation: u64,
+    pub frame_digest: alife_core::PerceptionFrameDigest,
+    pub sensory_digest: String,
+    pub natural_senses_context: String,
+    pub heard_tokens: usize,
+    pub grounded_object_slots: usize,
+    pub semantic_codes: usize,
+    pub nonzero_prior_lanes: usize,
+    pub semantic_encoder_lanes: usize,
+    pub nonzero_encoded_prior_lanes: usize,
+    pub gain: f32,
+    pub status: PriorInputStatus,
+    pub context_digest: Option<String>,
+    pub output_digest: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PriorProviderFailure {
+    pub organism: u64,
+    pub tick: u64,
+    pub context_digest: String,
+    pub error: String,
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PriorDelivery {
     pub organism: u64,
@@ -51,6 +107,8 @@ struct Life {
     active: Option<(String, SemanticPriorPacket, LocalSlmPriorOutput)>,
     last_request: Option<(String, u64)>,
     recently_heard: Option<(u64, Vec<String>)>,
+    last_context: String,
+    input_status: PriorInputStatus,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct PriorResume {
@@ -144,6 +202,98 @@ impl RuntimeSemanticPrior {
         }))
     }
 
+    #[cfg(feature = "foundation-training")]
+    pub fn require_rich_information(&mut self) {
+        self.dropout_seed = None;
+        self.metrics.rich_information_required = true;
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn ready(&self, id: u64) -> bool {
+        self.lives.get(&id).is_some_and(|life| {
+            life.controller.developmental_gain() > 0.0
+                && (self
+                    .cache
+                    .get(&life.last_context)
+                    .is_some_and(has_usable_hints)
+                    || life.active.as_ref().is_some_and(|(key, packet, output)| {
+                        key == &life.last_context
+                            && packet.plasticity_modulation > 0.0
+                            && has_usable_hints(output)
+                    }))
+        })
+    }
+
+    pub fn record_decision_input(
+        &mut self,
+        frame: &PerceptionFrame,
+        sequence: u64,
+        dispatch_generation: u64,
+        semantic_encoder_lanes: usize,
+        nonzero_encoded_prior_lanes: usize,
+    ) {
+        let life = self.lives.get(&frame.organism_id().raw());
+        let context = frame.sensory().semantic_context.as_ref();
+        let gain = context.map_or(0.0, |prior| prior.confidence.raw());
+        let nonzero_prior_lanes = frame.sensory().language_prior_neural_lanes()[128..]
+            .iter()
+            .filter(|value| **value != 0.0)
+            .count();
+        let status = if nonzero_prior_lanes > 0 {
+            if nonzero_encoded_prior_lanes > 0 {
+                PriorInputStatus::Delivered
+            } else {
+                PriorInputStatus::NoSemanticEncoder
+            }
+        } else if context.is_some() && gain == 0.0 {
+            PriorInputStatus::DevelopmentalGainZero
+        } else {
+            match life.map_or(PriorInputStatus::Unavailable, |life| life.input_status) {
+                // Preparation can mark a cached hint ready. Only actual frame
+                // lanes and encoder contributions establish delivery above.
+                PriorInputStatus::Delivered => PriorInputStatus::EmptyHints,
+                status => status,
+            }
+        };
+        let active = life.and_then(|life| life.active.as_ref());
+        let receipt = PriorDecisionInput {
+            organism: frame.organism_id().raw(),
+            sequence,
+            tick: frame.tick().raw(),
+            dispatch_generation,
+            frame_digest: frame.frame_digest(),
+            sensory_digest: digest_json(frame.sensory()),
+            natural_senses_context: life.map_or_else(String::new, |life| life.last_context.clone()),
+            heard_tokens: frame
+                .sensory()
+                .language_context
+                .heard_tokens
+                .iter()
+                .flatten()
+                .count(),
+            grounded_object_slots: frame.grounded_object_slots().len(),
+            semantic_codes: context.map_or(0, |prior| prior.compressed_codes.len()),
+            nonzero_prior_lanes,
+            semantic_encoder_lanes,
+            nonzero_encoded_prior_lanes,
+            gain,
+            status,
+            context_digest: active
+                .map(|(key, _, _)| blake3::hash(key.as_bytes()).to_hex().to_string()),
+            output_digest: active.map(|(_, _, output)| digest_json(output)),
+        };
+        self.metrics.decision_frames += 1;
+        if status == PriorInputStatus::Delivered {
+            self.metrics.decision_frames_with_prior += 1;
+        } else {
+            self.metrics.decision_frames_without_prior += 1;
+        }
+        if receipt.heard_tokens > 0 {
+            self.metrics.decision_frames_with_heard_language += 1;
+        }
+        push_bounded(&mut self.metrics.decision_inputs, receipt);
+    }
+
     pub fn prepare(
         &mut self,
         draft: PerceptionFrameDraft,
@@ -174,6 +324,8 @@ impl RuntimeSemanticPrior {
         let id = draft.organism_id();
         let tick = draft.tick();
         if draft.sensor_profile() != alife_core::SensorProfile::GroundedTerrainVisionV1 {
+            self.lives.entry(id.raw()).or_default().input_status =
+                PriorInputStatus::UnsupportedProfile;
             return Ok(draft);
         }
         if self
@@ -183,6 +335,8 @@ impl RuntimeSemanticPrior {
             if consume {
                 self.metrics.dropout_frames += 1;
             }
+            self.lives.entry(id.raw()).or_default().input_status =
+                PriorInputStatus::DeliberateDropout;
             return Ok(draft);
         }
         let life = self.lives.entry(id.raw()).or_default();
@@ -206,10 +360,25 @@ impl RuntimeSemanticPrior {
                 .as_ref()
                 .map_or(&[], |(_, words)| words.as_slice()),
         );
+        if life.last_context != key {
+            life.input_status = PriorInputStatus::Unavailable;
+        }
+        life.last_context = key.clone();
         if let Some(pending) = life.pending.take() {
             match pending.reply.try_recv() {
                 Ok(Ok(output)) => {
-                    output.validate()?;
+                    if let Err(error) = output.validate() {
+                        record_provider_failure(
+                            &mut self.metrics,
+                            id.raw(),
+                            tick.raw(),
+                            &pending.key,
+                            format!("invalid provider output: {error:?}"),
+                        );
+                        life.input_status = PriorInputStatus::ProviderFailure;
+                        return Err(error);
+                    }
+                    self.metrics.validated_provider_replies += 1;
                     if pending.key != key {
                         self.metrics.stale_replies += 1;
                     }
@@ -225,12 +394,33 @@ impl RuntimeSemanticPrior {
                     }
                 }
                 Ok(Err(error)) => {
-                    self.metrics.failures += 1;
-                    self.metrics.last_error = Some(error);
+                    record_provider_failure(
+                        &mut self.metrics,
+                        id.raw(),
+                        tick.raw(),
+                        &pending.key,
+                        error,
+                    );
+                    life.input_status = PriorInputStatus::ProviderFailure;
                 }
-                Err(TryRecvError::Empty) => life.pending = Some(pending),
-                Err(TryRecvError::Disconnected) => self.metrics.failures += 1,
+                Err(TryRecvError::Empty) => {
+                    life.pending = Some(pending);
+                    life.input_status = PriorInputStatus::Pending;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    record_provider_failure(
+                        &mut self.metrics,
+                        id.raw(),
+                        tick.raw(),
+                        &pending.key,
+                        "local SLM prior worker disconnected".into(),
+                    );
+                    life.input_status = PriorInputStatus::ProviderFailure;
+                }
             }
+        }
+        if life.pending.is_none() && life.input_status == PriorInputStatus::Pending {
+            life.input_status = PriorInputStatus::Unavailable;
         }
         if life.active.as_ref().is_some_and(|(context, packet, _)| {
             context != &key || tick.raw() >= packet.expires_at_tick.raw()
@@ -240,6 +430,11 @@ impl RuntimeSemanticPrior {
         if life.active.is_none() {
             if let Some(output) = self.cache.get(&key) {
                 if !consume {
+                    life.input_status = if has_usable_hints(output) {
+                        PriorInputStatus::Delivered
+                    } else {
+                        PriorInputStatus::EmptyHints
+                    };
                     return Ok(draft);
                 }
                 let slots: Vec<u16> = output
@@ -281,6 +476,7 @@ impl RuntimeSemanticPrior {
                     self.metrics.cache_hits += 1;
                 } else if consume {
                     self.metrics.empty_hint_frames += 1;
+                    life.input_status = PriorInputStatus::EmptyHints;
                 }
             } else if life.pending.is_none()
                 && life.last_request.as_ref().is_none_or(|(context, at)| {
@@ -291,22 +487,42 @@ impl RuntimeSemanticPrior {
                     request_id: self.next_request,
                     prompt: key.clone(),
                 };
-                if let Ok(reply) = self.queue.submit(request) {
-                    self.next_request = self
-                        .next_request
-                        .checked_add(1)
-                        .ok_or(alife_core::ScaffoldContractError::InvalidId)?;
-                    life.pending = Some(Pending {
-                        key: key.clone(),
-                        reply,
-                    });
-                    life.last_request = Some((key.clone(), tick.raw()));
-                    self.metrics.requests += 1;
+                match self.queue.submit(request) {
+                    Ok(reply) => {
+                        self.next_request = self
+                            .next_request
+                            .checked_add(1)
+                            .ok_or(alife_core::ScaffoldContractError::InvalidId)?;
+                        life.pending = Some(Pending {
+                            key: key.clone(),
+                            reply,
+                        });
+                        life.last_request = Some((key.clone(), tick.raw()));
+                        self.metrics.requests += 1;
+                        life.input_status = PriorInputStatus::Pending;
+                    }
+                    Err(error) => {
+                        record_provider_failure(
+                            &mut self.metrics,
+                            id.raw(),
+                            tick.raw(),
+                            &key,
+                            format!("local SLM prior submit failed: {error:?}"),
+                        );
+                        life.input_status = PriorInputStatus::ProviderFailure;
+                    }
                 }
             }
         }
         let context = life.active.as_ref().map(|(_, packet, output)| {
-            self.metrics.delivered_frames += 1;
+            if consume {
+                self.metrics.delivered_frames += 1;
+            }
+            life.input_status = if packet.plasticity_modulation > 0.0 {
+                PriorInputStatus::Delivered
+            } else {
+                PriorInputStatus::DevelopmentalGainZero
+            };
             SemanticContextRef {
                 feature_flags: ContextFeatureFlags::NONE,
                 confidence: Confidence(packet.plasticity_modulation),
@@ -452,6 +668,8 @@ impl RuntimeSemanticPrior {
                     state.last_request
                 },
                 recently_heard: state.recently_heard,
+                last_context: String::new(),
+                input_status: PriorInputStatus::Unavailable,
             },
         );
         Ok(())
@@ -498,6 +716,14 @@ fn bounded_context(draft: &PerceptionFrameDraft, words: &[String]) -> String {
             "low"
         }
     );
+    context.push_str(&format!(
+        "smells chemical levels {:.1},{:.1},{:.1}; feels contact pressure {:.1} grip {:.1}; ",
+        draft.sensory().channels.smell_chemistry[0],
+        draft.sensory().channels.smell_chemistry[1],
+        draft.sensory().channels.smell_chemistry[2],
+        draft.sensory().channels.tactile_contact[0],
+        draft.sensory().channels.tactile_contact[2]
+    ));
     for slot in draft.grounded_object_slots().iter().take(2) {
         context.push_str(&format!("sees object color {:.1},{:.1},{:.1} shape {:.1},{:.1},{:.1} chemical {:.1},{:.1},{:.1}; ",
             slot.color[0], slot.color[1], slot.color[2], slot.shape[0], slot.shape[1], slot.shape[2],
@@ -513,4 +739,268 @@ fn bounded_context(draft: &PerceptionFrameDraft, words: &[String]) -> String {
         context.push_str("sees nearby terrain surface");
     }
     context
+}
+
+fn has_usable_hints(output: &LocalSlmPriorOutput) -> bool {
+    output.lexicon_associations.iter().any(|association| {
+        association.salience > 0.0
+            && BASIC_VOCABULARY_V1
+                .iter()
+                .any(|(word, _)| *word == association.token)
+    })
+}
+
+fn digest_json(value: &impl serde::Serialize) -> String {
+    // Only validated typed runtime records are serialized here.
+    blake3::hash(&serde_json::to_vec(value).expect("typed prior receipt serializes"))
+        .to_hex()
+        .to_string()
+}
+
+fn push_bounded<T>(receipts: &mut VecDeque<T>, receipt: T) {
+    if receipts.len() >= MAX_RECEIPTS {
+        receipts.pop_front();
+    }
+    receipts.push_back(receipt);
+}
+
+fn record_provider_failure(
+    metrics: &mut SemanticPriorMetrics,
+    organism: u64,
+    tick: u64,
+    key: &str,
+    error: String,
+) {
+    let error: String = error.chars().take(512).collect();
+    metrics.failures += 1;
+    metrics.last_error = Some(error.clone());
+    push_bounded(
+        &mut metrics.provider_failures,
+        PriorProviderFailure {
+            organism,
+            tick,
+            context_digest: blake3::hash(key.as_bytes()).to_hex().to_string(),
+            error,
+        },
+    );
+}
+
+#[cfg(all(test, feature = "foundation-training"))]
+mod tests {
+    use super::*;
+    use alife_core::{
+        HomeostaticSnapshot, OrganismId, PerceptionContextBlock, SensorProfile, Tick, Vec3f,
+    };
+
+    fn draft() -> PerceptionFrameDraft {
+        let mut world = alife_world::HeadlessScenarioBuilder::new(77)
+            .agent("learner", OrganismId(5), Vec3f::ZERO)
+            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
+            .build()
+            .unwrap();
+        world
+            .perception_frame_draft(
+                OrganismId(5),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap()
+    }
+    fn output() -> LocalSlmPriorOutput {
+        LocalSlmPriorOutput {
+            schema: "alife.ca27.local_slm_prior_output.v1".into(),
+            schema_version: 1,
+            model: "test-prior".into(),
+            salience_labels: vec!["near".into()],
+            context_summary: "nearby observation".into(),
+            lexicon_associations: vec![alife_semantic::SlmLexiconAssociation {
+                token: "eat".into(),
+                salience: 0.5,
+            }],
+            perception_tags: vec!["near".into()],
+            can_issue_actions: false,
+            can_rewrite_weights: false,
+            can_bypass_arbitration: false,
+            hidden_vector_injection: false,
+            bounded_context_only: true,
+        }
+    }
+    fn prior() -> RuntimeSemanticPrior {
+        RuntimeSemanticPrior {
+            queue: LocalSlmPriorAsyncQueue::new(LlamaCppSlmPriorConfig::default()).unwrap(),
+            lives: BTreeMap::new(),
+            cache: BTreeMap::new(),
+            next_request: 1,
+            cache_path: std::env::temp_dir().join("alife-semantic-receipt-unused-cache.json"),
+            dropout_seed: Some(5),
+            metrics: SemanticPriorMetrics::default(),
+        }
+    }
+
+    #[test]
+    fn rich_lesson_disables_dropout_and_only_dispatch_creates_input_receipt() {
+        let draft = draft();
+        let mut prior = prior();
+        let key = bounded_context(&draft, &[]);
+        prior.cache.insert(key, output());
+        assert!(prior
+            .prepare(draft.clone(), ExperienceSequenceId(1))
+            .unwrap()
+            .sensory()
+            .semantic_context
+            .is_none());
+        assert_eq!(prior.metrics.dropout_frames, 1);
+        prior.require_rich_information();
+        prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        assert!(prior.ready(5));
+        assert_eq!(prior.metrics.delivered_frames, 0);
+        assert_eq!(prior.metrics.decision_frames, 0);
+        let prepared = prior.prepare(draft, ExperienceSequenceId(1)).unwrap();
+        assert!(prepared.sensory().semantic_context.is_some());
+        assert_eq!(prior.metrics.delivered_frames, 1);
+        assert_eq!(prior.metrics.decision_frames, 0);
+        let frame = prepared.finalize(PerceptionContextBlock::empty()).unwrap();
+        prior.record_decision_input(&frame, 1, 7, 128, 8);
+        let receipt = prior.metrics.decision_inputs.back().unwrap();
+        assert_eq!(receipt.status, PriorInputStatus::Delivered);
+        assert_eq!((receipt.sequence, receipt.dispatch_generation), (1, 7));
+        assert!(receipt.nonzero_prior_lanes > 0);
+        assert!(receipt.natural_senses_context.contains("smells chemical"));
+        assert!(receipt.natural_senses_context.contains("feels contact"));
+        assert!(receipt.context_digest.is_some());
+        assert_eq!(prior.metrics.decision_frames_with_prior, 1);
+        prior.record_decision_input(&frame, 2, 8, 0, 0);
+        assert_eq!(
+            prior.metrics.decision_inputs.back().unwrap().status,
+            PriorInputStatus::NoSemanticEncoder
+        );
+        assert_eq!(prior.metrics.decision_frames_without_prior, 1);
+    }
+
+    #[test]
+    fn ready_cached_hint_cannot_count_as_delivery_on_an_empty_frame() {
+        let draft = draft();
+        let mut prior = prior();
+        prior.require_rich_information();
+        prior.cache.insert(bounded_context(&draft, &[]), output());
+        prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        assert!(prior.ready(5));
+        let frame = draft.finalize(PerceptionContextBlock::empty()).unwrap();
+        prior.record_decision_input(&frame, 1, 7, 128, 0);
+        assert_eq!(prior.metrics.decision_frames_with_prior, 0);
+        assert_eq!(prior.metrics.decision_frames_without_prior, 1);
+        assert_eq!(
+            prior.metrics.decision_inputs.back().unwrap().status,
+            PriorInputStatus::EmptyHints
+        );
+    }
+
+    #[test]
+    fn current_active_hint_survives_resume_without_cache_or_prime_delivery() {
+        let draft = draft();
+        let mut prior = prior();
+        prior.require_rich_information();
+        prior.cache.insert(bounded_context(&draft, &[]), output());
+        let prepared = prior
+            .prepare(draft.clone(), ExperienceSequenceId(1))
+            .unwrap();
+        let gain = prepared
+            .sensory()
+            .semantic_context
+            .as_ref()
+            .unwrap()
+            .confidence;
+        let bytes = prior.snapshot(5).unwrap().unwrap();
+        let mut restored = self::prior();
+        restored.require_rich_information();
+        restored.restore_life(5, 0, &bytes).unwrap();
+        assert!(restored.cache.is_empty());
+        restored
+            .prime(draft.clone(), ExperienceSequenceId(2))
+            .unwrap();
+        assert!(restored.ready(5));
+        assert_eq!(restored.metrics.delivered_frames, 0);
+        assert_eq!(restored.metrics.decision_frames, 0);
+        let resumed = restored.prepare(draft, ExperienceSequenceId(2)).unwrap();
+        assert_eq!(
+            resumed
+                .sensory()
+                .semantic_context
+                .as_ref()
+                .unwrap()
+                .confidence,
+            gain
+        );
+    }
+
+    #[test]
+    fn provider_failure_and_disconnection_remain_visible() {
+        for disconnected in [false, true] {
+            let draft = draft();
+            let key = bounded_context(&draft, &[]);
+            let mut prior = prior();
+            prior.require_rich_information();
+            let (tx, rx) = std::sync::mpsc::channel();
+            if !disconnected {
+                tx.send(Err("provider unavailable".into())).unwrap();
+            }
+            drop(tx);
+            let life = prior.lives.entry(5).or_default();
+            life.pending = Some(Pending {
+                key: key.clone(),
+                reply: rx,
+            });
+            life.last_request = Some((key, 0));
+            let prepared = prior.prepare(draft, ExperienceSequenceId(1)).unwrap();
+            assert!(!prior.ready(5));
+            let frame = prepared.finalize(PerceptionContextBlock::empty()).unwrap();
+            prior.record_decision_input(&frame, 1, 7, 128, 0);
+            assert_eq!(prior.metrics.failures, 1);
+            assert!(prior.metrics.last_error.is_some());
+            assert_eq!(prior.metrics.provider_failures.len(), 1);
+            assert_eq!(
+                prior.metrics.decision_inputs.back().unwrap().status,
+                PriorInputStatus::ProviderFailure
+            );
+            let retry = prior
+                .prepare(self::draft(), ExperienceSequenceId(2))
+                .unwrap();
+            let retry_frame = retry.finalize(PerceptionContextBlock::empty()).unwrap();
+            prior.record_decision_input(&retry_frame, 2, 8, 128, 0);
+            assert_eq!(
+                prior.metrics.decision_inputs.back().unwrap().status,
+                PriorInputStatus::ProviderFailure
+            );
+            assert_eq!(prior.metrics.failures, 1);
+        }
+    }
+
+    #[test]
+    fn empty_hints_are_not_readiness_and_receipts_are_bounded() {
+        let draft = draft();
+        let mut prior = prior();
+        prior.require_rich_information();
+        let mut empty = output();
+        empty.lexicon_associations[0].salience = 0.0;
+        empty.validate().unwrap();
+        prior.cache.insert(bounded_context(&draft, &[]), empty);
+        prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        assert!(!prior.ready(5));
+        let frame = prior
+            .prepare(draft, ExperienceSequenceId(1))
+            .unwrap()
+            .finalize(PerceptionContextBlock::empty())
+            .unwrap();
+        for sequence in 1..=300 {
+            prior.record_decision_input(&frame, sequence, sequence, 128, 0);
+        }
+        assert_eq!(prior.metrics.decision_frames_without_prior, 300);
+        assert_eq!(prior.metrics.decision_inputs.len(), MAX_RECEIPTS);
+        assert_eq!(prior.metrics.decision_inputs.front().unwrap().sequence, 45);
+        assert_eq!(
+            prior.metrics.decision_inputs.back().unwrap().status,
+            PriorInputStatus::EmptyHints
+        );
+    }
 }

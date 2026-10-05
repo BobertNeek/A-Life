@@ -5992,6 +5992,23 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
+    /// Explicit lessons require hints rather than the training dropout ablation.
+    #[cfg(feature = "foundation-training")]
+    pub(crate) fn require_foundation_rich_information(&mut self) -> Result<(), GameAppShellError> {
+        if self.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "rich-information lesson requires grounded natural senses".into(),
+            });
+        }
+        let prior = self.semantic_prior.as_mut().ok_or_else(|| {
+            GameAppShellError::InvalidProductionFrontend {
+                message: "rich-information lesson requires the local semantic prior; ALIFE_SLM_PRIOR=off is incompatible".into(),
+            }
+        })?;
+        prior.require_rich_information();
+        Ok(())
+    }
+
     /// Setup-only priming for max-speed collection. No world tick, neural
     /// dispatch or learned state advances while the provider prepares a hint.
     #[cfg(feature = "foundation-training")]
@@ -6025,6 +6042,14 @@ impl GpuLiveBrainRuntime {
         }
         prior.metrics.prime_wait_ms +=
             started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        if prior.metrics.rich_information_required && !prior.ready(raw) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "rich-information semantic prior not ready after bounded priming (timeouts={}, failures={}, last_error={:?})",
+                    prior.metrics.prime_timeouts, prior.metrics.failures, prior.metrics.last_error
+                ),
+            });
+        }
         Ok(())
     }
 

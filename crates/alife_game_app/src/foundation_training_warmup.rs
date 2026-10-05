@@ -70,6 +70,7 @@ fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
         FoundationTeacherLesson::MazeNavigation => 5,
         FoundationTeacherLesson::VocabularyReception => 6,
         FoundationTeacherLesson::VocabularyProduction => 7,
+        FoundationTeacherLesson::EatHeldFood => 8,
     }
 }
 
@@ -83,7 +84,7 @@ struct ImitationSpan {
 }
 
 fn imitation_spans(lessons: &[(FoundationTeacherLesson, usize)]) -> Vec<ImitationSpan> {
-    let mut categories = [const { Vec::new() }; 8];
+    let mut categories = [const { Vec::new() }; 9];
     for (demo, (lesson, _)) in lessons.iter().enumerate() {
         categories[lesson_index(*lesson)].push(demo);
     }
@@ -229,7 +230,7 @@ pub fn run_foundation_imitation_warmup(
     let root = manifest_path
         .parent()
         .ok_or("manifest has no parent directory")?;
-    let mut category_counts = vec![0usize; 8];
+    let mut category_counts = vec![0usize; 9];
     let mut corpus_lesson_budgets = [
         FoundationTeacherLesson::Feeding,
         FoundationTeacherLesson::HazardAvoidance,
@@ -239,6 +240,7 @@ pub fn run_foundation_imitation_warmup(
         FoundationTeacherLesson::MazeNavigation,
         FoundationTeacherLesson::VocabularyReception,
         FoundationTeacherLesson::VocabularyProduction,
+        FoundationTeacherLesson::EatHeldFood,
     ]
     .into_iter()
     .map(crate::FoundationLessonBudget::new)
@@ -298,7 +300,13 @@ pub fn run_foundation_imitation_warmup(
         demos.push((directory.join("replay"), references, labels.targets));
     }
     if let Some(expected) = &manifest.category_counts {
-        if expected != &category_counts {
+        // The ninth lesson is optional for existing eight-category corpora.
+        if ![8, 9].contains(&expected.len())
+            || expected != &category_counts[..expected.len()]
+            || category_counts[expected.len()..]
+                .iter()
+                .any(|count| *count != 0)
+        {
             return Err("warm-up category counts differ from the manifest".into());
         }
     }

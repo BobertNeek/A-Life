@@ -103,6 +103,14 @@ pub struct FoundationCycleReceipt {
     pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
     #[serde(default)]
     pub speech_target_rows: usize,
+    #[serde(default)]
+    pub teacher_cue_frames: usize,
+    #[serde(default)]
+    pub teacher_cue_tokens: Vec<u16>,
+    #[serde(default)]
+    pub held_food_setup: Option<crate::foundation_training::FoundationHeldFoodSetup>,
+    #[serde(default)]
+    pub held_food_consumption_events: usize,
     pub collection_seconds: f64,
     pub update_seconds: f64,
     pub old_asset_digest: String,
@@ -1125,6 +1133,9 @@ fn run_foundation_training_cycle_from(
             "lesson": lesson,
             "maze_walls": scenario.as_ref().map(|s|s.maze_walls.iter().map(|(id,p)|(id.raw(),p.to_array())).collect::<Vec<_>>()),
             "vocabulary_token": scenario.as_ref().and_then(|s|s.vocabulary_token),
+            "teacher_cue_tokens": scenario.as_ref().map(|s| &s.teacher_cue_tokens),
+            "teacher_cue_kind": "contextual_request_not_completed_action_narration",
+            "held_food_setup": scenario.as_ref().and_then(|s|s.held_food_setup.as_ref()),
             "vocabulary_target": scenario.as_ref().and_then(|s|s.vocabulary_target).map(|id|id.raw()),
             "food_position": scenario_position("food-01")?,
             "blocker_position": scenario_position("obstacle-01")?,
@@ -1180,6 +1191,30 @@ fn run_foundation_training_cycle_from(
         .clone();
     let mut minimum_energy = initial_energy;
     let mut consumed_events = 0_u64;
+    let mut teacher_cue_frames = 0;
+    let mut held_food_consumption_events = 0;
+    let lesson_food_held = |runtime: &GpuLiveBrainRuntime| {
+        scenario
+            .as_ref()
+            .and_then(|s| s.held_food_setup.as_ref())
+            .is_some_and(|setup| {
+                runtime
+                    .world()
+                    .entity(setup.target)
+                    .is_some_and(|food| food.carried_by == Some(setup.organism) && !food.consumed)
+            })
+    };
+    let observe_lesson = |step: &crate::FoundationTrainingStep, held: bool| {
+        scenario.as_ref().map_or((false, false), |s| {
+            (
+                crate::foundation_training::heard_foundation_teacher_cue(
+                    &step.frame,
+                    &s.teacher_cue_tokens,
+                ),
+                crate::foundation_training::held_food_step_consumed(step, s.food, held),
+            )
+        })
+    };
     let mut first_consumed_world_tick = None;
     let mut food_available_elapsed_seconds = None;
     let mut first_consumed_elapsed_seconds = None;
@@ -1192,7 +1227,8 @@ fn run_foundation_training_cycle_from(
     if let Some(scenario) = &scenario {
         crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
     }
-    runtime.prime_foundation_semantic_prior()?;
+    crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, output, lesson)?;
+    let held_before = lesson_food_held(&runtime);
     runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
@@ -1212,6 +1248,9 @@ fn run_foundation_training_cycle_from(
     if first[0].frame.organism_id() != organism_id {
         return Err("first training capture belongs to a different organism".into());
     }
+    let (heard_cue, consumed_held) = observe_lesson(&first[0], held_before);
+    teacher_cue_frames += usize::from(heard_cue);
+    held_food_consumption_events += usize::from(consumed_held);
     minimum_energy = minimum_energy.min(
         first[0]
             .patch
@@ -1241,6 +1280,7 @@ fn run_foundation_training_cycle_from(
         food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
     }
     std::fs::write(output.join("phase.txt"), "first-capture")?;
+    crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     let phenotype = first[0].before.phenotype.as_ref().clone();
     let mask = if let Some(checkpoint) = &restored_actor {
         checkpoint.stage_mask.clone()
@@ -1331,6 +1371,14 @@ fn run_foundation_training_cycle_from(
         if let Some(scenario) = &scenario {
             crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
         }
+        if lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+            crate::foundation_training::prime_foundation_lesson_prior(
+                &mut runtime,
+                output,
+                lesson,
+            )?;
+        }
+        let held_before = lesson_food_held(&runtime);
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
                 output.join("runtime-performance-failed.json"),
@@ -1444,6 +1492,9 @@ fn run_foundation_training_cycle_from(
         if captured.len() != 1 {
             return Err(format!("cycle world tick {after}: expected at most one decision").into());
         }
+        let (heard_cue, consumed_held) = observe_lesson(&captured[0], held_before);
+        teacher_cue_frames += usize::from(heard_cue);
+        held_food_consumption_events += usize::from(consumed_held);
         if gap {
             verify_foundation_replay_step(&mut trainer, &captured[0])?;
             writer.start_segment()?;
@@ -1468,6 +1519,7 @@ fn run_foundation_training_cycle_from(
             break;
         }
     }
+    crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     let collection_seconds = started.elapsed().as_secs_f64();
     let train_rows = references.len() - usize::from(terminal_biology.is_none());
     if train_rows == 0 {
@@ -1787,6 +1839,12 @@ fn run_foundation_training_cycle_from(
         sleep_gap_reward_total,
         semantic_prior: runtime.semantic_prior_metrics().cloned(),
         speech_target_rows: speech_targets[..train_rows].iter().flatten().count(),
+        teacher_cue_frames,
+        teacher_cue_tokens: scenario
+            .as_ref()
+            .map_or_else(Vec::new, |s| s.teacher_cue_tokens.clone()),
+        held_food_setup: scenario.as_ref().and_then(|s| s.held_food_setup.clone()),
+        held_food_consumption_events,
         collection_seconds,
         update_seconds,
         old_asset_digest: digest(&asset),

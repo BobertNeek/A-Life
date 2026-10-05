@@ -898,6 +898,46 @@ impl GpuLiveBrainRuntime {
                 return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
             }
             self.record_gpu_tick_metrics(&gpu_ticks)?;
+            // These inputs were accepted by the authoritative GPU dispatch.
+            // A prepared packet or a setup-only prime is not a delivery receipt.
+            if let Some(prior) = self.semantic_prior.as_mut() {
+                for (prepared, gpu_tick) in batch.iter().zip(&gpu_ticks) {
+                    if gpu_tick.frame_digest != prepared.frame.frame_digest()
+                        || gpu_tick.base_digest != prepared.frame.base_digest()
+                    {
+                        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+                    }
+                    let resident = self
+                        .residents
+                        .get(&prepared.frame.organism_id().raw())
+                        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                    let lanes = prepared.frame.sensory().language_prior_neural_lanes();
+                    let assignments = resident
+                        .phenotype
+                        .sensor_encoder()
+                        .assignments()
+                        .iter()
+                        .filter(|a| {
+                            a.source_group() == alife_core::SensorEncoderSourceGroup::SemanticPrior
+                        });
+                    let semantic_encoder_lanes = assignments.clone().count();
+                    let nonzero_encoded = assignments
+                        .filter(|a| {
+                            let source = lanes[128 + usize::from(a.source_index())];
+                            let (low, high) = a.clamp_range();
+                            (source * a.scale() + a.bias()).clamp(low, high)
+                                != a.bias().clamp(low, high)
+                        })
+                        .count();
+                    prior.record_decision_input(
+                        &prepared.frame,
+                        resident.next_sequence,
+                        gpu_tick.dispatch_generation,
+                        semantic_encoder_lanes,
+                        nonzero_encoded,
+                    );
+                }
+            }
             let rows = batch.into_iter().zip(gpu_ticks).collect();
             let summaries = self
                 .process_selection_batch_in_staged_tick(rows)

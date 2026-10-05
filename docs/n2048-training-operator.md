@@ -1,5 +1,12 @@
 # N2048 training operator
 
+Cassidy's first primitive is now available as `eat_held_food`. See the
+[October 5 eating lesson and bounded night plan](reviews/2026-10-05-eat-held-food.md)
+for legal held-food setup, contextual spatial speech without speech labels,
+required semantic-prior input receipts, and a separate single-cycle probe.
+Its GPU behavior and the PC provider are Unrun/Unknown until tonight's owner
+records the checks; it is not added to the automatic multi-skill campaign.
+
 Use PowerShell 7 from the authoritative repository root. The launcher has separate fidelity preparation and bounded campaign modes. Neither a completed teacher corpus nor a successful training cycle by itself proves learned care.
 
 The next proposed [vision, maze, and vocabulary campaign](n2048-vision-maze-vocabulary-run-2026-09-28.md) must use the internal SLM prior during warmup and training, with deliberate dropout, and run headlessly at maximum sustainable speed. The launcher has explicit Care and VisionLanguage curricula. The [September 29 seven-repair report](n2048-seven-repairs-2026-09-29.md) records the current changes and preparation; the [September 28 evidence](n2048-prior-maze-speech-repairs-2026-09-28.md) is historical. No founder training campaign or scheduling is authorized by this operator update.
