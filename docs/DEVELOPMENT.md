@@ -32,9 +32,12 @@ Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
 selected creature, or finds the first creature when none is selected.
 Page Up and Page Down select and follow the previous or next creature. F toggles
-follow, and R returns to the starting view. Camera movement loads a bounded
-terrain region around the view without moving creatures or advancing simulation
-time. World shortcuts are suspended while typing in the conversation panel.
+follow, and R returns to the starting view. New Game uses the authored island.
+Camera movement changes the view without moving creatures or advancing simulation
+time. Unbound CPU/ECS scenes remain static diagnostics for meshing, vertex colors,
+identity and persistence; they do not install the retired procedural camera stream
+or establish playable island acceptance. World shortcuts are suspended while typing
+in the conversation panel.
 
 Creature pose transitions blend over time. Ground contact uses the posed mesh
 bounds and rendered terrain heights. The approved Hearthling art and its

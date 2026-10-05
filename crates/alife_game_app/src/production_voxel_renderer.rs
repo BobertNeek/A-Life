@@ -73,7 +73,6 @@ use crate::{
 };
 
 mod camera_navigation;
-mod camera_terrain;
 mod creature_grounding;
 mod god_hand;
 mod graphics_capture;
@@ -1380,7 +1379,6 @@ impl Fvr04CreatureSpawnContext {
 #[derive(Debug, Clone)]
 struct Fvr04RuntimeSceneState {
     terrain: Option<alife_world::WorldTerrain>,
-    backend: PersistentVoxelWorldBackend,
     snapshot: PersistentVoxelWorldSnapshot,
     creatures: Vec<Fvr04CreatureVisualRecord>,
 }
@@ -2179,7 +2177,6 @@ pub fn spawn_fvr03_production_voxel_scene(
             god_hand::animate.after(highlands::constrain_camera),
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
-            camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
             highlands::constrain_camera.after(sync_fvr04_camera_follow),
             highlands::update.after(highlands::constrain_camera),
             sync_fvr04_creature_label,
@@ -2350,7 +2347,6 @@ fn load_fvr04_runtime_state_from_save(
             production_save.world.terrain,
             production_save.world.terrain_state.as_ref(),
         )?,
-        backend,
         snapshot,
         creatures,
     })
@@ -2623,27 +2619,6 @@ fn prepare_fvr04_runtime_scene_candidate(
     ux_settings: &Fvr05ProductionUxSettings,
     context: &Fvr04CreatureSpawnContext,
 ) -> Result<Fvr04RuntimeSceneCandidate, GameAppShellError> {
-    let occupied_tiles = runtime_state
-        .creatures
-        .iter()
-        .map(|creature| creature.tile)
-        .collect::<BTreeSet<_>>();
-    prepare_fvr04_runtime_scene_candidate_with_occupied(
-        runtime_state,
-        settings,
-        ux_settings,
-        context,
-        &occupied_tiles,
-    )
-}
-
-fn prepare_fvr04_runtime_scene_candidate_with_occupied(
-    runtime_state: Fvr04RuntimeSceneState,
-    settings: Fvr03ProductionVoxelRendererSettings,
-    ux_settings: &Fvr05ProductionUxSettings,
-    context: &Fvr04CreatureSpawnContext,
-    occupied_tiles: &BTreeSet<VoxelTileCoord>,
-) -> Result<Fvr04RuntimeSceneCandidate, GameAppShellError> {
     validate_fvr04_creature_spawn_inputs(&runtime_state.creatures, context)?;
     let snapshot = &runtime_state.snapshot;
     let visible_chunks = snapshot
@@ -2737,12 +2712,17 @@ fn prepare_fvr04_runtime_scene_candidate_with_occupied(
             )
         })
         .collect::<BTreeMap<_, _>>();
+    let occupied_tiles = runtime_state
+        .creatures
+        .iter()
+        .map(|creature| creature.tile)
+        .collect::<BTreeSet<_>>();
     let dressing_spawns = if runtime_state.terrain.is_some() {
         Vec::new()
     } else {
         plan_production_terrain_dressing(
             &dressing_tiles,
-            occupied_tiles,
+            &occupied_tiles,
             settings.production_dressing_cap,
             settings.tile_stride,
             settings.minimum_floor,
@@ -3209,13 +3189,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         world.remove_resource::<highlands::HighlandsActive>();
         highlands::stop(world);
     }
-    world.insert_resource(camera_terrain::CameraTerrainStream::new(
-        runtime_state.backend.clone(),
-        snapshot
-            .creatures
-            .first()
-            .map(|creature| creature.stable_id),
-    ));
     let terrain_receipt = spawn_fvr11_layered_terrain_meshes(
         world,
         &assets.terrain_materials,

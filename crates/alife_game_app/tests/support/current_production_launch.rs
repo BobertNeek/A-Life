@@ -14,8 +14,9 @@ use alife_world::RuntimeConfig;
 #[path = "untrained_population_save.rs"]
 mod untrained_population_save;
 
-/// A current file-backed launch input, independent of the historical saved
-/// source. Keep this owner alive until the launch and its output checks finish.
+/// A current file-backed unbound world for isolated CPU/ECS and causal diagnostics.
+/// Product New Game binds the authored island; this fixture does not certify
+/// playable island presentation. Keep its owner alive through output checks.
 pub struct CurrentProductionLaunchFixture {
     _root: FixtureRoot,
     pub launch: ProductionVoxelLaunchConfig,
