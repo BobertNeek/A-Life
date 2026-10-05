@@ -228,16 +228,10 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 }
 
                 let prepared = {
-                    let Some(mut context) = world.remove_resource::<Fvr04CreatureSpawnContext>()
-                    else {
+                    let Some(context) = world.remove_resource::<Fvr04CreatureSpawnContext>() else {
                         return;
                     };
-                    let result = prepare_fvr04_creature_batch(
-                        world,
-                        &newborns,
-                        &tile_summaries,
-                        &mut context,
-                    );
+                    let result = prepare_fvr04_creature_batch(&newborns, &tile_summaries, &context);
                     world.insert_resource(context);
                     let Ok(prepared) = result else {
                         return;

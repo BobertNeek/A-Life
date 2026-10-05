@@ -70,7 +70,6 @@ pub(super) fn stream_camera_terrain(world: &mut World) {
             },
             settings,
             &world.resource::<Fvr05ProductionUxStateResource>().settings,
-            world.resource::<Fvr04CreatureSpawnContext>(),
         )
     })();
     let candidate = match result {

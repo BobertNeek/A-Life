@@ -627,8 +627,6 @@ mod tests {
 
     const GENEFORGE_RECIPE_PATH: &str =
         "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json";
-    const GENEFORGE_LICENSE_PATH: &str =
-        "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md";
     const GENEFORGE_OUTPUT_COUNT: usize = 168;
 
     fn collect_recipe_output_paths(value: &serde_json::Value, output: &mut BTreeSet<String>) {
@@ -680,52 +678,22 @@ mod tests {
     }
 
     #[test]
-    fn geneforge_manifest_is_an_exact_bounded_recipe_bound_production_pack() {
+    fn retired_geneforge_outputs_are_not_required_by_the_production_pack() {
         let root = ca12_workspace_root();
         let recipe: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(root.join(GENEFORGE_RECIPE_PATH)).unwrap(),
         )
         .unwrap();
-        let recipe_digest = recipe["recipe_sha256"]
-            .as_str()
-            .expect("GeneForge recipe must carry its canonical digest");
-        let importer_version = recipe["importer_version"]
-            .as_str()
-            .expect("GeneForge recipe must pin its importer");
-        let mut expected_paths = BTreeSet::new();
-        collect_recipe_output_paths(&recipe, &mut expected_paths);
-        assert_eq!(expected_paths.len(), GENEFORGE_OUTPUT_COUNT);
-
+        let mut retired_paths = BTreeSet::new();
+        collect_recipe_output_paths(&recipe, &mut retired_paths);
+        assert_eq!(retired_paths.len(), GENEFORGE_OUTPUT_COUNT);
+        assert!(retired_paths.iter().all(|path| !root.join(path).exists()));
         let manifest = fixture_manifest();
-        let entries = manifest
+        assert!(manifest
             .entries
             .iter()
-            .filter(|entry| expected_paths.contains(&entry.local_path))
-            .collect::<Vec<_>>();
-        assert_eq!(entries.len(), GENEFORGE_OUTPUT_COUNT);
-        assert_eq!(
-            entries
-                .iter()
-                .map(|entry| entry.local_path.clone())
-                .collect::<BTreeSet<_>>(),
-            expected_paths
-        );
-        assert!(entries.iter().map(|entry| entry.size_bytes).sum::<u64>() <= 8 * 1024 * 1024);
-        for entry in entries {
-            let generator = entry.generator.as_ref().expect("generated source receipt");
-            assert_eq!(entry.source, "https://eem.foo/geneforge/");
-            assert_eq!(entry.license, "MIT");
-            assert_eq!(entry.license_ref, GENEFORGE_LICENSE_PATH);
-            assert_eq!(entry.author, "Eem Foo");
-            assert!(entry.generated && !entry.external && entry.final_art && !entry.placeholder);
-            assert_eq!(generator.tool, importer_version);
-            assert_eq!(generator.config_path, GENEFORGE_RECIPE_PATH);
-            assert!(generator.seed.contains(recipe_digest));
-            assert_eq!(
-                entry.replacement_policy,
-                "regenerate-from-pinned-geneforge-sources-and-validated-v2-recipe"
-            );
-        }
+            .all(|entry| !retired_paths.contains(&entry.local_path)));
+        validate_production_assets(default_production_asset_manifest_path()).unwrap();
     }
 
     #[test]
@@ -734,7 +702,8 @@ mod tests {
         let generated =
             root.join("crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated");
         let stale_generated = std::fs::read_dir(generated)
-            .unwrap()
+            .into_iter()
+            .flatten()
             .filter_map(Result::ok)
             .filter(|entry| entry.path().is_file())
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
