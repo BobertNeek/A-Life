@@ -154,7 +154,7 @@ impl HeadlessWorld {
         object.position = position;
         object.grounded_physical.velocity = Vec3f::ZERO;
         if let Some(organism) = organism {
-            self.move_carried_objects(organism, displacement);
+            self.sync_carried_pose(organism)?;
         }
         self.rebuild_ecology_metrics();
         Ok(())
