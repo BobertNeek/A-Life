@@ -214,11 +214,7 @@ pub(super) fn input(
         }
         if hand.held.is_some() {
             if let Some(p) = hand.ground {
-                let ground = if runtime.runtime.world().terrain().is_some() {
-                    Vec3f::new(p.x, p.y, p.z)
-                } else {
-                    Vec3f::new(p.x, p.z, 0.0)
-                };
+                let ground = Vec3f::new(p.x, p.y, p.z);
                 let _ = runtime.runtime.move_player_hold(ground);
             }
             if let Some(frame) = frame.as_deref_mut() {

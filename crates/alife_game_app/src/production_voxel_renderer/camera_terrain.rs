@@ -49,6 +49,11 @@ pub(super) fn stream_camera_terrain(world: &mut World) {
     if previous == Some(chunk) {
         return;
     }
+    let mut creatures = world.query::<&Fvr04ProductionCreatureVisualMarker>();
+    let occupied_tiles = creatures
+        .iter(world)
+        .map(|creature| creature.tile)
+        .collect::<BTreeSet<_>>();
     // Build everything before replacing the old ground. Creature roots and the GPU
     // runtime remain untouched. The anchor only selects a read-only terrain region.
     let result = (|| -> Result<Fvr04RuntimeSceneCandidate, GameAppShellError> {
@@ -61,7 +66,7 @@ pub(super) fn stream_camera_terrain(world: &mut World) {
             .retain(|reference| reference.kind != StableVoxelRefKind::Creature);
         let scene = world.resource::<Fvr03ProductionVoxelSceneResource>();
         let settings = Fvr03ProductionVoxelRendererSettings::for_profile(scene.profile_id);
-        prepare_fvr04_runtime_scene_candidate(
+        prepare_fvr04_runtime_scene_candidate_with_occupied(
             Fvr04RuntimeSceneState {
                 terrain: None,
                 backend,
@@ -70,6 +75,7 @@ pub(super) fn stream_camera_terrain(world: &mut World) {
             },
             settings,
             &world.resource::<Fvr05ProductionUxStateResource>().settings,
+            &occupied_tiles,
         )
     })();
     let candidate = match result {
