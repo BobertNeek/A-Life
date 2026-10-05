@@ -10,6 +10,8 @@ mod action_credit_food_tests;
 mod checkpoint_manifest_pruning_tests;
 mod checkpoint_poll;
 mod checkpoint_runtime;
+#[cfg(test)]
+mod contact_chemistry_tests;
 mod cpu_preparation;
 mod durability_hold;
 mod exact_population_checkpoint;
