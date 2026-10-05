@@ -76,7 +76,7 @@ mod graphics_capture;
 mod hearthling;
 #[cfg(test)]
 mod hearthling_asset_retirement_tests;
-mod highlands;
+mod island;
 mod landscape;
 mod live_creature_projection;
 mod live_food_projection;
@@ -2115,12 +2115,12 @@ pub fn spawn_fvr03_production_voxel_scene(
         Update,
         (
             god_hand::highlight,
-            god_hand::animate.after(highlands::constrain_camera),
+            god_hand::animate.after(island::constrain_camera),
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
             camera_terrain::stream_camera_terrain.after(sync_fvr04_camera_follow),
-            highlands::constrain_camera.after(sync_fvr04_camera_follow),
-            highlands::update.after(highlands::constrain_camera),
+            island::constrain_camera.after(sync_fvr04_camera_follow),
+            island::update.after(island::constrain_camera),
             sync_fvr04_creature_label,
             sync_fvr05_panel_visibility,
             sync_fvr05_overlay_visibility,
@@ -2502,7 +2502,7 @@ fn prepare_fvr04_runtime_scene_candidate(
             }
         }
     }
-    let terrain_build = if highlands::has_baked_art(runtime_state.terrain.as_ref()) {
+    let terrain_build = if island::has_baked_art(runtime_state.terrain.as_ref()) {
         TerrainMeshBuild {
             layers: Vec::new(),
             stats: crate::terrain_mesh::TerrainMeshStats {
@@ -2924,11 +2924,11 @@ fn spawn_fvr04_runtime_scene_candidate(
     } else {
         world.remove_resource::<creature_grounding::SelectedTerrain>();
     }
-    if highlands::has_baked_art(runtime_state.terrain.as_ref()) {
-        highlands::start(world);
+    if island::has_baked_art(runtime_state.terrain.as_ref()) {
+        island::start(world);
     } else {
-        world.remove_resource::<highlands::HighlandsActive>();
-        highlands::stop(world);
+        world.remove_resource::<island::IslandActive>();
+        island::stop(world);
     }
     world.insert_resource(camera_terrain::CameraTerrainStream::new(
         runtime_state.backend.clone(),
