@@ -111,6 +111,22 @@ pub struct FoundationCycleReceipt {
     pub held_food_setup: Option<crate::foundation_training::FoundationHeldFoodSetup>,
     #[serde(default)]
     pub held_food_consumption_events: usize,
+    /// Actual captured meals whose action row participates in the update.
+    #[serde(default)]
+    pub trained_held_food_consumption_events: usize,
+    /// Fresh world/lifetime setup opportunities, not replay rows or epochs.
+    #[serde(default)]
+    pub prepared_held_food_opportunities: usize,
+    #[serde(default)]
+    pub captured_replay_rows: usize,
+    #[serde(default)]
+    pub trained_replay_rows: usize,
+    #[serde(default)]
+    pub bootstrap_replay_rows: usize,
+    #[serde(default)]
+    pub actor_optimizer_updates: u32,
+    #[serde(default)]
+    pub value_optimizer_updates: u32,
     pub collection_seconds: f64,
     pub update_seconds: f64,
     pub old_asset_digest: String,
@@ -129,6 +145,26 @@ fn digest(asset: &FoundationWeightAsset) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
+}
+
+fn cycle_replay_dose(
+    captured_rows: usize,
+    trained_rows: usize,
+    meal_rows: &[usize],
+) -> Result<(usize, usize)> {
+    let bootstrap_rows = captured_rows
+        .checked_sub(trained_rows)
+        .ok_or("trained replay row count exceeds captured rows")?;
+    if bootstrap_rows > 1
+        || meal_rows.iter().any(|row| *row >= captured_rows)
+        || meal_rows.windows(2).any(|rows| rows[0] >= rows[1])
+    {
+        return Err("cycle replay dose has inconsistent bootstrap or meal row evidence".into());
+    }
+    Ok((
+        bootstrap_rows,
+        meal_rows.iter().filter(|row| **row < trained_rows).count(),
+    ))
 }
 
 fn validate_cycle_optimizer_handoff(
@@ -400,6 +436,18 @@ fn prepare_terrain_founder_refresh(
 #[cfg(test)]
 mod founder_refresh_tests {
     use super::*;
+
+    #[test]
+    fn held_food_dose_excludes_bootstrap_meals_and_counts_terminal_trained_rows() {
+        assert_eq!(cycle_replay_dose(1025, 1024, &[1024]).unwrap(), (1, 0));
+        assert_eq!(cycle_replay_dose(1025, 1024, &[0]).unwrap(), (1, 1));
+        assert_eq!(cycle_replay_dose(3, 3, &[2]).unwrap(), (0, 1));
+        assert_eq!(cycle_replay_dose(3, 2, &[]).unwrap(), (1, 0));
+        assert!(cycle_replay_dose(1, 2, &[]).is_err());
+        assert!(cycle_replay_dose(3, 1, &[]).is_err());
+        assert!(cycle_replay_dose(3, 2, &[3]).is_err());
+        assert!(cycle_replay_dose(3, 2, &[1, 1]).is_err());
+    }
 
     fn cycle_handoff() -> (
         FoundationCycleReceipt,
@@ -884,7 +932,8 @@ pub fn resume_foundation_training_cycle_with_food_delay(
 }
 
 /// Collect policy actions in the same world layout used by a teacher lesson.
-/// The teacher is absent; all decisions and outcomes come from the live brain.
+/// Configured teacher speech enters ordinary hearing; no demonstrator selects
+/// learner actions. All decisions and outcomes come from the live brain.
 pub fn run_foundation_training_cycle_with_lesson(
     previous: Option<&Path>,
     output: &Path,
@@ -1193,6 +1242,7 @@ fn run_foundation_training_cycle_from(
     let mut consumed_events = 0_u64;
     let mut teacher_cue_frames = 0;
     let mut held_food_consumption_events = 0;
+    let mut held_food_meal_rows = Vec::new();
     let lesson_food_held = |runtime: &GpuLiveBrainRuntime| {
         scenario
             .as_ref()
@@ -1251,6 +1301,9 @@ fn run_foundation_training_cycle_from(
     let (heard_cue, consumed_held) = observe_lesson(&first[0], held_before);
     teacher_cue_frames += usize::from(heard_cue);
     held_food_consumption_events += usize::from(consumed_held);
+    if consumed_held {
+        held_food_meal_rows.push(0);
+    }
     minimum_energy = minimum_energy.min(
         first[0]
             .patch
@@ -1304,6 +1357,7 @@ fn run_foundation_training_cycle_from(
     if let Some(checkpoint) = &restored_actor {
         trainer.restore_checkpoint(checkpoint)?;
     }
+    let actor_optimizer_step_before = trainer.optimizer_step();
     let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
     let source = foundation_replay_source(&phenotype, &asset, policy_version, &initial_checkpoint)?;
     let budget = FoundationReplayBudget::default();
@@ -1495,6 +1549,9 @@ fn run_foundation_training_cycle_from(
         let (heard_cue, consumed_held) = observe_lesson(&captured[0], held_before);
         teacher_cue_frames += usize::from(heard_cue);
         held_food_consumption_events += usize::from(consumed_held);
+        if consumed_held {
+            held_food_meal_rows.push(references.len());
+        }
         if gap {
             verify_foundation_replay_step(&mut trainer, &captured[0])?;
             writer.start_segment()?;
@@ -1522,6 +1579,8 @@ fn run_foundation_training_cycle_from(
     crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     let collection_seconds = started.elapsed().as_secs_f64();
     let train_rows = references.len() - usize::from(terminal_biology.is_none());
+    let (bootstrap_replay_rows, trained_held_food_consumption_events) =
+        cycle_replay_dose(references.len(), train_rows, &held_food_meal_rows)?;
     if train_rows == 0 {
         return Err("cycle has no complete training transition".into());
     }
@@ -1554,6 +1613,9 @@ fn run_foundation_training_cycle_from(
         output.join("replay-manifest.json"),
         serde_json::to_vec(&references)?,
     )?;
+    let value_optimizer_step_before = restored_value
+        .as_ref()
+        .map_or(0, |checkpoint| checkpoint.optimizer_step);
     let mut value = if let Some(checkpoint) = restored_value {
         PpoTrainingState::from_checkpoint(checkpoint)?
     } else {
@@ -1845,6 +1907,23 @@ fn run_foundation_training_cycle_from(
             .map_or_else(Vec::new, |s| s.teacher_cue_tokens.clone()),
         held_food_setup: scenario.as_ref().and_then(|s| s.held_food_setup.clone()),
         held_food_consumption_events,
+        trained_held_food_consumption_events,
+        prepared_held_food_opportunities: usize::from(
+            scenario
+                .as_ref()
+                .is_some_and(|s| s.held_food_setup.is_some()),
+        ),
+        captured_replay_rows: references.len(),
+        trained_replay_rows: train_rows,
+        bootstrap_replay_rows,
+        actor_optimizer_updates: update
+            .actor_optimizer_step
+            .checked_sub(actor_optimizer_step_before)
+            .ok_or("cycle actor optimizer step regressed")?,
+        value_optimizer_updates: update
+            .value_optimizer_step
+            .checked_sub(value_optimizer_step_before)
+            .ok_or("cycle value optimizer step regressed")?,
         collection_seconds,
         update_seconds,
         old_asset_digest: digest(&asset),

@@ -3,7 +3,8 @@
 Cassidy's first primitive is now available as `eat_held_food`. See the
 [October 5 eating lesson and bounded night plan](reviews/2026-10-05-eat-held-food.md)
 for legal held-food setup, contextual spatial speech without speech labels,
-required semantic-prior input receipts, and a separate single-cycle probe.
+required semantic-prior input receipts, startup qualification and the separate
+held-food runner targeting thousands of fresh episodes with bounded batches.
 Its GPU behavior and the PC provider are Unrun/Unknown until tonight's owner
 records the checks; it is not added to the automatic multi-skill campaign.
 

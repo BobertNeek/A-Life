@@ -584,6 +584,16 @@ pub struct FoundationHeldFoodSetup {
     pub initial_hunger: f32,
     pub initial_health: f32,
     pub initial_sleeping: bool,
+    #[serde(default)]
+    pub sampling_seed: u64,
+    #[serde(default)]
+    pub sampling_attempts: u32,
+    #[serde(default)]
+    pub realized_body_position: Option<alife_core::Vec3f>,
+    #[serde(default)]
+    pub realized_body_yaw: Option<f32>,
+    #[serde(default)]
+    pub realized_grip_position: Option<alife_core::Vec3f>,
 }
 
 /// Prerequisite fidelity check, not behavioral acceptance or a training campaign.
@@ -2638,9 +2648,54 @@ fn scenario_random(seed: u64, stream: u64) -> f32 {
     (((value ^ (value >> 31)) >> 40) as u32 as f32) / 16_777_216.0
 }
 
+const HELD_FOOD_POSE_ATTEMPTS: u32 = 32;
+const HELD_FOOD_POSITION_RADIUS: f32 = 4.0;
+
+fn sample_foundation_held_food_pose(
+    world: &alife_world::HeadlessWorld,
+    subject: alife_core::WorldEntityId,
+    food: alife_core::WorldEntityId,
+    seed: u64,
+) -> Result<(alife_core::Vec3f, f32, u32)> {
+    let body = world.entity(subject).ok_or("held-food body missing")?;
+    let food_radius = world.entity(food).ok_or("held-food target missing")?.radius;
+    let terrain = world.terrain().ok_or("held-food terrain missing")?;
+    let objects = world.object_snapshots();
+    for attempt in 1..=HELD_FOOD_POSE_ATTEMPTS {
+        let stream = 1000 + u64::from(attempt) * 3;
+        let x = body.position.x
+            + HELD_FOOD_POSITION_RADIUS * (2.0 * scenario_random(seed, stream) - 1.0);
+        let z = body.position.z
+            + HELD_FOOD_POSITION_RADIUS * (2.0 * scenario_random(seed, stream + 1) - 1.0);
+        let yaw = std::f32::consts::TAU * scenario_random(seed, stream + 2) - std::f32::consts::PI;
+        let Some(y) = terrain.surface().height(x, z) else {
+            continue;
+        };
+        let position = alife_core::Vec3f::new(x, y, z);
+        let grip = alife_core::Vec3f::new(x + 0.5 * yaw.cos(), y, z + 0.5 * yaw.sin());
+        if !terrain.walkable(x, z) || terrain.resolve_move(position, grip).is_none() {
+            continue;
+        }
+        let clear = objects
+            .iter()
+            .filter(|object| object.id != subject && object.id != food && !object.consumed)
+            .all(|object| {
+                (object.position.x - x).hypot(object.position.z - z)
+                    > body.radius + object.radius + 0.1
+                    && (object.position.x - grip.x).hypot(object.position.z - grip.z)
+                        > food_radius + object.radius + 0.1
+            });
+        if clear {
+            return Ok((position, yaw, attempt));
+        }
+    }
+    Err(format!("held-food pose sampling exhausted {HELD_FOOD_POSE_ATTEMPTS} blocked or invalid ground attempts for seed {seed}").into())
+}
+
 fn establish_foundation_held_food(
     world: &mut alife_world::HeadlessWorld,
     target: alife_core::WorldEntityId,
+    seed: u64,
 ) -> Result<FoundationHeldFoodSetup> {
     let (organism, entity) = world.organism_entity_ids()[0];
     // Starting biology supplies the need. If expression needs time, age the
@@ -2679,14 +2734,61 @@ fn establish_foundation_held_food(
     {
         return Err("held-food lesson requires safe unconsumed nutritious food".into());
     }
-    let position = world
+    let (position, requested_yaw, sampling_attempts) =
+        sample_foundation_held_food_pose(world, entity, target, seed)?;
+    // Arrangement remains outside learner capture. Facing changes execute
+    // ordinary registered body turns and their ordinary physiological cost.
+    let mut arranged = world.clone();
+    move_scenario_object(&mut arranged, entity, position)?;
+    for _ in 0..10 {
+        let yaw = arranged
+            .entity(entity)
+            .ok_or("held-food body missing")?
+            .body_yaw;
+        let delta = (requested_yaw - yaw + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU)
+            - std::f32::consts::PI;
+        if delta.abs() <= 0.0001 {
+            break;
+        }
+        let turn = alife_core::ActionCommand::structured(
+            organism,
+            if delta >= 0.0 {
+                alife_world::HeadlessActionIds::TURN_LEFT
+            } else {
+                alife_world::HeadlessActionIds::TURN_RIGHT
+            },
+            alife_core::ActionKind::Look,
+            alife_core::ActionTarget::NONE,
+            alife_core::Intensity::new((delta.abs() / 20.0_f32.to_radians()).min(1.0))?,
+            alife_core::DurationTicks::new(1),
+            alife_core::Confidence::new(0.9)?,
+            0,
+            None,
+            None,
+            None,
+        )?;
+        let next = Tick::new(arranged.tick().raw().checked_add(1).ok_or_else(invalid)?);
+        let receipt = arranged.apply_registered_command(&turn, entity, next)?;
+        arranged.try_advance_tick()?;
+        if !receipt.action_result.execution.succeeded {
+            return Err("held-food sampled body turn was physically blocked".into());
+        }
+    }
+    let realized_yaw = arranged
         .entity(entity)
         .ok_or("held-food body missing")?
-        .position;
+        .body_yaw;
+    if (realized_yaw - requested_yaw).abs() > 0.0002 {
+        return Err("held-food bounded ordinary turns did not realize sampled facing".into());
+    }
     move_scenario_object(
-        world,
+        &mut arranged,
         target,
-        alife_core::Vec3f::new(position.x + 0.5, position.y, position.z),
+        alife_core::Vec3f::new(
+            position.x + 0.5 * realized_yaw.cos(),
+            position.y,
+            position.z + 0.5 * realized_yaw.sin(),
+        ),
     )?;
     let command = alife_core::ActionCommand::structured(
         organism,
@@ -2701,34 +2803,58 @@ fn establish_foundation_held_food(
         None,
         None,
     )?;
-    let next = Tick::new(world.tick().raw().checked_add(1).ok_or_else(invalid)?);
-    let receipt = world.apply_registered_command(&command, entity, next)?;
-    world.try_advance_tick()?;
+    let next = Tick::new(arranged.tick().raw().checked_add(1).ok_or_else(invalid)?);
+    let receipt = arranged.apply_registered_command(&command, entity, next)?;
+    arranged.try_advance_tick()?;
     if !receipt.action_result.execution.succeeded
         || receipt.action_result.execution.physical.contact
             != alife_core::PhysicalContactKind::Touch
-        || world
+        || arranged
             .entity(target)
             .is_none_or(|food| food.carried_by != Some(organism))
     {
         return Err("held-food legal setup Grab did not establish possession".into());
     }
-    let state = world
+    let state = arranged
         .organism_registry()
         .get(organism)
         .ok_or("held-food organism missing after setup")?
         .biochemistry();
-    Ok(FoundationHeldFoodSetup {
+    if state.body.sleeping
+        || state.body.health < 0.95
+        || state.body.injury > 0.01
+        || state.homeostasis.drives.pain > 0.01
+        || state.body.energy <= 0.2
+        || state.body.energy > 0.9
+        || state.homeostasis.drives.hunger < 0.12
+    {
+        return Err("held-food ordinary pose setup did not preserve a healthy awake learner with measurable need".into());
+    }
+    let body = arranged
+        .entity(entity)
+        .ok_or("held-food body missing after setup")?;
+    let grip = arranged
+        .entity(target)
+        .ok_or("held-food target missing after setup")?
+        .position;
+    let setup = FoundationHeldFoodSetup {
         target,
         organism,
-        setup_tick: world.tick().raw(),
+        setup_tick: arranged.tick().raw(),
         grab_command: command,
         grab_physical: receipt.action_result.execution.physical,
         initial_energy: state.body.energy,
         initial_hunger: state.homeostasis.drives.hunger,
         initial_health: state.body.health,
         initial_sleeping: state.body.sleeping,
-    })
+        sampling_seed: seed,
+        sampling_attempts,
+        realized_body_position: Some(body.position),
+        realized_body_yaw: Some(body.body_yaw),
+        realized_grip_position: Some(grip),
+    };
+    *world = arranged;
+    Ok(setup)
 }
 
 /// Canonical fixtures start in legacy X/Y coordinates. Production terrain
@@ -3137,7 +3263,7 @@ pub(crate) fn configure_foundation_scenario(
         None
     };
     let held_food_setup = if lesson == Some(FoundationTeacherLesson::EatHeldFood) {
-        Some(establish_foundation_held_food(world, food)?)
+        Some(establish_foundation_held_food(world, food, seed)?)
     } else {
         None
     };
@@ -3956,22 +4082,132 @@ mod held_food_lesson_tests {
         PostActionOutcome, SignedValence, Vec3f,
     };
 
-    fn prepared(seed: u64) -> (alife_world::HeadlessWorld, FoundationScenarioSetup) {
+    fn unconfigured(seed: u64) -> alife_world::HeadlessWorld {
         let asset = initial_n2048_care_asset(seed).unwrap();
         let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
         config.brain_class = BrainScaleTier::Standard2048;
         config.sensor_profile = asset.manifest().sensor_profile();
-        let mut game =
-            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+        alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+            .unwrap()
+            .world
+    }
+
+    fn prepared(seed: u64) -> (alife_world::HeadlessWorld, FoundationScenarioSetup) {
+        let mut world = unconfigured(seed);
         let scenario = configure_foundation_scenario(
-            &mut game.world,
+            &mut world,
             seed,
             Some(FoundationTeacherLesson::EatHeldFood),
             None,
             true,
         )
         .unwrap();
-        (game.world, scenario)
+        (world, scenario)
+    }
+
+    #[test]
+    fn held_food_seeded_pose_is_repeatable_varied_grounded_and_legally_held() {
+        let mut poses = std::collections::BTreeSet::new();
+        let mut facings = std::collections::BTreeSet::new();
+        for seed in [42, 91, 132] {
+            let mut original = unconfigured(seed);
+            ground_foundation_training_world(&mut original).unwrap();
+            let origin = original
+                .entity(original.organism_entity_ids()[0].1)
+                .unwrap()
+                .position;
+            let (world, scenario) = prepared(seed);
+            let (_, repeated) = prepared(seed);
+            let setup = scenario.held_food_setup.as_ref().unwrap();
+            let again = repeated.held_food_setup.as_ref().unwrap();
+            let position = setup.realized_body_position.unwrap();
+            let yaw = setup.realized_body_yaw.unwrap();
+            let grip = setup.realized_grip_position.unwrap();
+            assert_eq!(setup.sampling_seed, seed);
+            assert!((1..=HELD_FOOD_POSE_ATTEMPTS).contains(&setup.sampling_attempts));
+            assert_eq!(setup.realized_body_position, again.realized_body_position);
+            assert_eq!(setup.realized_body_yaw, again.realized_body_yaw);
+            assert_eq!(setup.realized_grip_position, again.realized_grip_position);
+            assert_eq!(setup.sampling_attempts, again.sampling_attempts);
+            assert!((position.x - origin.x).abs() <= HELD_FOOD_POSITION_RADIUS);
+            assert!((position.z - origin.z).abs() <= HELD_FOOD_POSITION_RADIUS);
+            assert!(world.terrain().unwrap().walkable(position.x, position.z));
+            assert_eq!(
+                Some(position.y),
+                world
+                    .terrain()
+                    .unwrap()
+                    .surface()
+                    .height(position.x, position.z)
+            );
+            assert!((grip.x - position.x - 0.5 * yaw.cos()).abs() < 0.0001);
+            assert!((grip.z - position.z - 0.5 * yaw.sin()).abs() < 0.0001);
+            assert_eq!(
+                world.entity(scenario.food).unwrap().carried_by,
+                Some(setup.organism)
+            );
+            poses.insert((position.x.to_bits(), position.z.to_bits(), yaw.to_bits()));
+            facings.insert(yaw.to_bits());
+        }
+        assert_eq!(poses.len(), 3);
+        assert_eq!(facings.len(), 3);
+    }
+
+    #[test]
+    fn held_food_pose_sampling_rejects_blocked_attempts_and_is_bounded() {
+        let seed = 42;
+        let first_x = HELD_FOOD_POSITION_RADIUS * (2.0 * scenario_random(seed, 1003) - 1.0);
+        let first_z = HELD_FOOD_POSITION_RADIUS * (2.0 * scenario_random(seed, 1004) - 1.0);
+        let mut world = alife_world::HeadlessScenarioBuilder::new(seed)
+            .agent("subject", alife_core::OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(10.0, 0.0, 0.0), 0.6)
+            .obstacle("first-blocker", Vec3f::new(first_x, first_z, 0.0), 0.25)
+            .build()
+            .unwrap();
+        ground_foundation_training_world(&mut world).unwrap();
+        let body = world.entity_id("subject").unwrap();
+        let food = world.entity_id("food").unwrap();
+        let (_, _, attempts) = sample_foundation_held_food_pose(&world, body, food, seed).unwrap();
+        assert!(attempts > 1 && attempts <= HELD_FOOD_POSE_ATTEMPTS);
+        let mut blocked = alife_world::HeadlessScenarioBuilder::new(seed)
+            .agent("subject", alife_core::OrganismId(1), Vec3f::ZERO)
+            .food("food", Vec3f::new(10.0, 0.0, 0.0), 0.6)
+            .obstacle("block-all", Vec3f::ZERO, 100.0)
+            .build()
+            .unwrap();
+        ground_foundation_training_world(&mut blocked).unwrap();
+        let before = blocked.canonical_signature_digest().unwrap();
+        let error = sample_foundation_held_food_pose(
+            &blocked,
+            blocked.entity_id("subject").unwrap(),
+            blocked.entity_id("food").unwrap(),
+            seed,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("exhausted 32"));
+        assert_eq!(before, blocked.canonical_signature_digest().unwrap());
+    }
+
+    #[test]
+    fn older_lesson_modes_preserve_fixed_founder_position_and_facing() {
+        let mut initial = unconfigured(42);
+        ground_foundation_training_world(&mut initial).unwrap();
+        let body_id = initial.organism_entity_ids()[0].1;
+        let expected = initial.entity(body_id).unwrap().clone();
+        for lesson in [
+            None,
+            Some(FoundationTeacherLesson::Feeding),
+            Some(FoundationTeacherLesson::VisionSearch),
+            Some(FoundationTeacherLesson::HazardAvoidance),
+            Some(FoundationTeacherLesson::ObstacleNavigation),
+        ] {
+            let mut world = initial.clone();
+            let setup = configure_foundation_scenario(&mut world, 42, lesson, None, false).unwrap();
+            let body = world.entity(body_id).unwrap();
+            assert_eq!(body.position, expected.position);
+            assert_eq!(body.body_yaw, expected.body_yaw);
+            assert!(setup.held_food_setup.is_none());
+        }
     }
 
     fn frame(world: &mut alife_world::HeadlessWorld) -> alife_core::PerceptionFrame {

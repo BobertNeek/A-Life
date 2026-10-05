@@ -50,8 +50,10 @@ requires the bounded semantic prior. It disables deliberate training dropout and
 fails when bounded priming cannot supply a usable hint. Receipts distinguish
 preparation from input accepted by the authoritative inference dispatch, record
 nonzero private-port encoder delivery per decision, and retain provider failures.
-Receipt queues are bounded at 256 entries; keep tonight's assessments and first cycle
-below that bound to retain the entire decision-input trace. Metrics do not prove
+Receipt queues are bounded at 256 entries; each episode uses at most 128 loss
+rows plus one bootstrap row, retaining the entire decision-input trace. Duplicate
+lexicon rows use the maximum validated salience for a token consistently in
+readiness and conversion, so a zero-salience first row cannot conceal delivery. Metrics do not prove
 that cognition used a hint. Exact current persistence and GPU-authoritative
 cognition remain required.
 
@@ -63,100 +65,118 @@ and `AOA-OBS-002..005`. Carrying a nearby object in a stable hand position follo
 the repository's WWCD guidance. Teacher, biology, semantic prior, and learner
 policy remain separate mechanisms.
 
-## Tonight's bounded setup and commands
+## Tonight's startup and longer run
 
-PC provider and GPU readiness are **Unknown** from this cloud checkout. The
-owner must verify the reviewed commit, clean source, idle training lane, compatible
-sealed source, and founder seed before launching. Use a new output directory for
-every command; never resume an interrupted collection or replace the source.
-Record Git SHA/tree/status, executable SHA-256, source asset SHA-256, source
-receipt, founder seed, world seeds, actual adapter identity, and start/end times.
-Build only once in the shared target directory.
+Cassidy requested **thousands of distinct examples/episodes**, rather than dozens
+or repeated decision rows. The new `scripts/run_eat_held_food_night.py` targets
+3,000 fresh `eat_held_food` episodes by default. It does not launch in plan mode.
+The 16/128/16 frozen-before/update/frozen-after sequence and its 45-minute cap are
+startup qualification only. Subsequent episodes use 16 loss rows by default,
+with frozen 16-decision checks after each bounded batch of 16 episodes and a final
+assessment reserve. No navigation, Grab lesson, maze or multi-skill schedule is
+included. Longer dose does not establish successful learning by itself.
 
-On the PC, after the parent selects the owner and exact source, use PowerShell 7
-to build the trainer under the same overall process budget:
+Every episode prepares exactly one genuine held target. Its seeded X/Z location
+and body facing vary within four units per horizontal axis of the founder origin; the engine's
+horizontal plane is X/Z. At most 32 attempts reject invalid terrain, blocked
+body/grip geometry or crowded placements. Ordinary registered Turn and Grab
+realize the accepted arrangement, and natural biology establishes need. Receipts
+record the sampling seed, attempt count, realized body/grip positions and yaw.
+The runner rejects repeated realized position/facing pairs. A unique seed alone
+is not counted as proof of spatial variation.
 
-```powershell
-$DeadlineUtc = [DateTime]::UtcNow.AddMinutes(45)
-$Cargo = (Get-Command cargo -ErrorAction Stop).Source
-$Run = Join-Path (Get-Location).Path ('target/founder-training/eat-held-food-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
-New-Item -ItemType Directory -Path $Run -ErrorAction Stop | Out-Null
-function Invoke-BoundedProcess([string]$Program, [string[]]$Arguments, [int]$Seconds, [string]$Log) {
-    $remaining = ($DeadlineUtc - [DateTime]::UtcNow).TotalSeconds
-    if ($remaining -le 0) { throw 'Overall night-check budget exhausted.' }
-    $limit = [int](1000 * [Math]::Min($Seconds, $remaining))
-    $info = [Diagnostics.ProcessStartInfo]::new($Program)
-    $info.UseShellExecute = $false
-    $info.RedirectStandardOutput = $true
-    $info.RedirectStandardError = $true
-    foreach ($argument in $Arguments) { $info.ArgumentList.Add($argument) }
-    $process = [Diagnostics.Process]::new()
-    $process.StartInfo = $info
-    try {
-        if (-not $process.Start()) { throw 'Process did not start.' }
-        $stdout = $process.StandardOutput.ReadToEndAsync()
-        $stderr = $process.StandardError.ReadToEndAsync()
-        $timedOut = -not $process.WaitForExit($limit)
-        if ($timedOut) { $process.Kill($true); $process.WaitForExit() }
-        [IO.File]::WriteAllText("$Log.stdout.log", $stdout.GetAwaiter().GetResult())
-        [IO.File]::WriteAllText("$Log.stderr.log", $stderr.GetAwaiter().GetResult())
-        if ($timedOut -or $process.ExitCode -ne 0) { throw "Process failed or timed out; retain $Log logs and stop." }
-    } finally { $process.Dispose() }
-}
-Invoke-BoundedProcess $Cargo @('build', '--release', '-p', 'alife_game_app', '--features', 'foundation-training', '--bin', 'train_n2048_care') 1200 (Join-Path $Run 'build')
-```
+Each completely sealed cycle resumes the preceding exported actor, value head,
+optimizer ages and policy version. The runtime validates that exact handoff; the
+runner also checks source bytes, ages and checkpoint hashes. **Fresh worlds start
+fresh individuals:** recurrent state and personal lifetime memories restart
+between these episodes. Ordinary individual lifetime learning remains active
+within each episode. This is an offline parameter-training sequence, not one
+creature retaining personal memories across resets. Exact world snapshots and
+replay remain preserved; no current-format persistence conversion is added.
 
-Verify the local GGUF's actual SHA-256 and the llama.cpp server alias. Use the
-existing `scripts/start_llamacpp_slm_prior.ps1` with explicit executable/model
-paths if the server is absent; the owner starts it tonight, not during day work.
-Set `ALIFE_SLM_PRIOR=on`, `ALIFE_SLM_PRIOR_MODEL` to the served alias, and
-`ALIFE_SLM_PRIOR_MODEL_SHA256` to the actual file digest. The runtime uses localhost
-port 18081. A successful `/health` and `/v1/models` check is an initial check only;
-actual validated structured hints and dispatch delivery must appear in the probe.
-
-Run the bounded CPU provider preflight tonight and retain its JSON and errors:
+PC provider and GPU readiness are **Unknown** from this cloud checkout. Tonight's
+coordinator must choose one owner, the reviewed commit, a compatible sealed
+source and the morning cutoff. Use PowerShell 7 from a clean repository root.
+Verify no game, Cargo or training process occupies the lane. Build once using the
+existing bounded `Run-Command` pattern in `run_n2048_care_training.ps1`, or an
+owner-supervised 20-minute limit that stops only its owned build process tree:
 
 ```powershell
-Invoke-BoundedProcess $Cargo @('run', '-p', 'alife_semantic', '--features', 'local-llamacpp', '--example', 'local_slm_prior_preflight') 300 (Join-Path $Run 'provider')
+cargo build --release --offline --locked -j 2 -p alife_game_app --features foundation-training --bin train_n2048_care
+cargo build --offline --locked -j 2 -p alife_semantic --features local-llamacpp --example local_slm_prior_preflight
 ```
 
-This sends one real structured request with a 30-second provider timeout and
-checks usable validated hints. Its `supplied_model_sha256_claim` comes from the
-environment; `model_file_hash_verified=false` is intentional. Keep the independent
-GGUF file hash alongside it. This check does not dispatch a neural GPU or establish
-brain input delivery; the subsequent frozen probe supplies that receipt.
-
-After setting `$Source` to the selected sealed directory and `$FounderSeed` to its
-receipt's founder seed, use one reserved assessment seed before and after the
-update, and a distinct learning seed. Assessment pauses offline optimizer updates;
-ordinary lifetime associations and biology continue in both assessments.
+Record Git SHA/tree/status, executable SHA-256, selected source receipt and asset
+hash, founder seed, actual adapter, GGUF file hash, service alias, and start/end
+times. Check port 18081 before starting the existing local prior launcher; avoid
+a second server. Set the served alias and independently calculated model digest:
 
 ```powershell
-$Trainer = (Resolve-Path target/release/train_n2048_care.exe).Path
-$Probe = Join-Path $Run 'frozen-before'
-$Cycle = Join-Path $Run 'cycle-000'
-$After = Join-Path $Run 'frozen-after'
-# Keep $DeadlineUtc, $Run and the helper from the build/preflight setup above.
-Invoke-BoundedProcess $Trainer @('--evaluate', $Probe, (Join-Path $Source 'trained.alife-foundation'), 'eat_held_food', '16', '2026100501', "$FounderSeed") 600 (Join-Path $Run 'before')
-# Verify real possession, selectable Eat, contextual hearing, delivered prior
-# inputs and measured outcome/credit receipts before the next command.
-Invoke-BoundedProcess $Trainer @('--resume-cycle', $Source, $Cycle, '128', '--seed', '2026100502', '--lesson', 'eat_held_food') 1200 (Join-Path $Run 'cycle')
-# Only a completely sealed cycle may supply this post-update assessment.
-Invoke-BoundedProcess $Trainer @('--evaluate', $After, (Join-Path $Cycle 'trained.alife-foundation'), 'eat_held_food', '16', '2026100501', "$FounderSeed") 600 (Join-Path $Run 'after')
+$env:ALIFE_SLM_PRIOR = 'on'
+$env:ALIFE_SLM_PRIOR_MODEL = 'OWNER_VERIFIED_SERVED_ALIAS'
+$env:ALIFE_SLM_PRIOR_MODEL_SHA256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $ModelPath).Hash.ToLowerInvariant()
+# Owner-supervised five-minute process limit; the provider request itself is 30 seconds.
+.\target\debug\examples\local_slm_prior_preflight.exe
 ```
 
-These are separate supervised steps, not an unattended campaign. Apply a hard
-10-minute timeout to each probe and a 20-minute timeout to the single cycle,
-with a 45-minute overall limit including build. If a limit or any command fails,
-stop the owned process tree, retain logs and partial receipts, mark the result
-Incomplete/Failed, and do not retry or widen the budget without diagnosis. A
-pre-update failure to eat is a baseline observation; absent action availability,
-input delivery, or usable credit evidence requires diagnosis before training.
-Check that the sealed ordinary outcome and lifetime credit path match the captured
-decision. A baseline with no meal can have no positive ingestion benefit.
-Do not invoke the existing multi-skill campaign or an additional broad gate suite
-for this first lesson. Earlier prior-off panels used a different environment and
-cue configuration and are not an apples-to-apples baseline for this lesson.
+Retain preflight JSON/errors. The supplied digest is a claim:
+`model_file_hash_verified=false` is intentional. The independent file hash and
+validated structured reply are separate evidence. `/health`, `/v1/models` and
+configured-on alone do not establish actual neural input delivery.
+
+Choose `$Source` and an explicit local morning cutoff within the next 24 hours;
+its timezone offset is required. `$Run` must be a new directory directly under `target/founder-training`.
+The following writes a reviewable plan without running the binary:
+
+```powershell
+$Source = 'OWNER_SELECTED_SEALED_SOURCE'
+$Run = 'target/founder-training/eat-held-food-NIGHT-UNIQUE'
+# Example only: owner must choose tonight's actual morning cutoff and timezone.
+$Cutoff = '2026-10-06T08:00:00+00:00'
+py -3 scripts/run_eat_held_food_night.py --binary target/release/train_n2048_care.exe --source $Source --output ($Run + '-plan') --cutoff $Cutoff --target-episodes 3000 --batch-episodes 16 --decisions 16
+```
+
+After startup readiness is authorized by tonight's single owner, the ready command
+uses a separate fresh output and explicit execution flag:
+
+```powershell
+py -3 scripts/run_eat_held_food_night.py --binary target/release/train_n2048_care.exe --source $Source --output $Run --cutoff $Cutoff --target-episodes 3000 --batch-episodes 16 --decisions 16 --run
+```
+
+`--run` enforces a shared exclusive owner lock, clean source and binary/source
+hashes, idle Cargo/game lane, 20-minute per-cycle and 10-minute per-assessment caps,
+45-minute startup qualification and the hard morning cutoff. It reserves 15
+minutes for final assessment. It uses below-normal Windows process priority,
+requires 8 GiB free disk and 2 GiB available RAM, and checks resources while each
+owned child runs. After a 30-second startup grace it interrupts when Windows
+input resumes within the preceding 30 seconds, including startup and final probes.
+Create `$Run/STOP` to stop the owned child. Other processes are never stopped.
+Interactive checking is Windows-specific; it does not measure GPU scheduling
+priority, VRAM or a guarantee of desktop responsiveness. Resource failures and
+hardware errors remain explicit stop conditions.
+
+Startup and batch receipts estimate end-to-end episode throughput, amortized assessment
+cost and checkpoint/replay storage, with a 25% timing margin. The estimate is
+updated from ordinary windows once measured and marked provisional until at least
+three ordinary episodes are sealed. Internal collection/update times remain
+diagnostic; throughput includes setup, admission and sealing. If 3,000 episodes cannot fit the
+remaining night or disk, `night.json` records that limit and the attainable
+estimate; the runner collects what fits and reports **Incomplete**, rather than
+relabeling rows or epochs as examples. No throughput or overnight capacity is
+promised from cloud configuration. Every episode is a checkpoint boundary;
+partial collection never becomes a resume source. Failures retain logs, the last
+sealed checkpoint and the partial directory for diagnosis, without automatic
+retries. Two batch probes losing previously observed eating stop the sequence.
+A baseline failure to eat is an observation, not a manufactured success gate.
+To continue a previous held-food night, select its last sealed episode and an
+explicit `--seed` greater than that episode's seed. The runner rejects repeating
+an earlier seed prefix; the same assessment seed remains held out.
+
+The frozen assessment seed is excluded from the training seed range and reused
+before/after. Assessments pause offline optimizer updates while normal biology
+and lifetime learning continue. Actual candidate support for Eat of the held
+target, independent contextual hearing and per-decision encoder delivery must
+be present even when the baseline does not eat. No language response is required.
 
 ## Required receipts and interpretation
 
@@ -175,6 +195,11 @@ cue configuration and are not an apples-to-apples baseline for this lesson.
   `decision_inputs` receipt with nonzero private lanes and actual encoder delivery.
   Model identity/configuration alone does not establish provider availability;
   preserve validated provider replies, cache provenance, and any failure records.
+- `night.json` separates distinct prepared episodes, captured decision rows, trained
+  loss rows, bootstrap rows, epoch repeats and actor/value optimizer updates.
+  `cycle.json` separates captured held-food meals from trained-row held-food meals:
+  a meal on the final bootstrap is observed but its action receives no loss.
+  Admission ticks, setup actions and post-consumption idle rows add no examples.
 - Count held-food success only from matching learner-selected Eat, real possession,
   matching channel consumption, and measured body benefit. Wrong-target Eat,
   attempts, ground-food meals after Drop, and setup Grab do not qualify.
@@ -182,7 +207,8 @@ cue configuration and are not an apples-to-apples baseline for this lesson.
   checkpoint and sealed source digests. Inspect a current-format checkpoint
   restore before increasing run length. No compatibility conversion is implied.
 
-One bounded night can establish readiness and provide a first learning observation.
+One bounded night can establish readiness and provide learning observations at
+the measured attainable dose.
 It does not establish retained competence, transfer, speech competence, a service-off
 gate, or founder promotion. Grab-only and reach-only relocation lessons remain later
 slices; combinations follow their independent assessments.
@@ -195,16 +221,20 @@ Passed in the cloud with Rust 1.98.1:
 - `cargo check --workspace --all-targets`, also with
   `--features alife_game_app/foundation-training`.
 - `cargo test --workspace --all-targets --features alife_game_app/foundation-training`:
-  **1,709 passed, 20 ignored, zero failures**. GPU test features were disabled.
-- After adding immediate terminal-biology retention, the feature-enabled check
-  passed again and the focused foundation-training suite passed **16 tests**.
+  **1,714 passed, 20 ignored, zero failures** across 203 batches. GPU test features were disabled.
+- Focused foundation suites passed **28 tests**, including randomized valid setup,
+  blocked sampling, old lesson behavior, exact optimizer handoff and bootstrap dose.
 - `cargo clippy --workspace --all-targets -- -D warnings` passed.
 - Core dependency/source boundaries and docs assertions passed (**77/77**).
-- Provider-preflight example compilation and three training-dose Python tests passed.
+- Provider-preflight example compilation passed. **11** overnight-runner CPU
+  fixtures and **three** existing training-dose Python tests passed, including
+  plan-only thousands, native receipt shape, exact resume/dose counts, cutoff
+  cleanup of an owned disposable CPU child, and final assessment after interruption.
 
 Focused carry checks passed eight new regressions, the existing interval-motion
-regression, and all 14 tests in the revised world harness. Five semantic-prior CPU
-regressions passed in the aggregate. The terminal-distance regression passed
+regression, and all 14 tests in the revised world harness. Six semantic-prior CPU
+regressions passed in the aggregate, including duplicate tokens through the native
+128-lane encoder of a hearing-enabled N2048 fixture. The terminal-distance regression passed
 alone and in the aggregate with the fixture's required birth/life archive links.
 It tests reporting and retirement binding, without claiming a natural GPU death.
 
@@ -213,16 +243,20 @@ Additional strict feature lint,
 still reports **15 existing findings**: six constant-chunk suggestions, one range
 pattern, three existing argument-count findings, three existing modulus patterns,
 the boxed demonstrator type, and test-module placement. Their source/signatures
-were checked against `de38cad9`; no baseline compiler run or lint suppression is
+were checked against `de38cad9`; the expanded change still reports those same
+15 findings, with no new findings. No baseline compiler run or lint suppression is
 claimed. The new cue-modulus finding was fixed. Legacy cleanup remains outside
 this change. Local logs and the source comparison receipt are retained under
 `target/artifacts/cassidy-20261005/`.
 
 The initial debug/incremental build exhausted the writable overlay; only generated
 incremental caches and an unused task-installed toolchain were removed. Validation
-then used the saved lean CPU environment. An old carry regression was updated to
+then used the saved lean CPU environment. The first expanded aggregate encountered
+three generated Python bytecode caches under the source-audit directory; only
+those generated files were removed, and the complete rerun passed with bytecode
+generation disabled. An old carry regression was updated to
 assert the new body-local grip and actual interval displacement.
 
 Actual GPU dispatch, learned eating, replay on real hardware, PC model availability,
-visual hand attachment, PowerShell execution, and nighttime commands are **Unrun**
+visual hand attachment, Windows process/resource behavior, and nighttime commands are **Unrun**
 in this cloud task.

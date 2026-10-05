@@ -437,15 +437,10 @@ impl RuntimeSemanticPrior {
                     };
                     return Ok(draft);
                 }
-                let slots: Vec<u16> = output
-                    .lexicon_associations
+                let slots: Vec<u16> = BASIC_VOCABULARY_V1
                     .iter()
-                    .filter(|a| a.salience > 0.0)
-                    .filter_map(|a| {
-                        BASIC_VOCABULARY_V1
-                            .iter()
-                            .find(|(word, _)| *word == a.token)
-                            .map(|(_, code)| *code)
+                    .filter_map(|(_, code)| {
+                        (lexicon_slot_salience(output, *code) > 0.0).then_some(*code)
                     })
                     .collect();
                 if !slots.is_empty() {
@@ -532,17 +527,7 @@ impl RuntimeSemanticPrior {
                     .map(|slot| CompressedSemanticCode {
                         codebook_id: 1,
                         code: u32::from(*slot),
-                        salience: NormalizedScalar(
-                            output
-                                .lexicon_associations
-                                .iter()
-                                .find(|a| {
-                                    BASIC_VOCABULARY_V1
-                                        .iter()
-                                        .any(|(word, code)| code == slot && *word == a.token)
-                                })
-                                .map_or(0.0, |a| a.salience),
-                        ),
+                        salience: NormalizedScalar(lexicon_slot_salience(output, *slot)),
                     })
                     .collect(),
                 salience: Vec::new(),
@@ -741,13 +726,26 @@ fn bounded_context(draft: &PerceptionFrameDraft, words: &[String]) -> String {
     context
 }
 
-fn has_usable_hints(output: &LocalSlmPriorOutput) -> bool {
-    output.lexicon_associations.iter().any(|association| {
-        association.salience > 0.0
-            && BASIC_VOCABULARY_V1
+fn lexicon_slot_salience(output: &LocalSlmPriorOutput, slot: u16) -> f32 {
+    // Readiness and conversion use the same order-independent bounded reduction.
+    // Duplicate rows cannot let a zero association mask a usable hint.
+    BASIC_VOCABULARY_V1
+        .iter()
+        .find(|(_, code)| *code == slot)
+        .map_or(0.0, |(word, _)| {
+            output
+                .lexicon_associations
                 .iter()
-                .any(|(word, _)| *word == association.token)
-    })
+                .filter(|association| association.token == *word)
+                .map(|association| association.salience)
+                .fold(0.0, f32::max)
+        })
+}
+
+fn has_usable_hints(output: &LocalSlmPriorOutput) -> bool {
+    BASIC_VOCABULARY_V1
+        .iter()
+        .any(|(_, code)| lexicon_slot_salience(output, *code) > 0.0)
 }
 
 fn digest_json(value: &impl serde::Serialize) -> String {
@@ -876,6 +874,88 @@ mod tests {
             PriorInputStatus::NoSemanticEncoder
         );
         assert_eq!(prior.metrics.decision_frames_without_prior, 1);
+    }
+
+    #[test]
+    fn duplicate_lexicon_rows_keep_ready_hints_nonzero_and_delivered() {
+        let capacity = alife_core::BrainCapacityClass::n2048();
+        let mut genome = alife_core::BrainGenome::scaffold(77_112, capacity.id());
+        // The minimal scaffold has no Hearing gene. Native private language/prior
+        // ports are compiled only for hearing-enabled organisms, as in a founder.
+        genome
+            .sensor_layout
+            .channels
+            .push(alife_core::SensorChannelGene {
+                kind: alife_core::SensorChannelKind::Hearing,
+                receptor_count: 32,
+                target_lobe: alife_core::LobeKind::PerceptualIntegration,
+                enabled_at_maturation: 0,
+            });
+        let development =
+            alife_core::DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar(1.0));
+        let phenotype = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        for saliences in [[0.0, 0.5], [0.25, 0.5], [0.5, 0.25], [0.5, 0.0]] {
+            let draft = draft();
+            let mut prior = prior();
+            prior.require_rich_information();
+            let mut output = output();
+            output.lexicon_associations = saliences
+                .into_iter()
+                .map(|salience| alife_semantic::SlmLexiconAssociation {
+                    token: "eat".into(),
+                    salience,
+                })
+                .collect();
+            output.validate().unwrap();
+            prior.cache.insert(bounded_context(&draft, &[]), output);
+            prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+            assert!(prior.ready(5));
+            let prepared = prior.prepare(draft, ExperienceSequenceId(1)).unwrap();
+            let context = prepared.sensory().semantic_context.as_ref().unwrap();
+            assert_eq!(context.compressed_codes.len(), 1);
+            assert_eq!(context.compressed_codes[0].salience.raw(), 0.5);
+            let frame = prepared.finalize(PerceptionContextBlock::empty()).unwrap();
+            let lanes = frame.sensory().language_prior_neural_lanes();
+            assert!(lanes[128..].iter().any(|lane| *lane != 0.0));
+            let assignments =
+                phenotype
+                    .sensor_encoder()
+                    .assignments()
+                    .iter()
+                    .filter(|assignment| {
+                        assignment.source_group()
+                            == alife_core::SensorEncoderSourceGroup::SemanticPrior
+                    });
+            let semantic_encoder_lanes = assignments.clone().count();
+            assert_eq!(semantic_encoder_lanes, 128);
+            let nonzero_encoded_prior_lanes = assignments
+                .filter(|assignment| {
+                    let source = lanes[128 + usize::from(assignment.source_index())];
+                    let (low, high) = assignment.clamp_range();
+                    (source * assignment.scale() + assignment.bias()).clamp(low, high)
+                        != assignment.bias().clamp(low, high)
+                })
+                .count();
+            assert!(nonzero_encoded_prior_lanes > 0);
+            prior.record_decision_input(
+                &frame,
+                1,
+                7,
+                semantic_encoder_lanes,
+                nonzero_encoded_prior_lanes,
+            );
+            let receipt = prior.metrics.decision_inputs.back().unwrap();
+            assert_eq!(receipt.status, PriorInputStatus::Delivered);
+            assert!(receipt.nonzero_encoded_prior_lanes > 0);
+            assert_eq!(prior.metrics.decision_frames_with_prior, 1);
+            assert_eq!(prior.metrics.decision_frames_without_prior, 0);
+        }
     }
 
     #[test]
