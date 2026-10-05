@@ -120,7 +120,7 @@ mod tests {
             .add_systems(Update, sync_care_objects);
             if highlands {
                 app.insert_resource(creature_grounding::SelectedTerrain(
-                    alife_world::WorldTerrain::highlands(),
+                    alife_world::island_terrain(),
                 ));
             }
             app.update();

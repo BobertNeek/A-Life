@@ -6,6 +6,11 @@ guides, and the approved image blueprints. `island-terrain.blend` contains the
 1000 x 1200 metre island, 240 metre peaks, ocean, river, and placed shared props.
 The `Measured_Blueprint_Guides` collection is for authoring, not export.
 
+The island is the sole playable map. The reusable Highlands prop library remains
+available as art; its old terrain loader and save fallback have been retired.
+Current saves include their terrain data and locomotion limits, and restoration
+verifies that data against the saved binding without selecting another map.
+
 Runtime terrain has 120 chunks with 20 metre skirts. All LODs use the same
 vertex samples as the authoritative `alife_world/assets/island-v1.bin`.
 Near/middle/overview triangle totals are 276480 / 76800 / 23040. The 3716 prop
@@ -15,7 +20,7 @@ Terrain zoom spans a 9.8 to 1600 metre vertical view on every graphics profile.
 Camera clearance preserves the ground focus, and the two-triangle ocean extends
 past the widest view. Overview shadows switch off above a 240 metre view.
 Normalized byte colors reduce file size without changing heights or normals.
-Existing Highlands saves retain their original dataset and assets.
+The island heightfield and placements remain authoritative.
 
 Rebuild from the repository root, using the explicit Blender 5.2.1 executable:
 

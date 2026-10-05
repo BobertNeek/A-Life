@@ -203,8 +203,8 @@ pub(super) fn capture_player_view(
         "terrain_binding": highlands.as_ref().map(|t| t.0.binding()),
         "camera": cameras.iter().next().map(|(t,p)| serde_json::json!({
             "position":t.translation.to_array(),"rotation":t.rotation.to_array(),
-            "view_height_m":highlands::view_height(p),
-            "focus":highlands.as_ref().map(|s| highlands::focus_on_surface(t,s.0.surface()).to_array()),
+            "view_height_m":island::view_height(p),
+            "focus":highlands.as_ref().map(|s| island::focus_on_surface(t,s.0.surface()).to_array()),
         })),
         "selected_object": selection.selected.and_then(|s|s.stable_id).map(|id|id.raw()),
         "hand": hand.as_ref().map(|h|serde_json::json!({"held":h.held.map(|id|id.raw()),"contact":h.position.map(|p|p.to_array())})),

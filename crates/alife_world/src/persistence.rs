@@ -2692,7 +2692,7 @@ fn contains_engine_local_runtime_token(value: &str) -> bool {
 }
 
 #[cfg(test)]
-mod highlands_persistence_tests {
+mod terrain_persistence_tests {
     use super::*;
     #[test]
     fn custom_terrain_save_reloads_geometry_limits_and_signature() {
@@ -2768,22 +2768,15 @@ mod highlands_persistence_tests {
             .unwrap()
             .resolve_move(start, Vec3f::new(1006.0, 0.0, 2001.0))
             .is_none());
-        decoded
-            .terrain_state
-            .as_mut()
-            .unwrap()
-            .data
-            .as_mut()
-            .unwrap()
-            .heights[0] += 1.0;
+        decoded.terrain_state.as_mut().unwrap().data.heights[0] += 1.0;
         assert!(decoded.restore().is_err());
         decoded.terrain = None;
         assert!(decoded.restore().is_err());
     }
     #[test]
-    fn highlands_binding_roundtrips_and_rejects_incompatible_geometry() {
+    fn island_binding_roundtrips_and_rejects_incompatible_geometry() {
         let mut world = crate::HeadlessScenarioBuilder::new(71).build().unwrap();
-        world.enable_highlands_for_new_game().unwrap();
+        world.enable_island_for_new_game().unwrap();
         let saved = WorldSaveState::from_parts(world.persistence_parts());
         let mut restored: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
@@ -2791,15 +2784,23 @@ mod highlands_persistence_tests {
             restored.restore().unwrap().terrain_binding(),
             world.terrain_binding()
         );
+        let mut missing_state = restored.clone();
+        missing_state.terrain_state = None;
+        assert!(missing_state.restore().is_err());
+        let mut obsolete_binding = restored.clone();
+        obsolete_binding.terrain.as_mut().unwrap().version = 1;
+        assert!(obsolete_binding.restore().is_err());
+        let mut missing_data = serde_json::to_value(&restored).unwrap();
+        missing_data["terrain_state"]["data"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<WorldSaveState>(missing_data).is_err());
         restored.terrain.as_mut().unwrap().digest ^= 1;
         assert!(restored.restore().is_err());
     }
     #[test]
-    fn highlands_absent_binding_preserves_legacy_save_geometry() {
+    fn terrainless_fixture_save_roundtrips() {
         let world = crate::HeadlessScenarioBuilder::new(72).build().unwrap();
-        let mut value =
+        let value =
             serde_json::to_value(WorldSaveState::from_parts(world.persistence_parts())).unwrap();
-        value.as_object_mut().unwrap().remove("terrain");
         let restored: WorldSaveState = serde_json::from_value(value).unwrap();
         assert_eq!(restored.restore().unwrap().terrain_binding(), None);
     }

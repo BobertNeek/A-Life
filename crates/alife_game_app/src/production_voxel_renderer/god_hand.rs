@@ -171,7 +171,7 @@ pub(super) fn input(
             follow.enabled = false;
             if let (Some(target), Some(terrain)) = (hand.ground, terrain.as_ref()) {
                 for mut camera in &mut cameras {
-                    let focus = highlands::focus_on_surface(&camera, terrain.0.surface());
+                    let focus = island::focus_on_surface(&camera, terrain.0.surface());
                     camera.translation += Vec3::new(target.x - focus.x, 0.0, target.z - focus.z);
                 }
             }

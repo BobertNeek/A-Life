@@ -804,13 +804,10 @@ mod geneforge_tests {
     }
 
     #[test]
-    fn shipped_preparations_resolve_inherited_parts_on_every_torso() {
+    fn authored_preparations_resolve_inherited_parts_on_every_torso() {
         let catalog = load_geneforge_creature_part_catalog().unwrap();
-        let preparations = load_geneforge_assembly_preparation_index(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("assets"),
-            &catalog,
-        )
-        .unwrap();
+        let preparations =
+            GeneForgeAssemblyPreparationIndex::new(&catalog, authored_records(&catalog)).unwrap();
         for source in &catalog.families {
             for torso in &catalog.families {
                 let mut sources = CreaturePartSources::coherent(source.id);
