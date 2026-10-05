@@ -66,6 +66,9 @@ const EAT_RADIUS: f32 = 1.25;
 pub const WORLD_TICKS_PER_SECOND: u32 = 20;
 const WALK_SPEED_UNITS_PER_SECOND: f32 = 2.0;
 const MOVE_STEP: f32 = WALK_SPEED_UNITS_PER_SECOND / WORLD_TICKS_PER_SECOND as f32;
+// A second of peer touch supplies one small care-sized exposure. This is a
+// physical source; the individual's inherited emitters own its chemical effect.
+const PEER_TOUCH_PER_INTERVAL: f32 = 0.25 / WORLD_TICKS_PER_SECOND as f32;
 const HEAD_SWIVEL_LIMIT: f32 = 70.0_f32.to_radians();
 const HEAD_SWIVEL_STEP: f32 = 20.0_f32.to_radians();
 const VISION_HALF_ANGLE: f32 = 110.0_f32.to_radians();
@@ -1186,7 +1189,7 @@ impl HeadlessWorld {
 
         #[cfg(test)]
         let mut advanced_organism = false;
-        for organism_id in alive_organism_ids {
+        for organism_id in alive_organism_ids.iter().copied() {
             let biology_tick = candidate
                 .organism_registry
                 .get(organism_id)
@@ -1205,6 +1208,17 @@ impl HeadlessWorld {
                         }
                     } else {
                         BodyEventDelta::zero()
+                    };
+                    let entity = candidate
+                        .organism_registry
+                        .get(organism_id)
+                        .ok_or(ScaffoldContractError::InvalidId)?
+                        .world_entity_id();
+                    let position = candidate.objects[&entity.raw()].position;
+                    let (_, peer_touch) = candidate.body_contacts_at(entity, position);
+                    let ambient_event = BodyEventDelta {
+                        social_contact: peer_touch_dose(peer_touch),
+                        ..ambient_event
                     };
                     let body_event = combine_body_event(
                         ambient_event,
@@ -1240,6 +1254,16 @@ impl HeadlessWorld {
                 _ => return Err(ScaffoldContractError::NonMonotonicTick),
             }
 
+            #[cfg(test)]
+            if advanced_organism && candidate.injected_tick_late_failure_after_first_organism {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
+        }
+
+        // All interval exposure observes the same pre-boundary living peers.
+        // Retire terminal bodies only after every due biology update, using the
+        // already collected IDs without another snapshot or contact traversal.
+        for organism_id in alive_organism_ids {
             let terminal = {
                 let record = candidate
                     .organism_registry
@@ -1260,11 +1284,6 @@ impl HeadlessWorld {
                     .map_err(map_organism_registry_error)?;
                 candidate.detach_carried_objects(organism_id);
                 candidate.ingestion_observations.remove(&organism_id.raw());
-            }
-
-            #[cfg(test)]
-            if advanced_organism && candidate.injected_tick_late_failure_after_first_organism {
-                return Err(ScaffoldContractError::InvalidDecisionEvidence);
             }
         }
 
@@ -1940,7 +1959,9 @@ impl HeadlessWorld {
         self.objects.values().cloned().collect()
     }
 
-    pub(crate) fn set_food_nutrition(
+    /// Intentional recipe changes also define tracked resource regrowth.
+    /// Consumption and decay do not pass through this construction boundary.
+    pub(crate) fn set_food_recipe_nutrition(
         &mut self,
         id: WorldEntityId,
         nutrition: f32,
@@ -1956,6 +1977,9 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
         object.nutrition = nutrition;
+        if let Some(resource) = self.ecology.resource_by_object_mut(id) {
+            resource.base_nutrition = nutrition;
+        }
         Ok(())
     }
 
@@ -2854,7 +2878,46 @@ impl HeadlessWorld {
                 }
                 let candidates =
                     GroundedCandidateEnumerator.enumerate_candidates(&grounded, profile)?;
-                let (mut sensory, body, slots, _transports) = grounded.into_parts();
+                let (mut sensory, body, slots, transports) = grounded.into_parts();
+                // Bind only already observed bodies to personal recognition.
+                // Physical identity is not a friendly label or learned affinity.
+                let mut social_index = 0;
+                for transport in &transports {
+                    let object = &self.objects[&transport.transport_entity.raw()];
+                    let Some(agent_id) = object.organism_id else {
+                        continue;
+                    };
+                    if object.kind != WorldObjectKind::Agent
+                        || self
+                            .organism_registry
+                            .get(agent_id)
+                            .is_some_and(|record| !record.lifecycle().is_alive())
+                    {
+                        continue;
+                    }
+                    let yaw = object.body_yaw + object.head_yaw;
+                    sensory.social_context.nearest_agents[social_index] =
+                        Some(SocialAgentSnapshot {
+                            agent_id,
+                            body_entity: Some(object.id),
+                            relative_position: subtract(object.position, body.pose.translation),
+                            gaze_direction: Vec3f::new(yaw.cos(), 0.0, yaw.sin()),
+                            orientation_forward: Vec3f::new(
+                                object.body_yaw.cos(),
+                                0.0,
+                                object.body_yaw.sin(),
+                            ),
+                            affinity: SignedValence::ZERO,
+                            proximity: NormalizedScalar::new(proximity_salience(
+                                distance(object.position, body.pose.translation),
+                                HEADLESS_VISION_RADIUS,
+                            ))?,
+                        });
+                    social_index += 1;
+                    if social_index == MAX_SOCIAL_AGENTS {
+                        break;
+                    }
+                }
                 if terrain_vision {
                     let observer = self.agent_for(organism_id)?;
                     sensory.channels.visual_affordance = self.terrain_vision_fan(observer);
@@ -3604,7 +3667,8 @@ impl HeadlessWorld {
             .get(&world_entity_id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?
             .position;
-        let initial_hazard_contact = self.hazard_contact_at(initial_position);
+        let (initial_hazard_contact, initial_peer_touch) =
+            self.body_contacts_at(world_entity_id, initial_position);
 
         let mut channels = bundle
             .channels
@@ -3658,12 +3722,17 @@ impl HeadlessWorld {
             .get(&world_entity_id.raw())
             .ok_or(ScaffoldContractError::InvalidId)?
             .position;
-        let hazard_contact =
-            initial_hazard_contact.or_else(|| self.hazard_contact_at(final_position));
+        let (final_hazard_contact, final_peer_touch) = if final_position == initial_position {
+            (initial_hazard_contact, initial_peer_touch)
+        } else {
+            self.body_contacts_at(world_entity_id, final_position)
+        };
+        let hazard_contact = initial_hazard_contact.or(final_hazard_contact);
         let action_and_hazard_event = hazard_contact.map_or(action_body_event, |(_, pain)| {
             merge_hazard_contact_body_event(action_body_event, pain)
         });
         let ambient_event = BodyEventDelta {
+            social_contact: peer_touch_dose(initial_peer_touch || final_peer_touch),
             mating_opportunity: self.mating_response(bundle.organism_id, outcome_tick)?,
             ..BodyEventDelta::zero()
         };
@@ -3878,6 +3947,8 @@ impl HeadlessWorld {
     ) -> Result<HeadlessActionBiologyReceipt, ScaffoldContractError> {
         let biology_before =
             self.validate_registered_action(command, world_entity_id, outcome_tick)?;
+        let initial_position = self.objects[&world_entity_id.raw()].position;
+        let (_, initial_peer_touch) = self.body_contacts_at(world_entity_id, initial_position);
         let mut action_result = match mode {
             RegisteredCommandMode::Legacy => self.apply_command(command)?,
             RegisteredCommandMode::Neural {
@@ -3885,6 +3956,14 @@ impl HeadlessWorld {
                 prompted,
             } => self.apply_neural_command(command, speech_payload, prompted)?,
         };
+        let final_position = self.objects[&world_entity_id.raw()].position;
+        let final_peer_touch = if final_position == initial_position {
+            initial_peer_touch
+        } else {
+            self.body_contacts_at(world_entity_id, final_position).1
+        };
+        action_result.body_event.social_contact =
+            peer_touch_dose(initial_peer_touch || final_peer_touch);
         action_result.body_event = combine_body_event(
             action_result.body_event,
             self.pending_player_care
@@ -4698,13 +4777,12 @@ impl HeadlessWorld {
             .ecology
             .zone_at(destination)
             .map_or(0.0, |zone| zone.hazard_pressure);
-        let agent_contact = touched.iter().find_map(|id| {
+        let agent_contact = touched.iter().find(|id| {
             self.objects
                 .get(&id.raw())
-                .filter(|object| object.kind == WorldObjectKind::Agent)
-                .map(|object| (*id, object.social_affinity))
+                .is_some_and(|object| object.kind == WorldObjectKind::Agent)
         });
-        let (mut profile, contact, target) = if let Some((hazard_id, pain)) = hazard {
+        let (profile, contact, target) = if let Some((hazard_id, pain)) = hazard {
             (
                 OutcomeProfile::hazard(pain),
                 PhysicalContactKind::Collision,
@@ -4716,25 +4794,11 @@ impl HeadlessWorld {
                 PhysicalContactKind::Moved,
                 command.target_entity,
             )
-        } else if matches!(intent, MoveIntent::Absolute) {
-            if let Some((agent_id, affinity)) = agent_contact {
-                (
-                    OutcomeProfile::social_contact(affinity),
-                    PhysicalContactKind::Collision,
-                    Some(agent_id),
-                )
-            } else {
-                (
-                    OutcomeProfile::movement(),
-                    PhysicalContactKind::Moved,
-                    command.target_entity,
-                )
-            }
-        } else if let Some((_agent_id, affinity)) = agent_contact {
+        } else if matches!(intent, MoveIntent::Absolute) && agent_contact.is_some() {
             (
-                OutcomeProfile::movement().with_social_contact(affinity),
-                PhysicalContactKind::Moved,
-                command.target_entity,
+                OutcomeProfile::movement(),
+                PhysicalContactKind::Collision,
+                agent_contact.copied(),
             )
         } else {
             (
@@ -4743,11 +4807,8 @@ impl HeadlessWorld {
                 command.target_entity,
             )
         };
-        if (hazard.is_some() || zone_hazard > 0.0) && agent_contact.is_some() {
-            if let Some((_, affinity)) = agent_contact {
-                profile = profile.with_social_contact(affinity);
-            }
-        }
+        // Peer exposure is measured once at the biology boundary, independently
+        // of static affinity and how many motor channels report the same touch.
         self.finish_action(
             command,
             true,
@@ -4990,20 +5051,50 @@ impl HeadlessWorld {
             .any(|bounds| sight_box_hit(start, direction, *bounds, length).is_some())
     }
 
-    fn hazard_contact_at(&self, position: Vec3f) -> Option<(WorldEntityId, f32)> {
-        self.objects
-            .values()
-            .filter(|object| {
-                object.kind == WorldObjectKind::Hazard
-                    && !object.consumed
-                    && distance(object.position, position) <= object.radius
-            })
-            .min_by(|left, right| {
-                distance(left.position, position)
-                    .total_cmp(&distance(right.position, position))
-                    .then_with(|| left.id.raw().cmp(&right.id.raw()))
-            })
-            .map(|object| (object.id, object.hazard_pain))
+    /// Reuse the endpoint hazard scan for peer overlap, including stationary
+    /// bodies. No contact list, relationship state, or extra bundle scan is built.
+    fn body_contacts_at(
+        &self,
+        own_entity: WorldEntityId,
+        position: Vec3f,
+    ) -> (Option<(WorldEntityId, f32)>, bool) {
+        let mut hazard: Option<(&WorldObject, f32)> = None;
+        let mut peer_touch = false;
+        for object in self.objects.values() {
+            if object.id == own_entity || object.consumed {
+                continue;
+            }
+            match object.kind {
+                WorldObjectKind::Hazard => {
+                    let separation = distance(object.position, position);
+                    if separation <= object.radius
+                        && hazard.is_none_or(|(previous, previous_distance)| {
+                            separation
+                                .total_cmp(&previous_distance)
+                                .then_with(|| object.id.raw().cmp(&previous.id.raw()))
+                                .is_lt()
+                        })
+                    {
+                        hazard = Some((object, separation));
+                    }
+                }
+                WorldObjectKind::Agent if !peer_touch => {
+                    peer_touch = distance(object.position, position)
+                        <= object.radius.min(HEADLESS_CONTACT_RADIUS)
+                        && object.organism_id.is_some_and(|id| {
+                            self.organism_registry
+                                .get(id)
+                                .is_none_or(|record| record.lifecycle().is_alive())
+                        })
+                        && self.physical_contact_reachable(position, object.position);
+                }
+                _ => {}
+            }
+        }
+        (
+            hazard.map(|(object, _)| (object.id, object.hazard_pain)),
+            peer_touch,
+        )
     }
 
     fn advance_ecology_at_current_tick(&mut self) -> EcologyStepReport {
@@ -6177,13 +6268,22 @@ fn legacy_action_for_motor_channel(
     )?)
 }
 
+fn peer_touch_dose(touching: bool) -> f32 {
+    if touching {
+        PEER_TOUCH_PER_INTERVAL
+    } else {
+        0.0
+    }
+}
+
 fn combine_body_event(total: BodyEventDelta, event: BodyEventDelta) -> BodyEventDelta {
     BodyEventDelta {
         energy: (total.energy + event.energy).clamp(-1.0, 1.0),
         damage: (total.damage + event.damage).clamp(0.0, 1.0),
         temperature_stress: (total.temperature_stress + event.temperature_stress).clamp(0.0, 1.0),
         nutrition: (total.nutrition + event.nutrition).clamp(0.0, 1.0),
-        social_contact: (total.social_contact + event.social_contact).clamp(0.0, 1.0),
+        // Contact is exposure in this interval, not a count of reporting channels.
+        social_contact: total.social_contact.max(event.social_contact),
         player_reward: (total.player_reward + event.player_reward).clamp(0.0, 1.0),
         play_stimulation: (total.play_stimulation + event.play_stimulation).clamp(0.0, 1.0),
         perceived_novelty: (total.perceived_novelty + event.perceived_novelty).clamp(0.0, 1.0),
@@ -6555,33 +6655,6 @@ impl OutcomeProfile {
         )
     }
 
-    fn social_contact(affinity: f32) -> Self {
-        // A negative affinity label is not a physical attack. It must neither
-        // manufacture fear nor turn into positive affiliative contact via abs.
-        let affinity = affinity.clamp(0.0, 1.0);
-        Self::new(
-            DriveDelta {
-                loneliness: -0.08 * affinity,
-                brain_atp: -0.02,
-                ..DriveDelta::zero()
-            },
-            EndocrineDelta {
-                oxytocin: 0.08 * affinity,
-                serotonin: 0.03 * affinity,
-                ..EndocrineDelta::zero()
-            },
-            0.0,
-            0.0,
-            -0.02,
-            0.15,
-            false,
-        )
-        .with_body_event(BodyEventDelta {
-            social_contact: affinity,
-            ..BodyEventDelta::zero()
-        })
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn new(
         drives: DriveDelta,
@@ -6611,11 +6684,6 @@ impl OutcomeProfile {
             energy: self.body_event.energy,
             ..body_event
         };
-        self
-    }
-
-    fn with_social_contact(mut self, affinity: f32) -> Self {
-        self.body_event.social_contact = affinity.clamp(0.0, 1.0);
         self
     }
 }
@@ -6808,7 +6876,7 @@ mod biochemical_outcome_tests {
     use super::*;
 
     #[test]
-    fn failures_report_disappointment_not_injury_and_affinity_is_not_threat() {
+    fn failures_report_disappointment_not_injury() {
         let genes = alife_core::BiologicalValueProfile::default();
         for profile in [
             OutcomeProfile::blocked(),
@@ -6821,23 +6889,11 @@ mod biochemical_outcome_tests {
             assert_eq!(profile.homeostatic_delta.hormones, EndocrineDelta::zero());
             assert!(profile.frustration * genes.disappointment < genes.injury * 0.1);
         }
-        for affinity in [-1.0, 0.0, 0.5] {
-            let profile = OutcomeProfile::social_contact(affinity);
-            assert_eq!(profile.body_event.social_contact, affinity.max(0.0));
-            assert_eq!(profile.body_event.damage, 0.0);
-            assert_eq!(profile.homeostatic_delta.drives.fear, 0.0);
-            assert_eq!(profile.homeostatic_delta.drives.pain, 0.0);
-            assert_eq!(profile.frustration, 0.0);
-            assert_eq!(
-                OutcomeProfile::grab()
-                    .with_social_contact(affinity)
-                    .body_event
-                    .social_contact,
-                affinity.max(0.0)
-            );
-        }
     }
 }
+
+#[cfg(test)]
+mod contact_chemistry_tests;
 
 #[cfg(test)]
 mod task_6_factorized_motor_tests {
@@ -8770,6 +8826,11 @@ mod task_3_2a_tests {
         let current_tick = Tick::new(next_tick.raw().saturating_sub(1));
 
         for world in [&mut forward, &mut reverse] {
+            // Isolate age retirement from the now-physical peer contact source.
+            let peer = world.entity_id("agent-high").unwrap();
+            world
+                .editor_move_object(peer, Vec3f::new(2.0, 0.0, 0.0))
+                .unwrap();
             world.tick = current_tick;
             for organism_id in [TASK_4_1_LOW_ORGANISM, TASK_4_1_HIGH_ORGANISM] {
                 let phenotype = world
@@ -8998,7 +9059,12 @@ mod task_3_2a_tests {
             .biochemistry()
             .advance(
                 next_tick,
-                alife_core::BodyEventDelta::zero(),
+                // The touching low-energy peer is alive during this interval,
+                // even though upkeep retires it at the boundary.
+                alife_core::BodyEventDelta {
+                    social_contact: PEER_TOUCH_PER_INTERVAL,
+                    ..alife_core::BodyEventDelta::zero()
+                },
                 before_high.phenotype(),
             )
             .unwrap();
