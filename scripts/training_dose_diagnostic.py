@@ -4,9 +4,9 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import subprocess
 import time
+from pathlib import Path
 
 LESSONS = (
     "feeding", "hazard_avoidance", "obstacle_navigation", "recovery",
@@ -40,9 +40,12 @@ def main():
     parser.add_argument("--request-token", type=int, required=True)
     parser.add_argument("--run", action="store_true", help="Execute the planned GPU commands locally")
     args = parser.parse_args()
-    if not (0 < args.world_seed < 2**64 and 0 < args.founder_seed < 2**64
-            and args.eval_ticks > 0 and 0 < args.request_token < 256):
-        parser.error("seeds, tick count and request token must be valid positive values")
+    if not (0 < args.world_seed < 2**64 and 0 < args.founder_seed < 2**64):
+        parser.error("world and founder seeds must be positive u64 values")
+    if not 1 <= args.eval_ticks <= 2048:
+        parser.error("evaluation tick count must be in 1..2048")
+    if args.request_token not in (1, 2, 9, 13, 15, 16):
+        parser.error("request token must be 1, 2, 9, 13, 15 or 16 (food/toy, get/play, root/fruit)")
     deadline = time.monotonic() + 40 * 60
     binary, manifest_path, receipt = (p.resolve(strict=True) for p in
                                      (args.binary, args.manifest, args.source_receipt))
@@ -68,7 +71,7 @@ def main():
             argv = [str(binary), "--evaluate", str(output / f"eval-{epochs}-{lesson}"),
                     str(arm / "trained.alife-foundation"), lesson, str(args.eval_ticks),
                     str(args.world_seed), str(args.founder_seed)]
-            if lesson.startswith("vocabulary_"):
+            if lesson == "vocabulary_reception":
                 argv += ["--request-token", str(args.request_token)]
             commands.append({"name": f"eval-{epochs}-{lesson}", "prior_off": True, "argv": argv})
     plan = {"status": "planned", "cap_seconds": 2400, "inputs_sha256": before,
