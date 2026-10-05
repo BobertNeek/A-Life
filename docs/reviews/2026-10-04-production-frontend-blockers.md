@@ -5,7 +5,8 @@ baseline is main `482948ec116bad505cee0225cad74c1ab110acb7`. The coordinated
 candidate retains all eight reviewed heads, including the separate GeneForge
 retirement. The repair changes presentation and its tests; it does not change
 organism genomes, acquired state, neural execution, persistence publication,
-terrain height/collision, or exported art bytes.
+terrain height/collision, or exported art bytes. Unsupported procedural camera
+streaming is retired; static unbound scenes retain an explicit diagnostic role.
 
 ## Composite founder admission
 
@@ -59,26 +60,30 @@ The 20 failures were traced as follows:
 | Compact player HUD | 1 | Obsolete debug headings, recovery-key text and assumed energy. Tests check current compact controls, actual needs, explicit unavailable energy, and no invented learning/social readings. |
 | Profile lighting | 1 | Obsolete 6,000-lux limit; current configured sun is 8,500 lux. Profile shadow, grounding, contact and capability budgets remain checked. |
 | Terrain/world colors | 1 | White material tint was mistaken for terrain albedo. Tests read actual mesh vertex colors, lit white tint, cool ambient and warm sun. |
-| Terrain dressing | 1 | Camera rebuilds cleared creature records to avoid respawning roots, also losing occupied tiles for dressing. Rebuilds now receive existing root occupancy separately. The old twelve-enlarged-hero-props rule is absent from the current planner; tests retain composite mesh/upright geometry, nearby flora, all biome kinds, lit materials and clearance. |
-| **Total** | **20** | **17 stale fixture/contract cases; two coordinate cases; one dressing case with both a code defect and a retired expectation.** |
+| Terrain dressing | 1 | The procedural camera stream loses anchors, but has no current supported island role: New Game enables the authored island and `SelectedTerrain` bypasses this system. Retire the stream, its cache and the stale procedural dressing test; add no replacement planner machinery. |
+| **Total** | **20** | **17 stale fixture/contract cases; two coordinate cases; one obsolete procedural-path case retired under island-only scope.** |
 
 Current world coordinate evidence is in
 [headless movement and bearing](../../crates/alife_world/src/headless.rs).
 The repair preserves the existing grounding-height calculation and terrain
 backend. Terrain binding selects the height source, not a coordinate convention.
-The camera stream uses existing visual tiles only as read-only clearance input;
-it neither fabricates organisms nor stages replacement creature roots.
+The supported New Game path calls `enable_island_for_new_game`; the authored
+island's `SelectedTerrain` bypasses the retired camera stream. Its Blender prop
+exclusion, authored chunk culling and placements are unchanged. Sources:
+[New Game](../../crates/alife_game_app/src/new_game_lifecycle.rs),
+[island presentation](../../crates/alife_game_app/src/production_voxel_renderer/island.rs),
+and [Blender landscape exclusion](../../crates/alife_game_app/src/production_voxel_renderer/landscape.rs).
 
-The new camera-pan regression first projects correctly bound agents onto previous
-prop tiles. Moving the camera across a chunk boundary must rebuild terrain,
-keep prop children outside creature clearance, retain all 30 exact ECS roots and
-poses, and leave the source save bytes unchanged. Reinstating the empty occupied
-set makes this test fail with `streamed prop overlaps a live creature tile`.
-The fixed path passes. The complete library run also exposed a care-object
-fixture still expecting zero elevation after its position changed to Y-up height
-4. Its corrected assertion preserves both terrain-bound absolute height and the
-unbound surface offset, movement, consumption and unchanged authoritative tick.
-Only that failing case was rerun; the other 336 library cases already passed.
+The procedural streaming module, its retained backend cache, and obsolete
+procedural dressing scene assertion are removed. The existing current-format unbound fixture is explicitly described as
+isolated CPU/ECS and causal diagnostics. Its static terrain checks still cover
+meshing, layer budgets, vertex colors, stable identity and save correctness;
+these are not supported island scenery or graphical acceptance.
+
+A care-object fixture also expected zero elevation after its position changed
+to Y-up height 4. Its corrected assertion preserves both terrain-bound absolute
+height and the unbound surface offset, movement, consumption and unchanged
+authoritative tick. The affected case passes.
 
 Hearthling checks inspect the shipping GLB JSON bytes: one skin, matching inverse
 bind/joint counts, six primitives/materials, authored head/face/feet/tail joints,
@@ -94,10 +99,10 @@ certify all player-facing capabilities in `AOA-OBS-001`.
 
 | Check | Result |
 | --- | --- |
-| CPU scene target, `bevy-app,production-assets,vfx-hanabi` | 37 passed, zero failed, zero ignored |
-| Camera clearance regression with old empty occupancy | Fails on an actual overlapping prop; fixed path passes |
+| CPU scene target, `bevy-app,production-assets,vfx-hanabi` | 35 passed, zero failed, zero ignored; retired procedural assertions are removed |
 | Production-feature exact corrupt-checkpoint rejection | One passed; rejects before backend creation and retains exact corrupt/source bytes |
-| Production-feature library coverage | Full run: 336 passed, one care-height fixture failed, two existing ignored CPU benchmarks. Corrected care-height test: one passed; all 337 active cases covered successfully. |
+| Production-feature library coverage before procedural retirement | Full run: 336 passed, one care-height fixture failed, two existing ignored CPU benchmarks. Corrected care-height test: one passed; all 337 active cases covered successfully. |
+| Final relevant production renderer library tests | 47 passed, zero failed, zero ignored |
 | Strict app/training production and GPU-test all-target Clippy | Passed with `-D warnings` |
 | Formatting, patch whitespace and docs gate | Passed; documentation assertions 77/77 |
 | Combined production manifest | All 48 paths, sizes and FNV digests valid; 16,112,065 bytes |
@@ -108,7 +113,7 @@ Manifest SHA-256:
 ```sh
 cargo test -p alife_game_app --features bevy-app,production-assets,vfx-hanabi --test fvr03_voxel_renderer
 cargo test -p alife_game_app --features production-voxel-frontend --test fvr03_voxel_renderer runtime_checkpoint_corruption_is_explicit_and_never_overwritten
-cargo test -p alife_game_app --features production-voxel-frontend --lib
+cargo test -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::
 cargo clippy -p alife_game_app -p alife_training --features alife_game_app/production-voxel-frontend,alife_game_app/gpu-tests,alife_training/gpu-tests --all-targets -- -D warnings
 ```
 
