@@ -59,6 +59,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string_pretty(&receipt)?);
         return Ok(());
     }
+    if mode == "--continue-terrain" {
+        let source = std::path::PathBuf::from(args.next().ok_or("missing source cohort")?);
+        let output = std::path::PathBuf::from(args.next().ok_or("missing continuation output")?);
+        let mut preserve_from = None;
+        let mut legacy = None;
+        let mut template = None;
+        while let Some(flag) = args.next() {
+            let value = args.next().ok_or("missing continuation flag value")?;
+            if flag == "--preserve-objective-state-from" {
+                preserve_from = Some(value.to_string_lossy().parse::<u16>()?);
+            } else if flag == "--legacy-source-phenotype" {
+                legacy = Some(std::path::PathBuf::from(value));
+            } else if flag == "--terrain-template" {
+                template = Some(std::path::PathBuf::from(value));
+            } else {
+                return Err("unexpected continuation flag".into());
+            }
+        }
+        let receipt = alife_game_app::continue_foundation_to_terrain_with_legacy(
+            &source,
+            &output,
+            preserve_from,
+            legacy.as_deref(),
+            template.as_deref(),
+        )?;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
     if mode == "--adapt-terrain" {
         let source = std::path::PathBuf::from(args.next().ok_or("missing source cohort")?);
         let output = std::path::PathBuf::from(args.next().ok_or("missing adaptation output")?);
