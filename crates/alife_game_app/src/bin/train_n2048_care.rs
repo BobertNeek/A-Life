@@ -239,6 +239,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut founder_seed_base = None;
     let mut food_position = None;
     let mut lesson = None;
+    let mut preserve_objective_from = None;
     while let Some(flag) = next {
         if flag == "--seed" {
             seed = args
@@ -280,6 +281,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string_lossy()
                     .parse::<f32>()?,
             ]);
+        } else if flag == "--preserve-objective-state-from" {
+            if preserve_objective_from.is_some() {
+                return Err("duplicate objective transition flag".into());
+            }
+            preserve_objective_from = Some(
+                args.next()
+                    .ok_or("missing source objective version")?
+                    .to_string_lossy()
+                    .parse::<u16>()?,
+            );
         } else if flag == "--lesson" {
             if lesson.is_some() {
                 return Err("duplicate lesson flag".into());
@@ -313,6 +324,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("unexpected argument".into());
         }
         next = args.next();
+    }
+    if preserve_objective_from.is_some()
+        && (mode != "--resume-cycle" || food_after_world_tick.is_some())
+    {
+        return Err(
+            "objective transition requires --resume-cycle without a food-delay override".into(),
+        );
     }
     if mode == "--pilot" || mode == "--teacher-pilot" {
         if food_after_world_tick.is_some() {
@@ -356,34 +374,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = match (previous, food_after_world_tick, lesson) {
-                    (previous, None, Some(lesson)) => {
-                        alife_game_app::run_foundation_training_cycle_with_lesson(
-                            previous.as_deref(),
-                            &output,
-                            seed,
-                            ticks,
-                            lesson,
-                        )
-                    }
-                    (_, Some(_), Some(_)) => Err("food delay and lesson cannot be combined".into()),
-                    (Some(previous), Some(food_after), None) => {
-                        alife_game_app::resume_foundation_training_cycle_with_food_delay(
-                            &previous, &output, seed, ticks, food_after,
-                        )
-                    }
-                    (Some(previous), None, None) => {
-                        alife_game_app::resume_foundation_training_cycle(
-                            &previous, &output, seed, ticks,
-                        )
-                    }
-                    (None, Some(food_after), None) => {
-                        alife_game_app::run_foundation_training_cycle_with_food_delay(
-                            &output, seed, ticks, food_after,
-                        )
-                    }
-                    (None, None, None) => {
-                        alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
+                let result = if let Some(source_version) = preserve_objective_from {
+                    alife_game_app::resume_foundation_training_cycle_with_objective_transition(
+                        previous
+                            .as_deref()
+                            .ok_or("objective transition needs a source cycle")?,
+                        &output,
+                        seed,
+                        ticks,
+                        source_version,
+                        lesson,
+                    )
+                } else {
+                    match (previous, food_after_world_tick, lesson) {
+                        (previous, None, Some(lesson)) => {
+                            alife_game_app::run_foundation_training_cycle_with_lesson(
+                                previous.as_deref(),
+                                &output,
+                                seed,
+                                ticks,
+                                lesson,
+                            )
+                        }
+                        (_, Some(_), Some(_)) => {
+                            Err("food delay and lesson cannot be combined".into())
+                        }
+                        (Some(previous), Some(food_after), None) => {
+                            alife_game_app::resume_foundation_training_cycle_with_food_delay(
+                                &previous, &output, seed, ticks, food_after,
+                            )
+                        }
+                        (Some(previous), None, None) => {
+                            alife_game_app::resume_foundation_training_cycle(
+                                &previous, &output, seed, ticks,
+                            )
+                        }
+                        (None, Some(food_after), None) => {
+                            alife_game_app::run_foundation_training_cycle_with_food_delay(
+                                &output, seed, ticks, food_after,
+                            )
+                        }
+                        (None, None, None) => {
+                            alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
+                        }
                     }
                 };
                 result.map_err(|error| {
