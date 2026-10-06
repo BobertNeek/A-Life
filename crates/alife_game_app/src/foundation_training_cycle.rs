@@ -961,7 +961,42 @@ fn run_foundation_training_cycle_from(
     if food_available_world_tick.is_some() && lesson.is_some() {
         return Err("a delayed food gate cannot be combined with a lesson layout".into());
     }
-    std::fs::create_dir(output)?;
+    crate::foundation_training_output::in_new_directory(
+        output,
+        || {
+            run_foundation_training_cycle_in_owned_output(
+                output,
+                seed,
+                training_ticks,
+                previous,
+                food_available_world_tick,
+                lesson,
+            )
+        },
+        |error| {
+            let _ = std::fs::write(
+                output.join("failure.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "error": error.to_string(),
+                    "seed": seed,
+                    "requested_waking_decisions": training_ticks,
+                    "food_available_world_tick": food_available_world_tick,
+                    "lesson": lesson,
+                }))
+                .unwrap_or_default(),
+            );
+        },
+    )
+}
+
+fn run_foundation_training_cycle_in_owned_output(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+) -> Result<FoundationCycleReceipt> {
     let mut objective_state_reset = false;
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
         if let Some(previous) = previous {
