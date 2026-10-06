@@ -203,7 +203,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let asset =
             alife_core::FoundationWeightAsset::decode_canonical(&std::fs::read(asset_path)?)?;
-        let receipt = if let Some(token) = request_token {
+        if request_token.is_some() {
             if lesson != alife_game_app::FoundationTeacherLesson::VocabularyReception
                 || food_position.is_some()
             {
@@ -211,25 +211,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "request comparison applies to reception without food relocation".into(),
                 );
             }
-            alife_game_app::run_foundation_request_evaluation(
-                &output,
-                seed,
-                founder_seed_base,
-                ticks,
-                asset,
-                alife_game_app::FoundationEvaluationRequest { token, silent },
-            )?
-        } else {
-            alife_game_app::run_foundation_evaluation_pilot(
-                &output,
-                seed,
-                founder_seed_base,
-                ticks,
-                lesson,
-                food_position,
-                asset,
-            )?
-        };
+        }
+        // Evaluation uses the same production debug runtime as training. Give
+        // its bounded worker the same Windows stack rather than overflowing main.
+        let receipt = std::thread::Builder::new()
+            .name("foundation-evaluation".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || {
+                let result = if let Some(token) = request_token {
+                    alife_game_app::run_foundation_request_evaluation(
+                        &output,
+                        seed,
+                        founder_seed_base,
+                        ticks,
+                        asset,
+                        alife_game_app::FoundationEvaluationRequest { token, silent },
+                    )
+                } else {
+                    alife_game_app::run_foundation_evaluation_pilot(
+                        &output,
+                        seed,
+                        founder_seed_base,
+                        ticks,
+                        lesson,
+                        food_position,
+                        asset,
+                    )
+                };
+                result.map_err(|error| error.to_string())
+            })?
+            .join()
+            .map_err(|_| "evaluation thread panicked")??;
         println!("{}", serde_json::to_string_pretty(&receipt)?);
         return Ok(());
     }
