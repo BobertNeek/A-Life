@@ -26,6 +26,29 @@ fn legacy_objective_version() -> u16 {
     1
 }
 
+/// An objective change may retain learned state only when the caller names the
+/// actual older version. Ordinary resume never silently resets either head.
+fn validate_objective_continuation(
+    source_version: u16,
+    preserve_from: Option<u16>,
+) -> Result<Option<u16>> {
+    if source_version == BIOLOGICAL_OBJECTIVE_VERSION && preserve_from.is_none() {
+        return Ok(None);
+    }
+    if source_version == legacy_objective_version()
+        && BIOLOGICAL_OBJECTIVE_VERSION == 2
+        && preserve_from == Some(source_version)
+    {
+        return Ok(Some(source_version));
+    }
+    Err(format!(
+        "objective continuation blocked: source version {source_version}, current version \
+         {BIOLOGICAL_OBJECTIVE_VERSION}; a supported older objective requires an explicit \
+         --preserve-objective-state-from matching its receipt"
+    )
+    .into())
+}
+
 fn training_receptor_profile(
     phenotype: &alife_core::CreaturePhenotype,
 ) -> alife_core::PlasticityReceptorProfile {
@@ -58,6 +81,8 @@ pub struct FoundationCycleReceipt {
     pub biological_objective_version: u16,
     #[serde(default)]
     pub objective_state_reset: bool,
+    #[serde(default)]
+    pub objective_transition_from: Option<u16>,
     pub seed: u64,
     #[serde(default)]
     pub founder_seed_base: u64,
@@ -190,6 +215,53 @@ fn validate_cycle_optimizer_handoff(
         return Err("previous optimizer/value checkpoint does not match exported actor".into());
     }
     Ok(())
+}
+
+struct SealedCycleContinuation {
+    asset: FoundationWeightAsset,
+    policy_version: u64,
+    founder_seed_base: u64,
+    actor: alife_training::FoundationTrainerCheckpoint,
+    value: alife_training::PpoValueHeadCheckpoint,
+    objective_transition_from: Option<u16>,
+}
+
+/// CPU decoding/admission only. No output, world, backend or optimizer is created
+/// until the existing receipt and both saved training heads have been accepted.
+fn load_cycle_continuation(
+    previous: &Path,
+    preserve_objective_from: Option<u16>,
+) -> Result<SealedCycleContinuation> {
+    let receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+    let objective_transition_from = validate_objective_continuation(
+        receipt.biological_objective_version,
+        preserve_objective_from,
+    )?;
+    let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        previous.join("trained.alife-foundation"),
+    )?)?;
+    if digest(&asset) != receipt.new_asset_digest {
+        return Err("previous exported asset does not match its receipt".into());
+    }
+    let actor = serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
+    let value = serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
+    validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value)?;
+    Ok(SealedCycleContinuation {
+        asset,
+        policy_version: receipt
+            .policy_version
+            .checked_add(1)
+            .ok_or("policy version overflow")?,
+        founder_seed_base: if receipt.founder_seed_base == 0 {
+            receipt.seed
+        } else {
+            receipt.founder_seed_base
+        },
+        actor,
+        value,
+        objective_transition_from,
+    })
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -549,6 +621,104 @@ mod founder_refresh_tests {
     }
 
     #[test]
+    fn objective_continuation_requires_the_exact_supported_transition() {
+        assert_eq!(validate_objective_continuation(2, None).unwrap(), None);
+        assert_eq!(
+            validate_objective_continuation(1, Some(1)).unwrap(),
+            Some(1)
+        );
+        for (source, requested) in [
+            (1, None),
+            (1, Some(2)),
+            (2, Some(1)),
+            (0, Some(0)),
+            (3, Some(3)),
+        ] {
+            assert!(validate_objective_continuation(source, requested).is_err());
+        }
+    }
+
+    #[test]
+    fn objective_continuation_loads_both_complete_heads_without_resetting_source() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "alife-objective-continuation-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let mut legacy = serde_json::to_value(receipt).unwrap();
+        // A genuine old receipt omits this field; decoding keeps its v1 identity.
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("biological_objective_version");
+        let files = [
+            ("cycle.json", serde_json::to_vec(&legacy).unwrap()),
+            (
+                "trained.alife-foundation",
+                asset.encode_canonical().unwrap(),
+            ),
+            ("actor-checkpoint.json", serde_json::to_vec(&actor).unwrap()),
+            ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
+        ];
+        for (name, bytes) in &files {
+            std::fs::write(directory.join(name), bytes).unwrap();
+        }
+        assert!(load_cycle_continuation(&directory, None).is_err());
+        assert!(load_cycle_continuation(&directory, Some(2)).is_err());
+        let continued = load_cycle_continuation(&directory, Some(1)).unwrap();
+        assert_eq!(continued.objective_transition_from, Some(1));
+        assert_eq!(continued.policy_version, 5);
+        assert_eq!(
+            continued.asset.encode_canonical().unwrap(),
+            asset.encode_canonical().unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&continued.actor).unwrap(),
+            serde_json::to_vec(&actor).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&continued.value).unwrap(),
+            serde_json::to_vec(&value).unwrap()
+        );
+        for (name, bytes) in &files {
+            assert_eq!(std::fs::read(directory.join(name)).unwrap(), *bytes);
+            std::fs::remove_file(directory.join(name)).unwrap();
+        }
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn objective_continuation_rejects_legacy_resume_before_output_or_asset_reads() {
+        let (mut receipt, _, _, _) = cycle_handoff();
+        receipt.biological_objective_version = 1;
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "alife-objective-rejection-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(
+            directory.join("cycle.json"),
+            serde_json::to_vec(&receipt).unwrap(),
+        )
+        .unwrap();
+        let output = directory.join("must-not-exist");
+        let error = resume_foundation_training_cycle(&directory, &output, 17, 1).unwrap_err();
+        assert!(error.to_string().contains("objective continuation blocked"));
+        assert!(!output.exists());
+        std::fs::remove_file(directory.join("cycle.json")).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
     fn cycle_handoff_value_age_mismatch_changes_next_adam_update() {
         let (receipt, asset, actor, value) = cycle_handoff();
         // Scalar bias-correction diagnostic of foundation_ppo.wgsl's value
@@ -882,7 +1052,7 @@ pub fn run_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, None, None, None)
+    run_foundation_training_cycle_from(output, seed, training_ticks, None, None, None, None)
 }
 
 /// A scenario gate: food is out of reach until an explicit world tick. Biology
@@ -900,6 +1070,7 @@ pub fn run_foundation_training_cycle_with_food_delay(
         None,
         Some(food_available_world_tick),
         None,
+        None,
     )
 }
 
@@ -911,7 +1082,15 @@ pub fn resume_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous), None, None)
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        None,
+        None,
+    )
 }
 
 pub fn resume_foundation_training_cycle_with_food_delay(
@@ -928,6 +1107,7 @@ pub fn resume_foundation_training_cycle_with_food_delay(
         Some(previous),
         Some(food_available_world_tick),
         None,
+        None,
     )
 }
 
@@ -941,7 +1121,37 @@ pub fn run_foundation_training_cycle_with_lesson(
     training_ticks: usize,
     lesson: FoundationTeacherLesson,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, previous, None, Some(lesson))
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        None,
+        Some(lesson),
+        None,
+    )
+}
+
+/// Explicitly move an existing sealed cycle to the current biological objective
+/// while retaining its actor/value weights, moments, optimizer ages and masks.
+/// This remains a new cohort; it does not restore individual lifetime state.
+pub fn resume_foundation_training_cycle_with_objective_transition(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    source_objective_version: u16,
+    lesson: Option<FoundationTeacherLesson>,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        lesson,
+        Some(source_objective_version),
+    )
 }
 
 fn run_foundation_training_cycle_from(
@@ -951,6 +1161,7 @@ fn run_foundation_training_cycle_from(
     previous: Option<&Path>,
     food_available_world_tick: Option<u64>,
     lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
 ) -> Result<FoundationCycleReceipt> {
     if seed == 0 || !(1..=36_000).contains(&training_ticks) {
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
@@ -961,8 +1172,17 @@ fn run_foundation_training_cycle_from(
     if food_available_world_tick.is_some() && lesson.is_some() {
         return Err("a delayed food gate cannot be combined with a lesson layout".into());
     }
-    std::fs::create_dir(output)?;
     let mut objective_state_reset = false;
+    let mut objective_transition_from = None;
+    if preserve_objective_from.is_some()
+        && !previous.is_some_and(|path| {
+            path.join("cycle.json").is_file()
+                && !path.join("adaptation.json").is_file()
+                && !path.join("warmup.json").is_file()
+        })
+    {
+        return Err("objective transition requires an unambiguous sealed existing cycle".into());
+    }
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
         if let Some(previous) = previous {
             if previous.join("adaptation.json").is_file() {
@@ -1029,48 +1249,14 @@ fn run_foundation_training_cycle_from(
                     receipt.founder_seed_base,
                 )
             } else {
-                let receipt: FoundationCycleReceipt =
-                    serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
-                if receipt.biological_objective_version > BIOLOGICAL_OBJECTIVE_VERSION {
-                    return Err("previous cohort uses a newer biological objective".into());
-                }
-                objective_state_reset =
-                    receipt.biological_objective_version != BIOLOGICAL_OBJECTIVE_VERSION;
-                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
-                    previous.join("trained.alife-foundation"),
-                )?)?;
-                if digest(&asset) != receipt.new_asset_digest {
-                    return Err("previous exported asset does not match its receipt".into());
-                }
-                let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
-                    &std::fs::read(previous.join("actor-checkpoint.json"))?,
-                )?;
-                let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
-                    &std::fs::read(previous.join("value-checkpoint.json"))?,
-                )?;
-                validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value)?;
-                let founder_seed_base = if receipt.founder_seed_base == 0 {
-                    receipt.seed
-                } else {
-                    receipt.founder_seed_base
-                };
+                let continued = load_cycle_continuation(previous, preserve_objective_from)?;
+                objective_transition_from = continued.objective_transition_from;
                 (
-                    asset,
-                    receipt
-                        .policy_version
-                        .checked_add(1)
-                        .ok_or("policy version overflow")?,
-                    if objective_state_reset {
-                        None
-                    } else {
-                        Some(actor)
-                    },
-                    if objective_state_reset {
-                        None
-                    } else {
-                        Some(value)
-                    },
-                    founder_seed_base,
+                    continued.asset,
+                    continued.policy_version,
+                    Some(continued.actor),
+                    Some(continued.value),
+                    continued.founder_seed_base,
                 )
             }
         } else {
@@ -1081,6 +1267,7 @@ fn run_foundation_training_cycle_from(
     {
         return Err("navigation curriculum requires explicit --adapt-terrain before resuming an old founder".into());
     }
+    std::fs::create_dir(output)?;
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
@@ -1356,6 +1543,9 @@ fn run_foundation_training_cycle_from(
     )?;
     if let Some(checkpoint) = &restored_actor {
         trainer.restore_checkpoint(checkpoint)?;
+        if serde_json::to_vec(&trainer.checkpoint()?)? != serde_json::to_vec(checkpoint)? {
+            return Err("restored actor weights/optimizer state changed before training".into());
+        }
     }
     let actor_optimizer_step_before = trainer.optimizer_step();
     let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
@@ -1616,6 +1806,10 @@ fn run_foundation_training_cycle_from(
     let value_optimizer_step_before = restored_value
         .as_ref()
         .map_or(0, |checkpoint| checkpoint.optimizer_step);
+    let mut expected_value_checkpoint = restored_value
+        .as_ref()
+        .map(serde_json::to_vec)
+        .transpose()?;
     let mut value = if let Some(checkpoint) = restored_value {
         PpoTrainingState::from_checkpoint(checkpoint)?
     } else {
@@ -1646,6 +1840,13 @@ fn run_foundation_training_cycle_from(
             let window =
                 load_foundation_replay_window(&replay_dir, refs, 0, &source, &phenotype, budget)?;
             values.extend(value.predict_values(&mut trainer, &window.sequence)?);
+            if let Some(expected) = expected_value_checkpoint.take() {
+                if serde_json::to_vec(&value.checkpoint(trainer.session())?)? != expected {
+                    return Err(
+                        "restored value weights/optimizer state changed before training".into(),
+                    );
+                }
+            }
             for (row, (behavior, patch)) in window.behavior.iter().zip(&window.patches).enumerate()
             {
                 let index = segment_start + chunk * 512 + row;
@@ -1877,6 +2078,7 @@ fn run_foundation_training_cycle_from(
     let receipt = FoundationCycleReceipt {
         biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
         objective_state_reset,
+        objective_transition_from,
         seed,
         founder_seed_base,
         policy_version,
