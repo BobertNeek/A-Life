@@ -92,13 +92,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-imitation-warmup".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                alife_game_app::run_foundation_imitation_warmup(&output, &manifest, epochs).map_err(
-                    |error| {
-                        let message = error.to_string();
-                        let _ = std::fs::write(output.join("failure.txt"), &message);
-                        message
-                    },
-                )
+                alife_game_app::run_foundation_imitation_warmup(&output, &manifest, epochs)
+                    .map_err(|error| error.to_string())
             })?
             .join()
             .map_err(|_| "warm-up thread panicked")??;
@@ -419,21 +414,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                 };
-                result.map_err(|error| {
-                    let message = error.to_string();
-                    let _ = std::fs::write(
-                        output.join("failure.json"),
-                        serde_json::to_vec_pretty(&serde_json::json!({
-                            "error": message,
-                            "seed": seed,
-                            "requested_waking_decisions": ticks,
-                            "food_available_world_tick": food_after_world_tick,
-                            "lesson": lesson,
-                        }))
-                        .unwrap_or_default(),
-                    );
-                    message
-                })
+                result.map_err(|error| error.to_string())
             })?
             .join()
             .map_err(|_| "training cycle thread panicked")??;

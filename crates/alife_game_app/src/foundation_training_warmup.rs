@@ -163,7 +163,21 @@ pub fn run_foundation_imitation_warmup(
     {
         return Err("warm-up requires 1-128 lessons and one nonzero founder seed".into());
     }
-    std::fs::create_dir(output)?;
+    crate::foundation_training_output::in_new_directory(
+        output,
+        || run_foundation_imitation_warmup_in_owned_output(output, manifest_path, epochs, manifest),
+        |error| {
+            let _ = std::fs::write(output.join("failure.txt"), error.to_string());
+        },
+    )
+}
+
+fn run_foundation_imitation_warmup_in_owned_output(
+    output: &Path,
+    manifest_path: &Path,
+    epochs: u32,
+    manifest: DemonstrationManifest,
+) -> Result<FoundationWarmupReceipt> {
     let source_asset = if let Some(path) = &manifest.source_asset {
         let root = manifest_path
             .parent()

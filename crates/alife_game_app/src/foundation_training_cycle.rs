@@ -711,11 +711,108 @@ mod founder_refresh_tests {
         )
         .unwrap();
         let output = directory.join("must-not-exist");
+        let source_hash = blake3::hash(&std::fs::read(directory.join("cycle.json")).unwrap());
+        std::fs::write(
+            directory.join("failure.json"),
+            b"preserved source diagnostic",
+        )
+        .unwrap();
         let error = resume_foundation_training_cycle(&directory, &output, 17, 1).unwrap_err();
         assert!(error.to_string().contains("objective continuation blocked"));
         assert!(!output.exists());
+        let error = resume_foundation_training_cycle(&directory, &directory, 17, 1).unwrap_err();
+        assert!(error.to_string().contains("objective continuation blocked"));
+        assert_eq!(
+            blake3::hash(&std::fs::read(directory.join("cycle.json")).unwrap()),
+            source_hash
+        );
+        assert_eq!(
+            std::fs::read(directory.join("failure.json")).unwrap(),
+            b"preserved source diagnostic"
+        );
+        std::fs::remove_file(directory.join("failure.json")).unwrap();
         std::fs::remove_file(directory.join("cycle.json")).unwrap();
         std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn objective_continuation_preserves_existing_outputs_after_valid_admission() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let files = [
+            ("cycle.json", serde_json::to_vec(&receipt).unwrap()),
+            (
+                "trained.alife-foundation",
+                asset.encode_canonical().unwrap(),
+            ),
+            ("actor-checkpoint.json", serde_json::to_vec(&actor).unwrap()),
+            ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
+            ("failure.json", b"preserved source diagnostic".to_vec()),
+        ];
+        for alias in [true, false] {
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let directory = std::env::temp_dir().join(format!(
+                "alife-admitted-output-{}-{nonce}-{alias}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&directory).unwrap();
+            let source = directory.join("source");
+            let foreign = directory.join("foreign");
+            std::fs::create_dir(&source).unwrap();
+            std::fs::create_dir(&foreign).unwrap();
+            for (name, bytes) in &files {
+                std::fs::write(source.join(name), bytes).unwrap();
+            }
+            std::fs::write(foreign.join("failure.json"), b"foreign diagnostic").unwrap();
+            let output = if alias { &source } else { &foreign };
+            let error = resume_foundation_training_cycle(&source, output, 17, 1).unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                std::io::ErrorKind::AlreadyExists
+            );
+            for (name, bytes) in &files {
+                assert_eq!(
+                    blake3::hash(&std::fs::read(source.join(name)).unwrap()),
+                    blake3::hash(bytes)
+                );
+                std::fs::remove_file(source.join(name)).unwrap();
+            }
+            assert_eq!(
+                std::fs::read(foreign.join("failure.json")).unwrap(),
+                b"foreign diagnostic"
+            );
+            std::fs::remove_file(foreign.join("failure.json")).unwrap();
+            std::fs::remove_dir(&source).unwrap();
+            std::fs::remove_dir(&foreign).unwrap();
+            std::fs::remove_dir(&directory).unwrap();
+        }
+    }
+
+    #[test]
+    fn objective_continuation_owned_failure_keeps_cycle_diagnostic_fields() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let output = std::env::temp_dir().join(format!(
+            "alife-owned-cycle-diagnostic-{}-{nonce}",
+            std::process::id()
+        ));
+        let result: Result<()> = crate::foundation_training_output::in_new_directory(
+            &output,
+            || Err("CPU-only diagnostic failure".into()),
+            |error| record_cycle_failure(&output, error, 17, 32, None, None),
+        );
+        assert!(result.is_err());
+        let diagnostic: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output.join("failure.json")).unwrap()).unwrap();
+        assert_eq!(diagnostic["error"], "CPU-only diagnostic failure");
+        assert_eq!(diagnostic["seed"], 17);
+        assert_eq!(diagnostic["requested_waking_decisions"], 32);
+        std::fs::remove_file(output.join("failure.json")).unwrap();
+        std::fs::remove_dir(output).unwrap();
     }
 
     #[test]
@@ -1267,7 +1364,88 @@ fn run_foundation_training_cycle_from(
     {
         return Err("navigation curriculum requires explicit --adapt-terrain before resuming an old founder".into());
     }
-    std::fs::create_dir(output)?;
+    let admitted = AdmittedCycleState {
+        asset,
+        policy_version,
+        restored_actor,
+        restored_value,
+        founder_seed_base,
+        objective_state_reset,
+        objective_transition_from,
+    };
+    crate::foundation_training_output::in_new_directory(
+        output,
+        || {
+            run_foundation_training_cycle_in_owned_output(
+                output,
+                seed,
+                training_ticks,
+                food_available_world_tick,
+                lesson,
+                admitted,
+            )
+        },
+        |error| {
+            record_cycle_failure(
+                output,
+                error,
+                seed,
+                training_ticks,
+                food_available_world_tick,
+                lesson,
+            );
+        },
+    )
+}
+
+fn record_cycle_failure(
+    output: &Path,
+    error: &dyn std::error::Error,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+) {
+    let _ = std::fs::write(
+        output.join("failure.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "error": error.to_string(),
+            "seed": seed,
+            "requested_waking_decisions": training_ticks,
+            "food_available_world_tick": food_available_world_tick,
+            "lesson": lesson,
+        }))
+        .unwrap_or_default(),
+    );
+}
+
+struct AdmittedCycleState {
+    asset: FoundationWeightAsset,
+    policy_version: u64,
+    restored_actor: Option<alife_training::FoundationTrainerCheckpoint>,
+    restored_value: Option<alife_training::PpoValueHeadCheckpoint>,
+    founder_seed_base: u64,
+    objective_state_reset: bool,
+    objective_transition_from: Option<u16>,
+}
+
+fn run_foundation_training_cycle_in_owned_output(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    admitted: AdmittedCycleState,
+) -> Result<FoundationCycleReceipt> {
+    let AdmittedCycleState {
+        asset,
+        policy_version,
+        restored_actor,
+        restored_value,
+        founder_seed_base,
+        objective_state_reset,
+        objective_transition_from,
+    } = admitted;
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
