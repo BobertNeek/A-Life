@@ -7,6 +7,34 @@ on:
     branches: ["main"]
 
 jobs:
+  training-continuity:
+    name: Training checkpoint continuity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check training CLI
+        run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Objective continuation CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
+
+  training-output-preservation:
+    name: Training output preservation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check training CLI
+        run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Output ownership CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_output::tests
+
   rust:
     name: Rust workspace validation
     runs-on: ubuntu-latest

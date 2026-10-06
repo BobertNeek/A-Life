@@ -143,6 +143,8 @@ mod foundation_training;
 #[cfg(feature = "foundation-training")]
 mod foundation_training_cycle;
 #[cfg(feature = "foundation-training")]
+mod foundation_training_output;
+#[cfg(feature = "foundation-training")]
 mod foundation_training_warmup;
 mod new_game_lifecycle;
 #[cfg(feature = "foundation-training")]

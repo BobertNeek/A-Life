@@ -61,6 +61,8 @@ def source_info(source):
             files = [source / name, source / "trained.alife-foundation"]
             if name != "adaptation.json":
                 files += [source / "actor-checkpoint.json", source / "value-checkpoint.json"]
+            if (source / "terrain-continuation.json").is_file():
+                files.append(source / "terrain-continuation.json")
             return founder, {str(path): sha256(path) for path in files}
     raise ValueError("source must be a sealed cycle, warm-up or explicit adaptation")
 
@@ -210,14 +212,16 @@ def stop_owned(process):
     process.wait(timeout=10)
 
 
-def run_child(argv, log, deadline, guard, environment):
+def run_child(argv, log, deadline, guard, environment, on_started=None):
     guard()
     if dt.datetime.now(UTC) >= deadline:
         raise TimeoutError("command budget exhausted before launch")
-    kwargs = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+    kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     with Path(str(log) + ".stdout.log").open("xb") as out, Path(str(log) + ".stderr.log").open("xb") as err:
         process = subprocess.Popen(argv, stdout=out, stderr=err, env=environment, **kwargs)
         try:
+            if on_started is not None:
+                on_started(process)
             while process.poll() is None:
                 if dt.datetime.now(UTC) >= deadline:
                     raise TimeoutError("owned command exceeded its wall-time/cutoff budget")
@@ -277,6 +281,7 @@ def arguments():
     parser.add_argument("--min-memory-gib", type=float, default=2)
     parser.add_argument("--idle-seconds", type=int, default=30)
     parser.add_argument("--startup-grace-seconds", type=int, default=30)
+    parser.add_argument("--preserve-objective-state-from", type=int, choices=[1], help="explicit first-cycle transition retaining both trained heads")
     parser.add_argument("--run", action="store_true", help="explicitly launch; default only writes a plan")
     return parser
 
@@ -333,6 +338,8 @@ def main(argv=None):
         state["first_episode_argv"] = [str(args.binary), "--resume-cycle", str(args.source),
             str(args.output / "episode-00000"), str(args.startup_decisions), "--seed", str(args.seed),
             "--lesson", "eat_held_food"]
+        if args.preserve_objective_state_from is not None:
+            state["first_episode_argv"] += ["--preserve-objective-state-from", str(args.preserve_objective_state_from)]
         state["episode_schedule"] = "each accepted episode resumes the immediately preceding sealed cycle; one new seed and realized pose per episode"
         state_path = args.output / "night.json"
         write_json(state_path, state)
@@ -435,9 +442,12 @@ def run_night(args, state, state_path, input_hashes):
             directory = args.output / f"episode-{index:05d}"
             state["partial_episode"] = str(directory); publish()
             started = time.monotonic()
-            invoke([str(args.binary), "--resume-cycle", str(previous), str(directory),
+            cycle_argv = [str(args.binary), "--resume-cycle", str(previous), str(directory),
                     str(args.startup_decisions if index == 0 else args.decisions),
-                    "--seed", str(seed), "--lesson", "eat_held_food"],
+                    "--seed", str(seed), "--lesson", "eat_held_food"]
+            if index == 0 and args.preserve_objective_state_from is not None:
+                cycle_argv += ["--preserve-objective-state-from", str(args.preserve_objective_state_from)]
+            invoke(cycle_argv,
                    f"episode-{index:05d}", args.command_seconds,
                    startup_cutoff if index == 0 else collection_cutoff)
             receipt, setup, hashes = validate_cycle(directory, previous, seed)
