@@ -37,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .to_string_lossy()
             .as_ref()
         {
+            "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
             "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
             "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
             "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
@@ -137,6 +138,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .to_string_lossy()
             .as_ref()
         {
+            "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
             "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
             "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
             "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
@@ -337,6 +339,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string_lossy()
                     .as_ref()
                 {
+                    "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
                     "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
                     "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
                     "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,

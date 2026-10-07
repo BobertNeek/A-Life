@@ -135,6 +135,20 @@ pub struct FoundationCycleReceipt {
     #[serde(default)]
     pub held_food_setup: Option<crate::foundation_training::FoundationHeldFoodSetup>,
     #[serde(default)]
+    pub grab_food_setup: Option<crate::FoundationGrabFoodSetup>,
+    #[serde(default)]
+    pub grab_food_acquisitions: Vec<crate::FoundationGrabAcquisition>,
+    #[serde(default)]
+    pub trained_grab_food_acquisitions: usize,
+    #[serde(default)]
+    pub prepared_grab_food_opportunities: usize,
+    #[serde(default)]
+    pub grab_food_curriculum_version: Option<u16>,
+    #[serde(default)]
+    pub curriculum_reward_rows: Vec<crate::FoundationCurriculumRewardRow>,
+    #[serde(default)]
+    pub curriculum_reward_total: f32,
+    #[serde(default)]
     pub held_food_consumption_events: usize,
     /// Actual captured meals whose action row participates in the update.
     #[serde(default)]
@@ -2301,6 +2315,7 @@ fn run_foundation_training_cycle_in_owned_output(
             "teacher_cue_tokens": scenario.as_ref().map(|s| &s.teacher_cue_tokens),
             "teacher_cue_kind": "contextual_request_not_completed_action_narration",
             "held_food_setup": scenario.as_ref().and_then(|s|s.held_food_setup.as_ref()),
+            "grab_food_setup": scenario.as_ref().and_then(|s|s.grab_food_setup.as_ref()),
             "vocabulary_target": scenario.as_ref().and_then(|s|s.vocabulary_target).map(|id|id.raw()),
             "food_position": scenario_position("food-01")?,
             "blocker_position": scenario_position("obstacle-01")?,
@@ -2359,6 +2374,14 @@ fn run_foundation_training_cycle_in_owned_output(
     let mut teacher_cue_frames = 0;
     let mut held_food_consumption_events = 0;
     let mut held_food_meal_rows = Vec::new();
+    let mut grab_food_acquisitions = Vec::new();
+    let mut grab_reward_gate = crate::foundation_grab_food::GrabRewardGate::default();
+    let grab_setup = scenario.as_ref().and_then(|s| s.grab_food_setup.as_ref());
+    let lesson_food_ownership = |runtime: &GpuLiveBrainRuntime| {
+        grab_setup.and_then(|setup| {
+            crate::foundation_grab_food::food_ownership(runtime.world(), setup.target)
+        })
+    };
     let lesson_food_held = |runtime: &GpuLiveBrainRuntime| {
         scenario
             .as_ref()
@@ -2395,6 +2418,7 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, output, lesson)?;
     let held_before = lesson_food_held(&runtime);
+    let grab_before = lesson_food_ownership(&runtime);
     runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
@@ -2413,6 +2437,18 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     if first[0].frame.organism_id() != organism_id {
         return Err("first training capture belongs to a different organism".into());
+    }
+    if let Some(setup) = grab_setup {
+        if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
+            setup,
+            grab_before,
+            runtime.world(),
+            &first[0],
+            0,
+        )? {
+            grab_reward_gate.observe(0);
+            grab_food_acquisitions.push(acquisition);
+        }
     }
     let (heard_cue, consumed_held) = observe_lesson(&first[0], held_before);
     teacher_cue_frames += usize::from(heard_cue);
@@ -2544,7 +2580,10 @@ fn run_foundation_training_cycle_in_owned_output(
         if let Some(scenario) = &scenario {
             crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
         }
-        if lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+        if matches!(
+            lesson,
+            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+        ) {
             crate::foundation_training::prime_foundation_lesson_prior(
                 &mut runtime,
                 output,
@@ -2552,6 +2591,7 @@ fn run_foundation_training_cycle_in_owned_output(
             )?;
         }
         let held_before = lesson_food_held(&runtime);
+        let grab_before = lesson_food_ownership(&runtime);
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
                 output.join("runtime-performance-failed.json"),
@@ -2664,6 +2704,18 @@ fn run_foundation_training_cycle_in_owned_output(
         }
         if captured.len() != 1 {
             return Err(format!("cycle world tick {after}: expected at most one decision").into());
+        }
+        if let Some(setup) = grab_setup {
+            if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
+                setup,
+                grab_before,
+                runtime.world(),
+                &captured[0],
+                references.len(),
+            )? {
+                grab_reward_gate.observe(references.len());
+                grab_food_acquisitions.push(acquisition);
+            }
         }
         let (heard_cue, consumed_held) = observe_lesson(&captured[0], held_before);
         teacher_cue_frames += usize::from(heard_cue);
@@ -2861,6 +2913,29 @@ fn run_foundation_training_cycle_in_owned_output(
         *final_reward = (*final_reward + delayed).clamp(-1.0, 1.0);
         sleep_gap_reward_total += delayed;
     }
+    // Keep the ordinary measured biological value, including sleep/terminal
+    // gaps, intact. Only a captured learner acquisition loss row adds this
+    // bounded offline curriculum component; the real bootstrap row never does.
+    let mut curriculum_reward_rows = Vec::new();
+    if grab_setup.is_some() {
+        for (row, (_, physiological_reward)) in actions_rewards.iter_mut().enumerate() {
+            let component = crate::foundation_grab_food::curriculum_reward_row(
+                row,
+                *physiological_reward,
+                grab_reward_gate.reward(row, train_rows),
+            )?;
+            *physiological_reward = component.combined_reward;
+            curriculum_reward_rows.push(component);
+        }
+    }
+    let curriculum_reward_total = curriculum_reward_rows
+        .iter()
+        .map(|row| row.curriculum_reward)
+        .sum();
+    let trained_grab_food_acquisitions = grab_food_acquisitions
+        .iter()
+        .filter(|event| event.row < train_rows)
+        .count();
     let mut transitions = Vec::with_capacity(train_rows);
     for (tick, (action, reward)) in actions_rewards.into_iter().enumerate() {
         let terminal = terminal_death_tick.is_some() && tick + 1 == train_rows;
@@ -3037,6 +3112,14 @@ fn run_foundation_training_cycle_in_owned_output(
             .as_ref()
             .map_or_else(Vec::new, |s| s.teacher_cue_tokens.clone()),
         held_food_setup: scenario.as_ref().and_then(|s| s.held_food_setup.clone()),
+        grab_food_setup: grab_setup.cloned(),
+        grab_food_acquisitions,
+        trained_grab_food_acquisitions,
+        prepared_grab_food_opportunities: usize::from(grab_setup.is_some()),
+        grab_food_curriculum_version: grab_setup
+            .map(|_| crate::foundation_grab_food::GRAB_FOOD_CURRICULUM_VERSION),
+        curriculum_reward_rows,
+        curriculum_reward_total,
         held_food_consumption_events,
         trained_held_food_consumption_events,
         prepared_held_food_opportunities: usize::from(

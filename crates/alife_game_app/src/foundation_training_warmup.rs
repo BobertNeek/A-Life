@@ -71,6 +71,7 @@ fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
         FoundationTeacherLesson::VocabularyReception => 6,
         FoundationTeacherLesson::VocabularyProduction => 7,
         FoundationTeacherLesson::EatHeldFood => 8,
+        FoundationTeacherLesson::GrabFood => 9,
     }
 }
 
@@ -244,7 +245,7 @@ fn run_foundation_imitation_warmup_in_owned_output(
     let root = manifest_path
         .parent()
         .ok_or("manifest has no parent directory")?;
-    let mut category_counts = vec![0usize; 9];
+    let mut category_counts = vec![0usize; 10];
     let mut corpus_lesson_budgets = [
         FoundationTeacherLesson::Feeding,
         FoundationTeacherLesson::HazardAvoidance,
@@ -255,6 +256,7 @@ fn run_foundation_imitation_warmup_in_owned_output(
         FoundationTeacherLesson::VocabularyReception,
         FoundationTeacherLesson::VocabularyProduction,
         FoundationTeacherLesson::EatHeldFood,
+        FoundationTeacherLesson::GrabFood,
     ]
     .into_iter()
     .map(crate::FoundationLessonBudget::new)

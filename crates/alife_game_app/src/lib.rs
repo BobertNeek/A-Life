@@ -139,9 +139,15 @@ mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
 #[cfg(feature = "foundation-training")]
+mod foundation_grab_food;
+#[cfg(feature = "foundation-training")]
 mod foundation_training;
 #[cfg(feature = "foundation-training")]
 mod foundation_training_cycle;
+#[cfg(feature = "foundation-training")]
+pub use foundation_grab_food::{
+    FoundationCurriculumRewardRow, FoundationGrabAcquisition, FoundationGrabFoodSetup,
+};
 #[cfg(feature = "foundation-training")]
 mod foundation_training_output;
 #[cfg(feature = "foundation-training")]
