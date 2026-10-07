@@ -71,6 +71,7 @@ fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
         FoundationTeacherLesson::VocabularyReception => 6,
         FoundationTeacherLesson::VocabularyProduction => 7,
         FoundationTeacherLesson::EatHeldFood => 8,
+        FoundationTeacherLesson::GrabFood => 9,
     }
 }
 
@@ -163,7 +164,21 @@ pub fn run_foundation_imitation_warmup(
     {
         return Err("warm-up requires 1-128 lessons and one nonzero founder seed".into());
     }
-    std::fs::create_dir(output)?;
+    crate::foundation_training_output::in_new_directory(
+        output,
+        || run_foundation_imitation_warmup_in_owned_output(output, manifest_path, epochs, manifest),
+        |error| {
+            let _ = std::fs::write(output.join("failure.txt"), error.to_string());
+        },
+    )
+}
+
+fn run_foundation_imitation_warmup_in_owned_output(
+    output: &Path,
+    manifest_path: &Path,
+    epochs: u32,
+    manifest: DemonstrationManifest,
+) -> Result<FoundationWarmupReceipt> {
     let source_asset = if let Some(path) = &manifest.source_asset {
         let root = manifest_path
             .parent()
@@ -230,7 +245,7 @@ pub fn run_foundation_imitation_warmup(
     let root = manifest_path
         .parent()
         .ok_or("manifest has no parent directory")?;
-    let mut category_counts = vec![0usize; 9];
+    let mut category_counts = vec![0usize; 10];
     let mut corpus_lesson_budgets = [
         FoundationTeacherLesson::Feeding,
         FoundationTeacherLesson::HazardAvoidance,
@@ -241,6 +256,7 @@ pub fn run_foundation_imitation_warmup(
         FoundationTeacherLesson::VocabularyReception,
         FoundationTeacherLesson::VocabularyProduction,
         FoundationTeacherLesson::EatHeldFood,
+        FoundationTeacherLesson::GrabFood,
     ]
     .into_iter()
     .map(crate::FoundationLessonBudget::new)

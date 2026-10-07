@@ -164,12 +164,21 @@ fn registered_food_transaction_reports_actual_nutrition() {
     let agent = world.entity_id("agent").unwrap();
     let food = world.entity_id("food").unwrap();
     register(&mut world, agent);
+    assert!(
+        world
+            .apply_registered_command(&grab_command(food), agent, Tick(1))
+            .unwrap()
+            .action_result
+            .execution
+            .succeeded
+    );
+    world.advance_tick();
 
     let receipt = world
         .apply_registered_command(
             &HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap(),
             agent,
-            Tick(1),
+            Tick(world.tick().raw() + 1),
         )
         .unwrap();
 
@@ -182,7 +191,7 @@ fn registered_food_transaction_reports_actual_nutrition() {
     assert_eq!(receipt.action_result.body_event.social_contact, 0.0);
     assert_eq!(receipt.action_result.body_event.sleep_recovery, 0.0);
     assert_eq!(receipt.action_result.body_event.mating_opportunity, 0.0);
-    assert_eq!(receipt.biology_after.tick, Tick(1));
+    assert_eq!(receipt.biology_after.tick, Tick(2));
     assert!(world.entity(food).unwrap().is_consumed());
 }
 
@@ -371,6 +380,15 @@ fn incidental_hazard_contact_preserves_factorized_action_outcome() {
     let food = world.entity_id("food").unwrap();
     let hazard = world.entity_id("hazard").unwrap();
     register(&mut world, agent);
+    assert!(
+        world
+            .apply_registered_command(&grab_command(food), agent, Tick(1))
+            .unwrap()
+            .action_result
+            .execution
+            .succeeded
+    );
+    world.advance_tick();
     let channel = ChannelCommand::new(
         MotorChannel::Manipulation,
         HeadlessActionIds::EAT,
@@ -398,7 +416,7 @@ fn incidental_hazard_contact_preserves_factorized_action_outcome() {
     let bundle = MotorCommandBundle::new(
         ORGANISM_ID,
         ExperienceSequenceId::new(1).unwrap(),
-        Tick::ZERO,
+        world.tick(),
         vec![locomotion, channel],
     )
     .unwrap();

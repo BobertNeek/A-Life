@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan by default; explicitly run fresh held-food episodes through the GPU CLI.
+"""Plan by default; explicitly continue sealed brains on reachable Grab-only lives.
 
 One sealed cycle is one prepared target opportunity. Fresh worlds retain the
 offline actor/value/optimizer chain, not a creature's personal lifetime state.
@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import struct
 import subprocess
 import time
 
@@ -50,21 +51,22 @@ def cutoff_time(text):
 
 def source_info(source):
     seals = [name for name in ("cycle.json", "warmup.json", "adaptation.json") if (source / name).is_file()]
-    if len(seals) != 1:
-        raise ValueError("source must contain exactly one unambiguous sealed handoff receipt")
-    for name in ("cycle.json", "warmup.json", "adaptation.json"):
-        if (source / name).is_file():
-            receipt = read_json(source / name)
-            founder = receipt.get("founder_seed_base") or receipt.get("seed")
-            if not isinstance(founder, int) or not 1 <= founder <= MAX_SEED:
-                raise ValueError("source has no valid founder seed")
-            files = [source / name, source / "trained.alife-foundation"]
-            if name != "adaptation.json":
-                files += [source / "actor-checkpoint.json", source / "value-checkpoint.json"]
-            if (source / "terrain-continuation.json").is_file():
-                files.append(source / "terrain-continuation.json")
-            return founder, {str(path): sha256(path) for path in files}
-    raise ValueError("source must be a sealed cycle, warm-up or explicit adaptation")
+    if seals != ["cycle.json"]:
+        raise ValueError("Grab continuation requires an existing sealed actor/value cycle; adaptations and warm-ups are ineligible")
+    receipt = read_json(source / "cycle.json")
+    if (receipt.get("biological_objective_version") != 2 or receipt.get("objective_state_reset") or
+            not receipt.get("next_cohort_tick_captured") or not receipt.get("next_cohort_optimizer_rebound")):
+        raise ValueError("continuation requires compatible objective2 and completed optimizer rebind")
+    founder = receipt.get("founder_seed_base")
+    if not isinstance(founder, int) or not 1 <= founder <= MAX_SEED:
+        raise ValueError("source has no valid founder seed")
+    for head in ("actor", "value"):
+        checkpoint = read_json(source / f"{head}-checkpoint.json")
+        if checkpoint.get("optimizer_step") != receipt.get(f"{head}_optimizer_step"):
+            raise ValueError(f"{head} checkpoint age disagrees with its sealed cycle")
+    files = [source / name for name in ("cycle.json", "trained.alife-foundation",
+        "actor-checkpoint.json", "value-checkpoint.json")]
+    return founder, {str(path): sha256(path) for path in files}
 
 
 def assert_prior(receipt, expected_frames=None):
@@ -88,7 +90,7 @@ def assert_prior(receipt, expected_frames=None):
         raise ValueError("actual semantic encoder delivery is missing")
 
 
-def assert_setup(receipt):
+def assert_held_setup(receipt):
     setup = receipt.get("held_food_setup") or {}
     if receipt.get("lesson") != "eat_held_food" or not setup or not setup.get("sampling_seed"):
         raise ValueError("receipt lacks the randomized genuine held-food setup")
@@ -116,9 +118,9 @@ def coordinates(value):
     return values
 
 
-def validate_probe(directory):
+def validate_retention_probe(directory):
     receipt = read_json(directory / "pilot.json")
-    setup = assert_setup(receipt)
+    setup = assert_held_setup(receipt)
     assert_prior(receipt, receipt["ticks"])
     if receipt.get("held_food_terminal_death_tick") is not None:
         raise ValueError("assessment learner died")
@@ -142,6 +144,73 @@ def validate_probe(directory):
             "decisions": receipt["ticks"], "directory": str(directory)}
 
 
+def assert_setup(receipt):
+    setup = receipt.get("grab_food_setup") or {}
+    if receipt.get("lesson") != "grab_food" or not setup or receipt.get("held_food_setup"):
+        raise ValueError("receipt lacks genuine unheld Grab-only setup")
+    if (not setup.get("sampling_seed") or not 1 <= setup.get("sampling_attempts", 0) <= 32 or
+            setup.get("initial_owner") is not None or setup.get("initial_consumed")):
+        raise ValueError("Grab setup was held/consumed or has invalid sampled provenance")
+    position = coordinates(setup.get("realized_body_position"))
+    food = coordinates(setup.get("food_position"))
+    if not math.isclose(math.dist(position, food), .5, abs_tol=.0002):
+        raise ValueError("Grab setup food is outside its prepared reach")
+    if not math.isfinite(setup.get("realized_body_yaw", float("nan"))):
+        raise ValueError("Grab setup lacks realized facing")
+    if (setup.get("initial_sleeping") or setup.get("initial_hunger", 0) < .12 or
+            not .2 < setup.get("initial_energy", 0) <= .9 or setup.get("initial_health", 0) < .95):
+        raise ValueError("Grab setup lacks healthy awake natural need")
+    if not receipt.get("teacher_cue_frames") or receipt.get("vocabulary_token") is not None:
+        raise ValueError("ordinary independent Grab cue exposure is missing")
+    if receipt.get("teacher_cue_tokens") != [9, 1]:
+        raise ValueError("Grab teacher cue changed")
+    return setup
+
+
+def validate_acquisitions(receipt, setup, captured_rows):
+    events = receipt.get("grab_food_acquisitions", [])
+    rows = []
+    for event in events:
+        row = event.get("row")
+        command = event.get("selected_command") or {}
+        physical = event.get("physical") or {}
+        target = command.get("target") or {}
+        if (not isinstance(row, int) or not 0 <= row < captured_rows or
+                event.get("organism") != setup["organism"] or event.get("target") != setup["target"] or
+                event.get("owner_before") is not None or event.get("owner_after") != setup["organism"] or
+                event.get("consumed_after") or command.get("channel") != "Manipulation" or
+                command.get("primitive") != 211 or target.get("entity") != setup["target"] or
+                physical.get("contact") != "Touch" or physical.get("target_entity") != setup["target"]):
+            raise ValueError("Grab acquisition lacks exact sealed action/Touch/ownership evidence")
+        rows.append(row)
+    if rows != sorted(set(rows)):
+        raise ValueError("Grab acquisition rows repeat or reorder")
+    return rows
+
+
+def validate_probe(directory):
+    receipt = read_json(directory / "pilot.json")
+    setup = assert_setup(receipt)
+    assert_prior(receipt, receipt["ticks"])
+    rows = validate_acquisitions(receipt, setup, receipt["ticks"])
+    if receipt.get("teacher_mode"):
+        raise ValueError("Grab assessment must be learner-selected")
+    if bool(rows) != bool(receipt.get("lesson_completed")):
+        raise ValueError("Grab assessment completion disagrees with acquisition evidence")
+    trace_path = directory / "lesson-trace.json"
+    if not trace_path.is_file():
+        trace_path = directory / "lesson-diagnostic.json"
+    trace = read_json(trace_path)
+    offered = any(candidate.get("action") == 211 and candidate.get("target") == setup["target"]
+        and any(mask & (1 << candidate["index"]) for mask in
+            [step.get("representative_mask", 0)] + step.get("motor_masks", []))
+        for step in trace.get("steps", []) for candidate in step.get("candidates", []))
+    if not offered:
+        raise ValueError("assessment never offered selectable Grab for its reachable unheld food")
+    return {"lesson": "grab_food", "grab_acquisitions": len(rows), "first_acquisition_row": rows[0] if rows else None,
+            "decisions": receipt["ticks"], "directory": str(directory)}
+
+
 def validate_cycle(directory, previous, seed):
     receipt = read_json(directory / "cycle.json")
     setup = assert_setup(receipt)
@@ -150,13 +219,30 @@ def validate_cycle(directory, previous, seed):
             not receipt.get("next_cohort_tick_captured") or
             not receipt.get("next_cohort_optimizer_rebound") or receipt.get("speech_target_rows")):
         raise ValueError("cycle did not seal the healthy nonlanguage optimizer handoff")
-    if receipt.get("prepared_held_food_opportunities") != 1:
+    if receipt.get("prepared_grab_food_opportunities") != 1:
         raise ValueError("cycle must identify exactly one prepared opportunity")
     rows = receipt.get("trained_replay_rows", 0)
     bootstrap = receipt.get("bootstrap_replay_rows", 0)
     if (rows < 1 or rows != receipt.get("training_ticks") or
             receipt.get("captured_replay_rows") != rows + bootstrap or bootstrap != 1):
         raise ValueError("captured, loss and bootstrap row counts disagree")
+    event_rows = validate_acquisitions(receipt, setup, rows + bootstrap)
+    if receipt.get("trained_grab_food_acquisitions") != sum(row < rows for row in event_rows):
+        raise ValueError("Grab trained acquisition count includes bootstrap or loses events")
+    rewards = receipt.get("curriculum_reward_rows", [])
+    if receipt.get("grab_food_curriculum_version") != 1 or len(rewards) != rows:
+        raise ValueError("Grab curriculum components are missing")
+    for index, reward in enumerate(rewards):
+        credit = .25 if event_rows and event_rows[0] == index else 0.0
+        if (reward.get("row") != index or reward.get("curriculum_reward") != credit or
+                not all(math.isfinite(reward.get(key, float("nan"))) for key in
+                    ("physiological_reward", "curriculum_reward", "combined_reward")) or
+                not math.isclose(reward["combined_reward"],
+                    reward["physiological_reward"] + credit, abs_tol=1e-6)):
+            raise ValueError("Grab curriculum reward includes repeated/setup/bootstrap credit")
+    if not math.isclose(receipt.get("curriculum_reward_total", float("nan")),
+            sum(reward["curriculum_reward"] for reward in rewards), abs_tol=1e-6):
+        raise ValueError("Grab curriculum total disagrees with its loss rows")
     _, files = source_info(directory)
     if sha256(previous / "trained.alife-foundation") != sha256(directory / "initial.alife-foundation"):
         raise ValueError("cycle did not start from the exact preceding exported asset")
@@ -261,18 +347,27 @@ def estimate_capacity(samples, remaining_seconds, free_bytes, reserve_bytes):
             "seconds_per_episode_with_margin": seconds, "max_observed_episode_bytes": size}
 
 
+def sampling_temperature(text):
+    value = float(text)
+    minimum = struct.unpack("<f", struct.pack("<f", .0001))[0]
+    if not math.isfinite(value) or not minimum <= value <= 128.0:
+        raise argparse.ArgumentTypeError("sampling temperature must be finite in 0.0001..128")
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cutoff", type=cutoff_time, required=True)
-    parser.add_argument("--seed", type=int, default=2026100502)
-    parser.add_argument("--assessment-seed", type=int, default=2026100501)
+    parser.add_argument("--seed", type=int, default=202610061277)
+    parser.add_argument("--assessment-seed", type=int, default=202610061201)
     parser.add_argument("--target-episodes", type=int, default=3000)
     parser.add_argument("--batch-episodes", type=int, default=16)
     parser.add_argument("--decisions", type=int, default=16)
     parser.add_argument("--startup-decisions", type=int, default=128)
+    parser.add_argument("--sampling-temperature", type=sampling_temperature, default=1.0)
     parser.add_argument("--startup-seconds", type=int, default=2700)
     parser.add_argument("--command-seconds", type=int, default=1200)
     parser.add_argument("--assessment-seconds", type=int, default=600)
@@ -281,7 +376,7 @@ def arguments():
     parser.add_argument("--min-memory-gib", type=float, default=2)
     parser.add_argument("--idle-seconds", type=int, default=30)
     parser.add_argument("--startup-grace-seconds", type=int, default=30)
-    parser.add_argument("--preserve-objective-state-from", type=int, choices=[1], help="explicit first-cycle transition retaining both trained heads")
+    parser.add_argument("--qualification", type=Path, help="completed focused CPU qualification pinning source and new binary")
     parser.add_argument("--run", action="store_true", help="explicitly launch; default only writes a plan")
     return parser
 
@@ -312,15 +407,29 @@ def main(argv=None):
             source_cycle = read_json(args.source / "cycle.json")
             source_seed = source_cycle.get("seed")
             if source_seed is not None and (args.seed <= source_seed < args.seed + args.target_episodes or
-                    source_cycle.get("lesson") == "eat_held_food" and args.seed <= source_seed):
+                    source_cycle.get("lesson") in ("eat_held_food", "grab_food") and args.seed <= source_seed):
                 raise ValueError("training seed range repeats the source episode; select a fresh range")
         input_hashes[str(args.binary)] = sha256(args.binary)
+        if args.run:
+            if args.qualification is None:
+                raise ValueError("run requires completed focused CPU qualification for this new Grab/Eat binary")
+            qualification = read_json(args.qualification)
+            repo = Path(__file__).resolve().parent.parent
+            actual_revision = subprocess.check_output(
+                ["git", "-c", f"safe.directory={repo.as_posix()}", "rev-parse", "HEAD"],
+                cwd=repo, text=True).strip()
+            if (not qualification.get("ready") or qualification.get("source_revision") != actual_revision or
+                    qualification.get("binary_sha256") != input_hashes[str(args.binary)] or
+                    not qualification.get("focused_native_tests_passed") or
+                    not qualification.get("focused_host_tests_passed")):
+                raise ValueError("new Grab/Eat source and binary are not CPU-qualified")
         args.output = args.output.resolve()
         # Do not acquire the owner lock or start any executable in plan mode.
         args.output.mkdir(parents=True, exist_ok=False)
-        state = {"schema": 1, "status": "planned", "lesson": "eat_held_food", "promoted": False,
+        state = {"schema": 1, "status": "planned", "lesson": "grab_food", "promoted": False,
                  "target_distinct_episodes": args.target_episodes, "batch_episodes": args.batch_episodes,
                  "decisions_per_episode": args.decisions, "startup_decisions": args.startup_decisions,
+                 "sampling_temperature": args.sampling_temperature, "frozen_assessment_temperature": 1.0,
                  "startup_cap_seconds": args.startup_seconds,
                  "cutoff_utc": args.cutoff.isoformat(), "input_sha256": input_hashes,
                  "source": str(args.source), "latest_checkpoint": str(args.source),
@@ -328,6 +437,7 @@ def main(argv=None):
                  "training_seed_range": [args.seed, args.seed + args.target_episodes - 1],
                  "distinct_completed_episodes": 0, "captured_decision_rows": 0, "trained_decision_rows": 0,
                  "bootstrap_rows": 0, "captured_held_meals": 0, "trained_row_held_meals": 0,
+                 "captured_grab_acquisitions": 0, "trained_grab_acquisitions": 0, "curriculum_reward_total": 0.0,
                  "completed_epoch_repeats": 0, "actor_optimizer_updates": 0, "value_optimizer_updates": 0,
                  "individual_lifetime_continues_between_episodes": False,
                  "trained_parameters_and_optimizer_continue": True, "episodes": [], "assessments": [],
@@ -337,9 +447,7 @@ def main(argv=None):
         state["resource_limits"]["startup_grace_seconds"] = args.startup_grace_seconds
         state["first_episode_argv"] = [str(args.binary), "--resume-cycle", str(args.source),
             str(args.output / "episode-00000"), str(args.startup_decisions), "--seed", str(args.seed),
-            "--lesson", "eat_held_food"]
-        if args.preserve_objective_state_from is not None:
-            state["first_episode_argv"] += ["--preserve-objective-state-from", str(args.preserve_objective_state_from)]
+            "--lesson", "grab_food", "--sampling-temperature", str(args.sampling_temperature)]
         state["episode_schedule"] = "each accepted episode resumes the immediately preceding sealed cycle; one new seed and realized pose per episode"
         state_path = args.output / "night.json"
         write_json(state_path, state)
@@ -392,10 +500,20 @@ def run_night(args, state, state_path, input_hashes):
         directory = args.output / name
         started = time.monotonic()
         invoke([str(args.binary), "--evaluate", str(directory), str(source / "trained.alife-foundation"),
-                "eat_held_food", "16", str(args.assessment_seed), str(state["founder_seed_base"])],
+                "grab_food", "16", str(args.assessment_seed), str(state["founder_seed_base"])],
                name, args.assessment_seconds, cutoff)
         result = validate_probe(directory); state["assessments"].append(result); publish()
         assessment_costs.append(time.monotonic() - started)
+        return result
+
+    def retention_probe(name, source, cutoff):
+        directory = args.output / name
+        invoke([str(args.binary), "--evaluate", str(directory), str(source / "trained.alife-foundation"),
+                "eat_held_food", "16", str(args.assessment_seed), str(state["founder_seed_base"])],
+               name, args.assessment_seconds, cutoff)
+        result = validate_retention_probe(directory)
+        result["lesson"] = "eat_held_food"
+        state.setdefault("retention_assessments", []).append(result); publish()
         return result
 
     try:
@@ -412,12 +530,13 @@ def run_night(args, state, state_path, input_hashes):
             raise ValueError("run from the authoritative repository root")
         if args.output.parent != repo / "target" / "founder-training":
             raise ValueError("run output must be a fresh directory directly under target/founder-training for one shared owner lock")
-        git = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+        git = subprocess.run(["git", "-c", f"safe.directory={repo.as_posix()}", "status", "--porcelain"], capture_output=True, text=True, check=True)
         if git.stdout.strip():
             raise ValueError("run requires clean reviewed repository source")
-        state["git_head"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        state["git_head"] = subprocess.check_output(["git", "-c", f"safe.directory={repo.as_posix()}", "rev-parse", "HEAD"], text=True).strip()
         before = probe("frozen-before", previous, startup_cutoff)
-        observed_frozen_meal = bool(before["held_food_meals"])
+        observed_frozen_grab = bool(before["grab_acquisitions"])
+        retention_probe("eating-retention-before", previous, startup_cutoff)
         regressions = 0
         for index in range(args.target_episodes):
             if dt.datetime.now(UTC) >= collection_cutoff:
@@ -444,9 +563,8 @@ def run_night(args, state, state_path, input_hashes):
             started = time.monotonic()
             cycle_argv = [str(args.binary), "--resume-cycle", str(previous), str(directory),
                     str(args.startup_decisions if index == 0 else args.decisions),
-                    "--seed", str(seed), "--lesson", "eat_held_food"]
-            if index == 0 and args.preserve_objective_state_from is not None:
-                cycle_argv += ["--preserve-objective-state-from", str(args.preserve_objective_state_from)]
+                    "--seed", str(seed), "--lesson", "grab_food"]
+            cycle_argv.extend(["--sampling-temperature", str(args.sampling_temperature)])
             invoke(cycle_argv,
                    f"episode-{index:05d}", args.command_seconds,
                    startup_cutoff if index == 0 else collection_cutoff)
@@ -466,10 +584,13 @@ def run_night(args, state, state_path, input_hashes):
                                  ("trained_decision_rows", "trained_replay_rows"), ("bootstrap_rows", "bootstrap_replay_rows"),
                                  ("captured_held_meals", "held_food_consumption_events"),
                                  ("trained_row_held_meals", "trained_held_food_consumption_events"),
+                                 ("captured_grab_acquisitions", "grab_food_acquisitions"),
+                                 ("trained_grab_acquisitions", "trained_grab_food_acquisitions"),
+                                 ("curriculum_reward_total", "curriculum_reward_total"),
                                  ("completed_epoch_repeats", "completed_epochs"),
                                  ("actor_optimizer_updates", "actor_optimizer_updates"),
                                  ("value_optimizer_updates", "value_optimizer_updates")):
-                state[total] += receipt[field]
+                state[total] += len(receipt[field]) if field == "grab_food_acquisitions" else receipt[field]
             state["episodes"].append({"index": index, "seed": seed, "setup": setup, "seconds": seconds,
                                       "bytes": size, "input_sha256": hashes, "policy_version": receipt["policy_version"]})
             publish()
@@ -478,15 +599,16 @@ def run_night(args, state, state_path, input_hashes):
                                 startup_cutoff if index == 0 else collection_cutoff)
                 if index == 0:
                     state["startup_qualified"] = True
-                print(f"Held-food episodes {index + 1}/{args.target_episodes}; trained rows {state['trained_decision_rows']}; "
+                print(f"Grab-food episodes {index + 1}/{args.target_episodes}; trained rows {state['trained_decision_rows']}; "
                       f"last sealed checkpoint {previous}; estimate {state.get('throughput_estimate', 'startup measurement')}", flush=True)
-                regressions = regressions + 1 if observed_frozen_meal and not current["held_food_meals"] else 0
-                observed_frozen_meal = observed_frozen_meal or bool(current["held_food_meals"])
+                regressions = regressions + 1 if observed_frozen_grab and not current["grab_acquisitions"] else 0
+                observed_frozen_grab = observed_frozen_grab or bool(current["grab_acquisitions"])
                 if regressions >= 2:
-                    raise ValueError("two frozen batch checks lost previously observed eating")
+                    raise ValueError("two frozen batch checks lost previously observed Grab acquisition")
         # A deadline interruption retains the last sealed source; never resume
         # partial collection. The reserved final probe is a separate assessment.
         probe("frozen-final", previous, args.cutoff)
+        retention_probe("eating-retention-final", previous, args.cutoff)
         state["status"] = "completed" if state["distinct_completed_episodes"] == args.target_episodes else "incomplete"
     except KeyboardInterrupt:
         state["status"] = "interrupted"; state["error"] = "owner interrupted the runner"

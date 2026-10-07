@@ -32,7 +32,37 @@ fn fixture() -> HeadlessWorld {
     world
         .set_grounded_physical_properties(food, properties)
         .unwrap();
+    pickup(&mut world, OrganismId(1), food);
+    world.try_advance_tick().unwrap();
     world
+}
+
+fn pickup(world: &mut HeadlessWorld, id: OrganismId, target: WorldEntityId) {
+    let command = ActionCommand::structured(
+        id,
+        HeadlessActionIds::GRAB,
+        ActionKind::Hold,
+        ActionTarget::new(Some(target), None),
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        Confidence::new(0.9).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let result = if let Some(record) = world.organism_registry().get(id) {
+        let entity = record.world_entity_id();
+        world
+            .apply_registered_command(&command, entity, Tick(world.tick().raw() + 1))
+            .unwrap()
+            .action_result
+    } else {
+        world.apply_command(&command).unwrap()
+    };
+    assert!(result.execution.succeeded);
+    assert_eq!(world.entity(target).unwrap().carried_by, Some(id));
 }
 
 fn act(world: &mut HeadlessWorld, id: OrganismId, eat: bool) {
@@ -63,7 +93,7 @@ fn act(world: &mut HeadlessWorld, id: OrganismId, eat: bool) {
     let bundle = MotorCommandBundle::new(
         id,
         ExperienceSequenceId::new(1).unwrap(),
-        Tick::ZERO,
+        world.tick(),
         vec![command],
     )
     .unwrap();
@@ -155,7 +185,7 @@ fn simultaneous_neutral_posture_preserves_taste() {
     let bundle = MotorCommandBundle::new(
         OrganismId(1),
         ExperienceSequenceId::new(1).unwrap(),
-        Tick::ZERO,
+        world.tick(),
         vec![
             channel(
                 MotorChannel::Manipulation,
@@ -233,13 +263,15 @@ fn two_eaters_keep_their_own_opposite_tastes() {
     world
         .set_grounded_physical_properties(food_b, properties)
         .unwrap();
+    pickup(&mut world, OrganismId(2), food_b);
+    world.try_advance_tick().unwrap();
     act(&mut world, OrganismId(1), true);
     let entity_b = world.entity_id("b").unwrap();
     let receipt = world
         .apply_registered_command(
             &HeadlessWorldCommand::eat(OrganismId(2), food_b).unwrap(),
             entity_b,
-            Tick(1),
+            Tick(world.tick().raw() + 1),
         )
         .unwrap();
     assert!(receipt.action_result.execution.succeeded);
@@ -292,7 +324,7 @@ fn dead_creatures_drop_taste_before_retirement() {
         .get(OrganismId(1))
         .unwrap()
         .clone();
-    record.mark_dead(Tick(1)).unwrap();
+    record.mark_dead(world.tick()).unwrap();
     world.replace_organism_record_exact(record).unwrap();
     assert!(save(&world).world.ingestion_observations.is_empty());
 }
@@ -306,6 +338,7 @@ fn both_external_actor_removal_paths_clear_taste() {
             .build()
             .unwrap();
         let food = world.entity_id("food").unwrap();
+        pickup(&mut world, OrganismId(1), food);
         world
             .apply_command(&HeadlessWorldCommand::eat(OrganismId(1), food).unwrap())
             .unwrap();
@@ -335,7 +368,7 @@ fn legacy_saves_without_observations_remain_loadable_and_new_invalid_samples_fai
     world.try_advance_tick().unwrap();
     for sample in [
         IngestionObservation {
-            ingested_at: Tick(2),
+            ingested_at: Tick(world.tick().raw() + 1),
             taste: 0.4,
         },
         IngestionObservation {

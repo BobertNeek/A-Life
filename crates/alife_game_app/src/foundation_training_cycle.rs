@@ -26,6 +26,60 @@ fn legacy_objective_version() -> u16 {
     1
 }
 
+fn default_sampling_temperature() -> f32 {
+    1.0
+}
+
+fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
+    if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
+        return Err("cycle sampling temperature must be finite in 0.0001..=128".into());
+    }
+    let config = PpoConfig {
+        temperature,
+        ..PpoConfig::default()
+    };
+    config.validate()?;
+    Ok(config)
+}
+
+fn cycle_sampling_config(
+    seed: u64,
+    policy: u64,
+    temperature: f32,
+) -> Result<GpuTrainingSamplingConfig> {
+    let config = GpuTrainingSamplingConfig {
+        seed: (seed as u32) ^ (policy as u32).wrapping_mul(0x9e37_79b9),
+        counter: 0,
+        temperature: cycle_ppo_config(temperature)?.temperature,
+        demonstrator: None,
+    };
+    config.validate()?;
+    Ok(config)
+}
+
+/// An objective change may retain learned state only when the caller names the
+/// actual older version. Ordinary resume never silently resets either head.
+fn validate_objective_continuation(
+    source_version: u16,
+    preserve_from: Option<u16>,
+) -> Result<Option<u16>> {
+    if source_version == BIOLOGICAL_OBJECTIVE_VERSION && preserve_from.is_none() {
+        return Ok(None);
+    }
+    if source_version == legacy_objective_version()
+        && BIOLOGICAL_OBJECTIVE_VERSION == 2
+        && preserve_from == Some(source_version)
+    {
+        return Ok(Some(source_version));
+    }
+    Err(format!(
+        "objective continuation blocked: source version {source_version}, current version \
+         {BIOLOGICAL_OBJECTIVE_VERSION}; a supported older objective requires an explicit \
+         --preserve-objective-state-from matching its receipt"
+    )
+    .into())
+}
+
 fn training_receptor_profile(
     phenotype: &alife_core::CreaturePhenotype,
 ) -> alife_core::PlasticityReceptorProfile {
@@ -58,6 +112,10 @@ pub struct FoundationCycleReceipt {
     pub biological_objective_version: u16,
     #[serde(default)]
     pub objective_state_reset: bool,
+    #[serde(default)]
+    pub objective_transition_from: Option<u16>,
+    #[serde(default = "default_sampling_temperature")]
+    pub sampling_temperature: f32,
     pub seed: u64,
     #[serde(default)]
     pub founder_seed_base: u64,
@@ -109,6 +167,20 @@ pub struct FoundationCycleReceipt {
     pub teacher_cue_tokens: Vec<u16>,
     #[serde(default)]
     pub held_food_setup: Option<crate::foundation_training::FoundationHeldFoodSetup>,
+    #[serde(default)]
+    pub grab_food_setup: Option<crate::FoundationGrabFoodSetup>,
+    #[serde(default)]
+    pub grab_food_acquisitions: Vec<crate::FoundationGrabAcquisition>,
+    #[serde(default)]
+    pub trained_grab_food_acquisitions: usize,
+    #[serde(default)]
+    pub prepared_grab_food_opportunities: usize,
+    #[serde(default)]
+    pub grab_food_curriculum_version: Option<u16>,
+    #[serde(default)]
+    pub curriculum_reward_rows: Vec<crate::FoundationCurriculumRewardRow>,
+    #[serde(default)]
+    pub curriculum_reward_total: f32,
     #[serde(default)]
     pub held_food_consumption_events: usize,
     /// Actual captured meals whose action row participates in the update.
@@ -188,6 +260,734 @@ fn validate_cycle_optimizer_handoff(
         || value.last_updated_policy_version != Some(receipt.policy_version)
     {
         return Err("previous optimizer/value checkpoint does not match exported actor".into());
+    }
+    Ok(())
+}
+
+struct SealedCycleContinuation {
+    asset: FoundationWeightAsset,
+    policy_version: u64,
+    founder_seed_base: u64,
+    actor: alife_training::FoundationTrainerCheckpoint,
+    value: alife_training::PpoValueHeadCheckpoint,
+    objective_transition_from: Option<u16>,
+}
+
+/// CPU decoding/admission only. No output, world, backend or optimizer is created
+/// until the existing receipt and both saved training heads have been accepted.
+fn load_cycle_continuation(
+    previous: &Path,
+    preserve_objective_from: Option<u16>,
+) -> Result<SealedCycleContinuation> {
+    let receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+    let objective_transition_from = validate_objective_continuation(
+        receipt.biological_objective_version,
+        preserve_objective_from,
+    )?;
+    let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        previous.join("trained.alife-foundation"),
+    )?)?;
+    if previous.join("terrain-continuation.json").is_file() {
+        validate_terrain_continuation_package(previous, preserve_objective_from)?;
+    } else if digest(&asset) != receipt.new_asset_digest {
+        return Err("previous exported asset does not match its receipt".into());
+    }
+    let actor = serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
+    let value = serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
+    validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value)?;
+    Ok(SealedCycleContinuation {
+        asset,
+        policy_version: receipt
+            .policy_version
+            .checked_add(1)
+            .ok_or("policy version overflow")?,
+        founder_seed_base: if receipt.founder_seed_base == 0 {
+            receipt.seed
+        } else {
+            receipt.founder_seed_base
+        },
+        actor,
+        value,
+        objective_transition_from,
+    })
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct FoundationTerrainContinuationReceipt {
+    pub schema_version: u16,
+    pub source_directory: std::path::PathBuf,
+    pub source_file_blake3: std::collections::BTreeMap<String, String>,
+    pub source_asset_digest: String,
+    pub target_asset_digest: String,
+    pub target_phenotype_hash: alife_core::PhenotypeHash,
+    pub actor_optimizer_step: u32,
+    pub value_optimizer_step: u32,
+    pub biological_objective_version: u16,
+    pub preserved_weight_count: usize,
+    pub optimizer_reset: bool,
+    pub value_state_reset: bool,
+    pub personal_lifetime_restored: bool,
+    #[serde(default)]
+    pub legacy_source_export: Option<std::path::PathBuf>,
+    #[serde(default)]
+    pub terrain_template: Option<std::path::PathBuf>,
+    #[serde(default)]
+    pub source_phenotype_blake3: Option<String>,
+    #[serde(default)]
+    pub explicit_interface_changes: Vec<String>,
+}
+
+fn current_choice_credit_transition(
+    old: &serde_json::Value,
+    new: &serde_json::Value,
+    head: Option<&str>,
+) -> bool {
+    let mut expected = old.clone();
+    expected["receptor_profile"] = serde_json::json!([0.0, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5]);
+    old["receptor_profile"] == serde_json::json!([0.2, -1.0, 1.0, -0.5, 0.2, 0.0, 0.5, -0.5])
+        && expected == *new
+        && matches!(
+            head,
+            Some("ActionCandidate" | "MemoryContext" | "CognitiveContext")
+        )
+}
+
+fn prepare_legacy_terrain_binding(
+    source: &FoundationWeightAsset,
+    actor: &alife_training::FoundationTrainerCheckpoint,
+    legacy: &Path,
+    template_directory: &Path,
+    seed: u64,
+    founder: u64,
+) -> Result<(
+    FoundationWeightAsset,
+    alife_core::BrainPhenotype,
+    Vec<String>,
+)> {
+    let export: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(legacy.join("export.json"))?)?;
+    let old: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(legacy.join("source-phenotype.json"))?)?;
+    if export["producer_commit"] != "d4eb7892c8263e980314828f4273c271acab6a41"
+        || export["actor_identity_verified"] != true
+        || export["actor_phenotype_hash"] != serde_json::to_value(actor.phenotype_hash)?
+        || old["phenotype_hash"] != export["actor_phenotype_hash"]
+        || export["source_asset_digest"] != serde_json::to_value(source.digest())?
+    {
+        return Err("legacy terrain export does not authenticate the original actor".into());
+    }
+    let template = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        template_directory.join("trained.alife-foundation"),
+    )?)?;
+    if template.manifest().sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+        || template.weights().len() != source.weights().len()
+        || template
+            .weights()
+            .iter()
+            .zip(source.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+    {
+        return Err("terrain metadata template lacks the exact established trained weights".into());
+    }
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = founder;
+    config.sensor_profile = template.manifest().sensor_profile();
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &template)
+        .map_err(|e| format!("trained terrain template admission: {e}"))?;
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("terrain founder missing")?;
+    let genome = record.phenotype().brain_genome.clone();
+    let development = crate::gpu_live_runtime::foundation_construction_development(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)?,
+    )?;
+    let (compiled, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome.clone(),
+        development.clone(),
+        template,
+    )?;
+    let target = FoundationWeightAsset::from_trained_weights(
+        &compiled,
+        source.weights().to_vec(),
+        source.manifest().training_stage(),
+    )?;
+    let (next, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        target.clone(),
+    )?;
+    // Serialize typed f32 fields before parsing, exactly as the source export
+    // did. to_value widens f32 to f64 and invents decimal representation diffs.
+    let new: serde_json::Value = serde_json::from_slice(&serde_json::to_vec(&next)?)?;
+    // Receptor indices address a compiler-local table, not learned coordinates.
+    // Preserve every synapse ordinal and require its resolved receptor parameters
+    // to be identical before accepting any table relocation.
+    let old_synapses = old["synapses"]
+        .as_array()
+        .ok_or("legacy synapses missing")?;
+    let new_synapses = new["synapses"]
+        .as_array()
+        .ok_or("terrain synapses missing")?;
+    let old_receptors = old["plasticity_receptors"]
+        .as_array()
+        .ok_or("legacy receptors missing")?;
+    let new_receptors = new["plasticity_receptors"]
+        .as_array()
+        .ok_or("terrain receptors missing")?;
+    if old_synapses.len() != new_synapses.len() {
+        return Err("legacy terrain continuation changed synapse count".into());
+    }
+    let mut receptor_rebindings = std::collections::BTreeSet::new();
+    let mut current_credit_readouts = 0_usize;
+    for (index, (a, b)) in old_synapses.iter().zip(new_synapses).enumerate() {
+        let ai = a["receptor_index"]
+            .as_u64()
+            .ok_or("legacy receptor index missing")? as usize;
+        let bi = b["receptor_index"]
+            .as_u64()
+            .ok_or("terrain receptor index missing")? as usize;
+        let ap = old_receptors
+            .get(ai)
+            .ok_or("legacy receptor index out of bounds")?;
+        let bp = new_receptors
+            .get(bi)
+            .ok_or("terrain receptor index out of bounds")?;
+        if ap != bp {
+            // The merged 163457ca founder default deliberately removes surprise
+            // reinforcement from choice readouts. Retain this current learning
+            // rule while preserving accumulated weights and optimizer history.
+            // Admit only that exact, documented coefficient change on its named
+            // heads; every rate, bound and other receptor lane must still match.
+            let head = a["kind"]["Decoder"]["head"].as_str();
+            if !current_choice_credit_transition(ap, bp, head) {
+                return Err(format!("legacy terrain continuation changed resolved receptor at synapse {index} ({ai} -> {bi}): source {ap}; target {bp}").into());
+            }
+            current_credit_readouts += 1;
+        }
+        let mut a = a.clone();
+        let mut b = b.clone();
+        a.as_object_mut()
+            .ok_or("legacy synapse invalid")?
+            .remove("receptor_index");
+        b.as_object_mut()
+            .ok_or("terrain synapse invalid")?
+            .remove("receptor_index");
+        if a != b {
+            return Err(format!("legacy terrain continuation changed synapse coordinate {index}: source {a}; target {b}").into());
+        }
+        if ai != bi {
+            receptor_rebindings.insert((ai, bi));
+        }
+    }
+    for field in [
+        "language_codebook",
+        "brain_class_id",
+        "neuron_count",
+        "microstep_count",
+        "lobe_layout",
+        "projections",
+        "neuron_dynamics",
+        "cognitive_architecture",
+        "replay_capture_plan",
+        "sleep_consolidation_plan",
+        "persistent_address_map",
+        "route_abi_digest",
+        "plasticity_abi_digest",
+        "budgets",
+        "speech_decoder",
+        "memory_decoder",
+    ] {
+        if old[field] != new[field] {
+            if let (Some(a), Some(b)) = (old[field].as_array(), new[field].as_array()) {
+                if let Some(index) = a.iter().zip(b).position(|(x, y)| x != y) {
+                    return Err(format!("legacy terrain continuation changed ordered neural field {field} index {index}: source {}; target {}", a[index], b[index]).into());
+                }
+            }
+            return Err(format!(
+                "legacy terrain continuation changed ordered neural field {field}"
+            )
+            .into());
+        }
+    }
+    let old_assignments = old["sensor_encoder"]["assignments"]
+        .as_array()
+        .ok_or("legacy encoder missing")?;
+    let new_assignments = new["sensor_encoder"]["assignments"]
+        .as_array()
+        .ok_or("terrain encoder missing")?;
+    let changed: Vec<_> = old_assignments
+        .iter()
+        .filter(|a| !new_assignments.contains(a))
+        .collect();
+    if changed.iter().any(|a| {
+        !matches!(
+            a["source_group"].as_str(),
+            Some("SensoryChannel" | "Body" | "Homeostasis")
+        )
+    }) {
+        return Err("legacy terrain continuation changed an encoder binding outside the documented physical input coverage repair".into());
+    }
+    let mut old_decoder = old["decoder"].clone();
+    let mut new_decoder = new["decoder"].clone();
+    let mut changes = vec![
+        "sensor_profile: grounded_object_slots_v1 -> grounded_terrain_vision_v1".to_owned(),
+        "new hearing/private-prior encoder ports".to_owned(),
+    ];
+    if !changed.is_empty() {
+        changes.push(format!("current physical input coverage from merged 163457ca replaces {} old sensory/body/homeostasis bindings; learned neural/critic coordinates retained, pre-update policy behavior may change", changed.len()));
+    }
+    // Keep the actual physical feature -> neuron maps, rather than describing
+    // the intentional input repair as an invented bijective neural remapping.
+    changes.push(format!(
+        "source_sensor_encoder_assignments={}",
+        serde_json::to_string(old_assignments)?
+    ));
+    changes.push(format!(
+        "target_sensor_encoder_assignments={}",
+        serde_json::to_string(new_assignments)?
+    ));
+    if current_credit_readouts != 0 {
+        changes.push(format!("current SignedChoiceReadouts from merged 163457ca: surprise coefficient 0.2 -> 0.0 on {current_credit_readouts} action/memory/cognitive readout synapses; all other receptor parameters and accumulated learned/optimizer state retained"));
+    }
+    for (old_index, new_index) in receptor_rebindings {
+        changes.push(format!("receptor table index {old_index} -> {new_index}; identical resolved parameters, synapse ordinals and optimizer arrays retained"));
+    }
+    if old["plasticity_plan_digest"] != new["plasticity_plan_digest"] {
+        // This digest includes the entire compiler-local table, including unused
+        // entries. All used entries and both replay/sleep plans were checked above.
+        changes.push(
+            "plasticity plan digest rebound after full per-synapse receptor validation and the explicit current credit transition"
+                .to_owned(),
+        );
+    }
+    for decoder in [&mut old_decoder, &mut new_decoder] {
+        decoder
+            .as_object_mut()
+            .ok_or("decoder missing")?
+            .remove("canonical_digest");
+        for family in decoder["families"]
+            .as_array_mut()
+            .ok_or("decoder families missing")?
+        {
+            for field in [
+                "innate_drive_mask",
+                "innate_gain",
+                "innate_cue_lane",
+                "innate_cue_inverted",
+                "innate_requires_reach",
+            ] {
+                family
+                    .as_object_mut()
+                    .ok_or("decoder family missing")?
+                    .remove(field);
+            }
+        }
+    }
+    if old_decoder != new_decoder {
+        return Err(
+            "legacy terrain continuation changed action readout coordinates or bias".into(),
+        );
+    }
+    if old["decoder"] != new["decoder"] {
+        changes.push("current gene-compiled innate decoder dispositions; learned readout coordinates and bias retained".to_owned());
+    }
+    Ok((target, next, changes))
+}
+
+fn verify_terrain_coordinates(
+    old: &alife_core::BrainPhenotype,
+    next: &alife_core::BrainPhenotype,
+) -> Result<()> {
+    if old.sensor_profile() != SensorProfile::GroundedObjectSlotsV1
+        || next.sensor_profile() != SensorProfile::GroundedTerrainVisionV1
+        || old.schema_version() != next.schema_version()
+        || old.brain_class_id() != next.brain_class_id()
+        || old.neuron_count() != next.neuron_count()
+        || old.microstep_count() != next.microstep_count()
+        || old.lobe_layout() != next.lobe_layout()
+        || old.language_codebook() != next.language_codebook()
+        || old.cognitive_architecture() != next.cognitive_architecture()
+        || old.projections() != next.projections()
+        || old.neuron_dynamics() != next.neuron_dynamics()
+        || old.candidate_decoder() != next.candidate_decoder()
+        || old.speech_decoder() != next.speech_decoder()
+        || old.memory_decoder() != next.memory_decoder()
+        || old.cognitive_decoder() != next.cognitive_decoder()
+        || old.cognitive_channel_plan() != next.cognitive_channel_plan()
+        || old.plasticity_receptors() != next.plasticity_receptors()
+        || old.replay_capture_plan() != next.replay_capture_plan()
+        || old.sleep_consolidation_plan() != next.sleep_consolidation_plan()
+        || old.plasticity_plan_digest() != next.plasticity_plan_digest()
+        || old.persistent_address_map() != next.persistent_address_map()
+        || old.route_abi_digest() != next.route_abi_digest()
+        || old.plasticity_abi_digest() != next.plasticity_abi_digest()
+        || old.budgets() != next.budgets()
+        || old.synapses().len() != next.synapses().len()
+        || old.synapses().iter().zip(next.synapses()).any(|(a, b)| {
+            a.source() != b.source()
+                || a.target() != b.target()
+                || a.alpha().to_bits() != b.alpha().to_bits()
+                || a.route_index() != b.route_index()
+                || a.receptor_index() != b.receptor_index()
+                || a.kind() != b.kind()
+                || a.genetic_weight().to_bits() != b.genetic_weight().to_bits()
+        })
+    {
+        return Err(
+            "terrain continuation changed neural, synapse or ordered critic coordinates".into(),
+        );
+    }
+    // Preserve every existing sensory/body binding. Only the explicitly named
+    // hearing/private-prior ports may be added to the same learned neurons.
+    let old_assignments = old.sensor_encoder().assignments();
+    let next_assignments = next.sensor_encoder().assignments();
+    if old_assignments
+        .iter()
+        .any(|a| !next_assignments.contains(a))
+        || next_assignments.iter().any(|a| {
+            !old_assignments.contains(a)
+                && !matches!(
+                    a.source_group(),
+                    alife_core::SensorEncoderSourceGroup::HeardLanguage
+                        | alife_core::SensorEncoderSourceGroup::SemanticPrior
+                )
+        })
+    {
+        return Err("terrain continuation changed existing encoder coordinates".into());
+    }
+    Ok(())
+}
+
+fn prepare_terrain_continuation(
+    previous: &Path,
+    preserve_from: Option<u16>,
+    legacy: Option<&Path>,
+    terrain_template: Option<&Path>,
+) -> Result<(
+    FoundationWeightAsset,
+    alife_training::FoundationTrainerCheckpoint,
+    alife_training::PpoValueHeadCheckpoint,
+    FoundationTerrainContinuationReceipt,
+)> {
+    if previous.join("terrain-continuation.json").exists() {
+        return Err(
+            "terrain continuation requires the original sealed cycle, not another transfer".into(),
+        );
+    }
+    let sealed = load_cycle_continuation(previous, preserve_from)?;
+    let original_receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+    let source = sealed.asset;
+    if source.manifest().sensor_profile() != SensorProfile::GroundedObjectSlotsV1 {
+        return Err("terrain continuation requires a grounded-object checkpoint".into());
+    }
+    let (target, next, old_hash, interface_changes) = if let (Some(legacy), Some(template)) =
+        (legacy, terrain_template)
+    {
+        let (target, next, changes) = prepare_legacy_terrain_binding(
+            &source,
+            &sealed.actor,
+            legacy,
+            template,
+            original_receipt.seed,
+            sealed.founder_seed_base,
+        )?;
+        (target, next, sealed.actor.phenotype_hash, changes)
+    } else {
+        if legacy.is_some() || terrain_template.is_some() {
+            return Err("legacy continuation requires both authenticated export and trained terrain template".into());
+        }
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(original_receipt.seed, 1)?;
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.founder_seed_base = sealed.founder_seed_base;
+        config.sensor_profile = source.manifest().sensor_profile();
+        let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &source)?;
+        let record = game
+            .world
+            .organism_registry()
+            .iter()
+            .next()
+            .ok_or("source founder missing")?;
+        let genome = record.phenotype().brain_genome.clone();
+        let capacity = alife_core::BrainCapacityClass::n2048();
+        let development = crate::gpu_live_runtime::foundation_construction_development(
+            &genome,
+            &capacity,
+            &record
+                .phenotype()
+                .development_state_at(alife_core::Tick::ZERO)?,
+        )?;
+        let (old, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome.clone(),
+            development.clone(),
+            source.clone(),
+        )?;
+        let template = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )?;
+        // The procedural compile supplies metadata only. Every exported weight is
+        // taken from the existing trained source, then that actual asset is compiled.
+        let target = FoundationWeightAsset::from_trained_weights(
+            &template,
+            source.weights().to_vec(),
+            source.manifest().training_stage(),
+        )?;
+        let (next, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome,
+            development,
+            target.clone(),
+        )?;
+        verify_terrain_coordinates(&old, &next)?;
+        (target, next, old.phenotype_hash(), Vec::new())
+    };
+    let mut actor = sealed.actor;
+    actor.config.validate()?;
+    let n = source.weights().len();
+    let indices = (0..actor.stage_mask.len())
+        .filter(|index| actor.stage_mask.is_trainable(*index))
+        .map(|index| index as u32)
+        .collect::<Vec<_>>();
+    if actor.stage_mask != StageTrainableMask::from_synapse_indices(&next, &indices)? {
+        return Err("terrain continuation source stage mask is malformed".into());
+    }
+    if actor.schema_version != 2
+        || actor.phenotype_hash != old_hash
+        || actor.first_moment.len() != n
+        || actor.second_moment.len() != n
+        || actor.update_ages.len() != n
+        || actor
+            .weights
+            .iter()
+            .chain(&actor.first_moment)
+            .chain(&actor.second_moment)
+            .any(|v| !v.is_finite())
+        || actor.second_moment.iter().any(|v| *v < 0.0)
+        || actor
+            .update_ages
+            .iter()
+            .zip(&actor.first_moment)
+            .zip(&actor.second_moment)
+            .any(|((age, m), v)| {
+                *age > actor.optimizer_step || (*age == 0 && (*m != 0.0 || *v != 0.0))
+            })
+        || sealed.value.feature_count != next.neuron_count()
+    {
+        return Err(
+            "terrain continuation source actor or ordered value features are incompatible".into(),
+        );
+    }
+    PpoTrainingState::from_checkpoint(sealed.value.clone())?;
+    actor.phenotype_hash = next.phenotype_hash();
+    actor.source_foundation_digest = target.digest();
+    let files = [
+        "cycle.json",
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+    ];
+    let source_file_blake3 = files
+        .iter()
+        .map(|name| {
+            Ok((
+                (*name).to_owned(),
+                blake3::hash(&std::fs::read(previous.join(name))?)
+                    .to_hex()
+                    .to_string(),
+            ))
+        })
+        .collect::<Result<_>>()?;
+    let receipt = FoundationTerrainContinuationReceipt {
+        schema_version: 1,
+        source_directory: previous.canonicalize()?,
+        source_file_blake3,
+        source_asset_digest: digest(&source),
+        target_asset_digest: digest(&target),
+        target_phenotype_hash: next.phenotype_hash(),
+        actor_optimizer_step: actor.optimizer_step,
+        value_optimizer_step: sealed.value.optimizer_step,
+        biological_objective_version: original_receipt.biological_objective_version,
+        preserved_weight_count: n,
+        optimizer_reset: false,
+        value_state_reset: false,
+        personal_lifetime_restored: false,
+        legacy_source_export: legacy.map(|p| p.canonicalize()).transpose()?,
+        terrain_template: terrain_template.map(|p| p.canonicalize()).transpose()?,
+        source_phenotype_blake3: legacy
+            .map(|p| -> Result<String> {
+                Ok(
+                    blake3::hash(&std::fs::read(p.join("source-phenotype.json"))?)
+                        .to_hex()
+                        .to_string(),
+                )
+            })
+            .transpose()?,
+        explicit_interface_changes: interface_changes,
+    };
+    Ok((target, actor, sealed.value, receipt))
+}
+
+/// CPU-only explicit sensor migration of an existing complete offline checkpoint.
+/// The original cycle receipt remains byte-identical; no update or objective
+/// relabel occurs here. A later first cycle still requires the objective flag.
+pub fn continue_foundation_to_terrain(
+    previous: &Path,
+    output: &Path,
+    preserve_from: Option<u16>,
+) -> Result<FoundationTerrainContinuationReceipt> {
+    continue_foundation_to_terrain_with_legacy(previous, output, preserve_from, None, None)
+}
+
+pub fn continue_foundation_to_terrain_with_legacy(
+    previous: &Path,
+    output: &Path,
+    preserve_from: Option<u16>,
+    legacy: Option<&Path>,
+    terrain_template: Option<&Path>,
+) -> Result<FoundationTerrainContinuationReceipt> {
+    let (asset, actor, _value, receipt) =
+        prepare_terrain_continuation(previous, preserve_from, legacy, terrain_template)?;
+    crate::foundation_training_output::in_new_directory(
+        output,
+        || {
+            std::fs::write(
+                output.join("trained.alife-foundation"),
+                asset.encode_canonical()?,
+            )?;
+            std::fs::write(
+                output.join("actor-checkpoint.json"),
+                serde_json::to_vec(&actor)?,
+            )?;
+            for name in ["cycle.json", "value-checkpoint.json"] {
+                std::fs::copy(previous.join(name), output.join(name))?;
+            }
+            std::fs::write(
+                output.join("terrain-continuation.json"),
+                serde_json::to_vec_pretty(&receipt)?,
+            )?;
+            Ok(())
+        },
+        |error| {
+            let _ = std::fs::write(output.join("failure.txt"), error.to_string());
+        },
+    )?;
+    Ok(receipt)
+}
+
+#[cfg(test)]
+mod sampling_temperature_tests {
+    use super::*;
+
+    #[test]
+    fn collection_ppo_and_next_cohort_share_one_temperature() {
+        for temperature in [0.0001_f32, 1.0, 2.0, 16.0, 32.0, 128.0] {
+            let collection = cycle_sampling_config(202610061298, 624, temperature).unwrap();
+            let next = cycle_sampling_config(202610061298, 625, temperature).unwrap();
+            let ppo = cycle_ppo_config(temperature).unwrap();
+            assert_eq!(collection.temperature.to_bits(), ppo.temperature.to_bits());
+            assert_eq!(next.temperature.to_bits(), ppo.temperature.to_bits());
+            assert_eq!(collection.counter, 0);
+            assert!(collection.demonstrator.is_none());
+            assert_ne!(collection.seed, next.seed);
+            assert_eq!(
+                ppo,
+                PpoConfig {
+                    temperature,
+                    ..PpoConfig::default()
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn incompatible_temperature_is_rejected_before_checkpoint_or_output_access() {
+        for temperature in [0.0_f32, -1.0, 0.00001, 129.0, f32::NAN, f32::INFINITY] {
+            let error = resume_foundation_training_cycle_with_lesson_temperature(
+                Path::new("missing-source-for-temperature-fixture"),
+                Path::new("unused-output-for-temperature-fixture"),
+                1,
+                16,
+                FoundationTeacherLesson::GrabFood,
+                temperature,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("temperature must be finite"));
+        }
+    }
+
+    #[test]
+    fn replay_action_rejects_collection_ppo_temperature_mismatch() {
+        let action = PpoJointAction {
+            candidate_count: 1,
+            representative_mask: 1,
+            motor_masks: [0; 6],
+            representative: 0,
+            forced_slots: vec![Some(4)],
+            motor_candidates: [None, None, None, None, Some(0), None],
+            old_joint_log_probability: 0.0,
+            temperature: 2.0,
+        };
+        assert!(action
+            .validate(cycle_ppo_config(2.0).unwrap().temperature)
+            .is_ok());
+        assert!(action
+            .validate(cycle_ppo_config(1.0).unwrap().temperature)
+            .is_err());
+    }
+}
+
+fn validate_terrain_continuation_package(
+    directory: &Path,
+    preserve_from: Option<u16>,
+) -> Result<()> {
+    let receipt: FoundationTerrainContinuationReceipt =
+        serde_json::from_slice(&std::fs::read(directory.join("terrain-continuation.json"))?)?;
+    for (name, expected) in &receipt.source_file_blake3 {
+        if !matches!(
+            name.as_str(),
+            "cycle.json"
+                | "trained.alife-foundation"
+                | "actor-checkpoint.json"
+                | "value-checkpoint.json"
+        ) || blake3::hash(&std::fs::read(receipt.source_directory.join(name))?)
+            .to_hex()
+            .as_str()
+            != expected
+        {
+            return Err("terrain continuation source file changed".into());
+        }
+    }
+    let (asset, actor, _value, expected) = prepare_terrain_continuation(
+        &receipt.source_directory,
+        preserve_from,
+        receipt.legacy_source_export.as_deref(),
+        receipt.terrain_template.as_deref(),
+    )?;
+    if serde_json::to_vec(&receipt)? != serde_json::to_vec(&expected)?
+        || std::fs::read(directory.join("cycle.json"))?
+            != std::fs::read(receipt.source_directory.join("cycle.json"))?
+        || std::fs::read(directory.join("value-checkpoint.json"))?
+            != std::fs::read(receipt.source_directory.join("value-checkpoint.json"))?
+        || asset.encode_canonical()? != std::fs::read(directory.join("trained.alife-foundation"))?
+        || serde_json::to_vec(&actor)?
+            != serde_json::to_vec(&serde_json::from_slice::<
+                alife_training::FoundationTrainerCheckpoint,
+            >(&std::fs::read(
+                directory.join("actor-checkpoint.json"),
+            )?)?)?
+    {
+        return Err("terrain continuation package changed learned state or provenance".into());
     }
     Ok(())
 }
@@ -438,6 +1238,42 @@ mod founder_refresh_tests {
     use super::*;
 
     #[test]
+    fn current_credit_transition_preserves_all_other_lanes_and_learning_parameters() {
+        let old = serde_json::json!({"receptor_profile": [0.2,-1.0,1.0,-0.5,0.2,0.0,0.5,-0.5], "learning_rate": 0.01, "eligibility_decay": 0.95});
+        let mut new = old.clone();
+        new["receptor_profile"][0] = serde_json::json!(0.0);
+        assert!(current_choice_credit_transition(
+            &old,
+            &new,
+            Some("ActionCandidate")
+        ));
+        assert!(current_choice_credit_transition(
+            &old,
+            &new,
+            Some("MemoryContext")
+        ));
+        assert!(!current_choice_credit_transition(
+            &old,
+            &new,
+            Some("SpeechPayload")
+        ));
+        assert!(!current_choice_credit_transition(&old, &new, None));
+        new["learning_rate"] = serde_json::json!(0.02);
+        assert!(!current_choice_credit_transition(
+            &old,
+            &new,
+            Some("ActionCandidate")
+        ));
+        new["learning_rate"] = serde_json::json!(0.01);
+        new["receptor_profile"][1] = serde_json::json!(-0.5);
+        assert!(!current_choice_credit_transition(
+            &old,
+            &new,
+            Some("ActionCandidate")
+        ));
+    }
+
+    #[test]
     fn held_food_dose_excludes_bootstrap_meals_and_counts_terminal_trained_rows() {
         assert_eq!(cycle_replay_dose(1025, 1024, &[1024]).unwrap(), (1, 0));
         assert_eq!(cycle_replay_dose(1025, 1024, &[0]).unwrap(), (1, 1));
@@ -546,6 +1382,297 @@ mod founder_refresh_tests {
         assert_eq!(actor, original_actor);
         assert_eq!(value, original_value);
         PpoTrainingState::from_checkpoint(value).unwrap();
+    }
+
+    #[test]
+    fn objective_continuation_requires_the_exact_supported_transition() {
+        assert_eq!(validate_objective_continuation(2, None).unwrap(), None);
+        assert_eq!(
+            validate_objective_continuation(1, Some(1)).unwrap(),
+            Some(1)
+        );
+        for (source, requested) in [
+            (1, None),
+            (1, Some(2)),
+            (2, Some(1)),
+            (0, Some(0)),
+            (3, Some(3)),
+        ] {
+            assert!(validate_objective_continuation(source, requested).is_err());
+        }
+    }
+
+    #[test]
+    fn objective_continuation_loads_both_complete_heads_without_resetting_source() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "alife-objective-continuation-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let mut legacy = serde_json::to_value(receipt).unwrap();
+        // A genuine old receipt omits this field; decoding keeps its v1 identity.
+        legacy
+            .as_object_mut()
+            .unwrap()
+            .remove("biological_objective_version");
+        let files = [
+            ("cycle.json", serde_json::to_vec(&legacy).unwrap()),
+            (
+                "trained.alife-foundation",
+                asset.encode_canonical().unwrap(),
+            ),
+            ("actor-checkpoint.json", serde_json::to_vec(&actor).unwrap()),
+            ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
+        ];
+        for (name, bytes) in &files {
+            std::fs::write(directory.join(name), bytes).unwrap();
+        }
+        assert!(load_cycle_continuation(&directory, None).is_err());
+        assert!(load_cycle_continuation(&directory, Some(2)).is_err());
+        let continued = load_cycle_continuation(&directory, Some(1)).unwrap();
+        assert_eq!(continued.objective_transition_from, Some(1));
+        assert_eq!(continued.policy_version, 5);
+        assert_eq!(
+            continued.asset.encode_canonical().unwrap(),
+            asset.encode_canonical().unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&continued.actor).unwrap(),
+            serde_json::to_vec(&actor).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&continued.value).unwrap(),
+            serde_json::to_vec(&value).unwrap()
+        );
+        for (name, bytes) in &files {
+            assert_eq!(std::fs::read(directory.join(name)).unwrap(), *bytes);
+            std::fs::remove_file(directory.join(name)).unwrap();
+        }
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn objective_continuation_rejects_legacy_resume_before_output_or_asset_reads() {
+        let (mut receipt, _, _, _) = cycle_handoff();
+        receipt.biological_objective_version = 1;
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "alife-objective-rejection-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::write(
+            directory.join("cycle.json"),
+            serde_json::to_vec(&receipt).unwrap(),
+        )
+        .unwrap();
+        let output = directory.join("must-not-exist");
+        let source_hash = blake3::hash(&std::fs::read(directory.join("cycle.json")).unwrap());
+        std::fs::write(
+            directory.join("failure.json"),
+            b"preserved source diagnostic",
+        )
+        .unwrap();
+        let error = resume_foundation_training_cycle(&directory, &output, 17, 1).unwrap_err();
+        assert!(error.to_string().contains("objective continuation blocked"));
+        assert!(!output.exists());
+        let error = resume_foundation_training_cycle(&directory, &directory, 17, 1).unwrap_err();
+        assert!(error.to_string().contains("objective continuation blocked"));
+        assert_eq!(
+            blake3::hash(&std::fs::read(directory.join("cycle.json")).unwrap()),
+            source_hash
+        );
+        assert_eq!(
+            std::fs::read(directory.join("failure.json")).unwrap(),
+            b"preserved source diagnostic"
+        );
+        std::fs::remove_file(directory.join("failure.json")).unwrap();
+        std::fs::remove_file(directory.join("cycle.json")).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn objective_continuation_preserves_existing_outputs_after_valid_admission() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let files = [
+            ("cycle.json", serde_json::to_vec(&receipt).unwrap()),
+            (
+                "trained.alife-foundation",
+                asset.encode_canonical().unwrap(),
+            ),
+            ("actor-checkpoint.json", serde_json::to_vec(&actor).unwrap()),
+            ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
+            ("failure.json", b"preserved source diagnostic".to_vec()),
+        ];
+        for alias in [true, false] {
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let directory = std::env::temp_dir().join(format!(
+                "alife-admitted-output-{}-{nonce}-{alias}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&directory).unwrap();
+            let source = directory.join("source");
+            let foreign = directory.join("foreign");
+            std::fs::create_dir(&source).unwrap();
+            std::fs::create_dir(&foreign).unwrap();
+            for (name, bytes) in &files {
+                std::fs::write(source.join(name), bytes).unwrap();
+            }
+            std::fs::write(foreign.join("failure.json"), b"foreign diagnostic").unwrap();
+            let output = if alias { &source } else { &foreign };
+            let error = resume_foundation_training_cycle(&source, output, 17, 1).unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                std::io::ErrorKind::AlreadyExists
+            );
+            for (name, bytes) in &files {
+                assert_eq!(
+                    blake3::hash(&std::fs::read(source.join(name)).unwrap()),
+                    blake3::hash(bytes)
+                );
+                std::fs::remove_file(source.join(name)).unwrap();
+            }
+            assert_eq!(
+                std::fs::read(foreign.join("failure.json")).unwrap(),
+                b"foreign diagnostic"
+            );
+            std::fs::remove_file(foreign.join("failure.json")).unwrap();
+            std::fs::remove_dir(&source).unwrap();
+            std::fs::remove_dir(&foreign).unwrap();
+            std::fs::remove_dir(&directory).unwrap();
+        }
+    }
+
+    #[test]
+    fn objective_continuation_owned_failure_keeps_cycle_diagnostic_fields() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let output = std::env::temp_dir().join(format!(
+            "alife-owned-cycle-diagnostic-{}-{nonce}",
+            std::process::id()
+        ));
+        let result: Result<()> = crate::foundation_training_output::in_new_directory(
+            &output,
+            || Err("CPU-only diagnostic failure".into()),
+            |error| record_cycle_failure(&output, error, 17, 32, None, None),
+        );
+        assert!(result.is_err());
+        let diagnostic: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output.join("failure.json")).unwrap()).unwrap();
+        assert_eq!(diagnostic["error"], "CPU-only diagnostic failure");
+        assert_eq!(diagnostic["seed"], 17);
+        assert_eq!(diagnostic["requested_waking_decisions"], 32);
+        std::fs::remove_file(output.join("failure.json")).unwrap();
+        std::fs::remove_dir(output).unwrap();
+    }
+
+    #[test]
+    fn terrain_continuation_preserves_full_heads_and_rejects_tampering() {
+        let (mut receipt, terrain, mut actor, value) = cycle_handoff();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.founder_seed_base = receipt.founder_seed_base;
+        config.sensor_profile = terrain.manifest().sensor_profile();
+        let game =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &terrain).unwrap();
+        let record = game.world.organism_registry().iter().next().unwrap();
+        let genome = record.phenotype().brain_genome.clone();
+        let capacity = alife_core::BrainCapacityClass::n2048();
+        let development = crate::gpu_live_runtime::foundation_construction_development(
+            &genome,
+            &capacity,
+            &record
+                .phenotype()
+                .development_state_at(alife_core::Tick::ZERO)
+                .unwrap(),
+        )
+        .unwrap();
+        let template = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let source = FoundationWeightAsset::from_trained_weights(
+            &template,
+            terrain.weights().to_vec(),
+            terrain.manifest().training_stage(),
+        )
+        .unwrap();
+        let (old, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome,
+            development,
+            source.clone(),
+        )
+        .unwrap();
+        actor.phenotype_hash = old.phenotype_hash();
+        actor.source_foundation_digest = source.digest();
+        receipt.new_asset_digest = digest(&source);
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "alife-terrain-continuation-{}-{nonce}",
+            std::process::id()
+        ));
+        let original = root.join("original");
+        let output = root.join("continued");
+        std::fs::create_dir_all(&original).unwrap();
+        let files = [
+            ("cycle.json", serde_json::to_vec(&receipt).unwrap()),
+            (
+                "trained.alife-foundation",
+                source.encode_canonical().unwrap(),
+            ),
+            ("actor-checkpoint.json", serde_json::to_vec(&actor).unwrap()),
+            ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
+        ];
+        for (name, bytes) in &files {
+            std::fs::write(original.join(name), bytes).unwrap();
+        }
+        let conversion = continue_foundation_to_terrain(&original, &output, None).unwrap();
+        assert!(!conversion.optimizer_reset && !conversion.value_state_reset);
+        let restored = load_cycle_continuation(&output, None).unwrap();
+        let mut rebound = restored.actor;
+        rebound.phenotype_hash = actor.phenotype_hash;
+        rebound.source_foundation_digest = actor.source_foundation_digest;
+        assert_eq!(rebound, actor);
+        assert_eq!(restored.value, value);
+        for name in ["cycle.json", "value-checkpoint.json"] {
+            assert_eq!(
+                std::fs::read(output.join(name)).unwrap(),
+                std::fs::read(original.join(name)).unwrap()
+            );
+        }
+        let mut corrupt: alife_training::FoundationTrainerCheckpoint =
+            serde_json::from_slice(&std::fs::read(output.join("actor-checkpoint.json")).unwrap())
+                .unwrap();
+        corrupt.first_moment[0] += 0.125;
+        std::fs::write(
+            output.join("actor-checkpoint.json"),
+            serde_json::to_vec(&corrupt).unwrap(),
+        )
+        .unwrap();
+        assert!(load_cycle_continuation(&output, None).is_err());
+        for (name, bytes) in &files {
+            assert_eq!(std::fs::read(original.join(name)).unwrap(), *bytes);
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -882,7 +2009,7 @@ pub fn run_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, None, None, None)
+    run_foundation_training_cycle_from(output, seed, training_ticks, None, None, None, None)
 }
 
 /// A scenario gate: food is out of reach until an explicit world tick. Biology
@@ -900,6 +2027,7 @@ pub fn run_foundation_training_cycle_with_food_delay(
         None,
         Some(food_available_world_tick),
         None,
+        None,
     )
 }
 
@@ -911,7 +2039,15 @@ pub fn resume_foundation_training_cycle(
     seed: u64,
     training_ticks: usize,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, Some(previous), None, None)
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        None,
+        None,
+    )
 }
 
 pub fn resume_foundation_training_cycle_with_food_delay(
@@ -928,6 +2064,7 @@ pub fn resume_foundation_training_cycle_with_food_delay(
         Some(previous),
         Some(food_available_world_tick),
         None,
+        None,
     )
 }
 
@@ -941,7 +2078,59 @@ pub fn run_foundation_training_cycle_with_lesson(
     training_ticks: usize,
     lesson: FoundationTeacherLesson,
 ) -> Result<FoundationCycleReceipt> {
-    run_foundation_training_cycle_from(output, seed, training_ticks, previous, None, Some(lesson))
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        None,
+        Some(lesson),
+        None,
+    )
+}
+
+/// Bounded exploration diagnostic on an existing checkpoint. The same fixed
+/// temperature governs collection, PPO likelihood/gradient, and next admission.
+pub fn resume_foundation_training_cycle_with_lesson_temperature(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    lesson: FoundationTeacherLesson,
+    sampling_temperature: f32,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_temperature(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(lesson),
+        None,
+        sampling_temperature,
+    )
+}
+
+/// Explicitly move an existing sealed cycle to the current biological objective
+/// while retaining its actor/value weights, moments, optimizer ages and masks.
+/// This remains a new cohort; it does not restore individual lifetime state.
+pub fn resume_foundation_training_cycle_with_objective_transition(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    source_objective_version: u16,
+    lesson: Option<FoundationTeacherLesson>,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        lesson,
+        Some(source_objective_version),
+    )
 }
 
 fn run_foundation_training_cycle_from(
@@ -951,7 +2140,32 @@ fn run_foundation_training_cycle_from(
     previous: Option<&Path>,
     food_available_world_tick: Option<u64>,
     lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
 ) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_temperature(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        food_available_world_tick,
+        lesson,
+        preserve_objective_from,
+        default_sampling_temperature(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_foundation_training_cycle_from_with_temperature(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
+    sampling_temperature: f32,
+) -> Result<FoundationCycleReceipt> {
+    cycle_ppo_config(sampling_temperature)?;
     if seed == 0 || !(1..=36_000).contains(&training_ticks) {
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
     }
@@ -961,8 +2175,17 @@ fn run_foundation_training_cycle_from(
     if food_available_world_tick.is_some() && lesson.is_some() {
         return Err("a delayed food gate cannot be combined with a lesson layout".into());
     }
-    std::fs::create_dir(output)?;
     let mut objective_state_reset = false;
+    let mut objective_transition_from = None;
+    if preserve_objective_from.is_some()
+        && !previous.is_some_and(|path| {
+            path.join("cycle.json").is_file()
+                && !path.join("adaptation.json").is_file()
+                && !path.join("warmup.json").is_file()
+        })
+    {
+        return Err("objective transition requires an unambiguous sealed existing cycle".into());
+    }
     let (asset, policy_version, restored_actor, restored_value, founder_seed_base) =
         if let Some(previous) = previous {
             if previous.join("adaptation.json").is_file() {
@@ -1029,48 +2252,14 @@ fn run_foundation_training_cycle_from(
                     receipt.founder_seed_base,
                 )
             } else {
-                let receipt: FoundationCycleReceipt =
-                    serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
-                if receipt.biological_objective_version > BIOLOGICAL_OBJECTIVE_VERSION {
-                    return Err("previous cohort uses a newer biological objective".into());
-                }
-                objective_state_reset =
-                    receipt.biological_objective_version != BIOLOGICAL_OBJECTIVE_VERSION;
-                let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
-                    previous.join("trained.alife-foundation"),
-                )?)?;
-                if digest(&asset) != receipt.new_asset_digest {
-                    return Err("previous exported asset does not match its receipt".into());
-                }
-                let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
-                    &std::fs::read(previous.join("actor-checkpoint.json"))?,
-                )?;
-                let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
-                    &std::fs::read(previous.join("value-checkpoint.json"))?,
-                )?;
-                validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value)?;
-                let founder_seed_base = if receipt.founder_seed_base == 0 {
-                    receipt.seed
-                } else {
-                    receipt.founder_seed_base
-                };
+                let continued = load_cycle_continuation(previous, preserve_objective_from)?;
+                objective_transition_from = continued.objective_transition_from;
                 (
-                    asset,
-                    receipt
-                        .policy_version
-                        .checked_add(1)
-                        .ok_or("policy version overflow")?,
-                    if objective_state_reset {
-                        None
-                    } else {
-                        Some(actor)
-                    },
-                    if objective_state_reset {
-                        None
-                    } else {
-                        Some(value)
-                    },
-                    founder_seed_base,
+                    continued.asset,
+                    continued.policy_version,
+                    Some(continued.actor),
+                    Some(continued.value),
+                    continued.founder_seed_base,
                 )
             }
         } else {
@@ -1081,6 +2270,90 @@ fn run_foundation_training_cycle_from(
     {
         return Err("navigation curriculum requires explicit --adapt-terrain before resuming an old founder".into());
     }
+    let admitted = AdmittedCycleState {
+        asset,
+        policy_version,
+        restored_actor,
+        restored_value,
+        founder_seed_base,
+        objective_state_reset,
+        objective_transition_from,
+    };
+    crate::foundation_training_output::in_new_directory(
+        output,
+        || {
+            run_foundation_training_cycle_in_owned_output(
+                output,
+                seed,
+                training_ticks,
+                food_available_world_tick,
+                lesson,
+                admitted,
+                sampling_temperature,
+            )
+        },
+        |error| {
+            record_cycle_failure(
+                output,
+                error,
+                seed,
+                training_ticks,
+                food_available_world_tick,
+                lesson,
+            );
+        },
+    )
+}
+
+fn record_cycle_failure(
+    output: &Path,
+    error: &dyn std::error::Error,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+) {
+    let _ = std::fs::write(
+        output.join("failure.json"),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "error": error.to_string(),
+            "seed": seed,
+            "requested_waking_decisions": training_ticks,
+            "food_available_world_tick": food_available_world_tick,
+            "lesson": lesson,
+        }))
+        .unwrap_or_default(),
+    );
+}
+
+struct AdmittedCycleState {
+    asset: FoundationWeightAsset,
+    policy_version: u64,
+    restored_actor: Option<alife_training::FoundationTrainerCheckpoint>,
+    restored_value: Option<alife_training::PpoValueHeadCheckpoint>,
+    founder_seed_base: u64,
+    objective_state_reset: bool,
+    objective_transition_from: Option<u16>,
+}
+
+fn run_foundation_training_cycle_in_owned_output(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    admitted: AdmittedCycleState,
+    sampling_temperature: f32,
+) -> Result<FoundationCycleReceipt> {
+    let AdmittedCycleState {
+        asset,
+        policy_version,
+        restored_actor,
+        restored_value,
+        founder_seed_base,
+        objective_state_reset,
+        objective_transition_from,
+    } = admitted;
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
@@ -1133,12 +2406,7 @@ fn run_foundation_training_cycle_from(
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         format!("n2048-cycle-{seed}"),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        GpuTrainingSamplingConfig {
-            seed: (seed as u32) ^ (policy_version as u32).wrapping_mul(0x9e37_79b9),
-            counter: 0,
-            temperature: 1.0,
-            demonstrator: None,
-        },
+        cycle_sampling_config(seed, policy_version, sampling_temperature)?,
     )?;
     let delayed_food = if food_available_world_tick.is_some() {
         let food_id = runtime
@@ -1185,6 +2453,7 @@ fn run_foundation_training_cycle_from(
             "teacher_cue_tokens": scenario.as_ref().map(|s| &s.teacher_cue_tokens),
             "teacher_cue_kind": "contextual_request_not_completed_action_narration",
             "held_food_setup": scenario.as_ref().and_then(|s|s.held_food_setup.as_ref()),
+            "grab_food_setup": scenario.as_ref().and_then(|s|s.grab_food_setup.as_ref()),
             "vocabulary_target": scenario.as_ref().and_then(|s|s.vocabulary_target).map(|id|id.raw()),
             "food_position": scenario_position("food-01")?,
             "blocker_position": scenario_position("obstacle-01")?,
@@ -1243,6 +2512,14 @@ fn run_foundation_training_cycle_from(
     let mut teacher_cue_frames = 0;
     let mut held_food_consumption_events = 0;
     let mut held_food_meal_rows = Vec::new();
+    let mut grab_food_acquisitions = Vec::new();
+    let mut grab_reward_gate = crate::foundation_grab_food::GrabRewardGate::default();
+    let grab_setup = scenario.as_ref().and_then(|s| s.grab_food_setup.as_ref());
+    let lesson_food_ownership = |runtime: &GpuLiveBrainRuntime| {
+        grab_setup.and_then(|setup| {
+            crate::foundation_grab_food::food_ownership(runtime.world(), setup.target)
+        })
+    };
     let lesson_food_held = |runtime: &GpuLiveBrainRuntime| {
         scenario
             .as_ref()
@@ -1279,6 +2556,7 @@ fn run_foundation_training_cycle_from(
     }
     crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, output, lesson)?;
     let held_before = lesson_food_held(&runtime);
+    let grab_before = lesson_food_ownership(&runtime);
     runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
@@ -1297,6 +2575,18 @@ fn run_foundation_training_cycle_from(
     }
     if first[0].frame.organism_id() != organism_id {
         return Err("first training capture belongs to a different organism".into());
+    }
+    if let Some(setup) = grab_setup {
+        if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
+            setup,
+            grab_before,
+            runtime.world(),
+            &first[0],
+            0,
+        )? {
+            grab_reward_gate.observe(0);
+            grab_food_acquisitions.push(acquisition);
+        }
     }
     let (heard_cue, consumed_held) = observe_lesson(&first[0], held_before);
     teacher_cue_frames += usize::from(heard_cue);
@@ -1356,6 +2646,9 @@ fn run_foundation_training_cycle_from(
     )?;
     if let Some(checkpoint) = &restored_actor {
         trainer.restore_checkpoint(checkpoint)?;
+        if serde_json::to_vec(&trainer.checkpoint()?)? != serde_json::to_vec(checkpoint)? {
+            return Err("restored actor weights/optimizer state changed before training".into());
+        }
     }
     let actor_optimizer_step_before = trainer.optimizer_step();
     let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
@@ -1425,7 +2718,10 @@ fn run_foundation_training_cycle_from(
         if let Some(scenario) = &scenario {
             crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
         }
-        if lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+        if matches!(
+            lesson,
+            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+        ) {
             crate::foundation_training::prime_foundation_lesson_prior(
                 &mut runtime,
                 output,
@@ -1433,6 +2729,7 @@ fn run_foundation_training_cycle_from(
             )?;
         }
         let held_before = lesson_food_held(&runtime);
+        let grab_before = lesson_food_ownership(&runtime);
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
                 output.join("runtime-performance-failed.json"),
@@ -1546,6 +2843,18 @@ fn run_foundation_training_cycle_from(
         if captured.len() != 1 {
             return Err(format!("cycle world tick {after}: expected at most one decision").into());
         }
+        if let Some(setup) = grab_setup {
+            if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
+                setup,
+                grab_before,
+                runtime.world(),
+                &captured[0],
+                references.len(),
+            )? {
+                grab_reward_gate.observe(references.len());
+                grab_food_acquisitions.push(acquisition);
+            }
+        }
         let (heard_cue, consumed_held) = observe_lesson(&captured[0], held_before);
         teacher_cue_frames += usize::from(heard_cue);
         held_food_consumption_events += usize::from(consumed_held);
@@ -1616,6 +2925,10 @@ fn run_foundation_training_cycle_from(
     let value_optimizer_step_before = restored_value
         .as_ref()
         .map_or(0, |checkpoint| checkpoint.optimizer_step);
+    let mut expected_value_checkpoint = restored_value
+        .as_ref()
+        .map(serde_json::to_vec)
+        .transpose()?;
     let mut value = if let Some(checkpoint) = restored_value {
         PpoTrainingState::from_checkpoint(checkpoint)?
     } else {
@@ -1631,7 +2944,7 @@ fn run_foundation_training_cycle_from(
     let mut collision_actions = 0_u64;
     let mut avoid_actions = 0_u64;
     let mut rest_recovery_actions = 0_u64;
-    let ppo_config = PpoConfig::default();
+    let ppo_config = cycle_ppo_config(sampling_temperature)?;
     let mut segment_start = 0;
     while segment_start < references.len() {
         let segment = references[segment_start].segment;
@@ -1646,6 +2959,13 @@ fn run_foundation_training_cycle_from(
             let window =
                 load_foundation_replay_window(&replay_dir, refs, 0, &source, &phenotype, budget)?;
             values.extend(value.predict_values(&mut trainer, &window.sequence)?);
+            if let Some(expected) = expected_value_checkpoint.take() {
+                if serde_json::to_vec(&value.checkpoint(trainer.session())?)? != expected {
+                    return Err(
+                        "restored value weights/optimizer state changed before training".into(),
+                    );
+                }
+            }
             for (row, (behavior, patch)) in window.behavior.iter().zip(&window.patches).enumerate()
             {
                 let index = segment_start + chunk * 512 + row;
@@ -1731,6 +3051,29 @@ fn run_foundation_training_cycle_from(
         *final_reward = (*final_reward + delayed).clamp(-1.0, 1.0);
         sleep_gap_reward_total += delayed;
     }
+    // Keep the ordinary measured biological value, including sleep/terminal
+    // gaps, intact. Only a captured learner acquisition loss row adds this
+    // bounded offline curriculum component; the real bootstrap row never does.
+    let mut curriculum_reward_rows = Vec::new();
+    if grab_setup.is_some() {
+        for (row, (_, physiological_reward)) in actions_rewards.iter_mut().enumerate() {
+            let component = crate::foundation_grab_food::curriculum_reward_row(
+                row,
+                *physiological_reward,
+                grab_reward_gate.reward(row, train_rows),
+            )?;
+            *physiological_reward = component.combined_reward;
+            curriculum_reward_rows.push(component);
+        }
+    }
+    let curriculum_reward_total = curriculum_reward_rows
+        .iter()
+        .map(|row| row.curriculum_reward)
+        .sum();
+    let trained_grab_food_acquisitions = grab_food_acquisitions
+        .iter()
+        .filter(|event| event.row < train_rows)
+        .count();
     let mut transitions = Vec::with_capacity(train_rows);
     for (tick, (action, reward)) in actions_rewards.into_iter().enumerate() {
         let terminal = terminal_death_tick.is_some() && tick + 1 == train_rows;
@@ -1846,13 +3189,7 @@ fn run_foundation_training_cycle_from(
         alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
         format!("n2048-cycle-next-{}", seed + 1),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        GpuTrainingSamplingConfig {
-            seed: (seed as u32)
-                ^ ((policy_version as u32).wrapping_add(1)).wrapping_mul(0x9e37_79b9),
-            counter: 0,
-            temperature: 1.0,
-            demonstrator: None,
-        },
+        cycle_sampling_config(seed, policy_version.wrapping_add(1), sampling_temperature)?,
     )?;
     next_runtime.tick()?;
     let next_steps = next_runtime.take_foundation_training_steps();
@@ -1877,6 +3214,8 @@ fn run_foundation_training_cycle_from(
     let receipt = FoundationCycleReceipt {
         biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
         objective_state_reset,
+        objective_transition_from,
+        sampling_temperature,
         seed,
         founder_seed_base,
         policy_version,
@@ -1906,6 +3245,14 @@ fn run_foundation_training_cycle_from(
             .as_ref()
             .map_or_else(Vec::new, |s| s.teacher_cue_tokens.clone()),
         held_food_setup: scenario.as_ref().and_then(|s| s.held_food_setup.clone()),
+        grab_food_setup: grab_setup.cloned(),
+        grab_food_acquisitions,
+        trained_grab_food_acquisitions,
+        prepared_grab_food_opportunities: usize::from(grab_setup.is_some()),
+        grab_food_curriculum_version: grab_setup
+            .map(|_| crate::foundation_grab_food::GRAB_FOOD_CURRICULUM_VERSION),
+        curriculum_reward_rows,
+        curriculum_reward_total,
         held_food_consumption_events,
         trained_held_food_consumption_events,
         prepared_held_food_opportunities: usize::from(

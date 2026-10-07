@@ -5,8 +5,8 @@ use alife_core::{
     ScaffoldContractError, SchemaVersions, SleepPhase, Validate, WorldEntityId,
 };
 use alife_world::{
-    ActionLegality, ActionLegalityChecker, HeadlessWorldCommand, ScenarioFixture, ScenarioName,
-    ScenarioRun,
+    ActionLegality, ActionLegalityChecker, HeadlessWorldCommand, ScenarioAssertions,
+    ScenarioFixture, ScenarioName, ScenarioRun,
 };
 use serde::{Deserialize, Serialize};
 
@@ -99,6 +99,7 @@ fn p18_scenarios_match_versioned_golden_trace_fixtures() {
         let run = fixture.run().unwrap();
         let actual = GoldenTrace::from_run(&run);
         if update_golden_traces_enabled() {
+            ScenarioAssertions::assert_run_matches_expectations(&fixture, &run);
             write_golden_trace(scenario_key(name), &actual);
             continue;
         }

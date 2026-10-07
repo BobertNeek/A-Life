@@ -34,7 +34,10 @@ pub(crate) fn prime_foundation_lesson_prior(
     lesson: Option<FoundationTeacherLesson>,
 ) -> Result<()> {
     let ready = (|| {
-        if lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+        if matches!(
+            lesson,
+            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+        ) {
             runtime.require_foundation_rich_information()?;
         }
         runtime.prime_foundation_semantic_prior()
@@ -59,7 +62,10 @@ pub(crate) fn validate_foundation_lesson_prior(
     output: &Path,
     lesson: Option<FoundationTeacherLesson>,
 ) -> Result<()> {
-    if lesson != Some(FoundationTeacherLesson::EatHeldFood) {
+    if !matches!(
+        lesson,
+        Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+    ) {
         return Ok(());
     }
     let complete = runtime.semantic_prior_metrics().is_some_and(|metrics| {
@@ -76,7 +82,7 @@ pub(crate) fn validate_foundation_lesson_prior(
         }))?,
     )?;
     if !complete {
-        return Err("held-food rich-information lesson has a confirmed decision without a delivered semantic input".into());
+        return Err("food primitive rich-information lesson has a confirmed decision without a delivered semantic input".into());
     }
     Ok(())
 }
@@ -528,6 +534,10 @@ pub struct FoundationPilotReceipt {
     #[serde(default)]
     pub held_food_setup: Option<FoundationHeldFoodSetup>,
     #[serde(default)]
+    pub grab_food_setup: Option<crate::FoundationGrabFoodSetup>,
+    #[serde(default)]
+    pub grab_food_acquisitions: Vec<crate::FoundationGrabAcquisition>,
+    #[serde(default)]
     pub held_food_consumption_events: usize,
     /// Assessment-only possession snapshots taken before each learner tick.
     #[serde(default)]
@@ -570,6 +580,7 @@ pub enum FoundationTeacherLesson {
     VocabularyReception,
     VocabularyProduction,
     EatHeldFood,
+    GrabFood,
 }
 
 /// Legal possession established before learner capture, not a learner action.
@@ -758,6 +769,7 @@ struct GroundedNavigationTeacher {
     vocabulary_noun: Option<u16>,
     last_speech_tick: Option<u64>,
     previous_receipt: std::sync::Arc<std::sync::Mutex<Option<alife_core::ExperiencePatch>>>,
+    held_targets: std::sync::Arc<std::sync::Mutex<Vec<alife_core::WorldEntityId>>>,
     remembered_food: Option<alife_core::Vec3f>,
     search_phase: u8,
     detour_side: f32,
@@ -883,6 +895,18 @@ fn grounded_lesson_teacher(
     navigation: &mut GroundedNavigationTeacher,
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
     use alife_core::CandidateActionFamily as Family;
+    let held_targets = navigation.held_targets.lock().unwrap().clone();
+    if lesson == FoundationTeacherLesson::GrabFood {
+        let chosen = frame
+            .candidates()
+            .iter()
+            .find(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::GRAB
+                    && candidate.target.entity == Some(food)
+            })
+            .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+    }
     if lesson == FoundationTeacherLesson::EatHeldFood {
         // The acquisition transaction belongs to setup. The demonstration has
         // only the already-held ingest primitive; no route or Grab policy.
@@ -901,7 +925,11 @@ fn grounded_lesson_teacher(
             .maze
             .choose(frame, food)
             .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+        return assemble_grounded_teacher(
+            frame,
+            enabled_channels,
+            teacher_possession_action(frame, chosen, &held_targets)?,
+        );
     }
     if matches!(
         lesson,
@@ -935,6 +963,7 @@ fn grounded_lesson_teacher(
             )
         }
         .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+        let action = teacher_possession_action(frame, action, &held_targets)?;
         // Ordinary past action/physical receipts, never future outcomes or route inputs.
         let speak = grounded_speech_label(
             frame,
@@ -991,7 +1020,11 @@ fn grounded_lesson_teacher(
             navigation.choose(frame, food)
         }
         .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+        return assemble_grounded_teacher(
+            frame,
+            enabled_channels,
+            teacher_possession_action(frame, chosen, &held_targets)?,
+        );
     }
     let target = |entity, family| {
         frame
@@ -1034,7 +1067,11 @@ fn grounded_lesson_teacher(
             navigation.choose(frame, food)
         }
         .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-        return assemble_grounded_teacher(frame, enabled_channels, chosen);
+        return assemble_grounded_teacher(
+            frame,
+            enabled_channels,
+            teacher_possession_action(frame, chosen, &held_targets)?,
+        );
     }
     let chosen = match lesson {
         FoundationTeacherLesson::Feeding => target(
@@ -1080,7 +1117,38 @@ fn grounded_lesson_teacher(
         _ => navigation.choose(frame, food),
     }
     .ok_or(ScaffoldContractError::InvalidActionDecision)?;
-    assemble_grounded_teacher(frame, enabled_channels, chosen)
+    assemble_grounded_teacher(
+        frame,
+        enabled_channels,
+        teacher_possession_action(frame, chosen, &held_targets)?,
+    )
+}
+
+/// Offline demonstrator sequencing only. This possession snapshot never enters
+/// candidate enumeration or the learner's inference inputs.
+fn teacher_possession_action<'a>(
+    frame: &'a alife_core::PerceptionFrame,
+    chosen: &'a alife_core::ActionCandidate,
+    held_targets: &[alife_core::WorldEntityId],
+) -> std::result::Result<&'a alife_core::ActionCandidate, ScaffoldContractError> {
+    if chosen.action_id != alife_world::HeadlessActionIds::EAT {
+        return Ok(chosen);
+    }
+    let target = chosen
+        .target
+        .entity
+        .ok_or(ScaffoldContractError::InvalidActionDecision)?;
+    if held_targets.contains(&target) {
+        return Ok(chosen);
+    }
+    frame
+        .candidates()
+        .iter()
+        .find(|candidate| {
+            candidate.action_id == alife_world::HeadlessActionIds::GRAB
+                && candidate.target.entity == Some(target)
+        })
+        .ok_or(ScaffoldContractError::InvalidActionDecision)
 }
 
 fn assemble_grounded_teacher(
@@ -1429,8 +1497,11 @@ fn run_foundation_training_pilot_with_request(
         configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
     scenario.repeat_vocabulary =
         teacher_mode && scenario_lesson != Some(FoundationTeacherLesson::VocabularyProduction);
-    scenario.training_language_feedback =
-        teacher_mode && scenario_lesson != Some(FoundationTeacherLesson::EatHeldFood);
+    scenario.training_language_feedback = teacher_mode
+        && !matches!(
+            scenario_lesson,
+            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+        );
     if let Some(request) = request {
         // Construct once from the same seed; never relocate objects, change needs,
         // or change a toy's mobility to match the counterfactual request.
@@ -1527,11 +1598,13 @@ fn run_foundation_training_pilot_with_request(
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
     let teacher_previous = std::sync::Arc::new(std::sync::Mutex::new(None));
+    let teacher_held_targets = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     if teacher_mode {
         let mut navigation = GroundedNavigationTeacher::default();
         navigation.maze.route = scenario.demonstration_route.clone();
         navigation.vocabulary_target = scenario.vocabulary_target;
         navigation.previous_receipt = teacher_previous.clone();
+        navigation.held_targets = teacher_held_targets.clone();
         navigation.vocabulary_noun = scenario.vocabulary_noun;
         navigation.vocabulary_position = scenario
             .vocabulary_target
@@ -1552,7 +1625,9 @@ fn run_foundation_training_pilot_with_request(
             )
         })?;
     }
-    let initial_food_distance = if scenario_lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+    let initial_food_distance = if let Some(setup) = scenario.grab_food_setup.as_ref() {
+        held_food_learner_distance(runtime.world(), food, setup.organism)
+    } else if scenario_lesson == Some(FoundationTeacherLesson::EatHeldFood) {
         scenario
             .held_food_setup
             .as_ref()
@@ -1568,6 +1643,7 @@ fn run_foundation_training_pilot_with_request(
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     let mut held_food_possession_frames = Vec::new();
+    let mut grab_food_acquisitions = Vec::new();
     let mut held_food_terminal_biology = None;
     let mut correct_utterances = 0;
     let mut unprompted_correct_utterances = 0;
@@ -1576,9 +1652,22 @@ fn run_foundation_training_pilot_with_request(
     for tick in 0..tick_count {
         if tick != 0 {
             close_foundation_navigation_gate(&mut runtime, &scenario)?;
-            if scenario_lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+            if matches!(
+                scenario_lesson,
+                Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+            ) {
                 prime_foundation_lesson_prior(&mut runtime, output, scenario_lesson)?;
             }
+        }
+        if teacher_mode {
+            let learner = runtime.world().organism_entity_ids()[0].0;
+            *teacher_held_targets.lock().unwrap() = runtime
+                .world()
+                .object_snapshots()
+                .into_iter()
+                .filter(|object| object.carried_by == Some(learner) && !object.consumed)
+                .map(|object| object.id)
+                .collect();
         }
         let held_food_before = runtime.world().entity(food).is_some_and(|object| {
             scenario
@@ -1589,6 +1678,9 @@ fn run_foundation_training_pilot_with_request(
         if held_food_before {
             held_food_possession_frames.push(runtime.world().tick().raw());
         }
+        let grab_before = scenario.grab_food_setup.as_ref().and_then(|setup| {
+            crate::foundation_grab_food::food_ownership(runtime.world(), setup.target)
+        });
         runtime
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
@@ -1612,6 +1704,17 @@ fn run_foundation_training_pilot_with_request(
                 collected.len()
             )
             .into());
+        }
+        if let Some(setup) = scenario.grab_food_setup.as_ref() {
+            if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
+                setup,
+                grab_before,
+                runtime.world(),
+                &collected[0],
+                steps.len(),
+            )? {
+                grab_food_acquisitions.push(acquisition);
+            }
         }
         let speech_label = grounded_speech_label(
             &collected[0].frame,
@@ -1688,12 +1791,15 @@ fn run_foundation_training_pilot_with_request(
             && scenario_lesson != Some(FoundationTeacherLesson::VocabularyProduction))
             || production_consumed_previous
             || hazard_settled
+            || !grab_food_acquisitions.is_empty()
         {
             break;
         }
     }
     let collection_seconds = started.elapsed().as_secs_f64();
-    let final_food_distance = if scenario_lesson == Some(FoundationTeacherLesson::EatHeldFood) {
+    let final_food_distance = if let Some(setup) = scenario.grab_food_setup.as_ref() {
+        held_food_learner_distance(runtime.world(), food, setup.organism)
+    } else if scenario_lesson == Some(FoundationTeacherLesson::EatHeldFood) {
         scenario
             .held_food_setup
             .as_ref()
@@ -1835,6 +1941,7 @@ fn run_foundation_training_pilot_with_request(
         }
     }
     let lesson_completed = scenario_lesson.map(|lesson| match lesson {
+        FoundationTeacherLesson::GrabFood => !grab_food_acquisitions.is_empty(),
         FoundationTeacherLesson::EatHeldFood => {
             scenario.held_food_setup.is_some()
                 && held_food_consumption_events > 0
@@ -2031,6 +2138,8 @@ fn run_foundation_training_pilot_with_request(
                 "teacher_cue_tokens": scenario.teacher_cue_tokens,
                 "teacher_cue_frames": teacher_cue_frames,
                 "teacher_cue_kind": "contextual_request_not_completed_action_narration",
+                "grab_food_setup": scenario.grab_food_setup,
+                "grab_food_acquisitions": grab_food_acquisitions,
                 "held_food_setup": scenario.held_food_setup,
                 "held_food_consumption_events": held_food_consumption_events,
                 "held_food_possession_frames": held_food_possession_frames,
@@ -2246,6 +2355,8 @@ fn run_foundation_training_pilot_with_request(
         teacher_cue_frames,
         teacher_cue_tokens: scenario.teacher_cue_tokens.clone(),
         held_food_setup: scenario.held_food_setup.clone(),
+        grab_food_setup: scenario.grab_food_setup.clone(),
+        grab_food_acquisitions,
         held_food_consumption_events,
         held_food_possession_frames,
         held_food_terminal_death_tick,
@@ -2408,6 +2519,7 @@ pub(crate) struct FoundationScenarioSetup {
     pub(crate) vocabulary_token: Option<u16>,
     pub(crate) teacher_cue_tokens: Vec<u16>,
     pub(crate) held_food_setup: Option<FoundationHeldFoodSetup>,
+    pub(crate) grab_food_setup: Option<crate::FoundationGrabFoodSetup>,
     pub(crate) vocabulary_target: Option<alife_core::WorldEntityId>,
     pub(crate) vocabulary_noun: Option<u16>,
     pub(crate) repeat_vocabulary: bool,
@@ -2697,6 +2809,30 @@ fn establish_foundation_held_food(
     target: alife_core::WorldEntityId,
     seed: u64,
 ) -> Result<FoundationHeldFoodSetup> {
+    establish_foundation_food(world, target, seed, true)?
+        .0
+        .ok_or_else(|| "held-food setup did not produce its receipt".into())
+}
+
+fn establish_foundation_grab_food(
+    world: &mut alife_world::HeadlessWorld,
+    target: alife_core::WorldEntityId,
+    seed: u64,
+) -> Result<crate::FoundationGrabFoodSetup> {
+    establish_foundation_food(world, target, seed, false)?
+        .1
+        .ok_or_else(|| "Grab-only setup did not produce its receipt".into())
+}
+
+fn establish_foundation_food(
+    world: &mut alife_world::HeadlessWorld,
+    target: alife_core::WorldEntityId,
+    seed: u64,
+    setup_grab: bool,
+) -> Result<(
+    Option<FoundationHeldFoodSetup>,
+    Option<crate::FoundationGrabFoodSetup>,
+)> {
     let (organism, entity) = world.organism_entity_ids()[0];
     // Starting biology supplies the need. If expression needs time, age the
     // ordinary organism instead of assigning reserves or injecting hunger.
@@ -2728,6 +2864,7 @@ fn establish_foundation_held_food(
     }
     let food = world.entity(target).ok_or("held-food target missing")?;
     if food.kind != alife_world::WorldObjectKind::Food
+        || food.carried_by.is_some()
         || food.consumed
         || food.nutrition <= 0.0
         || food.hazard_pain != 0.0
@@ -2803,6 +2940,48 @@ fn establish_foundation_held_food(
         None,
         None,
     )?;
+    if !setup_grab {
+        let record = arranged
+            .organism_registry()
+            .get(organism)
+            .ok_or("Grab-only learner missing after arrangement")?;
+        let state = record.biochemistry();
+        if state.body.sleeping
+            || state.body.health < 0.95
+            || state.body.injury > 0.01
+            || state.homeostasis.drives.pain > 0.01
+            || state.body.energy <= 0.2
+            || state.body.energy > 0.9
+            || state.homeostasis.drives.hunger < 0.12
+        {
+            return Err(
+                "Grab-only ordinary arrangement did not preserve healthy measurable need".into(),
+            );
+        }
+        let body = arranged.entity(entity).ok_or("Grab-only body missing")?;
+        let food = arranged.entity(target).ok_or("Grab-only food missing")?;
+        if food.carried_by.is_some() || food.consumed {
+            return Err("Grab-only setup requires unowned unconsumed food".into());
+        }
+        let setup = crate::FoundationGrabFoodSetup {
+            target,
+            organism,
+            setup_tick: arranged.tick().raw(),
+            initial_energy: state.body.energy,
+            initial_hunger: state.homeostasis.drives.hunger,
+            initial_health: state.body.health,
+            initial_sleeping: state.body.sleeping,
+            initial_owner: food.carried_by,
+            initial_consumed: food.consumed,
+            sampling_seed: seed,
+            sampling_attempts,
+            realized_body_position: body.position,
+            realized_body_yaw: body.body_yaw,
+            food_position: food.position,
+        };
+        *world = arranged;
+        return Ok((None, Some(setup)));
+    }
     let next = Tick::new(arranged.tick().raw().checked_add(1).ok_or_else(invalid)?);
     let receipt = arranged.apply_registered_command(&command, entity, next)?;
     arranged.try_advance_tick()?;
@@ -2854,7 +3033,7 @@ fn establish_foundation_held_food(
         realized_grip_position: Some(grip),
     };
     *world = arranged;
-    Ok(setup)
+    Ok((Some(setup), None))
 }
 
 /// Canonical fixtures start in legacy X/Y coordinates. Production terrain
@@ -2926,9 +3105,9 @@ pub(crate) fn configure_foundation_scenario(
     let mut vocabulary_noun = None;
     let mut vocabulary_token = None;
     match lesson {
-        Some(FoundationTeacherLesson::EatHeldFood) => {
-            // Scenery is separated from this first ingest primitive. The food
-            // itself is acquired by the legal setup transaction below.
+        Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood) => {
+            // Keep either first manipulation primitive free of navigation.
+            // Eat setup acquires food; Grab setup leaves it unowned within reach.
             for label in ["obstacle-01", "obstacle-02", "hazard-01", "food-02"] {
                 if let Some(entity) = world.entity_id(label) {
                     move_scenario_object(
@@ -3267,7 +3446,14 @@ pub(crate) fn configure_foundation_scenario(
     } else {
         None
     };
-    let teacher_cue_tokens = if held_food_setup.is_some() {
+    let grab_food_setup = if lesson == Some(FoundationTeacherLesson::GrabFood) {
+        Some(establish_foundation_grab_food(world, food, seed)?)
+    } else {
+        None
+    };
+    let teacher_cue_tokens = if grab_food_setup.is_some() {
+        vec![9, 1] // Contextual request: "get food", through spatial hearing.
+    } else if held_food_setup.is_some() {
         vec![8, 1] // Contextual request: "eat food", through spatial hearing.
     } else {
         Vec::new()
@@ -3283,12 +3469,16 @@ pub(crate) fn configure_foundation_scenario(
         vocabulary_token,
         teacher_cue_tokens,
         held_food_setup,
+        grab_food_setup,
         vocabulary_target,
         vocabulary_noun,
         repeat_vocabulary: true,
         silent_request: false,
         fixed_speaker_position: None,
-        training_language_feedback: lesson != Some(FoundationTeacherLesson::EatHeldFood),
+        training_language_feedback: !matches!(
+            lesson,
+            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+        ),
         start_tick: world.tick().raw(),
         last_language_praise_tick: std::cell::Cell::new(None),
         language_praise_count: std::cell::Cell::new(0),
@@ -4106,6 +4296,148 @@ mod held_food_lesson_tests {
     }
 
     #[test]
+    fn grab_food_setup_leaves_healthy_natural_need_and_legally_reachable_unheld_food() {
+        for seed in [42, 91, 132] {
+            let mut world = unconfigured(seed);
+            let scenario = configure_foundation_scenario(
+                &mut world,
+                seed,
+                Some(FoundationTeacherLesson::GrabFood),
+                None,
+                false,
+            )
+            .unwrap();
+            let setup = scenario.grab_food_setup.as_ref().unwrap();
+            assert!(scenario.held_food_setup.is_none());
+            assert_eq!(setup.initial_owner, None);
+            assert!(!setup.initial_consumed && !setup.initial_sleeping);
+            assert!(setup.initial_hunger >= 0.12 && setup.initial_energy <= 0.9);
+            assert!(setup.initial_health >= 0.95);
+            assert_eq!(scenario.teacher_cue_tokens, vec![9, 1]);
+            assert!(!scenario.training_language_feedback && scenario.vocabulary_token.is_none());
+            let (organism, entity) = world.organism_entity_ids()[0];
+            let grab = alife_core::ActionCommand::structured(
+                organism,
+                alife_world::HeadlessActionIds::GRAB,
+                alife_core::ActionKind::Hold,
+                alife_core::ActionTarget::new(Some(setup.target), None),
+                Intensity::new(1.0).unwrap(),
+                DurationTicks::new(1),
+                Confidence::new(0.9).unwrap(),
+                0,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            let receipt = world
+                .apply_registered_command(&grab, entity, Tick(world.tick().raw() + 1))
+                .unwrap();
+            world.try_advance_tick().unwrap();
+            assert!(receipt.action_result.execution.succeeded);
+            assert_eq!(
+                receipt.action_result.execution.physical.contact,
+                PhysicalContactKind::Touch
+            );
+            assert_eq!(
+                world.entity(setup.target).unwrap().carried_by,
+                Some(organism)
+            );
+            assert!(!world.entity(setup.target).unwrap().consumed);
+        }
+    }
+
+    #[test]
+    fn ordinary_teacher_meal_choice_sequences_real_grab_then_eat_exact_target() {
+        let mut world = unconfigured(42);
+        let scenario = configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(FoundationTeacherLesson::GrabFood),
+            None,
+            false,
+        )
+        .unwrap();
+        let perceived = frame(&mut world);
+        let eat = perceived
+            .candidates()
+            .iter()
+            .find(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(scenario.food)
+            })
+            .unwrap();
+        let empty = Vec::new();
+        let grab = teacher_possession_action(&perceived, eat, &empty).unwrap();
+        assert_eq!(grab.action_id, alife_world::HeadlessActionIds::GRAB);
+        assert_eq!(grab.target.entity, Some(scenario.food));
+        let held = vec![scenario.food];
+        assert_eq!(
+            teacher_possession_action(&perceived, eat, &held)
+                .unwrap()
+                .action_id,
+            alife_world::HeadlessActionIds::EAT
+        );
+        let different = vec![scenario.hazard];
+        assert_eq!(
+            teacher_possession_action(&perceived, eat, &different)
+                .unwrap()
+                .action_id,
+            alife_world::HeadlessActionIds::GRAB
+        );
+        let (organism, entity) = world.organism_entity_ids()[0];
+        let grab_command = alife_core::ActionCommand::structured(
+            organism,
+            grab.action_id,
+            grab.kind,
+            alife_core::ActionTarget::new(Some(scenario.food), None),
+            Intensity::new(1.0).unwrap(),
+            DurationTicks::new(1),
+            Confidence::new(0.9).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let grabbed = world
+            .apply_registered_command(&grab_command, entity, Tick(world.tick().raw() + 1))
+            .unwrap();
+        world.try_advance_tick().unwrap();
+        assert!(grabbed.action_result.execution.succeeded);
+        assert_eq!(
+            grabbed.action_result.execution.physical.contact,
+            PhysicalContactKind::Touch
+        );
+        let actual_held: Vec<_> = world
+            .object_snapshots()
+            .into_iter()
+            .filter(|object| object.carried_by == Some(organism) && !object.consumed)
+            .map(|object| object.id)
+            .collect();
+        let after_grab = frame(&mut world);
+        let eat_candidate = after_grab
+            .candidates()
+            .iter()
+            .find(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(scenario.food)
+            })
+            .unwrap();
+        assert_eq!(
+            teacher_possession_action(&after_grab, eat_candidate, &actual_held)
+                .unwrap()
+                .action_id,
+            alife_world::HeadlessActionIds::EAT
+        );
+        let (_, eaten) = eat_outcome(&mut world, scenario.food);
+        assert!(eaten.success);
+        assert_eq!(eaten.physical.contact, PhysicalContactKind::Consumed);
+        assert!(world.entity(scenario.food).unwrap().consumed);
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+    }
+
+    #[test]
     fn held_food_seeded_pose_is_repeatable_varied_grounded_and_legally_held() {
         let mut poses = std::collections::BTreeSet::new();
         let mut facings = std::collections::BTreeSet::new();
@@ -4395,6 +4727,8 @@ mod held_food_lesson_tests {
             .apply_registered_command(&drop, entity, Tick(world.tick().raw() + 1))
             .unwrap();
         world.try_advance_tick().unwrap();
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert!(!world.entity(scenario.food).unwrap().consumed);
         let mut released = scenario.clone();
         released.start_tick = world.tick().raw();
         expose_foundation_teacher_cue(&mut world, &released).unwrap();
@@ -4411,13 +4745,24 @@ mod held_food_lesson_tests {
         assert!(heard.contains(&1));
         assert!(!heard.contains(&8));
         let (eat, outcome) = eat_outcome(&mut world, scenario.food);
-        assert_eq!(outcome.physical.contact, PhysicalContactKind::Consumed);
+        assert!(!outcome.success);
+        assert_eq!(outcome.physical.contact, PhysicalContactKind::Touch);
+        assert_eq!(outcome.physical.target_entity, Some(scenario.food));
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert!(!world.entity(scenario.food).unwrap().consumed);
         assert!(!held_food_action_consumed(
             &eat,
             None,
             &outcome,
             scenario.food,
             false
+        ));
+        assert!(!held_food_action_consumed(
+            &eat,
+            None,
+            &outcome,
+            scenario.food,
+            true
         ));
     }
 

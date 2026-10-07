@@ -6,10 +6,11 @@ use alife_core::{
 };
 use alife_semantic::{
     DevelopmentalPriorController, LlamaCppSlmPriorConfig, LocalSlmPriorAsyncQueue,
-    LocalSlmPriorOutput, LocalSlmPriorRequest,
+    LocalSlmPriorOutput, LocalSlmPriorRequest, CA27_UNUSABLE_HINT_FEEDBACK,
+    CA27_UNUSABLE_HINT_FEEDBACK_VERSION,
 };
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::mpsc::{Receiver, TryRecvError},
 };
 
@@ -38,8 +39,45 @@ pub struct SemanticPriorMetrics {
     pub decision_frames_without_prior: u64,
     pub decision_frames_with_heard_language: u64,
     pub provider_failures: VecDeque<PriorProviderFailure>,
+    pub unusable_hint_retry_requests: u64,
+    pub unusable_hint_retries: VecDeque<PriorUnusableHintRetry>,
+    pub last_priming: Option<PriorPrimingStatus>,
 }
 const MAX_RECEIPTS: usize = 256;
+const MAX_UNUSABLE_RETRY_CONTEXTS: usize = 128;
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PriorUnusableHintRetry {
+    pub organism: u64,
+    pub tick: u64,
+    pub context: String,
+    pub context_digest: String,
+    pub previous_output: LocalSlmPriorOutput,
+    pub previous_output_digest: String,
+    pub feedback: String,
+    pub feedback_version: String,
+    pub replacement_output: Option<LocalSlmPriorOutput>,
+    pub replacement_output_digest: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PriorPrimingStatus {
+    pub organism: u64,
+    pub tick: u64,
+    pub context: String,
+    pub context_digest: String,
+    pub status: PriorInputStatus,
+    pub developmental_gain: f32,
+    pub cache_match: bool,
+    pub cache_usable_hints: usize,
+    pub cache_output: Option<LocalSlmPriorOutput>,
+    pub cache_output_digest: Option<String>,
+    pub active_context_match: bool,
+    pub pending: bool,
+    pub unusable_retry_used: bool,
+    pub ready: bool,
+    pub exit_reason: String,
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -99,6 +137,7 @@ pub struct PriorDelivery {
 struct Pending {
     key: String,
     reply: Receiver<Result<LocalSlmPriorOutput, String>>,
+    unusable_hint_feedback: bool,
 }
 #[derive(Default)]
 struct Life {
@@ -126,6 +165,7 @@ pub(super) struct RuntimeSemanticPrior {
     lives: BTreeMap<u64, Life>,
     // This cache belongs to one fixed provider configuration and prompt version.
     cache: BTreeMap<String, LocalSlmPriorOutput>,
+    unusable_retry_contexts: BTreeSet<String>,
     next_request: u64,
     cache_path: std::path::PathBuf,
     dropout_seed: Option<u64>,
@@ -195,6 +235,7 @@ impl RuntimeSemanticPrior {
             queue: LocalSlmPriorAsyncQueue::new(config)?,
             lives: BTreeMap::new(),
             cache,
+            unusable_retry_contexts: BTreeSet::new(),
             cache_path,
             next_request: 1,
             dropout_seed: training.then_some(seed),
@@ -222,6 +263,42 @@ impl RuntimeSemanticPrior {
                             && has_usable_hints(output)
                     }))
         })
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn record_priming_status(&mut self, id: u64, tick: u64, exit_reason: &str) {
+        let Some(life) = self.lives.get(&id) else {
+            return;
+        };
+        let output = self.cache.get(&life.last_context);
+        let usable = output.map_or(0, |output| {
+            BASIC_VOCABULARY_V1
+                .iter()
+                .filter(|(_, code)| lexicon_slot_salience(output, *code) > 0.0)
+                .count()
+        });
+        self.metrics.last_priming = Some(PriorPrimingStatus {
+            organism: id,
+            tick,
+            context: life.last_context.clone(),
+            context_digest: blake3::hash(life.last_context.as_bytes())
+                .to_hex()
+                .to_string(),
+            status: life.input_status,
+            developmental_gain: life.controller.developmental_gain(),
+            cache_match: output.is_some(),
+            cache_usable_hints: usable,
+            cache_output: output.cloned(),
+            cache_output_digest: output.map(digest_json),
+            active_context_match: life
+                .active
+                .as_ref()
+                .is_some_and(|(key, _, _)| key == &life.last_context),
+            pending: life.pending.is_some(),
+            unusable_retry_used: self.unusable_retry_contexts.contains(&life.last_context),
+            ready: self.ready(id),
+            exit_reason: exit_reason.into(),
+        });
     }
 
     pub fn record_decision_input(
@@ -379,6 +456,22 @@ impl RuntimeSemanticPrior {
                         return Err(error);
                     }
                     self.metrics.validated_provider_replies += 1;
+                    if pending.unusable_hint_feedback {
+                        if let Some(retry) = self
+                            .metrics
+                            .unusable_hint_retries
+                            .iter_mut()
+                            .rev()
+                            .find(|retry| {
+                                retry.organism == id.raw()
+                                    && retry.context == pending.key
+                                    && retry.replacement_output.is_none()
+                            })
+                        {
+                            retry.replacement_output_digest = Some(digest_json(&output));
+                            retry.replacement_output = Some(output.clone());
+                        }
+                    }
                     if pending.key != key {
                         self.metrics.stale_replies += 1;
                     }
@@ -435,6 +528,59 @@ impl RuntimeSemanticPrior {
                     } else {
                         PriorInputStatus::EmptyHints
                     };
+                    // Schema-valid zero hints remain evidence, but do not become
+                    // a permanent admission failure. One same-context feedback
+                    // request is allowed for a rich lesson; a second zero still
+                    // fails readiness. No world/neural state advances here.
+                    if self.metrics.rich_information_required
+                        && !has_usable_hints(output)
+                        && life.controller.developmental_gain() > 0.0
+                        && life.pending.is_none()
+                        && self.unusable_retry_contexts.len() < MAX_UNUSABLE_RETRY_CONTEXTS
+                        && self.unusable_retry_contexts.insert(key.clone())
+                    {
+                        push_bounded(
+                            &mut self.metrics.unusable_hint_retries,
+                            PriorUnusableHintRetry {
+                                organism: id.raw(),
+                                tick: tick.raw(),
+                                context: key.clone(),
+                                context_digest: blake3::hash(key.as_bytes()).to_hex().to_string(),
+                                previous_output: output.clone(),
+                                previous_output_digest: digest_json(output),
+                                feedback: CA27_UNUSABLE_HINT_FEEDBACK.into(),
+                                feedback_version: CA27_UNUSABLE_HINT_FEEDBACK_VERSION.into(),
+                                replacement_output: None,
+                                replacement_output_digest: None,
+                            },
+                        );
+                        let request = LocalSlmPriorRequest {
+                            request_id: self.next_request,
+                            prompt: key.clone(),
+                        };
+                        match self.queue.submit_unusable_hint_retry(request) {
+                            Ok(reply) => {
+                                self.next_request = self
+                                    .next_request
+                                    .checked_add(1)
+                                    .ok_or(alife_core::ScaffoldContractError::InvalidId)?;
+                                life.pending = Some(Pending {
+                                    key: key.clone(),
+                                    reply,
+                                    unusable_hint_feedback: true,
+                                });
+                                life.last_request = Some((key.clone(), tick.raw()));
+                                self.metrics.requests += 1;
+                                self.metrics.unusable_hint_retry_requests += 1;
+                                life.input_status = PriorInputStatus::Pending;
+                            }
+                            Err(error) => {
+                                record_provider_failure(&mut self.metrics, id.raw(), tick.raw(), &key,
+                                    format!("local SLM prior unusable-hint retry submit failed: {error:?}"));
+                                life.input_status = PriorInputStatus::ProviderFailure;
+                            }
+                        }
+                    }
                     return Ok(draft);
                 }
                 let slots: Vec<u16> = BASIC_VOCABULARY_V1
@@ -491,6 +637,7 @@ impl RuntimeSemanticPrior {
                         life.pending = Some(Pending {
                             key: key.clone(),
                             reply,
+                            unusable_hint_feedback: false,
                         });
                         life.last_request = Some((key.clone(), tick.raw()));
                         self.metrics.requests += 1;
@@ -829,6 +976,7 @@ mod tests {
             queue: LocalSlmPriorAsyncQueue::new(LlamaCppSlmPriorConfig::default()).unwrap(),
             lives: BTreeMap::new(),
             cache: BTreeMap::new(),
+            unusable_retry_contexts: BTreeSet::new(),
             next_request: 1,
             cache_path: std::env::temp_dir().join("alife-semantic-receipt-unused-cache.json"),
             dropout_seed: Some(5),
@@ -1030,6 +1178,7 @@ mod tests {
             life.pending = Some(Pending {
                 key: key.clone(),
                 reply: rx,
+                unusable_hint_feedback: false,
             });
             life.last_request = Some((key, 0));
             let prepared = prior.prepare(draft, ExperienceSequenceId(1)).unwrap();
@@ -1082,5 +1231,84 @@ mod tests {
             prior.metrics.decision_inputs.back().unwrap().status,
             PriorInputStatus::EmptyHints
         );
+    }
+
+    fn complete_pending(prior: &mut RuntimeSemanticPrior, result: LocalSlmPriorOutput) {
+        let life = prior.lives.get_mut(&5).unwrap();
+        let pending = life.pending.take().expect("one retry was queued");
+        let (send, receive) = std::sync::mpsc::channel();
+        send.send(Ok(result)).unwrap();
+        life.pending = Some(Pending {
+            key: pending.key,
+            reply: receive,
+            unusable_hint_feedback: pending.unusable_hint_feedback,
+        });
+    }
+
+    #[test]
+    fn rich_zero_hint_cache_retries_same_context_once_and_accepts_only_usable_reply() {
+        let draft = draft();
+        let key = bounded_context(&draft, &[]);
+        let mut prior = prior();
+        prior.require_rich_information();
+        let mut zero = output();
+        zero.lexicon_associations[0].salience = 0.0;
+        prior.cache.insert(key.clone(), zero.clone());
+        prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        assert!(prior.pending(5));
+        assert!(!prior.ready(5));
+        assert_eq!(prior.metrics.unusable_hint_retry_requests, 1);
+        assert_eq!(prior.metrics.unusable_hint_retries[0].context, key);
+        assert_eq!(prior.metrics.unusable_hint_retries[0].previous_output, zero);
+        complete_pending(&mut prior, output());
+        prior.prime(draft, ExperienceSequenceId(1)).unwrap();
+        assert!(!prior.pending(5));
+        assert!(prior.ready(5));
+        prior.record_priming_status(5, 0, "no_pending");
+        let status = prior.metrics.last_priming.as_ref().unwrap();
+        assert_eq!(status.context, key);
+        assert!(status.ready && status.cache_match && status.unusable_retry_used);
+        assert_eq!(status.cache_usable_hints, 1);
+        assert!(status.developmental_gain > 0.0);
+    }
+
+    #[test]
+    fn honest_second_zero_stays_unready_without_repeated_requests() {
+        let draft = draft();
+        let mut prior = prior();
+        prior.require_rich_information();
+        let mut zero = output();
+        zero.lexicon_associations[0].salience = 0.0;
+        prior
+            .cache
+            .insert(bounded_context(&draft, &[]), zero.clone());
+        prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        complete_pending(&mut prior, zero.clone());
+        for _ in 0..3 {
+            prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        }
+        assert!(!prior.pending(5));
+        assert!(!prior.ready(5));
+        assert_eq!(prior.metrics.unusable_hint_retry_requests, 1);
+        prior.record_priming_status(5, 0, "no_pending");
+        let status = prior.metrics.last_priming.as_ref().unwrap();
+        assert_eq!(status.status, PriorInputStatus::EmptyHints);
+        assert_eq!(status.cache_output.as_ref().unwrap(), &zero);
+        assert_eq!(status.cache_usable_hints, 0);
+        assert!(!status.ready);
+    }
+
+    #[test]
+    fn ordinary_zero_hint_cache_remains_valid_without_training_retry() {
+        let draft = draft();
+        let mut prior = prior();
+        prior.dropout_seed = None;
+        let mut zero = output();
+        zero.lexicon_associations[0].salience = 0.0;
+        prior.cache.insert(bounded_context(&draft, &[]), zero);
+        prior.prime(draft, ExperienceSequenceId(1)).unwrap();
+        assert!(!prior.pending(5));
+        assert!(!prior.ready(5));
+        assert_eq!(prior.metrics.unusable_hint_retry_requests, 0);
     }
 }

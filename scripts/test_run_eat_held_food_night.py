@@ -143,20 +143,35 @@ class HeldFoodNightTests(unittest.TestCase):
             night.run_child([sys.executable, "-c", "import time; time.sleep(30)"],
                             self.root / "child", deadline, lambda: None, os.environ.copy())
 
+    def test_start_receipt_occurs_only_after_actual_process_creation(self):
+        started = []
+        deadline = dt.datetime.now(night.UTC) + dt.timedelta(seconds=10)
+        def blocked():
+            raise RuntimeError("host became interactive")
+        with self.assertRaises(RuntimeError):
+            night.run_child([sys.executable, "-c", "pass"], self.root / "blocked", deadline,
+                            blocked, os.environ.copy(), on_started=lambda p: started.append(p.pid))
+        self.assertEqual(started, [])
+        night.run_child([sys.executable, "-c", "pass"], self.root / "accepted", deadline,
+                        lambda: None, os.environ.copy(), on_started=lambda p: started.append(p.pid))
+        self.assertEqual(len(started), 1)
+        self.assertGreater(started[0], 0)
+
     def test_capacity_is_bounded_by_measured_time_and_disk(self):
         samples = [{"seconds": 10, "bytes": 100}, {"seconds": 20, "bytes": 200}]
         self.assertEqual(night.estimate_capacity(samples, 100, 10000, 0)["estimated_remaining_episodes"], 4)
         self.assertEqual(night.estimate_capacity(samples, 1000, 450, 250)["estimated_remaining_episodes"], 1)
 
-    def fixture_run(self, fail_index=None, batch_episodes=2, meals=None):
+    def fixture_run(self, fail_index=None, batch_episodes=2, meals=None, preserve_from=None):
         parser = night.arguments()
-        args = parser.parse_args([*self.argv(), "--target-episodes", "3", "--batch-episodes", str(batch_episodes)])
+        transition = [] if preserve_from is None else ["--preserve-objective-state-from", str(preserve_from)]
+        args = parser.parse_args([*self.argv(), "--target-episodes", "3", "--batch-episodes", str(batch_episodes), *transition])
         args.binary = self.binary; args.source = self.source
         self.output.mkdir(parents=True)
         # Populate the same plan that production uses; it never runs a trainer.
         self.output.rmdir()
         with patch("builtins.print"):
-            self.assertEqual(night.main([*self.argv(), "--target-episodes", "3", "--batch-episodes", "2"]), 0)
+            self.assertEqual(night.main([*self.argv(), "--target-episodes", "3", "--batch-episodes", "2", *transition]), 0)
         state_path = self.output / "night.json"; state = night.read_json(state_path)
         commands = []
         probe_index = 0
@@ -221,6 +236,14 @@ class HeldFoodNightTests(unittest.TestCase):
         self.assertEqual(commands[-1][1], "--evaluate")
         self.assertTrue(commands[-1][2].endswith("frozen-final-after-interruption"))
         self.assertEqual(commands[-1][3], str(self.output / "episode-00000/trained.alife-foundation"))
+
+    def test_explicit_objective_transition_reaches_only_first_executed_cycle(self):
+        state, commands = self.fixture_run(preserve_from=1)
+        self.assertEqual(state["status"], "completed", state["error"])
+        cycles = [argv for argv in commands if argv[1] == "--resume-cycle"]
+        self.assertEqual(state["first_episode_argv"][-2:], ["--preserve-objective-state-from", "1"])
+        self.assertEqual(cycles[0][-2:], ["--preserve-objective-state-from", "1"])
+        self.assertTrue(all("--preserve-objective-state-from" not in argv for argv in cycles[1:]))
 
     def test_learning_then_two_lost_frozen_meals_stops_without_promotion(self):
         state, _ = self.fixture_run(batch_episodes=1, meals=[0, 1, 0, 0])
