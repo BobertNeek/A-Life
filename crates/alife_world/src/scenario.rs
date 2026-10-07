@@ -736,7 +736,32 @@ fn food_seeking(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
         agent("agent", organism, pos(0.0, 0.0)),
         food("berry", pos(0.5, 0.0), 0.65),
     ];
-    let world = world_from_layout(seed, &layout)?;
+    let mut world = world_from_layout(seed, &layout)?;
+    // Establish the ingestion/salience fixture's possession prerequisite through
+    // an ordinary physical Grab. The traced Eat must still consume this target.
+    let berry = world
+        .entity_id("berry")
+        .ok_or(ScaffoldContractError::InvalidId)?;
+    let grab = alife_core::ActionCommand::structured(
+        organism,
+        HeadlessActionIds::GRAB,
+        ActionKind::Hold,
+        ActionTarget::new(Some(berry), None),
+        Intensity::new(1.0)?,
+        DurationTicks::new(1),
+        Confidence::new(1.0)?,
+        0,
+        None,
+        None,
+        None,
+    )?;
+    if !world.apply_command(&grab)?.execution.succeeded
+        || world
+            .entity(berry)
+            .is_none_or(|food| food.carried_by != Some(organism) || food.consumed)
+    {
+        return Err(ScaffoldContractError::InvalidActionDecision);
+    }
     let steps = vec![ScenarioStep {
         tick: Tick::ZERO,
         proposals: vec![

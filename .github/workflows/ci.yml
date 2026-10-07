@@ -59,7 +59,7 @@ jobs:
         run: cargo check --workspace --all-targets
 
       - name: Test
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --no-fail-fast
 
       - name: Benchmark smoke
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}
