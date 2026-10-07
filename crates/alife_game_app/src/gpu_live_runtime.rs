@@ -6029,6 +6029,7 @@ impl GpuLiveBrainRuntime {
         )?;
         let sequence = ExperienceSequenceId(resident.next_sequence);
         let started = std::time::Instant::now();
+        let mut exit_reason = "no_pending";
         loop {
             prior.prime(draft.clone(), sequence)?;
             if !prior.pending(raw) {
@@ -6036,12 +6037,14 @@ impl GpuLiveBrainRuntime {
             }
             if started.elapsed() >= std::time::Duration::from_secs(5) {
                 prior.metrics.prime_timeouts += 1;
+                exit_reason = "time_limit";
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         prior.metrics.prime_wait_ms +=
             started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        prior.record_priming_status(raw, self.world.tick().raw(), exit_reason);
         if prior.metrics.rich_information_required && !prior.ready(raw) {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: format!(
