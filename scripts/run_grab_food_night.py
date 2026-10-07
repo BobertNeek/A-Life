@@ -358,6 +358,7 @@ def arguments():
     parser.add_argument("--batch-episodes", type=int, default=16)
     parser.add_argument("--decisions", type=int, default=16)
     parser.add_argument("--startup-decisions", type=int, default=128)
+    parser.add_argument("--sampling-temperature", type=float, choices=(1.0, 2.0), default=1.0)
     parser.add_argument("--startup-seconds", type=int, default=2700)
     parser.add_argument("--command-seconds", type=int, default=1200)
     parser.add_argument("--assessment-seconds", type=int, default=600)
@@ -419,6 +420,7 @@ def main(argv=None):
         state = {"schema": 1, "status": "planned", "lesson": "grab_food", "promoted": False,
                  "target_distinct_episodes": args.target_episodes, "batch_episodes": args.batch_episodes,
                  "decisions_per_episode": args.decisions, "startup_decisions": args.startup_decisions,
+                 "sampling_temperature": args.sampling_temperature, "frozen_assessment_temperature": 1.0,
                  "startup_cap_seconds": args.startup_seconds,
                  "cutoff_utc": args.cutoff.isoformat(), "input_sha256": input_hashes,
                  "source": str(args.source), "latest_checkpoint": str(args.source),
@@ -436,7 +438,7 @@ def main(argv=None):
         state["resource_limits"]["startup_grace_seconds"] = args.startup_grace_seconds
         state["first_episode_argv"] = [str(args.binary), "--resume-cycle", str(args.source),
             str(args.output / "episode-00000"), str(args.startup_decisions), "--seed", str(args.seed),
-            "--lesson", "grab_food"]
+            "--lesson", "grab_food", "--sampling-temperature", str(args.sampling_temperature)]
         state["episode_schedule"] = "each accepted episode resumes the immediately preceding sealed cycle; one new seed and realized pose per episode"
         state_path = args.output / "night.json"
         write_json(state_path, state)
@@ -553,6 +555,7 @@ def run_night(args, state, state_path, input_hashes):
             cycle_argv = [str(args.binary), "--resume-cycle", str(previous), str(directory),
                     str(args.startup_decisions if index == 0 else args.decisions),
                     "--seed", str(seed), "--lesson", "grab_food"]
+            cycle_argv.extend(["--sampling-temperature", str(args.sampling_temperature)])
             invoke(cycle_argv,
                    f"episode-{index:05d}", args.command_seconds,
                    startup_cutoff if index == 0 else collection_cutoff)

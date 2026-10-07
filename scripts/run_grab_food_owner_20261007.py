@@ -113,6 +113,7 @@ def native_argv(config, output, cutoff, run=False):
             "--final-reserve-minutes", "5", "--min-memory-gib", "8", "--min-disk-gib", "15",
             "--idle-seconds", "0", "--startup-grace-seconds", "0", "--cutoff", cutoff,
             "--qualification", config["qualification"]]
+    argv.extend(["--sampling-temperature", str(config.get("sampling_temperature", 1.0))])
     if run:
         argv.append("--run")
     return argv
@@ -378,6 +379,8 @@ def execute(config, config_path, plan, recover_startup=None):
     def checked_cycle(directory, previous, seed):
         result = original_cycle(directory, previous, seed)
         checked_model(directory, "cycle.json")
+        if result[0].get("sampling_temperature", 1.0) != config.get("sampling_temperature", 1.0):
+            raise ValueError("completed cycle sampling/PPO temperature differs from owner configuration")
         if result[1]["sampling_seed"] != seed:
             raise ValueError("prepared Grab setup seed mismatch")
         receipt["last_sealed_checkpoint"] = str(directory)

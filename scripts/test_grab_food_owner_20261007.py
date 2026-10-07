@@ -112,6 +112,8 @@ class OwnerTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--idle-seconds") + 1], "0")
 
     def test_duplicate_attempt_stops_before_resource_work(self):
+        argv = owner.native_argv({**self.config, "sampling_temperature": 2.0}, self.root / "new-run", "2026-10-07T14:55:00Z", True)
+        self.assertEqual(argv[argv.index("--sampling-temperature") + 1], "2.0")
         (self.root / "RUN-ATTEMPT.json").write_text("existing owner marker")
         plan = {"config_sha256": "fixture", "source_sha256": self.config["source_sha256"],
                 "prepared_utc": "2026-10-07T01:00:00Z",

@@ -277,6 +277,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut food_position = None;
     let mut lesson = None;
     let mut preserve_objective_from = None;
+    let mut sampling_temperature = None;
     while let Some(flag) = next {
         if flag == "--seed" {
             seed = args
@@ -284,6 +285,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing training seed")?
                 .to_string_lossy()
                 .parse::<u64>()?;
+        } else if flag == "--sampling-temperature" {
+            if sampling_temperature.is_some() {
+                return Err("duplicate sampling temperature".into());
+            }
+            sampling_temperature = Some(
+                args.next()
+                    .ok_or("missing sampling temperature")?
+                    .to_string_lossy()
+                    .parse::<f32>()?,
+            );
         } else if flag == "--food-after-world-tick" {
             if food_after_world_tick.is_some() {
                 return Err("duplicate food availability flag".into());
@@ -370,6 +381,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "objective transition requires --resume-cycle without a food-delay override".into(),
         );
     }
+    if sampling_temperature.is_some()
+        && (mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson.is_none()
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some())
+    {
+        return Err(
+            "sampling temperature requires an existing compatible --resume-cycle with --lesson"
+                .into(),
+        );
+    }
     if mode == "--pilot" || mode == "--teacher-pilot" {
         if food_after_world_tick.is_some() {
             return Err("food availability is only supported in cycle mode".into());
@@ -412,7 +435,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if let Some(source_version) = preserve_objective_from {
+                let result = if let Some(temperature) = sampling_temperature {
+                    alife_game_app::resume_foundation_training_cycle_with_lesson_temperature(
+                        previous
+                            .as_deref()
+                            .ok_or("sampling diagnostic needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        lesson.ok_or("sampling diagnostic needs lesson")?,
+                        temperature,
+                    )
+                } else if let Some(source_version) = preserve_objective_from {
                     alife_game_app::resume_foundation_training_cycle_with_objective_transition(
                         previous
                             .as_deref()

@@ -104,5 +104,16 @@ class GrabNightTests(unittest.TestCase):
             spawn.assert_not_called()
         self.assertFalse(output.exists())
 
+    def test_unsupported_sampling_temperature_fails_before_output_or_spawn(self):
+        argv = ["--binary", "not-executable", "--source", str(self.source),
+                "--output", str(self.root / "temperature-output"), "--cutoff",
+                (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat(),
+                "--sampling-temperature", "nan", "--run"]
+        with patch.object(night.subprocess, "Popen") as spawn, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                night.main(argv)
+            spawn.assert_not_called()
+        self.assertFalse((self.root / "temperature-output").exists())
+
 if __name__ == "__main__":
     unittest.main()

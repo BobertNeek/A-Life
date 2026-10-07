@@ -26,6 +26,37 @@ fn legacy_objective_version() -> u16 {
     1
 }
 
+fn default_sampling_temperature() -> f32 {
+    1.0
+}
+
+fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
+    if temperature.to_bits() != 1.0_f32.to_bits() && temperature.to_bits() != 2.0_f32.to_bits() {
+        return Err("cycle sampling temperature must be 1 or 2".into());
+    }
+    let config = PpoConfig {
+        temperature,
+        ..PpoConfig::default()
+    };
+    config.validate()?;
+    Ok(config)
+}
+
+fn cycle_sampling_config(
+    seed: u64,
+    policy: u64,
+    temperature: f32,
+) -> Result<GpuTrainingSamplingConfig> {
+    let config = GpuTrainingSamplingConfig {
+        seed: (seed as u32) ^ (policy as u32).wrapping_mul(0x9e37_79b9),
+        counter: 0,
+        temperature: cycle_ppo_config(temperature)?.temperature,
+        demonstrator: None,
+    };
+    config.validate()?;
+    Ok(config)
+}
+
 /// An objective change may retain learned state only when the caller names the
 /// actual older version. Ordinary resume never silently resets either head.
 fn validate_objective_continuation(
@@ -83,6 +114,8 @@ pub struct FoundationCycleReceipt {
     pub objective_state_reset: bool,
     #[serde(default)]
     pub objective_transition_from: Option<u16>,
+    #[serde(default = "default_sampling_temperature")]
+    pub sampling_temperature: f32,
     pub seed: u64,
     #[serde(default)]
     pub founder_seed_base: u64,
@@ -850,6 +883,68 @@ pub fn continue_foundation_to_terrain_with_legacy(
         },
     )?;
     Ok(receipt)
+}
+
+#[cfg(test)]
+mod sampling_temperature_tests {
+    use super::*;
+
+    #[test]
+    fn collection_ppo_and_next_cohort_share_one_temperature() {
+        for temperature in [1.0_f32, 2.0] {
+            let collection = cycle_sampling_config(202610061298, 624, temperature).unwrap();
+            let next = cycle_sampling_config(202610061298, 625, temperature).unwrap();
+            let ppo = cycle_ppo_config(temperature).unwrap();
+            assert_eq!(collection.temperature.to_bits(), ppo.temperature.to_bits());
+            assert_eq!(next.temperature.to_bits(), ppo.temperature.to_bits());
+            assert_eq!(collection.counter, 0);
+            assert!(collection.demonstrator.is_none());
+            assert_ne!(collection.seed, next.seed);
+            assert_eq!(
+                ppo,
+                PpoConfig {
+                    temperature,
+                    ..PpoConfig::default()
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn incompatible_temperature_is_rejected_before_checkpoint_or_output_access() {
+        for temperature in [0.0_f32, -1.0, 1.5, 3.0, f32::NAN, f32::INFINITY] {
+            let error = resume_foundation_training_cycle_with_lesson_temperature(
+                Path::new("missing-source-for-temperature-fixture"),
+                Path::new("unused-output-for-temperature-fixture"),
+                1,
+                16,
+                FoundationTeacherLesson::GrabFood,
+                temperature,
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("temperature must be 1 or 2"));
+        }
+    }
+
+    #[test]
+    fn replay_action_rejects_collection_ppo_temperature_mismatch() {
+        let action = PpoJointAction {
+            candidate_count: 1,
+            representative_mask: 1,
+            motor_masks: [0; 6],
+            representative: 0,
+            forced_slots: vec![Some(4)],
+            motor_candidates: [None, None, None, None, Some(0), None],
+            old_joint_log_probability: 0.0,
+            temperature: 2.0,
+        };
+        assert!(action
+            .validate(cycle_ppo_config(2.0).unwrap().temperature)
+            .is_ok());
+        assert!(action
+            .validate(cycle_ppo_config(1.0).unwrap().temperature)
+            .is_err());
+    }
 }
 
 fn validate_terrain_continuation_package(
@@ -1994,6 +2089,28 @@ pub fn run_foundation_training_cycle_with_lesson(
     )
 }
 
+/// Bounded exploration diagnostic on an existing checkpoint. The same fixed
+/// temperature governs collection, PPO likelihood/gradient, and next admission.
+pub fn resume_foundation_training_cycle_with_lesson_temperature(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    lesson: FoundationTeacherLesson,
+    sampling_temperature: f32,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_temperature(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(lesson),
+        None,
+        sampling_temperature,
+    )
+}
+
 /// Explicitly move an existing sealed cycle to the current biological objective
 /// while retaining its actor/value weights, moments, optimizer ages and masks.
 /// This remains a new cohort; it does not restore individual lifetime state.
@@ -2025,6 +2142,30 @@ fn run_foundation_training_cycle_from(
     lesson: Option<FoundationTeacherLesson>,
     preserve_objective_from: Option<u16>,
 ) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_temperature(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        food_available_world_tick,
+        lesson,
+        preserve_objective_from,
+        default_sampling_temperature(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_foundation_training_cycle_from_with_temperature(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
+    sampling_temperature: f32,
+) -> Result<FoundationCycleReceipt> {
+    cycle_ppo_config(sampling_temperature)?;
     if seed == 0 || !(1..=36_000).contains(&training_ticks) {
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
     }
@@ -2148,6 +2289,7 @@ fn run_foundation_training_cycle_from(
                 food_available_world_tick,
                 lesson,
                 admitted,
+                sampling_temperature,
             )
         },
         |error| {
@@ -2201,6 +2343,7 @@ fn run_foundation_training_cycle_in_owned_output(
     food_available_world_tick: Option<u64>,
     lesson: Option<FoundationTeacherLesson>,
     admitted: AdmittedCycleState,
+    sampling_temperature: f32,
 ) -> Result<FoundationCycleReceipt> {
     let AdmittedCycleState {
         asset,
@@ -2263,12 +2406,7 @@ fn run_foundation_training_cycle_in_owned_output(
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         format!("n2048-cycle-{seed}"),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        GpuTrainingSamplingConfig {
-            seed: (seed as u32) ^ (policy_version as u32).wrapping_mul(0x9e37_79b9),
-            counter: 0,
-            temperature: 1.0,
-            demonstrator: None,
-        },
+        cycle_sampling_config(seed, policy_version, sampling_temperature)?,
     )?;
     let delayed_food = if food_available_world_tick.is_some() {
         let food_id = runtime
@@ -2806,7 +2944,7 @@ fn run_foundation_training_cycle_in_owned_output(
     let mut collision_actions = 0_u64;
     let mut avoid_actions = 0_u64;
     let mut rest_recovery_actions = 0_u64;
-    let ppo_config = PpoConfig::default();
+    let ppo_config = cycle_ppo_config(sampling_temperature)?;
     let mut segment_start = 0;
     while segment_start < references.len() {
         let segment = references[segment_start].segment;
@@ -3051,13 +3189,7 @@ fn run_foundation_training_cycle_in_owned_output(
         alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
         format!("n2048-cycle-next-{}", seed + 1),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        GpuTrainingSamplingConfig {
-            seed: (seed as u32)
-                ^ ((policy_version as u32).wrapping_add(1)).wrapping_mul(0x9e37_79b9),
-            counter: 0,
-            temperature: 1.0,
-            demonstrator: None,
-        },
+        cycle_sampling_config(seed, policy_version.wrapping_add(1), sampling_temperature)?,
     )?;
     next_runtime.tick()?;
     let next_steps = next_runtime.take_foundation_training_steps();
@@ -3083,6 +3215,7 @@ fn run_foundation_training_cycle_in_owned_output(
         biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
         objective_state_reset,
         objective_transition_from,
+        sampling_temperature,
         seed,
         founder_seed_base,
         policy_version,
