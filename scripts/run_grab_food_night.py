@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import struct
 import subprocess
 import time
 
@@ -346,6 +347,14 @@ def estimate_capacity(samples, remaining_seconds, free_bytes, reserve_bytes):
             "seconds_per_episode_with_margin": seconds, "max_observed_episode_bytes": size}
 
 
+def sampling_temperature(text):
+    value = float(text)
+    minimum = struct.unpack("<f", struct.pack("<f", .0001))[0]
+    if not math.isfinite(value) or not minimum <= value <= 128.0:
+        raise argparse.ArgumentTypeError("sampling temperature must be finite in 0.0001..128")
+    return struct.unpack("<f", struct.pack("<f", value))[0]
+
+
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
@@ -358,7 +367,7 @@ def arguments():
     parser.add_argument("--batch-episodes", type=int, default=16)
     parser.add_argument("--decisions", type=int, default=16)
     parser.add_argument("--startup-decisions", type=int, default=128)
-    parser.add_argument("--sampling-temperature", type=float, choices=(1.0, 2.0), default=1.0)
+    parser.add_argument("--sampling-temperature", type=sampling_temperature, default=1.0)
     parser.add_argument("--startup-seconds", type=int, default=2700)
     parser.add_argument("--command-seconds", type=int, default=1200)
     parser.add_argument("--assessment-seconds", type=int, default=600)

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import struct
 import sys
 import time
 import urllib.request
@@ -46,6 +47,7 @@ def revision():
          "rev-parse", "HEAD"], cwd=REPO, text=True, **hidden()).strip()
 
 def assert_source(config):
+    night.sampling_temperature(str(config.get("sampling_temperature", 1.0)))
     if night.sha256(config["snapshot_ps1"]) != config["snapshot_ps1_sha256"]:
         raise ValueError("approved read-only host snapshot script changed")
     source = Path(config["source"])
@@ -379,7 +381,7 @@ def execute(config, config_path, plan, recover_startup=None):
     def checked_cycle(directory, previous, seed):
         result = original_cycle(directory, previous, seed)
         checked_model(directory, "cycle.json")
-        if result[0].get("sampling_temperature", 1.0) != config.get("sampling_temperature", 1.0):
+        if struct.pack("<f", result[0].get("sampling_temperature", 1.0)) != struct.pack("<f", config.get("sampling_temperature", 1.0)):
             raise ValueError("completed cycle sampling/PPO temperature differs from owner configuration")
         if result[1]["sampling_seed"] != seed:
             raise ValueError("prepared Grab setup seed mismatch")

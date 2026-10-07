@@ -31,8 +31,8 @@ fn default_sampling_temperature() -> f32 {
 }
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
-    if temperature.to_bits() != 1.0_f32.to_bits() && temperature.to_bits() != 2.0_f32.to_bits() {
-        return Err("cycle sampling temperature must be 1 or 2".into());
+    if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
+        return Err("cycle sampling temperature must be finite in 0.0001..=128".into());
     }
     let config = PpoConfig {
         temperature,
@@ -891,7 +891,7 @@ mod sampling_temperature_tests {
 
     #[test]
     fn collection_ppo_and_next_cohort_share_one_temperature() {
-        for temperature in [1.0_f32, 2.0] {
+        for temperature in [0.0001_f32, 1.0, 2.0, 16.0, 32.0, 128.0] {
             let collection = cycle_sampling_config(202610061298, 624, temperature).unwrap();
             let next = cycle_sampling_config(202610061298, 625, temperature).unwrap();
             let ppo = cycle_ppo_config(temperature).unwrap();
@@ -912,7 +912,7 @@ mod sampling_temperature_tests {
 
     #[test]
     fn incompatible_temperature_is_rejected_before_checkpoint_or_output_access() {
-        for temperature in [0.0_f32, -1.0, 1.5, 3.0, f32::NAN, f32::INFINITY] {
+        for temperature in [0.0_f32, -1.0, 0.00001, 129.0, f32::NAN, f32::INFINITY] {
             let error = resume_foundation_training_cycle_with_lesson_temperature(
                 Path::new("missing-source-for-temperature-fixture"),
                 Path::new("unused-output-for-temperature-fixture"),
@@ -922,7 +922,7 @@ mod sampling_temperature_tests {
                 temperature,
             )
             .unwrap_err();
-            assert!(error.to_string().contains("temperature must be 1 or 2"));
+            assert!(error.to_string().contains("temperature must be finite"));
         }
     }
 

@@ -115,5 +115,14 @@ class GrabNightTests(unittest.TestCase):
             spawn.assert_not_called()
         self.assertFalse((self.root / "temperature-output").exists())
 
+    def test_bounded_temperature_matches_native_float32(self):
+        import struct
+        for value in (.0001, 1.0, 2.0, 32.0, 128.0):
+            actual = night.sampling_temperature(str(value))
+            self.assertEqual(struct.pack("<f", actual), struct.pack("<f", value))
+        for value in (0, -.1, .00001, 129, float("inf"), float("nan")):
+            with self.assertRaises(Exception):
+                night.sampling_temperature(str(value))
+
 if __name__ == "__main__":
     unittest.main()
