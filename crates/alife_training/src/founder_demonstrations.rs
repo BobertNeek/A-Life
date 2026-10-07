@@ -1,7 +1,7 @@
 //! Offline teacher commands and their actual world/body consequences.
 
 use alife_core::*;
-use alife_world::{HeadlessScenarioBuilder, WorldOrganismRecord};
+use alife_world::{HeadlessActionIds, HeadlessScenarioBuilder, WorldOrganismRecord};
 use serde::{Deserialize, Serialize};
 
 use crate::{TrainingError, MAX_TRAINING_SEQUENCE_TICKS};
@@ -29,7 +29,8 @@ pub struct FounderDemonstration {
 }
 
 /// A declared training-only demonstrator. It approaches one visible object,
-/// inspects it within contact range, then samples it through ordinary ingestion.
+/// inspects it within contact range, grabs it, then samples the held object
+/// through ordinary ingestion.
 /// The teacher has no choice between hidden nutritional contingencies.
 pub fn record_founder_demonstration(
     seed: u64,
@@ -38,8 +39,8 @@ pub fn record_founder_demonstration(
     record_demonstration(seed, target_position, true)
 }
 
-/// Observation-grounded approach/sample curriculum without a hidden inspection
-/// phase. Autonomous inspection is a separate, still-required behavior.
+/// Observation-grounded approach/grab/sample curriculum without a hidden
+/// inspection phase. Autonomous inspection is a separate, still-required behavior.
 pub fn record_founder_sampling_demonstration(
     seed: u64,
     target_position: Vec3f,
@@ -82,7 +83,7 @@ fn record_demonstration(
         steps: Vec::new(),
     };
     let mut inspected = !inspect_first;
-    let terminal_steps = 1 + usize::from(inspect_first);
+    let terminal_steps = 2 + usize::from(inspect_first);
     let mut step_budget = terminal_steps;
     while result.steps.len() < step_budget {
         let body_before = *world
@@ -106,13 +107,25 @@ fn record_demonstration(
             CandidateActionFamily::Approach
         } else if !inspected {
             CandidateActionFamily::Inspect
+        } else if world
+            .entity(target)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .carried_by
+            != Some(organism)
+        {
+            CandidateActionFamily::Contact
         } else {
             CandidateActionFamily::Ingest
         };
         let candidate = *observation
             .candidates()
             .iter()
-            .find(|c| c.target.entity == Some(target) && c.family == family)
+            .find(|c| {
+                c.target.entity == Some(target)
+                    && c.family == family
+                    && (family != CandidateActionFamily::Contact
+                        || c.action_id == HeadlessActionIds::GRAB)
+            })
             .ok_or(ScaffoldContractError::InvalidActionDecision)?;
         let command = candidate.to_command(organism, Confidence::new(1.0)?)?;
         let world_before_digest = world.canonical_signature_digest()?.words;
@@ -144,7 +157,7 @@ fn record_demonstration(
             if result.steps.is_empty() {
                 // The open, single-object fixture approaches at the measured
                 // physical interval rate. Reserve enough intervals to cover the
-                // initial distance plus the complete inspection/ingestion tail.
+                // initial distance plus the complete inspection/grab/ingestion tail.
                 // The replay contract bounds the sequence; a fixed 32-tick
                 // window would cut off farther visible targets before contact.
                 let approach_steps = (visible_target.distance / measured_step).ceil();
