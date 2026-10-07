@@ -1,12 +1,13 @@
 use alife_core::{
-    BrainCapacityClass, BrainGenome, CandidateActionFamily, Confidence, DecisionSnapshot,
-    DevelopmentState, ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId,
-    LanguageGroundingLedger, LanguageTokenId, LobeKind, NeuralActionSelection, NormalizedScalar,
-    OrganismId, PerceptionContextBlock, PhenotypeHash, PostActionOutcome, PreActionSnapshot,
-    ScaffoldContractError, SensorProfile, SpeechActKind, SpeechMotorPayload, Tick,
-    UtteranceGroundingReceiptV2, UtteranceId, UtteranceSourceKind, Vec3f, WorldEntityId,
+    BiochemistryState, BrainCapacityClass, BrainGenome, CandidateActionFamily, Confidence,
+    CreatureGenome, DecisionSnapshot, DevelopmentState, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, FoundationGeneticIdentity, LanguageGroundingLedger, LanguageTokenId,
+    LobeKind, NeuralActionSelection, NormalizedScalar, OrganismId, PerceptionContextBlock,
+    PhenotypeHash, PostActionOutcome, PreActionSnapshot, ScaffoldContractError, SensorProfile,
+    SpeechActKind, SpeechMotorPayload, Tick, UtteranceGroundingReceiptV2, UtteranceId,
+    UtteranceSourceKind, Vec3f, WorldEntityId,
 };
-use alife_world::HeadlessScenarioBuilder;
+use alife_world::{HeadlessActionIds, HeadlessScenarioBuilder, WorldOrganismRecord};
 
 const SUBJECT: OrganismId = OrganismId(501);
 const PEER: OrganismId = OrganismId(502);
@@ -19,6 +20,62 @@ fn grounded_patch(source: UtteranceSourceKind) -> (ExperiencePatch, UtteranceId,
         .build()
         .unwrap();
     let target = world.entity_id("fruit").unwrap();
+    let agent = world.entity_id("subject").unwrap();
+    let body_genome = CreatureGenome::early_mammal_founder(
+        9101,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N2048_ID).unwrap(),
+    )
+    .unwrap();
+    let body_phenotype = body_genome.express().unwrap();
+    let biology = BiochemistryState::new(&body_phenotype, Tick::ZERO).unwrap();
+    world
+        .register_organism_record(
+            WorldOrganismRecord::new(
+                SUBJECT,
+                agent,
+                body_genome,
+                body_phenotype,
+                biology,
+                Tick::ZERO,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let pickup_frame = world
+        .perception_frame_draft(
+            SUBJECT,
+            Tick::ZERO,
+            SensorProfile::GroundedObjectSlotsV1,
+            alife_core::HomeostaticSnapshot::baseline(Tick::ZERO),
+        )
+        .unwrap()
+        .finalize(PerceptionContextBlock::empty())
+        .unwrap();
+    let pickup = pickup_frame
+        .candidates()
+        .iter()
+        .find(|candidate| {
+            candidate.action_id == HeadlessActionIds::GRAB
+                && candidate.target.entity == Some(target)
+        })
+        .unwrap()
+        .to_command(SUBJECT, Confidence::new(1.0).unwrap())
+        .unwrap();
+    let grabbed = world
+        .apply_registered_command(&pickup, agent, Tick::new(1))
+        .unwrap();
+    assert!(grabbed.action_result.execution.succeeded);
+    assert_eq!(world.entity(target).unwrap().carried_by, Some(SUBJECT));
+    assert_eq!(world.try_advance_tick().unwrap(), Tick::new(1));
+    assert_eq!(
+        world
+            .organism_registry()
+            .get(SUBJECT)
+            .unwrap()
+            .biochemistry(),
+        &grabbed.biology_after,
+        "advancing the world clock must not repeat Grab biology"
+    );
     let utterance = match source {
         UtteranceSourceKind::Creature => world
             .emit_creature_utterance(
@@ -45,9 +102,9 @@ fn grounded_patch(source: UtteranceSourceKind) -> (ExperiencePatch, UtteranceId,
     let draft = world
         .perception_frame_draft(
             SUBJECT,
-            Tick::new(0),
+            world.tick(),
             SensorProfile::GroundedObjectSlotsV1,
-            alife_core::HomeostaticSnapshot::baseline(Tick::new(0)),
+            alife_core::HomeostaticSnapshot::baseline(world.tick()),
         )
         .unwrap();
     let frame = draft.finalize(PerceptionContextBlock::empty()).unwrap();
@@ -100,11 +157,17 @@ fn grounded_patch(source: UtteranceSourceKind) -> (ExperiencePatch, UtteranceId,
         frame,
     )
     .unwrap();
-    let action = world.apply_command(&decision.selected_action).unwrap();
+    let eaten = world
+        .apply_registered_command(&decision.selected_action, agent, Tick::new(2))
+        .unwrap();
+    let action = eaten.action_result;
+    assert!(action.execution.succeeded && action.observation.success);
+    assert!(action.body_event.nutrition > 0.0);
+    assert!(world.entity(target).unwrap().is_consumed());
     let mut outcome = PostActionOutcome::new(
         SUBJECT,
         sequence,
-        Tick::new(1),
+        eaten.outcome_tick,
         action.observation.success && action.execution.succeeded,
         action.execution.physical,
         action.observation.homeostatic_delta,
