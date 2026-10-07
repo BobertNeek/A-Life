@@ -15,6 +15,25 @@ fn organism() -> OrganismId {
     OrganismId(707)
 }
 
+fn grab_resource(world: &mut alife_world::HeadlessWorld, target: WorldEntityId) {
+    let command = alife_core::ActionCommand::structured(
+        organism(),
+        alife_world::HeadlessActionIds::GRAB,
+        ActionKind::Hold,
+        ActionTarget::new(Some(target), None),
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(world.apply_command(&command).unwrap().execution.succeeded);
+    assert_eq!(world.entity(target).unwrap().carried_by, Some(organism()));
+}
+
 fn pos(x: f32, y: f32) -> Vec3f {
     Vec3f::new(x, y, 0.0)
 }
@@ -69,6 +88,9 @@ fn resource_regrowth_is_deterministic_and_preserves_bounds() {
     let mut first = ecology_world();
     let mut second = ecology_world();
     let berry = first.entity_id("berry").unwrap();
+
+    grab_resource(&mut first, berry);
+    grab_resource(&mut second, berry);
 
     first
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
@@ -185,6 +207,7 @@ fn spawn_policy_and_world_caps_are_deterministic_and_bounded() {
 fn save_load_preserves_ecology_state_and_resource_lifecycle() {
     let mut world = ecology_world();
     let berry = world.entity_id("berry").unwrap();
+    grab_resource(&mut world, berry);
     world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
         .unwrap();
