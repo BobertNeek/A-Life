@@ -92,6 +92,18 @@ corpus admission and scheduling support; retained grabbing competence still
 requires frozen behavioral evaluation. Warmup initializes its training heads;
 use the sealed-cycle continuation path to preserve an existing campaign's actor,
 value head and optimizer history.
+For an opt-in GrabFood learning experiment, a sealed `--resume-cycle` can add
+`--lesson grab_food --sampling-temperature 32 --acquisition-rehearsal-epochs 8`.
+After the ordinary PPO update, the actor rehearses only the first captured loss
+row that actually acquired food. Its sampled manipulation command is the label;
+other motor factors and speech stay unconstrained. Replay retains up to 128
+same-segment burn-in rows. Bootstrap and release/regrab events add no labels.
+The existing actor optimizer continues and the value checkpoint must remain
+byte-identical during rehearsal. The cycle reports these extra offline epochs
+separately; they add no distinct lives or real experience. This option changes
+no ordinary runtime action policy and is not enabled in the prepared serial
+campaign. GPU qualification and frozen GrabFood/Eat retention comparisons are
+required before using it for a campaign or claiming improvement.
 All records and separate speech labels bind to the same inherited asset and compiler.
 Collection pins the Git revision and executable hash and stops if either changes.
 Keep the checkout and executable fixed until collection completes. Compact replay

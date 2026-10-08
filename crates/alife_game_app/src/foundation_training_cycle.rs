@@ -116,6 +116,8 @@ pub struct FoundationCycleReceipt {
     pub objective_transition_from: Option<u16>,
     #[serde(default = "default_sampling_temperature")]
     pub sampling_temperature: f32,
+    #[serde(default)]
+    pub acquisition_rehearsal: Option<crate::FoundationAcquisitionRehearsalReceipt>,
     pub seed: u64,
     #[serde(default)]
     pub founder_seed_base: u64,
@@ -2108,6 +2110,32 @@ pub fn resume_foundation_training_cycle_with_lesson_temperature(
         Some(lesson),
         None,
         sampling_temperature,
+        0,
+    )
+}
+
+/// Rehearse only this continued life's first genuinely acquired food after PPO.
+/// The actor's existing Adam history continues; the PPO value state is frozen
+/// during the optional imitation phase. Ordinary runtime sampling is unchanged.
+pub fn resume_foundation_grab_cycle_with_acquisition_rehearsal(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    sampling_temperature: f32,
+    rehearsal_epochs: u32,
+) -> Result<FoundationCycleReceipt> {
+    crate::foundation_acquisition_rehearsal::validate_rehearsal_epochs(rehearsal_epochs)?;
+    run_foundation_training_cycle_from_with_temperature(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(FoundationTeacherLesson::GrabFood),
+        None,
+        sampling_temperature,
+        rehearsal_epochs,
     )
 }
 
@@ -2151,6 +2179,7 @@ fn run_foundation_training_cycle_from(
         lesson,
         preserve_objective_from,
         default_sampling_temperature(),
+        0,
     )
 }
 
@@ -2164,8 +2193,23 @@ fn run_foundation_training_cycle_from_with_temperature(
     lesson: Option<FoundationTeacherLesson>,
     preserve_objective_from: Option<u16>,
     sampling_temperature: f32,
+    rehearsal_epochs: u32,
 ) -> Result<FoundationCycleReceipt> {
     cycle_ppo_config(sampling_temperature)?;
+    if rehearsal_epochs != 0 {
+        crate::foundation_acquisition_rehearsal::validate_rehearsal_epochs(rehearsal_epochs)?;
+        if lesson != Some(FoundationTeacherLesson::GrabFood)
+            || !previous.is_some_and(|path| {
+                path.join("cycle.json").is_file()
+                    && !path.join("adaptation.json").is_file()
+                    && !path.join("warmup.json").is_file()
+            })
+        {
+            return Err(
+                "acquisition rehearsal requires an existing sealed GrabFood continuation".into(),
+            );
+        }
+    }
     if seed == 0 || !(1..=36_000).contains(&training_ticks) {
         return Err("cycle needs a nonzero seed and 1..=36000 training ticks".into());
     }
@@ -2290,6 +2334,7 @@ fn run_foundation_training_cycle_from_with_temperature(
                 lesson,
                 admitted,
                 sampling_temperature,
+                rehearsal_epochs,
             )
         },
         |error| {
@@ -2336,6 +2381,10 @@ struct AdmittedCycleState {
     objective_transition_from: Option<u16>,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the owned cycle carries validated continuation, world layout, sampling and offline rehearsal controls"
+)]
 fn run_foundation_training_cycle_in_owned_output(
     output: &Path,
     seed: u64,
@@ -2344,6 +2393,7 @@ fn run_foundation_training_cycle_in_owned_output(
     lesson: Option<FoundationTeacherLesson>,
     admitted: AdmittedCycleState,
     sampling_temperature: f32,
+    rehearsal_epochs: u32,
 ) -> Result<FoundationCycleReceipt> {
     let AdmittedCycleState {
         asset,
@@ -3149,6 +3199,31 @@ fn run_foundation_training_cycle_in_owned_output(
         ppo_config,
         policy_version,
     )?;
+    let acquisition_rehearsal = if rehearsal_epochs != 0 {
+        std::fs::write(output.join("phase.txt"), "acquisition-rehearsal")?;
+        let event = grab_food_acquisitions.iter().find(|event| {
+            event.row < train_rows && grab_reward_gate.reward(event.row, train_rows) > 0.0
+        });
+        Some(
+            crate::foundation_acquisition_rehearsal::rehearse_acquisition(
+                &mut trainer,
+                &mut value,
+                rehearsal_epochs,
+                event,
+                crate::foundation_acquisition_rehearsal::AcquisitionRehearsalContext {
+                    directory: &replay_dir,
+                    references: &references,
+                    train_rows,
+                    source: &source,
+                    phenotype: &phenotype,
+                    budget,
+                },
+            )?,
+        )
+    } else {
+        None
+    };
+    let final_actor_optimizer_step = trainer.optimizer_step();
     std::fs::write(output.join("phase.txt"), "update-complete")?;
     let update_seconds = started.elapsed().as_secs_f64();
     if update.actor_optimizer_step == 0 || update.value_optimizer_step == 0 {
@@ -3216,6 +3291,7 @@ fn run_foundation_training_cycle_in_owned_output(
         objective_state_reset,
         objective_transition_from,
         sampling_temperature,
+        acquisition_rehearsal,
         seed,
         founder_seed_base,
         policy_version,
@@ -3263,8 +3339,7 @@ fn run_foundation_training_cycle_in_owned_output(
         captured_replay_rows: references.len(),
         trained_replay_rows: train_rows,
         bootstrap_replay_rows,
-        actor_optimizer_updates: update
-            .actor_optimizer_step
+        actor_optimizer_updates: final_actor_optimizer_step
             .checked_sub(actor_optimizer_step_before)
             .ok_or("cycle actor optimizer step regressed")?,
         value_optimizer_updates: update
@@ -3275,7 +3350,7 @@ fn run_foundation_training_cycle_in_owned_output(
         update_seconds,
         old_asset_digest: digest(&asset),
         new_asset_digest: digest(&trained),
-        actor_optimizer_step: update.actor_optimizer_step,
+        actor_optimizer_step: final_actor_optimizer_step,
         value_optimizer_step: update.value_optimizer_step,
         completed_epochs: update.completed_epochs,
         next_cohort_tick_captured,
