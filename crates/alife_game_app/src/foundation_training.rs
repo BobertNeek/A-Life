@@ -3651,9 +3651,10 @@ pub(crate) fn foundation_replay_source(
     policy_version: u64,
     actor_checkpoint: &[u8],
 ) -> Result<FoundationReplaySource> {
+    // Launch from the qualified checkout; a downloaded binary's build-host path
+    // may not exist on this computer.
     let revision = std::process::Command::new("git")
         .args(["rev-parse", "HEAD"])
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()?;
     if !revision.status.success() {
         return Err("could not identify training source revision".into());

@@ -111,6 +111,23 @@ no ordinary runtime action policy and is not enabled in the prepared serial
 campaign. GPU qualification and frozen GrabFood/Eat retention comparisons are
 required before using it for a campaign or claiming improvement.
 All records and separate speech labels bind to the same inherited asset and compiler.
+Launch training from the qualified Git checkout. Replay source revision comes
+from that launch checkout, rather than the compile machine's absolute path;
+the operator still pins the source revision and executable hash.
+
+The GrabFood night runner can opt into `--acquisition-rehearsal-epochs 512`
+with `--sampling-temperature 32 --sampling-temperature-floor 1`
+and `--max-stalled-batches 2`, after the chosen dose passes its private GPU and
+frozen behavior comparison. These flags do not change legacy defaults.
+Every credited acquisition must complete its reported offline dose, preserving
+the value checkpoint and exact actor optimizer delta. A life without credit
+performs zero rehearsal updates. The runner checks eating retention at every
+batch, and halves exploration temperature only when ordinary-temperature
+GrabFood and EatHeldFood both pass. It stops after the requested number of full
+batches without frozen grabbing, rather than spending the whole window on an
+unchanged failing recipe. Cooling changes collection and matching PPO temperature
+together; frozen assessments stay at temperature 1. Extra offline updates remain
+separate from distinct world lives and captured experience.
 Collection pins the Git revision and executable hash and stops if either changes.
 Keep the checkout and executable fixed until collection completes. Compact replay
 schema 2 always writes candidate innate-bias fields, including zero values. Schema
