@@ -2381,6 +2381,10 @@ struct AdmittedCycleState {
     objective_transition_from: Option<u16>,
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the owned cycle carries validated continuation, world layout, sampling and offline rehearsal controls"
+)]
 fn run_foundation_training_cycle_in_owned_output(
     output: &Path,
     seed: u64,
