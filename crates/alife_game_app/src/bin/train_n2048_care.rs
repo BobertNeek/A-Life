@@ -278,6 +278,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut lesson = None;
     let mut preserve_objective_from = None;
     let mut sampling_temperature = None;
+    let mut acquisition_rehearsal_epochs = None;
     while let Some(flag) = next {
         if flag == "--seed" {
             seed = args
@@ -285,6 +286,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing training seed")?
                 .to_string_lossy()
                 .parse::<u64>()?;
+        } else if flag == "--acquisition-rehearsal-epochs" {
+            if acquisition_rehearsal_epochs.is_some() {
+                return Err("duplicate acquisition rehearsal epochs".into());
+            }
+            acquisition_rehearsal_epochs = Some(
+                args.next()
+                    .ok_or("missing acquisition rehearsal epochs")?
+                    .to_string_lossy()
+                    .parse::<u32>()?,
+            );
         } else if flag == "--sampling-temperature" {
             if sampling_temperature.is_some() {
                 return Err("duplicate sampling temperature".into());
@@ -393,6 +404,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into(),
         );
     }
+    if acquisition_rehearsal_epochs.is_some()
+        && (mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson != Some(alife_game_app::FoundationTeacherLesson::GrabFood)
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some())
+    {
+        return Err("acquisition rehearsal requires a sealed GrabFood --resume-cycle without an objective or food-delay transition".into());
+    }
     if mode == "--pilot" || mode == "--teacher-pilot" {
         if food_after_world_tick.is_some() {
             return Err("food availability is only supported in cycle mode".into());
@@ -435,7 +455,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if let Some(temperature) = sampling_temperature {
+                let result = if let Some(epochs) = acquisition_rehearsal_epochs {
+                    alife_game_app::resume_foundation_grab_cycle_with_acquisition_rehearsal(
+                        previous
+                            .as_deref()
+                            .ok_or("acquisition rehearsal needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        sampling_temperature.unwrap_or(1.0),
+                        epochs,
+                    )
+                } else if let Some(temperature) = sampling_temperature {
                     alife_game_app::resume_foundation_training_cycle_with_lesson_temperature(
                         previous
                             .as_deref()

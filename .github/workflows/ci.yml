@@ -22,6 +22,8 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
       - name: Warmup lesson corpus CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_warmup::tests
+      - name: Acquisition rehearsal CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
 
   training-output-preservation:
     name: Training output preservation

@@ -139,6 +139,10 @@ mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
 #[cfg(feature = "foundation-training")]
+mod foundation_acquisition_rehearsal;
+#[cfg(feature = "foundation-training")]
+pub use foundation_acquisition_rehearsal::FoundationAcquisitionRehearsalReceipt;
+#[cfg(feature = "foundation-training")]
 mod foundation_grab_food;
 #[cfg(feature = "foundation-training")]
 mod foundation_training;
