@@ -143,6 +143,12 @@ mod foundation_acquisition_rehearsal;
 #[cfg(feature = "foundation-training")]
 pub use foundation_acquisition_rehearsal::FoundationAcquisitionRehearsalReceipt;
 #[cfg(feature = "foundation-training")]
+mod foundation_archived_success_replay;
+#[cfg(feature = "foundation-training")]
+pub use foundation_archived_success_replay::{
+    ArchivedSuccessEntry, ArchivedSuccessManifest, ArchivedSuccessReplayReceipt,
+};
+#[cfg(feature = "foundation-training")]
 mod foundation_grab_food;
 #[cfg(feature = "foundation-training")]
 mod foundation_training;
