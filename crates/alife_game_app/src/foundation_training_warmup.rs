@@ -17,6 +17,19 @@ use crate::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+const WARMUP_LESSONS: [FoundationTeacherLesson; 10] = [
+    FoundationTeacherLesson::Feeding,
+    FoundationTeacherLesson::HazardAvoidance,
+    FoundationTeacherLesson::ObstacleNavigation,
+    FoundationTeacherLesson::Recovery,
+    FoundationTeacherLesson::VisionSearch,
+    FoundationTeacherLesson::MazeNavigation,
+    FoundationTeacherLesson::VocabularyReception,
+    FoundationTeacherLesson::VocabularyProduction,
+    FoundationTeacherLesson::EatHeldFood,
+    FoundationTeacherLesson::GrabFood,
+];
+
 #[derive(Debug, serde::Deserialize)]
 struct DemonstrationManifest {
     founder_seed_base: u64,
@@ -85,7 +98,7 @@ struct ImitationSpan {
 }
 
 fn imitation_spans(lessons: &[(FoundationTeacherLesson, usize)]) -> Vec<ImitationSpan> {
-    let mut categories = [const { Vec::new() }; 9];
+    let mut categories = [const { Vec::new() }; WARMUP_LESSONS.len()];
     for (demo, (lesson, _)) in lessons.iter().enumerate() {
         categories[lesson_index(*lesson)].push(demo);
     }
@@ -117,6 +130,13 @@ fn imitation_spans(lessons: &[(FoundationTeacherLesson, usize)]) -> Vec<Imitatio
         }
     }
     spans
+}
+
+fn category_counts_match(expected: &[usize], actual: &[usize]) -> bool {
+    actual.len() == WARMUP_LESSONS.len()
+        && (8..=WARMUP_LESSONS.len()).contains(&expected.len())
+        && expected == &actual[..expected.len()]
+        && actual[expected.len()..].iter().all(|count| *count == 0)
 }
 
 fn imitation_example(
@@ -245,22 +265,11 @@ fn run_foundation_imitation_warmup_in_owned_output(
     let root = manifest_path
         .parent()
         .ok_or("manifest has no parent directory")?;
-    let mut category_counts = vec![0usize; 10];
-    let mut corpus_lesson_budgets = [
-        FoundationTeacherLesson::Feeding,
-        FoundationTeacherLesson::HazardAvoidance,
-        FoundationTeacherLesson::ObstacleNavigation,
-        FoundationTeacherLesson::Recovery,
-        FoundationTeacherLesson::VisionSearch,
-        FoundationTeacherLesson::MazeNavigation,
-        FoundationTeacherLesson::VocabularyReception,
-        FoundationTeacherLesson::VocabularyProduction,
-        FoundationTeacherLesson::EatHeldFood,
-        FoundationTeacherLesson::GrabFood,
-    ]
-    .into_iter()
-    .map(crate::FoundationLessonBudget::new)
-    .collect::<Vec<_>>();
+    let mut category_counts = vec![0usize; WARMUP_LESSONS.len()];
+    let mut corpus_lesson_budgets = WARMUP_LESSONS
+        .into_iter()
+        .map(crate::FoundationLessonBudget::new)
+        .collect::<Vec<_>>();
     let mut seen_seeds = HashSet::new();
     let mut demos = Vec::with_capacity(32);
     let mut lessons = Vec::with_capacity(manifest.pilots.len());
@@ -316,13 +325,9 @@ fn run_foundation_imitation_warmup_in_owned_output(
         demos.push((directory.join("replay"), references, labels.targets));
     }
     if let Some(expected) = &manifest.category_counts {
-        // The ninth lesson is optional for existing eight-category corpora.
-        if ![8, 9].contains(&expected.len())
-            || expected != &category_counts[..expected.len()]
-            || category_counts[expected.len()..]
-                .iter()
-                .any(|count| *count != 0)
-        {
+        // Existing eight/nine-category corpora may omit later lessons only
+        // when no demonstration uses those omitted categories.
+        if !category_counts_match(expected, &category_counts) {
             return Err("warm-up category counts differ from the manifest".into());
         }
     }
@@ -529,6 +534,68 @@ mod tests {
                 assert_eq!(pair[0].end, pair[1].start);
                 assert_eq!(pair[1].start - pair[1].burn_start, 128);
             }
+        }
+    }
+
+    #[test]
+    fn grab_demonstrations_share_the_round_robin_and_keep_their_loss_budget() {
+        use FoundationTeacherLesson::{EatHeldFood, Feeding, GrabFood};
+        let lessons = [
+            (GrabFood, 300),
+            (Feeding, 58),
+            (EatHeldFood, 20),
+            (GrabFood, 16),
+        ];
+        let spans = imitation_spans(&lessons);
+        assert_eq!(
+            spans
+                .iter()
+                .take(4)
+                .map(|span| span.demo)
+                .collect::<Vec<_>>(),
+            [1, 2, 0, 3]
+        );
+        for (demo, (_, length)) in lessons.iter().enumerate() {
+            let windows = spans
+                .iter()
+                .filter(|span| span.demo == demo)
+                .collect::<Vec<_>>();
+            assert_eq!(
+                windows
+                    .iter()
+                    .map(|span| span.end - span.start)
+                    .sum::<usize>(),
+                *length
+            );
+            assert!(
+                (windows.iter().map(|span| span.episode_weight).sum::<f32>() - 1.0).abs() < 1.0e-6
+            );
+        }
+    }
+
+    #[test]
+    fn complete_grab_corpus_is_accepted_without_hiding_omitted_lessons() {
+        let actual = [1, 0, 0, 0, 0, 0, 0, 0, 1, 2];
+        assert!(category_counts_match(&actual, &actual));
+        assert!(!category_counts_match(&actual[..9], &actual));
+        assert!(!category_counts_match(&actual[..8], &actual));
+        let mut wrong = actual;
+        wrong[9] = 1;
+        assert!(!category_counts_match(&wrong, &actual));
+        assert!(!category_counts_match(&[0; 11], &actual));
+        assert!(!category_counts_match(&[0; 7], &actual));
+    }
+
+    #[test]
+    fn historical_corpus_widths_require_unused_later_categories() {
+        let legacy_eight = [1, 2, 3, 4, 5, 6, 7, 8, 0, 0];
+        assert!(category_counts_match(&legacy_eight[..8], &legacy_eight));
+        assert!(category_counts_match(&legacy_eight[..9], &legacy_eight));
+        let with_eating = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+        assert!(category_counts_match(&with_eating[..9], &with_eating));
+        assert!(!category_counts_match(&with_eating[..8], &with_eating));
+        for (index, lesson) in WARMUP_LESSONS.into_iter().enumerate() {
+            assert_eq!(lesson_index(lesson), index);
         }
     }
 }

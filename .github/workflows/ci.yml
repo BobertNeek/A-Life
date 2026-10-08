@@ -20,6 +20,8 @@ jobs:
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Objective continuation CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
+      - name: Warmup lesson corpus CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_warmup::tests
 
   training-output-preservation:
     name: Training output preservation

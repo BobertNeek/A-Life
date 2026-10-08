@@ -84,6 +84,14 @@ words twice, including real hunger/tiredness and food/toy subtypes.
 have a 1,024-decision cap, vocabulary 64, and other lessons 128. Meal lessons stop
 when they eat; vocabulary records hearing, named actions, and speaking opportunities.
 Use `-Curriculum Care` explicitly for the earlier balanced 32-lesson care corpus.
+Imitation warmup accepts ten-category manifests, including `EatHeldFood` and
+`GrabFood`, and mixes their windows with the other lessons while preserving one
+loss budget per demonstration. Existing eight- and nine-category manifests remain
+valid only when their omitted later categories have no demonstrations. This is
+corpus admission and scheduling support; retained grabbing competence still
+requires frozen behavioral evaluation. Warmup initializes its training heads;
+use the sealed-cycle continuation path to preserve an existing campaign's actor,
+value head and optimizer history.
 All records and separate speech labels bind to the same inherited asset and compiler.
 Collection pins the Git revision and executable hash and stops if either changes.
 Keep the checkout and executable fixed until collection completes. Compact replay
