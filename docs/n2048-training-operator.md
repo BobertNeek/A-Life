@@ -111,6 +111,46 @@ no ordinary runtime action policy and is not enabled in the prepared serial
 campaign. GPU qualification and frozen GrabFood/Eat retention comparisons are
 required before using it for a campaign or claiming improvement.
 All records and separate speech labels bind to the same inherited asset and compiler.
+Launch training from the qualified Git checkout. Replay source revision comes
+from that launch checkout, rather than the compile machine's absolute path;
+the operator still pins the source revision and executable hash.
+
+The GrabFood night runner can opt into `--acquisition-rehearsal-epochs 512`
+with `--sampling-temperature 32 --sampling-temperature-floor 1`
+and `--max-stalled-batches 2`, after the chosen dose passes its private GPU and
+frozen behavior comparison. These flags do not change legacy defaults.
+Every credited acquisition must complete its reported offline dose, preserving
+the value checkpoint and exact actor optimizer delta. A life without credit
+performs zero rehearsal updates. The runner checks eating retention at every
+batch, and halves exploration temperature only when ordinary-temperature
+GrabFood and EatHeldFood both pass. It stops after the requested number of full
+batches without frozen grabbing, rather than spending the whole window on an
+unchanged failing recipe. Cooling changes collection and matching PPO temperature
+together; frozen assessments stay at temperature 1. Extra offline updates remain
+separate from distinct world lives and captured experience.
+
+An explicit archived-success experiment can resume the current sealed cycle
+with `--archived-success-manifest MANIFEST --archived-success-epochs 16`.
+Use `--resume-cycle` with `--lesson grab_food`; archive practice and the
+single-acquisition rehearsal flag cannot be combined in one invocation.
+The schema1 manifest names 1..128 immutable older event records and their
+actual parent checkpoints. Every selected Grab must match a real ownership
+transition. Every selected Eat must follow acquisition and consume that same
+target. The native loader checks the original record digests, actor/asset
+bindings, recurrent continuity, and complete graph compatibility before any
+extra update. Only genetic weights and their compiler identity may differ.
+The in-memory training sequence then uses the current actor; original records,
+policy identities, and rewards remain intact. Historical behavior probabilities
+authenticate collection and are never treated as current PPO samples.
+
+Archived practice uses temperature 1, eight-example effective batches, and
+1..128 epochs. Acquisition and eating receive equal aggregate learning weight
+when both are present. The receipt records the exact examples, manifest digest,
+finite losses, completed actor updates, and preserved value checkpoint. These
+are extra offline updates, not new lives. Repeat frozen acquisition and eating
+checks after this private experiment; a source-bound replay run alone proves
+neither transfer nor founder competence.
+
 Collection pins the Git revision and executable hash and stops if either changes.
 Keep the checkout and executable fixed until collection completes. Compact replay
 schema 2 always writes candidate innate-bias fields, including zero values. Schema

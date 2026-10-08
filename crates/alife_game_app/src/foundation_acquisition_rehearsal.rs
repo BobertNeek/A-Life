@@ -40,7 +40,7 @@ pub(crate) fn validate_rehearsal_epochs(epochs: u32) -> Result<()> {
     Ok(())
 }
 
-fn acquisition_target(
+pub(crate) fn acquisition_target(
     behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt,
     event: &FoundationGrabAcquisition,
 ) -> Result<ImitationExample> {
@@ -98,7 +98,7 @@ pub(crate) struct AcquisitionRehearsalContext<'a> {
     pub budget: FoundationReplayBudget,
 }
 
-fn rehearsal_window(
+pub(crate) fn rehearsal_window(
     references: &[FoundationReplayRecordRef],
     train_rows: usize,
     row: usize,

@@ -279,6 +279,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut preserve_objective_from = None;
     let mut sampling_temperature = None;
     let mut acquisition_rehearsal_epochs = None;
+    let mut archived_success_manifest = None;
+    let mut archived_success_epochs = None;
     while let Some(flag) = next {
         if flag == "--seed" {
             seed = args
@@ -286,6 +288,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing training seed")?
                 .to_string_lossy()
                 .parse::<u64>()?;
+        } else if flag == "--archived-success-manifest" {
+            if archived_success_manifest.is_some() {
+                return Err("duplicate archived success manifest".into());
+            }
+            archived_success_manifest = Some(std::path::PathBuf::from(
+                args.next().ok_or("missing archived success manifest")?,
+            ));
+        } else if flag == "--archived-success-epochs" {
+            if archived_success_epochs.is_some() {
+                return Err("duplicate archived success epochs".into());
+            }
+            archived_success_epochs = Some(
+                args.next()
+                    .ok_or("missing archived success epochs")?
+                    .to_string_lossy()
+                    .parse::<u32>()?,
+            );
         } else if flag == "--acquisition-rehearsal-epochs" {
             if acquisition_rehearsal_epochs.is_some() {
                 return Err("duplicate acquisition rehearsal epochs".into());
@@ -413,6 +432,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("acquisition rehearsal requires a sealed GrabFood --resume-cycle without an objective or food-delay transition".into());
     }
+    if (archived_success_manifest.is_some() || archived_success_epochs.is_some())
+        && (archived_success_manifest.is_none()
+            || archived_success_epochs.is_none()
+            || mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson != Some(alife_game_app::FoundationTeacherLesson::GrabFood)
+            || acquisition_rehearsal_epochs.is_some()
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some())
+    {
+        return Err("archived success replay needs both archive flags and a sealed GrabFood resume, without other practice or objective overrides".into());
+    }
     if mode == "--pilot" || mode == "--teacher-pilot" {
         if food_after_world_tick.is_some() {
             return Err("food availability is only supported in cycle mode".into());
@@ -455,7 +486,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if let Some(epochs) = acquisition_rehearsal_epochs {
+                let result = if let Some(manifest) = archived_success_manifest {
+                    alife_game_app::resume_foundation_grab_cycle_with_archived_success_replay(
+                        previous
+                            .as_deref()
+                            .ok_or("archived replay needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        sampling_temperature.unwrap_or(1.0),
+                        &manifest,
+                        archived_success_epochs.ok_or("archived replay needs an epoch budget")?,
+                    )
+                } else if let Some(epochs) = acquisition_rehearsal_epochs {
                     alife_game_app::resume_foundation_grab_cycle_with_acquisition_rehearsal(
                         previous
                             .as_deref()

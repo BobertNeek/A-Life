@@ -355,6 +355,38 @@ def sampling_temperature(text):
     return struct.unpack("<f", struct.pack("<f", value))[0]
 
 
+def validate_rehearsal(receipt, requested):
+    rehearsal = receipt.get("acquisition_rehearsal")
+    if not requested:
+        if rehearsal is not None:
+            raise ValueError("unexpected acquisition rehearsal in a PPO-only cycle")
+        return 0
+    credited = [row["row"] for row in receipt["curriculum_reward_rows"]
+                if row["curriculum_reward"] > 0]
+    expected = requested if credited else 0
+    if (not isinstance(rehearsal, dict) or
+            rehearsal.get("requested_epochs") != requested or
+            rehearsal.get("completed_epochs") != expected or
+            rehearsal.get("acquisition_row") != (credited[0] if credited else None) or
+            rehearsal.get("loss_rows_per_epoch") != int(bool(credited)) or
+            rehearsal.get("imitation_temperature") != 1.0 or
+            rehearsal.get("value_checkpoint_unchanged") is not True):
+        raise ValueError("rehearsal dose or credited acquisition disagrees with the sealed cycle")
+    losses = rehearsal.get("action_losses", [])
+    if (len(losses) != expected or any(not math.isfinite(loss) for loss in losses) or
+            rehearsal.get("actor_optimizer_step_after") != receipt["actor_optimizer_step"] or
+            rehearsal["actor_optimizer_step_after"] - rehearsal["actor_optimizer_step_before"] != expected):
+        raise ValueError("rehearsal losses or actor optimizer delta disagree with completed epochs")
+    return expected
+
+
+def cooled_temperature(current, floor, grab, eating, baseline_meals):
+    # Cool exploration only after ordinary-temperature behavior and retention pass.
+    if grab["grab_acquisitions"] and eating["held_food_meals"] >= max(1, baseline_meals):
+        return sampling_temperature(str(max(floor, current / 2)))
+    return current
+
+
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
@@ -368,6 +400,12 @@ def arguments():
     parser.add_argument("--decisions", type=int, default=16)
     parser.add_argument("--startup-decisions", type=int, default=128)
     parser.add_argument("--sampling-temperature", type=sampling_temperature, default=1.0)
+    parser.add_argument("--sampling-temperature-floor", type=sampling_temperature,
+                        help="halve exploration after passing frozen Grab/Eat checks, down to this floor")
+    parser.add_argument("--acquisition-rehearsal-epochs", type=int, default=0,
+                        help="0 disables; 1..512 offline passes on each first real acquisition")
+    parser.add_argument("--max-stalled-batches", type=int, default=0,
+                        help="stop after this many full batches without frozen grabbing; 0 disables")
     parser.add_argument("--startup-seconds", type=int, default=2700)
     parser.add_argument("--command-seconds", type=int, default=1200)
     parser.add_argument("--assessment-seconds", type=int, default=600)
@@ -388,6 +426,12 @@ def main(argv=None):
             raise ValueError("target must be 1..100000 episodes; batches 1..64")
         if not 1 <= args.decisions <= 128 or not 1 <= args.startup_decisions <= 128:
             raise ValueError("decision windows must be 1..128 to retain every bounded prior receipt")
+        if not 0 <= args.acquisition_rehearsal_epochs <= 512 or not 0 <= args.max_stalled_batches <= 64:
+            raise ValueError("rehearsal must be 0..512; stalled-batch limit 0..64")
+        if args.sampling_temperature_floor is None:
+            args.sampling_temperature_floor = args.sampling_temperature
+        if args.sampling_temperature_floor > args.sampling_temperature:
+            raise ValueError("temperature floor cannot exceed initial exploration temperature")
         if not 1 <= args.seed <= MAX_SEED - args.target_episodes or not 1 <= args.assessment_seed <= MAX_SEED:
             raise ValueError("invalid or overflowing seed range")
         if args.seed <= args.assessment_seed < args.seed + args.target_episodes:
@@ -430,6 +474,10 @@ def main(argv=None):
                  "target_distinct_episodes": args.target_episodes, "batch_episodes": args.batch_episodes,
                  "decisions_per_episode": args.decisions, "startup_decisions": args.startup_decisions,
                  "sampling_temperature": args.sampling_temperature, "frozen_assessment_temperature": 1.0,
+                 "sampling_temperature_floor": args.sampling_temperature_floor,
+                 "acquisition_rehearsal_epochs": args.acquisition_rehearsal_epochs,
+                 "offline_rehearsal_epochs_completed": 0,
+                 "max_stalled_batches": args.max_stalled_batches,
                  "startup_cap_seconds": args.startup_seconds,
                  "cutoff_utc": args.cutoff.isoformat(), "input_sha256": input_hashes,
                  "source": str(args.source), "latest_checkpoint": str(args.source),
@@ -448,6 +496,9 @@ def main(argv=None):
         state["first_episode_argv"] = [str(args.binary), "--resume-cycle", str(args.source),
             str(args.output / "episode-00000"), str(args.startup_decisions), "--seed", str(args.seed),
             "--lesson", "grab_food", "--sampling-temperature", str(args.sampling_temperature)]
+        if args.acquisition_rehearsal_epochs:
+            state["first_episode_argv"].extend(["--acquisition-rehearsal-epochs",
+                                               str(args.acquisition_rehearsal_epochs)])
         state["episode_schedule"] = "each accepted episode resumes the immediately preceding sealed cycle; one new seed and realized pose per episode"
         state_path = args.output / "night.json"
         write_json(state_path, state)
@@ -469,6 +520,9 @@ def run_night(args, state, state_path, input_hashes):
     collection_cutoff = args.cutoff - dt.timedelta(minutes=args.final_reserve_minutes)
     startup_cutoff = min(collection_cutoff, dt.datetime.now(UTC) + dt.timedelta(seconds=args.startup_seconds))
     assessment_costs = []
+    temperature = args.sampling_temperature
+    recipe_enabled = bool(args.acquisition_rehearsal_epochs or args.max_stalled_batches or
+                          args.sampling_temperature_floor < temperature)
     interactive_grace_until = dt.datetime.now(UTC) + dt.timedelta(seconds=args.startup_grace_seconds)
 
     def publish():
@@ -536,8 +590,10 @@ def run_night(args, state, state_path, input_hashes):
         state["git_head"] = subprocess.check_output(["git", "-c", f"safe.directory={repo.as_posix()}", "rev-parse", "HEAD"], text=True).strip()
         before = probe("frozen-before", previous, startup_cutoff)
         observed_frozen_grab = bool(before["grab_acquisitions"])
-        retention_probe("eating-retention-before", previous, startup_cutoff)
+        eating_before = retention_probe("eating-retention-before", previous, startup_cutoff)
+        baseline_meals = eating_before["held_food_meals"]
         regressions = 0
+        stalled_batches = 0
         for index in range(args.target_episodes):
             if dt.datetime.now(UTC) >= collection_cutoff:
                 break
@@ -564,11 +620,16 @@ def run_night(args, state, state_path, input_hashes):
             cycle_argv = [str(args.binary), "--resume-cycle", str(previous), str(directory),
                     str(args.startup_decisions if index == 0 else args.decisions),
                     "--seed", str(seed), "--lesson", "grab_food"]
-            cycle_argv.extend(["--sampling-temperature", str(args.sampling_temperature)])
+            cycle_argv.extend(["--sampling-temperature", str(temperature)])
+            if args.acquisition_rehearsal_epochs:
+                cycle_argv.extend(["--acquisition-rehearsal-epochs", str(args.acquisition_rehearsal_epochs)])
             invoke(cycle_argv,
                    f"episode-{index:05d}", args.command_seconds,
                    startup_cutoff if index == 0 else collection_cutoff)
             receipt, setup, hashes = validate_cycle(directory, previous, seed)
+            if receipt.get("sampling_temperature", 1.0) != temperature:
+                raise ValueError("collected sampling/PPO temperature differs from the requested recipe")
+            offline_epochs = validate_rehearsal(receipt, args.acquisition_rehearsal_epochs)
             key = coordinates(setup["realized_body_position"]) + (setup["realized_body_yaw"],)
             if key in setup_keys:
                 raise ValueError("episode repeated a realized location/facing setup")
@@ -580,6 +641,7 @@ def run_night(args, state, state_path, input_hashes):
             checkpoint_hashes = {str(args.binary): input_hashes[str(args.binary)], **hashes}
             state["latest_checkpoint"] = str(directory); state["partial_episode"] = None
             state["distinct_completed_episodes"] += 1
+            state["offline_rehearsal_epochs_completed"] += offline_epochs
             for total, field in (("captured_decision_rows", "captured_replay_rows"),
                                  ("trained_decision_rows", "trained_replay_rows"), ("bootstrap_rows", "bootstrap_replay_rows"),
                                  ("captured_held_meals", "held_food_consumption_events"),
@@ -592,11 +654,26 @@ def run_night(args, state, state_path, input_hashes):
                                  ("value_optimizer_updates", "value_optimizer_updates")):
                 state[total] += len(receipt[field]) if field == "grab_food_acquisitions" else receipt[field]
             state["episodes"].append({"index": index, "seed": seed, "setup": setup, "seconds": seconds,
-                                      "bytes": size, "input_sha256": hashes, "policy_version": receipt["policy_version"]})
+                                      "bytes": size, "input_sha256": hashes, "policy_version": receipt["policy_version"],
+                                      "sampling_temperature": temperature, "offline_rehearsal_epochs": offline_epochs})
             publish()
             if index == 0 or (index + 1) % args.batch_episodes == 0:
                 current = probe(f"frozen-after-{index:05d}", previous,
                                 startup_cutoff if index == 0 else collection_cutoff)
+                if recipe_enabled:
+                    eating = retention_probe(f"eating-retention-after-{index:05d}", previous,
+                                             startup_cutoff if index == 0 else collection_cutoff)
+                    if eating["held_food_meals"] < baseline_meals:
+                        raise ValueError("frozen batch lost source eating retention")
+                    temperature = cooled_temperature(temperature, args.sampling_temperature_floor,
+                                                     current, eating, baseline_meals)
+                    state["next_sampling_temperature"] = temperature
+                    if (index + 1) % args.batch_episodes == 0:
+                        stalled_batches = 0 if current["grab_acquisitions"] else stalled_batches + 1
+                        state["stalled_batches"] = stalled_batches
+                        if args.max_stalled_batches and stalled_batches >= args.max_stalled_batches:
+                            raise ValueError("recipe stalled: full batches still fail frozen grabbing")
+                    publish()
                 if index == 0:
                     state["startup_qualified"] = True
                 print(f"Grab-food episodes {index + 1}/{args.target_episodes}; trained rows {state['trained_decision_rows']}; "

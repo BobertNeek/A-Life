@@ -118,6 +118,8 @@ pub struct FoundationCycleReceipt {
     pub sampling_temperature: f32,
     #[serde(default)]
     pub acquisition_rehearsal: Option<crate::FoundationAcquisitionRehearsalReceipt>,
+    #[serde(default)]
+    pub archived_success_replay: Option<crate::ArchivedSuccessReplayReceipt>,
     pub seed: u64,
     #[serde(default)]
     pub founder_seed_base: u64,
@@ -2111,6 +2113,7 @@ pub fn resume_foundation_training_cycle_with_lesson_temperature(
         None,
         sampling_temperature,
         0,
+        None,
     )
 }
 
@@ -2136,6 +2139,34 @@ pub fn resume_foundation_grab_cycle_with_acquisition_rehearsal(
         None,
         sampling_temperature,
         rehearsal_epochs,
+        None,
+    )
+}
+
+/// Replay authentic successful older learner events as offline imitation.
+pub fn resume_foundation_grab_cycle_with_archived_success_replay(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    sampling_temperature: f32,
+    manifest: &Path,
+    epochs: u32,
+) -> Result<FoundationCycleReceipt> {
+    let bytes = crate::foundation_archived_success_replay::read_archive_bytes(manifest)?;
+    let archive: crate::ArchivedSuccessManifest = serde_json::from_slice(&bytes)?;
+    crate::foundation_archived_success_replay::validate_archive_request(&archive, epochs)?;
+    run_foundation_training_cycle_from_with_temperature(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(FoundationTeacherLesson::GrabFood),
+        None,
+        sampling_temperature,
+        0,
+        Some((manifest, epochs)),
     )
 }
 
@@ -2180,6 +2211,7 @@ fn run_foundation_training_cycle_from(
         preserve_objective_from,
         default_sampling_temperature(),
         0,
+        None,
     )
 }
 
@@ -2194,10 +2226,13 @@ fn run_foundation_training_cycle_from_with_temperature(
     preserve_objective_from: Option<u16>,
     sampling_temperature: f32,
     rehearsal_epochs: u32,
+    archived_replay: Option<(&Path, u32)>,
 ) -> Result<FoundationCycleReceipt> {
     cycle_ppo_config(sampling_temperature)?;
-    if rehearsal_epochs != 0 {
-        crate::foundation_acquisition_rehearsal::validate_rehearsal_epochs(rehearsal_epochs)?;
+    if rehearsal_epochs != 0 || archived_replay.is_some() {
+        if rehearsal_epochs != 0 {
+            crate::foundation_acquisition_rehearsal::validate_rehearsal_epochs(rehearsal_epochs)?;
+        }
         if lesson != Some(FoundationTeacherLesson::GrabFood)
             || !previous.is_some_and(|path| {
                 path.join("cycle.json").is_file()
@@ -2335,6 +2370,7 @@ fn run_foundation_training_cycle_from_with_temperature(
                 admitted,
                 sampling_temperature,
                 rehearsal_epochs,
+                archived_replay,
             )
         },
         |error| {
@@ -2394,6 +2430,7 @@ fn run_foundation_training_cycle_in_owned_output(
     admitted: AdmittedCycleState,
     sampling_temperature: f32,
     rehearsal_epochs: u32,
+    archived_replay: Option<(&Path, u32)>,
 ) -> Result<FoundationCycleReceipt> {
     let AdmittedCycleState {
         asset,
@@ -3223,6 +3260,22 @@ fn run_foundation_training_cycle_in_owned_output(
     } else {
         None
     };
+    let archived_success_replay = if let Some((manifest, epochs)) = archived_replay {
+        std::fs::write(output.join("phase.txt"), "archived-success-replay")?;
+        Some(
+            crate::foundation_archived_success_replay::rehearse_archived_successes(
+                &mut trainer,
+                &mut value,
+                manifest,
+                epochs,
+                founder_seed_base,
+                &phenotype,
+                policy_version,
+            )?,
+        )
+    } else {
+        None
+    };
     let final_actor_optimizer_step = trainer.optimizer_step();
     std::fs::write(output.join("phase.txt"), "update-complete")?;
     let update_seconds = started.elapsed().as_secs_f64();
@@ -3292,6 +3345,7 @@ fn run_foundation_training_cycle_in_owned_output(
         objective_transition_from,
         sampling_temperature,
         acquisition_rehearsal,
+        archived_success_replay,
         seed,
         founder_seed_base,
         policy_version,

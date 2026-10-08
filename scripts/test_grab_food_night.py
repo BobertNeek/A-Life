@@ -124,5 +124,55 @@ class GrabNightTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 night.sampling_temperature(str(value))
 
+    def test_exploration_cools_only_after_frozen_grabbing_and_eating_pass(self):
+        grab = {"grab_acquisitions": 1}
+        eating = {"held_food_meals": 1}
+        self.assertEqual(night.cooled_temperature(32., 1., grab, eating, 1), 16.)
+        self.assertEqual(night.cooled_temperature(1., 1., grab, eating, 1), 1.)
+        self.assertEqual(night.cooled_temperature(32., 1., {"grab_acquisitions": 0}, eating, 1), 32.)
+        self.assertEqual(night.cooled_temperature(32., 1., grab, {"held_food_meals": 0}, 0), 32.)
+        self.assertEqual(night.cooled_temperature(32., 1., grab, eating, 2), 32.)
+
+    def test_rehearsal_requires_actual_credit_complete_dose_and_preserved_value(self):
+        rehearsal = {"requested_epochs": 4, "completed_epochs": 4, "acquisition_row": 2,
+                     "loss_rows_per_epoch": 1, "imitation_temperature": 1.,
+                     "value_checkpoint_unchanged": True, "action_losses": [8., 7., 6., 5.],
+                     "actor_optimizer_step_before": 100, "actor_optimizer_step_after": 104}
+        receipt = {"curriculum_reward_rows": [{"row": 2, "curriculum_reward": .25}],
+                   "actor_optimizer_step": 104, "acquisition_rehearsal": rehearsal}
+        self.assertEqual(night.validate_rehearsal(receipt, 4), 4)
+        for change in ({"completed_epochs": 3}, {"requested_epochs": 8}, {"acquisition_row": 3},
+                       {"value_checkpoint_unchanged": False}, {"actor_optimizer_step_before": 99},
+                       {"action_losses": [8., 7., 6., float("nan")]}):
+            with self.assertRaises(ValueError):
+                night.validate_rehearsal({**receipt, "acquisition_rehearsal": {**rehearsal, **change}}, 4)
+
+    def test_no_acquisition_has_zero_offline_epochs_and_no_fabricated_dose(self):
+        rehearsal = {"requested_epochs": 512, "completed_epochs": 0, "acquisition_row": None,
+                     "loss_rows_per_epoch": 0, "imitation_temperature": 1.,
+                     "value_checkpoint_unchanged": True, "action_losses": [],
+                     "actor_optimizer_step_before": 100, "actor_optimizer_step_after": 100}
+        receipt = {"curriculum_reward_rows": [{"row": 0, "curriculum_reward": 0.}],
+                   "actor_optimizer_step": 100, "acquisition_rehearsal": rehearsal}
+        self.assertEqual(night.validate_rehearsal(receipt, 512), 0)
+        with self.assertRaises(ValueError):
+            night.validate_rehearsal({**receipt, "acquisition_rehearsal": {**rehearsal, "completed_epochs": 512}}, 512)
+        self.assertEqual(night.validate_rehearsal({}, 0), 0)
+        with self.assertRaises(ValueError):
+            night.validate_rehearsal(receipt, 0)
+
+    def test_invalid_recipe_fails_before_source_output_or_spawn(self):
+        for options in (["--acquisition-rehearsal-epochs", "513"],
+                        ["--sampling-temperature", "4", "--sampling-temperature-floor", "8"],
+                        ["--max-stalled-batches", "65"]):
+            output = self.root / "invalid-recipe-output"
+            argv = ["--binary", "not-executable", "--source", str(self.source), "--output", str(output),
+                    "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat(), *options]
+            with patch.object(night.subprocess, "Popen") as spawn, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    night.main(argv)
+                spawn.assert_not_called()
+            self.assertFalse(output.exists())
+
 if __name__ == "__main__":
     unittest.main()
