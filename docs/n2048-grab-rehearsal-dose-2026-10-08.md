@@ -10,8 +10,12 @@ Its SHA256 is `6aa7b3e77d900013637fbb222896e993486bc83fa9b86910d29389936e17438c`
 The starting actor Adam age was 2616 and value Adam age was 1976; objective 2,
 founder 539363617, all 32768 weights, and optimizer histories continued.
 World/body state was reconstructed per life, rather than retaining one
-individual lifetime. The two trials sealed 33 distinct new learner lives;
-the first PPO control life was reused in the 16-life comparison.
+individual lifetime. The two trials completed 33 native cycle executions across
+16 world seeds shared by the paired branches. The first PPO control life was
+reused in the 16-life comparison. Manifest record references identify 32
+distinct sealed replay sequences: the first 8-epoch and 32-epoch treatment
+collections are byte-identical. These counts describe experimental execution
+and replay, not 33 different world episodes or additional production dose.
 
 ## Observed behavior and replay
 
@@ -34,6 +38,8 @@ decisions.
 Each 16-life branch captured four genuine training acquisitions. The rehearsal
 branch performed 128 additional actor updates. Together with the earlier
 8-epoch trial, five positive replay windows completed 136 extra actor updates.
+Those five windows contain four distinct acquisition loss records; the first
+successful record was rehearsed in both dose trials.
 Burn-in lengths of zero, one, and five rows executed on GPU. The value
 checkpoint was byte-identical across each rehearsal phase. Failed acquisition
 lives performed zero extra updates. These are runtime/continuity results;
@@ -89,7 +95,8 @@ campaign uses its unchanged pinned serial executable.
 The host receipts are under
 `D:\A life\target\brain-goal-20261007\qualification-e8bfdb9c`:
 `gpu-20261008T053656Z/receipt.json`, `dose32-20261008T054506Z/receipt.json`, and
-`qualification.json`. The first receipt is pinned by the second receipt's
+`qualification.json`. `rehearsal-experiment-accounting.json` records the
+manifest-reference duplicate comparison. The first receipt is pinned by the second receipt's
 baseline hash. The protected source's four checkpoint hashes still match
 after both trials. The qualification provider and native worker exited, and
 the shared ownership locks were released before the overnight owner launched.
