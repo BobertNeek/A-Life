@@ -1,0 +1,85 @@
+name: Windows training artifact
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "codex/**"]
+    paths:
+      - ".github/workflows/windows-training-artifact.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/alife_game_app/src/foundation*.rs"
+      - "crates/alife_game_app/src/bin/train_n2048_care.rs"
+      - "crates/alife_training/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-training-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and check Windows training CLI
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Acquisition rehearsal CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
+      - name: Build training executable
+        run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Check rehearsal admission before runtime creation
+        run: |
+          $taskBinary = (Resolve-Path 'target/debug/train_n2048_care.exe').Path
+          $taskMissing = Join-Path $env:RUNNER_TEMP 'missing-rehearsal-source'
+          $taskOutput = Join-Path $env:RUNNER_TEMP 'unused-rehearsal-output'
+          if ((Test-Path -LiteralPath $taskMissing) -or (Test-Path -LiteralPath $taskOutput)) {
+            throw 'Admission checks require absent source and output paths'
+          }
+          foreach ($taskEpochs in @(0, 512, 513)) {
+            $taskStdout = Join-Path $env:RUNNER_TEMP "admission-$taskEpochs.stdout"
+            $taskStderr = Join-Path $env:RUNNER_TEMP "admission-$taskEpochs.stderr"
+            $taskArgs = @('--resume-cycle', $taskMissing, $taskOutput, '1', '--lesson', 'grab_food', '--acquisition-rehearsal-epochs', "$taskEpochs")
+            $taskProcess = Start-Process -FilePath $taskBinary -ArgumentList $taskArgs -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $taskStdout -RedirectStandardError $taskStderr
+            $taskError = Get-Content -LiteralPath $taskStderr -Raw
+            $taskExpected = if ($taskEpochs -eq 512) { 'existing sealed GrabFood continuation' } else { 'requires 1..=512 offline epochs' }
+            if ($taskProcess.ExitCode -eq 0 -or -not $taskError.Contains($taskExpected)) {
+              throw "Unexpected admission result for $taskEpochs epochs: $taskError"
+            }
+            if (Test-Path -LiteralPath $taskOutput) { throw 'Rejected admission created output' }
+          }
+      - name: Seal artifact metadata
+        run: |
+          $taskBinary = 'target/debug/train_n2048_care.exe'
+          $taskRevision = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $taskRevision -ne $env:GITHUB_SHA) { throw 'Checked-out revision mismatch' }
+          $taskArtifact = New-Item -ItemType Directory -Path 'target/windows-training-artifact'
+          Copy-Item -LiteralPath $taskBinary -Destination $taskArtifact.FullName
+          [ordered]@{
+            schema = 1
+            source_revision = $taskRevision
+            executable_sha256 = (Get-FileHash -LiteralPath $taskBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+            rustc = (rustc --version)
+            target = 'x86_64-pc-windows-msvc'
+            features = @('foundation-training')
+            build_profile = 'dev'
+            cpu_checks = @('four acquisition rehearsal unit tests', 'CLI bounds 0 and 513 rejected', 'CLI 512 reaches sealed-source admission', 'rejected admission preserves absent output')
+            gpu_training_executed = $false
+            founder_promoted = $false
+            workflow_run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          } | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $taskArtifact.FullName 'build-receipt.json') -Encoding utf8
+      - name: Upload executable and receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-training-${{ github.sha }}
+          path: target/windows-training-artifact
+          if-no-files-found: error
+          retention-days: 7

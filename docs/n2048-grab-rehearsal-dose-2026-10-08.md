@@ -83,6 +83,14 @@ training-world acquisitions separate from held-out behavior. Hold promotion
 if grabbing fails or eating retention is lost. The current live overnight
 campaign uses its unchanged pinned serial executable.
 
+The Windows training artifact workflow builds the opt-in CLI on a hosted
+Windows runner, runs the four rehearsal CPU tests, and checks that 512 epochs
+reach sealed-source admission while 0 and 513 are rejected before runtime
+creation. Its executable travels with the exact source revision, SHA256, and
+compiler version. This prepares a native candidate without competing with the
+live learner. The artifact receipt explicitly leaves GPU training and founder
+promotion unexecuted; the paired behavior gate still applies.
+
 ## Architecture trace and evidence
 
 | Controlling requirement | Evidence and remaining gap |
