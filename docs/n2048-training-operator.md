@@ -98,6 +98,12 @@ After the ordinary PPO update, the actor rehearses only the first captured loss
 row that actually acquired food. Its sampled manipulation command is the label;
 other motor factors and speech stay unconstrained. Replay retains up to 128
 same-segment burn-in rows. Bootstrap and release/regrab events add no labels.
+The explicit offline epoch budget is 1..=512. The larger ceiling allows a
+separate dose comparison: the [October 8 trials](n2048-grab-rehearsal-dose-2026-10-08.md)
+found that 32 updates still left very low likelihood on the successful actions.
+Only budgets up to 32 have executed GPU qualification. Higher budgets need their
+own bounded GPU trial and frozen GrabFood/Eat comparison; the ceiling does not
+establish competence or enable a campaign.
 The existing actor optimizer continues and the value checkpoint must remain
 byte-identical during rehearsal. The cycle reports these extra offline epochs
 separately; they add no distinct lives or real experience. This option changes

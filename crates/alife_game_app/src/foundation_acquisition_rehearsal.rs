@@ -14,6 +14,7 @@ use crate::{
 };
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+const MAX_REHEARSAL_EPOCHS: u32 = 512;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FoundationAcquisitionRehearsalReceipt {
@@ -30,8 +31,11 @@ pub struct FoundationAcquisitionRehearsalReceipt {
 }
 
 pub(crate) fn validate_rehearsal_epochs(epochs: u32) -> Result<()> {
-    if !(1..=32).contains(&epochs) {
-        return Err("acquisition rehearsal requires 1..=32 offline epochs".into());
+    if !(1..=MAX_REHEARSAL_EPOCHS).contains(&epochs) {
+        return Err(format!(
+            "acquisition rehearsal requires 1..={MAX_REHEARSAL_EPOCHS} offline epochs"
+        )
+        .into());
     }
     Ok(())
 }
@@ -286,7 +290,9 @@ mod tests {
         assert!(validate_rehearsal_epochs(0).is_err());
         assert!(validate_rehearsal_epochs(1).is_ok());
         assert!(validate_rehearsal_epochs(32).is_ok());
-        assert!(validate_rehearsal_epochs(33).is_err());
+        assert!(validate_rehearsal_epochs(512).is_ok());
+        assert!(validate_rehearsal_epochs(513).is_err());
+        assert!(validate_rehearsal_epochs(u32::MAX).is_err());
     }
 
     #[test]
