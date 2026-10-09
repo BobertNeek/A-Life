@@ -55,6 +55,30 @@ geometry edits. The optional `--author-from` bootstrap accepts only that exact
 baseline, preventing repeated paint application. The checker proves binary
 color-only retention; it does not render or establish in-game acceptance.
 
+The 2026-10-09 Sapling color-only override is owned by
+`sapling-color.blend` (Blender 4.3.2), reconstructed from the exact pre-pass
+runtime GLB. Use this override for Sapling instead of its older copies in
+`island-assets.blend` or the terrain authoring scene. The canopy gains restrained
+jade/sea-glass foliage and warmer olive new growth; bark is unchanged. Geometry,
+normals, topology, bounds, pivots, material parameters, LOD budgets
+(3,124 / 672 / 56 triangles) and the 127,320-byte runtime size are retained.
+The original Blender 5.2 sources remain untouched; 5.2 compatibility is untested.
+
+After editing this override, use the explicit Blender 4.3.2 executable:
+`blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_sapling_color.py`
+then `python scripts/register_approved_art.py` and
+`python scripts/check_sapling_color.py`. Run this override after a full
+base-library rebuild too. Normal export loads the editable source; the optional
+`--author-from` bootstrap accepts only `sapling-color/Sapling.baseline.glb`,
+preventing repeated paint application. The guarded adapter requires exact
+triangle-corner positions, original materials/nodes, unambiguous colors and
+pinned per-corner normals from an unchanged 4.3.2 round-trip. It transfers only
+RGB bytes into the original layout. Native intermediate exports stay under
+`target/artifacts/sapling-color/export` and are never shipped or registered.
+This recipe supports color edits only. Source reload/export reproduces the
+shipping GLB byte-for-byte. The checker proves retention; in-game visual
+acceptance and physical GPU/performance testing are unrun.
+
 The island is the sole playable map. The reusable Highlands prop library remains
 available as art; its old terrain loader and save fallback have been retired.
 Current saves include their terrain data and locomotion limits, and restoration

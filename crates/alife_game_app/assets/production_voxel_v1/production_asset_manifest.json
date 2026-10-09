@@ -950,15 +950,15 @@
     {
       "asset_id": "approved-island-sapling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:3f1a39b373cccf11",
+      "digest": "fnv1a64:05a143714ac5bdd1",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_assets.py",
-        "date": "2026-09-30",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "config_path": "scripts/build_sapling_color.py",
+        "date": "2026-10-09",
+        "seed": "sapling-color-v1/from-ec5bb040",
+        "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
