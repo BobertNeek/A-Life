@@ -708,22 +708,22 @@
     {
       "asset_id": "approved-island-berrybush",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:d784f58211d92b21",
+      "digest": "fnv1a64:25dcd20a8b3a0a54",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_assets.py",
-        "date": "2026-09-30",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "config_path": "scripts/build_island_biological_shrubs.py",
+        "date": "2026-10-09",
+        "seed": "biological-island-shrubs-v1/from-9a4e3b3d",
+        "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
       "local_path": "crates/alife_game_app/assets/landscape/island/BerryBush.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 74292,
+      "size_bytes": 74340,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
@@ -840,22 +840,22 @@
     {
       "asset_id": "approved-island-coastalshrub",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:e8debf8313325b63",
+      "digest": "fnv1a64:f1e4b6c326ae6d8f",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_assets.py",
-        "date": "2026-09-30",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "config_path": "scripts/build_island_biological_shrubs.py",
+        "date": "2026-10-09",
+        "seed": "biological-island-shrubs-v1/from-9a4e3b3d",
+        "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
       "local_path": "crates/alife_game_app/assets/landscape/island/CoastalShrub.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 44740,
+      "size_bytes": 44788,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },
