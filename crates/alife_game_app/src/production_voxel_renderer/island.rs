@@ -51,6 +51,25 @@ struct Prop {
     yaw: f32,
 }
 
+fn grounded_prop_position(
+    kind: &str,
+    authored: [f32; 3],
+    surface: &alife_world::TerrainSurface,
+) -> Vec3 {
+    let mut position = Vec3::from_array(authored);
+    // Ground-centred plants follow the selected near-mesh triangles. Keep
+    // authored placements for trees and solid props with baked collision proxies.
+    if matches!(
+        kind,
+        "Grass" | "Fern" | "Flowers" | "BerryBush" | "CoastalShrub"
+    ) {
+        if let Some(height) = surface.height(position.x, position.z) {
+            position.y = height;
+        }
+    }
+    position
+}
+
 pub(super) fn stop(world: &mut World) {
     world.remove_resource::<IslandAssets>();
 }
@@ -220,7 +239,7 @@ pub(super) fn update(
         let mut shared_prop_material = None;
         for p in placements() {
             let gltf = gltfs.get(&assets.props[&p.kind]).unwrap();
-            let position = Vec3::from_array(p.position);
+            let position = grounded_prop_position(&p.kind, p.position, surface);
             let tree = matches!(p.kind.as_str(), "Broadleaf" | "Conifer" | "Sapling");
             let small = matches!(p.kind.as_str(), "Grass" | "Fern" | "Flowers");
             let distance = if small {
@@ -380,6 +399,77 @@ fn constrain_to_surface(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn plant_grounding_surface() -> alife_world::TerrainSurface {
+        alife_world::TerrainSurface::from_data(alife_world::TerrainData {
+            width: 2,
+            depth: 2,
+            origin_x: 0.0,
+            origin_z: 0.0,
+            spacing: 1.0,
+            heights: vec![0.0, 2.0, 4.0, 10.0],
+            obstacles: vec![],
+            water_level: None,
+        })
+        .unwrap()
+    }
+
+    #[test]
+    fn plant_grounding_uses_both_near_mesh_triangles() {
+        let surface = plant_grounding_surface();
+        for kind in ["Grass", "Fern", "Flowers", "BerryBush", "CoastalShrub"] {
+            for (x, z, height) in [(0.75, 0.25, 3.5), (0.25, 0.75, 4.5)] {
+                let position = grounded_prop_position(kind, [x, 12.0, z], &surface);
+                assert_eq!(position, Vec3::new(x, height, z));
+                assert_eq!(Some(position.y), surface.height(x, z));
+            }
+        }
+    }
+
+    #[test]
+    fn plant_grounding_preserves_other_authored_positions() {
+        let surface = plant_grounding_surface();
+        let authored = [0.75, 12.0, 0.25];
+        for kind in [
+            "Broadleaf",
+            "Conifer",
+            "Sapling",
+            "BoulderA",
+            "BoulderB",
+            "BoulderC",
+            "Scree",
+            "Cliff",
+            "Unknown",
+            "grass",
+        ] {
+            assert_eq!(
+                grounded_prop_position(kind, authored, &surface),
+                Vec3::from_array(authored)
+            );
+        }
+    }
+
+    #[test]
+    fn plant_grounding_preserves_authored_position_when_sample_is_invalid() {
+        let surface = plant_grounding_surface();
+        for authored in [
+            [-0.25, 12.0, 0.5],
+            [1.25, 12.0, 0.5],
+            [0.5, 12.0, -0.25],
+            [0.5, 12.0, 1.25],
+            [f32::NAN, 12.0, 0.5],
+            [0.5, 12.0, f32::INFINITY],
+        ] {
+            for kind in ["Grass", "Fern", "Flowers", "BerryBush", "CoastalShrub"] {
+                let position = grounded_prop_position(kind, authored, &surface);
+                assert_eq!(
+                    position.to_array().map(f32::to_bits),
+                    authored.map(f32::to_bits)
+                );
+            }
+        }
+    }
+
     #[test]
     fn camera_zoom_keeps_the_ground_focus_and_clearance() {
         let terrain = alife_world::island_terrain();
