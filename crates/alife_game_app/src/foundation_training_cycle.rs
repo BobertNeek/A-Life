@@ -165,6 +165,7 @@ pub struct FoundationCycleReceipt {
     pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
     #[serde(default)]
     pub speech_target_rows: usize,
+    /// Frames hearing any configured cue token; not proof of the full command or comprehension.
     #[serde(default)]
     pub teacher_cue_frames: usize,
     #[serde(default)]

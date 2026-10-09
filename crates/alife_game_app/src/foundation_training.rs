@@ -526,7 +526,8 @@ pub struct FoundationPilotReceipt {
     pub semantic_prior: Option<crate::gpu_live_runtime::SemanticPriorMetrics>,
     #[serde(default)]
     pub heard_word_frames: usize,
-    /// Ordinary teacher cue exposure, independent of speech supervision.
+    /// Exposure to any configured Teacher token, independent of speech supervision.
+    /// Does not prove full command delivery or comprehension.
     #[serde(default)]
     pub teacher_cue_frames: usize,
     #[serde(default)]
@@ -2446,6 +2447,8 @@ fn held_food_body_benefit(transition: alife_core::MeasuredPhysiologyTransition) 
         && transition.after.homeostasis.drives.pain <= transition.before.homeostasis.drives.pain
 }
 
+/// Any-token exposure used by `teacher_cue_frames`, including noun-only speech.
+/// Full command delivery requires ordered tokens from the same Teacher utterance.
 pub(crate) fn heard_foundation_teacher_cue(
     frame: &alife_core::PerceptionFrame,
     tokens: &[u16],
@@ -2732,12 +2735,12 @@ pub(crate) fn expose_foundation_teacher_cue(
         .entity(scenario.food)
         .ok_or("teacher cue food missing")?;
     let position = food.position;
-    let tokens: &[u16] = if food.carried_by == Some(subject) {
-        &scenario.teacher_cue_tokens
-    } else {
+    let tokens: &[u16] = if scenario.held_food_setup.is_some() && food.carried_by != Some(subject) {
         &[1] // Name the released object; do not request the held-food action.
+    } else {
+        &scenario.teacher_cue_tokens
     };
-    // These are contextual naming/request words for the real held object,
+    // These are contextual naming/request words for the real food object,
     // not a declaration that the learner has already completed an action.
     alife_school::LanguageNursery::speak_in_world(
         world,
@@ -4641,6 +4644,44 @@ mod held_food_lesson_tests {
         }
     }
 
+    fn assert_teacher_utterance(frame: &alife_core::PerceptionFrame, expected: &[u32]) {
+        let heard: Vec<_> = frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .filter(|word| word.source_kind == alife_core::UtteranceSourceKind::Teacher)
+            .collect();
+        assert_eq!(heard.len(), expected.len());
+        let utterance = heard[0].utterance_id;
+        for (position, (word, token)) in heard.iter().zip(expected).enumerate() {
+            assert_eq!(word.utterance_id, utterance);
+            assert_eq!(usize::from(word.sequence_position), position);
+            assert_eq!(word.token_id, *token);
+        }
+    }
+
+    #[test]
+    fn unheld_grab_food_cue_delivers_ordered_get_food_before_acquisition() {
+        let mut world = unconfigured(42);
+        let scenario = configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(FoundationTeacherLesson::GrabFood),
+            None,
+            false,
+        )
+        .unwrap();
+        assert_eq!(scenario.teacher_cue_tokens, vec![9, 1]);
+        assert!(scenario.held_food_setup.is_none());
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        expose_foundation_teacher_cue(&mut world, &scenario).unwrap();
+        assert_teacher_utterance(&frame(&mut world), &[9, 1]);
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert!(!world.entity(scenario.food).unwrap().consumed);
+    }
+
     #[test]
     fn held_food_cues_use_hearing_without_positive_or_silence_speech_targets() {
         let (mut world, scenario) = prepared(42);
@@ -4649,6 +4690,7 @@ mod held_food_lesson_tests {
         assert_eq!(scenario.teacher_cue_tokens, vec![8, 1]);
         expose_foundation_teacher_cue(&mut world, &scenario).unwrap();
         let perceived = frame(&mut world);
+        assert_teacher_utterance(&perceived, &[8, 1]);
         assert!(heard_foundation_teacher_cue(
             &perceived,
             &scenario.teacher_cue_tokens
@@ -4734,17 +4776,13 @@ mod held_food_lesson_tests {
         released.start_tick = world.tick().raw();
         expose_foundation_teacher_cue(&mut world, &released).unwrap();
         let perceived = frame(&mut world);
-        let heard: Vec<_> = perceived
-            .sensory()
-            .language_context
-            .heard_tokens
-            .iter()
-            .flatten()
-            .filter(|word| word.source_kind == alife_core::UtteranceSourceKind::Teacher)
-            .map(|word| word.token_id)
-            .collect();
-        assert!(heard.contains(&1));
-        assert!(!heard.contains(&8));
+        assert_teacher_utterance(&perceived, &[1]);
+        // The existing frame counter includes noun-only exposure; a positive
+        // count does not establish that the full [8, 1] command was heard.
+        assert!(heard_foundation_teacher_cue(
+            &perceived,
+            &released.teacher_cue_tokens
+        ));
         let (eat, outcome) = eat_outcome(&mut world, scenario.food);
         assert!(!outcome.success);
         assert_eq!(outcome.physical.contact, PhysicalContactKind::Touch);
