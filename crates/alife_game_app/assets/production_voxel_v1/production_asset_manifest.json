@@ -884,15 +884,15 @@
     {
       "asset_id": "approved-island-fern",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:6e16936303f62c07",
+      "digest": "fnv1a64:20f764baefaa9f92",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_assets.py",
-        "date": "2026-09-30",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "config_path": "scripts/build_fern_readability.py",
+        "date": "2026-10-09",
+        "seed": "fern-readability-color-v1/from-ec5bb040",
+        "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",

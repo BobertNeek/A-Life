@@ -30,6 +30,31 @@ paths, names, one-material/one-primitive LOD bindings and placement data are
 unchanged. See [the source-bound review](../../../../../docs/reviews/2026-10-09-island-biological-shrubs.md)
 for isolated CPU-rendered before/after evidence; game-rendering acceptance is unrun.
 
+The 2026-10-09 Fern color-only override is owned by
+`fern-readability.blend` (Blender 4.3.2), reconstructed from the exact committed
+`ec5bb040` runtime GLB. Use this editable override for Fern rather than its older
+copies in `island-assets.blend` or the terrain authoring scene. The original
+Blender 5.2 sources remain byte-retained; this does not claim Blender 5.2 source
+compatibility. Geometry, normals, topology, bounds, pivots, material parameters,
+three LODs (784 / 352 / 156 triangles) and the 97,100-byte runtime size are retained.
+Only normalized RGB vertex-color bytes change, giving folded leaflets jade-green
+ridges, darker edges and restrained growth/frond variation.
+
+After editing this override, use the explicit Blender 4.3.2 executable:
+`blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_fern_readability.py`
+then `python scripts/register_approved_art.py` and
+`python scripts/check_fern_readability.py`. Run this override export after a
+full base-library rebuild as well. The shipped source reload/re-export is
+byte-identical to the candidate. The guarded adapter transfers only colors into
+`fern-readability/Fern.baseline.glb`, the exact pre-pass source-layout baseline;
+it rejects changed positions, triangle order or ambiguous color seams. Blender
+4.3's intermediate export can round split normals and duplicate near-LOD
+vertices, so it is kept only under `target/artifacts/fern-readability/export`.
+It is never shipped or registered. This color-only recipe does not support
+geometry edits. The optional `--author-from` bootstrap accepts only that exact
+baseline, preventing repeated paint application. The checker proves binary
+color-only retention; it does not render or establish in-game acceptance.
+
 The island is the sole playable map. The reusable Highlands prop library remains
 available as art; its old terrain loader and save fallback have been retired.
 Current saves include their terrain data and locomotion limits, and restoration
