@@ -1,0 +1,36 @@
+{
+  "result": "PASS",
+  "baseline": "9a4e3b3dea9ff1b8b63bf60fde5f2a8385e50c9b",
+  "assets": [
+    {
+      "kind": "BerryBush",
+      "lod_triangles": [
+        1872,
+        825,
+        326
+      ],
+      "before_bytes": 74292,
+      "after_bytes": 74340,
+      "sha256": "7b14dcad9b9558ec0e90d1f8a439f1859a9a7473cf2ddd02d16596c25fa289e8",
+      "maximum_bounds_error_m": 0.0
+    },
+    {
+      "kind": "CoastalShrub",
+      "lod_triangles": [
+        1152,
+        506,
+        218
+      ],
+      "before_bytes": 44740,
+      "after_bytes": 44788,
+      "sha256": "da06fbb85f454978c12459bf9b4fffa8ecbea031724b83406db225589ab657af",
+      "maximum_bounds_error_m": 0.0
+    }
+  ],
+  "target_bytes_before": 119032,
+  "target_bytes_after": 119128,
+  "maximum_bounds_error_m": 0,
+  "other_art_and_world_files_byte_retained": 105,
+  "manifest_entries_valid": 48,
+  "game_rendering_proof": false
+}

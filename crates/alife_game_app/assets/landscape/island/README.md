@@ -6,6 +6,30 @@ guides, and the approved image blueprints. `island-terrain.blend` contains the
 1000 x 1200 metre island, 240 metre peaks, ocean, river, and placed shared props.
 The `Measured_Blueprint_Guides` collection is for authoring, not export.
 
+The 2026-10-09 BerryBush and CoastalShrub overrides are owned by
+`island-biological-shrubs.blend` (Blender 4.3.2), reconstructed from the exact
+committed runtime GLBs before the pass. It contains six editable LOD meshes,
+ground-centred origins, and the shared `ArtColor` surface. The original Blender
+5.2 library, its embedded references, terrain source and all other props remain
+byte-retained. For these two species, use the override source rather than the
+older copies in `island-assets.blend` or the terrain authoring scene.
+
+After editing the override, run
+`blender --background --factory-startup --python-exit-code 1 --python scripts/build_island_biological_shrubs.py`
+and then `python scripts/register_approved_art.py`. Run this export after a full
+base-library rebuild as well. The optional `--author-from` bootstrap accepts
+only the exact pre-pass `9a4e3b3d` GLBs, preventing repeated sculpt application.
+The normal command exports the current native edits, preserving both bounds and
+triangle ceilings. `scripts/check_island_biological_shrubs.py` checks those
+contracts, manifest digests and retention of all other art against that revision.
+
+BerryBush exposes larger orchid fruit clusters against natural green foliage;
+its overview uses grouped fruit pods at the original face budget. CoastalShrub
+has layered, wind-swept leaves with restrained sea-glass growth tips. Runtime
+paths, names, one-material/one-primitive LOD bindings and placement data are
+unchanged. See [the source-bound review](../../../../../docs/reviews/2026-10-09-island-biological-shrubs.md)
+for isolated CPU-rendered before/after evidence; game-rendering acceptance is unrun.
+
 The island is the sole playable map. The reusable Highlands prop library remains
 available as art; its old terrain loader and save fallback have been retired.
 Current saves include their terrain data and locomotion limits, and restoration

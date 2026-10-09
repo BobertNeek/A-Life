@@ -17,13 +17,27 @@ def compact_colors(path):
         if accessor['componentType'] == 5121:
             continue
         view = doc['bufferViews'][accessor['bufferView']]
-        assert accessor['componentType'] == 5123 and accessor.get('normalized')
         assert accessor.get('byteOffset', 0) == 0 and 'byteStride' not in view
         components = {'VEC3': 3, 'VEC4': 4}[accessor['type']]
         count = accessor['count'] * components
-        assert view['byteLength'] == count * 2
-        values = struct.unpack_from('<'+'H'*count, binary, view.get('byteOffset', 0))
-        replacements[accessor['bufferView']] = bytes(round(v/257) for v in values)
+        if accessor['componentType'] == 5126:
+            # Blender 4.3 emits linear float colors; newer exporters use UNORM16.
+            assert view['byteLength'] == count * 4
+            values = struct.unpack_from('<'+'f'*count, binary, view.get('byteOffset', 0))
+            assert all(0 <= value <= 1 for value in values)
+            replacements[accessor['bufferView']] = bytes(round(v*255) for v in values)
+            accessor['normalized'] = True
+        else:
+            assert accessor['componentType'] == 5123 and accessor.get('normalized')
+            assert view['byteLength'] == count * 2
+            values = struct.unpack_from('<'+'H'*count, binary, view.get('byteOffset', 0))
+            replacements[accessor['bufferView']] = bytes(round(v/257) for v in values)
+        if components == 3:
+            # Vertex attributes need a four-byte element stride, including RGB8.
+            rgb = replacements[accessor['bufferView']]
+            replacements[accessor['bufferView']] = b''.join(
+                rgb[start:start+3] + b'\0' for start in range(0, len(rgb), 3))
+            view['byteStride'] = 4
         accessor['componentType'] = 5121
     if not replacements:
         return
