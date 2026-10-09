@@ -69,9 +69,10 @@ def check():
         'crates/alife_game_app/assets', 'crates/alife_world/assets'], cwd=ROOT, text=True).splitlines()
     allowed = {str(HERE / (kind + '.glb')) for kind in KINDS}
     allowed.add('crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json')
+    updated_documentation = {str(HERE / 'README.md')}
     verified = 0
     for name in protected:
-        if name in allowed:
+        if name in allowed or name in updated_documentation:
             continue
         assert (ROOT / name).read_bytes() == baseline(Path(name)), name
         verified += 1
@@ -98,6 +99,7 @@ def check():
             'target_bytes_before': total_before, 'target_bytes_after': total_after,
             'maximum_bounds_error_m': maximum_bound_error,
             'other_art_and_world_files_byte_retained': verified,
+            'updated_asset_documentation': sorted(updated_documentation),
             'manifest_entries_valid': len(manifest['entries']),
             'game_rendering_proof': False}
 

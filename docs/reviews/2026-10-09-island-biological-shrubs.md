@@ -30,7 +30,7 @@ shaders, meshes, material slots, world placements or gameplay code are added.
 
 These images import the runtime GLBs and use the same orthographic camera,
 daylight, ground, AgX transform and CPU Cycles settings. LOD0 is shown here;
-the delivery pack also includes matching LOD1 and LOD2 views. Every preview was
+the locally prepared pack also includes matching LOD1 and LOD2 views. Every preview was
 visually inspected. These are deliberately isolated model reviews: they do not
 establish Bevy/game appearance, physical-GPU acceptance, FPS or causal gameplay.
 
@@ -58,9 +58,10 @@ All counts remain at their original budgets. The two GLBs add 96 bytes in total.
 Names, paths, identity transforms, scene roots, material binding and bounding
 boxes remain stable. All 48 manifest entries validate; metadata changes are
 limited to the two refreshed registrations' export recipe, date, size and digest.
-The check byte-compares 105 other art/world files against the base, including
+The check byte-compares 104 other art/world files against the base, including
 Flowers, all three boulders, Fern, trees, terrain/placements/physics data,
 Hearthling and the approved dorsal right hand.
+The intentionally updated asset README is listed separately in the receipt.
 
 The existing island checker passes: 201,960 terrain vertices agree with the
 authoritative heightfield within 0.000001 metres, 3,716 placements and 1,716
@@ -75,9 +76,15 @@ Machine-readable evidence: [structural check](2026-10-09-island-biological-shrub
 ## Limits and ownership
 
 Library materialization of the previous island/character packs and the new
-Flowers pack/preview failed locally with `download failed`, including one
-bounded retry per item. No readable pack bytes were obtained and none were
-installed. This pass is derived from committed main assets. The parent owns
+Flowers and boulders packs/previews failed locally with
+`library file transfer failed: download failed` (exit 1), including one bounded
+retry per item. Resolved Library IDs were passed to `prepare_materialize`, then
+the complete returned transfer was passed to the current bundled download helper
+with a consumer-local destination. No readable pack bytes were obtained and none
+were installed. Outgoing Library upload failed at
+`hosted apps tools/list request failed: network`; no new Library IDs were returned.
+The GitHub branch carries the sources, exports, near-LOD previews and receipts.
+This pass is derived from committed main assets. The parent owns
 the separate Flowers and boulder work. Earlier unpublished boulder experiments
 were reserved outside this branch and their committed files restored before
 this review. No other dirty checkout was modified.

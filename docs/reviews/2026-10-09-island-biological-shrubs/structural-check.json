@@ -30,7 +30,10 @@
   "target_bytes_before": 119032,
   "target_bytes_after": 119128,
   "maximum_bounds_error_m": 0,
-  "other_art_and_world_files_byte_retained": 105,
+  "other_art_and_world_files_byte_retained": 104,
+  "updated_asset_documentation": [
+    "crates/alife_game_app/assets/landscape/island/README.md"
+  ],
   "manifest_entries_valid": 48,
   "game_rendering_proof": false
 }
