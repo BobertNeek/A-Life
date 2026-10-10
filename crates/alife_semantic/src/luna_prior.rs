@@ -546,8 +546,10 @@ mod tests {
 
     #[test]
     fn construction_is_offline_and_output_identity_is_adapter_owned() {
-        let mut config = LunaPriorConfig::default();
-        config.executable = std::env::temp_dir().join("does-not-exist-codex");
+        let mut config = LunaPriorConfig {
+            executable: std::env::temp_dir().join("does-not-exist-codex"),
+            ..Default::default()
+        };
         let first = LunaPriorProvider::new(config.clone()).unwrap();
         assert_eq!(first.parse_output(GOOD).unwrap().model, "codex:gpt-6-luna");
         config.model = "another-model".into();
@@ -572,8 +574,10 @@ mod tests {
             "/tmp/codex.cmd",
             "/tmp/codex.ps1",
         ] {
-            let mut config = LunaPriorConfig::default();
-            config.executable = PathBuf::from(bad);
+            let config = LunaPriorConfig {
+                executable: PathBuf::from(bad),
+                ..Default::default()
+            };
             assert!(config.validate().is_err(), "{bad}");
         }
         for bad in [
@@ -582,14 +586,18 @@ mod tests {
             "--model",
             "https://example.invalid",
         ] {
-            let mut config = LunaPriorConfig::default();
-            config.model = bad.into();
+            let config = LunaPriorConfig {
+                model: bad.into(),
+                ..Default::default()
+            };
             // A leading dash is not an executable argument injection (separate
             // argv), but still should not be accepted as a model identifier.
             assert!(config.validate().is_err(), "{bad}");
         }
-        let mut config = LunaPriorConfig::default();
-        config.timeout_ms = 240_001;
+        let mut config = LunaPriorConfig {
+            timeout_ms: 240_001,
+            ..Default::default()
+        };
         assert!(config.validate().is_err());
         config.timeout_ms = 1;
         config.max_prompt_chars = CA27_MAX_PROMPT_CHARS + 1;

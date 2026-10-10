@@ -233,7 +233,7 @@ impl RuntimeSemanticPrior {
                 config.model = alife_semantic::DETERMINISTIC_PRIOR_ID.into();
                 model_sha256 = "unverified-model".into();
                 backend_config = alife_semantic::DETERMINISTIC_PRIOR_ID.into();
-                deterministic = Some(DeterministicPriorProvider::default());
+                deterministic = Some(DeterministicPriorProvider);
                 Ok(None)
             }
             "local" => LocalSlmPriorAsyncQueue::new(config.clone())
@@ -722,16 +722,16 @@ impl RuntimeSemanticPrior {
                     // a permanent admission failure. One same-context feedback
                     // request is allowed for a rich lesson; a second zero still
                     // remains unaided. No world/neural state advances here.
-                    if self.queue.is_some()
-                        && !self.frozen_recording
-                        && self.metrics.rich_information_required
-                        && !has_usable_hints(output)
-                        && life.controller.developmental_gain() > 0.0
-                        && life.pending.is_none()
-                        && self.retry_not_before.is_none_or(|at| Instant::now() >= at)
-                        && self.unusable_retry_contexts.len() < MAX_UNUSABLE_RETRY_CONTEXTS
-                        && self.unusable_retry_contexts.insert(key.clone())
-                    {
+                    if let Some(queue) = self.queue.as_ref().filter(|_| {
+                        !self.frozen_recording
+                            && self.metrics.rich_information_required
+                            && !has_usable_hints(output)
+                            && life.controller.developmental_gain() > 0.0
+                            && life.pending.is_none()
+                            && self.retry_not_before.is_none_or(|at| Instant::now() >= at)
+                            && self.unusable_retry_contexts.len() < MAX_UNUSABLE_RETRY_CONTEXTS
+                            && self.unusable_retry_contexts.insert(key.clone())
+                    }) {
                         push_bounded(
                             &mut self.metrics.unusable_hint_retries,
                             PriorUnusableHintRetry {
@@ -751,12 +751,7 @@ impl RuntimeSemanticPrior {
                             request_id: self.next_request,
                             prompt: key.clone(),
                         };
-                        match self
-                            .queue
-                            .as_ref()
-                            .expect("live prior queue checked")
-                            .submit_unusable_hint_retry(request)
-                        {
+                        match queue.submit_unusable_hint_retry(request) {
                             Ok(reply) => {
                                 self.next_request = self
                                     .next_request
@@ -820,24 +815,19 @@ impl RuntimeSemanticPrior {
                     self.metrics.empty_hint_frames += 1;
                     life.input_status = PriorInputStatus::EmptyHints;
                 }
-            } else if self.queue.is_some()
-                && !self.frozen_recording
-                && life.pending.is_none()
-                && self.retry_not_before.is_none_or(|at| Instant::now() >= at)
-                && life.last_request.as_ref().is_none_or(|(context, at)| {
-                    context != &key || tick.raw().saturating_sub(*at) >= 128
-                })
-            {
+            } else if let Some(queue) = self.queue.as_ref().filter(|_| {
+                !self.frozen_recording
+                    && life.pending.is_none()
+                    && self.retry_not_before.is_none_or(|at| Instant::now() >= at)
+                    && life.last_request.as_ref().is_none_or(|(context, at)| {
+                        context != &key || tick.raw().saturating_sub(*at) >= 128
+                    })
+            }) {
                 let request = LocalSlmPriorRequest {
                     request_id: self.next_request,
                     prompt: key.clone(),
                 };
-                match self
-                    .queue
-                    .as_ref()
-                    .expect("live prior queue checked")
-                    .submit(request)
-                {
+                match queue.submit(request) {
                     Ok(reply) => {
                         self.next_request = self
                             .next_request
@@ -2089,7 +2079,7 @@ mod tests {
         let mut prior = prior();
         prior.require_rich_information();
         prior.queue = None;
-        prior.deterministic = Some(DeterministicPriorProvider::default());
+        prior.deterministic = Some(DeterministicPriorProvider);
         let draft = teacher_draft();
         prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
         assert!(prior.ready(5));

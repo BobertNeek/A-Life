@@ -965,7 +965,7 @@ mod bounded_worker_tests {
             .unwrap();
         drop(queue);
         release.send(()).unwrap();
-        first.recv_timeout(Duration::from_secs(1)).unwrap();
+        assert!(first.recv_timeout(Duration::from_secs(1)).unwrap().is_err());
         assert!(second.recv_timeout(Duration::from_secs(1)).is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
