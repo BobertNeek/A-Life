@@ -6,7 +6,11 @@
 
 use std::{
     collections::VecDeque,
-    sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
+        Arc,
+    },
     thread,
     time::Duration,
 };
@@ -221,6 +225,16 @@ enum LocalSlmPriorWork {
     ),
 }
 
+/// Swappable bounded text-in/hints-out provider. It owns no learner state.
+/// Calls run only on the bounded asynchronous worker, never the organism step.
+pub trait BoundedSlmPriorProvider: Send + 'static {
+    fn generate_prior(
+        &self,
+        bounded_context: &str,
+        unusable_hint_feedback: bool,
+    ) -> Result<LocalSlmPriorOutput, String>;
+}
+
 /// Bounded asynchronous worker queue for CA27 local SLM prior requests.
 ///
 /// The queue is asynchronous in the app sense: enqueue is non-blocking, local
@@ -231,18 +245,33 @@ enum LocalSlmPriorWork {
 pub struct LocalSlmPriorAsyncQueue {
     config: LlamaCppSlmPriorConfig,
     sender: SyncSender<LocalSlmPriorWork>,
+    alive: Arc<AtomicBool>,
 }
 
 impl LocalSlmPriorAsyncQueue {
     pub fn new(config: LlamaCppSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
-        config.validate()?;
         let provider = LlamaCppSlmPriorProvider::new(config.clone())?;
+        Self::with_provider(config, Box::new(provider))
+    }
+
+    pub fn with_provider(
+        config: LlamaCppSlmPriorConfig,
+        provider: Box<dyn BoundedSlmPriorProvider>,
+    ) -> Result<Self, ScaffoldContractError> {
+        config.validate()?;
+        let max_prompt_chars = config.max_prompt_chars;
         let (sender, receiver) = mpsc::sync_channel(config.max_queue_depth);
+        let alive = Arc::new(AtomicBool::new(true));
+        let worker_alive = alive.clone();
         thread::Builder::new()
-            .name("alife-ca27-local-slm-prior".to_string())
-            .spawn(move || run_slm_prior_worker(provider, receiver))
+            .name("alife-bounded-semantic-prior".to_string())
+            .spawn(move || run_slm_prior_worker(provider, max_prompt_chars, receiver, worker_alive))
             .map_err(|_| ScaffoldContractError::MissingPhaseData)?;
-        Ok(Self { config, sender })
+        Ok(Self {
+            config,
+            sender,
+            alive,
+        })
     }
 
     pub fn capacity(&self) -> usize {
@@ -304,19 +333,30 @@ impl LocalSlmPriorAsyncQueue {
     }
 }
 
+impl Drop for LocalSlmPriorAsyncQueue {
+    fn drop(&mut self) {
+        // Never start queued work after its owning runtime has gone away.
+        // A request already in flight remains bounded by the provider timeout.
+        self.alive.store(false, Ordering::Release);
+    }
+}
+
 fn run_slm_prior_worker(
-    provider: LlamaCppSlmPriorProvider,
+    provider: Box<dyn BoundedSlmPriorProvider>,
+    max_prompt_chars: usize,
     receiver: mpsc::Receiver<LocalSlmPriorWork>,
+    alive: Arc<AtomicBool>,
 ) {
     while let Ok(work) = receiver.recv() {
+        if !alive.load(Ordering::Acquire) {
+            break;
+        }
         match work {
             LocalSlmPriorWork::Generate(request, reply, unusable_hint_feedback) => {
                 let result = request
-                    .validate(provider.config.max_prompt_chars)
+                    .validate(max_prompt_chars)
                     .map_err(|err| format!("CA27 queued request invalid: {err:?}"))
-                    .and_then(|_| {
-                        provider.generate_prior_inner(&request.prompt, unusable_hint_feedback)
-                    });
+                    .and_then(|_| provider.generate_prior(&request.prompt, unusable_hint_feedback));
                 let _ = reply.send(result);
             }
         }
@@ -362,6 +402,16 @@ impl LocalSlmPriorQueue {
 #[derive(Debug, Clone)]
 pub struct LlamaCppSlmPriorProvider {
     pub config: LlamaCppSlmPriorConfig,
+}
+
+impl BoundedSlmPriorProvider for LlamaCppSlmPriorProvider {
+    fn generate_prior(
+        &self,
+        bounded_context: &str,
+        unusable_hint_feedback: bool,
+    ) -> Result<LocalSlmPriorOutput, String> {
+        self.generate_prior_inner(bounded_context, unusable_hint_feedback)
+    }
 }
 
 impl LlamaCppSlmPriorProvider {
@@ -867,5 +917,56 @@ mod tests {
         .unwrap();
         let err = provider.generate_prior("teacher token food").unwrap_err();
         assert!(err.contains("USER_ACTION_REQUIRED"));
+    }
+}
+
+#[cfg(test)]
+mod bounded_worker_tests {
+    use super::*;
+    struct BlockingProvider {
+        started: mpsc::Sender<()>,
+        release: Receiver<()>,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl BoundedSlmPriorProvider for BlockingProvider {
+        fn generate_prior(&self, _: &str, _: bool) -> Result<LocalSlmPriorOutput, String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.started.send(()).unwrap();
+            self.release.recv().unwrap();
+            Err("CPU fixture".into())
+        }
+    }
+    #[test]
+    fn dropped_queue_never_starts_its_waiting_provider_requests() {
+        let (started, start) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let queue = LocalSlmPriorAsyncQueue::with_provider(
+            LlamaCppSlmPriorConfig::default(),
+            Box::new(BlockingProvider {
+                started,
+                release: released,
+                calls: calls.clone(),
+            }),
+        )
+        .unwrap();
+        let first = queue
+            .submit(LocalSlmPriorRequest {
+                request_id: 1,
+                prompt: "heard words food".into(),
+            })
+            .unwrap();
+        start.recv_timeout(Duration::from_secs(1)).unwrap();
+        let second = queue
+            .submit(LocalSlmPriorRequest {
+                request_id: 2,
+                prompt: "heard words toy".into(),
+            })
+            .unwrap();
+        drop(queue);
+        release.send(()).unwrap();
+        assert!(first.recv_timeout(Duration::from_secs(1)).unwrap().is_err());
+        assert!(second.recv_timeout(Duration::from_secs(1)).is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

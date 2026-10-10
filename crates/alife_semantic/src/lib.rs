@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 mod developmental_prior;
 mod translation;
 
+#[cfg(feature = "local-llamacpp")]
+mod deterministic_prior;
 #[cfg(feature = "fake-semantic-provider")]
 mod fake;
 #[cfg(feature = "gaussian-adapter")]
@@ -14,6 +16,17 @@ mod gaussian;
 mod local_llamacpp;
 #[cfg(feature = "local-llamacpp")]
 mod local_slm_prior;
+#[cfg(feature = "local-llamacpp")]
+mod luna_prior;
+#[cfg(feature = "local-llamacpp")]
+mod recorded_prior;
+#[cfg(feature = "local-llamacpp")]
+pub use deterministic_prior::{DeterministicPriorProvider, DETERMINISTIC_PRIOR_ID};
+
+#[cfg(feature = "local-llamacpp")]
+pub use luna_prior::{LunaPriorConfig, LunaPriorProvider};
+#[cfg(feature = "local-llamacpp")]
+pub use recorded_prior::{RecordedPriorBank, RecordedPriorOrigin, MAX_RECORDED_PRIOR_BANK_BYTES};
 #[cfg(feature = "gaussian-adapter")]
 mod providers;
 #[cfg(feature = "gaussian-adapter")]
@@ -371,10 +384,10 @@ pub use local_llamacpp::{
 
 #[cfg(feature = "local-llamacpp")]
 pub use local_slm_prior::{
-    parse_slm_prior_json, LlamaCppSlmPriorConfig, LlamaCppSlmPriorProvider,
-    LocalSlmPriorAsyncQueue, LocalSlmPriorOutput, LocalSlmPriorQueue, LocalSlmPriorRequest,
-    SlmLexiconAssociation, CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, CA27_DEFAULT_LLAMA_CPP_SLM_PORT,
-    CA27_LOCAL_SLM_PRIOR_ID, CA27_MAX_PERCEPTION_TAGS, CA27_MAX_SALIENCE_LABELS,
-    CA27_SLM_PRIOR_OUTPUT_SCHEMA, CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
+    parse_slm_prior_json, BoundedSlmPriorProvider, LlamaCppSlmPriorConfig,
+    LlamaCppSlmPriorProvider, LocalSlmPriorAsyncQueue, LocalSlmPriorOutput, LocalSlmPriorQueue,
+    LocalSlmPriorRequest, SlmLexiconAssociation, CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS,
+    CA27_DEFAULT_LLAMA_CPP_SLM_PORT, CA27_LOCAL_SLM_PRIOR_ID, CA27_MAX_PERCEPTION_TAGS,
+    CA27_MAX_SALIENCE_LABELS, CA27_SLM_PRIOR_OUTPUT_SCHEMA, CA27_SLM_PRIOR_OUTPUT_SCHEMA_VERSION,
     CA27_UNUSABLE_HINT_FEEDBACK, CA27_UNUSABLE_HINT_FEEDBACK_VERSION,
 };
