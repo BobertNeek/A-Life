@@ -67,14 +67,18 @@ This is a small rule library, not model output, comprehension or learned compete
 The shared `BoundedSlmPriorProvider` interface accepts only bounded context and
 returns validated `LocalSlmPriorOutput`. Live calls run behind the same bounded
 asynchronous queue. The Luna adapter fixes read-only, ephemeral Codex arguments,
-requires ChatGPT authentication rather than API-key routing, disables agent tools,
-and accepts only strict four-field JSON with receiver-vocabulary associations.
+requires ChatGPT authentication rather than API-key routing, explicitly disables
+supported image/browser/computer/plugin/shell feature flags, and accepts only
+strict four-field JSON with receiver-vocabulary associations.
 It does not log in, read credentials, create tokens, install software, or modify
 account settings. Missing executables, unsupported CLI versions, missing login,
 quota/model-access errors and timeouts follow the same unaided failure policy.
 The default live request timeout is 30 seconds; collection never waits for it.
-CLI help was checked with version 0.159.2, but live Luna subscription access and
-actual model output are unverified by this change. Owned timeout/error process
+All fixed overrides passed actual version 0.159.2 strict configuration admission
+without authentication or inference. Effective image/browser/computer/plugin/shell
+flags read back disabled. The host still reports `unified_exec=true` despite the
+requested false override, so absence of advertised execution tools is unverified.
+Live Luna subscription output remains unverified by this change. Owned timeout/error process
 trees are cleaned up; guaranteed descendant cleanup after a normal CLI exit is
 not established. Windows taskkill behavior is unrun. The optional Luna adapter
 needs Windows live qualification before production use. Dropping the shared
