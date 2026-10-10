@@ -74,6 +74,19 @@ class HeldFoodNightTests(unittest.TestCase):
             "lesson_target_held_before_decision": True, "representative_mask": 1,
             "candidates": [{"action": 210, "target": 3, "index": 0}]}]}))
 
+    def test_explicit_off_survives_the_night_child_environment(self):
+        with patch.dict(night.os.environ, {"ALIFE_SLM_PRIOR": "off"}):
+            self.assertEqual(night.prior_environment()["ALIFE_SLM_PRIOR"], "off")
+        with patch.dict(night.os.environ, {"ALIFE_SLM_PRIOR_BACKEND": "recorded"}):
+            self.assertEqual(night.prior_environment()["ALIFE_SLM_PRIOR_BACKEND"], "recorded")
+
+    def test_all_optional_prior_failures_warn_and_continue(self):
+        for prior in (None, {}, "invalid receipt", {"decision_inputs": None}, {"decision_inputs": ["invalid row"]}, {"failures": 1}, {"prime_timeouts": 1},
+                      {"decision_frames_without_prior": 3}, {"provider_failures": [{"error": "parse failed"}]}):
+            diagnostics = night.assert_prior({"semantic_prior": prior}, 16)
+            self.assertEqual(diagnostics["failure_policy"], "log_and_continue_without_prior")
+            self.assertTrue(diagnostics["warnings"])
+
     def test_plan_targets_thousands_without_launching_nonexecutable_trainer(self):
         result = subprocess.run([sys.executable, str(SCRIPT), *self.argv()], capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -106,8 +119,7 @@ class HeldFoodNightTests(unittest.TestCase):
             night.validate_cycle(second, first, 11)
 
     def test_configured_prior_or_unselectable_ground_target_is_rejected(self):
-        with self.assertRaises(ValueError):
-            night.assert_prior({"semantic_prior": {"rich_information_required": True}})
+        self.assertTrue(night.assert_prior({"semantic_prior": {"rich_information_required": True}})["warnings"])
         directory = self.root / "probe"; self.probe(directory)
         self.assertEqual(night.validate_probe(directory)["held_food_meals"], 0)
         trace = night.read_json(directory / "lesson-diagnostic.json")
@@ -115,8 +127,7 @@ class HeldFoodNightTests(unittest.TestCase):
         (directory / "lesson-diagnostic.json").write_text(json.dumps(trace))
         with self.assertRaisesRegex(ValueError, "selectable Eat"):
             night.validate_probe(directory)
-        with self.assertRaisesRegex(ValueError, "captured learner decisions"):
-            night.assert_prior({"semantic_prior": prior(1)}, 16)
+        self.assertTrue(night.assert_prior({"semantic_prior": prior(1)}, 16)["warnings"])
 
     def test_native_pose_and_ambiguous_source_receipts_fail_explicitly(self):
         with self.assertRaises(ValueError):

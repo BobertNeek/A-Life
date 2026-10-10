@@ -7,6 +7,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args
         .next()
         .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N] | --refresh-terrain-founder SOURCE_DIRECTORY OUTPUT_DIRECTORY")?;
+    if mode == "--prior-context-contract" {
+        if args.next().is_some() {
+            return Err("unexpected prior-context-contract argument".into());
+        }
+        println!(
+            "{}",
+            alife_game_app::GpuLiveBrainRuntime::semantic_prior_context_contract()
+        );
+        return Ok(());
+    }
     if mode == "--refresh-terrain-founder" {
         let source = std::path::PathBuf::from(args.next().ok_or("missing terrain source")?);
         let output =

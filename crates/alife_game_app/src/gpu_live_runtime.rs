@@ -5992,7 +5992,7 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
-    /// Explicit lessons require hints rather than the training dropout ablation.
+    /// Explicit lessons attempt hints rather than the training dropout ablation.
     #[cfg(feature = "foundation-training")]
     pub(crate) fn require_foundation_rich_information(&mut self) -> Result<(), GameAppShellError> {
         if self.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
@@ -6000,13 +6000,16 @@ impl GpuLiveBrainRuntime {
                 message: "rich-information lesson requires grounded natural senses".into(),
             });
         }
-        let prior = self.semantic_prior.as_mut().ok_or_else(|| {
-            GameAppShellError::InvalidProductionFrontend {
-                message: "rich-information lesson requires the local semantic prior; ALIFE_SLM_PRIOR=off is incompatible".into(),
-            }
-        })?;
-        prior.require_rich_information();
+        if let Some(prior) = self.semantic_prior.as_mut() {
+            prior.require_rich_information();
+        }
         Ok(())
+    }
+
+    /// Read-only bank compatibility identity; this does not initialize a GPU or provider.
+    #[cfg(feature = "foundation-training")]
+    pub fn semantic_prior_context_contract() -> String {
+        semantic_prior::context_contract()
     }
 
     /// Setup-only priming for max-speed collection. No world tick, neural
@@ -6029,30 +6032,17 @@ impl GpuLiveBrainRuntime {
         )?;
         let sequence = ExperienceSequenceId(resident.next_sequence);
         let started = std::time::Instant::now();
-        let mut exit_reason = "no_pending";
-        loop {
-            prior.prime(draft.clone(), sequence)?;
-            if !prior.pending(raw) {
-                break;
-            }
-            if started.elapsed() >= std::time::Duration::from_secs(5) {
-                prior.metrics.prime_timeouts += 1;
-                exit_reason = "time_limit";
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(25));
-        }
+        // Poll/submit once. Provider inference is optional and never stalls
+        // initial admission or a later genuine collection decision.
+        prior.prime(draft, sequence)?;
+        let exit_reason = if prior.pending(raw) {
+            "pending_continue_unaided"
+        } else {
+            "no_pending"
+        };
         prior.metrics.prime_wait_ms +=
             started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
         prior.record_priming_status(raw, self.world.tick().raw(), exit_reason);
-        if prior.metrics.rich_information_required && !prior.ready(raw) {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: format!(
-                    "rich-information semantic prior not ready after bounded priming (timeouts={}, failures={}, last_error={:?})",
-                    prior.metrics.prime_timeouts, prior.metrics.failures, prior.metrics.last_error
-                ),
-            });
-        }
         Ok(())
     }
 

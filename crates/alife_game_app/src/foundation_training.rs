@@ -30,30 +30,17 @@ fn invalid() -> ScaffoldContractError {
 
 pub(crate) fn prime_foundation_lesson_prior(
     runtime: &mut GpuLiveBrainRuntime,
-    output: &Path,
+    _output: &Path,
     lesson: Option<FoundationTeacherLesson>,
 ) -> Result<()> {
-    let ready = (|| {
-        if matches!(
-            lesson,
-            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
-        ) {
-            runtime.require_foundation_rich_information()?;
-        }
-        runtime.prime_foundation_semantic_prior()
-    })();
-    if let Err(error) = ready {
-        std::fs::write(
-            output.join("semantic-prior-readiness.json"),
-            serde_json::to_vec_pretty(&serde_json::json!({
-                "lesson": lesson,
-                "rich_information_complete": false,
-                "error": error.to_string(),
-                "semantic_prior": runtime.semantic_prior_metrics(),
-            }))?,
-        )?;
-        return Err(error.into());
+    if matches!(
+        lesson,
+        Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+    ) {
+        // Grounded senses and ordinary organism contracts remain mandatory.
+        runtime.require_foundation_rich_information()?;
     }
+    runtime.prime_foundation_semantic_prior()?;
     Ok(())
 }
 
@@ -78,11 +65,14 @@ pub(crate) fn validate_foundation_lesson_prior(
         serde_json::to_vec_pretty(&serde_json::json!({
             "lesson": lesson,
             "rich_information_complete": complete,
+            "failure_policy": "log_and_continue_without_prior",
             "semantic_prior": runtime.semantic_prior_metrics(),
         }))?,
     )?;
     if !complete {
-        return Err("food primitive rich-information lesson has a confirmed decision without a delivered semantic input".into());
+        eprintln!(
+            "warning: lesson continued with unaided decisions; see semantic-prior-readiness.json"
+        );
     }
     Ok(())
 }

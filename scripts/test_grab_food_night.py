@@ -52,6 +52,19 @@ class GrabNightTests(unittest.TestCase):
         (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": value_age}))
         return receipt
 
+    def test_explicit_off_survives_the_night_child_environment(self):
+        with patch.dict(night.os.environ, {"ALIFE_SLM_PRIOR": "off"}):
+            self.assertEqual(night.prior_environment()["ALIFE_SLM_PRIOR"], "off")
+        with patch.dict(night.os.environ, {"ALIFE_SLM_PRIOR_BACKEND": "recorded"}):
+            self.assertEqual(night.prior_environment()["ALIFE_SLM_PRIOR_BACKEND"], "recorded")
+
+    def test_all_optional_prior_failures_warn_and_continue(self):
+        for prior in (None, {}, "invalid receipt", {"decision_inputs": None}, {"decision_inputs": ["invalid row"]}, {"failures": 1}, {"prime_timeouts": 1},
+                      {"decision_frames_without_prior": 3}, {"provider_failures": [{"error": "parse failed"}]}):
+            diagnostics = night.assert_prior({"semantic_prior": prior}, 16)
+            self.assertEqual(diagnostics["failure_policy"], "log_and_continue_without_prior")
+            self.assertTrue(diagnostics["warnings"])
+
     def test_only_complete_objective2_cycle_heads_are_eligible(self):
         founder, hashes = night.source_info(self.source)
         self.assertEqual(founder, 539363617); self.assertEqual(len(hashes), 4)
