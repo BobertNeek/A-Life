@@ -2737,6 +2737,8 @@ pub(crate) fn expose_foundation_teacher_cue(
     let position = food.position;
     let tokens: &[u16] = if scenario.held_food_setup.is_some() && food.carried_by != Some(subject) {
         &[1] // Name the released object; do not request the held-food action.
+    } else if scenario.grab_food_setup.is_some() && food.carried_by == Some(subject) {
+        &[1] // Name the acquired object; do not repeat the satisfied Get request.
     } else {
         &scenario.teacher_cue_tokens
     };
@@ -4654,6 +4656,9 @@ mod held_food_lesson_tests {
             .filter(|word| word.source_kind == alife_core::UtteranceSourceKind::Teacher)
             .collect();
         assert_eq!(heard.len(), expected.len());
+        if heard.is_empty() {
+            return;
+        }
         let utterance = heard[0].utterance_id;
         for (position, (word, token)) in heard.iter().zip(expected).enumerate() {
             assert_eq!(word.utterance_id, utterance);
@@ -4680,6 +4685,180 @@ mod held_food_lesson_tests {
         assert_teacher_utterance(&frame(&mut world), &[9, 1]);
         assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
         assert!(!world.entity(scenario.food).unwrap().consumed);
+    }
+
+    fn assert_emitted_food_cue(
+        world: &mut alife_world::HeadlessWorld,
+        scenario: &FoundationScenarioSetup,
+        expected: &[u32],
+    ) {
+        expose_foundation_teacher_cue(world, scenario).unwrap();
+        let emitted: Vec<_> = world
+            .audible_utterances()
+            .into_iter()
+            .filter(|utterance| utterance.source_kind == alife_core::UtteranceSourceKind::Teacher)
+            .collect();
+        assert_eq!(emitted.len(), usize::from(!expected.is_empty()));
+        let perceived = frame(world);
+        assert_teacher_utterance(&perceived, expected);
+        if let Some(utterance) = emitted.first() {
+            assert_eq!(
+                utterance
+                    .tokens
+                    .iter()
+                    .map(|token| u32::from(token.raw()))
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(utterance.addressee, Some(world.organism_entity_ids()[0].0));
+            assert_eq!(utterance.emitted_tick, world.tick());
+            assert_eq!(utterance.expires_after_tick.raw(), world.tick().raw() + 1);
+            let food = world.entity(scenario.food).unwrap();
+            assert_eq!(
+                utterance.source_position,
+                Vec3f::new(food.position.x, food.position.y, food.position.z + 2.0)
+            );
+            assert_eq!(
+                perceived
+                    .sensory()
+                    .language_context
+                    .heard_tokens
+                    .iter()
+                    .flatten()
+                    .next()
+                    .unwrap()
+                    .utterance_id,
+                utterance.utterance_id
+            );
+        }
+    }
+
+    #[test]
+    fn grab_food_cue_tracks_legal_unheld_held_released_and_consumed_transitions() {
+        let mut world = unconfigured(42);
+        let scenario = configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(FoundationTeacherLesson::GrabFood),
+            None,
+            false,
+        )
+        .unwrap();
+        let (subject, entity) = world.organism_entity_ids()[0];
+        let grab = alife_core::ActionCommand::structured(
+            subject,
+            alife_world::HeadlessActionIds::GRAB,
+            alife_core::ActionKind::Hold,
+            alife_core::ActionTarget::new(Some(scenario.food), None),
+            Intensity::new(1.0).unwrap(),
+            DurationTicks::new(1),
+            Confidence::new(0.9).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert_emitted_food_cue(&mut world, &scenario, &[9, 1]);
+        let original = world.audible_utterances();
+        let acquired = world
+            .apply_registered_command(&grab, entity, Tick(world.tick().raw() + 1))
+            .unwrap();
+        world.try_advance_tick().unwrap();
+        assert!(acquired.action_result.execution.succeeded);
+        assert_eq!(
+            acquired.action_result.execution.physical.contact,
+            PhysicalContactKind::Touch
+        );
+        assert_eq!(
+            world.entity(scenario.food).unwrap().carried_by,
+            Some(subject)
+        );
+        // The previous phrase retains its ordinary lifetime; possession does
+        // not retract already emitted speech or add an off-cadence cue.
+        expose_foundation_teacher_cue(&mut world, &scenario).unwrap();
+        assert_eq!(world.audible_utterances(), original);
+        assert_teacher_utterance(&frame(&mut world), &[9, 1]);
+        world.try_advance_tick().unwrap();
+        assert_emitted_food_cue(&mut world, &scenario, &[]);
+        while world.tick().raw() < scenario.start_tick + 24 {
+            world.try_advance_tick().unwrap();
+        }
+        assert_emitted_food_cue(&mut world, &scenario, &[1]);
+        let released = world
+            .apply_registered_command(&grab, entity, Tick(world.tick().raw() + 1))
+            .unwrap();
+        world.try_advance_tick().unwrap();
+        assert!(released.action_result.execution.succeeded);
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert!(!world.entity(scenario.food).unwrap().consumed);
+        while world.tick().raw() < scenario.start_tick + 48 {
+            world.try_advance_tick().unwrap();
+        }
+        assert_emitted_food_cue(&mut world, &scenario, &[9, 1]);
+        let reacquired = world
+            .apply_registered_command(&grab, entity, Tick(world.tick().raw() + 1))
+            .unwrap();
+        world.try_advance_tick().unwrap();
+        assert!(reacquired.action_result.execution.succeeded);
+        assert_eq!(
+            world.entity(scenario.food).unwrap().carried_by,
+            Some(subject)
+        );
+        let (_, eaten) = eat_outcome(&mut world, scenario.food);
+        assert!(eaten.success);
+        assert_eq!(eaten.physical.contact, PhysicalContactKind::Consumed);
+        assert!(world.entity(scenario.food).unwrap().consumed);
+        while world.tick().raw() < scenario.start_tick + 72 {
+            world.try_advance_tick().unwrap();
+        }
+        assert_emitted_food_cue(&mut world, &scenario, &[]);
+    }
+
+    #[test]
+    fn grab_food_cue_retains_get_food_when_another_organism_holds_the_target() {
+        let mut world = unconfigured(42);
+        let scenario = configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(FoundationTeacherLesson::GrabFood),
+            None,
+            false,
+        )
+        .unwrap();
+        let other = alife_core::OrganismId(2);
+        let food_position = world.entity(scenario.food).unwrap().position;
+        world
+            .spawn_social_agent("cue-peer", other, food_position, 0.75)
+            .unwrap();
+        let grab = alife_core::ActionCommand::structured(
+            other,
+            alife_world::HeadlessActionIds::GRAB,
+            alife_core::ActionKind::Hold,
+            alife_core::ActionTarget::new(Some(scenario.food), None),
+            Intensity::new(1.0).unwrap(),
+            DurationTicks::new(1),
+            Confidence::new(0.9).unwrap(),
+            0,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        // This social actor is a physical fixture, without an organism record.
+        // Use the ordinary world action path; no peer biology is being tested.
+        let acquired = world.apply_command(&grab).unwrap();
+        world.try_advance_tick().unwrap();
+        assert!(acquired.execution.succeeded);
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, Some(other));
+        while world.tick().raw() < scenario.start_tick + 24 {
+            world.try_advance_tick().unwrap();
+        }
+        // Existing semantics suppress Get only after this subject acquires
+        // the target. Another holder does not satisfy its acquisition lesson.
+        assert_emitted_food_cue(&mut world, &scenario, &[9, 1]);
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, Some(other));
     }
 
     #[test]
