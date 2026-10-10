@@ -626,15 +626,17 @@ impl RuntimeSemanticPrior {
                     if pending.key != key {
                         self.metrics.stale_replies += 1;
                     }
-                    if self.cache.len() >= 128 {
-                        self.cache.pop_first();
-                    }
-                    self.cache.insert(pending.key, output);
-                    if let Some(parent) = self.cache_path.parent() {
-                        let _ = std::fs::create_dir_all(parent);
-                    }
-                    if let Ok(bytes) = serde_json::to_vec(&self.cache) {
-                        let _ = std::fs::write(&self.cache_path, bytes);
+                    if self.cache.get(&pending.key) != Some(&output) {
+                        if self.cache.len() >= 128 && !self.cache.contains_key(&pending.key) {
+                            self.cache.pop_first();
+                        }
+                        self.cache.insert(pending.key, output);
+                        if let Some(parent) = self.cache_path.parent() {
+                            let _ = std::fs::create_dir_all(parent);
+                        }
+                        if let Ok(bytes) = serde_json::to_vec(&self.cache) {
+                            let _ = std::fs::write(&self.cache_path, bytes);
+                        }
                     }
                 }
                 Ok(Err(error)) => {
@@ -1828,6 +1830,98 @@ mod tests {
         });
         life.last_request = Some((key.into(), 0));
         Some(send)
+    }
+
+    #[test]
+    fn cache_reply_replaces_existing_keys_at_capacity_without_eviction() {
+        for smallest in [true, false] {
+            let draft = draft();
+            let key = bounded_context(&draft, &[]);
+            let mut prior = prior();
+            prior.require_rich_information();
+            prior.cache_path = std::env::temp_dir().join(format!(
+                "alife-cache-upsert-{}-existing-{smallest}.json",
+                std::process::id()
+            ));
+            prior.cache.insert(key.clone(), output());
+            for index in 0..127 {
+                let prefix = if smallest { "z" } else { "a" };
+                prior
+                    .cache
+                    .insert(format!("{prefix} fixture {index:03}"), output());
+            }
+            assert_eq!(prior.cache.len(), 128);
+            assert_eq!(prior.cache.first_key_value().unwrap().0 == &key, smallest);
+            let mut expected = prior.cache.clone();
+            let mut replacement = output();
+            replacement.context_summary = "updated nearby observation".into();
+            expected.insert(key.clone(), replacement.clone());
+            pending_result(&mut prior, &key, Some(Ok(replacement)), false);
+            prior.prime(draft, ExperienceSequenceId(1)).unwrap();
+            assert_eq!(prior.cache, expected);
+            assert_eq!(prior.metrics.validated_provider_replies, 1);
+            let persisted: BTreeMap<String, LocalSlmPriorOutput> =
+                serde_json::from_slice(&std::fs::read(&prior.cache_path).unwrap()).unwrap();
+            assert_eq!(persisted, expected);
+            std::fs::remove_file(&prior.cache_path).unwrap();
+        }
+    }
+
+    #[test]
+    fn cache_reply_inserts_new_key_at_capacity_with_one_eviction() {
+        let draft = draft();
+        let key = bounded_context(&draft, &[]);
+        let mut prior = prior();
+        prior.require_rich_information();
+        prior.cache_path = std::env::temp_dir().join(format!(
+            "alife-cache-upsert-{}-new.json",
+            std::process::id()
+        ));
+        for index in 0..128 {
+            prior
+                .cache
+                .insert(format!("z fixture {index:03}"), output());
+        }
+        assert!(!prior.cache.contains_key(&key));
+        let mut expected = prior.cache.clone();
+        expected.pop_first();
+        expected.insert(key.clone(), output());
+        pending_result(&mut prior, &key, Some(Ok(output())), false);
+        prior.prime(draft, ExperienceSequenceId(1)).unwrap();
+        assert_eq!(prior.cache.len(), 128);
+        assert_eq!(prior.cache, expected);
+        let persisted: BTreeMap<String, LocalSlmPriorOutput> =
+            serde_json::from_slice(&std::fs::read(&prior.cache_path).unwrap()).unwrap();
+        assert_eq!(persisted, expected);
+        std::fs::remove_file(&prior.cache_path).unwrap();
+    }
+
+    #[test]
+    fn cache_reply_unchanged_output_skips_persistence_without_skipping_validation() {
+        let draft = draft();
+        let key = bounded_context(&draft, &[]);
+        let mut prior = prior();
+        prior.require_rich_information();
+        prior.cache_path = std::env::temp_dir().join(format!(
+            "alife-cache-upsert-{}-unchanged.json",
+            std::process::id()
+        ));
+        prior.cache.insert(key.clone(), output());
+        for index in 0..127 {
+            prior
+                .cache
+                .insert(format!("z fixture {index:03}"), output());
+        }
+        let expected = prior.cache.clone();
+        let sentinel = b"unchanged cache persistence sentinel";
+        std::fs::write(&prior.cache_path, sentinel).unwrap();
+        pending_result(&mut prior, &key, Some(Ok(output())), false);
+        prior.prime(draft, ExperienceSequenceId(1)).unwrap();
+        assert_eq!(prior.cache, expected);
+        assert_eq!(prior.metrics.validated_provider_replies, 1);
+        assert!(prior.ready(5));
+        assert_eq!(std::fs::read(&prior.cache_path).unwrap(), sentinel);
+        std::fs::remove_file(&prior.cache_path).unwrap();
     }
 
     #[test]
