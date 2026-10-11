@@ -18,6 +18,21 @@ It is not a claim that every feature is integrated or proven. See
 - CPU neural helpers: reference, test, or developer use only.
 - GPU unavailable: typed unavailable result, never silent CPU substitution.
 
+## Grounded terrain sight
+
+`GroundedTerrainVisionV1` uses the existing bounded vision range, horizontal
+gaze cone, and physical line-of-sight occlusion. An object at exactly the
+observer's X/Z coordinates has no horizontal bearing, so it skips only the
+azimuth rejection; vertical separation, range, occlusion, consumption, contact,
+and action legality still follow their ordinary checks. Any nonzero horizontal
+offset retains the gaze cone, even at contact distance. This is a general
+geometry rule, without object-kind recognition or action scoring
+(`AOA-WORLD-001`, `AOA-WORLD-002`, `AOA-SENSE-001`, `AOA-SENSE-002`).
+
+Visibility does not authorize ingestion: Eat still requires the same food to be
+held by the acting organism after a legal Grab. CPU geometry regressions do not
+establish a learned Grab preference, GPU behavior, or founder promotion.
+
 ## Brain classes
 
 | Class | Status |

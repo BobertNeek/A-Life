@@ -664,6 +664,122 @@ mod terrain_vision_tests {
     }
 
     #[test]
+    fn coincident_xz_sight_is_gaze_independent_for_general_objects() {
+        let mut world = HeadlessScenarioBuilder::new(60_012)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .hazard("object", Vec3f::ZERO, 0.6)
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        let target = world.entity_id("object").unwrap();
+        for position in [Vec3f::ZERO, Vec3f::new(-0.0, 0.0, -0.0)] {
+            world.editor_move_object(target, position).unwrap();
+            for gaze in [0.0_f32, 70.0, -70.0, 133.32324, -133.32324, 180.0] {
+                world.objects.get_mut(&observer.raw()).unwrap().body_yaw = gaze.to_radians();
+                assert!(seen(&world, target), "gaze={gaze}, position={position:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn noncoincident_rear_contact_still_obeys_the_sight_cone() {
+        let gaze = 133.32324_f32.to_radians();
+        let mut world = HeadlessScenarioBuilder::new(60_013)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food(
+                "rear",
+                Vec3f::new(-0.05 * gaze.cos(), 0.0, -0.05 * gaze.sin()),
+                0.6,
+            )
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        let target = world.entity_id("rear").unwrap();
+        world.objects.get_mut(&observer.raw()).unwrap().body_yaw = gaze;
+        for separation in [0.05, f32::EPSILON * 0.5] {
+            world
+                .editor_move_object(
+                    target,
+                    Vec3f::new(-separation * gaze.cos(), 0.0, -separation * gaze.sin()),
+                )
+                .unwrap();
+            assert!(
+                distance(Vec3f::ZERO, world.entity(target).unwrap().position)
+                    < world.entity(target).unwrap().radius
+            );
+            assert!(!seen(&world, target), "separation={separation}");
+        }
+    }
+
+    #[test]
+    fn coincident_xz_sight_preserves_occlusion_range_and_consumed_filters() {
+        let mut world = HeadlessScenarioBuilder::new(60_014)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("above", Vec3f::new(0.0, 2.0, 0.0), 0.6)
+            .obstacle("barrier", Vec3f::new(0.0, 1.5, 0.0), 0.1)
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        let target = world.entity_id("above").unwrap();
+        let barrier = world.entity_id("barrier").unwrap();
+        world.objects.get_mut(&observer.raw()).unwrap().body_yaw = 133.32324_f32.to_radians();
+        world.editor_set_optical_opacity(barrier, 0.0).unwrap();
+        assert!(seen(&world, target));
+        let snapshot = world
+            .physical_observation_snapshot_from_objects(
+                OrganismId(1),
+                Tick::ZERO,
+                world.agent_for(OrganismId(1)).unwrap(),
+                world.objects.values(),
+                true,
+            )
+            .unwrap();
+        assert!(
+            !snapshot
+                .visible
+                .iter()
+                .find(|object| object.transport_entity == target)
+                .unwrap()
+                .contact
+        );
+        world.editor_set_optical_opacity(barrier, 1.0).unwrap();
+        assert!(!seen(&world, target));
+        world.editor_set_optical_opacity(barrier, 0.0).unwrap();
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 9],
+                    obstacles: vec![[-0.1, -0.1, 0.1, 0.1, 1.4, 1.6]],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        assert!(!seen(&world, target));
+        world.terrain = None;
+        assert!(seen(&world, target));
+        world
+            .editor_move_object(target, Vec3f::new(0.0, HEADLESS_VISION_RADIUS, 0.0))
+            .unwrap();
+        assert!(seen(&world, target));
+        let just_outside = f32::from_bits(HEADLESS_VISION_RADIUS.to_bits() + 1);
+        world
+            .editor_move_object(target, Vec3f::new(0.0, just_outside, 0.0))
+            .unwrap();
+        assert!(!seen(&world, target));
+        world.editor_move_object(target, Vec3f::ZERO).unwrap();
+        assert!(seen(&world, target));
+        world.objects.get_mut(&target.raw()).unwrap().consumed = true;
+        assert!(!seen(&world, target));
+    }
+
+    #[test]
     fn gaze_opaque_barriers_and_transparency_change_actual_sight() {
         let mut world = HeadlessScenarioBuilder::new(60_001)
             .agent("observer", OrganismId(1), Vec3f::ZERO)
@@ -3754,13 +3870,17 @@ impl HeadlessWorld {
 
     fn object_in_sight(&self, observer: &WorldObject, target: &WorldObject) -> bool {
         let relative = subtract(target.position, observer.position);
-        let bearing = relative.z.atan2(relative.x);
-        let gaze = observer.body_yaw + observer.head_yaw;
-        let angular_delta = (bearing - gaze + std::f32::consts::PI)
-            .rem_euclid(std::f32::consts::TAU)
-            - std::f32::consts::PI;
-        if angular_delta.abs() > VISION_HALF_ANGLE {
-            return false;
+        // Coincident X/Z has no azimuth. Do not let atan2(0, 0) assign an
+        // arbitrary world bearing; keep range and physical occlusion below.
+        if relative.x != 0.0 || relative.z != 0.0 {
+            let bearing = relative.z.atan2(relative.x);
+            let gaze = observer.body_yaw + observer.head_yaw;
+            let angular_delta = (bearing - gaze + std::f32::consts::PI)
+                .rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+            if angular_delta.abs() > VISION_HALF_ANGLE {
+                return false;
+            }
         }
         let eye = Vec3f::new(
             observer.position.x,
