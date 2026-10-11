@@ -6,9 +6,10 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location("grab_food_night", Path(__file__).with_name("run_grab_food_night.py"))
 night = importlib.util.module_from_spec(spec)
@@ -186,6 +187,313 @@ class GrabNightTests(unittest.TestCase):
                     night.main(argv)
                 spawn.assert_not_called()
             self.assertFalse(output.exists())
+
+    def fixture_run(self, failures=None, fail_episode=None, final_grab_seconds=0, final_remaining_seconds=None,
+                    invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False):
+        """Exercise real orchestration/validators with a nonexecuting child stub."""
+        self.run_index = getattr(self, "run_index", 0) + 1
+        output = self.root / "target/founder-training" / f"run-{self.run_index}"
+        binary = self.root / "nonexecutable-trainer"
+        binary.write_bytes(b"fixture; never execute")
+        now = dt.datetime.now(night.UTC)
+        clock = [now]
+        cutoff = now + dt.timedelta(hours=1)
+        argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
+                "--cutoff", cutoff.isoformat(), "--target-episodes", "1" if fail_episode is None else "2",
+                "--batch-episodes", "2", "--assessment-seconds", "10", "--idle-seconds", "0",
+                "--sampling-temperature-floor", "1"]
+        args = night.arguments().parse_args(argv)
+        with patch("builtins.print"):
+            self.assertEqual(night.main(argv), 0)
+        state_path = output / "night.json"
+        state = night.read_json(state_path)
+        checkpoint_hashes = state["input_sha256"].copy()
+        attempts = []
+        launched = []
+        active_command = [None]
+        fault_observed = [False]
+        real_sha256 = night.sha256
+
+        class FixtureDatetime(dt.datetime):
+            @classmethod
+            def now(cls, timezone=None):
+                return clock[0]
+
+        def fake_child(command, log, deadline, guard, environment):
+            name = log.name
+            active_command[0] = name
+            attempts.append((name, command, deadline, clock[0]))
+            if name == stop_before:
+                (output / "STOP").touch()
+            guard()
+            self.assertLessEqual(deadline, cutoff)
+            if command[1] == "--evaluate":
+                self.assertLessEqual(deadline, clock[0] + dt.timedelta(seconds=args.assessment_seconds))
+            if clock[0] >= deadline:
+                raise night.CommandTimeoutError("command budget exhausted before launch")
+            launched.append(name)
+            directory = Path(command[2] if command[1] == "--evaluate" else command[3])
+            directory.mkdir()
+            if name.startswith("frozen-final"):
+                clock[0] += dt.timedelta(seconds=final_grab_seconds)
+                self.assertLessEqual(clock[0], deadline)
+            if name in (failures or {}):
+                raise failures[name]
+            if command[1] == "--resume-cycle":
+                index = int(name.split("-")[1])
+                if index == fail_episode:
+                    raise night.CommandTimeoutError("fixture interrupted partial collection")
+                previous = Path(command[2])
+                (directory / "initial.alife-foundation").write_bytes(
+                    (previous / "trained.alife-foundation").read_bytes())
+                self.write_cycle(directory, 603, 1845, 1205, {
+                    "seed": int(command[6]), "lesson": "grab_food", "grab_food_setup": setup(),
+                    "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1],
+                    "prepared_grab_food_opportunities": 1, "training_ticks": 1,
+                    "captured_replay_rows": 2, "trained_replay_rows": 1, "bootstrap_replay_rows": 1,
+                    "grab_food_acquisitions": [], "trained_grab_food_acquisitions": 0,
+                    "grab_food_curriculum_version": 1, "curriculum_reward_rows": [{
+                        "row": 0, "physiological_reward": -.01, "curriculum_reward": 0., "combined_reward": -.01}],
+                    "curriculum_reward_total": 0., "held_food_consumption_events": 0,
+                    "trained_held_food_consumption_events": 0, "completed_epochs": 1,
+                    "actor_optimizer_updates": 1, "value_optimizer_updates": 1})
+                checkpoint_hashes.update(night.source_info(directory)[1])
+                return
+            lesson = command[4]
+            if lesson == "grab_food":
+                receipt = {"lesson": lesson, "grab_food_setup": setup(), "ticks": 16,
+                           "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1], "grab_food_acquisitions": []}
+                step = {"representative_mask": 1, "candidates": [{"action": 211, "target": 3, "index": 0}]}
+            else:
+                held_setup = {**setup(), "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}
+                receipt = {"lesson": lesson, "held_food_setup": held_setup, "ticks": 16,
+                           "teacher_cue_frames": 1, "held_food_consumption_events": 1}
+                step = {"lesson_target_held_before_decision": True, "representative_mask": 1,
+                        "candidates": [{"action": 210, "target": 3, "index": 0}]}
+            if name in invalid_receipts:
+                step["representative_mask"] = 0
+            (directory / "pilot.json").write_text(json.dumps(receipt))
+            (directory / "lesson-trace.json").write_text(json.dumps({"steps": [step]}))
+            if name == "frozen-after-00000" and final_remaining_seconds is not None:
+                clock[0] = cutoff - dt.timedelta(seconds=final_remaining_seconds)
+
+        resources = {"disk_free_bytes": 100 * 2**30, "available_memory_bytes": 8 * 2**30, "idle_seconds": 999}
+
+        def fake_resources(root):
+            if resource_fault and active_command[0] == resource_fault[0] and not fault_observed[0]:
+                fault_observed[0] = True
+                fault = resource_fault[1]
+                if isinstance(fault, Exception):
+                    raise fault
+                return {**resources, **fault}
+            return resources
+
+        def fake_lane():
+            if lane_fault and active_command[0] == "frozen-after-00000":
+                raise lane_fault
+
+        def fake_sha256(path):
+            if (source_fault and active_command[0] == "frozen-after-00000" and
+                    Path(path).name == "trained.alife-foundation"):
+                return "fixture mismatched checkpoint digest"
+            return real_sha256(path)
+
+        with patch.object(night.dt, "datetime", FixtureDatetime), \
+             patch.object(night, "__file__", str(self.root / "scripts/runner.py")), \
+             patch.object(night.Path, "cwd", return_value=self.root), \
+             patch.object(night, "run_child", side_effect=fake_child), \
+             patch.object(night, "resource_snapshot", side_effect=fake_resources), \
+             patch.object(night, "assert_lane_idle", side_effect=fake_lane), \
+             patch.object(night, "sha256", side_effect=fake_sha256), \
+             patch.object(night.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="")), \
+             patch.object(night.subprocess, "check_output", return_value="fixture-source-sha\n"), \
+             patch.object(night.subprocess, "Popen") as spawn, \
+             patch("builtins.print"), contextlib.redirect_stderr(io.StringIO()):
+            night.run_night(args, state, state_path, state["input_sha256"])
+            spawn.assert_not_called()
+        self.assertEqual(state, night.read_json(state_path))
+        self.assertFalse((output.parent / ".eat-held-food-owner.lock").exists())
+        self.assertFalse(state["promoted"])
+        accepted = self.source if fail_episode == 0 else output / "episode-00000"
+        self.assertEqual(state["latest_checkpoint"], str(accepted))
+        for path, expected in checkpoint_hashes.items():
+            self.assertEqual(night.sha256(path), expected, path)
+        finals = [attempt for attempt in attempts if "final" in attempt[0]]
+        self.assertEqual(len({attempt[0] for attempt in finals}), len(finals))
+        self.assertTrue(all(attempt[1][3] == str(accepted / "trained.alife-foundation")
+                            for attempt in finals))
+        return state, finals, launched
+
+    def test_final_grab_confirmed_timeout_still_attempts_eat_once(self):
+        error = night.CommandTimeoutError("fixture Grab command timeout")
+        state, finals, _ = self.fixture_run({"frozen-final": error}, final_grab_seconds=10)
+        self.assertEqual([row[0] for row in finals], ["frozen-final", "eating-retention-final"])
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["final_assessment_errors"], {"frozen-final": str(error)})
+        self.assertTrue(state["retention_assessments"][-1]["directory"].endswith("eating-retention-final"))
+        self.assertFalse(any(row["directory"].endswith("frozen-final") for row in state["assessments"]))
+
+    def test_final_eat_failure_preserves_successful_grab_result(self):
+        for error in (night.RunnerSafetyError("fixture Eat child failed"),
+                      night.CommandTimeoutError("fixture Eat command timeout")):
+            with self.subTest(error=type(error).__name__):
+                state, finals, _ = self.fixture_run({"eating-retention-final": error})
+                self.assertEqual([row[0] for row in finals], ["frozen-final", "eating-retention-final"])
+                self.assertEqual(state["status"], "interrupted" if isinstance(error, TimeoutError) else "failed")
+                self.assertTrue(state["assessments"][-1]["directory"].endswith("frozen-final"))
+                self.assertEqual(state["final_assessment_errors"], {"eating-retention-final": str(error)})
+
+    def test_invalid_final_grab_receipt_stops_without_companion(self):
+        state, finals, _ = self.fixture_run(invalid_receipts=("frozen-final",))
+        self.assertEqual([row[0] for row in finals], ["frozen-final"])
+        self.assertEqual(state["status"], "failed")
+        self.assertIn("selectable Grab", state["final_assessment_errors"]["frozen-final"])
+        self.assertFalse(any("final" in row["directory"] for row in state["retention_assessments"]))
+
+    def test_invalid_final_eat_receipt_preserves_recorded_grab(self):
+        state, finals, _ = self.fixture_run(invalid_receipts=("eating-retention-final",))
+        self.assertEqual(len(finals), 2)
+        self.assertEqual(state["status"], "failed")
+        self.assertIn("selectable Eat", state["final_assessment_errors"]["eating-retention-final"])
+        self.assertTrue(state["assessments"][-1]["directory"].endswith("frozen-final"))
+
+    def test_both_final_failures_are_reported_without_retry(self):
+        state, finals, _ = self.fixture_run({"frozen-final": night.CommandTimeoutError("Grab timed out"),
+                                           "eating-retention-final": night.CommandTimeoutError("Eat timed out")})
+        self.assertEqual(len(finals), 2)
+        self.assertEqual(state["error"], "Grab timed out")
+        self.assertEqual(state["final_assessment_errors"], {"frozen-final": "Grab timed out",
+                                                         "eating-retention-final": "Eat timed out"})
+
+    def test_collection_timeout_assesses_both_from_last_accepted_checkpoint(self):
+        state, finals, _ = self.fixture_run(fail_episode=1)
+        self.assertEqual([row[0] for row in finals], ["frozen-final-after-interruption",
+                                                   "eating-retention-final-after-interruption"])
+        self.assertEqual(state["status"], "interrupted")
+        self.assertTrue(state["partial_episode"].endswith("episode-00001"))
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+
+    def test_interrupted_final_grab_failure_still_assesses_eat_and_records_both_errors(self):
+        for eat_error in (None, ValueError("Eat invalid")):
+            with self.subTest(eat_error=eat_error):
+                failures = {"frozen-final-after-interruption": night.CommandTimeoutError("Grab timed out")}
+                if eat_error is not None:
+                    failures["eating-retention-final-after-interruption"] = eat_error
+                state, finals, _ = self.fixture_run(failures, fail_episode=1)
+                self.assertEqual(len(finals), 2)
+                self.assertEqual(state["error"], "fixture interrupted partial collection")
+                self.assertEqual(state["final_assessment_error"], "Grab timed out" if eat_error is None else "Eat invalid")
+                self.assertEqual(state["final_assessment_errors"], {name: str(error) for name, error in failures.items()})
+                if eat_error is None:
+                    self.assertTrue(state["retention_assessments"][-1]["directory"].endswith(
+                        "eating-retention-final-after-interruption"))
+
+    def test_unqualified_collection_timeout_does_not_start_final_assessments(self):
+        state, finals, _ = self.fixture_run(fail_episode=0)
+        self.assertEqual(finals, [])
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["distinct_completed_episodes"], 0)
+
+    def test_owner_keyboard_interrupt_does_not_launch_companion_or_recovery(self):
+        state, finals, launched = self.fixture_run({"frozen-final": KeyboardInterrupt()})
+        self.assertEqual([row[0] for row in finals], ["frozen-final"])
+        self.assertNotIn("eating-retention-final", launched)
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["error"], "owner interrupted the runner")
+
+    def test_transient_resource_guard_failure_stops_without_companion(self):
+        for fault in ({"available_memory_bytes": 0}, {"disk_free_bytes": 0},
+                      TimeoutError("fixture resource telemetry timeout")):
+            with self.subTest(fault=fault):
+                state, finals, launched = self.fixture_run(resource_fault=("frozen-final", fault))
+                self.assertEqual([row[0] for row in finals], ["frozen-final"])
+                self.assertNotIn("eating-retention-final", launched)
+                self.assertEqual(state["status"], "failed")
+                self.assertIn("frozen-final", state["final_assessment_errors"])
+
+    def test_owner_stop_aborts_companion(self):
+        state, finals, launched = self.fixture_run(stop_before="frozen-final")
+        self.assertEqual([row[0] for row in finals], ["frozen-final"])
+        self.assertNotIn("eating-retention-final", launched)
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["final_assessment_errors"]["frozen-final"], "owner STOP file requested interruption")
+
+    def test_source_or_lane_guard_failure_does_not_launch_assessments(self):
+        for options in ({"lane_fault": RuntimeError("fixture competing lane")}, {"source_fault": True}):
+            with self.subTest(options=options):
+                state, finals, launched = self.fixture_run(**options)
+                self.assertEqual(finals, [])
+                self.assertNotIn("eating-retention-final", launched)
+                self.assertEqual(state["status"], "failed")
+                self.assertIn("guard failed", state["final_assessment_errors"]["frozen-final"])
+
+    def test_unknown_exception_or_unconfirmed_cleanup_stops_companion(self):
+        for error in (RuntimeError("fixture unclassified native error"),
+                      TimeoutError("fixture unclassified I/O timeout"),
+                      night.RunnerSafetyError("owned command cleanup failed: fixture exit unconfirmed")):
+            with self.subTest(error=error):
+                state, finals, launched = self.fixture_run({"frozen-final": error})
+                self.assertEqual([row[0] for row in finals], ["frozen-final"])
+                self.assertNotIn("eating-retention-final", launched)
+                self.assertEqual(state["status"], "failed")
+                self.assertEqual(state["final_assessment_errors"], {"frozen-final": str(error)})
+
+    def test_command_timeout_requires_confirmed_cleanup(self):
+        now = dt.datetime.now(night.UTC)
+        deadline = now + dt.timedelta(seconds=10)
+
+        class DeadlineDatetime(dt.datetime):
+            calls = 0
+
+            @classmethod
+            def now(cls, timezone=None):
+                cls.calls += 1
+                return now if cls.calls == 1 else deadline
+
+        for cleanup_error in (None, subprocess.TimeoutExpired("fixture-owned-process", 10)):
+            with self.subTest(cleanup_error=cleanup_error):
+                DeadlineDatetime.calls = 0
+                process = Mock()
+                process.poll.return_value = None
+                expected = night.CommandTimeoutError if cleanup_error is None else night.RunnerSafetyError
+                log = self.root / ("confirmed-timeout" if cleanup_error is None else "unconfirmed-timeout")
+                with patch.object(night.dt, "datetime", DeadlineDatetime), \
+                     patch.object(night.subprocess, "Popen", return_value=process), \
+                     patch.object(night, "stop_owned", side_effect=cleanup_error) as cleanup:
+                    with self.assertRaises(expected):
+                        night.run_child(["fixture; never execute"], log, deadline, lambda: None, {})
+                    cleanup.assert_called_once_with(process)
+
+    def test_native_nonzero_exit_is_a_fatal_diagnostic_stop(self):
+        process = Mock()
+        process.poll.return_value = 1
+        process.returncode = 1
+        deadline = dt.datetime.now(night.UTC) + dt.timedelta(seconds=10)
+        with patch.object(night.subprocess, "Popen", return_value=process), \
+             patch.object(night, "stop_owned") as cleanup:
+            with self.assertRaisesRegex(night.RunnerSafetyError, "child exit 1"):
+                night.run_child(["fixture; never execute"], self.root / "native-error", deadline, lambda: None, {})
+            cleanup.assert_called_once_with(process)
+
+    def test_cutoff_rejects_second_assessment_before_launch_without_extending_budget(self):
+        state, finals, launched = self.fixture_run({"frozen-final": night.CommandTimeoutError("Grab reached cutoff")},
+                                                  final_grab_seconds=10, final_remaining_seconds=10)
+        self.assertEqual(len(finals), 2)
+        self.assertEqual(finals[1][2], finals[1][3])
+        self.assertNotIn("eating-retention-final", launched)
+        self.assertEqual(state["final_assessment_errors"]["eating-retention-final"],
+                         "command budget exhausted before launch")
+        with patch.object(night.subprocess, "Popen") as spawn:
+            with self.assertRaisesRegex(TimeoutError, "before launch"):
+                night.run_child([], self.root / "expired", dt.datetime.now(night.UTC) - dt.timedelta(seconds=1),
+                                lambda: None, {})
+            spawn.assert_not_called()
+
+    def test_successful_final_assessments_complete_once_without_errors(self):
+        state, finals, _ = self.fixture_run()
+        self.assertEqual([row[0] for row in finals], ["frozen-final", "eating-retention-final"])
+        self.assertEqual(state["status"], "completed")
+        self.assertNotIn("final_assessment_errors", state)
 
 if __name__ == "__main__":
     unittest.main()

@@ -123,6 +123,23 @@ Do not invoke the worker directly or add that retired pack to the production man
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
 
+### Grab-night final assessments
+
+`scripts/run_grab_food_night.py` attempts final Grab and held-food Eat assessments
+independently against the same latest accepted checkpoint. Normal completion and
+startup-qualified collection timeouts use the existing per-assessment cap and
+absolute cutoff; a failed final assessment is never retried. If no time remains,
+the companion assessment reports budget exhaustion without launching. Successful
+companion results stay recorded, and `final_assessment_errors` records each failed
+assessment by name. Failures retain failed/interrupted status, partial collection
+never becomes the accepted checkpoint, and candidates remain unpromoted.
+Only explicit command budget timeouts with confirmed owned-child cleanup allow
+the companion after an error. Native nonzero exits (including possible numerical,
+admission or parity failures), invalid/missing receipts, source/lane guards,
+STOP/resource/interactive guards, receipt persistence and cleanup failures stop
+without launching another assessment. Valid behavioral non-success remains a
+recorded assessment result.
+
 The readiness resume test checks acquired-state restoration and later gameplay.
 Set `ALIFE_PERSISTENCE_EXACT_DIAGNOSTICS=1` to additionally require identical
 post-wake receipts, memory metadata, and complete neural snapshots. Differences

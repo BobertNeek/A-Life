@@ -25,6 +25,14 @@ UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
 
 
+class RunnerSafetyError(RuntimeError):
+    """A runner stop condition that forbids launching another owned child."""
+
+
+class CommandTimeoutError(TimeoutError):
+    """Explicit command budget exhaustion; cleanup failures override this."""
+
+
 def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
@@ -324,7 +332,7 @@ def stop_owned(process):
 def run_child(argv, log, deadline, guard, environment, on_started=None):
     guard()
     if dt.datetime.now(UTC) >= deadline:
-        raise TimeoutError("command budget exhausted before launch")
+        raise CommandTimeoutError("command budget exhausted before launch")
     kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     with Path(str(log) + ".stdout.log").open("xb") as out, Path(str(log) + ".stderr.log").open("xb") as err:
         process = subprocess.Popen(argv, stdout=out, stderr=err, env=environment, **kwargs)
@@ -333,13 +341,18 @@ def run_child(argv, log, deadline, guard, environment, on_started=None):
                 on_started(process)
             while process.poll() is None:
                 if dt.datetime.now(UTC) >= deadline:
-                    raise TimeoutError("owned command exceeded its wall-time/cutoff budget")
+                    raise CommandTimeoutError("owned command exceeded its wall-time/cutoff budget")
                 guard()
                 time.sleep(.5)
             if process.returncode:
-                raise RuntimeError(f"child exit {process.returncode}; see {log}.*.log")
+                # Native errors do not expose a reliable exit-code taxonomy;
+                # they may include numerical, admission or parity failures.
+                raise RunnerSafetyError(f"child exit {process.returncode}; see {log}.*.log")
         finally:
-            stop_owned(process)
+            try:
+                stop_owned(process)
+            except Exception as error:
+                raise RunnerSafetyError(f"owned command cleanup failed: {error}") from error
 
 
 def assert_lane_idle():
@@ -543,6 +556,7 @@ def run_night(args, state, state_path, input_hashes):
     collection_cutoff = args.cutoff - dt.timedelta(minutes=args.final_reserve_minutes)
     startup_cutoff = min(collection_cutoff, dt.datetime.now(UTC) + dt.timedelta(seconds=args.startup_seconds))
     assessment_costs = []
+    final_assessments_started = False
     temperature = args.sampling_temperature
     recipe_enabled = bool(args.acquisition_rehearsal_epochs or args.max_stalled_batches or
                           args.sampling_temperature_floor < temperature)
@@ -550,26 +564,35 @@ def run_night(args, state, state_path, input_hashes):
 
     def publish():
         state["updated_utc"] = dt.datetime.now(UTC).isoformat()
-        write_json(state_path, state)
+        try:
+            write_json(state_path, state)
+        except Exception as error:
+            raise RunnerSafetyError(f"runner receipt persistence failed: {error}") from error
 
     def guard():
         if (args.output / "STOP").exists():
-            raise RuntimeError("owner STOP file requested interruption")
-        snapshot = resource_snapshot(args.output)
+            raise RunnerSafetyError("owner STOP file requested interruption")
+        try:
+            snapshot = resource_snapshot(args.output)
+        except Exception as error:
+            raise RunnerSafetyError(f"resource guard measurement failed: {error}") from error
         state["last_resources"] = snapshot
         if snapshot["disk_free_bytes"] < args.min_disk_gib * 2**30:
-            raise RuntimeError("disk reserve reached")
+            raise RunnerSafetyError("disk reserve reached")
         if snapshot["available_memory_bytes"] is None or snapshot["available_memory_bytes"] < args.min_memory_gib * 2**30:
-            raise RuntimeError("available-memory reserve reached or measurement unavailable")
+            raise RunnerSafetyError("available-memory reserve reached or measurement unavailable")
         if (dt.datetime.now(UTC) >= interactive_grace_until and args.idle_seconds and
                 os.name == "nt" and snapshot["idle_seconds"] < args.idle_seconds):
-            raise RuntimeError("interactive PC use resumed; stopped only the owned child")
+            raise RunnerSafetyError("interactive PC use resumed; stopped only the owned child")
 
     def invoke(argv, name, seconds, cutoff):
-        for path, expected in checkpoint_hashes.items():
-            if sha256(path) != expected:
-                raise RuntimeError(f"source/checkpoint/binary changed: {path}")
-        assert_lane_idle()
+        try:
+            for path, expected in checkpoint_hashes.items():
+                if sha256(path) != expected:
+                    raise RunnerSafetyError(f"source/checkpoint/binary changed: {path}")
+            assert_lane_idle()
+        except Exception as error:
+            raise RunnerSafetyError(f"source/checkpoint/lane guard failed: {error}") from error
         run_child(argv, args.output / name, min(cutoff, dt.datetime.now(UTC) + dt.timedelta(seconds=seconds)),
                   guard, environment)
 
@@ -592,6 +615,27 @@ def run_night(args, state, state_path, input_hashes):
         result["lesson"] = "eat_held_food"
         state.setdefault("retention_assessments", []).append(result); publish()
         return result
+
+    def final_assessments(suffix=""):
+        nonlocal final_assessments_started
+        final_assessments_started = True
+        errors = []
+        # These are independent assessments of the same last accepted source.
+        # Each retains the existing command cap and shared absolute cutoff.
+        for name, assessment in (("frozen-final", probe), ("eating-retention-final", retention_probe)):
+            name += suffix
+            try:
+                assessment(name, previous, args.cutoff)
+            except Exception as error:
+                state.setdefault("final_assessment_errors", {})[name] = str(error)
+                # Only an identified, cleanup-confirmed budget timeout permits
+                # a companion. Native/receipt/safety failures stop the runner.
+                if not isinstance(error, CommandTimeoutError):
+                    raise
+                publish()
+                errors.append(error)
+        if errors:
+            raise errors[0]
 
     try:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -709,16 +753,16 @@ def run_night(args, state, state_path, input_hashes):
                     raise ValueError("two frozen batch checks lost previously observed Grab acquisition")
         # A deadline interruption retains the last sealed source; never resume
         # partial collection. The reserved final probe is a separate assessment.
-        probe("frozen-final", previous, args.cutoff)
-        retention_probe("eating-retention-final", previous, args.cutoff)
+        final_assessments()
         state["status"] = "completed" if state["distinct_completed_episodes"] == args.target_episodes else "incomplete"
     except KeyboardInterrupt:
         state["status"] = "interrupted"; state["error"] = "owner interrupted the runner"
-    except TimeoutError as error:
+    except CommandTimeoutError as error:
         state["status"] = "interrupted"; state["error"] = str(error)
-        if state.get("startup_qualified") and dt.datetime.now(UTC) < args.cutoff:
+        if (not final_assessments_started and state.get("startup_qualified") and
+                dt.datetime.now(UTC) < args.cutoff):
             try:
-                probe("frozen-final-after-interruption", previous, args.cutoff)
+                final_assessments("-after-interruption")
             except Exception as assessment_error:
                 state["final_assessment_error"] = str(assessment_error)
     except Exception as error:
