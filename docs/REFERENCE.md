@@ -29,9 +29,27 @@ offset retains the gaze cone, even at contact distance. This is a general
 geometry rule, without object-kind recognition or action scoring
 (`AOA-WORLD-001`, `AOA-WORLD-002`, `AOA-SENSE-001`, `AOA-SENSE-002`).
 
-Visibility does not authorize ingestion: Eat still requires the same food to be
-held by the acting organism after a legal Grab. CPU geometry regressions do not
-establish a learned Grab preference, GPU behavior, or founder promotion.
+Visibility does not authorize ingestion. For reachable, safe, unheld food,
+selected Eat executes a real pickup using ordinary Grab reach, grip-path,
+ownership, liveness, and manipulation-effector checks. It requires a free grip:
+another held object is neither dropped nor replaced, and a player-held target
+cannot be taken. "Safe" here means Food with no authored hazard pain; this is
+world execution validation, never a candidate score or extra brain input.
+Out-of-reach Eat fails without navigation. This first decision retains selected
+Eat identity, reports Touch and zero nutrition, and leaves the exact target
+unconsumed in the actor's grip. Only a later Eat while holding that same food
+reports Consumed and provides ordinary nutrition/taste/ownership cleanup.
+Explicit Grab retains its acquisition/release toggle (`AOA-WORLD-003`,
+`AOA-MOTOR-002`).
+
+Eat-selected physical acquisition is not selected Grab. Sealed decisions and
+PPO labels retain the sampled Eat primitive. Explicit-Grab curriculum credit,
+completion, and replay/rehearsal eligibility still require an actual selected
+Grab of the same target; release/regrab provides one loss credit per life.
+Successful Touch cannot establish eating completion or completed-action speech
+labels. CPU geometry, world, and sealed-scaffold regressions do not establish
+on-policy GPU behavior, learned preference, or founder promotion
+(`AOA-TEACH-007`, `AOA-OBS-002`).
 
 ## Brain classes
 

@@ -86,7 +86,7 @@ fn looking_straight_at_food_after_approach_keeps_the_terrain_frame_valid() {
 }
 
 #[test]
-fn coincident_terrain_food_stays_visible_after_approach_and_requires_grab_before_eat() {
+fn coincident_terrain_food_stays_visible_and_eat_pickup_precedes_consumption() {
     for angle in [
         133.32324_f32.to_radians(),
         -133.32324_f32.to_radians(),
@@ -157,20 +157,36 @@ fn coincident_terrain_food_stays_visible_after_approach_and_requires_grab_before
             }));
         }
 
+        // Both paths acquire real possession, but only the explicit path has
+        // a selected Grab. Neither acquisition consumes or nourishes.
+        let mut explicit = world.clone();
+        let grab_result = explicit.apply_command(&grab.unwrap()).unwrap();
+        assert!(grab_result.execution.succeeded);
+        assert_eq!(grab_result.command.action_id, HeadlessActionIds::GRAB);
+        assert_eq!(explicit.entity(food).unwrap().carried_by, Some(ORGANISM));
+        assert!(!explicit.entity(food).unwrap().consumed);
+        assert_eq!(grab_result.body_event.nutrition, 0.0);
+
         let eat = alife_world::HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
-        assert!(!world.apply_command(&eat).unwrap().execution.succeeded);
-        assert_eq!(world.entity(food).unwrap().position, target);
-        assert_eq!(world.entity(food).unwrap().carried_by, None);
-        assert!(!world.entity(food).unwrap().consumed);
-        assert!(
-            world
-                .apply_command(&grab.unwrap())
-                .unwrap()
-                .execution
-                .succeeded
+        let pickup = world.apply_command(&eat).unwrap();
+        assert!(pickup.execution.succeeded);
+        assert_eq!(pickup.command, eat);
+        assert_eq!(
+            pickup.execution.physical.contact,
+            alife_core::PhysicalContactKind::Touch
         );
+        assert_eq!(pickup.body_event.nutrition, 0.0);
         assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
-        assert!(world.apply_command(&eat).unwrap().execution.succeeded);
+        assert!(!world.entity(food).unwrap().consumed);
+        world.advance_tick();
+        let meal = world.apply_command(&eat).unwrap();
+        assert!(meal.execution.succeeded);
+        assert_eq!(meal.command, eat);
+        assert_eq!(
+            meal.execution.physical.contact,
+            alife_core::PhysicalContactKind::Consumed
+        );
+        assert_eq!(meal.body_event.nutrition, 0.6);
         assert!(world.entity(food).unwrap().consumed);
     }
 }

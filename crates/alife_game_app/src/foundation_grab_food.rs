@@ -86,6 +86,19 @@ impl GrabRewardGate {
     }
 }
 
+// A real transfer is not enough: credit belongs to a sampled explicit Grab.
+// Keep this predicate shared with the honest CPU sealed-receipt regression.
+pub(crate) fn selected_grab_command(
+    bundle: &alife_core::MotorCommandBundle,
+    target: WorldEntityId,
+) -> Option<&ChannelCommand> {
+    bundle.channels.iter().find(|command| {
+        command.channel == MotorChannel::Manipulation
+            && command.primitive == alife_world::HeadlessActionIds::GRAB
+            && command.target.and_then(|target| target.entity) == Some(target)
+    })
+}
+
 pub(crate) fn observe_grab_acquisition(
     setup: &FoundationGrabFoodSetup,
     before: Option<FoodOwnership>,
@@ -127,11 +140,7 @@ pub(crate) fn observe_grab_acquisition(
     let Some(bundle) = patch.selected_bundle() else {
         return Ok(None);
     };
-    let Some(command) = bundle.channels.iter().find(|command| {
-        command.channel == MotorChannel::Manipulation
-            && command.primitive == alife_world::HeadlessActionIds::GRAB
-            && command.target.and_then(|target| target.entity) == Some(setup.target)
-    }) else {
+    let Some(command) = selected_grab_command(bundle, setup.target) else {
         return Ok(None);
     };
     let Some(candidate) = step

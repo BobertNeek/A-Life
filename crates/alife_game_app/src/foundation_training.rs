@@ -1366,6 +1366,18 @@ pub(crate) fn grounded_speech_label(
         _ => None,
     };
     let acted = previous.is_some_and(|patch| {
+        // Eat may first acquire reachable food. Completed eating narration
+        // requires actual ingestion, even when another motor channel failed.
+        if word == 8 {
+            return target.is_some_and(|target| {
+                selected_eat_consumed(
+                    &patch.decision().selected_action,
+                    patch.selected_bundle(),
+                    patch.outcome(),
+                    target,
+                )
+            });
+        }
         patch.outcome().success
             && !matches!(
                 patch.outcome().physical.contact,
@@ -1384,7 +1396,6 @@ pub(crate) fn grounded_speech_label(
                         }
                         6 => candidate.family == alife_core::CandidateActionFamily::Approach,
                         7 => candidate.family == alife_core::CandidateActionFamily::Avoid,
-                        8 => candidate.action_id == alife_world::HeadlessActionIds::EAT,
                         9 => {
                             candidate.action_id == alife_world::HeadlessActionIds::GRAB
                                 && frame.sensory().channels.tactile_contact[2] > 0.5
@@ -2399,16 +2410,27 @@ fn held_food_action_consumed(
     target: alife_core::WorldEntityId,
     held_before: bool,
 ) -> bool {
-    if !held_before {
-        return false;
-    }
+    held_before
+        && selected_eat_consumed(action, bundle, outcome, target)
+        && outcome
+            .measured_physiology
+            .is_some_and(held_food_body_benefit)
+}
+
+fn selected_eat_consumed(
+    action: &alife_core::ActionCommand,
+    bundle: Option<&alife_core::MotorCommandBundle>,
+    outcome: &alife_core::PostActionOutcome,
+    target: alife_core::WorldEntityId,
+) -> bool {
     let consumed = |physical: &alife_core::PhysicalActionOutcome| {
         physical.contact == alife_core::PhysicalContactKind::Consumed
             && physical.target_entity == Some(target)
     };
-    let selected_and_consumed = if let Some(bundle) = bundle {
+    if let Some(bundle) = bundle {
         bundle.channels.iter().any(|command| {
-            command.primitive == alife_world::HeadlessActionIds::EAT
+            command.channel == alife_core::MotorChannel::Manipulation
+                && command.primitive == alife_world::HeadlessActionIds::EAT
                 && command.target.and_then(|t| t.entity) == Some(target)
                 && outcome.joint.as_ref().is_some_and(|joint| {
                     joint.channel_outcomes.iter().any(|channel| {
@@ -2420,11 +2442,7 @@ fn held_food_action_consumed(
         action.action_id == alife_world::HeadlessActionIds::EAT
             && action.target_entity == Some(target)
             && consumed(&outcome.physical)
-    };
-    selected_and_consumed
-        && outcome
-            .measured_physiology
-            .is_some_and(held_food_body_benefit)
+    }
 }
 
 fn held_food_body_benefit(transition: alife_core::MeasuredPhysiologyTransition) -> bool {
@@ -4590,6 +4608,121 @@ mod held_food_lesson_tests {
         (command, outcome)
     }
 
+    fn eating_narration_patch(
+        frame: alife_core::PerceptionFrame,
+        target: alife_core::WorldEntityId,
+        outcome: PostActionOutcome,
+    ) -> alife_core::ExperiencePatch {
+        // Synthetic selection scaffolding verifies labels over measured CPU
+        // world outcomes. It does not claim a GPU selected this action.
+        let candidate = frame
+            .candidates()
+            .iter()
+            .find(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(target)
+            })
+            .unwrap();
+        let confidence = Confidence::new(1.0).unwrap();
+        let class = alife_core::BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
+        let genome = BrainGenome::scaffold(42, class.id);
+        let phenotype_hash = alife_core::PhenotypeHash([1, 2, 3, 4]);
+        let decision = alife_core::DecisionSnapshot::from_neural_selection(
+            outcome.sequence_id,
+            phenotype_hash,
+            1,
+            0,
+            &frame,
+            alife_core::NeuralActionSelection {
+                candidate_index: candidate.candidate_index,
+                logit: 0.0,
+                confidence,
+                active_tiles: 1,
+                active_synapses: 1,
+            },
+            candidate
+                .to_command(frame.organism_id(), confidence)
+                .unwrap(),
+        )
+        .unwrap();
+        let pre_action = alife_core::PreActionSnapshot::from_neural_frame(
+            outcome.sequence_id,
+            class.id,
+            phenotype_hash,
+            genome.id,
+            genome.schema_version,
+            DevelopmentState::new(genome.id, frame.tick(), NormalizedScalar::new(0.5).unwrap()),
+            frame,
+        )
+        .unwrap();
+        alife_core::ExperiencePatchBuilder::new(outcome.sequence_id)
+            .record_pre_action(pre_action)
+            .unwrap()
+            .record_decision(decision)
+            .unwrap()
+            .record_outcome(outcome)
+            .unwrap()
+            .seal()
+            .unwrap()
+    }
+
+    #[test]
+    fn eating_narration_requires_later_consumption_after_successful_eat_pickup() {
+        let mut world = unconfigured(42);
+        let scenario = configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(FoundationTeacherLesson::GrabFood),
+            None,
+            false,
+        )
+        .unwrap();
+        let pickup_frame = frame(&mut world);
+        let (eat, pickup) = eat_outcome(&mut world, scenario.food);
+        assert_eq!(eat.action_id, alife_world::HeadlessActionIds::EAT);
+        assert!(pickup.success);
+        assert_eq!(pickup.physical.contact, PhysicalContactKind::Touch);
+        let pickup_patch = eating_narration_patch(pickup_frame, scenario.food, pickup);
+        let meal_frame = frame(&mut world);
+        let pickup_label = grounded_speech_label(
+            &meal_frame,
+            Some(8),
+            Some(1),
+            Some(scenario.food),
+            Some(&pickup_patch),
+            true,
+        )
+        .unwrap();
+        assert_eq!(pickup_label.token, None);
+        assert_eq!(pickup_label.continuation, [0; 5]);
+
+        let (_, meal) = eat_outcome(&mut world, scenario.food);
+        assert_eq!(meal.physical.contact, PhysicalContactKind::Consumed);
+        let meal_patch = eating_narration_patch(meal_frame, scenario.food, meal);
+        let after_meal = frame(&mut world);
+        let meal_label = grounded_speech_label(
+            &after_meal,
+            Some(8),
+            Some(1),
+            Some(scenario.food),
+            Some(&meal_patch),
+            true,
+        )
+        .unwrap();
+        assert_eq!(meal_label.token, Some(8));
+        assert_eq!(meal_label.continuation, [1, 0, 0, 0, 0]);
+        let wrong_target_label = grounded_speech_label(
+            &after_meal,
+            Some(8),
+            Some(1),
+            Some(scenario.hazard),
+            Some(&meal_patch),
+            true,
+        )
+        .unwrap();
+        assert_eq!(wrong_target_label.token, None);
+    }
+
     #[test]
     fn held_food_setup_is_legal_separate_and_ready_for_only_eat() {
         for seed in [42, 91, 132] {
@@ -4918,7 +5051,7 @@ mod held_food_lesson_tests {
     }
 
     #[test]
-    fn released_food_gets_naming_only_and_cannot_pass_held_eating_score() {
+    fn released_food_gets_naming_only_then_eat_pickup_precedes_scored_meal() {
         let (mut world, scenario) = prepared(42);
         let (subject, entity) = world.organism_entity_ids()[0];
         let drop = alife_core::ActionCommand::structured(
@@ -4953,10 +5086,13 @@ mod held_food_lesson_tests {
             &released.teacher_cue_tokens
         ));
         let (eat, outcome) = eat_outcome(&mut world, scenario.food);
-        assert!(!outcome.success);
+        assert!(outcome.success);
         assert_eq!(outcome.physical.contact, PhysicalContactKind::Touch);
         assert_eq!(outcome.physical.target_entity, Some(scenario.food));
-        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert_eq!(
+            world.entity(scenario.food).unwrap().carried_by,
+            Some(subject)
+        );
         assert!(!world.entity(scenario.food).unwrap().consumed);
         assert!(!held_food_action_consumed(
             &eat,
@@ -4971,6 +5107,25 @@ mod held_food_lesson_tests {
             &outcome,
             scenario.food,
             true
+        ));
+        let (later_eat, meal) = eat_outcome(&mut world, scenario.food);
+        assert!(meal.success);
+        assert_eq!(meal.physical.contact, PhysicalContactKind::Consumed);
+        assert_eq!(world.entity(scenario.food).unwrap().carried_by, None);
+        assert!(world.entity(scenario.food).unwrap().consumed);
+        assert!(held_food_action_consumed(
+            &later_eat,
+            None,
+            &meal,
+            scenario.food,
+            true
+        ));
+        assert!(!held_food_action_consumed(
+            &later_eat,
+            None,
+            &meal,
+            scenario.food,
+            false
         ));
     }
 
@@ -5063,7 +5218,7 @@ mod held_food_lesson_tests {
     }
 
     #[test]
-    fn eating_score_retains_exact_consumption_when_other_bundle_channel_is_blocked() {
+    fn eating_score_and_narration_retain_consumption_when_other_bundle_channel_is_blocked() {
         let (mut world, scenario) = prepared(42);
         let (eat, mut outcome) = eat_outcome(&mut world, scenario.food);
         let command = ChannelCommand::new(
@@ -5120,6 +5275,13 @@ mod held_food_lesson_tests {
             scenario.food,
             true
         ));
+        // Completed-eating speech uses this same exact channel-outcome guard.
+        assert!(selected_eat_consumed(
+            &eat,
+            Some(&bundle),
+            &outcome,
+            scenario.food
+        ));
         outcome.joint.as_mut().unwrap().channel_outcomes[0]
             .physical
             .target_entity = world.entity_id("hazard-01");
@@ -5129,6 +5291,12 @@ mod held_food_lesson_tests {
             &outcome,
             scenario.food,
             true
+        ));
+        assert!(!selected_eat_consumed(
+            &eat,
+            Some(&bundle),
+            &outcome,
+            scenario.food
         ));
     }
 }
