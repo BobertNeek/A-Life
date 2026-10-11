@@ -299,6 +299,19 @@ For a held-out check of a frozen checkpoint, use `--evaluate OUTPUT ASSET LESSON
 
 `--food-after-world-tick N` in cycle mode temporarily moves the existing food resource to a distant legal world position, then returns it at world tick `N`. `scenario.json` records both positions, and `cycle.json` records the availability tick, first meal, and energy. It changes no physiology or policy. `--teacher-pilot OUTPUT [TICKS] --seed WORLD_SEED --founder-seed-base GENOME_SEED --lesson feeding|hazard_avoidance|obstacle_navigation|recovery` produces source-bound compact demonstration replay in the same format as the cycle. The optional `--food-position X Z` applies to feeding only; the second coordinate is horizontal Z, not elevation. `--cycle` and `--resume-cycle` also accept `--lesson` to place the same scenery around a teacher-free policy; a delayed-food gate cannot be combined with a lesson. Each teacher lesson must complete its measured world outcome before replay is accepted. Successful lessons write `lesson-trace.json`; failed lessons write `lesson-diagnostic.json`, both with every chosen action, sensed object slot, physical contact, and measured physiology.
 
+The compact lesson trace also preserves the raw pre-decision global grip signal
+(`global_grip_before_decision`, tactile channel 2), joint `success`, raw
+`frustration_delta` and `prediction_error`, and at most six `selected_commands`
+from the sealed motor bundle. Each command records channel, primitive,
+and target `{entity, position}`; an absent bundle, target, or position stays null.
+The existing `chosen_*` fields still describe the representative candidate, which
+can differ from the actual Manipulation command. Candidate `observation` joins
+an `ObjectSlot` reference to `object_slots`, and `target_position` retains its
+exact optional world position. Global grip does not establish any candidate's
+ownership, and joint success is not a per-channel success flag. These additive
+JSON diagnostics use already-resident CPU receipts and do not change the compact
+replay schema or backfill historical traces.
+
 The teacher's action sequence is a causal contract, not a script of desired labels alone:
 
 | Lesson | Perceived trigger and action | World outcome required before the next choice |

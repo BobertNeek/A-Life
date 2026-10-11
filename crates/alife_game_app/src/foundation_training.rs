@@ -21,6 +21,7 @@ use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub(crate) mod diagnostics;
+mod lesson_trace;
 mod maze;
 pub use diagnostics::{FoundationLessonBudget, FoundationSpeechBehaviorDiagnostics};
 
@@ -2061,54 +2062,16 @@ fn run_foundation_training_pilot_with_request(
         let trace = steps
             .iter()
             .map(|step| {
-                let chosen = step
-                    .frame
-                    .candidates()
-                    .get(step.behavior.representative_index as usize);
-                let outcome = step.patch.outcome();
-                serde_json::json!({
-                    "tick": step.frame.tick().raw(),
-                    "lesson_target_held_before_decision": scenario.held_food_setup.as_ref().map(|_| held_food_possession_frames.contains(&step.frame.tick().raw())),
-                    "position": step.frame.body().pose.translation,
-                    "gaze_rotation": step.frame.body().pose.rotation,
-                    "terrain_ranges": step.frame.sensory().channels.visual_affordance,
-                    "heard_tokens": step.frame.sensory().language_context.heard_tokens,
-                    "vocalized_token": step.frame.sensory().language_context.vocalized_token,
-                    "semantic_context": step.frame.sensory().semantic_context,
-                    "chosen_action": chosen.map(|candidate| candidate.action_id.raw()),
-                    "chosen_target": chosen.and_then(|candidate| candidate.target.entity),
-                    "chosen_family": chosen.map(|candidate| candidate.family),
-                    "object_slots": step.frame.grounded_object_slots(),
-                    "representative_mask": step.behavior.representative_mask,
-                    "motor_masks": step.behavior.motor_masks,
-                    "motor_indices": step.behavior.motor_indices,
-                    "candidates": step.frame.candidates().iter().enumerate().map(|(index, candidate)| serde_json::json!({
-                        "index": candidate.candidate_index,
-                        "action": candidate.action_id.raw(),
-                        "family": candidate.family,
-                        "target": candidate.target.entity,
-                        "logit": step.behavior.logits[index],
-                    })).collect::<Vec<_>>(),
-                    "physical": outcome.physical,
-                    "channel_outcomes": outcome.joint.as_ref().map(|joint| &joint.channel_outcomes),
-                    "experienced_valence": outcome.experienced_valence(),
-                    "physiology": outcome.measured_physiology.map(|transition| serde_json::json!({
-                        "before_energy": transition.before.body.energy,
-                        "after_energy": transition.after.body.energy,
-                        "before_hunger": transition.before.homeostasis.drives.hunger,
-                        "after_hunger": transition.after.homeostasis.drives.hunger,
-                        "before_health": transition.before.body.health,
-                        "after_health": transition.after.body.health,
-                        "before_injury": transition.before.body.injury,
-                        "after_injury": transition.after.body.injury,
-                        "before_pain": transition.before.homeostasis.drives.pain,
-                        "after_pain": transition.after.homeostasis.drives.pain,
-                        "before_brain_atp": transition.before.homeostasis.drives.brain_atp,
-                        "after_brain_atp": transition.after.homeostasis.drives.brain_atp,
-                        "before_fatigue": transition.before.homeostasis.drives.fatigue,
-                        "after_fatigue": transition.after.homeostasis.drives.fatigue,
-                    })),
-                })
+                lesson_trace::serialize_step(
+                    &step.frame,
+                    &step.behavior,
+                    step.patch.selected_bundle(),
+                    step.patch.outcome(),
+                    scenario
+                        .held_food_setup
+                        .as_ref()
+                        .map(|_| held_food_possession_frames.contains(&step.frame.tick().raw())),
+                )
             })
             .collect::<Vec<_>>();
         std::fs::write(

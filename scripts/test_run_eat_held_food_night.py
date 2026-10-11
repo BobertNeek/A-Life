@@ -129,6 +129,21 @@ class HeldFoodNightTests(unittest.TestCase):
             night.validate_probe(directory)
         self.assertTrue(night.assert_prior({"semantic_prior": prior(1)}, 16)["warnings"])
 
+    def test_additive_trace_fields_preserve_existing_held_probe_reader(self):
+        directory = self.root / "probe"
+        self.probe(directory)
+        previous = night.validate_probe(directory)
+        path = directory / "lesson-diagnostic.json"
+        trace = night.read_json(path)
+        step = trace["steps"][0]
+        # Synthetic fields test reader compatibility, not learner behavior.
+        step.update({"global_grip_before_decision": .375, "success": False,
+                     "frustration_delta": .25, "prediction_error": .875,
+                     "selected_commands": None})
+        step["candidates"][0].update({"observation": {"ObjectSlot": 0}, "target_position": None})
+        path.write_text(json.dumps(trace))
+        self.assertEqual(night.validate_probe(directory), previous)
+
     def test_native_pose_and_ambiguous_source_receipts_fail_explicitly(self):
         with self.assertRaises(ValueError):
             night.coordinates([1., 0., 2.])

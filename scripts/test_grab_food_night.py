@@ -104,6 +104,28 @@ class GrabNightTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 night.assert_setup({**receipt, "grab_food_setup": {**setup(), **mutation}})
 
+    def test_additive_trace_fields_preserve_existing_probe_reader(self):
+        directory = self.root / "probe"
+        directory.mkdir()
+        receipt = {"lesson": "grab_food", "grab_food_setup": setup(),
+                   "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1], "ticks": 1,
+                   "teacher_mode": False, "lesson_completed": False, "grab_food_acquisitions": []}
+        (directory / "pilot.json").write_text(json.dumps(receipt))
+        step = {"representative_mask": 1, "motor_masks": [0] * 6,
+                "candidates": [{"index": 0, "action": 211, "target": 3}]}
+        trace_path = directory / "lesson-diagnostic.json"
+        trace_path.write_text(json.dumps({"steps": [step]}))
+        previous = night.validate_probe(directory)
+        # Synthetic serializer-shaped additions must not change gate admission.
+        step.update({"global_grip_before_decision": 0., "success": False,
+                     "frustration_delta": .25, "prediction_error": .875,
+                     "selected_commands": [{"channel": "Manipulation", "primitive": 211,
+                                            "target": {"entity": 3, "position": None}}]})
+        step["candidates"][0].update({"observation": {"ObjectSlot": 0},
+                                      "target_position": {"x": -.5, "y": 0., "z": 0.}})
+        trace_path.write_text(json.dumps({"steps": [step]}))
+        self.assertEqual(night.validate_probe(directory), previous)
+
     def test_unqualified_run_fails_before_native_output_or_spawn(self):
         binary = self.root / "nonexecutable.exe"
         binary.write_bytes(b"not an executable; never launch")
