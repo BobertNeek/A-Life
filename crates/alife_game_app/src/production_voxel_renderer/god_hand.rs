@@ -601,6 +601,161 @@ mod tests {
     }
 
     #[test]
+    fn world_grab_move_drop_and_regrab_recompute_care_display_without_height_feedback() {
+        // Compose the real world hold APIs, immediate frame refresh, care-object
+        // ECS projection and hand contact helpers. The GPU-runtime-backed mouse
+        // input system and actual GLB animation are deliberately not exercised.
+        for terrain_bound in [false, true] {
+            for measured in [false, true] {
+                let mut world = alife_world::HeadlessScenarioBuilder::new(17)
+                    .food("food", Vec3f::new(0.5, 2.0, 0.5), 0.5)
+                    .toy("ball", Vec3f::new(0.5, 2.0, 0.5), true)
+                    .build()
+                    .unwrap();
+                if terrain_bound {
+                    let terrain = alife_world::WorldTerrain::new(
+                        alife_world::TerrainData {
+                            width: 2,
+                            depth: 2,
+                            origin_x: -5.0,
+                            origin_z: -5.0,
+                            spacing: 10.0,
+                            heights: vec![2.0; 4],
+                            obstacles: Vec::new(),
+                            water_level: None,
+                        },
+                        alife_world::LocomotionLimits::default(),
+                    )
+                    .unwrap();
+                    world
+                        .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+                        .unwrap();
+                }
+                let mut mesh = Mesh::new(
+                    PrimitiveTopology::TriangleList,
+                    RenderAssetUsages::default(),
+                );
+                mesh.insert_attribute(
+                    Mesh::ATTRIBUTE_POSITION,
+                    (0..4)
+                        .flat_map(|z| {
+                            (0..4).flat_map(move |x| {
+                                let (x, z) = (x as f32, z as f32);
+                                [
+                                    [x, 0.9, z],
+                                    [x, 0.9, z + 1.0],
+                                    [x + 1.0, 0.9, z + 1.0],
+                                    [x + 1.0, 0.9, z],
+                                ]
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                let mut app = App::new();
+                app.insert_resource(
+                    LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap(),
+                )
+                .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+                    measured.then_some(&mesh),
+                    1.0,
+                ))
+                .insert_resource(Assets::<Mesh>::default())
+                .insert_resource(Assets::<StandardMaterial>::default())
+                .add_systems(Update, live_food_projection::sync_care_objects);
+                if let Some(terrain) = world.terrain() {
+                    app.insert_resource(creature_grounding::SelectedTerrain(terrain.clone()));
+                }
+                let assert_projection = |app: &mut App,
+                                         world: &alife_world::HeadlessWorld,
+                                         id,
+                                         expected: Vec3f| {
+                    let snapshots = world.object_snapshots();
+                    let object = world.entity(id).unwrap();
+                    assert_eq!(object.position, expected);
+                    app.world_mut()
+                        .resource_mut::<LiveBrainPresentationFrameResource>()
+                        .refresh_world_objects(world);
+                    app.update();
+                    let frame = app.world().resource::<LiveBrainPresentationFrameResource>();
+                    assert_eq!(frame.current.object(id), Some(object));
+                    assert_eq!(frame.current.authoritative_world_tick, world.tick());
+                    let surface = app
+                        .world()
+                        .resource::<creature_grounding::RenderedTerrainSurface>();
+                    let sampled = surface.height(Vec3::new(expected.x, 0.0, expected.z));
+                    assert_eq!(sampled.is_some(), measured);
+                    if let Some(height) = sampled {
+                        assert!((height - 0.9).abs() < 1e-5);
+                    }
+                    let center = live_food_projection::care_object_center(
+                        object.position,
+                        terrain_bound,
+                        surface,
+                    );
+                    let lift = if terrain_bound {
+                        0.0
+                    } else if measured {
+                        0.9
+                    } else {
+                        0.44
+                    };
+                    let expected_center =
+                        Vec3::new(expected.x, expected.y + lift + 0.30, expected.z);
+                    assert!((center - expected_center).length() < 1e-5);
+                    let contact =
+                        object_contact_position(object, terrain_bound, surface, Vec3::ONE);
+                    assert_eq!(contact, center);
+                    let transform = pose_transform(Quat::IDENTITY, contact, 28.0, 3);
+                    assert!((transform.transform_point(POSE_CONTACTS[3]) - center).length() < 1e-5);
+                    let mut query = app
+                        .world_mut()
+                        .query::<(&live_food_projection::LiveCareObject, &Transform)>();
+                    let displayed = query
+                        .iter(app.world())
+                        .find(|(marker, _)| marker.0 == id)
+                        .unwrap()
+                        .1;
+                    assert_eq!(displayed.translation, center);
+                    assert_eq!(world.object_snapshots(), snapshots);
+                };
+                for label in ["food", "ball"] {
+                    let id = world.entity_id(label).unwrap();
+                    let mut ground = world.entity(id).unwrap().position;
+                    assert_projection(&mut app, &world, id, ground);
+                    for destination in [Vec3f::new(1.5, 4.0, 2.0), Vec3f::new(2.5, 5.0, 3.0)] {
+                        let mut raised = ground;
+                        if terrain_bound {
+                            raised.y += 1.3;
+                        } else {
+                            raised.z = 1.3;
+                        }
+                        assert_eq!(world.begin_player_hold(id).unwrap(), raised);
+                        assert_eq!(world.player_held_object(), Some(id));
+                        assert_projection(&mut app, &world, id, raised);
+                        ground = if terrain_bound {
+                            Vec3f::new(destination.x, 2.0, destination.z)
+                        } else {
+                            Vec3f::new(destination.x, destination.y, 0.0)
+                        };
+                        raised = ground;
+                        if terrain_bound {
+                            raised.y += 1.3;
+                        } else {
+                            raised.z += 1.3;
+                        }
+                        assert_eq!(world.move_player_hold(destination).unwrap(), raised);
+                        assert_projection(&mut app, &world, id, raised);
+                        assert_eq!(world.release_player_hold().unwrap(), Some(id));
+                        assert_eq!(world.player_held_object(), None);
+                        assert!(world.can_begin_player_hold(id));
+                        assert_projection(&mut app, &world, id, ground);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn contact_helper_preserves_creature_and_token_rules_and_held_priority() {
         let world = alife_world::HeadlessScenarioBuilder::new(17)
             .agent("walker", OrganismId(1), Vec3f::new(0.5, 2.0, 0.5))
