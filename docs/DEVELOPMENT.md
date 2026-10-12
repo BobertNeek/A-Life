@@ -140,6 +140,18 @@ STOP/resource/interactive guards, receipt persistence and cleanup failures stop
 without launching another assessment. Valid behavioral non-success remains a
 recorded assessment result.
 
+The additive `eating_retention_diagnostic` in `night.json` compares explicit
+held-food meal counts from successful before/final probes. It reports `lower`,
+`equal`, or `higher` only when recorded seed/founder, learner mode, cue tokens,
+realized starting pose/need and requested assay window match. Early meal success
+can shorten the actual decision count; fresh creature/target IDs are not assay
+conditions. Missing, invalid, timed-out or mismatched evidence reports `unknown`
+with null unavailable counts, never an inferred zero. A lower count emits an
+operator warning only. Completion, accepted checkpoints, recipe batch gates,
+cutoffs, error handling and promotion remain unchanged. This single short probe
+pair does not establish mastery, transfer, durable retention or causal attribution;
+optional language-prior delivery warnings remain visible in the diagnostic.
+
 The readiness resume test checks acquired-state restoration and later gameplay.
 Set `ALIFE_PERSISTENCE_EXACT_DIAGNOSTICS=1` to additionally require identical
 post-wake receipts, memory metadata, and complete neural snapshots. Differences

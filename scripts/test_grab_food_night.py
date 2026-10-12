@@ -189,7 +189,8 @@ class GrabNightTests(unittest.TestCase):
             self.assertFalse(output.exists())
 
     def fixture_run(self, failures=None, fail_episode=None, final_grab_seconds=0, final_remaining_seconds=None,
-                    invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False):
+                    invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False,
+                    retention_meals=None, retention_changes=None, recipe_options=()):
         """Exercise real orchestration/validators with a nonexecuting child stub."""
         self.run_index = getattr(self, "run_index", 0) + 1
         output = self.root / "target/founder-training" / f"run-{self.run_index}"
@@ -201,7 +202,7 @@ class GrabNightTests(unittest.TestCase):
         argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
                 "--cutoff", cutoff.isoformat(), "--target-episodes", "1" if fail_episode is None else "2",
                 "--batch-episodes", "2", "--assessment-seconds", "10", "--idle-seconds", "0",
-                "--sampling-temperature-floor", "1"]
+                "--sampling-temperature-floor", "1", *recipe_options]
         args = night.arguments().parse_args(argv)
         with patch("builtins.print"):
             self.assertEqual(night.main(argv), 0)
@@ -267,9 +268,16 @@ class GrabNightTests(unittest.TestCase):
             else:
                 held_setup = {**setup(), "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}
                 receipt = {"lesson": lesson, "held_food_setup": held_setup, "ticks": 16,
-                           "teacher_cue_frames": 1, "held_food_consumption_events": 1}
+                           "seed": int(command[6]), "founder_seed_base": int(command[7]), "teacher_mode": False,
+                           "teacher_cue_frames": 1, "teacher_cue_tokens": [8, 1],
+                           "held_food_consumption_events": (retention_meals or {}).get(name, 1)}
+                for key, value in (retention_changes or {}).get(name, {}).items():
+                    if value is None:
+                        receipt.pop(key, None)
+                    else:
+                        receipt[key] = value
                 step = {"lesson_target_held_before_decision": True, "representative_mask": 1,
-                        "candidates": [{"action": 210, "target": 3, "index": 0}]}
+                        "candidates": [{"action": 210, "target": receipt["held_food_setup"]["target"], "index": 0}]}
             if name in invalid_receipts:
                 step["representative_mask"] = 0
             (directory / "pilot.json").write_text(json.dumps(receipt))
@@ -314,7 +322,7 @@ class GrabNightTests(unittest.TestCase):
         self.assertEqual(state, night.read_json(state_path))
         self.assertFalse((output.parent / ".eat-held-food-owner.lock").exists())
         self.assertFalse(state["promoted"])
-        accepted = self.source if fail_episode == 0 else output / "episode-00000"
+        accepted = self.source if not state["distinct_completed_episodes"] else output / "episode-00000"
         self.assertEqual(state["latest_checkpoint"], str(accepted))
         for path, expected in checkpoint_hashes.items():
             self.assertEqual(night.sha256(path), expected, path)
@@ -494,6 +502,134 @@ class GrabNightTests(unittest.TestCase):
         self.assertEqual([row[0] for row in finals], ["frozen-final", "eating-retention-final"])
         self.assertEqual(state["status"], "completed")
         self.assertNotIn("final_assessment_errors", state)
+
+    def test_final_retention_lower_equal_higher_are_report_only(self):
+        for before, final, expected in ((1, 0, "lower"), (1, 1, "equal"), (0, 0, "equal"), (0, 1, "higher")):
+            with self.subTest(before=before, final=final):
+                state, finals, _ = self.fixture_run(retention_meals={
+                    "eating-retention-before": before, "eating-retention-final": final},
+                    retention_changes={"eating-retention-before": {"ticks": 1 if before else 16},
+                                       "eating-retention-final": {"ticks": 1 if final else 16}})
+                diagnostic = state["eating_retention_diagnostic"]
+                self.assertEqual(diagnostic["status"], expected)
+                self.assertTrue(diagnostic["comparable"])
+                self.assertEqual((diagnostic["before_meals"], diagnostic["final_meals"]), (before, final))
+                self.assertEqual(bool(diagnostic["warnings"]), expected == "lower")
+                self.assertEqual(state["status"], "completed")
+                self.assertEqual(state["distinct_completed_episodes"], 1)
+                self.assertEqual(len(finals), 2)
+
+    def test_missing_or_invalid_explicit_retention_count_is_unknown_never_zero(self):
+        for phase in ("before", "final"):
+            name = f"eating-retention-{phase}"
+            for count in (None, -1, True, "0", .5, 2, 17):
+                with self.subTest(phase=phase, count=count):
+                    state, _, _ = self.fixture_run(retention_changes={name: {"held_food_consumption_events": count}})
+                    diagnostic = state["eating_retention_diagnostic"]
+                    self.assertEqual(diagnostic["status"], "unknown")
+                    self.assertIsNone(diagnostic[f"{phase}_meals"])
+                    self.assertFalse(diagnostic["comparable"])
+                    self.assertEqual(diagnostic["warnings"], [])
+                    self.assertEqual(state["status"], "completed")
+                    # The legacy reader/default is deliberately preserved.
+                    if count is None:
+                        assessment = next(row for row in state["retention_assessments"]
+                                          if Path(row["directory"]).name == name)
+                        self.assertEqual(assessment["held_food_meals"], 0)
+
+    def test_final_retention_timeout_invalid_or_unattempted_is_unknown(self):
+        for options in ({"failures": {"eating-retention-final": night.CommandTimeoutError("Eat timed out")}},
+                        {"failures": {"eating-retention-before": night.CommandTimeoutError("baseline timed out")}},
+                        {"invalid_receipts": ("eating-retention-final",)},
+                        {"invalid_receipts": ("frozen-final",)}, {"fail_episode": 0}):
+            with self.subTest(options=options):
+                state, _, _ = self.fixture_run(**options)
+                diagnostic = state["eating_retention_diagnostic"]
+                self.assertEqual(diagnostic["status"], "unknown")
+                self.assertIsNone(diagnostic["final_meals"])
+                self.assertFalse(diagnostic["comparable"])
+                self.assertEqual(diagnostic["warnings"], [])
+
+    def test_confirmed_grab_timeout_preserves_successful_eat_comparison(self):
+        state, _, _ = self.fixture_run({"frozen-final": night.CommandTimeoutError("Grab timed out")},
+                                      retention_meals={"eating-retention-final": 0})
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["eating_retention_diagnostic"]["status"], "lower")
+
+    def test_interrupted_collection_compares_last_accepted_source(self):
+        state, _, _ = self.fixture_run(fail_episode=1,
+                                      retention_meals={"eating-retention-final-after-interruption": 0})
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["eating_retention_diagnostic"]["status"], "lower")
+        self.assertTrue(state["eating_retention_diagnostic"]["final_directory"].endswith("after-interruption"))
+
+    def test_changed_or_missing_assay_context_is_unknown(self):
+        for changes in ({"seed": 123}, {"founder_seed_base": 456}, {"teacher_cue_tokens": [9, 1]},
+                        {"teacher_mode": True}, {"seed": None}, {"ticks": 0},
+                        {"held_food_setup": {**setup(), "initial_hunger": float("nan"),
+                                             "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}},
+                        {"held_food_setup": {**setup(), "sampling_seed": True,
+                                             "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}},
+                        {"held_food_setup": {**setup(), "initial_hunger": .3,
+                                             "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}}):
+            with self.subTest(changes=changes):
+                state, _, _ = self.fixture_run(retention_meals={"eating-retention-final": 0},
+                                              retention_changes={"eating-retention-final": changes})
+                diagnostic = state["eating_retention_diagnostic"]
+                self.assertEqual(diagnostic["status"], "unknown")
+                self.assertFalse(diagnostic["comparable"])
+                self.assertTrue(diagnostic["reasons"])
+                self.assertEqual(diagnostic["warnings"], [])
+                self.assertEqual(state["status"], "completed")
+
+    def test_early_eating_and_fresh_instance_identity_do_not_block_comparison(self):
+        state, _, _ = self.fixture_run(retention_meals={"eating-retention-before": 0},
+                                      retention_changes={"eating-retention-final": {"ticks": 1,
+                                          "held_food_setup": {**setup(), "organism": 99, "target": 101,
+                                              "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}}})
+        diagnostic = state["eating_retention_diagnostic"]
+        self.assertEqual(diagnostic["status"], "higher")
+        self.assertEqual((diagnostic["before_decisions"], diagnostic["final_decisions"]), (16, 1))
+        self.assertNotIn("organism", diagnostic["before_context"]["held_setup"])
+        self.assertNotIn("target", diagnostic["before_context"]["held_setup"])
+
+    def test_recipe_batch_failure_and_final_report_only_policy_are_preserved(self):
+        state, finals, _ = self.fixture_run(retention_meals={"eating-retention-after-00000": 0},
+                                          recipe_options=("--max-stalled-batches", "2"))
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual(state["error"], "frozen batch lost source eating retention")
+        self.assertEqual(finals, [])
+        state, finals, _ = self.fixture_run(retention_meals={"eating-retention-final": 0},
+                                          recipe_options=("--max-stalled-batches", "2"))
+        self.assertEqual(state["status"], "completed")
+        self.assertEqual(state["eating_retention_diagnostic"]["status"], "lower")
+        self.assertEqual(len(finals), 2)
+
+    def test_shared_malformed_cue_evidence_is_unknown_without_changing_admission(self):
+        for change in ({"teacher_cue_tokens": [-1, 1]}, {"teacher_cue_tokens": [65536, 1]},
+                       {"teacher_cue_tokens": [True, 1]}, {"teacher_cue_frames": "1"},
+                       {"teacher_cue_frames": True}, {"teacher_cue_frames": 17}):
+            with self.subTest(change=change):
+                state, _, _ = self.fixture_run(retention_meals={"eating-retention-final": 0},
+                    retention_changes={name: change for name in
+                                       ("eating-retention-before", "eating-retention-final")})
+                diagnostic = state["eating_retention_diagnostic"]
+                self.assertEqual(diagnostic["status"], "unknown")
+                self.assertTrue(diagnostic["reasons"])
+                self.assertFalse(diagnostic["comparable"])
+                self.assertEqual(diagnostic["warnings"], [])
+                self.assertEqual(state["status"], "completed")
+
+    def test_shared_out_of_native_need_or_health_bounds_is_unknown(self):
+        for key in ("initial_hunger", "initial_health"):
+            with self.subTest(key=key):
+                held_setup = {**setup(), key: 2., "realized_grip_position": {"x": .5, "y": 0., "z": 0.}}
+                state, _, _ = self.fixture_run(retention_meals={"eating-retention-final": 0},
+                    retention_changes={name: {"held_food_setup": held_setup} for name in
+                                       ("eating-retention-before", "eating-retention-final")})
+                self.assertEqual(state["status"], "completed")
+                self.assertEqual(state["eating_retention_diagnostic"]["status"], "unknown")
+                self.assertEqual(state["eating_retention_diagnostic"]["warnings"], [])
 
 if __name__ == "__main__":
     unittest.main()

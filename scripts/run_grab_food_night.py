@@ -149,6 +149,96 @@ def coordinates(value):
     return values
 
 
+def retention_evidence(receipt, decision_budget):
+    """Add report-only evidence without changing legacy probe/recipe admission."""
+    setup = receipt["held_food_setup"]
+    setup_fields = ("sampling_seed", "sampling_attempts", "realized_body_position",
+                    "realized_body_yaw", "realized_grip_position", "initial_energy",
+                    "initial_hunger", "initial_health", "initial_sleeping")
+    context = {key: receipt.get(key) for key in ("seed", "founder_seed_base", "teacher_mode", "teacher_cue_tokens")}
+    context.update({"decision_budget": decision_budget, "sampling_temperature": 1.0,
+                    "held_setup": {key: setup.get(key) for key in setup_fields}})
+    issues = []
+    for key in ("seed", "founder_seed_base"):
+        if type(context[key]) is not int or not 1 <= context[key] <= MAX_SEED:
+            issues.append(f"missing/invalid {key}")
+    if context["teacher_mode"] is not False:
+        issues.append("missing/invalid learner-selected mode")
+    tokens = context["teacher_cue_tokens"]
+    if (not isinstance(tokens, list) or not tokens or
+            any(type(token) is not int or not 0 <= token <= 65535 for token in tokens)):
+        issues.append("missing/invalid teacher cue tokens")
+    if any(key not in setup or setup[key] is None for key in setup_fields):
+        issues.append("incomplete held-food starting context")
+    if (type(setup.get("sampling_seed")) is not int or not 1 <= setup["sampling_seed"] <= MAX_SEED or
+            type(setup.get("sampling_attempts")) is not int or not 1 <= setup["sampling_attempts"] <= 32 or
+            setup.get("initial_sleeping") is not False or
+            type(setup.get("realized_body_yaw")) not in (int, float) or
+            any(type(setup.get(key)) not in (int, float) or not 0 <= setup[key] <= 1
+                for key in ("initial_energy", "initial_hunger", "initial_health")) or
+            any(type(value) not in (int, float) for key in ("realized_body_position", "realized_grip_position")
+                for value in coordinates(setup[key]))):
+        issues.append("invalid held-food starting context")
+    try:
+        json.dumps(context, allow_nan=False)
+    except (TypeError, ValueError):
+        context = None
+        issues.append("nonfinite/invalid assay context")
+    decisions = receipt.get("ticks")
+    if type(decisions) is not int or not 1 <= decisions <= decision_budget:
+        issues.append("missing/invalid captured decision count")
+    cue_frames = receipt.get("teacher_cue_frames")
+    if type(cue_frames) is not int or type(decisions) is not int or not 1 <= cue_frames <= decisions:
+        cue_frames = None
+        issues.append("missing/invalid teacher cue exposure count")
+    meals = receipt.get("held_food_consumption_events")
+    # This assay has one held target and stops on its first consumption.
+    if (type(meals) is not int or meals not in (0, 1) or type(decisions) is not int or meals > decisions):
+        meals = None
+        issues.append("missing/invalid explicit held-food meal count")
+    return {"held_food_meals": meals, "context": context, "issues": issues,
+            "teacher_cue_frames": cue_frames,
+            "semantic_prior_warnings": receipt["semantic_prior_diagnostics"]["warnings"]}
+
+
+def final_eating_retention_diagnostic(state):
+    """Compare successful before/final probes only; no acceptance or promotion gate."""
+    assessments = state.get("retention_assessments", [])
+    before = next((row for row in assessments if Path(row["directory"]).name == "eating-retention-before"), {})
+    final = next((row for row in assessments if Path(row["directory"]).name in
+                  ("eating-retention-final", "eating-retention-final-after-interruption")), {})
+    report = {"status": "unknown", "comparable": False, "before_meals": None, "final_meals": None,
+              "before_decisions": before.get("decisions"), "final_decisions": final.get("decisions"),
+              "before_directory": before.get("directory"), "final_directory": final.get("directory"),
+              "reasons": [], "warnings": [], "before_context": None, "final_context": None,
+              "semantic_prior_warnings": {}, "teacher_cue_frames": {},
+              "scope": "one short held-food probe pair; optional prior delivery may vary; "
+                       "not mastery, transfer, durable retention or causal attribution evidence"}
+    for phase, assessment in (("before", before), ("final", final)):
+        evidence = assessment.get("retention_evidence") or {}
+        report[f"{phase}_meals"] = evidence.get("held_food_meals")
+        report[f"{phase}_context"] = evidence.get("context")
+        report["semantic_prior_warnings"][phase] = evidence.get("semantic_prior_warnings", [])
+        report["teacher_cue_frames"][phase] = evidence.get("teacher_cue_frames")
+        if not evidence:
+            report["reasons"].append(f"{phase} successful probe evidence unavailable")
+        report["reasons"].extend(f"{phase}: {issue}" for issue in evidence.get("issues", []))
+    if report["reasons"]:
+        return report
+    mismatches = [key for key in report["before_context"]
+                  if report["before_context"][key] != report["final_context"].get(key)]
+    if mismatches:
+        report["reasons"].append("assay context differs: " + ", ".join(mismatches))
+        return report
+    report["comparable"] = True
+    before_meals, final_meals = report["before_meals"], report["final_meals"]
+    report["status"] = "lower" if final_meals < before_meals else "higher" if final_meals > before_meals else "equal"
+    if report["status"] == "lower":
+        report["warnings"].append(f"final held-food probe observed fewer meals ({before_meals} -> {final_meals}); "
+                                  "possible eating-retention regression in this short assay only")
+    return report
+
+
 def validate_retention_probe(directory):
     receipt = read_json(directory / "pilot.json")
     setup = assert_held_setup(receipt)
@@ -172,7 +262,8 @@ def validate_retention_probe(directory):
     if not offered:
         raise ValueError("assessment never offered selectable Eat for the genuinely held target")
     return {"held_food_meals": receipt.get("held_food_consumption_events", 0),
-            "decisions": receipt["ticks"], "directory": str(directory)}
+            "decisions": receipt["ticks"], "directory": str(directory),
+            "retention_evidence": retention_evidence(receipt, 16)}
 
 
 def assert_setup(receipt):
@@ -770,6 +861,9 @@ def run_night(args, state, state_path, input_hashes):
         state["error"] = str(error)
     finally:
         try:
+            state["eating_retention_diagnostic"] = final_eating_retention_diagnostic(state)
+            for warning in state["eating_retention_diagnostic"]["warnings"]:
+                print("warning: " + warning, file=sys.stderr)
             state["ended_utc"] = dt.datetime.now(UTC).isoformat(); publish()
         finally:
             if descriptor is not None:
