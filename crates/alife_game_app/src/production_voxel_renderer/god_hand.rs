@@ -125,6 +125,33 @@ fn ready(
     }
 }
 
+#[cfg(any(feature = "gpu-runtime", test))]
+fn object_contact_position(
+    object: &alife_world::WorldObject,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    creature_scale: Vec3,
+) -> Vec3 {
+    let base = world_position_for_render(object.position, terrain_bound);
+    match object.kind {
+        WorldObjectKind::Agent => {
+            base + Vec3::Y * creature_scale.y
+                - Vec3::new(object.body_yaw.cos(), 0.0, object.body_yaw.sin())
+                    * (0.18 * creature_scale.x)
+        }
+        WorldObjectKind::Food | WorldObjectKind::Ball | WorldObjectKind::ActivityToy => {
+            live_food_projection::care_object_center(object.position, terrain_bound, surface)
+        }
+        _ => base + Vec3::Y * 0.30,
+    }
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn contact_id(hand: &HandInteraction) -> Option<WorldEntityId> {
+    hand.held
+        .or_else(|| hand.pressed.and_then(|(target, _, _)| target.stable_id))
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
@@ -142,6 +169,7 @@ pub(super) fn input(
     >,
     mut frame: Option<ResMut<LiveBrainPresentationFrameResource>>,
     terrain: Option<Res<creature_grounding::SelectedTerrain>>,
+    #[cfg(feature = "gpu-runtime")] surface: Res<creature_grounding::RenderedTerrainSurface>,
     creatures: Query<
         (&Fvr04ProductionCreatureVisualMarker, &Transform),
         Without<Fvr03ProductionVoxelCamera>,
@@ -222,25 +250,18 @@ pub(super) fn input(
             }
         }
         // Pending Grab and Carry contact the same canonical creature/object.
-        let contact_id = hand
-            .held
-            .or_else(|| hand.pressed.and_then(|(target, _, _)| target.stable_id));
-        if let Some(id) = contact_id {
-            hand.position = runtime.runtime.world().entity(id).map(|o| {
-                let base = world_position_for_render(
-                    o.position,
+        if let Some(id) = contact_id(&hand) {
+            hand.position = runtime.runtime.world().entity(id).map(|object| {
+                let scale = creatures
+                    .iter()
+                    .find(|(visual, _)| visual.stable_id == id)
+                    .map_or(Vec3::ONE, |(_, transform)| transform.scale);
+                object_contact_position(
+                    object,
                     runtime.runtime.world().terrain().is_some(),
-                );
-                if o.kind == WorldObjectKind::Agent {
-                    let scale = creatures
-                        .iter()
-                        .find(|(v, _)| v.stable_id == id)
-                        .map_or(Vec3::ONE, |(_, t)| t.scale);
-                    base + Vec3::Y * scale.y
-                        - Vec3::new(o.body_yaw.cos(), 0.0, o.body_yaw.sin()) * (0.18 * scale.x)
-                } else {
-                    base + Vec3::Y * 0.30
-                }
+                    &surface,
+                    scale,
+                )
             });
         } else {
             hand.position = hand.ground.map(|p| p + Vec3::Y * 1.0);
@@ -503,6 +524,115 @@ mod tests {
             ),
             None
         );
+    }
+
+    #[test]
+    fn pending_and_carry_care_contacts_match_the_visual_center_across_drop_and_regrab() {
+        let world = alife_world::HeadlessScenarioBuilder::new(17)
+            .food("food", Vec3f::new(0.5, 2.0, 0.5), 0.5)
+            .toy("ball", Vec3f::new(0.5, 2.0, 0.5), true)
+            .build()
+            .unwrap();
+        let original = world.object_snapshots();
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        mesh.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            vec![
+                [0.0, 0.9, 0.0],
+                [0.0, 0.9, 1.0],
+                [1.0, 0.9, 1.0],
+                [1.0, 0.9, 0.0],
+            ],
+        );
+        for terrain_bound in [false, true] {
+            for measured in [false, true] {
+                let surface = creature_grounding::RenderedTerrainSurface::from_meshes(
+                    measured.then_some(&mesh),
+                    1.0,
+                );
+                for object in &original {
+                    let selected = target(StableVoxelRefKind::Resource, Some(object.id));
+                    let mut hand = HandInteraction::default();
+                    for held in [false, true, true, false, true] {
+                        hand.held = held.then_some(object.id);
+                        hand.pressed = (!held).then_some((selected, 1.0, Vec2::ZERO));
+                        assert_eq!(contact_id(&hand), Some(object.id));
+                        let center = object_contact_position(
+                            object,
+                            terrain_bound,
+                            &surface,
+                            Vec3::splat(9.0),
+                        );
+                        assert_eq!(
+                            center,
+                            live_food_projection::care_object_center(
+                                object.position,
+                                terrain_bound,
+                                &surface
+                            )
+                        );
+                        let expected_y = 2.30
+                            + if terrain_bound {
+                                0.0
+                            } else if measured {
+                                0.9
+                            } else {
+                                0.44
+                            };
+                        assert!((center.y - expected_y).abs() < 1e-5);
+                        for state in [2, 3] {
+                            let transform = pose_transform(Quat::IDENTITY, center, 28.0, state);
+                            assert!(
+                                (transform.transform_point(POSE_CONTACTS[state]) - center).length()
+                                    < 1e-5
+                            );
+                        }
+                        hand.held = None;
+                        hand.pressed = None;
+                        assert_eq!(contact_id(&hand), None);
+                    }
+                }
+            }
+        }
+        assert_eq!(world.object_snapshots(), original);
+    }
+
+    #[test]
+    fn contact_helper_preserves_creature_and_token_rules_and_held_priority() {
+        let world = alife_world::HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::new(0.5, 2.0, 0.5))
+            .token("token", Vec3f::new(0.5, 2.0, 0.5), 1)
+            .build()
+            .unwrap();
+        let objects = world.object_snapshots();
+        let surface =
+            creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+        let scale = Vec3::new(2.0, 3.0, 4.0);
+        let creature = &objects[0];
+        let expected = world_position_for_render(creature.position, false) + Vec3::Y * scale.y
+            - Vec3::new(creature.body_yaw.cos(), 0.0, creature.body_yaw.sin()) * (0.18 * scale.x);
+        assert_eq!(
+            object_contact_position(creature, false, &surface, scale),
+            expected
+        );
+        let token = &objects[1];
+        assert_eq!(
+            object_contact_position(token, false, &surface, scale),
+            world_position_for_render(token.position, false) + Vec3::Y * 0.30
+        );
+        let hand = HandInteraction {
+            held: Some(creature.id),
+            pressed: Some((
+                target(StableVoxelRefKind::Resource, Some(token.id)),
+                1.0,
+                Vec2::ZERO,
+            )),
+            ..default()
+        };
+        assert_eq!(contact_id(&hand), Some(creature.id));
     }
 
     #[test]

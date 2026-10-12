@@ -5492,42 +5492,7 @@ fn handle_fvr03_mouse_selection(
         // Pick the actual elevated creature body, not the terrain tile behind
         // its face. The same ray and positions work at every orthographic zoom.
         let body = frame.as_ref().and_then(|frame| {
-            frame
-                .current
-                .objects()
-                .filter(|o| {
-                    !o.consumed
-                        && o.carried_by.is_none()
-                        && matches!(
-                            o.kind,
-                            WorldObjectKind::Agent
-                                | WorldObjectKind::Food
-                                | WorldObjectKind::Ball
-                                | WorldObjectKind::Token
-                        )
-                })
-                .filter_map(|o| {
-                    let p = world_position_for_render(o.position, highland.is_some());
-                    let samples: &[(f32, f32)] = if o.kind == WorldObjectKind::Agent {
-                        &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]
-                    } else {
-                        &[(0.30, 0.42)]
-                    };
-                    let nearest = samples
-                        .iter()
-                        .filter_map(|(lift, radius)| {
-                            let center = p + Vec3::Y * lift;
-                            let along = (center - ray.origin).dot(*ray.direction);
-                            let closest = ray.origin + *ray.direction * along;
-                            (along >= 0.0
-                                && along <= (position - ray.origin).length() + 0.5
-                                && closest.distance_squared(center) <= radius * radius)
-                                .then_some(along)
-                        })
-                        .min_by(f32::total_cmp)?;
-                    Some((nearest, o.id, o.kind, p))
-                })
-                .min_by(|a, b| a.0.total_cmp(&b.0))
+            pick_live_object_body(&frame.current, highland.is_some(), &surface, &ray, position)
         });
         if let Some((_, id, kind, p)) = body {
             let tile = VoxelTileCoord::new(p.x.floor() as i32, p.z.floor() as i32);
@@ -5548,32 +5513,7 @@ fn handle_fvr03_mouse_selection(
             return Some(selected);
         }
         let food = frame.as_ref().and_then(|frame| {
-            frame
-                .current
-                .objects()
-                .filter(|object| {
-                    object.kind == WorldObjectKind::Food
-                        && !object.consumed
-                        && object.carried_by.is_none()
-                })
-                .filter_map(|object| {
-                    let rendered = world_position_for_render(object.position, highland.is_some());
-                    let ground = Vec3::new(rendered.x, 0.0, rendered.z);
-                    // Match the existing food projection's center.
-                    let height = if highland.is_some() {
-                        surface.height(ground).unwrap_or(rendered.y)
-                    } else {
-                        surface.height(ground).unwrap_or(0.44) + rendered.y
-                    };
-                    let center = ground + Vec3::Y * (height + 0.30);
-                    let along = (center - ray.origin).dot(*ray.direction);
-                    let closest = ray.origin + *ray.direction * along;
-                    (along >= 0.0
-                        && along <= (position - ray.origin).length() + 0.42
-                        && closest.distance_squared(center) <= 0.42_f32.powi(2))
-                    .then_some((along, object.id, ground))
-                })
-                .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+            pick_live_food(&frame.current, highland.is_some(), &surface, &ray, position)
         });
         Some(food.map_or(selected, |(_, stable_id, ground)| {
             let tile = VoxelTileCoord::new(ground.x.floor() as i32, ground.z.floor() as i32);
@@ -5593,6 +5533,84 @@ fn handle_fvr03_mouse_selection(
         hovered,
         mouse.just_pressed(MouseButton::Left),
     );
+}
+
+// Keep the ray paths independently testable without creating a window or GPU.
+fn pick_live_object_body(
+    frame: &LiveBrainPresentationFrame,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    ray: &bevy::math::Ray3d,
+    ground_hit: Vec3,
+) -> Option<(f32, WorldEntityId, WorldObjectKind, Vec3)> {
+    frame
+        .objects()
+        .filter(|object| {
+            !object.consumed
+                && object.carried_by.is_none()
+                && matches!(
+                    object.kind,
+                    WorldObjectKind::Agent
+                        | WorldObjectKind::Food
+                        | WorldObjectKind::Ball
+                        | WorldObjectKind::Token
+                )
+        })
+        .filter_map(|object| {
+            let position = world_position_for_render(object.position, terrain_bound);
+            let (base, samples): (Vec3, &[(f32, f32)]) = match object.kind {
+                WorldObjectKind::Agent => (position, &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]),
+                WorldObjectKind::Food | WorldObjectKind::Ball => (
+                    live_food_projection::care_object_center(
+                        object.position,
+                        terrain_bound,
+                        surface,
+                    ),
+                    &[(0.0, 0.42)],
+                ),
+                _ => (position, &[(0.30, 0.42)]),
+            };
+            let nearest = samples
+                .iter()
+                .filter_map(|(lift, radius)| {
+                    let center = base + Vec3::Y * lift;
+                    let along = (center - ray.origin).dot(*ray.direction);
+                    let closest = ray.origin + *ray.direction * along;
+                    (along >= 0.0
+                        && along <= (ground_hit - ray.origin).length() + 0.5
+                        && closest.distance_squared(center) <= radius * radius)
+                        .then_some(along)
+                })
+                .min_by(f32::total_cmp)?;
+            Some((nearest, object.id, object.kind, position))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+}
+
+fn pick_live_food(
+    frame: &LiveBrainPresentationFrame,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    ray: &bevy::math::Ray3d,
+    ground_hit: Vec3,
+) -> Option<(f32, WorldEntityId, Vec3)> {
+    frame
+        .objects()
+        .filter(|object| {
+            object.kind == WorldObjectKind::Food && !object.consumed && object.carried_by.is_none()
+        })
+        .filter_map(|object| {
+            let center =
+                live_food_projection::care_object_center(object.position, terrain_bound, surface);
+            let ground = Vec3::new(center.x, 0.0, center.z);
+            let along = (center - ray.origin).dot(*ray.direction);
+            let closest = ray.origin + *ray.direction * along;
+            (along >= 0.0
+                && along <= (ground_hit - ray.origin).length() + 0.42
+                && closest.distance_squared(center) <= 0.42_f32.powi(2))
+            .then_some((along, object.id, ground))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
 }
 
 fn apply_fvr03_pointer_sample(
