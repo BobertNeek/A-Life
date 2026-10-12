@@ -27,11 +27,11 @@ def glb(raw):
     return result
 
 
-def check():
+def check_shrub_structures(root=ROOT, baseline_reader=baseline):
     rows, total_before, total_after, maximum_bound_error = [], 0, 0, 0
     for kind in KINDS:
         path = HERE / (kind + '.glb')
-        old_raw, new_raw = baseline(path), (ROOT / path).read_bytes()
+        old_raw, new_raw = baseline_reader(path), (root / path).read_bytes()
         old, new = glb(old_raw), glb(new_raw)
         assert {n['name'] for n in new.doc['nodes']} == {kind + '_L' + str(i) for i in range(3)}
         assert all(not any(k in n for k in ('matrix', 'translation', 'rotation', 'scale'))
@@ -64,6 +64,13 @@ def check():
                      'before_bytes': len(old_raw), 'after_bytes': len(new_raw),
                      'sha256': hashlib.sha256(new_raw).hexdigest(),
                      'maximum_bounds_error_m': max(errors)})
+    return {'assets': rows, 'target_bytes_before': total_before,
+            'target_bytes_after': total_after,
+            'maximum_bounds_error_m': maximum_bound_error}
+
+
+def check():
+    report = check_shrub_structures()
     # Every other committed art file and world surface retains its exact bytes.
     protected = subprocess.check_output(['git', 'ls-tree', '-r', '--name-only', BASE,
         'crates/alife_game_app/assets', 'crates/alife_world/assets'], cwd=ROOT, text=True).splitlines()
@@ -95,13 +102,12 @@ def check():
             assert {k: v for k, v in entry.items() if k not in ('digest', 'size_bytes', 'generator')} == {
                 k: v for k, v in old_entry.items() if k not in ('digest', 'size_bytes', 'generator')}
     assert len(manifest['entries']) == len(old_manifest['entries'])
-    return {'result': 'PASS', 'baseline': BASE, 'assets': rows,
-            'target_bytes_before': total_before, 'target_bytes_after': total_after,
-            'maximum_bounds_error_m': maximum_bound_error,
-            'other_art_and_world_files_byte_retained': verified,
-            'updated_asset_documentation': sorted(updated_documentation),
-            'manifest_entries_valid': len(manifest['entries']),
-            'game_rendering_proof': False}
+    report.update({'result': 'PASS', 'baseline': BASE,
+                   'other_art_and_world_files_byte_retained': verified,
+                   'updated_asset_documentation': sorted(updated_documentation),
+                   'manifest_entries_valid': len(manifest['entries']),
+                   'game_rendering_proof': False})
+    return report
 
 
 if __name__ == '__main__':

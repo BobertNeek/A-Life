@@ -70,6 +70,20 @@ Source-bound historical evidence tests require complete Git history. CI uses
 `git fetch --unshallow` before those tests. The validator still checks the exact
 producer revision's source blobs and tree, and rejects altered reports.
 
+
+For the exact reviewed PR20 + PR23 + PR24 island-art composition, run:
+
+```powershell
+python scripts/check_composed_island_graphics.py --output target/artifacts/composed-island-graphics/check.json
+python -m unittest discover -s scripts -p test_composed_island_graphics.py
+```
+
+This separate profile pins the reviewed art tree and all 48 registrations,
+permits only the four reviewed runtime refreshes, and runs the existing shrub,
+Fern and Sapling structural checks. It requires the pinned Git revisions.
+The standalone shrub gate retains its original pre-refresh preservation scope.
+These CPU contracts do not establish in-game visual or physical-GPU acceptance.
+
 Default workspace tests are CPU-safe: they retain shader validation, portable
 state, admission/receipt contracts, and typed failure checks without requiring
 a real neural GPU. Optional adapter diagnostics may report honest unavailability
