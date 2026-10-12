@@ -1734,6 +1734,11 @@ fn configure_production_voxel_presentation_schedule(app: &mut App) {
         )
             .chain(),
     );
+    app.add_systems(
+        Update,
+        live_food_projection::align_carried_care_objects
+            .in_set(ProductionVoxelPresentationSet::RootReaders),
+    );
 }
 
 #[cfg(feature = "gpu-runtime")]

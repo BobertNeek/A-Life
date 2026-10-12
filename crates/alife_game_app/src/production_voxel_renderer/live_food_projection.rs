@@ -94,6 +94,45 @@ pub(super) fn sync_care_objects(
     }
 }
 
+/// Follow the displayed carrier between world ticks without changing physical placement.
+/// Always start from the snapshot, so offsets cannot accumulate or survive release.
+pub(super) fn align_carried_care_objects(
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    roots: Query<(&ProductionCreatureAssemblyRoot, &Transform), Without<LiveCareObject>>,
+    mut objects: Query<(&LiveCareObject, &mut Transform), Without<ProductionCreatureAssemblyRoot>>,
+) {
+    let Some(frame) = frame else {
+        return;
+    };
+    let carrier_offsets: BTreeMap<_, _> = roots
+        .iter()
+        .filter_map(|(root, transform)| {
+            let carrier = frame.current.object(root.stable_id)?;
+            (carrier.kind == WorldObjectKind::Agent
+                && carrier.organism_id == Some(root.organism_id))
+            .then_some((
+                root.organism_id.raw(),
+                transform.translation - world_position_for_render(carrier.position, false),
+            ))
+        })
+        .collect();
+    for (marker, mut transform) in &mut objects {
+        let Some(object) = frame.current.object(marker.0) else {
+            continue;
+        };
+        let offset = object
+            .carried_by
+            .and_then(|carrier| carrier_offsets.get(&carrier.raw()))
+            .copied()
+            .unwrap_or(Vec3::ZERO);
+        // Hearthling heading follows world yaw directly; retain the world's grip
+        // offset and existing object height, correcting only the smoothed X/Z.
+        let position = world_position_for_render(object.position, false) + offset;
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +203,228 @@ mod tests {
                 world.tick()
             );
         }
+    }
+
+    #[derive(Resource, Default)]
+    struct DisplayedCarrierPositions(BTreeMap<u64, Vec3>);
+
+    fn present_carrier_positions(
+        positions: Res<DisplayedCarrierPositions>,
+        mut roots: Query<(&ProductionCreatureAssemblyRoot, &mut Transform)>,
+    ) {
+        for (root, mut transform) in &mut roots {
+            if let Some(position) = positions.0.get(&root.organism_id.raw()) {
+                transform.translation = *position;
+            }
+        }
+    }
+
+    fn carried_fixture(highlands: bool) -> (App, Vec<alife_world::WorldObject>, [Entity; 2]) {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .agent("carrier", OrganismId(11), Vec3f::new(4.0, 2.0, 6.0))
+            .agent("other", OrganismId(22), Vec3f::new(-8.0, 2.0, -9.0))
+            .food("held", Vec3f::new(4.5, 2.0, 6.0), 0.25)
+            .food("loose", Vec3f::new(10.0, 2.0, 10.0), 0.25)
+            .build()
+            .unwrap();
+        let mut objects = world.object_snapshots();
+        objects[2].carried_by = Some(OrganismId(11));
+        let frame =
+            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects.clone()).unwrap();
+        let mut app = App::new();
+        app.insert_resource(LiveBrainPresentationFrameResource {
+            previous: frame.clone(),
+            current: frame,
+        })
+        .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+            std::iter::empty(),
+            1.0,
+        ))
+        .insert_resource(Assets::<Mesh>::default())
+        .insert_resource(Assets::<StandardMaterial>::default())
+        .insert_resource(DisplayedCarrierPositions(BTreeMap::from([
+            (11, Vec3::new(3.0, 99.0, 5.0)),
+            (22, Vec3::new(90.0, 88.0, 90.0)),
+        ])));
+        if highlands {
+            app.insert_resource(creature_grounding::SelectedTerrain(
+                alife_world::island_terrain(),
+            ));
+        }
+        let roots = std::array::from_fn(|index| {
+            let object = &objects[index];
+            app.world_mut()
+                .spawn((
+                    ProductionCreatureAssemblyRoot {
+                        stable_id: object.id,
+                        organism_id: object.organism_id.unwrap(),
+                        display_only: true,
+                    },
+                    Transform::from_translation(Vec3::new(
+                        object.position.x,
+                        object.position.y,
+                        object.position.z,
+                    )),
+                ))
+                .id()
+        });
+        // Use the production registration and its real ECS systems, with CPU-only
+        // displayed root poses supplied in the animation set instead of a GLB.
+        configure_production_voxel_presentation_schedule(&mut app);
+        app.add_systems(
+            Update,
+            sync_care_objects.in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+        )
+        .add_systems(
+            Update,
+            present_carrier_positions.in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
+        );
+        (app, objects, roots)
+    }
+
+    fn care_entity(app: &mut App, id: WorldEntityId) -> Option<Entity> {
+        let mut query = app.world_mut().query::<(Entity, &LiveCareObject)>();
+        query
+            .iter(app.world())
+            .find_map(|(entity, marker)| (marker.0 == id).then_some(entity))
+    }
+
+    fn care_position(app: &mut App, id: WorldEntityId) -> Vec3 {
+        let entity = care_entity(app, id).unwrap();
+        app.world().get::<Transform>(entity).unwrap().translation
+    }
+
+    fn replace_objects(app: &mut App, objects: &[alife_world::WorldObject]) {
+        let tick = app
+            .world()
+            .resource::<LiveBrainPresentationFrameResource>()
+            .current
+            .authoritative_world_tick;
+        app.world_mut()
+            .resource_mut::<LiveBrainPresentationFrameResource>()
+            .current =
+            LiveBrainPresentationFrame::try_new(Vec::new(), tick, objects.to_vec()).unwrap();
+    }
+
+    #[test]
+    fn carried_care_objects_follow_exact_displayed_carrier_between_ticks_without_drift() {
+        for highlands in [false, true] {
+            let (mut app, objects, _) = carried_fixture(highlands);
+            let authoritative = app
+                .world()
+                .resource::<LiveBrainPresentationFrameResource>()
+                .clone();
+            for x in [3.0, 3.25, 3.5, 3.75, 3.75, 4.0, 4.0] {
+                app.world_mut()
+                    .resource_mut::<DisplayedCarrierPositions>()
+                    .0
+                    .insert(11, Vec3::new(x, 99.0, x + 2.0));
+                app.update();
+                let held = care_position(&mut app, objects[2].id);
+                assert!((held.x - (x + 0.5)).abs() < 1e-6);
+                assert!((held.z - (x + 2.0)).abs() < 1e-6);
+                assert!((held.y - if highlands { 2.30 } else { 2.74 }).abs() < 1e-5);
+                let loose = care_position(&mut app, objects[3].id);
+                assert_eq!((loose.x, loose.z), (10.0, 10.0));
+                assert_eq!(
+                    app.world().resource::<LiveBrainPresentationFrameResource>(),
+                    &authoritative,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn carried_care_objects_preserve_world_grip_on_turn_release_and_regrab() {
+        let (mut app, mut objects, roots) = carried_fixture(true);
+        for yaw in [0.0, std::f32::consts::FRAC_PI_2, std::f32::consts::PI] {
+            objects[0].body_yaw = yaw;
+            objects[2].position = Vec3f::new(4.0 + 0.5 * yaw.cos(), 2.0, 6.0 + 0.5 * yaw.sin());
+            app.world_mut()
+                .get_mut::<Transform>(roots[0])
+                .unwrap()
+                .rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2 - yaw);
+            replace_objects(&mut app, &objects);
+            app.update();
+            let held = care_position(&mut app, objects[2].id);
+            assert!((held.x - (3.0 + 0.5 * yaw.cos())).abs() < 1e-6);
+            assert!((held.z - (5.0 + 0.5 * yaw.sin())).abs() < 1e-6);
+        }
+        objects[2].carried_by = None;
+        objects[2].position = Vec3f::new(7.0, 2.0, 8.0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(7.0, 2.30, 8.0)
+        );
+        objects[2].carried_by = Some(OrganismId(22));
+        objects[2].position = Vec3f::new(-7.5, 2.0, -9.0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(90.5, 2.30, 90.0)
+        );
+    }
+
+    #[test]
+    fn carried_care_objects_fall_back_when_carrier_is_despawned_missing_or_mismatched() {
+        let (mut app, mut objects, roots) = carried_fixture(true);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(3.5, 2.30, 5.0)
+        );
+        app.world_mut().despawn(roots[0]);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+        // A stale root with the owner's organism ID and another stable ID must
+        // not attach the food to that unrelated entity.
+        app.world_mut()
+            .get_mut::<ProductionCreatureAssemblyRoot>(roots[1])
+            .unwrap()
+            .organism_id = OrganismId(11);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+        objects.remove(0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[1].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+    }
+
+    #[test]
+    fn carried_care_objects_keep_consumption_regrowth_and_removal_lifecycle() {
+        let (mut app, mut objects, _) = carried_fixture(true);
+        app.update();
+        let old_entity = care_entity(&mut app, objects[2].id).unwrap();
+        objects[2].consumed = true;
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert!(care_entity(&mut app, objects[2].id).is_none());
+        assert!(app.world().get_entity(old_entity).is_err());
+        objects[2].consumed = false;
+        objects[2].carried_by = None;
+        objects[2].position = Vec3f::new(12.0, 2.0, 13.0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_ne!(care_entity(&mut app, objects[2].id).unwrap(), old_entity);
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(12.0, 2.30, 13.0)
+        );
+        let removed_id = objects.remove(2).id;
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert!(care_entity(&mut app, removed_id).is_none());
     }
 }
