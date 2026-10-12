@@ -503,6 +503,116 @@ class GrabNightTests(unittest.TestCase):
         self.assertEqual(state["status"], "completed")
         self.assertNotIn("final_assessment_errors", state)
 
+    def test_report_only_diagnostic_exception_still_publishes_final_receipt(self):
+        with patch.object(night, "final_eating_retention_diagnostic",
+                          side_effect=RuntimeError("fixture diagnostic failed")) as diagnostic:
+            state, finals, _ = self.fixture_run()
+        diagnostic.assert_called_once()
+        self.assertEqual(state["status"], "completed")
+        self.assertIsNone(state["error"])
+        self.assertEqual([row[0] for row in finals], ["frozen-final", "eating-retention-final"])
+        self.assertEqual(state["eating_retention_diagnostic_error"], "RuntimeError: fixture diagnostic failed")
+        report = state["eating_retention_diagnostic"]
+        self.assertEqual(report["status"], "unknown")
+        self.assertFalse(report["comparable"])
+        self.assertIsNone(report["before_meals"])
+        self.assertIsNone(report["final_meals"])
+        self.assertTrue(report["reasons"])
+        self.assertEqual(report["warnings"], [])
+        self.assertEqual(state["ended_utc"], state["updated_utc"])
+
+    def test_report_only_diagnostic_exception_preserves_original_run_outcome(self):
+        cases = ({"fail_episode": 0}, {"fail_episode": 1},
+                 {"invalid_receipts": ("frozen-final",)},
+                 {"failures": {"eating-retention-final": night.RunnerSafetyError("fixture fatal Eat")}},
+                 {"failures": {"frozen-final": KeyboardInterrupt()}},
+                 {"retention_meals": {"eating-retention-after-00000": 0},
+                  "recipe_options": ("--max-stalled-batches", "2")},
+                 {"fail_episode": 99, "final_remaining_seconds": 900})
+        for options in cases:
+            with self.subTest(options=options):
+                original, original_finals, original_launches = self.fixture_run(**options)
+                with patch.object(night, "final_eating_retention_diagnostic",
+                                  side_effect=RuntimeError("fixture diagnostic failed")):
+                    state, finals, launches = self.fixture_run(**options)
+                for key in ("status", "error", "distinct_completed_episodes", "actor_optimizer_updates",
+                            "value_optimizer_updates", "trained_decision_rows", "promoted"):
+                    self.assertEqual(state[key], original[key], key)
+                self.assertNotEqual(state["status"], "completed")
+                self.assertEqual(state.get("final_assessment_errors"), original.get("final_assessment_errors"))
+                self.assertEqual([row[0] for row in finals], [row[0] for row in original_finals])
+                self.assertEqual(launches, original_launches)
+                self.assertEqual(state["eating_retention_diagnostic_error"], "RuntimeError: fixture diagnostic failed")
+                self.assertEqual(state["ended_utc"], state["updated_utc"])
+
+    def test_report_only_warning_failure_still_publishes_final_receipt(self):
+        # Exercise the actual warning loop as well as diagnostic construction.
+        with patch.object(night, "final_eating_retention_diagnostic", return_value={"warnings": [None]}):
+            state, _, _ = self.fixture_run()
+        self.assertEqual(state["status"], "completed")
+        self.assertTrue(state["eating_retention_diagnostic_error"].startswith("TypeError: "))
+        self.assertEqual(state["eating_retention_diagnostic"]["status"], "unknown")
+        self.assertEqual(state["ended_utc"], state["updated_utc"])
+
+    def test_final_receipt_persistence_failure_remains_fatal_after_diagnostic_exception(self):
+        real_write_json = night.write_json
+        final_attempts = []
+
+        def fail_final_write(path, state):
+            if "ended_utc" in state:
+                final_attempts.append(json.loads(json.dumps(state)))
+                raise OSError("fixture final disk failure")
+            return real_write_json(path, state)
+
+        with patch.object(night, "final_eating_retention_diagnostic",
+                          side_effect=RuntimeError("fixture diagnostic failed")), \
+             patch.object(night, "write_json", side_effect=fail_final_write):
+            with self.assertRaisesRegex(night.RunnerSafetyError, "receipt persistence failed: fixture final disk failure"):
+                self.fixture_run()
+        self.assertEqual(len(final_attempts), 1)
+        self.assertEqual(final_attempts[0]["status"], "completed")
+        self.assertEqual(final_attempts[0]["eating_retention_diagnostic_error"], "RuntimeError: fixture diagnostic failed")
+        output = self.root / "target/founder-training" / f"run-{self.run_index}"
+        self.assertNotIn("ended_utc", night.read_json(output / "night.json"))
+        self.assertFalse((output.parent / ".eat-held-food-owner.lock").exists())
+
+    def test_report_only_guard_does_not_suppress_process_control_exceptions(self):
+        for error in (KeyboardInterrupt(), SystemExit(9)):
+            with self.subTest(error=type(error).__name__):
+                with patch.object(night, "final_eating_retention_diagnostic", side_effect=error):
+                    with self.assertRaises(type(error)) as raised:
+                        self.fixture_run()
+                self.assertIs(raised.exception, error)
+                output = self.root / "target/founder-training" / f"run-{self.run_index}"
+                self.assertFalse((output.parent / ".eat-held-food-owner.lock").exists())
+
+    def test_owner_lock_cleanup_failure_remains_fatal_after_diagnostic_exception(self):
+        real_close, real_unlink = night.os.close, night.Path.unlink
+
+        def fail_close(descriptor):
+            real_close(descriptor)
+            raise OSError("fixture owner close failed")
+
+        def fail_unlink(path, *args, **kwargs):
+            if path.name == ".eat-held-food-owner.lock":
+                raise OSError("fixture owner unlink failed")
+            return real_unlink(path, *args, **kwargs)
+
+        for cleanup in (patch.object(night.os, "close", side_effect=fail_close),
+                        patch.object(night.Path, "unlink", autospec=True, side_effect=fail_unlink)):
+            with cleanup, patch.object(night, "final_eating_retention_diagnostic",
+                                      side_effect=RuntimeError("fixture diagnostic failed")):
+                with self.assertRaisesRegex(OSError, "fixture owner (close|unlink) failed"):
+                    self.fixture_run()
+            output = self.root / "target/founder-training" / f"run-{self.run_index}"
+            persisted = night.read_json(output / "night.json")
+            self.assertEqual(persisted["status"], "completed")
+            self.assertEqual(persisted["ended_utc"], persisted["updated_utc"])
+            self.assertIn("eating_retention_diagnostic_error", persisted)
+            self.assertTrue((output.parent / ".eat-held-food-owner.lock").is_file())
+            # Remove only this synthetic marker before the next fixture run.
+            real_unlink(output.parent / ".eat-held-food-owner.lock")
+
     def test_final_retention_lower_equal_higher_are_report_only(self):
         for before, final, expected in ((1, 0, "lower"), (1, 1, "equal"), (0, 0, "equal"), (0, 1, "higher")):
             with self.subTest(before=before, final=final):

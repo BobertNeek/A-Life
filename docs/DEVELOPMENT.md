@@ -151,6 +151,11 @@ operator warning only. Completion, accepted checkpoints, recipe batch gates,
 cutoffs, error handling and promotion remain unchanged. This single short probe
 pair does not establish mastery, transfer, durable retention or causal attribution;
 optional language-prior delivery warnings remain visible in the diagnostic.
+Unexpected errors while building or emitting this final report are recorded in
+`eating_retention_diagnostic_error`, with an `unknown` comparison and null meal
+counts. The final timestamp and receipt are still attempted, preserving the
+existing run status and error. Receipt persistence and owner-lock cleanup errors
+remain fatal; this guard does not cover training or assessment failures.
 
 The readiness resume test checks acquired-state restoration and later gameplay.
 Set `ALIFE_PERSISTENCE_EXACT_DIAGNOSTICS=1` to additionally require identical

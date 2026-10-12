@@ -861,9 +861,18 @@ def run_night(args, state, state_path, input_hashes):
         state["error"] = str(error)
     finally:
         try:
-            state["eating_retention_diagnostic"] = final_eating_retention_diagnostic(state)
-            for warning in state["eating_retention_diagnostic"]["warnings"]:
-                print("warning: " + warning, file=sys.stderr)
+            try:
+                state["eating_retention_diagnostic"] = final_eating_retention_diagnostic(state)
+                for warning in state["eating_retention_diagnostic"]["warnings"]:
+                    print("warning: " + warning, file=sys.stderr)
+            except Exception as error:
+                # This report cannot change acceptance/status or prevent the
+                # final receipt. Persistence and lock cleanup remain fatal.
+                state["eating_retention_diagnostic_error"] = f"{type(error).__name__}: {error}"
+                state["eating_retention_diagnostic"] = {
+                    "status": "unknown", "comparable": False, "before_meals": None, "final_meals": None,
+                    "reasons": ["report-only diagnostic failed; see eating_retention_diagnostic_error"],
+                    "warnings": []}
             state["ended_utc"] = dt.datetime.now(UTC).isoformat(); publish()
         finally:
             if descriptor is not None:
