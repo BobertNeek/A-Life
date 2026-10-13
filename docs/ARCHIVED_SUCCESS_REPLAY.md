@@ -3,7 +3,7 @@
 Build the read-only native inspector with:
 
 ```powershell
-cargo build -p alife_game_app --features foundation-training --bin inspect_archived_success
+cargo build --release -p alife_game_app --features foundation-training --bin inspect_archived_success
 ```
 
 Run `inspect_archived_success SEALED_CYCLE MANIFEST` against the exact trained
@@ -20,8 +20,13 @@ manifest digest, selected source policy, founder, and checked examples by action
 
 Set `ALIFE_ARCHIVE_INSPECT_PROGRESS=1` to report validation progress on stderr.
 The CLI uses a bounded 32 MiB worker stack for native record decoding on Windows.
-Full graph reconstruction can take several minutes for a large bank; include
-that validation cost in the replay budget.
+Use the release profile for repeated inspection: world and phenotype
+construction dominate the debug build's cost. On October 13, the same private
+40-example bank took 367.7 seconds in debug and 51.6 seconds in release, with
+identical native results and unchanged input hashes. The optimized build also
+passed all eight archive checks. This measures CPU inspection, not neural
+execution or training throughput. Include validation cost in the replay budget;
+the first optimized build has a separate one-time compilation cost.
 
 The integration check accepts private, already-sealed data and retains its
 tamper fixtures separately:
