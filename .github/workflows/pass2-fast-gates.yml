@@ -16,20 +16,12 @@ permissions:
   contents: read
 
 jobs:
-  speech-cpu-regressions:
-    name: CPU speech regressions
+  speech-cpu-selection:
+    name: Select CPU speech changes
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    concurrency:
-      group: speech-cpu-${{ github.ref }}
-      cancel-in-progress: true
-    env:
-      CARGO_BUILD_JOBS: "2"
-      CARGO_INCREMENTAL: "0"
-      CARGO_PROFILE_TEST_DEBUG: "0"
-      CARGO_PROFILE_DEV_DEBUG: "0"
-      CARGO_TARGET_DIR: target/speech-cpu
-      RUST_MIN_STACK: "33554432"
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.changes.outputs.run }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,23 +71,40 @@ jobs:
               output.write(f'run={str(run).lower()}\n')
           PY
 
+  speech-cpu-regressions:
+    name: CPU speech regressions
+    needs: speech-cpu-selection
+    # A skipped push or manual opt-out must not cancel a selected build.
+    if: needs.speech-cpu-selection.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: speech-cpu-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_TARGET_DIR: target/speech-cpu
+      RUST_MIN_STACK: "33554432"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Install Rust
-        if: steps.changes.outputs.run == 'true'
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Linux input build dependency
-        if: steps.changes.outputs.run == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends libudev-dev pkg-config
 
       - name: Resolve compiler cache key
-        if: steps.changes.outputs.run == 'true'
         id: compiler
         run: echo "key=$(rustc -Vv | sha256sum | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
       - name: Cache focused CPU build
-        if: steps.changes.outputs.run == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -106,7 +115,6 @@ jobs:
           key: speech-cpu-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.compiler.outputs.key }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'crates/*/Cargo.toml', '.cargo/config.toml', 'scripts/check_speech_cpu.sh') }}
 
       - name: Run focused CPU speech regressions
-        if: steps.changes.outputs.run == 'true'
         run: bash scripts/check_speech_cpu.sh
 
   host-fast-gates:

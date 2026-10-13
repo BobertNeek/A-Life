@@ -176,8 +176,11 @@ those fixtures do not establish real adapter admission or GPU performance.
 
 The Pass 2 fast-gates workflow also runs a focused CPU speech lane when the
 composer, care-dock integration, speech dependencies, or its build setup change.
-Unrelated updates skip its Rust/dependency setup; new branches conservatively run
-it because the push has no before-SHA. Manual dispatch opts in with `speech_cpu`.
+A lightweight prerequisite selects changes before scheduling the build job.
+Unrelated updates skip its Rust/dependency setup and cannot cancel an in-progress
+selected build. New branches conservatively run it because the push has no
+before-SHA. Manual dispatch opts in with `speech_cpu`; leaving it off cannot cancel
+a selected build either.
 Reproduce it on Linux after installing the distribution's `libudev-dev` and
 `pkg-config` packages:
 
