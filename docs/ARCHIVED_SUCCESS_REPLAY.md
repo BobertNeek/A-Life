@@ -14,6 +14,12 @@ compiled feature compatibility, bounded replay records, and genuine selected Gra
 the same typed readers used by archived rehearsal. Duplicate records, false
 labels, incompatible sources and incomplete handoffs are errors.
 
+For a selected sealed source at policy P, inspection uses the next continuation
+policy P+1, matching training's checked policy increment. Archived episodes E<=P
+can pass the ordering guard; future episodes E>P and an overflowing P+1 are
+errors. Each record retains its original episode policy and frozen parent actor
+binding, and the inspection receipt still reports the selected source policy P.
+
 Inspection reads artifacts and compiles phenotype metadata. It creates no GPU
 session, computes no new neural output, performs no optimizer updates, and
 changes no historical reward or checkpoint bytes. Its receipt reports the

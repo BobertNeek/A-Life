@@ -108,6 +108,12 @@ pub fn inspect_archived_successes(
                 .into(),
         );
     }
+    // The sealed source P resumes as P+1. Match rehearsal's episode ordering,
+    // while keeping each archived record bound to its original collection P.
+    let continuation_policy_version = cycle
+        .policy_version
+        .checked_add(1)
+        .ok_or("policy version overflow")?;
     let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
         source_cycle.join("trained.alife-foundation"),
     )?)?;
@@ -156,7 +162,7 @@ pub fn inspect_archived_successes(
             entry,
             cycle.founder_seed_base,
             &current,
-            cycle.policy_version,
+            continuation_policy_version,
         )?;
         if progress {
             eprintln!(
@@ -534,8 +540,11 @@ pub(crate) fn rehearse_archived_successes(
 mod tests {
     use super::*;
 
-    #[test]
-    fn selected_checkpoint_payloads_are_checked_before_loading_any_archive_entry() {
+    fn selected_source_fixture() -> (
+        PathBuf,
+        FoundationTrainerCheckpoint,
+        alife_training::PpoValueHeadCheckpoint,
+    ) {
         let founder = 539363617;
         let provisional = crate::initial_n2048_care_asset(founder).unwrap();
         let mut config = alife_world::CanonicalNewGameConfig::phase3(founder, 1).unwrap();
@@ -635,6 +644,15 @@ mod tests {
         archive.founder_seed_base = founder;
         archive.entries[0].episode = directory.join("missing-archive-entry");
         write_json("manifest.json", &serde_json::to_value(&archive).unwrap());
+        (directory, actor, value)
+    }
+
+    #[test]
+    fn selected_checkpoint_payloads_are_checked_before_loading_any_archive_entry() {
+        let (directory, actor, value) = selected_source_fixture();
+        let write_json = |name: &str, data: &serde_json::Value| {
+            std::fs::write(directory.join(name), serde_json::to_vec(data).unwrap()).unwrap();
+        };
         let inspect = || inspect_archived_successes(&directory, &directory.join("manifest.json"));
         // A valid selected checkpoint reaches the first (deliberately absent)
         // archive entry. A malformed selected checkpoint must fail earlier.
@@ -678,6 +696,88 @@ mod tests {
         assert_eq!(
             inspect().unwrap_err().to_string(),
             "inspection source value head is bound to a different feature count"
+        );
+    }
+
+    #[test]
+    fn inspection_orders_archive_episodes_against_the_next_continuation() {
+        let (directory, _, _) = selected_source_fixture();
+        let source_cycle: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(directory.join("cycle.json")).unwrap()).unwrap();
+        let mut archive: ArchivedSuccessManifest =
+            serde_json::from_slice(&std::fs::read(directory.join("manifest.json")).unwrap())
+                .unwrap();
+        let episode = directory.join("archive-episode");
+        let parent = directory.join("archive-parent");
+        std::fs::create_dir(&episode).unwrap();
+        std::fs::create_dir(&parent).unwrap();
+        archive.entries[0].episode = episode.clone();
+        archive.entries[0].previous = parent.clone();
+        let write_episode = |archive: &mut ArchivedSuccessManifest, policy: u64| {
+            let mut cycle = source_cycle.clone();
+            cycle["policy_version"] = serde_json::json!(policy);
+            std::fs::write(
+                episode.join("cycle.json"),
+                serde_json::to_vec(&cycle).unwrap(),
+            )
+            .unwrap();
+            cycle["policy_version"] = serde_json::json!(policy - 1);
+            std::fs::write(
+                parent.join("cycle.json"),
+                serde_json::to_vec(&cycle).unwrap(),
+            )
+            .unwrap();
+            archive.entries[0].source.policy_version = policy;
+            std::fs::write(
+                directory.join("manifest.json"),
+                serde_json::to_vec(archive).unwrap(),
+            )
+            .unwrap();
+        };
+        // The selected source is P=2. Historical E=1 and source episode E=2
+        // pass ordering for continuation 3 and reach the absent asset sentinel.
+        // This is boundary admission only, not a genuine replay/label fixture.
+        for policy in [1, 2] {
+            write_episode(&mut archive, policy);
+            let error = inspect_archived_successes(&directory, &directory.join("manifest.json"))
+                .unwrap_err();
+            assert_eq!(
+                error.downcast_ref::<std::io::Error>().unwrap().kind(),
+                std::io::ErrorKind::NotFound,
+                "episode {policy} must pass policy ordering"
+            );
+        }
+        write_episode(&mut archive, 3);
+        assert_eq!(
+            inspect_archived_successes(&directory, &directory.join("manifest.json"))
+                .unwrap_err()
+                .to_string(),
+            "archived episode is not a sealed older continuation of this founder"
+        );
+    }
+
+    #[test]
+    fn inspection_rejects_source_policy_overflow_before_archive_loading() {
+        let (directory, _, mut value) = selected_source_fixture();
+        let mut cycle: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(directory.join("cycle.json")).unwrap()).unwrap();
+        cycle["policy_version"] = serde_json::json!(u64::MAX);
+        value.last_updated_policy_version = Some(u64::MAX);
+        std::fs::write(
+            directory.join("cycle.json"),
+            serde_json::to_vec(&cycle).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(
+            directory.join("value-checkpoint.json"),
+            serde_json::to_vec(&value).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            inspect_archived_successes(&directory, &directory.join("manifest.json"))
+                .unwrap_err()
+                .to_string(),
+            "policy version overflow"
         );
     }
 
