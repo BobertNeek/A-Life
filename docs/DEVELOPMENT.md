@@ -174,6 +174,24 @@ in preflight/file-boundary tests. Tests that require neural hardware use the exp
 feature exposes synthetic admission-budget fixtures for CPU contract tests;
 those fixtures do not establish real adapter admission or GPU performance.
 
+The Pass 2 fast-gates workflow also runs a focused CPU speech lane when the
+composer, care-dock integration, speech dependencies, or its build setup change.
+Unrelated updates skip its Rust/dependency setup; new branches conservatively run
+it because the push has no before-SHA. Manual dispatch opts in with `speech_cpu`.
+Reproduce it on Linux after installing the distribution's `libudev-dev` and
+`pkg-config` packages:
+
+```sh
+bash scripts/check_speech_cpu.sh
+```
+
+This checks at least seven composer-state, six worker, and six opening-input
+tests, including the reopened-draft regression. It refuses empty or ignored
+coverage. Two build jobs and test-only optimization/debug overrides bound compile
+cost; debug assertions remain enabled. These CPU fixtures do not exercise the
+GPU-only Bevy completion handlers, render the live composer, or prove gameplay
+acceptance. The existing default-workspace and Tier 0-1 gates remain unchanged.
+
 Release-oriented checks may also require:
 
 ```powershell
