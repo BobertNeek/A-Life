@@ -124,24 +124,54 @@ const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
 const EMBEDDED: [(&str, &[u8]); 12] = [
-    ("hunger", include_bytes!("status_hud/icons/hunger.png")),
-    ("energy", include_bytes!("status_hud/icons/energy.png")),
-    ("fatigue", include_bytes!("status_hud/icons/fatigue.png")),
-    ("calm", include_bytes!("status_hud/icons/calm.png")),
-    ("sleep", include_bytes!("status_hud/icons/sleep.png")),
-    ("praise", include_bytes!("status_hud/icons/praise.png")),
+    (
+        "hunger",
+        include_bytes!("../../../../assets/ui/status_hud/hunger.png"),
+    ),
+    (
+        "energy",
+        include_bytes!("../../../../assets/ui/status_hud/energy.png"),
+    ),
+    (
+        "fatigue",
+        include_bytes!("../../../../assets/ui/status_hud/fatigue.png"),
+    ),
+    (
+        "calm",
+        include_bytes!("../../../../assets/ui/status_hud/calm.png"),
+    ),
+    (
+        "sleep",
+        include_bytes!("../../../../assets/ui/status_hud/sleep.png"),
+    ),
+    (
+        "praise",
+        include_bytes!("../../../../assets/ui/status_hud/praise.png"),
+    ),
     (
         "selection",
-        include_bytes!("status_hud/icons/selection.png"),
+        include_bytes!("../../../../assets/ui/status_hud/selection.png"),
     ),
     (
         "population",
-        include_bytes!("status_hud/icons/population.png"),
+        include_bytes!("../../../../assets/ui/status_hud/population.png"),
     ),
-    ("playing", include_bytes!("status_hud/icons/playing.png")),
-    ("paused", include_bytes!("status_hud/icons/paused.png")),
-    ("fast", include_bytes!("status_hud/icons/fast.png")),
-    ("warning", include_bytes!("status_hud/icons/warning.png")),
+    (
+        "playing",
+        include_bytes!("../../../../assets/ui/status_hud/playing.png"),
+    ),
+    (
+        "paused",
+        include_bytes!("../../../../assets/ui/status_hud/paused.png"),
+    ),
+    (
+        "fast",
+        include_bytes!("../../../../assets/ui/status_hud/fast.png"),
+    ),
+    (
+        "warning",
+        include_bytes!("../../../../assets/ui/status_hud/warning.png"),
+    ),
 ];
 fn bevel(raised: bool) -> BorderColor {
     let light = Color::srgb(0.43, 0.53, 0.55);

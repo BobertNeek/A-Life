@@ -454,7 +454,7 @@ fn export_nodes(world: &mut World) -> Vec<Value> {
             let name = image_name(world, entity).expect("every HUD image maps to an embedded asset");
             let asset = world.resource::<Assets<Image>>().get(&image.image).unwrap();
             json!({"name": name,
-                "source_path": format!("crates/alife_game_app/src/production_voxel_renderer/status_hud/icons/{name}.png"),
+                "source_path": format!("assets/ui/status_hud/{name}.png"),
                 "decoded_size": [asset.width(), asset.height()]})
         });
         let border = world.get::<BorderColor>(entity).map(|border| {
@@ -596,7 +596,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                     "embedded {name} PNG did not decode"
                 );
                 embedded_assets.push(json!({"name": name,
-                    "source_path": format!("crates/alife_game_app/src/production_voxel_renderer/status_hud/icons/{name}.png"),
+                    "source_path": format!("assets/ui/status_hud/{name}.png"),
                     "decoded_size": [image.width(), image.height()]}));
             }
             assert_eq!(embedded_assets.len(), EMBEDDED.len());
