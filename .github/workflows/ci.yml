@@ -20,6 +20,8 @@ jobs:
           python-version: '3.12'
       - name: Compact probe prior diagnostics CPU tests
         run: python -m unittest discover -s scripts -p 'test_probe_prior_summaries.py' -v
+      - name: Read-only raw prior receipt audit CPU tests
+        run: python -m unittest discover -s scripts -p 'test_audit_prior_receipts.py' -v
       - name: Existing night-runner CPU tests
         run: python -m unittest discover -s scripts -p 'test*food_night.py' -v
 
