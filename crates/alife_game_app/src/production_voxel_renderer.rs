@@ -69,6 +69,7 @@ use crate::{
 };
 
 mod camera_navigation;
+pub(crate) mod care_dock;
 mod creature_grounding;
 mod god_hand;
 mod graphics_capture;
@@ -1945,6 +1946,9 @@ fn apply_production_runtime_load(world: &mut World) {
             menu.note_loaded_pause(candidate_settings.paused);
         }
         world.insert_resource(candidate_frame);
+        if let Some(mut dock) = world.get_resource_mut::<care_dock::State>() {
+            dock.reset();
+        }
         world
             .resource_mut::<ProductionGpuBrainTickScheduleResource>()
             .reset_after_load(playback, mode);
@@ -2097,29 +2101,36 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
+            care_dock::collect_input.before(menu::handle_input),
             handle_fvr03_mouse_selection
                 .before(god_hand::input)
                 .after(menu::handle_input)
-                .run_if(menu::world_input_allowed),
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             god_hand::input
                 .before(handle_fvr05_production_ux_input)
                 .after(menu::handle_input)
-                .run_if(menu::world_input_allowed),
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             handle_fvr03_camera_mode_input
                 .after(menu::handle_input)
-                .run_if(menu::world_input_allowed),
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             camera_navigation::zoom_camera
                 .after(menu::handle_input)
-                .run_if(menu::world_input_allowed),
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             handle_fvr04_camera_follow_input
                 .after(menu::handle_input)
-                .run_if(menu::world_input_allowed),
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             camera_navigation::pan_camera
                 .after(handle_fvr03_camera_mode_input)
                 .after(handle_fvr04_camera_follow_input)
                 .before(handle_fvr05_production_ux_input)
                 .after(menu::handle_input)
-                .run_if(menu::world_input_allowed),
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             handle_pause_on_focus_loss
                 .before(handle_fvr05_production_ux_input)
                 .before(menu::handle_input),
@@ -2163,7 +2174,11 @@ pub fn spawn_fvr03_production_voxel_scene(
     )
     .add_systems(
         Update,
-        (sync_v0_player_control_strip, status_hud::sync)
+        (
+            sync_v0_player_control_strip,
+            care_dock::sync,
+            status_hud::sync,
+        )
             .chain()
             .in_set(ProductionVoxelPresentationSet::RootReaders),
     );
@@ -5139,8 +5154,10 @@ const V0_PLAYER_CONTROL_HINTS: &str =
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
     status_hud::spawn(app.world_mut());
+    care_dock::spawn(app.world_mut());
     app.world_mut().spawn((
-        Name::new("A-Life V0 player control strip"),
+        Name::new("A-Life explicit keyboard help"),
+        Visibility::Hidden,
         Text::new(V0_PLAYER_CONTROL_HINTS),
         TextFont {
             font_size: 13.0,
@@ -5151,7 +5168,7 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
             position_type: PositionType::Absolute,
             left: Val::Px(18.0),
             max_width: Val::Percent(95.0),
-            bottom: Val::Px(18.0),
+            bottom: Val::Px(92.0),
             padding: bevy::ui::UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
             ..default()
         },
@@ -5163,7 +5180,10 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
 fn sync_v0_player_control_strip(
     ux: Res<Fvr05ProductionUxStateResource>,
     #[cfg(feature = "gpu-runtime")] authority: Option<Res<ProductionGpuBrainAuthorityResource>>,
-    mut strips: bevy::prelude::Query<&mut Text, With<V0PlayerControlStrip>>,
+    mut strips: bevy::prelude::Query<
+        (&mut Text, &mut Visibility, &mut Node),
+        With<V0PlayerControlStrip>,
+    >,
 ) {
     #[cfg(feature = "gpu-runtime")]
     let authority_changed = authority.as_ref().is_some_and(|state| state.is_changed());
@@ -5259,8 +5279,14 @@ fn sync_v0_player_control_strip(
     if ux.pending_food_move.is_some() && !ux.debug_mode {
         text.push_str("\nFood chosen to move: click ground, then G. Esc cancels.");
     }
-    for mut strip in &mut strips {
+    for (mut strip, mut visibility, mut node) in &mut strips {
+        node.bottom = Val::Px(if ux.last_error.is_some() { 108.0 } else { 92.0 });
         strip.0 = text.clone();
+        *visibility = if ux.show_help || ux.debug_mode {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 

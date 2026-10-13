@@ -761,87 +761,60 @@ fn readout_does_not_capture_input_and_stays_below_unchanged_menu_source_layers()
 }
 
 #[test]
-fn short_player_window_hides_only_help_strip_and_restores_on_resize_or_deselection() {
+fn real_dock_retains_priority_and_status_restores_when_it_fits() {
     let mut world = World::new();
     spawn(&mut world);
-    let strip = world
-        .spawn((
-            V0PlayerControlStrip,
-            Text::new(V0_PLAYER_CONTROL_HINTS),
-            TextFont {
-                font_size: 13.0,
-                ..default()
-            },
-            Node {
-                max_width: Val::Percent(95.0),
-                bottom: Val::Px(18.0),
-                padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
-                ..default()
-            },
-        ))
-        .id();
-    for (size, selected, expected) in [
-        (Vec2::new(320.0, 240.0), true, Visibility::Hidden),
-        (Vec2::new(320.0, 480.0), true, Visibility::Inherited),
-        (Vec2::new(640.0, 360.0), true, Visibility::Inherited),
-        (Vec2::new(320.0, 240.0), true, Visibility::Hidden),
-        (Vec2::new(320.0, 240.0), false, Visibility::Inherited),
+    care_dock::spawn(&mut world);
+    let readout = Readout {
+        stable_id: 42,
+        values: [Some(0.5); 6],
+    };
+    let panel = world
+        .query_filtered::<Entity, With<HudRoot>>()
+        .single(&world)
+        .unwrap();
+    for (size, visible) in [
+        (Vec2::new(320.0, 240.0), false),
+        (Vec2::new(320.0, 480.0), true),
+        (Vec2::new(640.0, 360.0), true),
     ] {
-        adapt_control_strip_visibility(&mut world, size, selected);
-        assert_eq!(world.get::<Visibility>(strip), Some(&expected));
-        assert_eq!(world.get::<Text>(strip).unwrap().0, V0_PLAYER_CONTROL_HINTS);
+        set_readout(&mut world, Some(&readout), false);
+        adapt_bottom_controls_visibility(&mut world, size, true);
+        assert_eq!(visible_in_hierarchy(&world, panel), visible);
     }
     assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 238.0);
-    assert_eq!(panel_bottom(Vec2::new(640.0, 360.0)), 188.0);
 }
 
 #[test]
-fn expanded_help_and_action_error_keep_strip_visible_and_temporarily_hide_selected_panel() {
+fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
     let mut world = World::new();
     spawn(&mut world);
+    care_dock::spawn(&mut world);
     let strip = world
         .spawn((
             V0PlayerControlStrip,
-            Text::new(V0_PLAYER_CONTROL_HINTS),
+            Text::new("F1 Close help | Space Pause"),
             TextFont {
                 font_size: 13.0,
                 ..default()
             },
             Node {
-                max_width: Val::Percent(95.0),
-                bottom: Val::Px(18.0),
-                padding: UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
+                bottom: Val::Px(92.0),
                 ..default()
             },
+            Visibility::Inherited,
         ))
         .id();
     let readout = Readout {
         stable_id: 42,
         values: [Some(0.5); 6],
     };
-    for status in [
-        "\nSimulation stopped. F3 for details.",
-        "\nThe world wasn't saved. Press S to retry; F3 has details.",
-        "\nGentle touch queued for the selected creature.",
-        "\nF1 Close help | Space Pause",
-    ] {
-        world.get_mut::<Text>(strip).unwrap().0 = format!("{V0_PLAYER_CONTROL_HINTS}{status}");
-        set_readout(&mut world, Some(&readout), false);
-        adapt_control_strip_visibility(&mut world, Vec2::new(320.0, 240.0), true);
-        assert_eq!(world.get::<Visibility>(strip), Some(&Visibility::Inherited));
-        let panel = world
-            .query_filtered::<Entity, With<HudRoot>>()
-            .single(&world)
-            .unwrap();
-        assert!(!visible_in_hierarchy(&world, panel));
-    }
-    world.get_mut::<Text>(strip).unwrap().0 = V0_PLAYER_CONTROL_HINTS.into();
     set_readout(&mut world, Some(&readout), false);
-    adapt_control_strip_visibility(&mut world, Vec2::new(320.0, 240.0), true);
-    assert_eq!(world.get::<Visibility>(strip), Some(&Visibility::Hidden));
+    adapt_bottom_controls_visibility(&mut world, Vec2::new(320.0, 240.0), true);
     let panel = world
         .query_filtered::<Entity, With<HudRoot>>()
         .single(&world)
         .unwrap();
-    assert!(visible_in_hierarchy(&world, panel));
+    assert!(!visible_in_hierarchy(&world, panel));
+    assert_eq!(world.get::<Visibility>(strip), Some(&Visibility::Inherited));
 }

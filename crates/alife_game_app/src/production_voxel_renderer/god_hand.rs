@@ -284,6 +284,7 @@ type HandTransformFilter = (With<GodHand>, Without<Fvr03ProductionVoxelCamera>);
 pub(super) fn animate(
     time: Res<Time<bevy::time::Real>>,
     menu: Option<Res<menu::MenuState>>,
+    dock: Option<Res<care_dock::State>>,
     hand: Res<HandInteraction>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     cameras: Query<(&Transform, &Projection), HandCameraFilter>,
@@ -295,6 +296,7 @@ pub(super) fn animate(
         return;
     };
     let visible = !menu::captures_input(menu)
+        && !care_dock::captures_input(dock)
         && windows
             .single()
             .is_ok_and(|(w, _)| w.focused && w.cursor_position().is_some())

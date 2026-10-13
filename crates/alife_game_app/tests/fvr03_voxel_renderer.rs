@@ -1651,7 +1651,11 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
         .query::<(&V0PlayerControlStrip, &Text, &Visibility)>();
     let controls = controls_query.iter(app.world()).collect::<Vec<_>>();
     assert_eq!(controls.len(), 1);
-    assert_ne!(*controls[0].2, Visibility::Hidden);
+    assert_eq!(
+        *controls[0].2,
+        Visibility::Hidden,
+        "ordinary player view uses the wordless care dock"
+    );
     assert!(controls[0].1 .0.contains("F1 Help"));
     assert!(controls[0].1 .0.contains("Space Pause"));
 }

@@ -566,65 +566,17 @@ fn panel_bottom(size: Vec2) -> f32 {
         + rows as f32 * if size.y < 300.0 { 56.0 } else { 68.0 }
         + (rows - 1) as f32 * 6.0
 }
-fn adapt_control_strip_visibility(world: &mut World, size: Vec2, selected_visible: bool) {
-    let mut status_needs_space = false;
-    for (text, font, node, computed, mut visible) in world
-        .query_filtered::<(
-            &Text,
-            &TextFont,
-            &Node,
-            Option<&ComputedNode>,
-            &mut Visibility,
-        ), With<V0PlayerControlStrip>>()
-        .iter_mut(world)
-    {
-        let max_width = match node.max_width {
-            Val::Percent(percent) => size.x * percent / 100.0,
-            Val::Px(px) => px,
-            _ => size.x,
-        };
-        let horizontal_padding = match node.padding.left {
-            Val::Px(px) => px,
-            _ => 0.0,
-        } + match node.padding.right {
-            Val::Px(px) => px,
-            _ => 0.0,
-        };
-        let vertical_padding = match node.padding.top {
-            Val::Px(px) => px,
-            _ => 0.0,
-        } + match node.padding.bottom {
-            Val::Px(px) => px,
-            _ => 0.0,
-        };
-        // Conservative before text shaping, and when help/error text changes:
-        // one em per character and 1.3em per line. Actual measured height can
-        // increase the budget. This changes visibility only, never shortcuts.
-        let columns = ((max_width - horizontal_padding) / font.font_size)
-            .floor()
-            .max(1.0) as usize;
-        let lines = text
-            .0
-            .split('\n')
-            .map(|line| line.chars().count().max(1).div_ceil(columns))
-            .sum::<usize>();
-        let estimated = lines as f32 * font.font_size * 1.3 + vertical_padding;
-        let height = estimated.max(computed.map_or(0.0, |node| node.size().y));
-        let bottom = match node.bottom {
-            Val::Px(px) => px,
-            _ => 0.0,
-        };
-        let need = panel_bottom(size) + 8.0 + bottom + height;
-        let collision = selected_visible && size.y < need;
-        let default_hints = text.0 == V0_PLAYER_CONTROL_HINTS;
-        status_needs_space |= collision && !default_hints;
-        *visible = if collision && default_hints {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        };
+fn adapt_bottom_controls_visibility(world: &mut World, size: Vec2, selected_visible: bool) {
+    let occupied_top = care_dock::occupied_top(world, size);
+    if occupied_top < 72.0 {
+        for mut visible in world
+            .query_filtered::<&mut Visibility, With<StatusRoot>>()
+            .iter_mut(world)
+        {
+            *visible = Visibility::Hidden;
+        }
     }
-    if status_needs_space {
+    if selected_visible && panel_bottom(size) + 8.0 > occupied_top {
         for mut visible in world
             .query_filtered::<&mut Visibility, With<HudRoot>>()
             .iter_mut(world)
@@ -657,7 +609,7 @@ pub(super) fn sync(world: &mut World) {
             Vec2::new(window.width(), window.height())
         });
     apply_layout(world, size);
-    adapt_control_strip_visibility(world, size, readout.is_some() && !debug);
+    adapt_bottom_controls_visibility(world, size, readout.is_some() && !debug);
 }
 
 #[cfg(test)]

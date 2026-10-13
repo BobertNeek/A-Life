@@ -65,19 +65,60 @@ at narrow widths, and uses shorter cards below 300px viewport height. All HUD
 nodes ignore picking and pass UI focus. The existing menu's modal/entry source
 layers (100/90) remain above the HUD (30); CPU tests guard those layers and
 non-interactive components, without proving combined live input dispatch.
-CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240. The last
-is minimum stress evidence with a 2px bottom margin, not full-app collision
-clearance. When a selected HUD leaves insufficient space below it, only the
-retained default hint line is hidden. Expanded F1 help, errors and action/status
-confirmations stay visible; if they need that space the selected panel hides
-temporarily instead. The threshold is HUD bottom plus
-an 8px gap, the strip's bottom offset, and its height budget: the larger of real
-computed height and conservative character-wrap/line-height sizing. Deselect,
-resize with enough room, or F3 debug restores the strip; keyboard controls stay
-active. Other toolbars and speech controls are unchanged. Smaller sizes,
-combined live compositing, and live GPU rendering remain unvalidated.
-Speech, teaching text, menu behavior, keyboard controls and control-strip
-wording are unchanged; only the narrow visibility priority above is adaptive.
+CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240.
+The ordinary player hint strip is replaced by a five-control wordless care dock:
+food placement (apple over ground), gentle touch (open palm), physical toy offer
+(striped ball), praise offer (thumb), and speech entry (bubble). These real 48px
+buttons and E/C/J/K use one frontend dispatcher; they do not synthesize keys or
+select creature actions. Food preserves the existing eligibility of any valid
+selected reference with a tile. Care resolves stable selection against the
+current living canonical organism and position. Toy placement rejects a carried
+ball through the existing world authority. Repeated care doses remain bounded
+by that same authority. No new hand mode, biological mutation, learning-credit
+claim, or neural CPU fallback is introduced.
+
+Cream silhouettes mean available, a muted silhouette/question means unavailable,
+a cross means a rejected command, and a ground-reticle marks a returned physical
+placement identity only. The broken ring means accepted queued care whose effect
+is unconfirmed. There is no per-care-command completion receipt, so this marker
+never becomes successful from a later tick or hormone rise and remains while
+paused. Selection changes or a runtime load clear old care feedback. Player speech
+translation is a separate global operation; stale runtime results show unavailable. Errors remain
+visible as a wordless alert; the existing exact error and action stay in F3.
+F1 explicitly opens keyboard help, while the ordinary strip stays hidden.
+
+The dock captures its pointer area and held-button dismissal frames before world
+readers. Mouse speech opens the same existing composer path as Enter, establishes
+conversation capture before hand/world readers, and keeps all typed teaching text,
+creature speech and named-addressee precedence. The composer chrome itself remains
+for a separately bounded restyle. A clipped scroll parent follows the existing
+end caret so up to 512 typed characters stay intact inside short viewports. The dock has priority in short windows: selected
+physiology temporarily hides if it would overlap the actual dock budget or the
+expanded text composer/help budget, and restores when space permits. Full live
+GPU compositing, engine glyph layout and production neural integration remain
+separate qualification boundaries.
+
+The keyboard opening frame consumes its raw input in order: text before the
+first non-repeated Enter is discarded, and text after it is retained immediately.
+The opening frame does not submit speech, even with a second Enter. Submission in
+an already-open composer requires a fresh, non-repeated raw Enter as well as the
+existing aggregate input edge, so held repeats cannot retry after an input reset. Closed,
+lineage, menu, pointer-open and cancellation paths advance the speech reader so
+old shortcuts cannot become later text. Pointer-open still discards the entire
+unread keyboard batch; mouse and keyboard messages do not establish a shared
+ordering boundary. Six keyboard opening-boundary CPU regression tests were
+freshly compiled and passed in the combined care/speech code source tree
+`9e6054b6db37673eb299a347c5bf092a8c4744f6`. They exercise the production
+boundary helpers; GPU-only input handlers and live input remain unqualified.
+
+Accepted asynchronous player translation clears and closes its submitted draft
+immediately. A later successful worker completion preserves the current composer
+text and open/closed state, clearing the completed Pending cue while preserving
+a newer draft's rejection cue, so reopening to type another draft is safe. Inline
+unaided completion, including a worker-start fallback, still clears and closes
+the submitted draft after successful emission. Focused CPU state-helper tests
+exercise this ownership boundary; they do not instantiate the GPU-only input or
+completion handlers or establish live graphical speech acceptance.
 
 Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the

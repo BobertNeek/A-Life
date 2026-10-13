@@ -18,6 +18,7 @@ pub(super) fn handle_fvr05_production_ux_input(
     #[cfg(feature = "gpu-runtime")] mut frame: ResMut<LiveBrainPresentationFrameResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
     mut menu_state: ResMut<menu::MenuState>,
+    mut dock: ResMut<care_dock::State>,
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
         bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
     >,
@@ -227,98 +228,23 @@ pub(super) fn handle_fvr05_production_ux_input(
             );
         }
     }
-    if keyboard.just_pressed(KeyCode::KeyE) {
-        #[cfg(feature = "gpu-runtime")]
-        let selected_tile = selection
-            .selected
-            .and_then(|selected| (selected.is_stable()).then_some(selected.tile).flatten());
-        #[cfg(feature = "gpu-runtime")]
-        match (gpu_runtime.as_mut(), selected_tile) {
-            (Some(runtime), Some(tile)) => {
-                let position = if runtime.runtime.world().terrain_binding().is_some() {
-                    Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5)
-                } else {
-                    Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0)
-                };
-                match runtime.runtime.place_player_food(position) {
-                    Ok(_receipt) => {
-                        frame.refresh_world_objects(runtime.runtime.world());
-                        ux.last_error = None;
-                        ux.last_action = "Food placed".to_string();
-                    }
-                    Err(error) => {
-                        ux.last_error = Some(error.to_string());
-                        ux.last_action =
-                            "Food placement rejected; world left unchanged".to_string();
-                    }
-                }
-            }
-            (Some(_), None) => {
-                ux.last_error = Some("select a visible terrain tile first".to_string());
-                ux.last_action = "Food placement rejected; world left unchanged".to_string();
-            }
-            (None, _) => {
-                ux.last_error = Some("GPU runtime unavailable".to_string());
-                ux.last_action = "Food placement unavailable".to_string();
-            }
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.last_error = Some("GPU runtime unavailable".to_string());
-            ux.last_action = "Food placement unavailable".to_string();
-        }
-    }
-    #[cfg(feature = "gpu-runtime")]
-    for (key, label) in [
-        (KeyCode::KeyC, "Gentle touch"),
-        (KeyCode::KeyJ, "Play"),
-        (KeyCode::KeyK, "Praise reward"),
-    ] {
-        if keyboard.just_pressed(key) && !ux.debug_mode {
-            let result = (|| -> Result<(), crate::GameAppShellError> {
-                let runtime = gpu_runtime.as_mut().ok_or_else(|| {
-                    crate::GameAppShellError::InvalidProductionFrontend {
-                        message: "GPU runtime unavailable".to_string(),
-                    }
-                })?;
-                let selected = selection
-                    .selected
-                    .and_then(|s| s.stable_id)
-                    .and_then(|id| runtime.runtime.world().entity(id))
-                    .filter(|object| object.kind == WorldObjectKind::Agent)
-                    .ok_or_else(|| crate::GameAppShellError::InvalidProductionFrontend {
-                        message: "select a living creature first".to_string(),
-                    })?;
-                let organism = selected
-                    .organism_id
-                    .ok_or(alife_core::ScaffoldContractError::InvalidId)?;
-                let hand_position = selected.position;
-                if key == KeyCode::KeyJ {
-                    runtime.runtime.offer_player_play(organism)?;
-                } else {
-                    runtime.runtime.provide_player_care(
-                        organism,
-                        hand_position,
-                        key == KeyCode::KeyK,
-                    )?;
-                }
-                frame.refresh_world_objects(runtime.runtime.world());
-                Ok(())
-            })();
-            match result {
-                Ok(()) => {
-                    ux.last_error = None;
-                    ux.last_action = if key == KeyCode::KeyJ {
-                        "Plaything offered; creature chooses whether to investigate".to_string()
-                    } else {
-                        format!("{label} offered; chemistry updates at the next simulation tick")
-                    };
-                }
-                Err(error) => {
-                    ux.last_error = Some(error.to_string());
-                    ux.last_action = format!("{label} unavailable");
-                }
-            }
+    dock.observe_selection(selection.selected);
+    let pointer_action = dock.take_pending();
+    for action in care_dock::ACTIONS
+        .into_iter()
+        .filter(|a| *a != care_dock::Action::Speech)
+    {
+        if care_dock::requested(action, pointer_action, &keyboard, ux.debug_mode) {
+            let evidence = care_dock::dispatch(
+                action,
+                selection.selected,
+                &mut ux,
+                #[cfg(feature = "gpu-runtime")]
+                gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),
+                #[cfg(feature = "gpu-runtime")]
+                &mut frame,
+            );
+            dock.record(action, evidence);
         }
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
