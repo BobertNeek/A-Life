@@ -79,6 +79,7 @@ mod island;
 mod landscape;
 mod live_creature_projection;
 mod live_food_projection;
+pub(crate) mod menu;
 #[cfg(feature = "gpu-runtime")]
 mod performance_receipt;
 #[cfg(feature = "gpu-runtime")]
@@ -1918,7 +1919,10 @@ fn apply_production_runtime_load(world: &mut World) {
                     message: format!("same-device staging backend unavailable: {error}"),
                 })?
         };
-        let playback = if candidate_settings.paused {
+        let menu_open = world
+            .get_resource::<menu::MenuState>()
+            .is_some_and(menu::is_open);
+        let playback = if menu_open || candidate_settings.paused {
             RuntimePlaybackState::Paused
         } else {
             RuntimePlaybackState::Running
@@ -1936,6 +1940,9 @@ fn apply_production_runtime_load(world: &mut World) {
                 .replace_from_durable_save(staging_backend, durable)?;
         }
 
+        if let Some(mut menu) = world.get_resource_mut::<menu::MenuState>() {
+            menu.note_loaded_pause(candidate_settings.paused);
+        }
         world.insert_resource(candidate_frame);
         world
             .resource_mut::<ProductionGpuBrainTickScheduleResource>()
@@ -1943,6 +1950,9 @@ fn apply_production_runtime_load(world: &mut World) {
         {
             let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
             ux.settings = candidate_settings;
+            if menu_open {
+                ux.settings.paused = true;
+            }
             ux.settings.selected_stable_id = None;
             ux.settings.follow_selection = false;
             ux.source_save_path = save_path.clone();
@@ -2086,17 +2096,33 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
-            handle_fvr03_mouse_selection.before(god_hand::input),
-            god_hand::input.before(handle_fvr05_production_ux_input),
-            handle_fvr03_camera_mode_input,
-            camera_navigation::zoom_camera,
-            handle_fvr04_camera_follow_input,
+            handle_fvr03_mouse_selection
+                .before(god_hand::input)
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed),
+            god_hand::input
+                .before(handle_fvr05_production_ux_input)
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed),
+            handle_fvr03_camera_mode_input
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed),
+            camera_navigation::zoom_camera
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed),
+            handle_fvr04_camera_follow_input
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed),
             camera_navigation::pan_camera
                 .after(handle_fvr03_camera_mode_input)
                 .after(handle_fvr04_camera_follow_input)
-                .before(handle_fvr05_production_ux_input),
-            handle_pause_on_focus_loss.before(handle_fvr05_production_ux_input),
-            handle_fvr05_production_ux_input,
+                .before(handle_fvr05_production_ux_input)
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed),
+            handle_pause_on_focus_loss
+                .before(handle_fvr05_production_ux_input)
+                .before(menu::handle_input),
+            handle_fvr05_production_ux_input.after(menu::handle_input),
         )
             .in_set(ProductionVoxelPresentationSet::Input),
     )
@@ -2238,6 +2264,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         })
         .add_systems(Update, request_fvr03_recorded_screenshot);
     }
+    menu::install(app, summary);
     spawn_fvr05_production_ux_ui(app);
     spawn_v0_player_experience_ui(app);
     spawn_fvr04_creature_world_label(app, selected);
@@ -5629,6 +5656,7 @@ fn apply_fvr03_pointer_sample(
 fn handle_pause_on_focus_loss(
     mut focus_events: MessageReader<WindowFocused>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
+    menu: Option<ResMut<menu::MenuState>>,
     #[cfg(feature = "gpu-runtime")] mut schedule: Option<
         ResMut<crate::bevy_shell::ProductionGpuBrainTickScheduleResource>,
     >,
@@ -5636,6 +5664,9 @@ fn handle_pause_on_focus_loss(
     let lost_focus = focus_events.read().any(|event| !event.focused);
     if !lost_focus || !ux.settings.pause_on_focus_loss {
         return;
+    }
+    if let Some(mut menu) = menu {
+        menu.note_external_pause();
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(schedule) = schedule.as_deref_mut() {

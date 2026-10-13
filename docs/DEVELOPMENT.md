@@ -28,6 +28,18 @@ path whose parent also receives the new save. `-RecordPerformance` requires
 `-BuildProfile release`; the existing recorder also requires
 `ALIFE_PHASE31_SOURCE_HEAD` to identify the measured source.
 
+The player menu opens at graphical launch, except during performance recording.
+Play resumes; Escape or the three-bar button opens a pause menu. Escape closes
+it while restoring the prior pause state; Speed and Settings use Back/Escape to
+return to the main menu. The menu captures world, camera, and teaching input,
+including the dismissal frame and held keys/buttons. Typed and creature speech
+remain unchanged. Save and Load use the existing authoritative checkpoint
+paths; Load waits for pending publication and keeps an open menu paused.
+Speed offers the existing 1x and Max graphical modes. Settings' Autopause toggle
+controls the existing pause-on-focus-loss setting. Quit saves at the current
+paused tick and exits only after that exact checkpoint and journal publication
+finish; failures keep the window open. The debug rails remain separate.
+
 Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
 selected creature, or finds the first creature when none is selected.

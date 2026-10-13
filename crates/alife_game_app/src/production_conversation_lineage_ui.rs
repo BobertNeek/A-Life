@@ -1025,6 +1025,7 @@ pub fn install_production_conversation_lineage_ui(
     app.add_systems(
         Update,
         handle_production_conversation_lineage_input
+            .after(crate::production_voxel_renderer::menu::handle_input)
             .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::Input),
     )
     .add_systems(
@@ -1884,12 +1885,17 @@ pub(crate) fn handle_production_conversation_lineage_input(
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     creatures: Res<Fvr04ProductionCreatureSceneResource>,
     ux: Res<Fvr05ProductionUxStateResource>,
+    menu: Option<Res<crate::production_voxel_renderer::menu::MenuState>>,
     reset_result: Res<ProductionCuratedFounderResetResultResource>,
     mut reset_commands: MessageWriter<ProductionCuratedFounderResetCommand>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
+    if crate::production_voxel_renderer::menu::captures_input(menu) {
+        key_messages.clear();
+        return;
+    }
     if state.developer_overlay != ux.debug_mode {
         state.developer_overlay = ux.debug_mode;
     }
