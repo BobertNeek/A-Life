@@ -81,10 +81,15 @@ def assert_prior(receipt, expected_frames=None):
     if not isinstance(prior, dict):
         prior = {}
         issues.append("invalid optional prior receipt type")
-    frames = prior.get("decision_frames", 0)
-    if not isinstance(frames, int) or frames < 0:
-        frames = 0
-        issues.append("invalid optional prior decision count")
+    # Missing or malformed coverage is unknown, not a measured zero.
+    counts = {}
+    for key in ("decision_frames", "decision_frames_with_prior", "decision_frames_without_prior"):
+        value = prior.get(key)
+        if value is not None and (type(value) is not int or value < 0):
+            value = None
+            issues.append(f"invalid optional prior {key} count")
+        counts[key] = value
+    frames = counts["decision_frames"]
     inputs = prior.get("decision_inputs", [])
     if not isinstance(inputs, list) or any(not isinstance(row, dict) for row in inputs):
         inputs = []
@@ -93,8 +98,11 @@ def assert_prior(receipt, expected_frames=None):
         issues.append("prior receipt absent or its bounded trace incomplete")
     if expected_frames is not None and frames != expected_frames:
         issues.append("prior receipt count differs from captured learner decisions")
-    if len({(row.get("organism"), row.get("sequence")) for row in inputs}) != frames or any(
-            row.get("organism") is None or row.get("sequence") is None or row.get("tick") is None for row in inputs):
+    # PriorDecisionInput identities are u64 wire values. Validate before hashing
+    # so malformed optional identities can warn without rejecting the episode.
+    valid_identities = all(type(row.get(key)) is int and 0 <= row[key] <= MAX_SEED
+                           for row in inputs for key in ("organism", "sequence", "tick"))
+    if not valid_identities or len({(row["organism"], row["sequence"]) for row in inputs}) != frames:
         issues.append("prior trace lacks unique confirmed decision identities")
     if any(prior.get(key, 0) for key in
            ("dropout_frames", "failures", "prime_timeouts", "decision_frames_without_prior")):
@@ -106,9 +114,7 @@ def assert_prior(receipt, expected_frames=None):
         issues.append("some decisions have no semantic encoder delivery")
     if issues:
         print("warning: continuing without complete language priors: " + "; ".join(issues), file=sys.stderr)
-    return {"failure_policy": "log_and_continue_without_prior", "warnings": issues,
-            "decision_frames": frames, "decision_frames_with_prior": prior.get("decision_frames_with_prior", 0),
-            "decision_frames_without_prior": prior.get("decision_frames_without_prior", 0)}
+    return {"failure_policy": "log_and_continue_without_prior", "warnings": issues, **counts}
 
 
 def assert_setup(receipt):
@@ -162,7 +168,8 @@ def validate_probe(directory):
     if not offered:
         raise ValueError("assessment never offered selectable Eat for the genuinely held target")
     return {"held_food_meals": receipt.get("held_food_consumption_events", 0),
-            "decisions": receipt["ticks"], "directory": str(directory)}
+            "decisions": receipt["ticks"], "directory": str(directory),
+            "semantic_prior_diagnostics": receipt["semantic_prior_diagnostics"]}
 
 
 def validate_cycle(directory, previous, seed):
