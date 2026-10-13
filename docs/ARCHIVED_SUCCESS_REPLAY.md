@@ -44,3 +44,22 @@ those require the established frozen behavioral tests after actual training.
 This preserves causal event credit (`AOA-LEARN-002`, `AOA-LEARN-003`) and bounded
 selection of relevant replay (`AOA-SLEEP-005`). It does not implement organism
 sleep or redefine the controlling architecture.
+
+## Read the original GPU scores
+
+For passive training diagnosis, build and run the feature-gated example:
+
+```powershell
+cargo build -p alife_game_app --features foundation-training --example inspect_saved_policy
+target/debug/examples/inspect_saved_policy SEALED_CYCLE ROW
+```
+
+It reads one original replay row, checks the sealed cycle, compressed record
+digest, row identity, initial asset binding and score layout, then exports the
+captured GPU logits alongside candidate action IDs, targets, sampling settings
+and masks. It opens no GPU session, computes no neural output and changes no
+inputs. Its bounded 32 MiB decoding stack supports Windows.
+
+This is a passive score export, not the full graph and actor handoff validation
+above. Score margins across different recorded worlds are descriptive training
+evidence. They do not establish frozen behavior, retention or promotion.
