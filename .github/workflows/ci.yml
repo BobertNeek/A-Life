@@ -7,6 +7,22 @@ on:
     branches: ["main"]
 
 jobs:
+  probe-prior-diagnostics:
+    name: Probe prior receipt diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compact probe prior diagnostics CPU tests
+        run: python -m unittest discover -s scripts -p 'test_probe_prior_summaries.py' -v
+      - name: Existing night-runner CPU tests
+        run: python -m unittest discover -s scripts -p 'test*food_night.py' -v
+
   training-continuity:
     name: Training checkpoint continuity
     runs-on: ubuntu-latest

@@ -38,3 +38,8 @@ initial seven-test suite failed on the source base with 48 missing-summary-key
 errors before the repair. Eight original list/dict identity failures were also
 reproduced across both scripts. No learner, GPU, or provider was launched. Full Cargo checks and live
 training/provider delivery are not established by these receipt fixtures.
+
+The existing CI and fast-gate workflows did not run Python night-runner tests.
+CI now includes a dedicated `Probe prior receipt diagnostics` job that discovers
+the new focused suite and both existing night-runner suites with the commands
+above. A passing Rust/host fast-gate check alone does not certify this regression.
