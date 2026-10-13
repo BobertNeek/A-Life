@@ -244,7 +244,7 @@ fn cycle_replay_dose(
     ))
 }
 
-fn validate_cycle_optimizer_handoff(
+pub(crate) fn validate_cycle_optimizer_handoff(
     receipt: &FoundationCycleReceipt,
     asset: &FoundationWeightAsset,
     actor: &alife_training::FoundationTrainerCheckpoint,

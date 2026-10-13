@@ -68,6 +68,113 @@ pub struct ArchivedSuccessReplayReceipt {
     pub examples: Vec<ArchivedSuccessEntry>,
 }
 
+/// Read-only native validation of an archive against one sealed trained source.
+/// No GPU device, trainer, forward pass, or optimizer update is created.
+#[derive(Debug, serde::Serialize)]
+pub struct ArchivedSuccessInspection {
+    pub manifest_digest: Blake3Digest,
+    pub source_policy_version: u64,
+    pub founder_seed_base: u64,
+    pub checked_examples: usize,
+    pub grab_examples: usize,
+    pub eating_examples: usize,
+    pub neural_execution: bool,
+    pub weights_modified: bool,
+}
+
+/// Validate the same native source, graph, replay and action-label contracts
+/// used by archived rehearsal, without allocating its GPU training state.
+pub fn inspect_archived_successes(
+    source_cycle: &Path,
+    manifest_path: &Path,
+) -> Result<ArchivedSuccessInspection> {
+    let progress = std::env::var_os("ALIFE_ARCHIVE_INSPECT_PROGRESS").is_some();
+    let started = std::time::Instant::now();
+    if progress {
+        eprintln!("archive inspection: reading selected source");
+    }
+    let bytes = read_archive_bytes(manifest_path)?;
+    let manifest: ArchivedSuccessManifest = serde_json::from_slice(&bytes)?;
+    validate_archive_request(&manifest, 1)?;
+    let cycle: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(source_cycle.join("cycle.json"))?)?;
+    if cycle.biological_objective_version != 2
+        || cycle.objective_state_reset
+        || cycle.founder_seed_base == 0
+        || manifest.founder_seed_base != cycle.founder_seed_base
+    {
+        return Err(
+            "archive inspection requires a compatible sealed objective2 source of the same founder"
+                .into(),
+        );
+    }
+    let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        source_cycle.join("trained.alife-foundation"),
+    )?)?;
+    let asset_digest: String = asset
+        .digest()
+        .bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    if asset_digest != cycle.new_asset_digest {
+        return Err("inspection source export digest disagrees with its cycle".into());
+    }
+    let actor: FoundationTrainerCheckpoint =
+        serde_json::from_slice(&std::fs::read(source_cycle.join("actor-checkpoint.json"))?)?;
+    let value: alife_training::PpoValueHeadCheckpoint =
+        serde_json::from_slice(&std::fs::read(source_cycle.join("value-checkpoint.json"))?)?;
+    crate::foundation_training_cycle::validate_cycle_optimizer_handoff(
+        &cycle, &asset, &actor, &value,
+    )?;
+    if progress {
+        eprintln!(
+            "archive inspection: source handoff checked at {:.3}s; compiling source graph",
+            started.elapsed().as_secs_f64()
+        );
+    }
+    let current = compile_source(asset, cycle.seed, cycle.founder_seed_base)?;
+    if actor.phenotype_hash != current.phenotype_hash() {
+        return Err("inspection source actor is bound to a different phenotype".into());
+    }
+    let mut grabs = 0;
+    for (index, entry) in manifest.entries.iter().enumerate() {
+        if progress {
+            eprintln!(
+                "archive inspection: preparing example {}/{} at {:.3}s",
+                index + 1,
+                manifest.entries.len(),
+                started.elapsed().as_secs_f64()
+            );
+        }
+        let prepared = prepare(
+            entry,
+            cycle.founder_seed_base,
+            &current,
+            cycle.policy_version,
+        )?;
+        if progress {
+            eprintln!(
+                "archive inspection: loading example {} at {:.3}s",
+                index + 1,
+                started.elapsed().as_secs_f64()
+            );
+        }
+        load(entry, &prepared, &current)?;
+        grabs += usize::from(entry.action == 211);
+    }
+    Ok(ArchivedSuccessInspection {
+        manifest_digest: Blake3Digest::from_bytes(*blake3::hash(&bytes).as_bytes()),
+        source_policy_version: cycle.policy_version,
+        founder_seed_base: cycle.founder_seed_base,
+        checked_examples: manifest.entries.len(),
+        grab_examples: grabs,
+        eating_examples: manifest.entries.len() - grabs,
+        neural_execution: false,
+        weights_modified: false,
+    })
+}
+
 pub(crate) fn validate_archive_request(
     manifest: &ArchivedSuccessManifest,
     epochs: u32,
