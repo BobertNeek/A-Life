@@ -133,10 +133,15 @@ pub fn inspect_archived_successes(
             started.elapsed().as_secs_f64()
         );
     }
+    let source_foundation_digest = asset.digest();
     let current = compile_source(asset, cycle.seed, cycle.founder_seed_base)?;
-    if actor.phenotype_hash != current.phenotype_hash() {
-        return Err("inspection source actor is bound to a different phenotype".into());
+    actor.validate_for(&current, source_foundation_digest)?;
+    if value.feature_count != current.neuron_count() {
+        return Err("inspection source value head is bound to a different feature count".into());
     }
+    // This validates the value payload and holds a pending restore only. No
+    // replay buffers or GPU objective are created by this constructor.
+    PpoTrainingState::from_checkpoint(value)?;
     let mut grabs = 0;
     for (index, entry) in manifest.entries.iter().enumerate() {
         if progress {
@@ -528,6 +533,154 @@ pub(crate) fn rehearse_archived_successes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_checkpoint_payloads_are_checked_before_loading_any_archive_entry() {
+        let founder = 539363617;
+        let provisional = crate::initial_n2048_care_asset(founder).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(founder, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.founder_seed_base = founder;
+        config.sensor_profile = provisional.manifest().sensor_profile();
+        let game =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &provisional)
+                .unwrap();
+        let organism = game.world.organism_registry().iter().next().unwrap();
+        let genome = &organism.phenotype().brain_genome;
+        let capacity = alife_core::BrainCapacityClass::n2048();
+        let development = crate::gpu_live_runtime::foundation_construction_development(
+            genome,
+            &capacity,
+            &organism
+                .phenotype()
+                .development_state_at(alife_core::Tick::ZERO)
+                .unwrap(),
+        )
+        .unwrap();
+        // Fixture weights match the canonical founder's expressed graph.
+        // This constructs metadata only, without stepping a world or a GPU.
+        let native = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+            genome,
+            &capacity,
+            &development,
+            config.sensor_profile,
+        )
+        .unwrap();
+        let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&native).unwrap();
+        let current = compile_source(asset.clone(), founder, founder).unwrap();
+        let n = current.synapses().len();
+        let actor = FoundationTrainerCheckpoint {
+            schema_version: 2,
+            phenotype_hash: current.phenotype_hash(),
+            source_foundation_digest: asset.digest(),
+            optimizer_step: 1,
+            config: alife_training::AdamWConfig::default(),
+            stage_mask: alife_training::StageTrainableMask::from_synapse_indices(&current, &[17])
+                .unwrap(),
+            weights: asset.weights().to_vec(),
+            first_moment: vec![0.0; n],
+            second_moment: vec![0.0; n],
+            update_ages: vec![0; n],
+        };
+        let value = alife_training::PpoValueHeadCheckpoint {
+            feature_count: current.neuron_count(),
+            optimizer_step: 1,
+            parameters: vec![0.0; (current.neuron_count() as usize + 1) * 3],
+            last_updated_policy_version: Some(2),
+        };
+        // Keep newly created fixtures separate from all genuine source data.
+        let directory = std::env::temp_dir().join(format!(
+            "alife-inspection-checkpoints-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let write_json = |name: &str, data: &serde_json::Value| {
+            std::fs::write(directory.join(name), serde_json::to_vec(data).unwrap()).unwrap();
+        };
+        let asset_digest: String = asset
+            .digest()
+            .bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        write_json(
+            "cycle.json",
+            &serde_json::json!({
+                "biological_objective_version": 2, "seed": founder,
+                "founder_seed_base": founder, "policy_version": 2,
+                "training_ticks": 1, "collection_seconds": 0.0, "update_seconds": 0.0,
+                "old_asset_digest": asset_digest, "new_asset_digest": asset_digest,
+                "actor_optimizer_step": 1, "value_optimizer_step": 1, "completed_epochs": 1,
+                "next_cohort_tick_captured": true, "next_cohort_optimizer_rebound": true
+            }),
+        );
+        std::fs::write(
+            directory.join("trained.alife-foundation"),
+            asset.encode_canonical().unwrap(),
+        )
+        .unwrap();
+        write_json(
+            "actor-checkpoint.json",
+            &serde_json::to_value(&actor).unwrap(),
+        );
+        write_json(
+            "value-checkpoint.json",
+            &serde_json::to_value(&value).unwrap(),
+        );
+        let mut archive = manifest();
+        archive.founder_seed_base = founder;
+        archive.entries[0].episode = directory.join("missing-archive-entry");
+        write_json("manifest.json", &serde_json::to_value(&archive).unwrap());
+        let inspect = || inspect_archived_successes(&directory, &directory.join("manifest.json"));
+        // A valid selected checkpoint reaches the first (deliberately absent)
+        // archive entry. A malformed selected checkpoint must fail earlier.
+        let error = inspect().unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::NotFound
+        );
+        let mut malformed_actor = actor.clone();
+        malformed_actor.first_moment.clear();
+        write_json(
+            "actor-checkpoint.json",
+            &serde_json::to_value(&malformed_actor).unwrap(),
+        );
+        assert!(inspect()
+            .unwrap_err()
+            .downcast_ref::<ScaffoldContractError>()
+            .is_some());
+        write_json(
+            "actor-checkpoint.json",
+            &serde_json::to_value(&actor).unwrap(),
+        );
+        let mut malformed_value = value.clone();
+        malformed_value.parameters.clear();
+        write_json(
+            "value-checkpoint.json",
+            &serde_json::to_value(&malformed_value).unwrap(),
+        );
+        assert!(inspect()
+            .unwrap_err()
+            .downcast_ref::<alife_training::TrainingError>()
+            .is_some());
+        let mut incompatible_value = value;
+        incompatible_value.feature_count += 1;
+        incompatible_value.parameters =
+            vec![0.0; (incompatible_value.feature_count as usize + 1) * 3];
+        write_json(
+            "value-checkpoint.json",
+            &serde_json::to_value(&incompatible_value).unwrap(),
+        );
+        assert_eq!(
+            inspect().unwrap_err().to_string(),
+            "inspection source value head is bound to a different feature count"
+        );
+    }
+
     fn manifest() -> ArchivedSuccessManifest {
         ArchivedSuccessManifest {
             schema: 1,

@@ -50,17 +50,30 @@ def main():
         manifest = args.output / (name + ".json")
         manifest.write_text(json.dumps(mutated))
         invoke(name, args.source, manifest, False)
-    for name in ("incomplete-handoff", "actor-export-mismatch"):
+    for name in ("incomplete-handoff", "actor-export-mismatch", "actor-empty-first-moment",
+                 "value-empty-parameters", "value-feature-mismatch"):
         source = args.output / name
         source.mkdir()
         for path in protected[1:]:
             shutil.copy2(path, source / path.name)
-        path = source / ("cycle.json" if name == "incomplete-handoff" else "actor-checkpoint.json")
+        checkpoint_name = ("cycle.json" if name == "incomplete-handoff" else
+                           "value-checkpoint.json" if name.startswith("value-") else
+                           "actor-checkpoint.json")
+        path = source / checkpoint_name
         data = json.loads(path.read_bytes())
         if name == "incomplete-handoff":
             data["next_cohort_tick_captured"] = False
-        else:
+        elif name == "actor-export-mismatch":
             data["weights"][0] += .5
+        elif name == "actor-empty-first-moment":
+            data["first_moment"] = []
+        elif name == "value-empty-parameters":
+            data["parameters"] = []
+        else:
+            data["feature_count"] += 1
+            # Keep this payload internally well-shaped so only graph feature
+            # compatibility can reject it.
+            data["parameters"] = [0.0] * ((data["feature_count"] + 1) * 3)
         path.write_text(json.dumps(data))
         invoke(name, source, args.manifest, False)
     assert digests == {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in protected}

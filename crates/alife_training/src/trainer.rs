@@ -1457,36 +1457,8 @@ impl FoundationTrainer {
         if self.accumulation.is_some() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
-        checkpoint.config.validate()?;
-        checkpoint.stage_mask.validate_for(&self.phenotype)?;
+        checkpoint.validate_for(&self.phenotype, self.source_foundation.digest())?;
         let n = self.phenotype.synapses().len();
-        if checkpoint.schema_version != 2
-            || checkpoint.phenotype_hash != self.phenotype.phenotype_hash()
-            || checkpoint.source_foundation_digest != self.source_foundation.digest()
-            || checkpoint.weights.len() != n
-            || checkpoint.first_moment.len() != n
-            || checkpoint.second_moment.len() != n
-            || checkpoint.update_ages.len() != n
-            || checkpoint
-                .update_ages
-                .iter()
-                .any(|age| *age > checkpoint.optimizer_step)
-            || checkpoint
-                .update_ages
-                .iter()
-                .zip(&checkpoint.first_moment)
-                .zip(&checkpoint.second_moment)
-                .any(|((age, m), v)| *age == 0 && (*m != 0.0 || *v != 0.0))
-            || checkpoint
-                .weights
-                .iter()
-                .chain(&checkpoint.first_moment)
-                .chain(&checkpoint.second_moment)
-                .any(|v| !v.is_finite())
-            || checkpoint.second_moment.iter().any(|v| *v < 0.0)
-        {
-            return Err(ScaffoldContractError::PhenotypeCompile.into());
-        }
         let (_, queue) = self.session.backend().offline_training_device_queue()?;
         queue.write_buffer(
             &self.gpu.weights,

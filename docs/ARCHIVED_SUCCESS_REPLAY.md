@@ -9,7 +9,8 @@ cargo build --release -p alife_game_app --features foundation-training --bin ins
 Run `inspect_archived_success SEALED_CYCLE MANIFEST` against the exact trained
 cycle intended for continuation. It checks objective2, the exported actor and
 optimizer handoff, founder identity, full graph compatibility, original source
-digests, bounded replay records, and genuine selected Grab/Eat outcomes through
+digests, actor schema/config/mask and Adam payloads, value parameter shape and
+compiled feature compatibility, bounded replay records, and genuine selected Grab/Eat outcomes through
 the same typed readers used by archived rehearsal. Duplicate records, false
 labels, incompatible sources and incomplete handoffs are errors.
 
@@ -37,7 +38,9 @@ python scripts/check_archived_success_inspector.py --binary INSPECTOR --source S
 
 It requires genuine Grab and meal examples, then checks rejection of bad schema,
 duplicates, altered record digests, a false meal label, another founder, an
-incomplete handoff, and an actor/export mismatch. Protected inputs must retain
+incomplete handoff, an actor/export mismatch, empty actor first moments, empty
+value parameters, and a well-shaped value head with an incompatible feature count.
+Protected inputs must retain
 their original hashes.
 
 This prepares an archive for the existing `--archived-success-manifest` and
