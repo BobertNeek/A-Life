@@ -40,6 +40,45 @@ controls the existing pause-on-focus-loss setting. Quit saves at the current
 paused tick and exits only after that exact checkpoint and journal publication
 finish; failures keep the window open. The debug rails remain separate.
 
+The selected-creature HUD uses six distinct icon meters, read directly from the
+last complete authoritative presentation frame matched to the selected root's
+stable and organism IDs. Left to right: hunger drive (fruit), body-energy reserve
+(lightning bolt, not brain ATP), fatigue drive (half-lidded eye), inverse-fear
+calm (neutral face), sleep-pressure hormone (crescent), and praise hormone
+extension[0] (thumb). These are mixed physiology readouts, not six interchangeable
+needs, health scores, or proof of successful care. Calm is the display transform
+1 minus validated fear, not a claim about environmental safety. Sleep pressure
+is distinct from fatigue; praise hormone is neither happiness nor proof that an
+action received learning credit. Meter fill shows the actual normalized amount.
+High hunger/fatigue/sleep pressure and low energy/calm add an amber warning
+triangle; thresholds 0.65/0.35 are presentation cues only. Praise absence is not
+warned as poor health. No HUD logic changes chemistry or selects actions.
+
+Missing identity/frame/row or invalid values show a question mark; a known zero
+has a real empty track. Launch/save expression defaults are not evidence. The
+HUD does not extrapolate between ticks, during pause, or after a simulation stop.
+The reticle and full numeric stable ID identify selection without an invented
+portrait. The count chip shows rendered creature count and running/paused/fast
+playback icons. F3 hides these player readouts while preserving the existing
+textual inspector, animation/response details, and debug rails. The HUD wraps
+at narrow widths, and uses shorter cards below 300px viewport height. All HUD
+nodes ignore picking and pass UI focus. The existing menu's modal/entry source
+layers (100/90) remain above the HUD (30); CPU tests guard those layers and
+non-interactive components, without proving combined live input dispatch.
+CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240. The last
+is minimum stress evidence with a 2px bottom margin, not full-app collision
+clearance. When a selected HUD leaves insufficient space below it, only the
+retained default hint line is hidden. Expanded F1 help, errors and action/status
+confirmations stay visible; if they need that space the selected panel hides
+temporarily instead. The threshold is HUD bottom plus
+an 8px gap, the strip's bottom offset, and its height budget: the larger of real
+computed height and conservative character-wrap/line-height sizing. Deselect,
+resize with enough room, or F3 debug restores the strip; keyboard controls stay
+active. Other toolbars and speech controls are unchanged. Smaller sizes,
+combined live compositing, and live GPU rendering remain unvalidated.
+Speech, teaching text, menu behavior, keyboard controls and control-strip
+wording are unchanged; only the narrow visibility priority above is adaptive.
+
 Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
 selected creature, or finds the first creature when none is selected.

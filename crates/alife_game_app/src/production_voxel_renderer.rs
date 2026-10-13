@@ -86,6 +86,7 @@ mod performance_receipt;
 mod phase31_performance_health;
 #[cfg(feature = "gpu-runtime")]
 mod phase31_slow_frame_ranking;
+mod status_hud;
 mod terrain_water;
 mod ux_input;
 use crate::{
@@ -2162,11 +2163,8 @@ pub fn spawn_fvr03_production_voxel_scene(
     )
     .add_systems(
         Update,
-        (
-            sync_v0_player_status_chip,
-            sync_v0_player_creature_panel,
-            sync_v0_player_control_strip,
-        )
+        (sync_v0_player_control_strip, status_hud::sync)
+            .chain()
             .in_set(ProductionVoxelPresentationSet::RootReaders),
     );
     #[cfg(not(feature = "vfx-hanabi"))]
@@ -5140,45 +5138,7 @@ const V0_PLAYER_CONTROL_HINTS: &str =
     "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
-    app.world_mut().spawn((
-        Name::new("A-Life V0 player status chip"),
-        Text::new("A-LIFE"),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.96, 0.91, 0.70)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(18.0),
-            left: Val::Px(18.0),
-            padding: bevy::ui::UiRect::axes(Val::Px(14.0), Val::Px(9.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.055, 0.075, 0.048, 0.88)),
-        V0PlayerStatusChip,
-    ));
-    app.world_mut().spawn((
-        Name::new("A-Life V0 selected creature panel"),
-        Visibility::Hidden,
-        Text::new(""),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.95, 0.93, 0.82)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(62.0),
-            right: Val::Px(18.0),
-            width: Val::Px(318.0),
-            max_width: Val::Px(318.0),
-            padding: bevy::ui::UiRect::all(Val::Px(16.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.055, 0.070, 0.046, 0.91)),
-        V0PlayerCreaturePanel,
-    ));
+    status_hud::spawn(app.world_mut());
     app.world_mut().spawn((
         Name::new("A-Life V0 player control strip"),
         Text::new(V0_PLAYER_CONTROL_HINTS),
@@ -5198,58 +5158,6 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
         BackgroundColor(Color::srgba(0.050, 0.066, 0.044, 0.88)),
         V0PlayerControlStrip,
     ));
-}
-
-fn sync_v0_player_status_chip(
-    scene: Res<Fvr03ProductionVoxelSceneResource>,
-    ux: Res<Fvr05ProductionUxStateResource>,
-    mut chips: bevy::prelude::Query<&mut Text, With<V0PlayerStatusChip>>,
-) {
-    if !scene.is_changed() && !ux.is_changed() {
-        return;
-    }
-    let playback = if ux.settings.paused {
-        " | Paused".to_string()
-    } else if ux.settings.playback_mode() != crate::ProductionRunMode::OneX {
-        format!(" | {}", ux.settings.playback_mode().label())
-    } else {
-        String::new()
-    };
-    let noun = if scene.creature_render_count == 1 {
-        "creature"
-    } else {
-        "creatures"
-    };
-    let text = format!("{} {noun}{playback}", scene.creature_render_count);
-    for mut chip in &mut chips {
-        chip.0 = text.clone();
-    }
-}
-
-fn sync_v0_player_creature_panel(
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    creatures: Res<Fvr04ProductionCreatureSceneResource>,
-    ux: Res<Fvr05ProductionUxStateResource>,
-    mut panels: bevy::prelude::Query<(&mut Text, &mut Visibility), With<V0PlayerCreaturePanel>>,
-) {
-    if !selection.is_changed() && !creatures.is_changed() && !ux.is_changed() {
-        return;
-    }
-    let sample = selection
-        .selected
-        .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
-        .and_then(|selected| selected.stable_id)
-        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id));
-    for (mut panel, mut visibility) in &mut panels {
-        *visibility = if sample.is_some() && !ux.debug_mode {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-        if let Some(sample) = sample {
-            panel.0 = v0_selected_creature_text(sample);
-        }
-    }
 }
 
 fn sync_v0_player_control_strip(
@@ -5359,7 +5267,7 @@ fn sync_v0_player_control_strip(
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
     let mut text = format!(
-        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}\nPraise  {}",
+        "{display_name}\n{} | {}\n\nHunger drive  {}\nBody-energy reserve  {}\nFatigue drive  {}\nCalm (1-fear)  {}\nSleep pressure  {}\nPraise hormone  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
@@ -5448,6 +5356,9 @@ fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
 }
 
 fn v0_need_bar(value: f32) -> String {
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        return "unavailable".to_string();
+    }
     let filled = (value.clamp(0.0, 1.0) * 8.0).round() as usize;
     format!("[{}{}]", "=".repeat(filled), "-".repeat(8 - filled))
 }
@@ -6001,13 +5912,19 @@ fn sync_fvr05_right_inspector_panel(
     });
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
-            "{}\n\nDEBUG AUTHORITY\n{}",
+            "{}\n\nPRESENTATION DETAIL\n{}\n\nDEBUG AUTHORITY\n{}",
             fvr04_live_creature_inspector_text(
                 selection.selected,
                 &creatures,
                 live_state,
                 frame.as_deref(),
             ),
+            selection
+                .selected
+                .and_then(|r| r.stable_id)
+                .and_then(|id| creatures.sample_for_stable_id(id))
+                .map(v0_selected_creature_text)
+                .unwrap_or_else(|| "unavailable".to_string()),
             ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {

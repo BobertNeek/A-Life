@@ -1599,25 +1599,51 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
     assert_eq!(statuses.len(), 1);
     assert_ne!(*statuses[0].2, Visibility::Hidden);
 
-    let mut panel_query = app
+    let panels = app
         .world_mut()
-        .query::<(&V0PlayerCreaturePanel, &Text, &Visibility)>();
-    let panels = panel_query.iter(app.world()).collect::<Vec<_>>();
+        .query::<(
+            Entity,
+            &V0PlayerCreaturePanel,
+            &bevy::prelude::Children,
+            &Visibility,
+        )>()
+        .iter(app.world())
+        .map(|(entity, _, children, visible)| {
+            (
+                entity,
+                children.iter().copied().collect::<Vec<_>>(),
+                *visible,
+            )
+        })
+        .collect::<Vec<_>>();
     assert_eq!(panels.len(), 1);
-    assert_ne!(*panels[0].2, Visibility::Hidden);
-    let panel_text = panels[0].1 .0.clone();
-    for real_state_heading in [
-        "Hunger",
-        "Energy",
-        "Tiredness",
-        "Safety",
-        "Sleepiness",
-        "Praise",
-    ] {
-        assert!(panel_text.contains(real_state_heading), "{panel_text}");
-    }
-    for debug_term in ["backend", "chunk", "wgpu", "GPU"] {
-        assert!(!panel_text.contains(debug_term), "{panel_text}");
+    assert_ne!(panels[0].2, Visibility::Hidden);
+    assert!(
+        app.world().get::<Text>(panels[0].0).is_none(),
+        "selected readout has no text headings"
+    );
+    let grid = panels[0].1[1];
+    let cards = app.world().get::<bevy::prelude::Children>(grid).unwrap();
+    assert_eq!(cards.len(), 6);
+    for card in cards.iter().copied() {
+        let children = app.world().get::<bevy::prelude::Children>(card).unwrap();
+        assert!(
+            app.world()
+                .get::<bevy::prelude::ImageNode>(children[0])
+                .is_some(),
+            "each measured quantity has an actual icon"
+        );
+        let unknown = children
+            .iter()
+            .copied()
+            .find(|child| app.world().get::<Text>(*child).is_some())
+            .unwrap();
+        assert_eq!(app.world().get::<Text>(unknown).unwrap().0, "?");
+        assert_eq!(
+            app.world().get::<Visibility>(unknown),
+            Some(&Visibility::Inherited),
+            "unbound launch defaults must remain unknown"
+        );
     }
 
     let mut controls_query = app
@@ -1628,8 +1654,6 @@ fn v0_default_player_view_is_compact_and_uses_real_selected_creature_state() {
     assert_ne!(*controls[0].2, Visibility::Hidden);
     assert!(controls[0].1 .0.contains("F1 Help"));
     assert!(controls[0].1 .0.contains("Space Pause"));
-    assert!(panel_text.contains("Energy  unavailable"));
-    assert!(!panel_text.contains("LEARNING") && !panel_text.contains("SOCIAL"));
 }
 
 #[test]
