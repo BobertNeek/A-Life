@@ -41,7 +41,7 @@ jobs:
       - name: Strict foundation-training Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
       - name: Foundation scenario and replay CPU tests
-        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::
+        run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
       - name: Objective continuation CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
       - name: Warmup lesson corpus CPU tests
