@@ -2197,6 +2197,8 @@ impl GpuFixedClassArenaPlan {
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let frame_words_per_row = 77_u64
+            .checked_add(4 + u64::from(execution.max_active_tiles()))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
             .checked_add(256)
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
             .checked_add(
@@ -2214,6 +2216,8 @@ impl GpuFixedClassArenaPlan {
                 .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
         )?;
         let sleep_frame_words = 44_u64
+            .checked_add(4 + u64::from(execution.max_active_tiles()))
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?
             .checked_add(
                 u64::from(execution.max_replay_events())
                     .checked_mul(u64::from(GPU_REPLAY_EVENT_RECORD_WORDS))

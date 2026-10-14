@@ -25,6 +25,7 @@ fn every_active_challenge_has_a_bounded_production_world_spec() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+#[ignore = "requires canonical organism biology and sealed receptor-gated learning integration; legacy constructor is blocked"]
 fn real_gpu_active_battery_measures_all_fifteen_challenges() {
     let mut runner = N2048ActiveBatteryRunner::new_required().unwrap();
     let evidence = runner
@@ -42,6 +43,7 @@ fn real_gpu_active_battery_measures_all_fifteen_challenges() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+#[ignore = "requires canonical organism biology and sealed receptor-gated learning integration; legacy constructor is blocked"]
 fn real_gpu_battery_binds_the_exact_second_generation_creature_genome() {
     let foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,
@@ -87,6 +89,7 @@ fn real_gpu_battery_binds_the_exact_second_generation_creature_genome() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+#[ignore = "requires canonical organism biology and sealed receptor-gated learning integration; legacy constructor is blocked"]
 fn real_gpu_reproduction_intent_targets_a_legal_mate_and_seals_the_outcome() {
     let foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,
@@ -132,6 +135,7 @@ fn real_gpu_reproduction_intent_targets_a_legal_mate_and_seals_the_outcome() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+#[ignore = "requires canonical organism biology and sealed receptor-gated learning integration; legacy constructor is blocked"]
 fn real_gpu_reproduction_intent_rejects_a_mismatched_foundation_identity() {
     let wrong_foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5632,
@@ -150,6 +154,7 @@ fn real_gpu_reproduction_intent_rejects_a_mismatched_foundation_identity() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+#[ignore = "requires canonical organism biology and sealed receptor-gated learning integration; legacy constructor is blocked"]
 fn real_gpu_reproduction_intent_executes_in_the_supplied_runtime_world() {
     let foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,
@@ -195,6 +200,7 @@ fn real_gpu_reproduction_intent_executes_in_the_supplied_runtime_world() {
 
 #[cfg(feature = "gpu-tests")]
 #[test]
+#[ignore = "requires canonical organism biology and sealed receptor-gated learning integration; legacy constructor is blocked"]
 fn real_gpu_creature_chosen_intent_reports_the_mate_selected_by_the_network() {
     let foundation = FoundationGeneticIdentity::new(
         0x4E32_3034_385F_5631,

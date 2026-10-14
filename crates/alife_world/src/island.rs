@@ -64,7 +64,7 @@ mod tests {
         assert!(surface.height(-500.0, -600.0).unwrap() < -5.0);
         assert!(surface.height(28.0, -275.0).unwrap() > 200.0);
         assert!(terrain.walkable(80.0, 250.0));
-        assert_ne!(terrain.binding(), crate::TerrainBinding::highlands());
+        assert_eq!(terrain.binding().version, 2);
         let mut world = HeadlessScenarioBuilder::new(93026)
             .agent("walker", OrganismId(1), Vec3f::ZERO)
             .build()

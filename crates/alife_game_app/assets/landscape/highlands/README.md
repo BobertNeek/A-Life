@@ -1,6 +1,12 @@
-# Highlands runtime
+# Archived Highlands terrain
 
-New Game uses the approved Blender valley as physical terrain. Existing saves
+The island is the sole playable map. Highlands map loading, its version-1 save
+fallback, and its runtime terrain/placement registrations have been retired.
+These Blender sources and exports remain authoring references. Reusable props
+under `assets/landscape/` remain approved art. The historical verification below
+describes the earlier Highlands implementation, not current playable-map support.
+
+The former New Game used the approved Blender valley as physical terrain. Its saves
 without a terrain binding retain their original world. The binding records
 version 1 and the digest of the immutable bake; incompatible data fails loading.
 

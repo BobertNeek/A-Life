@@ -32,9 +32,12 @@ Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
 selected creature, or finds the first creature when none is selected.
 Page Up and Page Down select and follow the previous or next creature. F toggles
-follow, and R returns to the starting view. Camera movement loads a bounded
-terrain region around the view without moving creatures or advancing simulation
-time. World shortcuts are suspended while typing in the conversation panel.
+follow, and R returns to the starting view. New Game uses the authored island.
+Camera movement changes the view without moving creatures or advancing simulation
+time. Unbound CPU/ECS scenes remain static diagnostics for meshing, vertex colors,
+identity and persistence; they do not install the retired procedural camera stream
+or establish playable island acceptance. World shortcuts are suspended while typing
+in the conversation panel.
 
 Creature pose transitions blend over time. Ground contact uses the posed mesh
 bounds and rendered terrain heights. The approved Hearthling art and its
@@ -106,9 +109,16 @@ cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_rele
 
 Validate the committed content pack with `validate-pack` before using it in a
 tutorial or package. Optional GPU demonstrations remain manual.
-`scripts/build_geneforge_creature_parts.py` is the supported GeneForge command.
-It launches `scripts/geneforge_blender_worker.py` inside Blender; do not invoke
-the worker directly.
+Production creatures use the approved Hearthling GLB. The generated GeneForge
+OBJ, socket and mask pack is retired and is not required for launch or packaging.
+The compiled `geneforge_recipes.json` supplies current appearance family IDs
+and birth/mutation metadata; its output paths and source hashes are historical
+authoring metadata, not shipped asset requirements.
+
+For optional offline GeneForge authoring, `scripts/build_geneforge_creature_parts.py`
+launches `scripts/geneforge_blender_worker.py` inside Blender. Supply the original
+external donor sources and write regenerated output to a separate staging tree.
+Do not invoke the worker directly or add that retired pack to the production manifest.
 
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.

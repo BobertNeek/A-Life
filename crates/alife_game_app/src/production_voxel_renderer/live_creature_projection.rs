@@ -36,12 +36,7 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         }
                         let tile = VoxelTileCoord::new(
                             object.position.x.floor() as i32,
-                            (if highlands {
-                                object.position.z
-                            } else {
-                                object.position.y
-                            })
-                            .floor() as i32,
+                            object.position.z.floor() as i32,
                         );
                         let surface_height = if highlands {
                             object.position.y
@@ -60,11 +55,6 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                             &frame.current,
                         ) {
                             continue;
-                        }
-                        if highlands {
-                            // Tile snapping can visually push a blocked creature into a rock.
-                            projected.translation.x = object.position.x;
-                            projected.translation.z = object.position.z;
                         }
                         projected.translation.y = grounded_root_height(
                             surface_height,
@@ -193,12 +183,7 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 for object in pending_newborns {
                     let tile = VoxelTileCoord::new(
                         object.position.x.floor() as i32,
-                        (if highlands {
-                            object.position.z
-                        } else {
-                            object.position.y
-                        })
-                        .floor() as i32,
+                        object.position.z.floor() as i32,
                     );
                     let chunk = tile_summaries
                         .get(&tile)
@@ -228,16 +213,10 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                 }
 
                 let prepared = {
-                    let Some(mut context) = world.remove_resource::<Fvr04CreatureSpawnContext>()
-                    else {
+                    let Some(context) = world.remove_resource::<Fvr04CreatureSpawnContext>() else {
                         return;
                     };
-                    let result = prepare_fvr04_creature_batch(
-                        world,
-                        &newborns,
-                        &tile_summaries,
-                        &mut context,
-                    );
+                    let result = prepare_fvr04_creature_batch(&newborns, &tile_summaries, &context);
                     world.insert_resource(context);
                     let Ok(prepared) = result else {
                         return;

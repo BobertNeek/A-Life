@@ -1702,6 +1702,7 @@ struct GpuBrainSlotOwnership {
 }
 
 pub(crate) struct ResidentBrainSlot {
+    pub(crate) developmental_plasticity: crate::GpuDevelopmentalPlasticity,
     ownership: GpuBrainSlotOwnership,
     pub(crate) phenotype: BrainPhenotype,
     #[cfg(feature = "training-rollout")]
@@ -1761,6 +1762,7 @@ fn shared_training_phenotype(
 }
 
 struct PreparedLearningApply {
+    developmental_plasticity: crate::GpuDevelopmentalPlasticity,
     chunk_index: usize,
     handle: GpuBrainHandle,
     packet: OutcomeCreditPacket,
@@ -4305,6 +4307,27 @@ impl GpuClosedLoopBackend {
         Ok(None)
     }
 
+    /// Bind derived current-age metadata for the next learning or replay submission.
+    /// No GPU banks or immutable phenotype data are modified.
+    pub fn set_developmental_plasticity(
+        &mut self,
+        handle: GpuBrainHandle,
+        development: &alife_core::DevelopmentState,
+        parameters: &alife_core::PlasticityGenomeParameters,
+    ) -> Result<(), ScaffoldContractError> {
+        self.ensure_ready()?;
+        self.validate_handle_backend(handle)?;
+        let resident = self
+            .class_buckets
+            .get_mut(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident_mut(handle)?;
+        resident
+            .developmental_plasticity
+            .update(&resident.phenotype, development, parameters)?;
+        Ok(())
+    }
+
     /// Apply a same-class batch. Rows may span fixed arenas, but every row is
     /// bound to its arena-local slot, durable pending eligibility, and a
     /// core-owned sequence token before any command is submitted.
@@ -4391,6 +4414,7 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::LearningEvidenceMismatch);
             }
             prepared.push(PreparedLearningApply {
+                developmental_plasticity: resident.developmental_plasticity.clone(),
                 chunk_index,
                 handle: *handle,
                 packet,
@@ -4425,6 +4449,7 @@ impl GpuClosedLoopBackend {
                 .map(|index| {
                     let entry = &prepared[*index];
                     GpuFastPlasticityBatchEntry {
+                        developmental_plasticity: &entry.developmental_plasticity,
                         slot: &entry.brain_slot,
                         pending: &entry.pending_record,
                         outcome: entry.outcome,
@@ -5423,6 +5448,7 @@ impl GpuClosedLoopBackend {
         debug_assert_eq!(popped, Some(slot));
         bucket.generations[slot as usize] = generation;
         bucket.slots[slot as usize] = Some(ResidentBrainSlot {
+            developmental_plasticity: Default::default(),
             ownership: GpuBrainSlotOwnership {
                 organism_id,
                 phenotype_hash: phenotype.phenotype_hash(),
@@ -6227,6 +6253,7 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             phenotype_hash: entry.exact_phenotype_hash,
         };
         let resident = ResidentBrainSlot {
+            developmental_plasticity: Default::default(),
             ownership: GpuBrainSlotOwnership {
                 organism_id: entry.organism_id,
                 phenotype_hash: entry.exact_phenotype_hash,

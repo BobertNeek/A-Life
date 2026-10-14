@@ -1,13 +1,10 @@
 //! World-owned heightfields. Geometry is immutable and shared; movement limits
 //! describe the body, not the map or the neural policy.
-use crate::highlands::CELL;
-use crate::{highlands, TerrainBinding, TerrainSurface};
+use crate::terrain_surface::CELL;
+use crate::{TerrainBinding, TerrainSurface};
 use alife_core::{ScaffoldContractError, Vec3f};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{Arc, OnceLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerrainData {
@@ -53,8 +50,7 @@ impl LocomotionLimits {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TerrainState {
-    /// None is only accepted for the explicitly identified legacy baked asset.
-    pub data: Option<TerrainData>,
+    pub data: TerrainData,
     pub locomotion: LocomotionLimits,
 }
 
@@ -152,16 +148,6 @@ impl WorldTerrain {
             limits,
         })
     }
-    pub fn highlands() -> Self {
-        static SURFACE: OnceLock<Arc<TerrainSurface>> = OnceLock::new();
-        Self {
-            surface: SURFACE
-                .get_or_init(|| Arc::new(highlands().clone()))
-                .clone(),
-            binding: TerrainBinding::highlands(),
-            limits: LocomotionLimits::default(),
-        }
-    }
     pub fn restore(
         binding: Option<TerrainBinding>,
         state: Option<&TerrainState>,
@@ -174,20 +160,8 @@ impl WorldTerrain {
             };
         };
         binding.validate()?;
-        let limits = state.map_or_else(LocomotionLimits::default, |s| s.locomotion);
-        let result = if let Some(data) = state.and_then(|s| s.data.as_ref()) {
-            Self::new(data.clone(), limits)?
-        } else {
-            // Compatibility loader for old saves; never a fallback for other identities.
-            if binding != TerrainBinding::highlands() {
-                return Err(ScaffoldContractError::InvalidId);
-            }
-            limits.validate()?;
-            Self {
-                limits,
-                ..Self::highlands()
-            }
-        };
+        let state = state.ok_or(ScaffoldContractError::InvalidId)?;
+        let result = Self::new(state.data.clone(), state.locomotion)?;
         if result.binding != binding {
             return Err(ScaffoldContractError::InvalidId);
         }
@@ -204,7 +178,7 @@ impl WorldTerrain {
     }
     pub fn state(&self) -> TerrainState {
         TerrainState {
-            data: (self.binding.version == 2).then(|| self.surface.data()),
+            data: self.surface.data(),
             locomotion: self.limits,
         }
     }

@@ -636,14 +636,9 @@ fn apply_presentation_retirements(
     commands: &mut Commands,
     map: &mut BevyEntityMap,
     retired_ids: &[WorldEntityId],
-    coat_keys: &Query<&crate::production_voxel_renderer::ProductionCreatureCoatKey>,
-    coat_context: &mut crate::production_voxel_renderer::Fvr04CreatureSpawnContext,
 ) {
     for world_id in retired_ids.iter().copied() {
         if let Some(entity) = map.remove_by_world_id(world_id) {
-            if let Ok(key) = coat_keys.get(entity) {
-                coat_context.release_coat(key.0);
-            }
             commands.entity(entity).despawn();
         }
     }
@@ -665,8 +660,6 @@ fn tick_production_gpu_brain(
     >,
     mut commands: Commands,
     mut map: ResMut<BevyEntityMap>,
-    coat_keys: Query<&crate::production_voxel_renderer::ProductionCreatureCoatKey>,
-    mut coat_context: ResMut<crate::production_voxel_renderer::Fvr04CreatureSpawnContext>,
 ) {
     if performance
         .as_deref()
@@ -808,13 +801,7 @@ fn tick_production_gpu_brain(
         schedule.animation_speed +=
             1.0 / (crate::CA13_FIXED_SIM_TICK_HZ as f32 * time.delta_secs().max(f32::EPSILON));
         let retired_ids = runtime.runtime.take_presentation_retirements();
-        apply_presentation_retirements(
-            &mut commands,
-            &mut map,
-            &retired_ids,
-            &coat_keys,
-            &mut coat_context,
-        );
+        apply_presentation_retirements(&mut commands, &mut map, &retired_ids);
         let world = runtime.runtime.world();
 
         match presentation.try_publish_successful_tick_with_cognitive(

@@ -53,7 +53,7 @@ impl HeadlessWorld {
         }
         let physical = variety.physical(object.grounded_physical);
         self.set_grounded_physical_properties(id, physical)?;
-        self.set_food_nutrition(id, variety.nutrition())
+        self.set_food_recipe_nutrition(id, variety.nutrition())
     }
 
     pub fn spawn_toy(

@@ -1821,49 +1821,10 @@ mod tests {
     }
 
     #[test]
-    fn audit_atlas_emits_all_lod_view_and_pose_sheets_with_metadata() {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .unwrap();
-        let output = workspace.join("target/artifacts/creature_parts/geneforge-audit-command-test");
-        let _ = fs::remove_dir_all(&output);
-        audit_atlas(&workspace.join(DEFAULT_GENEFORGE_RECIPES), &output).unwrap();
-
-        let expected = [
-            "full_front.png",
-            "full_three-quarter.png",
-            "full_back.png",
-            "compact_front.png",
-            "compact_three-quarter.png",
-            "compact_back.png",
-            "impostor_front.png",
-            "impostor_three-quarter.png",
-            "impostor_back.png",
-            "full_upright.png",
-            "full_resting.png",
-            "full_sleeping.png",
-        ];
-        for name in expected {
-            let image = image::open(output.join(name)).unwrap().to_rgba8();
-            assert_eq!(image.dimensions(), (1440, 1080), "{name}");
-            assert!(
-                image.pixels().any(|pixel| pixel.0 != [52, 54, 57, 255]),
-                "{name} must contain rendered creatures"
-            );
-        }
-        let metadata: serde_json::Value =
-            serde_json::from_str(&fs::read_to_string(output.join("audit_metadata.json")).unwrap())
-                .unwrap();
-        assert_eq!(metadata["schema"], "alife.geneforge_audit_atlas.v1");
-        let families = metadata["families"].as_array().unwrap();
-        assert_eq!(families.len(), 12);
-        assert!(families.iter().all(|family| {
-            family["pixel_occupancy_ratio"].as_f64().unwrap() > 0.005
-                && family["eye_pixel_occupancy_ratio"].as_f64().unwrap() > 0.0
-                && family["nearest_silhouette_distance"].as_f64().unwrap() > 0.01
-        }));
-        assert_eq!(metadata["sheets"].as_array().unwrap().len(), expected.len());
+    fn retired_pack_audit_requires_external_regenerated_outputs() {
+        let output = workspace_path("target/artifacts/creature_parts/geneforge-audit-command-test");
+        let error = audit_atlas(&workspace_path(DEFAULT_GENEFORGE_RECIPES), &output).unwrap_err();
+        assert!(error.to_string().contains("norn_head_full_sockets.json"));
     }
 
     #[test]
@@ -1889,85 +1850,19 @@ mod tests {
     }
 
     #[test]
-    fn geneforge_production_catalog_validates_every_committed_lod() {
-        let recipes = workspace_path(DEFAULT_GENEFORGE_RECIPES);
-        let catalog =
-            GeneForgeCreaturePartCatalog::from_json_str(&fs::read_to_string(&recipes).unwrap())
-                .unwrap();
-        let root = recipes
-            .parent()
-            .and_then(Path::parent)
-            .and_then(Path::parent)
-            .unwrap();
-        let preparations = load_geneforge_assembly_preparation_index(root, &catalog).unwrap();
-        let mut mesh_cache = BTreeMap::new();
-
-        for lod in [
-            CreaturePartLodId::Full,
-            CreaturePartLodId::Compact,
-            CreaturePartLodId::Impostor,
-        ] {
-            let models =
-                load_audit_models(root, &catalog, &preparations, lod, &mut mesh_cache).unwrap();
-            assert_eq!(models.len(), 12);
-            assert!(models.iter().all(|model| {
-                model.parts.len() == CreaturePartSlot::ALL.len()
-                    && model.triangle_count > 0
-                    && model.attachment_error.is_finite()
-            }));
-        }
-    }
-
-    #[test]
-    fn production_manifest_records_exact_geneforge_outputs_and_provenance() {
-        let workspace = workspace_path("");
+    fn production_manifest_excludes_the_retired_geneforge_pack() {
         let manifest: Value =
             serde_json::from_str(&fs::read_to_string(workspace_path(DEFAULT_MANIFEST)).unwrap())
                 .unwrap();
         let entries = manifest["entries"].as_array().unwrap();
-        let geneforge = entries
-            .iter()
-            .filter(|entry| {
-                entry["asset_id"]
-                    .as_str()
-                    .is_some_and(|id| id.starts_with("geneforge-"))
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(geneforge.len(), 168);
-        for suffix in ["-obj", "-sockets", "-semantic", "-anatomy"] {
-            assert_eq!(
-                geneforge
-                    .iter()
-                    .filter(|entry| entry["asset_id"].as_str().unwrap().ends_with(suffix))
-                    .count(),
-                42,
-                "unexpected {suffix} entry count"
-            );
-        }
-        for entry in geneforge {
-            let local_path = entry["local_path"].as_str().unwrap();
-            let path = workspace.join(local_path);
-            let bytes = fs::read(&path).unwrap();
-            assert_eq!(entry["size_bytes"].as_u64().unwrap(), bytes.len() as u64);
-            assert_eq!(
-                entry["digest"].as_str().unwrap(),
-                PortableAssetDigest::for_file(&path).unwrap().0
-            );
-            assert_eq!(entry["license"], "MIT");
-            assert_eq!(
-                entry["license_ref"],
-                "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
-            );
-            assert_eq!(entry["generator"]["tool"], "alife.geneforge_importer.v2");
-            assert_eq!(entry["generator"]["config_path"], DEFAULT_GENEFORGE_RECIPES);
-            assert_eq!(
-                entry["replacement_policy"],
-                "regenerate-from-pinned-geneforge-sources-and-validated-v2-recipe"
-            );
-            assert_eq!(entry["generated"], true);
-            assert_eq!(entry["external"], false);
-            assert_eq!(entry["final_art"], true);
-            assert_eq!(entry["placeholder"], false);
-        }
+        assert!(entries.iter().all(|entry| !entry["asset_id"]
+            .as_str()
+            .unwrap()
+            .starts_with("geneforge-")));
+        assert!(entries.iter().any(|entry| entry["local_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("creatures/hearthling/hearthling.glb")));
+        alife_game_app::validate_production_assets(workspace_path(DEFAULT_MANIFEST)).unwrap();
     }
 }

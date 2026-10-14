@@ -11,6 +11,7 @@ use alife_world::{
 };
 
 const ORGANISM_ID: OrganismId = OrganismId(7);
+const PEER_TOUCH_PER_INTERVAL: f32 = 0.25 / alife_world::WORLD_TICKS_PER_SECOND as f32;
 
 fn record(world_entity_id: WorldEntityId) -> WorldOrganismRecord {
     let genome = CreatureGenome::early_mammal_founder(
@@ -490,7 +491,10 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
     assert_eq!(receipt.action_result.observation.pain_delta.raw(), 0.7);
     assert_eq!(receipt.action_result.body_event.energy, -0.08);
     assert_eq!(receipt.action_result.body_event.damage, 0.7);
-    assert_eq!(receipt.action_result.body_event.social_contact, 1.0);
+    assert_eq!(
+        receipt.action_result.body_event.social_contact,
+        PEER_TOUCH_PER_INTERVAL
+    );
     assert_eq!(receipt.action_result.body_event.temperature_stress, 0.0);
     assert_eq!(receipt.action_result.body_event.nutrition, 0.0);
     assert_eq!(receipt.action_result.body_event.sleep_recovery, 0.0);
@@ -498,7 +502,7 @@ fn registered_hazard_and_agent_contact_preserves_hazard_observation_and_social_e
 }
 
 #[test]
-fn registered_approach_does_not_turn_negative_affinity_into_affiliation() {
+fn registered_approach_touch_ignores_affinity_without_manufacturing_threat_or_reward() {
     let mut world = HeadlessScenarioBuilder::new(32_006)
         .agent("agent", ORGANISM_ID, Vec3f::ZERO)
         .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), -0.6)
@@ -516,7 +520,32 @@ fn registered_approach_does_not_turn_negative_affinity_into_affiliation() {
         )
         .unwrap();
 
-    assert_eq!(receipt.action_result.body_event.social_contact, 0.0);
+    assert_eq!(
+        receipt.action_result.body_event.social_contact,
+        PEER_TOUCH_PER_INTERVAL
+    );
+    assert_eq!(
+        receipt
+            .action_result
+            .observation
+            .homeostatic_delta
+            .drives
+            .fear,
+        0.0
+    );
+    assert_eq!(
+        receipt
+            .action_result
+            .observation
+            .homeostatic_delta
+            .drives
+            .pain,
+        0.0
+    );
+    assert_eq!(
+        receipt.action_result.observation.homeostatic_delta.hormones,
+        alife_core::EndocrineDelta::zero()
+    );
     assert_eq!(receipt.action_result.body_event.energy, -0.04);
     assert_eq!(receipt.action_result.observation.reward_valence.raw(), 0.0);
     assert_eq!(receipt.action_result.body_event.damage, 0.0);
@@ -593,9 +622,10 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
         0.0
     );
 
-    for (seed, affinity, expected_contact) in
-        [(32_008, 0.6_f32, 0.6_f32), (32_009, -0.6_f32, 0.0_f32)]
-    {
+    for (seed, affinity, expected_contact) in [
+        (32_008, 0.6_f32, PEER_TOUCH_PER_INTERVAL),
+        (32_009, -0.6_f32, PEER_TOUCH_PER_INTERVAL),
+    ] {
         let mut social_world = HeadlessScenarioBuilder::new(seed)
             .agent("agent", ORGANISM_ID, Vec3f::ZERO)
             .social_agent("other", OrganismId(8), Vec3f::new(0.5, 0.0, 0.0), affinity)
@@ -610,7 +640,7 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
                 Tick(1),
             )
             .unwrap();
-        assert_eq!(social.action_result.body_event.energy, -0.02);
+        assert_eq!(social.action_result.body_event.energy, -0.04);
         assert_eq!(social.action_result.observation.reward_valence.raw(), 0.0);
         assert_eq!(
             social.action_result.body_event.social_contact,

@@ -206,6 +206,7 @@ pub(crate) struct GpuSleepJobState {
 
 #[derive(Clone)]
 pub(crate) struct SleepSlotSnapshot {
+    pub(crate) developmental_plasticity: crate::GpuDevelopmentalPlasticity,
     pub(crate) brain_slot: GpuBrainSlot,
     pub(crate) ranges: GpuFixedSlotRanges,
     pub(crate) active_weight_bank: u8,
@@ -885,6 +886,7 @@ impl GpuClosedLoopBackend {
         }
         resident.sleep_plan.validate_contract()?;
         Ok(SleepSlotSnapshot {
+            developmental_plasticity: resident.developmental_plasticity.clone(),
             brain_slot: resident.brain_slot.clone(),
             ranges: resident.ranges.clone(),
             active_weight_bank: resident.active_weight_bank,
@@ -1254,14 +1256,6 @@ pub(crate) fn build_sleep_upload(
             pack_replay_eligibility_sample(sample.event_index, sample.eligibility_q15)
         }),
     );
-    if payload.len()
-        != usize::try_from(replay_sample_offset)
-            .ok()
-            .and_then(|start| start.checked_add(replay.eligibility_samples.len()))
-            .ok_or(ScaffoldContractError::ConsolidationGenerationMismatch)?
-    {
-        return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
-    }
     let header = GpuSleepHeader {
         schema_version: u32::from(GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION),
         class_id: u32::from(handle.class_id().raw()),
@@ -1288,6 +1282,12 @@ pub(crate) fn build_sleep_upload(
         std::mem::size_of::<GpuSleepHeader>() / 4,
         SLEEP_HEADER_WORDS
     );
+    crate::closed_loop_development::append_sleep_development(
+        &mut payload,
+        header.replay_sample_offset,
+        header.replay_sample_count,
+        &snapshot.developmental_plasticity,
+    )?;
     Ok((header, payload))
 }
 

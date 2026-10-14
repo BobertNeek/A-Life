@@ -11,6 +11,8 @@ mod approximate_cognition;
 mod checkpoint_manifest_pruning_tests;
 mod checkpoint_poll;
 mod checkpoint_runtime;
+#[cfg(test)]
+mod contact_chemistry_tests;
 mod cpu_preparation;
 mod durability_hold;
 mod exact_population_checkpoint;
@@ -22,6 +24,8 @@ mod founder_consequence_tests;
 mod journal_capacity_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod journal_worker_poll_tests;
+#[cfg(test)]
+mod newborn_admission_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod nociception_food_tests;
 #[cfg(test)]
@@ -560,6 +564,18 @@ pub fn legacy_nano512_compatibility_receipt_for_record_for_test(
     )?;
     plan.legacy_nano512_compatibility_receipt
         .ok_or(ScaffoldContractError::PhenotypeCompile)
+}
+
+// Learning uses biological age at the actual update, not the age encoded in an
+// old experience. Derive it from the authoritative record so a just-sealed
+// outcome can cross a period boundary before the global tick is advanced.
+fn learning_development_at(
+    record: &WorldOrganismRecord,
+    update_tick: Tick,
+) -> Result<DevelopmentState, ScaffoldContractError> {
+    record
+        .phenotype()
+        .development_state_at(record.age_at(update_tick)?)
 }
 
 fn synchronize_resident_from_record(
@@ -2400,6 +2416,7 @@ struct PreparedSealInput {
     world_entity_id: WorldEntityId,
     frame: PerceptionFrame,
     memory: MemoryRecallReceipt,
+    social_recognition: Option<NeuralEmission>,
     sequence_id: ExperienceSequenceId,
     outcome_tick: Tick,
     cognitive_context: CognitiveContextFrame,
@@ -4744,6 +4761,7 @@ fn seal_prepared_selection_core(
         world_entity_id,
         frame,
         memory,
+        social_recognition,
         sequence_id,
         outcome_tick,
         mut cognitive_context,
@@ -4766,27 +4784,28 @@ fn seal_prepared_selection_core(
     let pre_action_context = cognitive_context.clone();
     let motor_condition = JointMotorCondition::from_bundle(&motor_bundle)?;
     let neural_evidence = decision.neural_evidence()?;
-    let neural_emission = NeuralEmissionFrame::new(
-        frame.tick(),
-        neural_evidence.dispatch_generation,
-        vec![
-            NeuralEmission::new(
-                NeuralEmissionClass::RegionalArousal,
-                neural_evidence.logit.abs().tanh(),
-                neural_evidence.confidence.raw(),
-            )?,
-            NeuralEmission::new(
-                NeuralEmissionClass::MotorCommitment,
-                decision.confidence.raw(),
-                decision.confidence.raw(),
-            )?,
-            NeuralEmission::new(
-                NeuralEmissionClass::ExecutiveSustain,
-                decision.confidence.raw(),
-                1.0,
-            )?,
-        ],
-    )?;
+    let mut emissions = vec![
+        NeuralEmission::new(
+            NeuralEmissionClass::RegionalArousal,
+            neural_evidence.logit.abs().tanh(),
+            neural_evidence.confidence.raw(),
+        )?,
+        NeuralEmission::new(
+            NeuralEmissionClass::MotorCommitment,
+            decision.confidence.raw(),
+            decision.confidence.raw(),
+        )?,
+        NeuralEmission::new(
+            NeuralEmissionClass::ExecutiveSustain,
+            decision.confidence.raw(),
+            1.0,
+        )?,
+    ];
+    // Recognition is frozen personal recall of a currently attended creature.
+    // The GPU can choose another action; contact remains a separate body event.
+    emissions.extend(social_recognition);
+    let neural_emission =
+        NeuralEmissionFrame::new(frame.tick(), neural_evidence.dispatch_generation, emissions)?;
     let object_novelty = motor_bundle
         .channels
         .iter()
@@ -4894,6 +4913,25 @@ fn seal_prepared_selection_core(
         cognitive_work,
         cognitive_work_cost_policy,
     )?;
+    // The outcome error becomes chemistry on the next biology transition.
+    // Stage it before the measured receipt so its exact post-state remains
+    // world-authoritative. The enclosing tick also rolls back this pulse.
+    let mut record = world
+        .organism_registry()
+        .get(organism_id)
+        .cloned()
+        .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+    record
+        .stage_prediction_residual_pulse(
+            sequence_id,
+            neural_evidence.dispatch_generation,
+            combined_prediction_error,
+            1.0,
+        )
+        .map_err(|error| GameAppShellError::InvalidProductionFrontend {
+            message: error.to_string(),
+        })?;
+    replace_canonical_organism_record(world, record)?;
     let biology_after = *world
         .organism_registry()
         .get(organism_id)
@@ -5969,6 +6007,23 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
+    /// Explicit lessons require hints rather than the training dropout ablation.
+    #[cfg(feature = "foundation-training")]
+    pub(crate) fn require_foundation_rich_information(&mut self) -> Result<(), GameAppShellError> {
+        if self.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: "rich-information lesson requires grounded natural senses".into(),
+            });
+        }
+        let prior = self.semantic_prior.as_mut().ok_or_else(|| {
+            GameAppShellError::InvalidProductionFrontend {
+                message: "rich-information lesson requires the local semantic prior; ALIFE_SLM_PRIOR=off is incompatible".into(),
+            }
+        })?;
+        prior.require_rich_information();
+        Ok(())
+    }
+
     /// Setup-only priming for max-speed collection. No world tick, neural
     /// dispatch or learned state advances while the provider prepares a hint.
     #[cfg(feature = "foundation-training")]
@@ -6002,6 +6057,14 @@ impl GpuLiveBrainRuntime {
         }
         prior.metrics.prime_wait_ms +=
             started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        if prior.metrics.rich_information_required && !prior.ready(raw) {
+            return Err(GameAppShellError::InvalidProductionFrontend {
+                message: format!(
+                    "rich-information semantic prior not ready after bounded priming (timeouts={}, failures={}, last_error={:?})",
+                    prior.metrics.prime_timeouts, prior.metrics.failures, prior.metrics.last_error
+                ),
+            });
+        }
         Ok(())
     }
 
@@ -7525,12 +7588,14 @@ impl GpuLiveBrainRuntime {
             }
         };
         let result = if pending_matches {
-            self.backend
-                .apply_sealed_outcome_batch(&[(
-                    current_handle,
-                    &recovery_patch,
-                    &recovery_receptors,
-                )])
+            self.bind_learning_development(current_handle, tick)
+                .and_then(|()| {
+                    self.backend.apply_sealed_outcome_batch(&[(
+                        current_handle,
+                        &recovery_patch,
+                        &recovery_receptors,
+                    )])
+                })
                 .and_then(|mut receipts| {
                     receipts
                         .pop()
@@ -9238,6 +9303,7 @@ impl GpuLiveBrainRuntime {
             .cognitive_context()
             .cloned()
             .ok_or(ScaffoldContractError::MissingPhaseData)?;
+        let social_recognition = memory_recall.recognized_social_emission();
         let sealed = seal_prepared_selection_core(
             &mut self.world,
             &mut self.residents,
@@ -9250,6 +9316,7 @@ impl GpuLiveBrainRuntime {
                 world_entity_id,
                 frame,
                 memory: memory_recall.receipt().clone(),
+                social_recognition,
                 sequence_id,
                 outcome_tick,
                 cognitive_context,
@@ -9273,6 +9340,29 @@ impl GpuLiveBrainRuntime {
         })
     }
 
+    fn bind_learning_development(
+        &mut self,
+        handle: GpuBrainHandle,
+        update_tick: Tick,
+    ) -> Result<(), ScaffoldContractError> {
+        let raw = handle.organism_id().raw();
+        let record = self
+            .world
+            .organism_registry()
+            .get(handle.organism_id())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let development = learning_development_at(record, update_tick)?;
+        let resident = self
+            .residents
+            .get(&raw)
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        self.backend.set_developmental_plasticity(
+            handle,
+            &development,
+            resident.compiler_inputs.genome().plasticity_parameters(),
+        )
+    }
+
     fn commit_sealed_batch(
         &mut self,
         mut sealed: Vec<SealedLiveSelection>,
@@ -9294,7 +9384,18 @@ impl GpuLiveBrainRuntime {
             })
             .collect::<Vec<_>>();
         let learning_started = Instant::now();
-        let learning_result = self.backend.apply_sealed_outcome_batch(&learning_batch);
+        // Developmental binding is part of the fallible learning attempt:
+        // failures must retain eligibility and still reach both post-seal
+        // sidecars, just like a rejected GPU learning dispatch.
+        let learning_result = sealed
+            .iter()
+            .try_for_each(|selection| {
+                self.bind_learning_development(
+                    selection.handle,
+                    selection.patch.outcome().outcome_tick,
+                )
+            })
+            .and_then(|()| self.backend.apply_sealed_outcome_batch(&learning_batch));
         self.performance_metrics.learning_batches =
             self.performance_metrics.learning_batches.saturating_add(1);
         self.performance_metrics.learning_rows = self
@@ -10408,6 +10509,10 @@ fn place_food_in_world(
         world_signature,
     })
 }
+
+#[cfg(test)]
+#[path = "gpu_live_runtime/sensitive_period_audit.rs"]
+mod sensitive_period_audit;
 
 #[cfg(test)]
 mod tests {
@@ -13714,14 +13819,22 @@ mod tests {
         assert_eq!(source.mean_absolute_distance(&target).unwrap(), 0.0);
     }
 
-    #[test]
-    fn seal_prepared_selection_uses_world_biology_receipt_as_resident_authority() {
+    fn seal_rest_with_social_recognition(
+        social_recognition: Option<NeuralEmission>,
+        age_ticks: u64,
+        retry_after_late_failure: bool,
+    ) -> BiochemistryState {
         let organism_id = OrganismId(1);
         let mut world = HeadlessScenarioBuilder::new(9_308)
             .agent("agent", organism_id, Vec3f::ZERO)
             .build()
             .unwrap();
         register_sealing_test_organism(&mut world, organism_id);
+        for _ in 0..age_ticks {
+            world.try_advance_tick().unwrap();
+        }
+        let current_tick = world.tick();
+        let outcome_tick = Tick::new(current_tick.raw() + 1);
         let world_entity_id = world
             .organism_entity_ids()
             .into_iter()
@@ -13736,7 +13849,7 @@ mod tests {
         let normal = world
             .perception_frame(
                 organism_id,
-                Tick::ZERO,
+                current_tick,
                 SensorProfile::PrivilegedAffordanceV1,
                 biology_before.homeostasis,
             )
@@ -13749,7 +13862,7 @@ mod tests {
         rest.candidate_index = 0;
         let draft = alife_core::PerceptionFrameDraft::new(
             organism_id,
-            Tick::ZERO,
+            current_tick,
             SensorProfile::PrivilegedAffordanceV1,
             normal.sensory().clone(),
             normal.body(),
@@ -13766,7 +13879,7 @@ mod tests {
             9_308,
             BrainScaleTier::Nano512,
             organism_id,
-            Tick::ZERO,
+            current_tick,
             SensorProfile::PrivilegedAffordanceV1,
         )
         .unwrap();
@@ -13779,7 +13892,7 @@ mod tests {
             phenotype.foundation_abi_selection().clone(),
         )
         .unwrap();
-        let mut residents = BTreeMap::from([(
+        let residents = BTreeMap::from([(
             organism_id.raw(),
             ResidentCognition {
                 phenotype: phenotype.clone(),
@@ -13792,7 +13905,7 @@ mod tests {
                     .unwrap(),
                 next_sequence: 1,
                 language_grounding: LanguageGroundingLedger::default(),
-                life_statistics: PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap(),
+                life_statistics: PassiveLifeStatistics::new(organism_id, current_tick).unwrap(),
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: GroundedSuccessorPredictor::default(),
                 approximate_cache: Default::default(),
@@ -13838,7 +13951,7 @@ mod tests {
             .apply_registered_neural_command(
                 &decision.selected_action,
                 world_entity_id,
-                Tick::new(1),
+                outcome_tick,
                 None,
                 false,
             )
@@ -13879,45 +13992,89 @@ mod tests {
             receipt_digest: [0; 4],
         };
         let expected_pre_action_context = cognitive_context.clone();
-        let sealed = seal_prepared_selection_core(
-            &mut world,
-            &mut residents,
-            0,
-            CognitiveWorkCostPolicy {
-                enabled: true,
-                energy_per_work_unit: 0.001,
-            },
-            false,
-            WorldMutationRollback::Local,
-            PreparedSealInput {
+        let prepared = || PreparedSealInput {
+            organism_id,
+            world_entity_id,
+            frame: frame.clone(),
+            memory: memory.clone(),
+            social_recognition,
+            sequence_id,
+            outcome_tick,
+            cognitive_context: cognitive_context.clone(),
+            work: work.clone(),
+            v11_work: GpuV11WorkReceipt::default(),
+            pre_action: pre_action.clone(),
+            decision: decision.clone(),
+            motor_bundle: MotorCommandBundle::new(
                 organism_id,
-                world_entity_id,
-                frame: frame.clone(),
-                memory,
                 sequence_id,
-                outcome_tick: Tick::new(1),
-                cognitive_context,
-                work,
-                v11_work: GpuV11WorkReceipt::default(),
-                pre_action,
-                decision: decision.clone(),
-                motor_bundle: MotorCommandBundle::new(
-                    organism_id,
-                    sequence_id,
-                    frame.tick(),
-                    vec![channel_command_for_action(
-                        MotorChannel::Posture,
-                        &decision.selected_action,
-                    )
-                    .unwrap()],
-                )
-                .unwrap(),
-                frozen_prediction: None,
-                speech_payload: None,
-                speech_prompted: false,
-            },
-        )
-        .unwrap();
+                frame.tick(),
+                vec![
+                    channel_command_for_action(MotorChannel::Posture, &decision.selected_action)
+                        .unwrap(),
+                ],
+            )
+            .unwrap(),
+            frozen_prediction: None,
+            speech_payload: None,
+            speech_prompted: false,
+        };
+        struct TestAuthority {
+            world: HeadlessWorld,
+            residents: BTreeMap<u64, ResidentCognition>,
+        }
+        impl LiveAuthorityOwner for TestAuthority {
+            fn world_and_residents(
+                &mut self,
+            ) -> (&mut HeadlessWorld, &mut BTreeMap<u64, ResidentCognition>) {
+                (&mut self.world, &mut self.residents)
+            }
+        }
+        let mut authority = TestAuthority { world, residents };
+        let seal = |owner: &mut TestAuthority| {
+            seal_prepared_selection_core(
+                &mut owner.world,
+                &mut owner.residents,
+                0,
+                CognitiveWorkCostPolicy {
+                    enabled: true,
+                    energy_per_work_unit: 0.001,
+                },
+                false,
+                if retry_after_late_failure {
+                    WorldMutationRollback::EnclosingStagedTick
+                } else {
+                    WorldMutationRollback::Local
+                },
+                prepared(),
+            )
+        };
+        if retry_after_late_failure {
+            let before_world = authority.world.canonical_signature_digest().unwrap();
+            let before_residents = serde_json::to_vec(&authority.residents).unwrap();
+            let (failed, _) = tick_with_sleep_progress_inner(&mut authority, false, |owner| {
+                seal(owner)?;
+                assert_ne!(
+                    owner.world.canonical_signature_digest().unwrap(),
+                    before_world
+                );
+                Err::<(), GameAppShellError>(ScaffoldContractError::InvalidId.into())
+            });
+            assert!(failed.is_err());
+            assert_eq!(
+                authority.world.canonical_signature_digest().unwrap(),
+                before_world
+            );
+            assert_eq!(
+                serde_json::to_vec(&authority.residents).unwrap(),
+                before_residents
+            );
+        }
+        let sealed = seal(&mut authority).unwrap();
+        let TestAuthority {
+            mut world,
+            residents,
+        } = authority;
         let world_after = *world
             .organism_registry()
             .get(organism_id)
@@ -13958,6 +14115,20 @@ mod tests {
             Some(&expected_pre_action_context)
         );
         let measured = sealed.patch.outcome().measured_physiology.unwrap();
+        let pulse =
+            serde_json::to_value(world_after).unwrap()["pending_prediction_residual"].clone();
+        assert_eq!(
+            pulse["source_tick"],
+            serde_json::json!(sealed.patch.outcome().outcome_tick.raw())
+        );
+        assert_eq!(
+            pulse["source_sequence_id"],
+            serde_json::json!(sequence_id.raw())
+        );
+        assert_eq!(
+            pulse["activity"],
+            serde_json::json!(sealed.patch.outcome().prediction_error.raw())
+        );
         assert_eq!(
             measured.after, world_after,
             "learning must include the cognitive debit"
@@ -14011,10 +14182,12 @@ mod tests {
             expected_receipt.biology_after.homeostasis,
             learning_projection
         );
-        assert_eq!(
-            world_after.homeostasis,
-            expected_receipt.biology_after.homeostasis
-        );
+        if age_ticks == 0 {
+            assert_eq!(
+                world_after.homeostasis,
+                expected_receipt.biology_after.homeostasis
+            );
+        }
         let next_frame = world
             .perception_frame(
                 organism_id,
@@ -14023,10 +14196,7 @@ mod tests {
                 world_after.homeostasis,
             )
             .unwrap();
-        assert_eq!(
-            *next_frame.homeostasis(),
-            expected_receipt.biology_after.homeostasis
-        );
+        assert_eq!(*next_frame.homeostasis(), world_after.homeostasis);
         assert_eq!(
             sealed.patch.outcome().homeostatic_delta,
             measured.homeostatic_delta
@@ -14035,6 +14205,34 @@ mod tests {
             sealed.patch.outcome().homeostatic_delta,
             expected_receipt.action_result.observation.homeostatic_delta
         );
+        world_after
+    }
+
+    #[test]
+    fn seal_prepared_selection_uses_world_biology_receipt_as_resident_authority() {
+        seal_rest_with_social_recognition(None, 0, false);
+    }
+
+    #[test]
+    fn seal_prepared_selection_applies_social_recognition_while_rest_wins() {
+        let neutral = seal_rest_with_social_recognition(None, 120, false);
+        let recognized = seal_rest_with_social_recognition(
+            Some(NeuralEmission::new(NeuralEmissionClass::SocialState, 0.8, 0.9).unwrap()),
+            120,
+            false,
+        );
+        assert!(recognized.homeostasis.hormones.oxytocin > neutral.homeostasis.hormones.oxytocin);
+        let restored: BiochemistryState =
+            serde_json::from_slice(&serde_json::to_vec(&recognized).unwrap()).unwrap();
+        assert_eq!(restored, recognized);
+    }
+
+    #[test]
+    fn late_sealing_failure_restores_social_chemistry_for_exact_retry() {
+        let emission = NeuralEmission::new(NeuralEmissionClass::SocialState, 0.8, 0.9).unwrap();
+        let uninterrupted = seal_rest_with_social_recognition(Some(emission), 120, false);
+        let retried = seal_rest_with_social_recognition(Some(emission), 120, true);
+        assert_eq!(retried, uninterrupted);
     }
 
     #[test]
@@ -14311,189 +14509,6 @@ mod tests {
         assert_eq!(runtime.backend.pending_eligibility(handle).unwrap(), None);
         assert_eq!(runtime.last_learning_receipts().len(), 1);
         assert!(runtime.last_eligibility_discard_receipts().is_empty());
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    fn archived_newborn_runtime(label: &str) -> (GpuLiveBrainRuntime, PathBuf) {
-        let sensor_profile = SensorProfile::PrivilegedAffordanceV1;
-        let seed = 0x43B1_0001;
-        let world = HeadlessScenarioBuilder::new(seed)
-            .agent("parent-a", OrganismId(1), Vec3f::ZERO)
-            .agent("parent-b", OrganismId(2), Vec3f::new(1.0, 0.0, 0.0))
-            .build()
-            .unwrap();
-        let archive_root =
-            std::env::temp_dir().join(format!("alife-gpu-newborn-{label}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&archive_root);
-        let backend = GpuClosedLoopBackend::new_required(
-            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
-        )
-        .expect("in-process GPU backend");
-        let runtime = GpuLiveBrainRuntime::new_profiled_archived(
-            backend,
-            world,
-            seed,
-            BrainScaleTier::Nano512,
-            sensor_profile,
-            LineageLibraryConfig::profile_default(&archive_root),
-            "task-4.3b1-newborn",
-            ArchiveLearnedCapturePolicy::GeneticOnly,
-        )
-        .unwrap();
-        (runtime, archive_root)
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    fn queue_deterministic_conception(runtime: &mut GpuLiveBrainRuntime) {
-        let parent = OrganismId(1);
-        let parent_entity_id = runtime
-            .world
-            .organism_entity_ids()
-            .into_iter()
-            .find_map(|(organism_id, world_entity_id)| {
-                (organism_id == parent).then_some(world_entity_id)
-            })
-            .expect("parent binding");
-        let resident = runtime.residents.get(&parent.raw()).unwrap();
-        let frame = runtime
-            .world
-            .perception_frame(
-                parent,
-                runtime.world.tick(),
-                runtime.sensor_profile,
-                resident.homeostasis,
-            )
-            .unwrap();
-        let conception = frame
-            .candidates()
-            .iter()
-            .find(|candidate| {
-                let family = format!("{:?}", candidate.family);
-                family.contains("Repro") || family.contains("Mate")
-            })
-            .copied()
-            .expect("deterministic conception candidate");
-        let command = conception
-            .to_command(parent, Confidence::new(1.0).unwrap())
-            .unwrap();
-        let next_tick = Tick::new(runtime.world.tick().raw().saturating_add(1));
-        runtime
-            .world
-            .apply_registered_neural_command(&command, parent_entity_id, next_tick, None, false)
-            .unwrap();
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    fn newborn_id(runtime: &GpuLiveBrainRuntime) -> OrganismId {
-        let newborns = runtime
-            .world
-            .organism_entity_ids()
-            .into_iter()
-            .filter(|(organism_id, _)| organism_id.raw() > 2)
-            .map(|(organism_id, _)| organism_id)
-            .collect::<Vec<_>>();
-        assert_eq!(newborns.len(), 1);
-        newborns[0]
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    #[test]
-    fn newborn_is_archived_linked_and_admitted_before_tick_returns() {
-        let (mut runtime, archive_root) = archived_newborn_runtime("success");
-        queue_deterministic_conception(&mut runtime);
-
-        runtime.tick().unwrap();
-
-        let newborn = newborn_id(&runtime);
-        let record = runtime.world.organism_registry().get(newborn).unwrap();
-        let digest = runtime
-            .archive_birth_manifest(newborn)
-            .expect("newborn archive manifest");
-        assert_eq!(record.archive().birth_manifest_digest(), Some(digest));
-        assert_eq!(runtime.world.tick(), Tick::new(1));
-        let world_entity_id = record.world_entity_id();
-        assert!(runtime
-            .world
-            .organism_entity_ids()
-            .into_iter()
-            .any(|(organism_id, entity_id)| {
-                organism_id == newborn && entity_id == world_entity_id
-            }));
-        let handle = runtime.handle_for(newborn).expect("newborn handle");
-        assert_eq!(handle.organism_id(), newborn);
-        assert_eq!(
-            runtime
-                .residents
-                .get(&newborn.raw())
-                .unwrap()
-                .phenotype
-                .phenotype_hash(),
-            handle.phenotype_hash()
-        );
-        assert!(runtime.memories.contains_key(&newborn.raw()));
-        assert_eq!(
-            runtime
-                .topologies
-                .get(&newborn.raw())
-                .unwrap()
-                .organism_id(),
-            newborn
-        );
-        drop(runtime);
-        fs::remove_dir_all(archive_root).unwrap();
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    #[test]
-    fn failed_newborn_admission_publishes_nothing_and_retry_reuses_manifest() {
-        let (mut runtime, archive_root) = archived_newborn_runtime("retry");
-        queue_deterministic_conception(&mut runtime);
-        runtime.backend.force_admission_failures_for_test(1);
-
-        assert!(runtime.tick().is_err());
-
-        let newborn = newborn_id(&runtime);
-        let failed_record = runtime.world.organism_registry().get(newborn).unwrap();
-        assert_eq!(failed_record.archive().birth_manifest_digest(), None);
-        assert!(runtime.archive_birth_manifest(newborn).is_none());
-        assert!(!runtime.handles.contains_key(&newborn.raw()));
-        assert!(!runtime.residents.contains_key(&newborn.raw()));
-        assert!(!runtime.memories.contains_key(&newborn.raw()));
-        assert!(!runtime.topologies.contains_key(&newborn.raw()));
-        let archive_count_after_failure = runtime.lineage_archive_manifest_count().unwrap();
-
-        runtime.reconcile_population().unwrap();
-
-        let digest = runtime
-            .archive_birth_manifest(newborn)
-            .expect("retried newborn archive manifest");
-        assert_eq!(
-            runtime.lineage_archive_manifest_count().unwrap(),
-            archive_count_after_failure
-        );
-        assert_eq!(
-            runtime
-                .world
-                .organism_registry()
-                .get(newborn)
-                .unwrap()
-                .archive()
-                .birth_manifest_digest(),
-            Some(digest)
-        );
-        assert!(runtime.handles.contains_key(&newborn.raw()));
-        assert!(runtime.residents.contains_key(&newborn.raw()));
-        assert!(runtime.memories.contains_key(&newborn.raw()));
-        assert_eq!(
-            runtime
-                .topologies
-                .get(&newborn.raw())
-                .unwrap()
-                .organism_id(),
-            newborn
-        );
-        drop(runtime);
-        fs::remove_dir_all(archive_root).unwrap();
     }
 
     #[cfg(feature = "gpu-tests")]

@@ -19,3 +19,7 @@ local-llamacpp = ["gaussian-adapter"]
 [[example]]
 name = "local_slm_prior"
 required-features = ["local-llamacpp"]
+
+[[example]]
+name = "local_slm_prior_preflight"
+required-features = ["local-llamacpp"]

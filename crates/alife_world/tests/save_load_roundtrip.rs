@@ -188,9 +188,11 @@ fn composite_genome_foundation_and_nonzero_lifetime_state_survive_portable_resto
     creature.mind.memory_source_ids = vec![MemoryId(41)];
     creature.weights.lifetime_consolidated_entries = 2;
     creature.weights.generated_weight_asset_id = None;
+    let mut world = fixture_world();
+    world.enable_island_for_new_game().unwrap();
     let save = PortableSaveFile::from_headless_world(
         "composite-genetic-restore",
-        &fixture_world(),
+        &world,
         RuntimeConfig::deterministic_default(4242, BrainScaleTier::Standard2048),
         AssetManifest {
             schema: P34_ASSET_MANIFEST_SCHEMA.to_string(),
@@ -204,6 +206,16 @@ fn composite_genome_foundation_and_nonzero_lifetime_state_survive_portable_resto
     save.to_json_file(&path).unwrap();
     let restored = PortableSaveFile::from_json_file(&path).unwrap();
     restored.validate_with_asset_root(&root).unwrap();
+    assert_eq!(restored.world, save.world);
+    assert_eq!(restored.creatures, save.creatures);
+    let restored_world = restored.restore_headless_world().unwrap();
+    assert_eq!(restored_world.terrain_binding(), world.terrain_binding());
+    // Fixture agents normalize their allocator when saved; compare that exact snapshot.
+    let expected_world = save.restore_headless_world().unwrap();
+    assert_eq!(
+        restored_world.canonical_signature_digest().unwrap(),
+        expected_world.canonical_signature_digest().unwrap()
+    );
     let genetic_birth = restored
         .load_composite_genetic_birth(OrganismId(1), &root)
         .unwrap();

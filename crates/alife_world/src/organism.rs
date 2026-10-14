@@ -704,6 +704,39 @@ impl WorldOrganismRecord {
         Ok(())
     }
 
+    /// Preserve a staged, measured prediction pulse with organism-owned biology.
+    /// This updates its exact state reference without advancing biological time.
+    pub fn stage_prediction_residual_pulse(
+        &mut self,
+        source_sequence_id: alife_core::ExperienceSequenceId,
+        graph_epoch: u64,
+        activity: f32,
+        confidence: f32,
+    ) -> Result<(), OrganismRegistryError> {
+        if !self.lifecycle.is_alive() {
+            return Err(OrganismRegistryError::DeadOrganism(self.organism_id));
+        }
+        self.validate_contract()?;
+        let original_biochemistry = self.biochemistry;
+        let original_state_graph = self.state_graph.clone();
+        let result = (|| -> Result<(), ScaffoldContractError> {
+            self.biochemistry = self.biochemistry.with_prediction_residual_pulse(
+                source_sequence_id,
+                graph_epoch,
+                activity,
+                confidence,
+            )?;
+            self.advance_body_state_ref()?;
+            self.validate_contract()
+        })();
+        if let Err(error) = result {
+            self.biochemistry = original_biochemistry;
+            self.state_graph = original_state_graph;
+            return Err(error.into());
+        }
+        Ok(())
+    }
+
     pub fn advance_biology_with_neural_emission(
         &mut self,
         next_tick: Tick,

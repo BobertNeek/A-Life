@@ -150,6 +150,18 @@ impl GroundedCandidateEnumerator {
         grounded: &GroundedSensingFrame,
         profile: SensorProfile,
     ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+        self.enumerate_candidates_with_active_contact(grounded, profile, None)
+    }
+
+    /// Reserves at most one already observed, calibrated contact opportunity.
+    /// The caller may nominate a physically held target from the same snapshot;
+    /// hidden, occluded, or non-contact targets cannot enter the candidate set.
+    pub fn enumerate_candidates_with_active_contact(
+        &self,
+        grounded: &GroundedSensingFrame,
+        profile: SensorProfile,
+        active_contact: Option<alife_core::WorldEntityId>,
+    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
         if !matches!(
             profile,
             SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1
@@ -252,12 +264,22 @@ impl GroundedCandidateEnumerator {
             }
         }
 
-        for (slot, transport) in grounded
-            .slots()
+        let mut selected = (0..grounded.slots().len().min(object_limit)).collect::<Vec<_>>();
+        if let Some(index) = grounded
+            .transports()
             .iter()
-            .zip(grounded.transports())
-            .take(object_limit)
+            .position(|transport| Some(transport.transport_entity) == active_contact)
+            .filter(|index| grounded.slots()[*index].contact > 0.0)
         {
+            if !selected.contains(&index) {
+                if let Some(last) = selected.last_mut() {
+                    *last = index;
+                }
+            }
+        }
+        for index in selected {
+            let slot = &grounded.slots()[index];
+            let transport = &grounded.transports()[index];
             if slot.slot_index != transport.slot_index {
                 return Err(ScaffoldContractError::InvalidPerceptionFrame);
             }

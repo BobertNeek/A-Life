@@ -296,6 +296,7 @@ fn portable_save_round_trip_binds_creature_summary_to_world_record() {
 #[test]
 fn registered_agents_survive_portable_json_restore_with_exact_identity_and_signature() {
     let mut world = world_with_nontrivial_registry();
+    world.enable_island_for_new_game().unwrap();
     let expected_records = registry_records(&world);
     let expected_signature = world.canonical_signature_digest().unwrap();
 

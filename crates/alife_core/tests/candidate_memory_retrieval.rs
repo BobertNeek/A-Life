@@ -16,6 +16,9 @@ use alife_core::{
 const ORGANISM: OrganismId = OrganismId(811);
 const TICK: Tick = Tick::new(40);
 
+#[path = "candidate_memory_retrieval/social_recognition.rs"]
+mod social_recognition;
+
 fn slot(slot_index: u16, tracked: u64, distance: f32, color: [f32; 3]) -> GroundedObjectSlotV1 {
     GroundedObjectSlotV1 {
         slot_index,
@@ -47,6 +50,8 @@ fn candidate_for_family(
     let kind = match family {
         CandidateActionFamily::Approach | CandidateActionFamily::Avoid => ActionKind::Move,
         CandidateActionFamily::Contact | CandidateActionFamily::Ingest => ActionKind::Interact,
+        CandidateActionFamily::Inspect => ActionKind::Look,
+        CandidateActionFamily::Other => ActionKind::Hold,
         _ => unreachable!("fixture uses target-bearing families"),
     };
     ActionCandidate::new(

@@ -24,6 +24,11 @@ rules. Prefer the more specific rule unless it conflicts with v2.0.
 
 Read only documentation relevant to the touched behavior. Update affected docs and run the relevant existing checks. Preserve unrelated work.
 
+Until the first public release, replacements may break obsolete formats and systems;
+backward compatibility for disposable test saves is not required. Preserve current
+save/load correctness and acquired creature state, and verify replacements with
+newly created saves. This does not authorize unrelated deletions.
+
 If in doubt, WWCD — What Would Creatures Do? Use Creatures 3 / Docking Station to guide open gameplay decisions.
 
 Think through how systems should act step by step before committing them to code. Really go through the cause and effect of what it should do and when, in your mind, before you write the code. You should understand end to end how it’s going to act.

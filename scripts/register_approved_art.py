@@ -1,53 +1,31 @@
-"""Refresh production manifest receipts after exporting approved Blender art."""
+"""Refresh approved art receipts without replacing provenance or unrelated entries."""
 import json
 from pathlib import Path
+
 ROOT = Path(__file__).resolve().parents[1]
 manifest = ROOT / 'crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json'
 data = json.loads(manifest.read_text())
-data['entries'] = [e for e in data['entries'] if not e['asset_id'].startswith('approved-')]
+# The island is the only playable map. Retain the reusable Highlands prop library.
+retired = {'approved-terrain-chunks', 'approved-props'}
+data['entries'] = [e for e in data['entries'] if e['asset_id'] not in retired]
+entries = {e['local_path']: e for e in data['entries']}
 paths = [ROOT / 'crates/alife_game_app/assets/creatures/hearthling/hearthling.glb']
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape').glob('*.glb'))
-paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/terrain-chunks.glb']
-paths += [ROOT / 'crates/alife_game_app/assets/landscape/highlands/props.json']
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/ground-detail.png']
 paths += sorted((ROOT / 'crates/alife_game_app/assets/landscape/island').glob('*.glb'))
 paths += [ROOT / 'crates/alife_game_app/assets/landscape/island/props.json']
 paths += [ROOT / 'crates/alife_game_app/assets/hand/wizard-god-hand.glb']
 for path in paths:
+    local_path = path.relative_to(ROOT).as_posix()
+    entry = entries[local_path]
+    if not entry['asset_id'].startswith('approved-'):
+        raise ValueError(f'Expected an approved registration for {local_path}')
     payload = path.read_bytes()
-    digest = 0xcbf29ce484222325
     # PortableAssetDigest canonicalizes text across Windows/Git line endings.
-    digest_payload = payload.replace(b'\r\n',b'\n').replace(b'\r',b'\n') if path.suffix=='.json' else payload
+    digest_payload = payload.replace(b'\r\n', b'\n').replace(b'\r', b'\n') if path.suffix == '.json' else payload
+    digest = 0xcbf29ce484222325
     for byte in digest_payload:
         digest = ((digest ^ byte) * 0x100000001b3) & 0xffffffffffffffff
-    entry = dict(data['entries'][0])
-    suffix = ('island-' if path.parent.name=='island' else '') + path.stem.lower().replace('_', '-')
-    entry.update(asset_id='approved-' + suffix,
-        author='A-Life approved Blender art', digest=f'fnv1a64:{digest:016x}',
-        size_bytes=len(payload), local_path=path.relative_to(ROOT).as_posix(),
-        usage_category='creatures' if 'hearthling' in path.name else 'environment-dressing',
-        source='generated:approved-blender-model',
-        replacement_policy='edit-blender-source-and-refresh-manifest',
-        generator=dict(config_path=('scripts/export_hearthling.py' if 'hearthling' in path.name else
-            'crates/alife_game_app/assets/landscape/landscape.blend'),
-            date='2026-09-15' if 'hearthling' in path.name else '2026-09-07',
-            seed='bipedal-fox-reference-hearthling-v9-rounded-nose' if 'hearthling' in path.name else
-                'approved-creatures-modern-black-and-white', tool='Blender-5.2.1-LTS' if 'hearthling' in path.name else 'Blender-5.1'))
-    if path.suffix == '.png':
-        entry.update(author='A-Life generated art with OpenAI image generation', source='generated:ground-detail-prompt')
-        entry['generator'].update(config_path='crates/alife_game_app/assets/landscape/ground-detail-prompt.txt',
-            tool='OpenAI-image-generation')
-    elif 'hearthling' not in path.name:
-        entry['generator'].update(
-            config_path='scripts/build_highlands.py' if path.parent.name=='highlands' else 'scripts/export_landscape.py',
-            date='2026-09-15',seed='mountainous-open-world-v2',tool='Blender-5.2.1-LTS')
-        if path.name in {'terrain-chunks.glb','props.json'}:
-            entry['generator']['config_path']='scripts/export_highlands_runtime.py'
-        if path.parent.name=='island':
-            entry['generator'].update(config_path='scripts/build_island_terrain.py' if path.name in {'terrain-chunks.glb','props.json'} else 'scripts/build_island_assets.py',
-                date='2026-09-30',seed='approved-island-blueprints',tool='Blender-5.2.1-LTS')
-        if path.parent.name=='hand':
-            entry['generator'].update(config_path='scripts/build_wizard_hand.py',date='2026-09-30',seed='approved-wiry-wizard-hand',tool='Blender-5.2.1-LTS')
-    data['entries'].append(entry)
+    entry.update(digest=f'fnv1a64:{digest:016x}', size_bytes=len(payload))
 manifest.write_text(json.dumps(data, indent=2) + '\n')
-print('Registered', len(paths), 'approved production assets')
+print('Refreshed', len(paths), 'approved production assets; preserved registration metadata')

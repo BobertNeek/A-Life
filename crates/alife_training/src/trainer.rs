@@ -429,6 +429,25 @@ impl FoundationTrainer {
         )
     }
 
+    /// Read only the speech outputs from the last forward pass for telemetry.
+    pub(crate) fn read_replay_speech_diagnostics(
+        &self,
+        targets: &[Option<crate::ReplaySpeechTarget>],
+    ) -> Result<crate::ReplaySpeechPayloadDiagnostics, TrainingError> {
+        if !self.gpu.layout.replay || targets.len() != self.gpu.layout.ticks as usize {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
+        if !self.replay_speech_active {
+            return Ok(crate::ReplaySpeechPayloadDiagnostics::default());
+        }
+        let logits = self.read_float_buffer(
+            &self.gpu.outputs,
+            u64::from(self.gpu.layout.speech_logits) * 4,
+            targets.len() * 192,
+        )?;
+        crate::replay_speech_payload_diagnostics(&logits, targets)
+    }
+
     /// Runs the supplied frozen production contexts on the trainer GPU and
     /// returns numerical boundary receipts. This is conditional replay, not a
     /// claim that memory, chemistry or plasticity trajectories were generated here.

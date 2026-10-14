@@ -12,12 +12,58 @@
   "units": "metres",
   "palm_width_m": 0.99,
   "palm_depth_m": 0.33,
-  "overall_length_m": 3,
+  "overall_length_m": 2.498371,
   "fingers_m": {
-    "Index": 1.55,
-    "Middle": 1.65,
-    "Ring": 1.58,
-    "Little": 1.25,
+    "Index": 1.1,
+    "Middle": 1.15,
+    "Ring": 1.1,
+    "Little": 0.9,
     "Thumb_MCP_to_tip": 0.86
-  }
+  },
+  "handedness": "right",
+  "fingers_axis": "+Y",
+  "dorsal_axis": "-Z",
+  "pose_contacts": {
+    "Hover": {
+      "glTF_model_contact_xyz": [
+        0.429072,
+        2.320183,
+        0.345747
+      ],
+      "pinch_gap_m": null
+    },
+    "Point": {
+      "glTF_model_contact_xyz": [
+        0.447459,
+        2.356355,
+        0.230186
+      ],
+      "pinch_gap_m": null
+    },
+    "Grab": {
+      "glTF_model_contact_xyz": [
+        0.32002,
+        1.45997,
+        0.58997
+      ],
+      "pinch_gap_m": 0.120039
+    },
+    "Carry": {
+      "glTF_model_contact_xyz": [
+        0.32002,
+        1.45997,
+        0.58997
+      ],
+      "pinch_gap_m": 0.120039
+    },
+    "Release": {
+      "glTF_model_contact_xyz": [
+        0.439802,
+        2.342351,
+        0.279382
+      ],
+      "pinch_gap_m": null
+    }
+  },
+  "approved_revision": "2026-10-03-fuller-relaxed-rounded-back"
 }
