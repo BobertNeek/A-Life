@@ -1,7 +1,9 @@
 //! CPU-only contracts for the production runner. No device, provider or neural
 //! dispatch is created: device commit atomicity needs the separate GPU suite.
 use super::*;
-use alife_core::{HysteresisState, StableFocusIdentity, TrackedObjectId};
+use alife_core::{
+    HysteresisState, SensorProfileProvenance, SensorySnapshot, StableFocusIdentity, TrackedObjectId,
+};
 use alife_world::HeadlessScenarioBuilder;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -816,6 +818,7 @@ fn legacy_serial_reference(job: &CpuPreparationJob<'_>) -> CpuPreparationOutcome
         })
     })();
     CpuPreparationOutcome {
+        approximate_cache: None,
         result,
         stage: preparation_stage,
         hysteresis,
