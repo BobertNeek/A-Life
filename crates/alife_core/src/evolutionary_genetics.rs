@@ -1439,7 +1439,7 @@ fn express_brain_genome(
         &construction.paternal_learning
     };
     genome = genome
-        .with_plasticity_parameters(learning.with_inherited_credit_profile_from(credit_source))?;
+        .with_plasticity_parameters(learning.with_inherited_decoder_policies_from(credit_source))?;
     if let Some(candidate) = &source.nano512_action_credit_candidate_v2 {
         let parameters = genome
             .plasticity_parameters()
@@ -2488,13 +2488,13 @@ fn construction_gamete(
     let learning = chromosome
         .maternal_learning
         .map_inherited_parameters(&chromosome.paternal_learning, &mut map)?;
-    // Named credit policies are whole alleles, selected at this linked position.
+    // Named decoder policies are whole alleles, selected at this linked position.
     let credit_source = if selector.select_maternal_homolog {
         &chromosome.maternal_learning
     } else {
         &chromosome.paternal_learning
     };
-    let learning = learning.with_inherited_credit_profile_from(credit_source);
+    let learning = learning.with_inherited_decoder_policies_from(credit_source);
     Ok((architecture, learning))
 }
 

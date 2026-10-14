@@ -1,0 +1,737 @@
+{
+  "baseline_sha256": "cd1bddd8aac1c7a0f7d1e3ac71d51ba76d4c87804dca3405074498b550caaf4d",
+  "candidate_sha256": "e8e8f9058450d9fb3ff854084f98b86f7a6d14b8989449c8f537cf8f1fe88e12",
+  "semantics": "Exact audited float32 fields for existing trunk cap extension and angle-weighted incident normals; see derive_conifer_leader.py",
+  "fields": [
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 30,
+      "byte_offset": 3132,
+      "before_hex": "102a0abd250f1841227f493b",
+      "after_hex": "102a0abdfbaa3241227f493b"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 31,
+      "byte_offset": 3144,
+      "before_hex": "3b35e1bcff0d18413597c13c",
+      "after_hex": "3b35e1bcd5a932413597c13c"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 32,
+      "byte_offset": 3156,
+      "before_hex": "32a836bc620c1841bcd5143d",
+      "after_hex": "32a836bc38a83241bcd5143d"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 33,
+      "byte_offset": 3168,
+      "before_hex": "3358143cec0a1841bcd5143d",
+      "after_hex": "3358143cc2a63241bcd5143d"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 34,
+      "byte_offset": 3180,
+      "before_hex": "2614d03c2c0a18413597c13c",
+      "after_hex": "2614d03c02a632413597c13c"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 35,
+      "byte_offset": 3192,
+      "before_hex": "1e9f013d6a0a1841227f493b",
+      "after_hex": "1e9f013d40a63241227f493b"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 36,
+      "byte_offset": 3204,
+      "before_hex": "571fd03c8f0b18416c378fbc",
+      "after_hex": "571fd03c65a732416c378fbc"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 37,
+      "byte_offset": 3216,
+      "before_hex": "6b7c143c2c0d1841af4bf7bc",
+      "after_hex": "6b7c143c02a93241af4bf7bc"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 38,
+      "byte_offset": 3228,
+      "before_hex": "fa8336bca20e1841af4bf7bc",
+      "after_hex": "fa8336bc78aa3241af4bf7bc"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "POSITION",
+      "accessor": 0,
+      "vertex": 39,
+      "byte_offset": 3240,
+      "before_hex": "0a2ae1bc620f18416c378fbc",
+      "after_hex": "0a2ae1bc38ab32416c378fbc"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 20,
+      "byte_offset": 28116,
+      "before_hex": "f0fd7fbff56d013cba7e37ba",
+      "after_hex": "a6ff7fbfa241533b59cc0eba"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 21,
+      "byte_offset": 28128,
+      "before_hex": "ed5f53bf8a33ef3b1368103f",
+      "after_hex": "9b5453bf503a633b077b103f"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 22,
+      "byte_offset": 28140,
+      "before_hex": "fa65a8be4b1e273c35be713f",
+      "after_hex": "3836a8be1327fd3b0fc8713f"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 23,
+      "byte_offset": 28152,
+      "before_hex": "81e2a33ec04d7c3cd27f723f",
+      "after_hex": "ec13a43ec1e5683cad78723f"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 24,
+      "byte_offset": 28164,
+      "before_hex": "8594523fcc1ca73c257b113f",
+      "after_hex": "0d98523f2e1da33c2a77113f"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 25,
+      "byte_offset": 28176,
+      "before_hex": "6aed7f3f09f9c23cf8b751ba",
+      "after_hex": "71ee7f3f6094bd3c2614fbb9"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 26,
+      "byte_offset": 28188,
+      "before_hex": "1f5f523f359ccd3c02bc11bf",
+      "after_hex": "ae74523f65d2bf3c93a111bf"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 27,
+      "byte_offset": 28200,
+      "before_hex": "43a1a33e11debe3c418072bf",
+      "after_hex": "a6e1a33e597ba43c387a72bf"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 28,
+      "byte_offset": 28212,
+      "before_hex": "a222a8be3545943c2cc271bf",
+      "after_hex": "df04a8be36155f3c47cc71bf"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 29,
+      "byte_offset": 28224,
+      "before_hex": "372e53bf1c9d443c78ab10bf",
+      "after_hex": "683153bf78b7e53b4fac10bf"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 30,
+      "byte_offset": 28236,
+      "before_hex": "e6a33ebf0bda2a3fa038b43b",
+      "after_hex": "e36b3fbf14fa293f61b6a63b"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 31,
+      "byte_offset": 28248,
+      "before_hex": "26021dbffbd5283f3185de3e",
+      "after_hex": "f2981dbff51d283ff407df3e"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 32,
+      "byte_offset": 28260,
+      "before_hex": "26a871be16a7253f3198393f",
+      "after_hex": "2cb972befb2c253facee393f"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 33,
+      "byte_offset": 28272,
+      "before_hex": "42fe833e4588233fe692393f",
+      "after_hex": "27e3833efd50233f5dc8393f"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 34,
+      "byte_offset": 28284,
+      "before_hex": "a19c223f737b233fe569de3e",
+      "after_hex": "35a3223fbf69233faf8ade3e"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 35,
+      "byte_offset": 28296,
+      "before_hex": "ff3f443fbf60243fb5abad3b",
+      "after_hex": "2459443fd042243fcf7ba73b"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 36,
+      "byte_offset": 28308,
+      "before_hex": "5897223f9a54253f1df1d8be",
+      "after_hex": "e2c1223fc7fe243fb776d9be"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 37,
+      "byte_offset": 28320,
+      "before_hex": "5fff833e1a9c263fa8d036bf",
+      "after_hex": "6814843ec0ff253fe25a37bf"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 38,
+      "byte_offset": 28332,
+      "before_hex": "c18f71bec4ba283f3fcf36bf",
+      "after_hex": "00be72be60de273fc98037bf"
+    },
+    {
+      "mesh_index": 0,
+      "mesh": "Conifer_L0",
+      "attribute": "NORMAL",
+      "accessor": 1,
+      "vertex": 39,
+      "byte_offset": 28344,
+      "before_hex": "f3001dbffda52a3fd1eed8be",
+      "after_hex": "29a81dbf47b7293f2cf6d9be"
+    },
+    {
+      "mesh_index": 1,
+      "mesh": "Conifer_L1",
+      "attribute": "POSITION",
+      "accessor": 4,
+      "vertex": 6,
+      "byte_offset": 82156,
+      "before_hex": "706a88ba1f1018413bca493b",
+      "after_hex": "706a88ba8bac32413bca493b"
+    },
+    {
+      "mesh_index": 1,
+      "mesh": "Conifer_L1",
+      "attribute": "NORMAL",
+      "accessor": 5,
+      "vertex": 3,
+      "byte_offset": 91048,
+      "before_hex": "7bf8913e2c09f93a0360753f",
+      "after_hex": "dc278f3ea8eb193a2bca753f"
+    },
+    {
+      "mesh_index": 1,
+      "mesh": "Conifer_L1",
+      "attribute": "NORMAL",
+      "accessor": 5,
+      "vertex": 4,
+      "byte_offset": 91060,
+      "before_hex": "4a3cd43ebd9810bf79aa36bf",
+      "after_hex": "81ced43e76a410bfa27636bf"
+    },
+    {
+      "mesh_index": 1,
+      "mesh": "Conifer_L1",
+      "attribute": "NORMAL",
+      "accessor": 5,
+      "vertex": 5,
+      "byte_offset": 91072,
+      "before_hex": "ca047ebf5214593d35fbe5bd",
+      "after_hex": "027e7ebfbe031a3d6129d0bd"
+    },
+    {
+      "mesh_index": 1,
+      "mesh": "Conifer_L1",
+      "attribute": "NORMAL",
+      "accessor": 5,
+      "vertex": 6,
+      "byte_offset": 91084,
+      "before_hex": "853a343c1efb7f3fc1acad3b",
+      "after_hex": "2e37f33ba5fd7f3fc540863b"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 142,
+      "byte_offset": 108628,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 143,
+      "byte_offset": 108640,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 144,
+      "byte_offset": 108652,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 145,
+      "byte_offset": 108664,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 146,
+      "byte_offset": 108676,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 147,
+      "byte_offset": 108688,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 148,
+      "byte_offset": 108700,
+      "before_hex": "9667a23cd50c184169e6083d",
+      "after_hex": "9667a23cdca8324169e6083d"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 149,
+      "byte_offset": 108712,
+      "before_hex": "bf3bacbcab0f1841f364ffbc",
+      "after_hex": "bf3bacbcb2ab3241f364ffbc"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 150,
+      "byte_offset": 108724,
+      "before_hex": "bf3bacbcab0f1841f364ffbc",
+      "after_hex": "bf3bacbcb2ab3241f364ffbc"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 151,
+      "byte_offset": 108736,
+      "before_hex": "bf3bacbcab0f1841f364ffbc",
+      "after_hex": "bf3bacbcb2ab3241f364ffbc"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "POSITION",
+      "accessor": 8,
+      "vertex": 152,
+      "byte_offset": 108748,
+      "before_hex": "bf3bacbcab0f1841f364ffbc",
+      "after_hex": "bf3bacbcb2ab3241f364ffbc"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 103,
+      "byte_offset": 109996,
+      "before_hex": "b9e2b63db91da73c7aec7e3f",
+      "after_hex": "fbbdb63d910f8e3cb0f07e3f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 107,
+      "byte_offset": 110044,
+      "before_hex": "9375f7be8de1be3ccc08603f",
+      "after_hex": "032f10bf28ada03cb779533f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 109,
+      "byte_offset": 110068,
+      "before_hex": "b9e2b63db91da73c7aec7e3f",
+      "after_hex": "fbbdb63d910f8e3cb0f07e3f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 110,
+      "byte_offset": 110080,
+      "before_hex": "129c663fb1ea953c3b1cde3e",
+      "after_hex": "4d9c663f552f7f3c3729de3e"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 113,
+      "byte_offset": 110116,
+      "before_hex": "129c663fb1ea953c3b1cde3e",
+      "after_hex": "4d9c663f552f7f3c3729de3e"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 114,
+      "byte_offset": 110128,
+      "before_hex": "07a96c3f3df0b03ca3e8c2be",
+      "after_hex": "5aae6c3ff744963c27e5c2be"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 117,
+      "byte_offset": 110164,
+      "before_hex": "6adeaf3ec722b93ca35a70bf",
+      "after_hex": "ad70843eb764963c0f3e77bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 118,
+      "byte_offset": 110176,
+      "before_hex": "2a57583f970fc73cf4b908bf",
+      "after_hex": "5459583fd515a93c9dc008bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 119,
+      "byte_offset": 110188,
+      "before_hex": "07a96c3f3df0b03ca3e8c2be",
+      "after_hex": "5aae6c3ff744963c27e5c2be"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 128,
+      "byte_offset": 110296,
+      "before_hex": "a13b30bfac7e0c3d847939bf",
+      "after_hex": "102931bfabbace3c4caf38bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 130,
+      "byte_offset": 110320,
+      "before_hex": "a03e58bfed8ee43c39d5083f",
+      "after_hex": "684c58bfd216a83c5bd5083f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 132,
+      "byte_offset": 110344,
+      "before_hex": "c36979bf47cc2a3d1ccf623e",
+      "after_hex": "99237abfac28fd3cce8c573e"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 134,
+      "byte_offset": 110368,
+      "before_hex": "9375f7be8de1be3ccc08603f",
+      "after_hex": "032f10bf28ada03cb779533f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 136,
+      "byte_offset": 110392,
+      "before_hex": "c36979bf47cc2a3d1ccf623e",
+      "after_hex": "99237abfac28fd3cce8c573e"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 139,
+      "byte_offset": 110428,
+      "before_hex": "6adeaf3ec722b93ca35a70bf",
+      "after_hex": "ad70843eb764963c0f3e77bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 140,
+      "byte_offset": 110440,
+      "before_hex": "a13b30bfac7e0c3d847939bf",
+      "after_hex": "102931bfabbace3c4caf38bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 142,
+      "byte_offset": 110464,
+      "before_hex": "b9e2b63db91da73c7aec7e3f",
+      "after_hex": "fbbdb63d910f8e3cb0f07e3f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 143,
+      "byte_offset": 110476,
+      "before_hex": "2a57583f970fc73cf4b908bf",
+      "after_hex": "5459583fd515a93c9dc008bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 144,
+      "byte_offset": 110488,
+      "before_hex": "129c663fb1ea953c3b1cde3e",
+      "after_hex": "4d9c663f552f7f3c3729de3e"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 145,
+      "byte_offset": 110500,
+      "before_hex": "07a96c3f3df0b03ca3e8c2be",
+      "after_hex": "5aae6c3ff744963c27e5c2be"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 146,
+      "byte_offset": 110512,
+      "before_hex": "9375f7be8de1be3ccc08603f",
+      "after_hex": "032f10bf28ada03cb779533f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 147,
+      "byte_offset": 110524,
+      "before_hex": "a03e58bfed8ee43c39d5083f",
+      "after_hex": "684c58bfd216a83c5bd5083f"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 148,
+      "byte_offset": 110536,
+      "before_hex": "c36979bf47cc2a3d1ccf623e",
+      "after_hex": "99237abfac28fd3cce8c573e"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 149,
+      "byte_offset": 110548,
+      "before_hex": "6adeaf3ec722b93ca35a70bf",
+      "after_hex": "ad70843eb764963c0f3e77bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 150,
+      "byte_offset": 110560,
+      "before_hex": "2a57583f970fc73cf4b908bf",
+      "after_hex": "5459583fd515a93c9dc008bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 151,
+      "byte_offset": 110572,
+      "before_hex": "a13b30bfac7e0c3d847939bf",
+      "after_hex": "102931bfabbace3c4caf38bf"
+    },
+    {
+      "mesh_index": 2,
+      "mesh": "Conifer_L2",
+      "attribute": "NORMAL",
+      "accessor": 9,
+      "vertex": 152,
+      "byte_offset": 110584,
+      "before_hex": "a03e58bfed8ee43c39d5083f",
+      "after_hex": "684c58bfd216a83c5bd5083f"
+    }
+  ]
+}

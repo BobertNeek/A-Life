@@ -452,6 +452,12 @@ impl ProductionGpuBrainTickScheduleResource {
         self.step_pending = true;
     }
 
+    /// A modal pauses time and cancels an unconsumed debug step.
+    pub(crate) fn pause_for_menu(&mut self) {
+        self.pause();
+        self.step_pending = false;
+    }
+
     pub(crate) fn pause(&mut self) {
         self.playback = RuntimePlaybackState::Paused;
     }
@@ -1245,6 +1251,18 @@ struct ProductionHeadlessHandoff(
 
 #[cfg(feature = "gpu-runtime")]
 fn handoff_production_to_headless(world: &mut bevy::prelude::World) {
+    if world
+        .get_resource::<ProductionGpuBrainTickScheduleResource>()
+        .is_some_and(|schedule| schedule.is_paused())
+    {
+        return;
+    }
+    if world
+        .get_resource::<crate::production_voxel_renderer::menu::MenuState>()
+        .is_some_and(crate::production_voxel_renderer::menu::is_open)
+    {
+        return;
+    }
     use crate::production_voxel_renderer::Fvr05ProductionUxStateResource;
     if world
         .resource::<Fvr05ProductionUxStateResource>()
@@ -1358,6 +1376,22 @@ mod production_app_exit_tests {
 mod production_schedule_regression_tests {
     use super::ProductionGpuBrainTickScheduleResource;
     use crate::RuntimePlaybackState;
+
+    #[test]
+    fn menu_pause_cancels_an_unconsumed_step_without_changing_mode() {
+        let mut schedule = ProductionGpuBrainTickScheduleResource::new(12);
+        schedule.set_run_mode(crate::ProductionRunMode::MaxSpeed);
+        schedule.queue_step();
+        assert!(schedule.step_pending);
+        schedule.pause_for_menu();
+        assert!(schedule.is_paused());
+        assert!(!schedule.step_pending);
+        assert_eq!(schedule.run_mode(), crate::ProductionRunMode::MaxSpeed);
+        assert_eq!(
+            super::production_tick_decision(schedule.playback, schedule.step_pending, 4),
+            (0, false)
+        );
+    }
 
     #[test]
     fn care_pacing_preserves_clock_pause_step_and_unpaced_modes() {

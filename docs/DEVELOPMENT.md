@@ -28,6 +28,98 @@ path whose parent also receives the new save. `-RecordPerformance` requires
 `-BuildProfile release`; the existing recorder also requires
 `ALIFE_PHASE31_SOURCE_HEAD` to identify the measured source.
 
+The player menu opens at graphical launch, except during performance recording.
+Play resumes; Escape or the three-bar button opens a pause menu. Escape closes
+it while restoring the prior pause state; Speed and Settings use Back/Escape to
+return to the main menu. The menu captures world, camera, and teaching input,
+including the dismissal frame and held keys/buttons. Typed and creature speech
+remain unchanged. Save and Load use the existing authoritative checkpoint
+paths; Load waits for pending publication and keeps an open menu paused.
+Speed offers the existing 1x and Max graphical modes. Settings' Autopause toggle
+controls the existing pause-on-focus-loss setting. Quit saves at the current
+paused tick and exits only after that exact checkpoint and journal publication
+finish; failures keep the window open. The debug rails remain separate.
+
+The selected-creature HUD uses six distinct icon meters, read directly from the
+last complete authoritative presentation frame matched to the selected root's
+stable and organism IDs. Left to right: hunger drive (fruit), body-energy reserve
+(lightning bolt, not brain ATP), fatigue drive (half-lidded eye), inverse-fear
+calm (neutral face), sleep-pressure hormone (crescent), and praise hormone
+extension[0] (thumb). These are mixed physiology readouts, not six interchangeable
+needs, health scores, or proof of successful care. Calm is the display transform
+1 minus validated fear, not a claim about environmental safety. Sleep pressure
+is distinct from fatigue; praise hormone is neither happiness nor proof that an
+action received learning credit. Meter fill shows the actual normalized amount.
+High hunger/fatigue/sleep pressure and low energy/calm add an amber warning
+triangle; thresholds 0.65/0.35 are presentation cues only. Praise absence is not
+warned as poor health. No HUD logic changes chemistry or selects actions.
+
+Missing identity/frame/row or invalid values show a question mark; a known zero
+has a real empty track. Launch/save expression defaults are not evidence. The
+HUD does not extrapolate between ticks, during pause, or after a simulation stop.
+The reticle and full numeric stable ID identify selection without an invented
+portrait. The count chip shows rendered creature count and running/paused/fast
+playback icons. F3 hides these player readouts while preserving the existing
+textual inspector, animation/response details, and debug rails. The HUD wraps
+at narrow widths, and uses shorter cards below 300px viewport height. All HUD
+nodes ignore picking and pass UI focus. The existing menu's modal/entry source
+layers (100/90) remain above the HUD (30); CPU tests guard those layers and
+non-interactive components, without proving combined live input dispatch.
+CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240.
+The ordinary player hint strip is replaced by a five-control wordless care dock:
+food placement (apple over ground), gentle touch (open palm), physical toy offer
+(striped ball), praise offer (thumb), and speech entry (bubble). These real 48px
+buttons and E/C/J/K use one frontend dispatcher; they do not synthesize keys or
+select creature actions. Food preserves the existing eligibility of any valid
+selected reference with a tile. Care resolves stable selection against the
+current living canonical organism and position. Toy placement rejects a carried
+ball through the existing world authority. Repeated care doses remain bounded
+by that same authority. No new hand mode, biological mutation, learning-credit
+claim, or neural CPU fallback is introduced.
+
+Cream silhouettes mean available, a muted silhouette/question means unavailable,
+a cross means a rejected command, and a ground-reticle marks a returned physical
+placement identity only. The broken ring means accepted queued care whose effect
+is unconfirmed. There is no per-care-command completion receipt, so this marker
+never becomes successful from a later tick or hormone rise and remains while
+paused. Selection changes or a runtime load clear old care feedback. Player speech
+translation is a separate global operation; stale runtime results show unavailable. Errors remain
+visible as a wordless alert; the existing exact error and action stay in F3.
+F1 explicitly opens keyboard help, while the ordinary strip stays hidden.
+
+The dock captures its pointer area and held-button dismissal frames before world
+readers. Mouse speech opens the same existing composer path as Enter, establishes
+conversation capture before hand/world readers, and keeps all typed teaching text,
+creature speech and named-addressee precedence. The composer chrome itself remains
+for a separately bounded restyle. A clipped scroll parent follows the existing
+end caret so up to 512 typed characters stay intact inside short viewports. The dock has priority in short windows: selected
+physiology temporarily hides if it would overlap the actual dock budget or the
+expanded text composer/help budget, and restores when space permits. Full live
+GPU compositing, engine glyph layout and production neural integration remain
+separate qualification boundaries.
+
+The keyboard opening frame consumes its raw input in order: text before the
+first non-repeated Enter is discarded, and text after it is retained immediately.
+The opening frame does not submit speech, even with a second Enter. Submission in
+an already-open composer requires a fresh, non-repeated raw Enter as well as the
+existing aggregate input edge, so held repeats cannot retry after an input reset. Closed,
+lineage, menu, pointer-open and cancellation paths advance the speech reader so
+old shortcuts cannot become later text. Pointer-open still discards the entire
+unread keyboard batch; mouse and keyboard messages do not establish a shared
+ordering boundary. Six keyboard opening-boundary CPU regression tests were
+freshly compiled and passed in the combined care/speech code source tree
+`9e6054b6db37673eb299a347c5bf092a8c4744f6`. They exercise the production
+boundary helpers; GPU-only input handlers and live input remain unqualified.
+
+Accepted asynchronous player translation clears and closes its submitted draft
+immediately. A later successful worker completion preserves the current composer
+text and open/closed state, clearing the completed Pending cue while preserving
+a newer draft's rejection cue, so reopening to type another draft is safe. Inline
+unaided completion, including a worker-start fallback, still clears and closes
+the submitted draft after successful emission. Focused CPU state-helper tests
+exercise this ownership boundary; they do not instantiate the GPU-only input or
+completion handlers or establish live graphical speech acceptance.
+
 Camera controls: hold the arrow keys or move the pointer within 16 pixels of a
 game-window edge to pan. Panning releases creature follow. Home snaps to the
 selected creature, or finds the first creature when none is selected.
@@ -70,6 +162,40 @@ Source-bound historical evidence tests require complete Git history. CI uses
 `git fetch --unshallow` before those tests. The validator still checks the exact
 producer revision's source blobs and tree, and rejects altered reports.
 
+
+For the current PR24 + approved Conifer + six saved island-asset refinements,
+run the separate fixed successor profile:
+
+```powershell
+python scripts/check_consolidated_island_art.py --output target/artifacts/consolidated-island-art/check.json
+python -m unittest discover -s scripts -p test_finished_island_assets.py
+```
+
+It checks all 48 registrations, every art/world file, source identities and
+all eleven refined runtime assets. Native source reproduction uses Blender
+4.3.2 with `scripts/build_finished_island_assets.py`; re-export every override
+after a full base-library build, then refresh registrations. These CPU checks
+do not prove in-game appearance or physical-GPU performance.
+
+The earlier `check_composed_island_graphics.py` and
+`check_composed_conifer_graphics.py` remain fixed historical four/five-asset
+profiles. Run them only on their matching reviewed snapshots; their rejection
+of the later six-asset composition is intentional, not a reason to remove
+preservation guards.
+
+For the exact historical PR20 + PR23 + PR24 island-art composition, run:
+
+```powershell
+python scripts/check_composed_island_graphics.py --output target/artifacts/composed-island-graphics/check.json
+python -m unittest discover -s scripts -p test_composed_island_graphics.py
+```
+
+This separate profile pins the reviewed art tree and all 48 registrations,
+permits only the four reviewed runtime refreshes, and runs the existing shrub,
+Fern and Sapling structural checks. It requires the pinned Git revisions.
+The standalone shrub gate retains its original pre-refresh preservation scope.
+These CPU contracts do not establish in-game visual or physical-GPU acceptance.
+
 Default workspace tests are CPU-safe: they retain shader validation, portable
 state, admission/receipt contracts, and typed failure checks without requiring
 a real neural GPU. Optional adapter diagnostics may report honest unavailability
@@ -81,6 +207,27 @@ in preflight/file-boundary tests. Tests that require neural hardware use the exp
 `--all-features` also opts into hardware tests. The backend's `test-support`
 feature exposes synthetic admission-budget fixtures for CPU contract tests;
 those fixtures do not establish real adapter admission or GPU performance.
+
+The Pass 2 fast-gates workflow also runs a focused CPU speech lane when the
+composer, care-dock integration, speech dependencies, or its build setup change.
+A lightweight prerequisite selects changes before scheduling the build job.
+Unrelated updates skip its Rust/dependency setup and cannot cancel an in-progress
+selected build. New branches conservatively run it because the push has no
+before-SHA. Manual dispatch opts in with `speech_cpu`; leaving it off cannot cancel
+a selected build either.
+Reproduce it on Linux after installing the distribution's `libudev-dev` and
+`pkg-config` packages:
+
+```sh
+bash scripts/check_speech_cpu.sh
+```
+
+This checks at least seven composer-state, six worker, and six opening-input
+tests, including the reopened-draft regression. It refuses empty or ignored
+coverage. Two build jobs and test-only optimization/debug overrides bound compile
+cost; debug assertions remain enabled. These CPU fixtures do not exercise the
+GPU-only Bevy completion handlers, render the live composer, or prove gameplay
+acceptance. The existing default-workspace and Tier 0-1 gates remain unchanged.
 
 Release-oriented checks may also require:
 
@@ -122,6 +269,40 @@ Do not invoke the worker directly or add that retired pack to the production man
 
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
+
+### Grab-night final assessments
+
+`scripts/run_grab_food_night.py` attempts final Grab and held-food Eat assessments
+independently against the same latest accepted checkpoint. Normal completion and
+startup-qualified collection timeouts use the existing per-assessment cap and
+absolute cutoff; a failed final assessment is never retried. If no time remains,
+the companion assessment reports budget exhaustion without launching. Successful
+companion results stay recorded, and `final_assessment_errors` records each failed
+assessment by name. Failures retain failed/interrupted status, partial collection
+never becomes the accepted checkpoint, and candidates remain unpromoted.
+Only explicit command budget timeouts with confirmed owned-child cleanup allow
+the companion after an error. Native nonzero exits (including possible numerical,
+admission or parity failures), invalid/missing receipts, source/lane guards,
+STOP/resource/interactive guards, receipt persistence and cleanup failures stop
+without launching another assessment. Valid behavioral non-success remains a
+recorded assessment result.
+
+The additive `eating_retention_diagnostic` in `night.json` compares explicit
+held-food meal counts from successful before/final probes. It reports `lower`,
+`equal`, or `higher` only when recorded seed/founder, learner mode, cue tokens,
+realized starting pose/need and requested assay window match. Early meal success
+can shorten the actual decision count; fresh creature/target IDs are not assay
+conditions. Missing, invalid, timed-out or mismatched evidence reports `unknown`
+with null unavailable counts, never an inferred zero. A lower count emits an
+operator warning only. Completion, accepted checkpoints, recipe batch gates,
+cutoffs, error handling and promotion remain unchanged. This single short probe
+pair does not establish mastery, transfer, durable retention or causal attribution;
+optional language-prior delivery warnings remain visible in the diagnostic.
+Unexpected errors while building or emitting this final report are recorded in
+`eating_retention_diagnostic_error`, with an `unknown` comparison and null meal
+counts. The final timestamp and receipt are still attempted, preserving the
+existing run status and error. Receipt persistence and owner-lock cleanup errors
+remain fatal; this guard does not cover training or assessment failures.
 
 The readiness resume test checks acquired-state restoration and later gameplay.
 Set `ALIFE_PERSISTENCE_EXACT_DIAGNOSTICS=1` to additionally require identical

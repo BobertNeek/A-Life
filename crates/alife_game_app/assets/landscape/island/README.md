@@ -6,6 +6,165 @@ guides, and the approved image blueprints. `island-terrain.blend` contains the
 1000 x 1200 metre island, 240 metre peaks, ocean, river, and placed shared props.
 The `Measured_Blueprint_Guides` collection is for authoring, not export.
 
+The 2026-10-09 BerryBush and CoastalShrub overrides are owned by
+`island-biological-shrubs.blend` (Blender 4.3.2), reconstructed from the exact
+committed runtime GLBs before the pass. It contains six editable LOD meshes,
+ground-centred origins, and the shared `ArtColor` surface. The original Blender
+5.2 library, its embedded references, terrain source and all other props remain
+byte-retained. For these two species, use the override source rather than the
+older copies in `island-assets.blend` or the terrain authoring scene.
+
+After editing the override, run
+`blender --background --factory-startup --python-exit-code 1 --python scripts/build_island_biological_shrubs.py`
+and then `python scripts/register_approved_art.py`. Run this export after a full
+base-library rebuild as well. The optional `--author-from` bootstrap accepts
+only the exact pre-pass `9a4e3b3d` GLBs, preventing repeated sculpt application.
+The normal command exports the current native edits, preserving both bounds and
+triangle ceilings. `scripts/check_island_biological_shrubs.py` checks those
+contracts, manifest digests and retention of all other art against that revision.
+
+BerryBush exposes larger orchid fruit clusters against natural green foliage;
+its overview uses grouped fruit pods at the original face budget. CoastalShrub
+has layered, wind-swept leaves with restrained sea-glass growth tips. Runtime
+paths, names, one-material/one-primitive LOD bindings and placement data are
+unchanged. See [the source-bound review](../../../../../docs/reviews/2026-10-09-island-biological-shrubs.md)
+for isolated CPU-rendered before/after evidence; game-rendering acceptance is unrun.
+
+The 2026-10-09 Fern color-only override is owned by
+`fern-readability.blend` (Blender 4.3.2), reconstructed from the exact committed
+`ec5bb040` runtime GLB. Use this editable override for Fern rather than its older
+copies in `island-assets.blend` or the terrain authoring scene. The original
+Blender 5.2 sources remain byte-retained; this does not claim Blender 5.2 source
+compatibility. Geometry, normals, topology, bounds, pivots, material parameters,
+three LODs (784 / 352 / 156 triangles) and the 97,100-byte runtime size are retained.
+Only normalized RGB vertex-color bytes change, giving folded leaflets jade-green
+ridges, darker edges and restrained growth/frond variation.
+
+After editing this override, use the explicit Blender 4.3.2 executable:
+`blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_fern_readability.py`
+then `python scripts/register_approved_art.py` and
+`python scripts/check_fern_readability.py`. Run this override export after a
+full base-library rebuild as well. The shipped source reload/re-export is
+byte-identical to the candidate. The guarded adapter transfers only colors into
+`fern-readability/Fern.baseline.glb`, the exact pre-pass source-layout baseline;
+it rejects changed positions, triangle order or ambiguous color seams. Blender
+4.3's intermediate export can round split normals and duplicate near-LOD
+vertices, so it is kept only under `target/artifacts/fern-readability/export`.
+It is never shipped or registered. This color-only recipe does not support
+geometry edits. The optional `--author-from` bootstrap accepts only that exact
+baseline, preventing repeated paint application. The checker proves binary
+color-only retention; it does not render or establish in-game acceptance.
+
+The 2026-10-09 Sapling color-only override is owned by
+`sapling-color.blend` (Blender 4.3.2), reconstructed from the exact pre-pass
+runtime GLB. Use this override for Sapling instead of its older copies in
+`island-assets.blend` or the terrain authoring scene. The canopy gains restrained
+jade/sea-glass foliage and warmer olive new growth; bark is unchanged. Geometry,
+normals, topology, bounds, pivots, material parameters, LOD budgets
+(3,124 / 672 / 56 triangles) and the 127,320-byte runtime size are retained.
+The original Blender 5.2 sources remain untouched; 5.2 compatibility is untested.
+
+After editing this override, use the explicit Blender 4.3.2 executable:
+`blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_sapling_color.py`
+then `python scripts/register_approved_art.py` and
+`python scripts/check_sapling_color.py`. Run this override after a full
+base-library rebuild too. Normal export loads the editable source; the optional
+`--author-from` bootstrap accepts only `sapling-color/Sapling.baseline.glb`,
+preventing repeated paint application. The guarded adapter requires exact
+triangle-corner positions, original materials/nodes, unambiguous colors and
+pinned per-corner normals from an unchanged 4.3.2 round-trip. It transfers only
+RGB bytes into the original layout. Native intermediate exports stay under
+`target/artifacts/sapling-color/export` and are never shipped or registered.
+This recipe supports color edits only. Source reload/export reproduces the
+shipping GLB byte-for-byte. The checker proves retention; in-game visual
+acceptance and physical GPU/performance testing are unrun.
+
+The Conifer central-leader override is owned by `conifer-leader-repair.blend`
+(Blender 4.3.2), reconstructed from the exact PR24 runtime GLB. This integration
+was reconstructed on 2026-10-12 from the audited 2026-10-09 standalone repair;
+it is not an exact recovery of the unavailable earlier repository patch.
+Use this override for Conifer rather than its older copies in
+`island-assets.blend` or the terrain authoring scene. The original multi-asset
+sources and generators stay unchanged. The repair extends only the existing
+trunk cap into the unchanged top foliage shell at all three LODs. This proves
+geometric overlap, not topological welding. Bounds, horizontal coordinates,
+foliage, indices, colors, materials, nodes, pivots and 3,456 / 668 / 172 triangle
+budgets are unchanged; the runtime file remains 112,240 bytes.
+
+To reproduce the exact shipping GLB without Blender, run
+`python scripts/repair_conifer_leader.py`; it uses the Python standard library
+and the pinned `conifer-leader/Conifer.baseline.glb` plus audited float32 patch.
+`python scripts/derive_conifer_leader.py` independently reproduces it using
+NumPy. Neither command runs the monolithic generator.
+
+For a source reload and export, use the explicit Blender 4.3.2 executable:
+`blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_conifer_leader.py`
+then `python scripts/register_approved_art.py` and
+`python scripts/check_conifer_leader.py`. Run the override after a full base
+library rebuild too. `--author-from-baseline` reconstructs only this audited
+Conifer source. The source adapter checks transforms, colors and topology,
+reads its current positions, independently recalculates incident normals and
+retains the baseline binary layout. The complete export-and-check workflow
+rejects unreviewed source identity or coordinate changes; they require a new
+deliberate recipe and review. Native diagnostic exports
+and receipts stay under `target/artifacts/conifer-leader/` and are not shipped.
+Run the checker in normal Python mode; optimized mode is explicitly rejected.
+The checker verifies exact geometry/field retention, source identity and only
+this registration change against PR24; it does not establish whole-app or
+all-other-payload validation. It requires the pinned PR24 Git manifest, or an
+explicit `--baseline-manifest` copy with that exact SHA256. The registrar
+preserves this recorded provenance while refreshing asset digests.
+
+The separate historical PR20 + PR23 + PR24 composed checker remains pinned to
+its original four-asset profile. It deliberately rejects this later Conifer
+asset and source addition. The separate `check_composed_conifer_graphics.py`
+profile covers that fixed five-asset composition. It intentionally rejects
+the later six saved refinements below. Both historical profiles remain
+unchanged; use `check_consolidated_island_art.py` for the current all-repairs
+composition rather than loosening either historical gate.
+Blender 5.2, whole-island startup, production rendering, LOD transitions,
+performance, GPU and training acceptance remain untested for this integration.
+
+
+The saved 2026-10-09 Flowers, Grass, BoulderA/B/C and Cliff refinements are owned
+by the six editable Blender 4.3.2 sources under `finished-island-refinements/`.
+Use those sources instead of their older copies in `island-assets.blend` or the
+terrain authoring scene. The original Blender 5.2 sources remain unchanged.
+Flowers have broader orchid/ivory petals and amber centres; Grass has fuller
+folded blades and growing tips. The boulders have distinct basalt fractures and
+moss, while Cliff uses a restrained sea-gray palette.
+
+Their exact Oct 4 source-pack layout baselines differ from the Oct 1 runtime
+assets that were still installed. `lineage.json` pins both versions separately.
+The reconciliation retains every installed L0/L1/L2 AABB, dimension, pivot,
+node/mesh name, shared material and triangle budget. The earlier source-pack
+sculpt changes and the five later plant/boulder geometry refinements are
+intentional; only Cliff's Oct 9 pass is color-only versus its source-pack
+baseline. Do not describe all six as color-only versus the old installed pack.
+The historical baseline guard is retained as evidence, not silently removed.
+
+After editing these overrides, use Blender 4.3.2:
+`blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/build_finished_island_assets.py`
+then `python scripts/register_approved_art.py` and
+`python scripts/check_finished_island_assets.py`. The guarded adapter loads
+current native edits, preserves exact source-pack JSON/index layout and bounds,
+and writes normalized byte colors. It never reapplies a sculpt/paint pass.
+Native intermediate exports remain under `target/artifacts/finished-island-refinements/export`
+and are neither shipped nor registered. Unchanged native sources reproduce all
+six delivered runtime GLBs byte-for-byte. Source edits require a reviewed new
+fixed profile; the present checks deliberately reject changed delivered bytes.
+
+After any full base-library rebuild, re-export the shrub, Fern, Sapling,
+Conifer and six-finished-asset overrides before refreshing registrations.
+For the complete current art tree and all 48 manifest records, run
+`python scripts/check_consolidated_island_art.py --output target/artifacts/consolidated-island-art/check.json`.
+This fixed successor profile preserves the approved Conifer record, checks the
+six explicit manifest deltas and audits every art/world file. The historical
+four/five-asset checkers are unchanged and belong to their pinned snapshots.
+See [the reconciliation review](../../../../../docs/reviews/2026-10-14-six-finished-island-assets.md).
+CPU source reload/export and neutral-lighting comparison do not establish
+in-game visual acceptance, GPU timing or performance.
+
 The island is the sole playable map. The reusable Highlands prop library remains
 available as art; its old terrain loader and save fallback have been retired.
 Current saves include their terrain data and locomotion limits, and restoration

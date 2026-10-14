@@ -16,6 +16,35 @@ fn phase3_game(population: u16) -> alife_world::CanonicalNewGame {
     .unwrap()
 }
 
+fn grab_registered_food(
+    world: &mut alife_world::HeadlessWorld,
+    organism: alife_core::OrganismId,
+    entity: alife_core::WorldEntityId,
+    food: alife_core::WorldEntityId,
+) {
+    let tick = Tick(world.tick().raw() + 1);
+    let grab = alife_core::ActionCommand::structured(
+        organism,
+        alife_world::HeadlessActionIds::GRAB,
+        alife_core::ActionKind::Hold,
+        alife_core::ActionTarget::new(Some(food), None),
+        alife_core::Intensity::new(1.0).unwrap(),
+        alife_core::DurationTicks::new(1),
+        alife_core::Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let receipt = world.apply_registered_command(&grab, entity, tick).unwrap();
+    assert!(receipt.action_result.execution.succeeded);
+    assert_eq!(world.entity(food).unwrap().carried_by, Some(organism));
+    while world.tick() < tick {
+        world.try_advance_tick().unwrap();
+    }
+}
+
 #[test]
 fn player_care_is_local_gene_controlled_and_survives_pending_save() {
     let game = phase3_game(1);
@@ -131,6 +160,7 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
         let mut trial = world.clone();
         trial.set_food_variety(food, variety).unwrap();
         trial.editor_move_object(food, position).unwrap();
+        grab_registered_food(&mut trial, organism, entity, food);
         let object = trial.entity(food).unwrap().clone();
         let command = ActionCommand::structured(
             organism,
@@ -147,7 +177,7 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
         )
         .unwrap();
         let receipt = trial
-            .apply_registered_command(&command, entity, Tick(1))
+            .apply_registered_command(&command, entity, Tick(2))
             .unwrap();
         assert!(receipt.action_result.execution.succeeded);
         assert_eq!(
@@ -203,6 +233,8 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             trial.canonical_signature_digest().unwrap(),
             restored.canonical_signature_digest().unwrap()
         );
+        grab_registered_food(&mut trial, organism, entity, food);
+        grab_registered_food(&mut restored, organism, entity, food);
         let next_tick = Tick(trial.tick().raw() + 1);
         let second = trial
             .apply_registered_command(&command, entity, next_tick)
@@ -211,6 +243,15 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             .apply_registered_command(&command, entity, next_tick)
             .unwrap();
         assert!(second.action_result.execution.succeeded);
+        assert!(loaded_second.action_result.execution.succeeded);
+        assert_eq!(
+            second.action_result.execution.physical,
+            loaded_second.action_result.execution.physical
+        );
+        assert_eq!(
+            second.action_result.body_event,
+            loaded_second.action_result.body_event
+        );
         assert_eq!(
             second.action_result.body_event.nutrition,
             variety.nutrition()

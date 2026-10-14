@@ -125,6 +125,33 @@ fn ready(
     }
 }
 
+#[cfg(any(feature = "gpu-runtime", test))]
+fn object_contact_position(
+    object: &alife_world::WorldObject,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    creature_scale: Vec3,
+) -> Vec3 {
+    let base = world_position_for_render(object.position, terrain_bound);
+    match object.kind {
+        WorldObjectKind::Agent => {
+            base + Vec3::Y * creature_scale.y
+                - Vec3::new(object.body_yaw.cos(), 0.0, object.body_yaw.sin())
+                    * (0.18 * creature_scale.x)
+        }
+        WorldObjectKind::Food | WorldObjectKind::Ball | WorldObjectKind::ActivityToy => {
+            live_food_projection::care_object_center(object.position, terrain_bound, surface)
+        }
+        _ => base + Vec3::Y * 0.30,
+    }
+}
+
+#[cfg(any(feature = "gpu-runtime", test))]
+fn contact_id(hand: &HandInteraction) -> Option<WorldEntityId> {
+    hand.held
+        .or_else(|| hand.pressed.and_then(|(target, _, _)| target.stable_id))
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
@@ -142,6 +169,7 @@ pub(super) fn input(
     >,
     mut frame: Option<ResMut<LiveBrainPresentationFrameResource>>,
     terrain: Option<Res<creature_grounding::SelectedTerrain>>,
+    #[cfg(feature = "gpu-runtime")] surface: Res<creature_grounding::RenderedTerrainSurface>,
     creatures: Query<
         (&Fvr04ProductionCreatureVisualMarker, &Transform),
         Without<Fvr03ProductionVoxelCamera>,
@@ -222,25 +250,18 @@ pub(super) fn input(
             }
         }
         // Pending Grab and Carry contact the same canonical creature/object.
-        let contact_id = hand
-            .held
-            .or_else(|| hand.pressed.and_then(|(target, _, _)| target.stable_id));
-        if let Some(id) = contact_id {
-            hand.position = runtime.runtime.world().entity(id).map(|o| {
-                let base = world_position_for_render(
-                    o.position,
+        if let Some(id) = contact_id(&hand) {
+            hand.position = runtime.runtime.world().entity(id).map(|object| {
+                let scale = creatures
+                    .iter()
+                    .find(|(visual, _)| visual.stable_id == id)
+                    .map_or(Vec3::ONE, |(_, transform)| transform.scale);
+                object_contact_position(
+                    object,
                     runtime.runtime.world().terrain().is_some(),
-                );
-                if o.kind == WorldObjectKind::Agent {
-                    let scale = creatures
-                        .iter()
-                        .find(|(v, _)| v.stable_id == id)
-                        .map_or(Vec3::ONE, |(_, t)| t.scale);
-                    base + Vec3::Y * scale.y
-                        - Vec3::new(o.body_yaw.cos(), 0.0, o.body_yaw.sin()) * (0.18 * scale.x)
-                } else {
-                    base + Vec3::Y * 0.30
-                }
+                    &surface,
+                    scale,
+                )
             });
         } else {
             hand.position = hand.ground.map(|p| p + Vec3::Y * 1.0);
@@ -256,8 +277,14 @@ pub(super) fn input(
 type HandCameraFilter = (With<Fvr03ProductionVoxelCamera>, Without<GodHand>);
 type HandTransformFilter = (With<GodHand>, Without<Fvr03ProductionVoxelCamera>);
 
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Bevy injects independent ECS system parameters."
+)]
 pub(super) fn animate(
     time: Res<Time<bevy::time::Real>>,
+    menu: Option<Res<menu::MenuState>>,
+    dock: Option<Res<care_dock::State>>,
     hand: Res<HandInteraction>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
     cameras: Query<(&Transform, &Projection), HandCameraFilter>,
@@ -268,9 +295,11 @@ pub(super) fn animate(
     let Some((camera, projection)) = cameras.iter().next() else {
         return;
     };
-    let visible = windows
-        .single()
-        .is_ok_and(|(w, _)| w.focused && w.cursor_position().is_some())
+    let visible = !menu::captures_input(menu)
+        && !care_dock::captures_input(dock)
+        && windows
+            .single()
+            .is_ok_and(|(w, _)| w.focused && w.cursor_position().is_some())
         && hand.position.is_some();
     let state = if hand.held.is_some() {
         3
@@ -506,10 +535,308 @@ mod tests {
     }
 
     #[test]
+    fn pending_and_carry_care_contacts_match_the_visual_center_across_drop_and_regrab() {
+        let world = alife_world::HeadlessScenarioBuilder::new(17)
+            .food("food", Vec3f::new(0.5, 2.0, 0.5), 0.5)
+            .toy("ball", Vec3f::new(0.5, 2.0, 0.5), true)
+            .build()
+            .unwrap();
+        let original = world.object_snapshots();
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        mesh.insert_attribute(
+            Mesh::ATTRIBUTE_POSITION,
+            vec![
+                [0.0, 0.9, 0.0],
+                [0.0, 0.9, 1.0],
+                [1.0, 0.9, 1.0],
+                [1.0, 0.9, 0.0],
+            ],
+        );
+        for terrain_bound in [false, true] {
+            for measured in [false, true] {
+                let surface = creature_grounding::RenderedTerrainSurface::from_meshes(
+                    measured.then_some(&mesh),
+                    1.0,
+                );
+                for object in &original {
+                    let selected = target(StableVoxelRefKind::Resource, Some(object.id));
+                    let mut hand = HandInteraction::default();
+                    for held in [false, true, true, false, true] {
+                        hand.held = held.then_some(object.id);
+                        hand.pressed = (!held).then_some((selected, 1.0, Vec2::ZERO));
+                        assert_eq!(contact_id(&hand), Some(object.id));
+                        let center = object_contact_position(
+                            object,
+                            terrain_bound,
+                            &surface,
+                            Vec3::splat(9.0),
+                        );
+                        assert_eq!(
+                            center,
+                            live_food_projection::care_object_center(
+                                object.position,
+                                terrain_bound,
+                                &surface
+                            )
+                        );
+                        let expected_y = 2.30
+                            + if terrain_bound {
+                                0.0
+                            } else if measured {
+                                0.9
+                            } else {
+                                0.44
+                            };
+                        assert!((center.y - expected_y).abs() < 1e-5);
+                        for state in [2, 3] {
+                            let transform = pose_transform(Quat::IDENTITY, center, 28.0, state);
+                            assert!(
+                                (transform.transform_point(POSE_CONTACTS[state]) - center).length()
+                                    < 1e-5
+                            );
+                        }
+                        hand.held = None;
+                        hand.pressed = None;
+                        assert_eq!(contact_id(&hand), None);
+                    }
+                }
+            }
+        }
+        assert_eq!(world.object_snapshots(), original);
+    }
+
+    #[test]
+    fn world_grab_move_drop_and_regrab_recompute_care_display_without_height_feedback() {
+        // Compose the real world hold APIs, immediate frame refresh, care-object
+        // ECS projection and hand contact helpers. The GPU-runtime-backed mouse
+        // input system and actual GLB animation are deliberately not exercised.
+        for terrain_bound in [false, true] {
+            for measured in [false, true] {
+                let mut world = alife_world::HeadlessScenarioBuilder::new(17)
+                    .food("food", Vec3f::new(0.5, 2.0, 0.5), 0.5)
+                    .toy("ball", Vec3f::new(0.5, 2.0, 0.5), true)
+                    .build()
+                    .unwrap();
+                if terrain_bound {
+                    let terrain = alife_world::WorldTerrain::new(
+                        alife_world::TerrainData {
+                            width: 2,
+                            depth: 2,
+                            origin_x: -5.0,
+                            origin_z: -5.0,
+                            spacing: 10.0,
+                            heights: vec![2.0; 4],
+                            obstacles: Vec::new(),
+                            water_level: None,
+                        },
+                        alife_world::LocomotionLimits::default(),
+                    )
+                    .unwrap();
+                    world
+                        .enable_terrain_for_new_game(terrain, Vec3f::ZERO)
+                        .unwrap();
+                }
+                let mut mesh = Mesh::new(
+                    PrimitiveTopology::TriangleList,
+                    RenderAssetUsages::default(),
+                );
+                mesh.insert_attribute(
+                    Mesh::ATTRIBUTE_POSITION,
+                    (0..4)
+                        .flat_map(|z| {
+                            (0..4).flat_map(move |x| {
+                                let (x, z) = (x as f32, z as f32);
+                                [
+                                    [x, 0.9, z],
+                                    [x, 0.9, z + 1.0],
+                                    [x + 1.0, 0.9, z + 1.0],
+                                    [x + 1.0, 0.9, z],
+                                ]
+                            })
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                let mut app = App::new();
+                app.insert_resource(
+                    LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap(),
+                )
+                .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+                    measured.then_some(&mesh),
+                    1.0,
+                ))
+                .insert_resource(Assets::<Mesh>::default())
+                .insert_resource(Assets::<StandardMaterial>::default())
+                .add_systems(Update, live_food_projection::sync_care_objects);
+                if let Some(terrain) = world.terrain() {
+                    app.insert_resource(creature_grounding::SelectedTerrain(terrain.clone()));
+                }
+                let assert_projection = |app: &mut App,
+                                         world: &alife_world::HeadlessWorld,
+                                         id,
+                                         expected: Vec3f| {
+                    let snapshots = world.object_snapshots();
+                    let object = world.entity(id).unwrap();
+                    assert_eq!(object.position, expected);
+                    app.world_mut()
+                        .resource_mut::<LiveBrainPresentationFrameResource>()
+                        .refresh_world_objects(world);
+                    app.update();
+                    let frame = app.world().resource::<LiveBrainPresentationFrameResource>();
+                    assert_eq!(frame.current.object(id), Some(object));
+                    assert_eq!(frame.current.authoritative_world_tick, world.tick());
+                    let surface = app
+                        .world()
+                        .resource::<creature_grounding::RenderedTerrainSurface>();
+                    let sampled = surface.height(Vec3::new(expected.x, 0.0, expected.z));
+                    assert_eq!(sampled.is_some(), measured);
+                    if let Some(height) = sampled {
+                        assert!((height - 0.9).abs() < 1e-5);
+                    }
+                    let center = live_food_projection::care_object_center(
+                        object.position,
+                        terrain_bound,
+                        surface,
+                    );
+                    let lift = if terrain_bound {
+                        0.0
+                    } else if measured {
+                        0.9
+                    } else {
+                        0.44
+                    };
+                    let expected_center =
+                        Vec3::new(expected.x, expected.y + lift + 0.30, expected.z);
+                    assert!((center - expected_center).length() < 1e-5);
+                    let contact =
+                        object_contact_position(object, terrain_bound, surface, Vec3::ONE);
+                    assert_eq!(contact, center);
+                    let transform = pose_transform(Quat::IDENTITY, contact, 28.0, 3);
+                    assert!((transform.transform_point(POSE_CONTACTS[3]) - center).length() < 1e-5);
+                    let mut query = app
+                        .world_mut()
+                        .query::<(&live_food_projection::LiveCareObject, &Transform)>();
+                    let displayed = query
+                        .iter(app.world())
+                        .find(|(marker, _)| marker.0 == id)
+                        .unwrap()
+                        .1;
+                    assert_eq!(displayed.translation, center);
+                    assert_eq!(world.object_snapshots(), snapshots);
+                };
+                for label in ["food", "ball"] {
+                    let id = world.entity_id(label).unwrap();
+                    let mut ground = world.entity(id).unwrap().position;
+                    assert_projection(&mut app, &world, id, ground);
+                    for destination in [Vec3f::new(1.5, 4.0, 2.0), Vec3f::new(2.5, 5.0, 3.0)] {
+                        let mut raised = ground;
+                        if terrain_bound {
+                            raised.y += 1.3;
+                        } else {
+                            raised.z = 1.3;
+                        }
+                        assert_eq!(world.begin_player_hold(id).unwrap(), raised);
+                        assert_eq!(world.player_held_object(), Some(id));
+                        assert_projection(&mut app, &world, id, raised);
+                        ground = if terrain_bound {
+                            Vec3f::new(destination.x, 2.0, destination.z)
+                        } else {
+                            Vec3f::new(destination.x, destination.y, 0.0)
+                        };
+                        raised = ground;
+                        if terrain_bound {
+                            raised.y += 1.3;
+                        } else {
+                            raised.z += 1.3;
+                        }
+                        assert_eq!(world.move_player_hold(destination).unwrap(), raised);
+                        assert_projection(&mut app, &world, id, raised);
+                        assert_eq!(world.release_player_hold().unwrap(), Some(id));
+                        assert_eq!(world.player_held_object(), None);
+                        assert!(world.can_begin_player_hold(id));
+                        assert_projection(&mut app, &world, id, ground);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn contact_helper_preserves_creature_and_token_rules_and_held_priority() {
+        let world = alife_world::HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::new(0.5, 2.0, 0.5))
+            .token("token", Vec3f::new(0.5, 2.0, 0.5), 1)
+            .build()
+            .unwrap();
+        let objects = world.object_snapshots();
+        let surface =
+            creature_grounding::RenderedTerrainSurface::from_meshes(std::iter::empty(), 1.0);
+        let scale = Vec3::new(2.0, 3.0, 4.0);
+        let creature = &objects[0];
+        let expected = world_position_for_render(creature.position, false) + Vec3::Y * scale.y
+            - Vec3::new(creature.body_yaw.cos(), 0.0, creature.body_yaw.sin()) * (0.18 * scale.x);
+        assert_eq!(
+            object_contact_position(creature, false, &surface, scale),
+            expected
+        );
+        let token = &objects[1];
+        assert_eq!(
+            object_contact_position(token, false, &surface, scale),
+            world_position_for_render(token.position, false) + Vec3::Y * 0.30
+        );
+        let hand = HandInteraction {
+            held: Some(creature.id),
+            pressed: Some((
+                target(StableVoxelRefKind::Resource, Some(token.id)),
+                1.0,
+                Vec2::ZERO,
+            )),
+            ..default()
+        };
+        assert_eq!(contact_id(&hand), Some(creature.id));
+    }
+
+    #[test]
     fn zoom_keeps_pointer_coverage_and_carry_world_scale() {
         for extent in [9.8, 28.0, 400.0, 1600.0, 9.8] {
             assert!((3.0 * pointer_scale(extent, false) / extent - 0.125).abs() < 0.0001);
             assert_eq!(pointer_scale(extent, true), 1.0);
         }
+    }
+}
+
+/// Cancel a pointer gesture before the menu owns input. Carrying remains a world API.
+pub(super) fn cancel_for_menu(world: &mut World) {
+    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
+        hand.pressed = None;
+    }
+    #[cfg(feature = "gpu-runtime")]
+    if let Some(mut runtime) =
+        world.get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+    {
+        if runtime.runtime.world().player_held_object().is_some() {
+            if let Err(error) = runtime.runtime.release_player_hold() {
+                if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
+                    ux.last_error = Some(error.to_string());
+                    ux.last_action = "Hand release failed; menu remains paused".into();
+                }
+                return;
+            }
+        }
+    }
+    #[cfg(feature = "gpu-runtime")]
+    world.resource_scope(
+        |world, mut frame: Mut<LiveBrainPresentationFrameResource>| {
+            if let Some(runtime) =
+                world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+            {
+                frame.refresh_world_objects(runtime.runtime.world());
+            }
+        },
+    );
+    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
+        hand.held = None;
     }
 }

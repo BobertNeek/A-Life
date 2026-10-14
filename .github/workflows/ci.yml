@@ -7,6 +7,58 @@ on:
     branches: ["main"]
 
 jobs:
+  probe-prior-diagnostics:
+    name: Probe prior receipt diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compact probe prior diagnostics CPU tests
+        run: python -m unittest discover -s scripts -p 'test_probe_prior_summaries.py' -v
+      - name: Read-only raw prior receipt audit CPU tests
+        run: python -m unittest discover -s scripts -p 'test_audit_prior_receipts.py' -v
+      - name: Existing night-runner CPU tests
+        run: python -m unittest discover -s scripts -p 'test*food_night.py' -v
+
+  training-continuity:
+    name: Training checkpoint continuity
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check training CLI
+        run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Objective continuation CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
+      - name: Warmup lesson corpus CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_warmup::tests
+      - name: Acquisition rehearsal CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
+      - name: Archived checkpoint inspection CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_archived_success_replay::tests
+
+  training-output-preservation:
+    name: Training output preservation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check training CLI
+        run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Output ownership CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_output::tests
+
   rust:
     name: Rust workspace validation
     runs-on: ubuntu-latest
@@ -31,7 +83,7 @@ jobs:
         run: cargo check --workspace --all-targets
 
       - name: Test
-        run: cargo test --workspace --all-targets
+        run: cargo test --workspace --all-targets --no-fail-fast
 
       - name: Benchmark smoke
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}

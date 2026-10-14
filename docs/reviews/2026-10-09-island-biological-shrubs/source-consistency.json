@@ -1,0 +1,12 @@
+[
+  {
+    "name": "BerryBush",
+    "sha256": "7b14dcad9b9558ec0e90d1f8a439f1859a9a7473cf2ddd02d16596c25fa289e8",
+    "exact_native_reexport": true
+  },
+  {
+    "name": "CoastalShrub",
+    "sha256": "da06fbb85f454978c12459bf9b4fffa8ecbea031724b83406db225589ab657af",
+    "exact_native_reexport": true
+  }
+]

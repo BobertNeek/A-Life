@@ -17,6 +17,7 @@ from pathlib import Path
 import shutil
 import signal
 import subprocess
+import sys
 import time
 
 UTC = dt.timezone.utc
@@ -61,29 +62,59 @@ def source_info(source):
             files = [source / name, source / "trained.alife-foundation"]
             if name != "adaptation.json":
                 files += [source / "actor-checkpoint.json", source / "value-checkpoint.json"]
+            if (source / "terrain-continuation.json").is_file():
+                files.append(source / "terrain-continuation.json")
             return founder, {str(path): sha256(path) for path in files}
     raise ValueError("source must be a sealed cycle, warm-up or explicit adaptation")
 
 
+def prior_environment():
+    environment = os.environ.copy()
+    environment.setdefault("ALIFE_SLM_PRIOR", "on")
+    return environment
+
+
 def assert_prior(receipt, expected_frames=None):
+    """Prior diagnostics never reject a genuine, otherwise valid episode."""
     prior = receipt.get("semantic_prior") or {}
-    frames = prior.get("decision_frames", 0)
+    issues = []
+    if not isinstance(prior, dict):
+        prior = {}
+        issues.append("invalid optional prior receipt type")
+    # Missing or malformed coverage is unknown, not a measured zero.
+    counts = {}
+    for key in ("decision_frames", "decision_frames_with_prior", "decision_frames_without_prior"):
+        value = prior.get(key)
+        if value is not None and (type(value) is not int or value < 0):
+            value = None
+            issues.append(f"invalid optional prior {key} count")
+        counts[key] = value
+    frames = counts["decision_frames"]
     inputs = prior.get("decision_inputs", [])
+    if not isinstance(inputs, list) or any(not isinstance(row, dict) for row in inputs):
+        inputs = []
+        issues.append("invalid optional prior trace type")
     if not prior.get("rich_information_required") or not frames or frames != len(inputs):
-        raise ValueError("rich prior receipt is absent or its bounded trace is incomplete")
+        issues.append("prior receipt absent or its bounded trace incomplete")
     if expected_frames is not None and frames != expected_frames:
-        raise ValueError("prior receipt count does not match the captured learner decisions")
-    if len({(row.get("organism"), row.get("sequence")) for row in inputs}) != frames or any(
-            row.get("organism") is None or row.get("sequence") is None or row.get("tick") is None for row in inputs):
-        raise ValueError("prior receipts lack unique confirmed decision identities")
+        issues.append("prior receipt count differs from captured learner decisions")
+    # PriorDecisionInput identities are u64 wire values. Validate before hashing
+    # so malformed optional identities can warn without rejecting the episode.
+    valid_identities = all(type(row.get(key)) is int and 0 <= row[key] <= MAX_SEED
+                           for row in inputs for key in ("organism", "sequence", "tick"))
+    if not valid_identities or len({(row["organism"], row["sequence"]) for row in inputs}) != frames:
+        issues.append("prior trace lacks unique confirmed decision identities")
     if any(prior.get(key, 0) for key in
            ("dropout_frames", "failures", "prime_timeouts", "decision_frames_without_prior")):
-        raise ValueError("rich prior has dropout, failure, timeout or missing delivery")
+        issues.append("prior dropout, failure, timeout or missing delivery")
     if prior.get("decision_frames_with_prior") != frames or prior.get("provider_failures"):
-        raise ValueError("rich prior did not reach every confirmed decision")
+        issues.append("prior did not reach every confirmed decision")
     if any(row.get("status") != "delivered" or not row.get("nonzero_prior_lanes") or
            not row.get("nonzero_encoded_prior_lanes") for row in inputs):
-        raise ValueError("actual semantic encoder delivery is missing")
+        issues.append("some decisions have no semantic encoder delivery")
+    if issues:
+        print("warning: continuing without complete language priors: " + "; ".join(issues), file=sys.stderr)
+    return {"failure_policy": "log_and_continue_without_prior", "warnings": issues, **counts}
 
 
 def assert_setup(receipt):
@@ -117,7 +148,7 @@ def coordinates(value):
 def validate_probe(directory):
     receipt = read_json(directory / "pilot.json")
     setup = assert_setup(receipt)
-    assert_prior(receipt, receipt["ticks"])
+    receipt["semantic_prior_diagnostics"] = assert_prior(receipt, receipt["ticks"])
     if receipt.get("held_food_terminal_death_tick") is not None:
         raise ValueError("assessment learner died")
     trace_path = directory / "lesson-trace.json"
@@ -137,13 +168,14 @@ def validate_probe(directory):
     if not offered:
         raise ValueError("assessment never offered selectable Eat for the genuinely held target")
     return {"held_food_meals": receipt.get("held_food_consumption_events", 0),
-            "decisions": receipt["ticks"], "directory": str(directory)}
+            "decisions": receipt["ticks"], "directory": str(directory),
+            "semantic_prior_diagnostics": receipt["semantic_prior_diagnostics"]}
 
 
 def validate_cycle(directory, previous, seed):
     receipt = read_json(directory / "cycle.json")
     setup = assert_setup(receipt)
-    assert_prior(receipt, receipt["captured_replay_rows"])
+    receipt["semantic_prior_diagnostics"] = assert_prior(receipt, receipt["captured_replay_rows"])
     if (receipt.get("seed") != seed or receipt.get("terminal_death_tick") is not None or
             not receipt.get("next_cohort_tick_captured") or
             not receipt.get("next_cohort_optimizer_rebound") or receipt.get("speech_target_rows")):
@@ -210,14 +242,16 @@ def stop_owned(process):
     process.wait(timeout=10)
 
 
-def run_child(argv, log, deadline, guard, environment):
+def run_child(argv, log, deadline, guard, environment, on_started=None):
     guard()
     if dt.datetime.now(UTC) >= deadline:
         raise TimeoutError("command budget exhausted before launch")
-    kwargs = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+    kwargs = {"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
     with Path(str(log) + ".stdout.log").open("xb") as out, Path(str(log) + ".stderr.log").open("xb") as err:
         process = subprocess.Popen(argv, stdout=out, stderr=err, env=environment, **kwargs)
         try:
+            if on_started is not None:
+                on_started(process)
             while process.poll() is None:
                 if dt.datetime.now(UTC) >= deadline:
                     raise TimeoutError("owned command exceeded its wall-time/cutoff budget")
@@ -277,6 +311,7 @@ def arguments():
     parser.add_argument("--min-memory-gib", type=float, default=2)
     parser.add_argument("--idle-seconds", type=int, default=30)
     parser.add_argument("--startup-grace-seconds", type=int, default=30)
+    parser.add_argument("--preserve-objective-state-from", type=int, choices=[1], help="explicit first-cycle transition retaining both trained heads")
     parser.add_argument("--run", action="store_true", help="explicitly launch; default only writes a plan")
     return parser
 
@@ -333,6 +368,8 @@ def main(argv=None):
         state["first_episode_argv"] = [str(args.binary), "--resume-cycle", str(args.source),
             str(args.output / "episode-00000"), str(args.startup_decisions), "--seed", str(args.seed),
             "--lesson", "eat_held_food"]
+        if args.preserve_objective_state_from is not None:
+            state["first_episode_argv"] += ["--preserve-objective-state-from", str(args.preserve_objective_state_from)]
         state["episode_schedule"] = "each accepted episode resumes the immediately preceding sealed cycle; one new seed and realized pose per episode"
         state_path = args.output / "night.json"
         write_json(state_path, state)
@@ -348,7 +385,7 @@ def main(argv=None):
 def run_night(args, state, state_path, input_hashes):
     lock_path = args.output.parent / ".eat-held-food-owner.lock"
     descriptor = None
-    environment = os.environ.copy(); environment["ALIFE_SLM_PRIOR"] = "on"
+    environment = prior_environment()
     samples = []; setup_keys = set(); previous = args.source
     checkpoint_hashes = input_hashes.copy()
     collection_cutoff = args.cutoff - dt.timedelta(minutes=args.final_reserve_minutes)
@@ -395,11 +432,13 @@ def run_night(args, state, state_path, input_hashes):
         descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.write(descriptor, json.dumps({"pid": os.getpid(), "output": str(args.output)}).encode())
         state["status"] = "running"; state["started_utc"] = dt.datetime.now(UTC).isoformat(); publish()
-        # Explicit readiness/model hashes remain mandatory, not an assumption
-        # derived from setting ALIFE_SLM_PRIOR=on in this owned child.
+        # Missing optional prior provenance is reported, never an episode gate.
         claim = environment.get("ALIFE_SLM_PRIOR_MODEL_SHA256", "")
-        if not environment.get("ALIFE_SLM_PRIOR_MODEL") or len(claim) != 64 or any(c not in "0123456789abcdefABCDEF" for c in claim):
-            raise ValueError("set the verified local model alias and actual GGUF SHA256 before --run")
+        if environment.get("ALIFE_SLM_PRIOR_BACKEND", "deterministic") == "local" and (not environment.get("ALIFE_SLM_PRIOR_MODEL") or len(claim) != 64 or any(c not in "0123456789abcdefABCDEF" for c in claim)):
+            warning = "optional prior model alias/hash unavailable; runtime may continue unaided"
+            print("warning: " + warning, file=sys.stderr)
+            state.setdefault("semantic_prior_warnings", []).append(warning)
+            publish()
         repo = Path(__file__).resolve().parent.parent
         if Path.cwd().resolve() != repo:
             raise ValueError("run from the authoritative repository root")
@@ -435,9 +474,12 @@ def run_night(args, state, state_path, input_hashes):
             directory = args.output / f"episode-{index:05d}"
             state["partial_episode"] = str(directory); publish()
             started = time.monotonic()
-            invoke([str(args.binary), "--resume-cycle", str(previous), str(directory),
+            cycle_argv = [str(args.binary), "--resume-cycle", str(previous), str(directory),
                     str(args.startup_decisions if index == 0 else args.decisions),
-                    "--seed", str(seed), "--lesson", "eat_held_food"],
+                    "--seed", str(seed), "--lesson", "eat_held_food"]
+            if index == 0 and args.preserve_objective_state_from is not None:
+                cycle_argv += ["--preserve-objective-state-from", str(args.preserve_objective_state_from)]
+            invoke(cycle_argv,
                    f"episode-{index:05d}", args.command_seconds,
                    startup_cutoff if index == 0 else collection_cutoff)
             receipt, setup, hashes = validate_cycle(directory, previous, seed)

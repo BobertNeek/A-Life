@@ -1,6 +1,6 @@
 # Roadmap
 
-Updated 20 September 2026. The immediate priority is the persistent creature game
+Updated 14 October 2026. The immediate priority is the persistent creature game
 described in section 1.1 of the controlling v2.0 architecture: care, useful
 learning, and save/load first; breeding and practical breed promotion next.
 
@@ -107,6 +107,49 @@ Exit gate for each production class and population profile:
 - populations 1, 10, 50, 100, 250, and 500 measured for both sensor profiles where required;
 - admission, throttling, save migration, soak, and replay gates pass;
 - N4096 remains research-only until its own equivalence and rollback gate passes.
+
+### Current performance follow-up: 50 individuals at 20 FPS
+
+Target i7-3770K / 32 GB / RTX 3050 8 GB at 1080p, with the existing 20 Hz
+simulation/cognition schedule, useful learning, individual memory and exact
+continuity. **20 FPS with 50 creatures remains Unknown.** Keep the care and
+small-community milestones above in sequence; a broad population study is not
+an additional prerequisite for the first playable care loop.
+
+Source-integrated groundwork, confirmed in main and the inspected consolidation
+candidate (implementation status, not target-hardware or gameplay proof):
+
+- [x] Memory-sensitive attention without the unused preliminary finalized frame:
+  [`6aef08b1e8ded7691d2d5c111e9a5b3225e84c64`](https://github.com/BobertNeek/A-Life/commit/6aef08b1e8ded7691d2d5c111e9a5b3225e84c64)
+- [x] Bounded production CPU preparation with at most two participants and the
+  existing serial fallback: [`b24417cad91a859211ea6730948760c2582553d9`](https://github.com/BobertNeek/A-Life/commit/b24417cad91a859211ea6730948760c2582553d9)
+- [x] Redundant private topology-plan/lifecycle validation and digest work removed
+  while retaining transaction/rollback guards:
+  [`035d76fa8101c17ec5748c60e464c0c71a169122`](https://github.com/BobertNeek/A-Life/commit/035d76fa8101c17ec5748c60e464c0c71a169122) and [`994fceac4c6777b4390dc17ed1e4a7354b76930a`](https://github.com/BobertNeek/A-Life/commit/994fceac4c6777b4390dc17ed1e4a7354b76930a)
+- [x] Discarded draft/attention copies removed:
+  [`51ef0d88ab946bba75c63040348cad42d6f8be04`](https://github.com/BobertNeek/A-Life/commit/51ef0d88ab946bba75c63040348cad42d6f8be04)
+
+Remaining measurement-led work:
+
+- [ ] Bind the actual integrated source/tree, executable, configuration, adapter,
+  founder/save and workload; separately authorize the target-hardware window
+- [ ] Obtain paired 8/16/32/50-population receipts with fresh and populated personal
+  memory, spread/crowded placement, FPS, progressed TPS, due/completed cognitive
+  rows, latency tails, catch-up debt and mutually exclusive stage costs
+- [ ] Choose only the measured remaining bottleneck: exact organism-local reuse,
+  allocation/layout, world queries, transfers/waits or presentation scheduling
+  are hypotheses; retain grounded candidates, individual exceptions, bounded
+  work, GPU-authoritative actions and current cognition cadence
+- [ ] Preserve care/learning/sleep/lifecycle and fresh-process save/load in one
+  evolving ordinary play scenario; retain Unknown for missing source-bound proof
+
+The [historical optimization plan](performance/20261001-fifty-creature-optimization-plan.md)
+preserves cost arithmetic, alternatives and falsification criteria with an
+explicit current consolidation context. The [bounded experiment blueprints](deep-planning-experiments-2026-10-01.md)
+retain matched memory and learning screens as conditional follow-ups; they do
+not launch a training campaign. The [dated skill review](reviews/2026-10-01-deep-planning-skill.md)
+records the reusable method. Historical work packages do not reopen the
+integrated seams or change architecture authority and the release gate.
 
 ## 6. Release gate
 

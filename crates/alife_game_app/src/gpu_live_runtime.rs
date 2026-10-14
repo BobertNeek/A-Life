@@ -2594,6 +2594,14 @@ pub struct GpuLivePerformanceMetrics {
     pub preparation_sleep_consolidation_wall_ns: u64,
     pub preparation_grounded_perception_wall_ns: u64,
     pub preparation_episodic_retrieval_wall_ns: u64,
+    pub preparation_baseline_recall_wall_ns: u64,
+    pub preparation_baseline_context_wall_ns: u64,
+    pub preparation_baseline_attention_evidence_wall_ns: u64,
+    pub preparation_routed_recall_wall_ns: u64,
+    pub preparation_routed_context_wall_ns: u64,
+    pub preparation_cognitive_projection_wall_ns: u64,
+    pub preparation_routed_finalize_wall_ns: u64,
+    pub preparation_routed_validate_wall_ns: u64,
     pub preparation_attention_context_wall_ns: u64,
     pub preparation_topology_concept_wall_ns: u64,
     pub preparation_gpu_upload_wall_ns: u64,
@@ -2602,6 +2610,8 @@ pub struct GpuLivePerformanceMetrics {
     pub inference_batches: u64,
     pub inference_rows: u64,
     pub inference_transaction_wall_ns: u64,
+    pub neural_input_rows_wall_ns: u64,
+    pub neural_input_batch_validation_wall_ns: u64,
     pub selection_readback_calls: u64,
     pub selection_readback_bytes: u64,
     pub learning_batches: u64,
@@ -2614,6 +2624,8 @@ pub struct GpuLivePerformanceMetrics {
     pub sealed_commit_total_wall_ns: u64,
     pub sidecar_memory_wall_ns: u64,
     pub sidecar_topology_wall_ns: u64,
+    pub sidecar_topology_observe_wall_ns: u64,
+    pub sidecar_topology_lifecycle_wall_ns: u64,
     pub cognitive_authority_seal_wall_ns: u64,
     pub ordinary_snapshot_calls: u64,
     pub ordinary_snapshot_bytes: u64,
@@ -2760,6 +2772,18 @@ impl GpuLivePerformanceMetrics {
                 preparation_grounded_perception_wall_ns
             ),
             preparation_episodic_retrieval_wall_ns: delta!(preparation_episodic_retrieval_wall_ns),
+            preparation_baseline_recall_wall_ns: delta!(preparation_baseline_recall_wall_ns),
+            preparation_baseline_context_wall_ns: delta!(preparation_baseline_context_wall_ns),
+            preparation_baseline_attention_evidence_wall_ns: delta!(
+                preparation_baseline_attention_evidence_wall_ns
+            ),
+            preparation_routed_recall_wall_ns: delta!(preparation_routed_recall_wall_ns),
+            preparation_routed_context_wall_ns: delta!(preparation_routed_context_wall_ns),
+            preparation_cognitive_projection_wall_ns: delta!(
+                preparation_cognitive_projection_wall_ns
+            ),
+            preparation_routed_finalize_wall_ns: delta!(preparation_routed_finalize_wall_ns),
+            preparation_routed_validate_wall_ns: delta!(preparation_routed_validate_wall_ns),
             preparation_attention_context_wall_ns: delta!(preparation_attention_context_wall_ns),
             preparation_topology_concept_wall_ns: delta!(preparation_topology_concept_wall_ns),
             preparation_gpu_upload_wall_ns: delta!(preparation_gpu_upload_wall_ns),
@@ -2770,6 +2794,8 @@ impl GpuLivePerformanceMetrics {
             inference_batches: delta!(inference_batches),
             inference_rows: delta!(inference_rows),
             inference_transaction_wall_ns: delta!(inference_transaction_wall_ns),
+            neural_input_rows_wall_ns: delta!(neural_input_rows_wall_ns),
+            neural_input_batch_validation_wall_ns: delta!(neural_input_batch_validation_wall_ns),
             selection_readback_calls: delta!(selection_readback_calls),
             selection_readback_bytes: delta!(selection_readback_bytes),
             learning_batches: delta!(learning_batches),
@@ -2782,6 +2808,8 @@ impl GpuLivePerformanceMetrics {
             sealed_commit_total_wall_ns: delta!(sealed_commit_total_wall_ns),
             sidecar_memory_wall_ns: delta!(sidecar_memory_wall_ns),
             sidecar_topology_wall_ns: delta!(sidecar_topology_wall_ns),
+            sidecar_topology_observe_wall_ns: delta!(sidecar_topology_observe_wall_ns),
+            sidecar_topology_lifecycle_wall_ns: delta!(sidecar_topology_lifecycle_wall_ns),
             cognitive_authority_seal_wall_ns: delta!(cognitive_authority_seal_wall_ns),
             ordinary_snapshot_calls: delta!(ordinary_snapshot_calls),
             ordinary_snapshot_bytes: delta!(ordinary_snapshot_bytes),
@@ -6024,7 +6052,7 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
-    /// Explicit lessons require hints rather than the training dropout ablation.
+    /// Explicit lessons attempt hints rather than the training dropout ablation.
     #[cfg(feature = "foundation-training")]
     pub(crate) fn require_foundation_rich_information(&mut self) -> Result<(), GameAppShellError> {
         if self.sensor_profile != SensorProfile::GroundedTerrainVisionV1 {
@@ -6032,13 +6060,16 @@ impl GpuLiveBrainRuntime {
                 message: "rich-information lesson requires grounded natural senses".into(),
             });
         }
-        let prior = self.semantic_prior.as_mut().ok_or_else(|| {
-            GameAppShellError::InvalidProductionFrontend {
-                message: "rich-information lesson requires the local semantic prior; ALIFE_SLM_PRIOR=off is incompatible".into(),
-            }
-        })?;
-        prior.require_rich_information();
+        if let Some(prior) = self.semantic_prior.as_mut() {
+            prior.require_rich_information();
+        }
         Ok(())
+    }
+
+    /// Read-only bank compatibility identity; this does not initialize a GPU or provider.
+    #[cfg(feature = "foundation-training")]
+    pub fn semantic_prior_context_contract() -> String {
+        semantic_prior::context_contract()
     }
 
     /// Setup-only priming for max-speed collection. No world tick, neural
@@ -6061,27 +6092,17 @@ impl GpuLiveBrainRuntime {
         )?;
         let sequence = ExperienceSequenceId(resident.next_sequence);
         let started = std::time::Instant::now();
-        loop {
-            prior.prime(draft.clone(), sequence)?;
-            if !prior.pending(raw) {
-                break;
-            }
-            if started.elapsed() >= std::time::Duration::from_secs(5) {
-                prior.metrics.prime_timeouts += 1;
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(25));
-        }
+        // Poll/submit once. Provider inference is optional and never stalls
+        // initial admission or a later genuine collection decision.
+        prior.prime(draft, sequence)?;
+        let exit_reason = if prior.pending(raw) {
+            "pending_continue_unaided"
+        } else {
+            "no_pending"
+        };
         prior.metrics.prime_wait_ms +=
             started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-        if prior.metrics.rich_information_required && !prior.ready(raw) {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: format!(
-                    "rich-information semantic prior not ready after bounded priming (timeouts={}, failures={}, last_error={:?})",
-                    prior.metrics.prime_timeouts, prior.metrics.failures, prior.metrics.last_error
-                ),
-            });
-        }
+        prior.record_priming_status(raw, self.world.tick().raw(), exit_reason);
         Ok(())
     }
 
@@ -9715,9 +9736,23 @@ impl GpuLiveBrainRuntime {
             }
             let disposition = match self.topologies.get_mut(&organism_id.raw()) {
                 Some(sidecar) if sidecar.organism_id() == organism_id => {
+                    let observe_started = self.performance_measurement_enabled.then(Instant::now);
                     let receipt = sidecar.observe_sealed_patch(&selection.patch);
+                    if let Some(started) = observe_started {
+                        self.performance_metrics.sidecar_topology_observe_wall_ns = self
+                            .performance_metrics
+                            .sidecar_topology_observe_wall_ns
+                            .saturating_add(elapsed_ns(started));
+                    }
+                    let lifecycle_started = self.performance_measurement_enabled.then(Instant::now);
                     let _lifecycle_result =
                         sidecar.advance_lifecycle(selection.patch.outcome().outcome_tick);
+                    if let Some(started) = lifecycle_started {
+                        self.performance_metrics.sidecar_topology_lifecycle_wall_ns = self
+                            .performance_metrics
+                            .sidecar_topology_lifecycle_wall_ns
+                            .saturating_add(elapsed_ns(started));
+                    }
                     TopologyObservationDisposition::Observed(Box::new(receipt))
                 }
                 _ => TopologyObservationDisposition::RejectedMissingOwner { organism_id },

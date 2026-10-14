@@ -1,6 +1,6 @@
 use alife_core::{LanguageTokenId, OrganismId, UtteranceSourceKind, Vec3f};
 use alife_school::{LanguageNursery, LanguageNurseryLesson, NurseryDemonstration, NurserySpeaker};
-use alife_world::WorldObjectKind;
+use alife_world::{HeadlessActionIds, WorldObjectKind};
 
 #[test]
 fn nursery_exposure_is_spatial_perception_with_visible_object_and_no_authority_bypass() {
@@ -193,4 +193,61 @@ fn repeated_lessons_refresh_consumed_targets_and_move_existing_peers() {
         nursery.world().entity(peer_entity).unwrap().position,
         Vec3f::new(0.25, 0.0, 0.0)
     );
+}
+
+#[test]
+fn peer_eat_demonstration_acquires_the_exact_target_before_consumption() {
+    let subject = OrganismId(7);
+    let peer = OrganismId(9);
+    for position in [Vec3f::new(0.25, 0.0, 0.0), Vec3f::new(-0.25, 0.0, 0.0)] {
+        let mut nursery = LanguageNursery::new(4408, subject).unwrap();
+        let lesson = LanguageNurseryLesson::try_new(
+            LanguageTokenId::new(45).unwrap(),
+            "peer-held-fruit",
+            WorldObjectKind::Food,
+            Vec3f::new(1.0, 0.0, 0.0),
+            NurseryDemonstration::Eat,
+        )
+        .unwrap();
+        let exposure = nursery
+            .present(
+                NurserySpeaker::Peer {
+                    organism_id: peer,
+                    source_position: position,
+                },
+                &lesson,
+            )
+            .unwrap();
+        let actions = &exposure.demonstration_actions;
+        assert_eq!(actions.len(), 3);
+        assert_eq!(
+            actions
+                .iter()
+                .map(|result| result.command.action_id)
+                .collect::<Vec<_>>(),
+            vec![
+                HeadlessActionIds::APPROACH,
+                HeadlessActionIds::GRAB,
+                HeadlessActionIds::EAT
+            ]
+        );
+        for result in actions {
+            assert_eq!(result.command.organism_id, peer);
+            assert_eq!(result.command.target_entity, Some(exposure.target_entity));
+            assert!(result.observation.success);
+        }
+        assert!(actions[1]
+            .touched_entities
+            .contains(&exposure.target_entity));
+        // The ordinary self-held Eat rule makes successful consumption evidence
+        // that this peer really acquired this exact target through the Grab.
+        assert!(nursery
+            .world()
+            .entity(exposure.target_entity)
+            .unwrap()
+            .is_consumed());
+        assert!(!exposure.can_issue_actions);
+        assert!(!exposure.can_write_rewards);
+        assert!(!exposure.can_inject_hidden_concepts);
+    }
 }
