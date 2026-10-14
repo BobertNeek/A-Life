@@ -1325,7 +1325,7 @@ fn approximate_preparation_retains_memory_and_fresh_keys_between_refreshes() {
         let old = fixture.input.approximate_cache.as_ref().unwrap();
         let output = prepare_cpu_row(&fixture.job(&slot), false);
         let cache = output.approximate_cache.unwrap();
-        recall_refreshes += usize::from(cache.last_recall_tick != old.last_recall_tick);
+        recall_refreshes += usize::from(cache.last_full_recall_tick != old.last_full_recall_tick);
         summary_refreshes += usize::from(cache.last_summary_tick != old.last_summary_tick);
         let prepared = output.result.unwrap();
         learned_cue |= prepared
@@ -1402,7 +1402,7 @@ fn candidate_churn_cannot_postpone_full_expectancy_refresh() {
         let prepared = output.result.unwrap();
         let cache = output.approximate_cache.unwrap();
         let expected_full_tick = Tick::new(100 + (raw - 100) / 4 * 4);
-        assert_eq!(cache.last_recall_tick, Some(expected_full_tick));
+        assert_eq!(cache.last_full_recall_tick, Some(expected_full_tick));
         assert!(
             !std::sync::Arc::ptr_eq(&cache.recall, &old.recall),
             "the changing candidate must actually refresh the cache each tick"

@@ -14,7 +14,7 @@ pub(super) struct ApproximateCognitionCache {
     pub recall: Arc<alife_core::RuntimeMemoryRecallCache>,
     pub summary: Option<Arc<CognitiveContextFrame>>,
     pub object_evidence: Arc<ObjectTopologyEvidence>,
-    pub last_recall_tick: Option<Tick>,
+    pub last_full_recall_tick: Option<Tick>,
     pub last_summary_tick: Option<Tick>,
     pub last_topology_tick: Option<Tick>,
     pub targets: Arc<[alife_core::TrackedObjectId]>,
@@ -145,7 +145,7 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             .zip(&old.drives)
             .any(|(now, old)| (now - old).abs() > 0.15);
         let urgent = old.force_refresh || new_target || drive_change;
-        let refresh_recall = urgent || due(old.last_recall_tick, tick, RECALL_INTERVAL);
+        let refresh_recall = urgent || due(old.last_full_recall_tick, tick, RECALL_INTERVAL);
         let refresh_summary = urgent || due(old.last_summary_tick, tick, CONCEPT_INTERVAL);
         let started = measure.then(Instant::now);
         if refresh_summary {
@@ -212,7 +212,7 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             // Missing candidate keys refresh only those entries. They must not
             // postpone the deadline for refreshing the retained expectancies.
             if refresh_recall {
-                next.last_recall_tick = Some(tick);
+                next.last_full_recall_tick = Some(tick);
             }
         }
         timing.episodic_retrieval_wall_ns = started.map_or(0, elapsed_ns);
