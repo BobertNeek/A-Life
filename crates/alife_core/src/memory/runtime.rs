@@ -7,11 +7,62 @@ use super::*;
 
 pub const RUNTIME_MEMORY_SEARCH_CAP: usize = 16;
 
+/// Both audited and cached recall bind recognition to a creature visible now.
+pub(super) fn retain_observed_social_recognition(
+    draft: &PerceptionFrameDraft,
+    candidate: &crate::ActionCandidate,
+    query: &CandidateMemoryQueryV2,
+    emission: Option<crate::NeuralEmission>,
+    recognition: &mut std::collections::BTreeMap<crate::TrackedObjectId, crate::NeuralEmission>,
+) -> Result<(), ScaffoldContractError> {
+    if let (Some(tracked), Some(emission), crate::CandidateObservationRef::ObjectSlot(slot)) =
+        (query.tracked_object_id(), emission, candidate.observation)
+    {
+        let observed = candidate.target.entity.is_some_and(|entity| {
+            draft
+                .sensory()
+                .social_context
+                .nearest_agents
+                .iter()
+                .flatten()
+                .any(|agent| agent.body_entity == Some(entity))
+        });
+        let confidence = emission.confidence
+            * draft.grounded_object_slots()[usize::from(slot)]
+                .confidence
+                .raw();
+        if observed && confidence > 0.0 {
+            let emission = crate::NeuralEmission::new(
+                crate::NeuralEmissionClass::SocialState,
+                emission.activity,
+                confidence,
+            )?;
+            let retained = recognition.entry(tracked).or_insert(emission);
+            if (emission.activity * emission.confidence)
+                .total_cmp(&(retained.activity * retained.confidence))
+                .then_with(|| emission.activity.total_cmp(&retained.activity))
+                .then_with(|| emission.confidence.total_cmp(&retained.confidence))
+                .is_gt()
+            {
+                *retained = emission;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RecallKey {
     target: Option<crate::TrackedObjectId>,
     family: u8,
     action: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct CachedCandidate {
+    key: RecallKey,
+    context: CandidateMemoryContextV1,
+    social_emission: Option<crate::NeuralEmission>,
 }
 
 impl RecallKey {
@@ -30,7 +81,7 @@ impl RecallKey {
 pub struct RuntimeMemoryRecallCache {
     owner: u64,
     profile: Option<crate::SensorProfileIdentity>,
-    entries: Vec<(RecallKey, CandidateMemoryContextV1)>,
+    entries: Vec<CachedCandidate>,
     attention: Vec<crate::FinalizedMemoryAttentionEvidence>,
 }
 
@@ -42,11 +93,12 @@ impl RuntimeMemoryRecallCache {
     fn from_entries(
         owner: u64,
         profile: crate::SensorProfileIdentity,
-        entries: Vec<(RecallKey, CandidateMemoryContextV1)>,
+        entries: Vec<CachedCandidate>,
     ) -> Result<Self, ScaffoldContractError> {
         let attention = entries
             .iter()
-            .map(|(key, context)| {
+            .map(|entry| {
+                let context = &entry.context;
                 let confidence = context
                     .target_confidence
                     .raw()
@@ -58,7 +110,7 @@ impl RuntimeMemoryRecallCache {
                     .map(|value| value.abs())
                     .fold(0.0, f32::max);
                 Ok(crate::FinalizedMemoryAttentionEvidence {
-                    tracked_object_id: key.target,
+                    tracked_object_id: entry.key.target,
                     salience: crate::NormalizedScalar::new(salience.clamp(0.0, 1.0))?,
                     confidence: Confidence::new(confidence)?,
                     source_count: context.target_source_count.max(context.family_source_count),
@@ -121,6 +173,8 @@ impl MemoryBank {
 
         let mut queries = Vec::with_capacity(draft.candidates().len());
         let mut contexts = Vec::with_capacity(draft.candidates().len());
+        let mut emissions = Vec::with_capacity(draft.candidates().len());
+        let mut social_recognition = std::collections::BTreeMap::new();
 
         let mut evaluations = 0_u32;
         let mut searched_any = refresh;
@@ -129,24 +183,17 @@ impl MemoryBank {
             let key = RecallKey::from_query(&query);
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let cached = (!refresh)
-                .then(|| cache.entries.iter().find(|(old, _)| *old == key))
+                .then(|| cache.entries.iter().find(|entry| entry.key == key))
                 .flatten()
-                .filter(|(_, context)| {
+                .filter(|entry| {
+                    let context = &entry.context;
                     [context.best_target_source, context.best_family_source]
                         .into_iter()
                         .flatten()
                         .all(|id| self.candidate_store.records.contains_key(&id.raw()))
                 });
-            let (
-                mut context,
-                _target_eligible,
-                _target_searched,
-                _target_matches,
-                _family_eligible,
-                _family_searched,
-                _family_matches,
-            ) = if let Some((_, context)) = cached {
-                (*context, 0, 0, 0, 0, 0, 0)
+            let (mut context, emission) = if let Some(entry) = cached {
+                (entry.context, entry.social_emission)
             } else {
                 searched_any = true;
                 let target = recall_target_channel_with_budget(
@@ -174,18 +221,21 @@ impl MemoryBank {
                         best_target_source: target.best_source,
                         best_family_source: family.best_source,
                     },
-                    target.eligible,
-                    target.searched,
-                    target.matches,
-                    family.eligible,
-                    family.searched,
-                    family.matches,
+                    target.social_emission,
                 )
             };
             context.candidate_index = candidate.candidate_index;
+            retain_observed_social_recognition(
+                draft,
+                candidate,
+                &query,
+                emission,
+                &mut social_recognition,
+            )?;
 
             contexts.push(context);
             queries.push(query);
+            emissions.push(emission);
         }
         let next = searched_any
             .then(|| {
@@ -195,7 +245,12 @@ impl MemoryBank {
                     queries
                         .iter()
                         .zip(&contexts)
-                        .map(|(query, context)| (RecallKey::from_query(query), *context))
+                        .zip(emissions)
+                        .map(|((query, context), social_emission)| CachedCandidate {
+                            key: RecallKey::from_query(query),
+                            context: *context,
+                            social_emission,
+                        })
                         .collect(),
                 )
             })
@@ -231,6 +286,7 @@ impl MemoryBank {
                 base_frame_digest: draft.base_digest(),
                 receipt,
                 cognitive_context: None,
+                social_recognition,
             },
             next,
         ))

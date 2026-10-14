@@ -1197,14 +1197,16 @@ fn approximate_preparation_retains_memory_and_fresh_keys_between_refreshes() {
     assert_eq!(summary_refreshes, 2);
     assert!(learned_cue);
     assert_eq!(fixture.memory.export_active_bank().unwrap(), before);
+    move_fixture_tick(&mut fixture, Tick::new(120));
+    fixture.input.approximate_cache = prepare_cpu_row(&fixture.job(&slot), false).approximate_cache;
     let cache = fixture.input.approximate_cache.as_mut().unwrap();
     std::sync::Arc::make_mut(cache).force_refresh = true;
-    move_fixture_tick(&mut fixture, Tick::new(120));
+    move_fixture_tick(&mut fixture, Tick::new(121));
     let output = prepare_cpu_row(&fixture.job(&slot), false);
     assert!(output.result.is_ok());
     assert_eq!(
         output.approximate_cache.unwrap().last_summary_tick,
-        Some(Tick::new(120))
+        Some(Tick::new(121))
     );
 }
 
@@ -1220,14 +1222,15 @@ fn approximate_preparation_cpu_timing_evidence() {
             with_candidate_count(fixture, 26);
         }
         let slots = canonical_slots(owners);
-        let mut samples = [Vec::new(), Vec::new(), Vec::new()];
+        let mut samples = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
         for sample in 0..9 {
             for mode in if sample % 2 == 0 {
-                [0, 1, 2]
+                [0, 1, 2, 3]
             } else {
-                [2, 1, 0]
+                [3, 2, 1, 0]
             } {
                 for (fixture, slot) in fixtures.iter_mut().zip(&slots) {
+                    move_fixture_tick(fixture, Tick::new(100));
                     fixture.input.approximate_cache = if mode == 0 {
                         None
                     } else {
@@ -1238,6 +1241,28 @@ fn approximate_preparation_cpu_timing_evidence() {
                         assert!(warm.result.is_ok());
                         fixture.input.approximate_cache = warm.approximate_cache;
                     }
+                }
+                if mode == 3 {
+                    let mut elapsed = 0;
+                    for tick in 100..120 {
+                        for fixture in &mut fixtures {
+                            move_fixture_tick(fixture, Tick::new(tick));
+                        }
+                        let jobs: Vec<_> = fixtures
+                            .iter()
+                            .zip(&slots)
+                            .map(|(fixture, slot)| fixture.job(slot))
+                            .collect();
+                        let started = Instant::now();
+                        let outputs = prepare_cpu_rows(&jobs, 2, false).unwrap();
+                        elapsed += elapsed_ns(started);
+                        for (fixture, output) in fixtures.iter_mut().zip(outputs) {
+                            assert!(output.result.is_ok());
+                            fixture.input.approximate_cache = output.approximate_cache;
+                        }
+                    }
+                    samples[mode].push(elapsed / 20);
+                    continue;
                 }
                 let jobs: Vec<_> = fixtures
                     .iter()
@@ -1262,7 +1287,9 @@ fn approximate_preparation_cpu_timing_evidence() {
         println!(
             "{}",
             serde_json::json!({"owners": owners, "candidates":26,"records":64,
-            "modes":["audited","runtime_cold","runtime_cached"],"samples_ns":samples,"median_ns":medians,"gpu":false})
+                "modes":["audited","runtime_cold","runtime_cached","runtime_20tick_cycle"],
+                "cycle_ticks":20,"workers":2,"profile":"test_opt2_debug_assertions",
+                "samples_ns":samples,"median_ns":medians,"gpu":false})
         );
     }
 }

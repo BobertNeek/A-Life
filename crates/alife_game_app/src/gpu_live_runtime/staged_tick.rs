@@ -169,6 +169,7 @@ impl GpuLiveBrainRuntime {
             scheduled_handles.len(),
             thread::available_parallelism().map_or(1, usize::from),
         );
+        let audited_cognition = self.uses_audited_cognition();
         let mut captured_rows = Vec::with_capacity(if workers == 2 {
             scheduled_handles.len()
         } else {
@@ -588,7 +589,7 @@ impl GpuLiveBrainRuntime {
                     handle,
                     world_entity_id,
                     input: CapturedCpuPreparation {
-                        approximate_cache: (!cfg!(feature = "foundation-training"))
+                        approximate_cache: (!audited_cognition)
                             .then(|| resident.approximate_cache.clone()),
                         draft,
                         sequence_id: ExperienceSequenceId(resident.next_sequence),

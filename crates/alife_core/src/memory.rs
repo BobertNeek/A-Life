@@ -1069,47 +1069,13 @@ impl MemoryBank {
                     searched: family.searched,
                 });
             }
-            if let (
-                Some(tracked),
-                Some(emission),
-                crate::CandidateObservationRef::ObjectSlot(slot),
-            ) = (
-                query.tracked_object_id(),
+            runtime::retain_observed_social_recognition(
+                draft,
+                candidate,
+                &query,
                 target.social_emission,
-                candidate.observation,
-            ) {
-                let observed_creature = candidate.target.entity.is_some_and(|entity| {
-                    draft
-                        .sensory()
-                        .social_context
-                        .nearest_agents
-                        .iter()
-                        .flatten()
-                        .any(|agent| agent.body_entity == Some(entity))
-                });
-                if observed_creature {
-                    let confidence = emission.confidence
-                        * draft.grounded_object_slots()[usize::from(slot)]
-                            .confidence
-                            .raw();
-                    if confidence > 0.0 {
-                        let emission = crate::NeuralEmission::new(
-                            crate::NeuralEmissionClass::SocialState,
-                            emission.activity,
-                            confidence,
-                        )?;
-                        let retained = social_recognition.entry(tracked).or_insert(emission);
-                        if (emission.activity * emission.confidence)
-                            .total_cmp(&(retained.activity * retained.confidence))
-                            .then_with(|| emission.activity.total_cmp(&retained.activity))
-                            .then_with(|| emission.confidence.total_cmp(&retained.confidence))
-                            .is_gt()
-                        {
-                            *retained = emission;
-                        }
-                    }
-                }
-            }
+                &mut social_recognition,
+            )?;
             candidate_contexts.push(CandidateMemoryContextV1 {
                 candidate_index: candidate.candidate_index,
                 target_latent: target.values,

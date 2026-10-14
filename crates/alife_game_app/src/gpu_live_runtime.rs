@@ -5027,6 +5027,17 @@ impl Drop for GpuLiveBrainRuntime {
 }
 
 impl GpuLiveBrainRuntime {
+    fn uses_audited_cognition(&self) -> bool {
+        #[cfg(feature = "foundation-training")]
+        {
+            self.training_sampling.is_some()
+        }
+        #[cfg(not(feature = "foundation-training"))]
+        {
+            false
+        }
+    }
+
     /// Creates an ephemeral restore target on the live session's exact GPU
     /// context without exposing adapter selection to the caller.
     pub fn new_staging_like_live(&self) -> Result<GpuClosedLoopBackend, ScaffoldContractError> {
@@ -9530,7 +9541,7 @@ impl GpuLiveBrainRuntime {
                 .memories
                 .get(&organism_id.raw())
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            let memory_digest = if cfg!(feature = "foundation-training") {
+            let memory_digest = if self.uses_audited_cognition() {
                 memory.compaction_checkpoint().active_digest
             } else {
                 memory.runtime_generation_binding()
@@ -9635,19 +9646,18 @@ impl GpuLiveBrainRuntime {
     }
 
     fn observe_sealed_memory(&mut self, sealed: &[SealedLiveSelection]) -> Vec<bool> {
+        let audited = self.uses_audited_cognition();
         let mut memory_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
-            if !cfg!(feature = "foundation-training")
-                && approximate_cognition::important_outcome(selection.patch.outcome())
-            {
+            if !audited && approximate_cognition::important_outcome(selection.patch.outcome()) {
                 if let Some(resident) = self.residents.get_mut(&organism_id.raw()) {
                     std::sync::Arc::make_mut(&mut resident.approximate_cache).force_refresh = true;
                 }
             }
             let observation = match self.memories.get_mut(&organism_id.raw()) {
                 Some(memory) => {
-                    if cfg!(feature = "foundation-training") {
+                    if audited {
                         memory.observe_sealed_patch(&selection.patch)
                     } else {
                         memory.observe_sealed_patch_runtime(&selection.patch)
@@ -9671,10 +9681,11 @@ impl GpuLiveBrainRuntime {
     }
 
     fn observe_sealed_topology(&mut self, sealed: &[SealedLiveSelection]) -> Vec<bool> {
+        let audited = self.uses_audited_cognition();
         let mut topology_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
-            if !cfg!(feature = "foundation-training") {
+            if !audited {
                 let cache = &mut self
                     .residents
                     .get_mut(&organism_id.raw())
