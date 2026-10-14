@@ -557,6 +557,9 @@ fn encode_genome(
         d.write_utf8("alife.action-candidate-credit.v1");
         d.write_u8(profile.raw());
     }
+    if let Some(policy) = plasticity.decoder_lifetime_rate_policy() {
+        policy.write_canonical(d)?;
+    }
     g.cognitive_architecture().write_canonical(d)?;
     d.write_sequence_len(g.sensor_layout.channels.len());
     for row in &g.sensor_layout.channels {

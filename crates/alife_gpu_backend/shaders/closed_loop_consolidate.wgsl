@@ -36,6 +36,29 @@ fn consolidate_reject(completion:u32) {
   }
 }
 
+// Match PlasticityReceptorPlan::is_delta_enabled on the immutable plan.
+// Current-age and biochemical modulation do not make a synapse born-fixed.
+// 0 = disabled, 1 = enabled, 2 = malformed plan (reject the transaction).
+fn consolidate_synapse_delta_mode(extension:GpuBrainSlotExtensionRecord, synapse:u32) -> u32 {
+  if (synapse > (0xffffffffu-extension.synapse_metadata_offset)/8u) { return 2u; }
+  let metadata_base = extension.synapse_metadata_offset+synapse*8u;
+  if (!consolidate_immutable_plan_span_within(metadata_base,8u)) { return 2u; }
+  let metadata = load_synapse_learning_metadata(metadata_base);
+  if (metadata.global_synapse_id != synapse
+      || metadata.receptor_index > (0xffffffffu-extension.receptor_offset)/16u) { return 2u; }
+  let receptor_base = extension.receptor_offset+metadata.receptor_index*16u;
+  if (!consolidate_immutable_plan_span_within(receptor_base,16u)) { return 2u; }
+  let receptor = load_plasticity_receptor(receptor_base);
+  if (!consolidate_finite(receptor.learning_rate)
+      || !consolidate_finite(receptor.sleep_replay_rate)
+      || !consolidate_finite(receptor.normalization_rate)
+      || receptor.learning_rate < 0.0 || receptor.learning_rate > 1.0
+      || receptor.sleep_replay_rate < 0.0 || receptor.sleep_replay_rate > 1.0
+      || receptor.normalization_rate < 0.0 || receptor.normalization_rate > 1.0) { return 2u; }
+  return select(0u,1u,receptor.learning_rate != 0.0
+      || receptor.sleep_replay_rate != 0.0 || receptor.normalization_rate != 0.0);
+}
+
 fn sleep_transaction_valid(
   header:GpuSleepHeader,
   brain:GpuBrainSlotRecord,
@@ -173,6 +196,10 @@ fn consolidate_fast_weights(@builtin(global_invocation_id) gid:vec3<u32>) {
       || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_PREPARED
       || gid.x >= header.synapse_count) { return; }
   let brain = brain_slots[header.brain_slot_index];
+  let delta_mode = consolidate_synapse_delta_mode(load_slot_extension(brain),gid.x);
+  if (delta_mode == 2u) { consolidate_reject(header.completion_offset); return; }
+  // The copy pass already staged both coefficients. Leave disabled rows intact.
+  if (delta_mode == 0u) { return; }
   let parameters = load_sleep_parameter(
     load_state_u32(brain.extension_record_offset + 12u)
   );
@@ -217,7 +244,9 @@ fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
     let active_fast = load_state_f32(active_bases.fast+synapse);
     let staged_lifetime = load_state_f32(inactive_bases.lifetime+synapse);
     let staged_fast = load_state_f32(inactive_bases.fast+synapse);
-    let no_replay_fast = active_fast*(1.0-parameters.fast_decay_rate);
+    let delta_mode = consolidate_synapse_delta_mode(extension,synapse);
+    if (delta_mode == 2u) { consolidate_reject(header.completion_offset); return; }
+    let no_replay_fast = select(active_fast*(1.0-parameters.fast_decay_rate),active_fast,delta_mode == 0u);
     if (!consolidate_finite(active_lifetime) || !consolidate_finite(active_fast)
         || !consolidate_finite(staged_lifetime) || !consolidate_finite(staged_fast)
         || !consolidate_finite(no_replay_fast)) {
