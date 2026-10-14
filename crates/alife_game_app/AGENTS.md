@@ -28,8 +28,8 @@ Rules:
   restore; preserve builtin admission and deployed lifetime learning.
 - Observe every sealed patch in its organism-owned memory sidecar even when
   post-seal GPU learning is rejected. Ordinary play updates diagnostic topology
-  every ten ticks or on a significant outcome; foundation training observes
-  every patch. Sidecars supply evidence without selecting actions or aborting
+  every ten ticks or on a significant outcome; foundation training and audited
+  diagnostics observe every patch. Sidecars supply evidence without selecting actions or aborting
   candidate arbitration. See `docs/performance/20261013-approximate-cognition-runtime.md`
   for the authorized live approximation and checkpoint boundaries.
 - Update one fixed-size passive-statistics record per resident tick and archive
