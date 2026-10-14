@@ -7,8 +7,8 @@ Base: PR #40, `d1ee947fad980d4adcdfd08cb85b0068a73aef80`
 ## Scope and defaults
 
 `PlasticityGenomeParameters` has an optional `DecoderLifetimeRatePolicyV1`.
-Absent policy preserves the old serialized genome and compiler identity and
-keeps every decoder scale at 1.0. Founder constructors and their rate constants
+Absent policy preserves the old JSON genome serialization and compiler identity
+and keeps every decoder scale at 1.0. Founder constructors and their rate constants
 are unchanged. This candidate adds a control, not a selected founder/training
 policy or a claim that basic motor competence is separately represented.
 
@@ -35,10 +35,12 @@ Thus critical periods can increase a positive configured scale (0.5 may become
 1.0 at the maximum boost), while an explicit zero stays zero. Learning,
 normalization, and replay rates share that existing effective scale. Zero rows
 use the existing disabled receptor and are excluded from replay capture.
-Eligibility decay and fast-weight bounds do not change.
+Eligibility decay and fast-weight bounds do not change. Reduced positive scales
+change those local rates; they do not scale the global sleep staging or fast-decay
+parameters.
 
-Recurrent rules, alpha, inherited weights, topology, and genetic/acquired weight
-mixing remain unchanged. No live CPU neural update or new runtime dispatch is
+Recurrent receptor construction, alpha, inherited weights, topology, and
+genetic/acquired weight mixing remain unchanged. No live CPU neural update or new runtime dispatch is
 introduced. The policy is bound into compiler-input identity; compiled rates
 remain bound into the existing plasticity-plan and phenotype identities.
 
