@@ -11516,12 +11516,13 @@ mod tests {
     fn v11_authoritative_admission_real_runtime() {
         let organism_id = OrganismId(1);
         let seed = 7_701;
-        let world = HeadlessScenarioBuilder::new(seed)
+        let mut world = HeadlessScenarioBuilder::new(seed)
             .agent("learner", organism_id, Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.9)
             .hazard("hazard", Vec3f::new(-2.0, 0.0, 0.0), 0.7)
             .build()
             .unwrap();
+        register_sealing_test_organism(&mut world, organism_id);
         let mut runtime = GpuLiveBrainRuntime::new(
             GpuClosedLoopBackend::new_required(
                 alife_gpu_backend::GpuRuntimeProfile::production_v1(),
