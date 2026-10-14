@@ -488,6 +488,80 @@ class GrabNightTests(unittest.TestCase):
         self.assertEqual(state["captured_decision_rows"], 2)
         self.assertEqual(len(finals), 2)
 
+    def test_boundary_admission_rejects_an_episode_that_only_fits_amortized_cost(self):
+        for recipe in (False, True):
+            with self.subTest(recipe=recipe):
+                durations = {"frozen-before": 6, "eating-retention-before": 8,
+                             "frozen-after-00000": 6, "eating-retention-after-00000": 8,
+                             "frozen-after-00015": 2, "eating-retention-after-00015": 8,
+                             **{f"episode-{index:05d}": 2 for index in range(16)}}
+                options = ("--batch-episodes", "16", "--target-episodes", "16")
+                if recipe:
+                    options += ("--max-stalled-batches", "64")
+                # Four collection seconds remain before episode 16. Its
+                # amortized cost fits, but its immediate full probe work does not.
+                # If incorrectly launched, the due Grab probe exhausts its
+                # two remaining seconds at the existing collection cutoff.
+                state, finals, launched = self.fixture_run(
+                    {"frozen-after-00015": night.CommandTimeoutError("due Grab reached collection cutoff")},
+                    command_seconds=durations,
+                    final_remaining_seconds=932 + (8 if recipe else 0), recipe_options=options)
+                self.assertLess(state["throughput_estimate"]["seconds_per_episode_with_margin"], 4)
+                self.assertEqual(state["status"], "incomplete")
+                self.assertEqual(state["distinct_completed_episodes"], 15)
+                self.assertEqual(state["trained_decision_rows"], 15)
+                self.assertEqual(state["captured_decision_rows"], 30)
+                self.assertIsNone(state["partial_episode"])
+                self.assertNotIn("episode-00015", launched)
+                self.assertNotIn("frozen-after-00015", launched)
+                self.assertNotIn("eating-retention-after-00015", launched)
+                self.assertEqual(len(finals), 2)
+
+    def test_nonboundary_admission_charges_only_the_episode_due_now(self):
+        for recipe in (False, True):
+            with self.subTest(recipe=recipe):
+                durations = {"frozen-before": 6, "eating-retention-before": 8,
+                             "frozen-after-00000": 6, "eating-retention-after-00000": 8,
+                             **{f"episode-{index:05d}": 2 for index in range(15)}}
+                options = ("--batch-episodes", "16", "--target-episodes", "15")
+                if recipe:
+                    options += ("--max-stalled-batches", "64")
+                # Before episode 15, 2.75s remain: enough for its 2.5s
+                # margin-bound cost, but less than the amortized rate estimate.
+                state, finals, launched = self.fixture_run(command_seconds=durations,
+                    final_remaining_seconds=928.75 + (8 if recipe else 0), recipe_options=options)
+                self.assertGreater(state["throughput_estimate"]["seconds_per_episode_with_margin"], 2.75)
+                self.assertEqual(state["status"], "completed")
+                self.assertEqual(state["distinct_completed_episodes"], 15)
+                self.assertEqual(state["trained_decision_rows"], 15)
+                self.assertIn("episode-00014", launched)
+                self.assertFalse(any(name.startswith("frozen-after-") and name != "frozen-after-00000"
+                                     for name in launched))
+                self.assertIsNone(state["partial_episode"])
+                self.assertEqual(len(finals), 2)
+
+    def test_boundary_admission_accepts_a_full_probe_budget_including_margin(self):
+        for recipe in (False, True):
+            with self.subTest(recipe=recipe):
+                durations = {"frozen-before": 6, "eating-retention-before": 8,
+                             "frozen-after-00000": 6, "eating-retention-after-00000": 8,
+                             "frozen-after-00015": 6, "eating-retention-after-00015": 8,
+                             **{f"episode-{index:05d}": 2 for index in range(16)}}
+                options = ("--batch-episodes", "16", "--target-episodes", "16")
+                if recipe:
+                    options += ("--max-stalled-batches", "64")
+                # Exactly the margin-bound episode plus due probes fit:
+                # 10s for Grab-only, 20s for the recipe Grab/Eat pair.
+                state, finals, launched = self.fixture_run(command_seconds=durations,
+                    final_remaining_seconds=938 + (18 if recipe else 0), recipe_options=options)
+                self.assertEqual(state["status"], "completed")
+                self.assertEqual(state["distinct_completed_episodes"], 16)
+                self.assertIn("episode-00015", launched)
+                self.assertIn("frozen-after-00015", launched)
+                self.assertEqual("eating-retention-after-00015" in launched, recipe)
+                self.assertIsNone(state["partial_episode"])
+                self.assertEqual(len(finals), 2)
+
     def test_recipe_retention_probe_timeout_keeps_shared_cutoff_and_accepted_cycle(self):
         state, finals, launched = self.fixture_run(
             {"eating-retention-after-00000": night.CommandTimeoutError("Eat reached collection cutoff")},
