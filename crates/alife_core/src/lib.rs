@@ -251,10 +251,11 @@ pub use memory::{
     MemoryExpectancy, MemoryMatch, MemoryOutcomeSummary, MemoryQuery, MemoryRecallChannel,
     MemoryRecallDegradation, MemoryRecallReceipt, MemoryRecord, MemorySidecarState,
     MemoryUpdateKind, MemoryUpdateReceipt, PortableMemoryBankAssetV2, PortableMemoryRecordV2,
-    PreparedMemoryCompaction, PreparedMemoryRecall, TargetMemoryBucketReceiptKey,
-    MEMORY_BANK_MAX_CAPACITY, MEMORY_FAMILY_SEARCH_CAP, MEMORY_FEATURE_VECTOR_MAX_LEN,
-    MEMORY_MERGE_SIMILARITY, MEMORY_MIN_SIMILARITY, MEMORY_RECALL_SCHEMA_VERSION,
-    MEMORY_RECALL_TOP_K, MEMORY_TARGET_SEARCH_CAP, MEMORY_TOTAL_SEARCH_CAP,
+    PreparedMemoryCompaction, PreparedMemoryRecall, RuntimeMemoryRecallCache,
+    TargetMemoryBucketReceiptKey, MEMORY_BANK_MAX_CAPACITY, MEMORY_FAMILY_SEARCH_CAP,
+    MEMORY_FEATURE_VECTOR_MAX_LEN, MEMORY_MERGE_SIMILARITY, MEMORY_MIN_SIMILARITY,
+    MEMORY_RECALL_SCHEMA_VERSION, MEMORY_RECALL_TOP_K, MEMORY_TARGET_SEARCH_CAP,
+    MEMORY_TOTAL_SEARCH_CAP, RUNTIME_MEMORY_SEARCH_CAP,
 };
 pub use memory_query::{
     finalized_memory_attention_evidence, CandidateMemoryContextV1, CandidateMemoryQueryV2,

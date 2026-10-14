@@ -73,6 +73,8 @@ pub enum MemoryUpdateKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryUpdateReceipt {
+    #[serde(default)]
+    pub runtime_approximate: bool,
     pub sealed_sequence_id: ExperienceSequenceId,
     pub organism_id_raw: u64,
     pub bucket: MemoryBucketReceiptKey,
@@ -227,13 +229,25 @@ pub struct PreparedMemoryCompaction {
     receipt: MemoryCompactionReceipt,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub struct MemorySidecarState {
+    runtime_checks_deferred: bool,
+    canonical_checkpoint: std::sync::OnceLock<MemoryCompactionCheckpoint>,
     organism_id: OrganismId,
     profile: crate::SensorProfileIdentity,
     bank: MemoryBank,
     compaction: MemoryCompactionCheckpoint,
     staged_bank: Option<MemoryBank>,
+}
+
+impl PartialEq for MemorySidecarState {
+    fn eq(&self, other: &Self) -> bool {
+        self.organism_id == other.organism_id
+            && self.profile == other.profile
+            && self.bank == other.bank
+            && self.staged_bank == other.staged_bank
+            && self.compaction_checkpoint() == other.compaction_checkpoint()
+    }
 }
 
 impl MemorySidecarState {
@@ -276,6 +290,8 @@ impl MemorySidecarState {
             profile,
             bank,
             compaction,
+            runtime_checks_deferred: false,
+            canonical_checkpoint: Default::default(),
             staged_bank: None,
         })
     }
@@ -319,8 +335,33 @@ impl MemorySidecarState {
         )
     }
 
-    pub const fn compaction_checkpoint(&self) -> &MemoryCompactionCheckpoint {
-        &self.compaction
+    pub fn compaction_checkpoint(&self) -> &MemoryCompactionCheckpoint {
+        if !self.runtime_checks_deferred {
+            return &self.compaction;
+        }
+        self.canonical_checkpoint.get_or_init(|| {
+            let mut checkpoint = self.compaction;
+            // Only internally generated, owner-checked records reach here.
+            // Portable export/restore still validate the complete real bank.
+            checkpoint.active_digest = self
+                .bank
+                .candidate_store
+                .digest(self.bank.capacity())
+                .expect("runtime memory remains valid at checkpoint boundary");
+            checkpoint
+        })
+    }
+
+    fn materialize_checkpoint(&mut self) {
+        if self.runtime_checks_deferred {
+            self.compaction = *self.compaction_checkpoint();
+            self.runtime_checks_deferred = false;
+            self.canonical_checkpoint.take();
+        }
+    }
+
+    pub fn runtime_generation_binding(&self) -> [u64; 4] {
+        self.bank.runtime_generation_binding(self.organism_id)
     }
 
     /// Carries durable episodic learning into a new identity while discarding
@@ -364,6 +405,8 @@ impl MemorySidecarState {
             profile: self.profile,
             bank,
             compaction,
+            runtime_checks_deferred: false,
+            canonical_checkpoint: Default::default(),
             staged_bank: None,
         })
     }
@@ -390,9 +433,39 @@ impl MemorySidecarState {
         self.bank.recall_frame(draft)
     }
 
+    pub fn recall_frame_runtime(
+        &self,
+        draft: &PerceptionFrameDraft,
+        cache: &RuntimeMemoryRecallCache,
+        refresh: bool,
+    ) -> Result<(PreparedMemoryRecall, Option<RuntimeMemoryRecallCache>), ScaffoldContractError>
+    {
+        if draft.organism_id() != self.organism_id
+            || draft.profile_provenance().identity() != self.profile
+        {
+            return Err(ScaffoldContractError::BrainOwnershipMismatch);
+        }
+        self.bank.recall_frame_runtime(draft, cache, refresh)
+    }
+
     pub fn observe_sealed_patch(
         &mut self,
         patch: &ExperiencePatch,
+    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+        self.observe_sealed_patch_impl(patch, false)
+    }
+
+    pub fn observe_sealed_patch_runtime(
+        &mut self,
+        patch: &ExperiencePatch,
+    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+        self.observe_sealed_patch_impl(patch, true)
+    }
+
+    fn observe_sealed_patch_impl(
+        &mut self,
+        patch: &ExperiencePatch,
+        runtime: bool,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
         if matches!(
             self.compaction.phase,
@@ -406,7 +479,13 @@ impl MemorySidecarState {
         if patch.header().sensor_profile.identity() != self.profile {
             return Err(ScaffoldContractError::SensorProfileMismatch);
         }
-        let receipt = self.bank.observe_sealed_patch(patch)?;
+        let receipt = if runtime {
+            self.bank.observe_sealed_patch_runtime(patch)?
+        } else {
+            self.bank.observe_sealed_patch(patch)?
+        };
+        self.canonical_checkpoint.take();
+        self.runtime_checks_deferred = runtime;
         self.compaction.active_generation = receipt.output_generation;
         self.compaction.active_digest = receipt.after_digest;
         self.compaction.phase = MemoryCompactionPhase::Idle;
@@ -421,6 +500,7 @@ impl MemorySidecarState {
         max_records_after: u32,
         policy_version: u16,
     ) -> Result<PreparedMemoryCompaction, ScaffoldContractError> {
+        self.materialize_checkpoint();
         self.compaction.validate_contract()?;
         if cycle_id == 0 || max_records_after == 0 || policy_version == 0 {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
@@ -680,6 +760,8 @@ impl MemorySidecarState {
                     profile,
                     bank: active_bank,
                     compaction: checkpoint,
+                    runtime_checks_deferred: false,
+                    canonical_checkpoint: Default::default(),
                     staged_bank: None,
                 })
             }
@@ -700,6 +782,8 @@ impl MemorySidecarState {
                     profile,
                     bank: active_bank,
                     compaction: checkpoint,
+                    runtime_checks_deferred: false,
+                    canonical_checkpoint: Default::default(),
                     staged_bank: None,
                 };
                 let prepared =
@@ -728,6 +812,8 @@ impl MemorySidecarState {
                         profile,
                         bank: active_bank,
                         compaction: checkpoint,
+                        runtime_checks_deferred: false,
+                        canonical_checkpoint: Default::default(),
                         staged_bank,
                     };
                     state.commit_compaction(PreparedMemoryCompaction {
@@ -754,6 +840,8 @@ impl MemorySidecarState {
                         profile,
                         bank: active_bank,
                         compaction: committed,
+                        runtime_checks_deferred: false,
+                        canonical_checkpoint: Default::default(),
                         staged_bank: None,
                     })
                 } else {
@@ -772,6 +860,8 @@ impl MemorySidecarState {
                     profile,
                     bank: active_bank,
                     compaction: checkpoint,
+                    runtime_checks_deferred: false,
+                    canonical_checkpoint: Default::default(),
                     staged_bank: None,
                 })
             }

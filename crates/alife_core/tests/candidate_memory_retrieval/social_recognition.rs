@@ -76,6 +76,15 @@ fn finalize_social(
     draft: PerceptionFrameDraft,
     attended: &[u64],
 ) -> (PerceptionFrame, alife_core::FinalizedMemoryRecall) {
+    let recall = bank.recall_frame(&draft).unwrap();
+    finalize_prepared_social(recall, draft, attended)
+}
+
+fn finalize_prepared_social(
+    recall: alife_core::PreparedMemoryRecall,
+    draft: PerceptionFrameDraft,
+    attended: &[u64],
+) -> (PerceptionFrame, alife_core::FinalizedMemoryRecall) {
     let mut attention = AttentionFrame::empty(ORGANISM, sequence(), draft.tick()).unwrap();
     attention.focal_targets = attended
         .iter()
@@ -88,12 +97,37 @@ fn finalize_social(
     context.budget.focal_capacity = attention.budget_receipt.focal_capacity;
     context.attention = attention;
     context.validate_contract().unwrap();
-    bank.recall_frame(&draft)
-        .unwrap()
+    recall
         .with_cognitive_context(context)
         .unwrap()
         .finalize(draft)
         .unwrap()
+}
+
+#[test]
+fn cached_runtime_recognition_keeps_learned_cues_but_requires_current_visibility() {
+    let object = slot(0, 71, 0.4, [0.0, 0.8, 0.9]);
+    let mut bank = empty_bank();
+    remember(&mut bank, 1, object, CandidateActionFamily::Contact, 0.8);
+    let first = social_draft(vec![object], true, TICK);
+    let (recall, cache) = bank
+        .recall_frame_runtime(&first, &Default::default(), true)
+        .unwrap();
+    let warm = finalize_prepared_social(recall, first, &[71])
+        .1
+        .recognized_social_emission()
+        .unwrap();
+    let cache = cache.unwrap();
+    for observed in [true, false] {
+        let draft = social_draft(vec![object], observed, Tick::new(TICK.raw() + 1));
+        let (recall, refreshed) = bank.recall_frame_runtime(&draft, &cache, false).unwrap();
+        assert!(refreshed.is_none());
+        assert_eq!(recall.receipt().similarity_evaluations, 0);
+        let emission = finalize_prepared_social(recall, draft, &[71])
+            .1
+            .recognized_social_emission();
+        assert_eq!(emission, observed.then_some(warm));
+    }
 }
 
 fn remember(

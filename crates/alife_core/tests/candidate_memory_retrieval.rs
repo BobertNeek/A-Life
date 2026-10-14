@@ -177,6 +177,72 @@ fn empty_bank() -> MemoryBank {
         .unwrap()
 }
 
+#[test]
+fn runtime_recall_reuses_values_but_rebinds_current_decision_keys() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch_runtime(&sequenced_patch(1, 1, 71, 0.4, -0.6, 0.5))
+        .unwrap();
+    let first = grounded_draft(0.4);
+    let (recall, cache) = bank
+        .recall_frame_runtime(&first, &Default::default(), true)
+        .unwrap();
+    let cache = cache.unwrap();
+    assert!(recall.receipt().runtime_approximate);
+    assert!(recall.receipt().similarity_evaluations > 0);
+    let changed = grounded_draft(0.45);
+    let (cached, refreshed) = bank.recall_frame_runtime(&changed, &cache, false).unwrap();
+    assert!(refreshed.is_none());
+    assert_eq!(cached.receipt().similarity_evaluations, 0);
+    assert_eq!(recall.context().candidates, cached.context().candidates);
+    let (frame, finalized) = cached.finalize(changed).unwrap();
+    for (key, candidate) in finalized.candidate_keys().iter().zip(frame.candidates()) {
+        key.query()
+            .validate_against_frame(&frame, candidate)
+            .unwrap();
+    }
+    assert!(!cache.attention_evidence().is_empty());
+}
+
+#[test]
+fn runtime_memory_export_restore_keeps_every_learned_record_and_real_checksum() {
+    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut sidecar = grounded_sidecar(config);
+    for sequence in 1..=3 {
+        let receipt = sidecar
+            .observe_sealed_patch_runtime(&sequenced_patch(
+                sequence,
+                sequence,
+                70 + sequence,
+                0.4,
+                -0.5,
+                0.4,
+            ))
+            .unwrap();
+        assert!(receipt.runtime_approximate);
+    }
+    let binding = sidecar.runtime_generation_binding();
+    let asset = sidecar.export_active_bank().unwrap();
+    let checkpoint = *sidecar.compaction_checkpoint();
+    assert_eq!(checkpoint.active_digest, asset.active_bank_digest);
+    assert_ne!(checkpoint.active_digest, binding);
+    let restored =
+        MemorySidecarState::restore_portable(sidecar.profile(), checkpoint, asset.clone(), None)
+            .unwrap();
+    assert_eq!(restored.export_active_bank().unwrap(), asset);
+    assert_eq!(restored.latest_durable_sequence_raw(), 3);
+    sidecar
+        .observe_sealed_patch_runtime(&sequenced_patch(4, 4, 74, 0.4, 0.5, 0.0))
+        .unwrap();
+    assert_ne!(
+        sidecar.compaction_checkpoint().active_digest,
+        checkpoint.active_digest
+    );
+    assert_eq!(
+        sidecar.compaction_checkpoint().active_digest,
+        sidecar.export_active_bank().unwrap().active_bank_digest
+    );
+}
+
 fn grounded_sidecar(config: MemoryBankConfig) -> MemorySidecarState {
     MemorySidecarState::new_profiled(
         ORGANISM,
@@ -2310,4 +2376,97 @@ fn prepared_attention_and_finalization_reject_changed_draft_and_cognitive_owner(
         );
     }
     prepared.attention_evidence_for_draft(&draft).unwrap();
+}
+
+fn privileged_runtime_draft(tick: Tick, objects: &[(u64, f32)]) -> PerceptionFrameDraft {
+    let candidates = objects
+        .iter()
+        .enumerate()
+        .map(|(index, (entity, signature))| {
+            let mut features = alife_core::CandidateFeatureVector::zero();
+            features.0[3] = *signature;
+            ActionCandidate::new(
+                index as u16,
+                ActionId(200),
+                ActionKind::Interact,
+                CandidateActionFamily::Ingest,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(*entity)), None),
+                features,
+                Confidence::new(0.9).unwrap(),
+                NormalizedScalar::new(0.2).unwrap(),
+                DurationTicks::new(1),
+                DurationTicks::new(2),
+            )
+            .unwrap()
+        })
+        .collect();
+    PerceptionFrameDraft::new(
+        ORGANISM,
+        tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        SensorySnapshot::new(
+            ORGANISM,
+            tick,
+            Vec3f::ZERO,
+            SensoryChannels::ZERO,
+            Default::default(),
+        )
+        .unwrap(),
+        BodySnapshot {
+            pose: Pose::IDENTITY,
+            velocity: Velocity::ZERO,
+        },
+        HomeostaticSnapshot::baseline(tick),
+        candidates,
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        vec![],
+    )
+    .unwrap()
+}
+
+#[test]
+fn runtime_recall_keeps_untracked_object_expectancies_separate() {
+    let mut bank = empty_bank();
+    for (sequence, entity, signature, reward, pain) in
+        [(1, 9_071, -0.9, -0.8, 0.9), (2, 9_072, 0.9, 0.8, 0.0)]
+    {
+        let patch = observation_from_draft(
+            &bank,
+            sequence,
+            privileged_runtime_draft(Tick::new(sequence), &[(entity, signature)]),
+            reward,
+            pain,
+            |outcome| outcome.physical.target_entity = Some(WorldEntityId(entity)),
+        );
+        bank.observe_sealed_patch_runtime(&patch).unwrap();
+    }
+    let draft = privileged_runtime_draft(Tick::new(10), &[(9_071, -0.9), (9_072, 0.9)]);
+    let (fresh, cache) = bank
+        .recall_frame_runtime(&draft, &Default::default(), true)
+        .unwrap();
+    assert!(fresh.context().candidates[0].family_value[0] < -0.7);
+    assert!(fresh.context().candidates[1].family_value[0] > 0.7);
+    let cache = cache.unwrap();
+    let (cached, replacement) = bank.recall_frame_runtime(&draft, &cache, false).unwrap();
+    assert!(replacement.is_none());
+    assert_eq!(cached.receipt().similarity_evaluations, 0);
+    assert_eq!(fresh.context().candidates, cached.context().candidates);
+
+    let reversed = privileged_runtime_draft(Tick::new(11), &[(9_072, 0.9), (9_071, -0.9)]);
+    let (reordered, replacement) = bank.recall_frame_runtime(&reversed, &cache, false).unwrap();
+    assert!(replacement.is_none());
+    assert!(reordered.context().candidates[0].family_value[0] > 0.7);
+    assert!(reordered.context().candidates[1].family_value[0] < -0.7);
+    let (frame, finalized) = reordered.finalize(reversed).unwrap();
+    for (key, candidate) in finalized.candidate_keys().iter().zip(frame.candidates()) {
+        key.query()
+            .validate_against_frame(&frame, candidate)
+            .unwrap();
+    }
 }

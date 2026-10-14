@@ -1,7 +1,9 @@
 //! CPU-only contracts for the production runner. No device, provider or neural
 //! dispatch is created: device commit atomicity needs the separate GPU suite.
 use super::*;
-use alife_core::{HysteresisState, StableFocusIdentity, TrackedObjectId};
+use alife_core::{
+    HysteresisState, SensorProfileProvenance, SensorySnapshot, StableFocusIdentity, TrackedObjectId,
+};
 use alife_world::HeadlessScenarioBuilder;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -197,6 +199,7 @@ impl OwnerFixture {
         }
         Self {
             input: CapturedCpuPreparation {
+                approximate_cache: None,
                 draft,
                 sequence_id,
                 homeostasis,
@@ -949,6 +952,7 @@ fn legacy_serial_reference(job: &CpuPreparationJob<'_>) -> CpuPreparationOutcome
         })
     })();
     CpuPreparationOutcome {
+        approximate_cache: None,
         result,
         stage: preparation_stage,
         hysteresis,
@@ -1252,6 +1256,254 @@ fn production_runner_cpu_timing_evidence() {
             "candidates": 26, "retained_records": 64, "samples_ns": samples,
             "median_ns": medians, "full_trace_equal": true, "row_visits_once": true,
             "device_created": false })
+        );
+    }
+}
+
+fn move_fixture_tick(fixture: &mut OwnerFixture, tick: Tick) {
+    let draft = &fixture.input.draft;
+    let sensory = SensorySnapshot::new(
+        draft.organism_id(),
+        tick,
+        Vec3f::ZERO,
+        draft.sensory().channels,
+        Default::default(),
+    )
+    .unwrap();
+    let mut homeostasis = fixture.input.homeostasis;
+    homeostasis.tick = tick;
+    fixture.input.draft = PerceptionFrameDraft::new(
+        draft.organism_id(),
+        tick,
+        draft.sensor_profile(),
+        sensory,
+        draft.body(),
+        homeostasis,
+        draft.candidates().to_vec(),
+        SensorProfileProvenance::new(draft.sensor_profile(), SensoryAbiVersion::CURRENT, tick)
+            .unwrap(),
+        draft.grounded_object_slots().to_vec(),
+    )
+    .unwrap();
+    fixture.input.homeostasis = homeostasis;
+    fixture.input.sequence_id = ExperienceSequenceId(1000 + tick.raw());
+    fixture.input.receptor_effects.source_tick = tick;
+}
+
+#[test]
+fn bounded_runtime_summary_preserves_concept_and_gap_selection() {
+    let fixture = OwnerFixture::new(811, true);
+    let recall = fixture.memory.recall_frame(&fixture.input.draft).unwrap();
+    let owner = fixture.input.draft.organism_id();
+    let sequence = fixture.input.sequence_id;
+    let audited =
+        cognitive_context_for_recall(owner, sequence, &recall, &fixture.topology).unwrap();
+    let bounded = super::super::approximate_cognition::summary_for_recall(
+        owner,
+        sequence,
+        &recall,
+        &fixture.topology,
+    )
+    .unwrap();
+    assert_eq!(bounded.concept, audited.concept);
+    assert_eq!(bounded.gap, audited.gap);
+}
+
+#[test]
+fn approximate_preparation_retains_memory_and_fresh_keys_between_refreshes() {
+    let mut fixture = OwnerFixture::new(811, true);
+    seed_memory(&mut fixture, 64);
+    with_candidate_count(&mut fixture, 26);
+    fixture.input.approximate_cache = Some(Default::default());
+    let slot = canonical_slots(1).remove(0);
+    let before = fixture.memory.export_active_bank().unwrap();
+    let mut recall_refreshes = 0;
+    let mut summary_refreshes = 0;
+    let mut learned_cue = false;
+    for raw in 100..120 {
+        move_fixture_tick(&mut fixture, Tick::new(raw));
+        let old = fixture.input.approximate_cache.as_ref().unwrap();
+        let output = prepare_cpu_row(&fixture.job(&slot), false);
+        let cache = output.approximate_cache.unwrap();
+        recall_refreshes += usize::from(cache.last_full_recall_tick != old.last_full_recall_tick);
+        summary_refreshes += usize::from(cache.last_summary_tick != old.last_summary_tick);
+        let prepared = output.result.unwrap();
+        learned_cue |= prepared
+            .memory_recall
+            .context()
+            .candidates
+            .iter()
+            .any(|candidate| {
+                candidate.best_target_source.is_some() || candidate.best_family_source.is_some()
+            });
+        for (key, candidate) in prepared
+            .memory_recall
+            .candidate_keys()
+            .iter()
+            .zip(prepared.frame.candidates())
+        {
+            assert_eq!(key.query().tick(), Tick::new(raw));
+            key.query()
+                .validate_against_frame(&prepared.frame, candidate)
+                .unwrap();
+        }
+        fixture.input.approximate_cache = Some(cache);
+    }
+    assert_eq!(recall_refreshes, 5);
+    assert_eq!(summary_refreshes, 2);
+    assert!(learned_cue);
+    assert_eq!(fixture.memory.export_active_bank().unwrap(), before);
+    move_fixture_tick(&mut fixture, Tick::new(120));
+    fixture.input.approximate_cache = prepare_cpu_row(&fixture.job(&slot), false).approximate_cache;
+    let cache = fixture.input.approximate_cache.as_mut().unwrap();
+    std::sync::Arc::make_mut(cache).force_refresh = true;
+    move_fixture_tick(&mut fixture, Tick::new(121));
+    let output = prepare_cpu_row(&fixture.job(&slot), false);
+    assert!(output.result.is_ok());
+    assert_eq!(
+        output.approximate_cache.unwrap().last_summary_tick,
+        Some(Tick::new(121))
+    );
+}
+
+#[test]
+fn candidate_churn_cannot_postpone_full_expectancy_refresh() {
+    let mut fixture = OwnerFixture::new(811, true);
+    seed_memory(&mut fixture, 64);
+    with_candidate_count(&mut fixture, 26);
+    fixture.input.approximate_cache = Some(Default::default());
+    let slot = canonical_slots(1).remove(0);
+    let mut full_refreshes = 0;
+    for raw in 100..120 {
+        move_fixture_tick(&mut fixture, Tick::new(raw));
+        let draft = &fixture.input.draft;
+        let mut candidates = draft.candidates().to_vec();
+        // A changing non-object action creates a cache miss without changing
+        // visible identities, drives or the retained object-action queries.
+        let changing = candidates
+            .iter_mut()
+            .find(|candidate| candidate.observation == alife_core::CandidateObservationRef::None)
+            .unwrap();
+        changing.action_id = alife_core::ActionId(50_000 + raw as u32);
+        fixture.input.draft = PerceptionFrameDraft::new(
+            draft.organism_id(),
+            draft.tick(),
+            draft.sensor_profile(),
+            draft.sensory().clone(),
+            draft.body(),
+            *draft.homeostasis(),
+            candidates,
+            draft.profile_provenance(),
+            draft.grounded_object_slots().to_vec(),
+        )
+        .unwrap();
+        let old = fixture.input.approximate_cache.as_ref().unwrap();
+        let output = prepare_cpu_row(&fixture.job(&slot), false);
+        let prepared = output.result.unwrap();
+        let cache = output.approximate_cache.unwrap();
+        let expected_full_tick = Tick::new(100 + (raw - 100) / 4 * 4);
+        assert_eq!(cache.last_full_recall_tick, Some(expected_full_tick));
+        assert!(
+            !std::sync::Arc::ptr_eq(&cache.recall, &old.recall),
+            "the changing candidate must actually refresh the cache each tick"
+        );
+        if raw == expected_full_tick.raw() {
+            full_refreshes += 1;
+            assert!(
+                prepared.memory_recall.receipt().similarity_evaluations > 0,
+                "a due refresh must search the retained learned object evidence"
+            );
+        }
+        assert_eq!(
+            cache.summary.as_ref().unwrap().world_tick,
+            Tick::new(raw),
+            "partial updates must still publish fresh attention memory cues"
+        );
+        fixture.input.approximate_cache = Some(cache);
+    }
+    assert_eq!(full_refreshes, 5);
+}
+
+#[test]
+#[ignore = "Explicit bounded CPU comparison of audited, cold and cached runtime preparation"]
+fn approximate_preparation_cpu_timing_evidence() {
+    for owners in [8, 50] {
+        let mut fixtures: Vec<_> = (0..owners)
+            .map(|i| OwnerFixture::new(811 + i as u64, true))
+            .collect();
+        for fixture in &mut fixtures {
+            seed_memory(fixture, 64);
+            with_candidate_count(fixture, 26);
+        }
+        let slots = canonical_slots(owners);
+        let mut samples = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+        for sample in 0..9 {
+            for mode in if sample % 2 == 0 {
+                [0, 1, 2, 3]
+            } else {
+                [3, 2, 1, 0]
+            } {
+                for (fixture, slot) in fixtures.iter_mut().zip(&slots) {
+                    move_fixture_tick(fixture, Tick::new(100));
+                    fixture.input.approximate_cache = if mode == 0 {
+                        None
+                    } else {
+                        Some(Default::default())
+                    };
+                    if mode == 2 {
+                        let warm = prepare_cpu_row(&fixture.job(slot), false);
+                        assert!(warm.result.is_ok());
+                        fixture.input.approximate_cache = warm.approximate_cache;
+                    }
+                }
+                if mode == 3 {
+                    let mut elapsed = 0;
+                    for tick in 100..120 {
+                        for fixture in &mut fixtures {
+                            move_fixture_tick(fixture, Tick::new(tick));
+                        }
+                        let jobs: Vec<_> = fixtures
+                            .iter()
+                            .zip(&slots)
+                            .map(|(fixture, slot)| fixture.job(slot))
+                            .collect();
+                        let started = Instant::now();
+                        let outputs = prepare_cpu_rows(&jobs, 2, false).unwrap();
+                        elapsed += elapsed_ns(started);
+                        for (fixture, output) in fixtures.iter_mut().zip(outputs) {
+                            assert!(output.result.is_ok());
+                            fixture.input.approximate_cache = output.approximate_cache;
+                        }
+                    }
+                    samples[mode].push(elapsed / 20);
+                    continue;
+                }
+                let jobs: Vec<_> = fixtures
+                    .iter()
+                    .zip(&slots)
+                    .map(|(fixture, slot)| fixture.job(slot))
+                    .collect();
+                let started = Instant::now();
+                let outputs = prepare_cpu_rows(&jobs, 2, false).unwrap();
+                let elapsed = elapsed_ns(started);
+                assert!(outputs.iter().all(|output| output.result.is_ok()));
+                samples[mode].push(elapsed);
+            }
+        }
+        let medians: Vec<_> = samples
+            .iter()
+            .map(|values| {
+                let mut values = values.clone();
+                values.sort_unstable();
+                values[values.len() / 2]
+            })
+            .collect();
+        println!(
+            "{}",
+            serde_json::json!({"owners": owners, "candidates":26,"records":64,
+                "modes":["audited","runtime_cold","runtime_cached","runtime_20tick_cycle"],
+                "cycle_ticks":20,"workers":2,"profile":"test_opt2_debug_assertions",
+                "samples_ns":samples,"median_ns":medians,"gpu":false})
         );
     }
 }

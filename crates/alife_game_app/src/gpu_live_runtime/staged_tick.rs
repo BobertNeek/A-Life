@@ -169,6 +169,7 @@ impl GpuLiveBrainRuntime {
             scheduled_handles.len(),
             thread::available_parallelism().map_or(1, usize::from),
         );
+        let audited_cognition = self.uses_audited_cognition();
         let mut captured_rows = Vec::with_capacity(if workers == 2 {
             scheduled_handles.len()
         } else {
@@ -588,6 +589,8 @@ impl GpuLiveBrainRuntime {
                     handle,
                     world_entity_id,
                     input: CapturedCpuPreparation {
+                        approximate_cache: (!audited_cognition)
+                            .then(|| resident.approximate_cache.clone()),
                         draft,
                         sequence_id: ExperienceSequenceId(resident.next_sequence),
                         homeostasis: resident.homeostasis,
@@ -1269,6 +1272,15 @@ fn collect_preparation(
     collection: &mut CpuPreparationCollection<'_>,
 ) -> Result<(), ScaffoldContractError> {
     let raw = captured.input.draft.organism_id().raw();
+    if outcome.result.is_ok() {
+        if let Some(cache) = outcome.approximate_cache {
+            runtime
+                .residents
+                .get_mut(&raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .approximate_cache = cache;
+        }
+    }
     if let Some(hysteresis) = outcome.hysteresis {
         runtime
             .residents

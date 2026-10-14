@@ -8,6 +8,13 @@ pub(super) fn candidate_record_from_patch(
     patch: &ExperiencePatch,
 ) -> Result<CandidateMemoryRecordV2, ScaffoldContractError> {
     patch.validate_contract()?;
+    candidate_record_from_patch_runtime(memory_id, patch)
+}
+
+pub(super) fn candidate_record_from_patch_runtime(
+    memory_id: MemoryId,
+    patch: &ExperiencePatch,
+) -> Result<CandidateMemoryRecordV2, ScaffoldContractError> {
     let decision = patch.decision();
     let key = decision
         .episodic_key()
@@ -155,6 +162,15 @@ pub(super) fn recall_target_channel(
     query: &CandidateMemoryQueryV2,
     exact_key: &TargetMemoryBucketKey,
 ) -> Result<TargetRecallResult, ScaffoldContractError> {
+    recall_target_channel_with_budget(store, query, exact_key, MEMORY_TARGET_SEARCH_CAP)
+}
+
+pub(super) fn recall_target_channel_with_budget(
+    store: &CandidateMemoryStoreV2,
+    query: &CandidateMemoryQueryV2,
+    exact_key: &TargetMemoryBucketKey,
+    search_cap: usize,
+) -> Result<TargetRecallResult, ScaffoldContractError> {
     if query.tracked_object_id().is_none() {
         return Ok(TargetRecallResult {
             values: [0.0; MEMORY_LATENT_V1_COUNT],
@@ -173,7 +189,7 @@ pub(super) fn recall_target_channel(
         |key| store.target_namespace_index.get(key),
         store,
         exact_key.target_bins,
-        MEMORY_TARGET_SEARCH_CAP,
+        search_cap,
     );
     let mut eligible = ids.0;
     let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
@@ -234,7 +250,7 @@ pub(super) fn recall_target_channel(
         for id in category_ids
             .into_iter()
             .flatten()
-            .take(MEMORY_TARGET_SEARCH_CAP.saturating_sub(searched as usize))
+            .take(search_cap.saturating_sub(searched as usize))
         {
             searched += 1;
             let record = &store.records[&id.raw()];
@@ -269,6 +285,15 @@ pub(super) fn recall_family_channel(
     query: &CandidateMemoryQueryV2,
     exact_key: &MemoryBucketKey,
 ) -> Result<FamilyRecallResult, ScaffoldContractError> {
+    recall_family_channel_with_budget(store, query, exact_key, MEMORY_FAMILY_SEARCH_CAP)
+}
+
+pub(super) fn recall_family_channel_with_budget(
+    store: &CandidateMemoryStoreV2,
+    query: &CandidateMemoryQueryV2,
+    exact_key: &MemoryBucketKey,
+    search_cap: usize,
+) -> Result<FamilyRecallResult, ScaffoldContractError> {
     let ids = collect_shortlist(
         &neighbor_family_keys(exact_key),
         |key| {
@@ -280,7 +305,7 @@ pub(super) fn recall_family_channel(
         },
         store,
         exact_key.target_bins,
-        MEMORY_FAMILY_SEARCH_CAP,
+        search_cap,
     );
     let mut eligible = ids.0;
     let mut searched = u32::try_from(ids.1.len()).unwrap_or(u32::MAX);
@@ -303,7 +328,7 @@ pub(super) fn recall_family_channel(
         for id in category_ids
             .into_iter()
             .flatten()
-            .take(MEMORY_FAMILY_SEARCH_CAP.saturating_sub(searched as usize))
+            .take(search_cap.saturating_sub(searched as usize))
         {
             searched += 1;
             let record = &store.records[&id.raw()];
@@ -339,6 +364,27 @@ fn collect_shortlist<'a, K: Ord>(
     query_bins: [i8; CANDIDATE_FEATURE_COUNT],
     cap: usize,
 ) -> (u32, Vec<MemoryId>) {
+    if cap <= RUNTIME_MEMORY_SEARCH_CAP {
+        // Namespace lists already prefer retained salient/recent records. The
+        // runtime accepts that order instead of allocating a tree and sorting
+        // every neighbor's union for an exact global shortlist.
+        let mut selected = Vec::with_capacity(cap);
+        let mut eligible = 0_u32;
+        for key in keys {
+            if let Some(ids) = lookup(key) {
+                eligible = eligible.saturating_add(ids.len() as u32);
+                for id in ids.iter().take(cap) {
+                    if selected.len() == cap {
+                        break;
+                    }
+                    if !selected.contains(id) {
+                        selected.push(*id);
+                    }
+                }
+            }
+        }
+        return (eligible, selected);
+    }
     let mut unique = BTreeSet::new();
     let mut eligible = 0_u32;
     for key in keys {

@@ -6,6 +6,7 @@
 
 #[cfg(all(test, feature = "gpu-tests"))]
 mod action_credit_food_tests;
+mod approximate_cognition;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod checkpoint_manifest_pruning_tests;
 mod checkpoint_poll;
@@ -147,6 +148,8 @@ use alife_core::channel_command_for_action;
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct ResidentCognition {
+    #[serde(skip)]
+    approximate_cache: std::sync::Arc<approximate_cognition::ApproximateCognitionCache>,
     phenotype: alife_core::BrainPhenotype,
     compiler_inputs: PhenotypeCompilerInputs,
     legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
@@ -768,6 +771,7 @@ impl ResidentAuthorityPlan {
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
             attention_hysteresis: alife_core::HysteresisState::default(),
             predictor,
+            approximate_cache: Default::default(),
             last_cognitive_context: None,
             last_selected_motor_bundle: None,
             last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -1768,6 +1772,7 @@ fn run_exact_population_checkpoint_finalize_worker(
 
 #[derive(Debug, Clone, Copy)]
 struct GpuLiveRuntimeConstructionOptions {
+    audited_cognition: bool,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
     homeostatic_parameters: HomeostaticParameters,
@@ -1780,6 +1785,7 @@ struct GpuLiveRuntimeConstructionOptions {
 impl GpuLiveRuntimeConstructionOptions {
     const fn production() -> Self {
         Self {
+            audited_cognition: false,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -1797,6 +1803,7 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn benchmark(homeostatic_parameters: HomeostaticParameters) -> Self {
         Self {
+            audited_cognition: false,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters,
@@ -1809,6 +1816,7 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn causal_acceptance() -> Self {
         Self {
+            audited_cognition: true,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -1825,6 +1833,7 @@ impl GpuLiveRuntimeConstructionOptions {
     #[cfg(feature = "gpu-tests")]
     const fn soak() -> Self {
         Self {
+            audited_cognition: true,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -2518,6 +2527,7 @@ pub struct PostSealLearningFailure {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TopologyObservationDisposition {
+    DeferredRuntimeCadence { organism_id: OrganismId, tick: Tick },
     Observed(Box<TopologyObservationReceipt>),
     RejectedMissingOwner { organism_id: OrganismId },
 }
@@ -2533,7 +2543,7 @@ impl TopologyObservationDisposition {
     pub fn receipt(&self) -> Option<&TopologyObservationReceipt> {
         match self {
             Self::Observed(receipt) => Some(receipt),
-            Self::RejectedMissingOwner { .. } => None,
+            Self::RejectedMissingOwner { .. } | Self::DeferredRuntimeCadence { .. } => None,
         }
     }
 }
@@ -3390,6 +3400,7 @@ pub struct FoundationTrainingStep {
 }
 
 pub struct GpuLiveBrainRuntime {
+    audited_cognition: bool,
     semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
@@ -4050,11 +4061,10 @@ fn validate_restore_checkpoint_coverage(
     Ok(())
 }
 
-fn cognitive_context_for_recall(
+fn cognitive_memory_context_for_recall(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
     recall: &PreparedMemoryRecall,
-    topology: &TopologySidecar,
 ) -> Result<CognitiveContextFrame, ScaffoldContractError> {
     let mut context =
         CognitiveContextFrame::empty(organism_id, sequence_id, recall.context().tick)?;
@@ -4078,6 +4088,16 @@ fn cognitive_context_for_recall(
             });
         }
     }
+    Ok(context)
+}
+
+fn cognitive_context_for_recall(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    recall: &PreparedMemoryRecall,
+    topology: &TopologySidecar,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    let mut context = cognitive_memory_context_for_recall(organism_id, sequence_id, recall)?;
     let mut concepts = topology.map().concepts().iter().collect::<Vec<_>>();
     concepts.sort_by(|left, right| {
         (right.salience.raw() * right.confidence.raw())
@@ -5041,6 +5061,17 @@ impl Drop for GpuLiveBrainRuntime {
 }
 
 impl GpuLiveBrainRuntime {
+    fn uses_audited_cognition(&self) -> bool {
+        #[cfg(feature = "foundation-training")]
+        {
+            self.audited_cognition || self.training_sampling.is_some()
+        }
+        #[cfg(not(feature = "foundation-training"))]
+        {
+            self.audited_cognition
+        }
+    }
+
     /// Creates an ephemeral restore target on the live session's exact GPU
     /// context without exposing adapter selection to the caller.
     pub fn new_staging_like_live(&self) -> Result<GpuClosedLoopBackend, ScaffoldContractError> {
@@ -5594,6 +5625,7 @@ impl GpuLiveBrainRuntime {
                 predictor: predictor_for_phenotype(&phenotype).map_err(|error| {
                     CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
                 })?,
+                approximate_cache: Default::default(),
                 last_cognitive_context: None,
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -6233,6 +6265,7 @@ impl GpuLiveBrainRuntime {
             consumer
         };
         let mut runtime = Self {
+            audited_cognition: options.audited_cognition,
             semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
                 deterministic_seed,
                 consumer == GpuSessionConsumerKind::Training,
@@ -6426,6 +6459,7 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
             sensor_profile,
+            audited_cognition: false,
             homeostatic_parameters: HomeostaticParameters::reference(),
             cognitive_work_cost_policy: GpuLiveRuntimeConstructionOptions::production()
                 .cognitive_work_cost_policy,
@@ -6628,6 +6662,7 @@ impl GpuLiveBrainRuntime {
                         None
                     };
                     let resident = ResidentCognition {
+                        approximate_cache: Default::default(),
                         phenotype: authority.phenotype.clone(),
                         genome: authority.genome.clone(),
                         development: authority.development.clone(),
@@ -9531,12 +9566,15 @@ impl GpuLiveBrainRuntime {
                 .performance_metrics
                 .state_reference_hash_wall_ns
                 .saturating_add(elapsed_ns(hash_started));
-            let memory_digest = self
+            let memory = self
                 .memories
                 .get(&organism_id.raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                .compaction_checkpoint()
-                .active_digest;
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let memory_digest = if self.uses_audited_cognition() {
+                memory.compaction_checkpoint().active_digest
+            } else {
+                memory.runtime_generation_binding()
+            };
             let mut record = self
                 .world
                 .organism_registry()
@@ -9637,11 +9675,23 @@ impl GpuLiveBrainRuntime {
     }
 
     fn observe_sealed_memory(&mut self, sealed: &[SealedLiveSelection]) -> Vec<bool> {
+        let audited = self.uses_audited_cognition();
         let mut memory_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
+            if !audited && approximate_cognition::important_outcome(selection.patch.outcome()) {
+                if let Some(resident) = self.residents.get_mut(&organism_id.raw()) {
+                    std::sync::Arc::make_mut(&mut resident.approximate_cache).force_refresh = true;
+                }
+            }
             let observation = match self.memories.get_mut(&organism_id.raw()) {
-                Some(memory) => memory.observe_sealed_patch(&selection.patch),
+                Some(memory) => {
+                    if audited {
+                        memory.observe_sealed_patch(&selection.patch)
+                    } else {
+                        memory.observe_sealed_patch_runtime(&selection.patch)
+                    }
+                }
                 None => Err(ScaffoldContractError::BrainOwnershipMismatch),
             };
             match observation {
@@ -9660,9 +9710,30 @@ impl GpuLiveBrainRuntime {
     }
 
     fn observe_sealed_topology(&mut self, sealed: &[SealedLiveSelection]) -> Vec<bool> {
+        let audited = self.uses_audited_cognition();
         let mut topology_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
+            if !audited {
+                let cache = &mut self
+                    .residents
+                    .get_mut(&organism_id.raw())
+                    .expect("sealed resident remains owned")
+                    .approximate_cache;
+                if !approximate_cognition::should_observe_topology(cache, selection.patch.outcome())
+                {
+                    topology_updates.push(false);
+                    self.last_topology_observations.push(
+                        TopologyObservationDisposition::DeferredRuntimeCadence {
+                            organism_id,
+                            tick: selection.patch.outcome().outcome_tick,
+                        },
+                    );
+                    continue;
+                }
+                std::sync::Arc::make_mut(cache).last_topology_tick =
+                    Some(selection.patch.outcome().outcome_tick);
+            }
             let disposition = match self.topologies.get_mut(&organism_id.raw()) {
                 Some(sidecar) if sidecar.organism_id() == organism_id => {
                     let observe_started = self.performance_measurement_enabled.then(Instant::now);
@@ -12080,6 +12151,7 @@ mod tests {
                             .unwrap(),
                         attention_hysteresis: alife_core::HysteresisState::default(),
                         predictor: GroundedSuccessorPredictor::default(),
+                        approximate_cache: Default::default(),
                         last_cognitive_context: None,
                         last_selected_motor_bundle: None,
                         last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -13890,6 +13962,7 @@ mod tests {
                 life_statistics: PassiveLifeStatistics::new(organism_id, current_tick).unwrap(),
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: GroundedSuccessorPredictor::default(),
+                approximate_cache: Default::default(),
                 last_cognitive_context: None,
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -13940,6 +14013,7 @@ mod tests {
         let cognitive_context =
             CognitiveContextFrame::empty(organism_id, sequence_id, frame.tick()).unwrap();
         let memory = MemoryRecallReceipt {
+            runtime_approximate: false,
             schema_version: 1,
             organism_id_raw: organism_id.raw(),
             input_generation: 1,

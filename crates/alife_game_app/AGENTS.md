@@ -26,9 +26,12 @@ Rules:
 - Explicit Nano512 readout candidates enter through their genome-bound canonical
   asset and archive before GPU insertion. Reconstruct that exact foundation on
   restore; preserve builtin admission and deployed lifetime learning.
-- Observe each sealed patch in its organism-owned memory sidecar and then its
-  diagnostic topology sidecar even when post-seal GPU learning is rejected;
-  neither sidecar may abort or influence candidate arbitration.
+- Observe every sealed patch in its organism-owned memory sidecar even when
+  post-seal GPU learning is rejected. Ordinary play updates diagnostic topology
+  every ten ticks or on a significant outcome; foundation training and audited
+  diagnostics observe every patch. Sidecars supply evidence without selecting actions or aborting
+  candidate arbitration. See `docs/performance/20261013-approximate-cognition-runtime.md`
+  for the authorized live approximation and checkpoint boundaries.
 - Update one fixed-size passive-statistics record per resident tick and archive
   that typed record before GPU retirement; never scan unbounded life history.
 - Use `docs/ROADMAP.md` for product sequencing and exit gates. Do not infer

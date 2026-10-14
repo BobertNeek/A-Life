@@ -58,11 +58,18 @@ For each admitted organism, the production live runtime:
 8. seals the outcome and applies GPU learning, memory, and topology updates;
 9. advances the world after the batch.
 
-Core episodic recall reuses exact target and action-family queries within one
-creature's immutable decision frame. Its caches exist only for that recall call;
-individual and perceptual-category lookup keys retain the organism ID. This
-reuse does not transfer memories between creatures. Each candidate retains its own sealed decision key; work
-receipts identify reused channels and count actual searches. Candidate memory
+Ordinary play uses cached memory cues for attention and one focused episodic
+recall every four ticks or on significant changes, searching at most sixteen
+records per channel. Concept summaries and quiet topology observations run
+every ten ticks. Immediate senses, neural selection and GPU outcome learning
+remain at tick rate. Each candidate receives a fresh current-frame decision key,
+even when its expectancy is cached. Owner/profile-bound caches are transient;
+individual and perceptual-category lookup keys retain the organism ID. Full
+bank checksums remain at save/load and compaction boundaries. Foundation
+training retains the audited per-frame path, with channel reuse receipts and
+sixty-four-record searches. See the
+[dated implementation and evidence](performance/20261013-approximate-cognition-runtime.md).
+Candidate memory
 admits consequences, surprises, manipulation, blocked attempts, and first novel
 inspection rather than routine movement ticks. Conflicting individual outcomes
 remain separate, with current same-context evidence preserved during bounded

@@ -34,7 +34,13 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
 
     assert_eq!(recall.organism_id_raw, 1);
     assert_eq!(recall.input_generation, 0);
-    assert_eq!(usize::from(recall.candidate_count), recall.candidates.len());
+    assert!(recall.runtime_approximate);
+    if recall.runtime_approximate {
+        assert!(recall.candidates.is_empty());
+        assert_eq!(recall.bank_digest, [1, 0, 0, 1]);
+    } else {
+        assert_eq!(usize::from(recall.candidate_count), recall.candidates.len());
+    }
     assert_eq!(update.organism_id_raw, 1);
     assert_eq!(update.sealed_sequence_id, patch.header().sequence_id);
     assert_eq!(update.input_generation, recall.input_generation);
@@ -192,7 +198,10 @@ fn post_seal_learning_rejection_retains_credit_and_still_observes_memory_and_top
     assert_eq!(runtime.last_memory_update_receipts().len(), 1);
     assert_eq!(second[0].learning_updates, 1);
     assert_eq!(second[0].memory_updates, 1);
-    assert_eq!(second[0].topology_updates, 1);
+    assert_eq!(
+        second[0].topology_updates,
+        u32::from(runtime.last_topology_observations()[0].was_observed())
+    );
     assert_eq!(runtime.last_learning_receipts().len(), 2);
 }
 
