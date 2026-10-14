@@ -125,49 +125,6 @@ impl RuntimeMemoryRecallCache {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cached_attention_prefers_supported_evidence_over_weak_extremes() {
-        let entries = [(1.0, 0.01, 1), (0.4, 0.9, 4)]
-            .into_iter()
-            .enumerate()
-            .map(|(index, (signal, confidence, sources))| CachedCandidate {
-                key: RecallKey {
-                    target: Some(crate::TrackedObjectId(index as u64 + 1)),
-                    untracked_entity: None,
-                    family: CandidateActionFamily::Ingest.raw(),
-                    action: 200,
-                },
-                context: CandidateMemoryContextV1 {
-                    candidate_index: index as u16,
-                    target_latent: [signal; MEMORY_LATENT_V1_COUNT],
-                    family_value: [signal; MEMORY_VALUE_V1_COUNT],
-                    target_confidence: Confidence::new(confidence).unwrap(),
-                    family_confidence: Confidence::new(confidence).unwrap(),
-                    target_source_count: sources,
-                    family_source_count: sources,
-                    best_target_source: Some(MemoryId(index as u64 + 1)),
-                    best_family_source: Some(MemoryId(index as u64 + 1)),
-                },
-                social_emission: None,
-            })
-            .collect();
-        let profile = crate::SensorProfileIdentity {
-            profile_id: crate::SensorProfile::GroundedObjectSlotsV1.into(),
-            profile_schema_version: 1,
-            sensory_abi_version: crate::SensoryAbiVersion::CURRENT.raw(),
-        };
-        let cache = RuntimeMemoryRecallCache::from_entries(811, profile, entries).unwrap();
-        let cues = cache.attention_evidence();
-        assert!(cues[1].salience.raw() > cues[0].salience.raw());
-        assert_eq!(cues[0].confidence.raw(), 0.01);
-        assert_eq!(cues[1].source_count, 4);
-    }
-}
-
 impl PreparedMemoryRecall {
     pub(super) fn validate_runtime_binding(
         &self,
@@ -331,5 +288,48 @@ impl MemoryBank {
             },
             next,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cached_attention_prefers_supported_evidence_over_weak_extremes() {
+        let entries = [(1.0, 0.01, 1), (0.4, 0.9, 4)]
+            .into_iter()
+            .enumerate()
+            .map(|(index, (signal, confidence, sources))| CachedCandidate {
+                key: RecallKey {
+                    target: Some(crate::TrackedObjectId(index as u64 + 1)),
+                    untracked_entity: None,
+                    family: CandidateActionFamily::Ingest.raw(),
+                    action: 200,
+                },
+                context: CandidateMemoryContextV1 {
+                    candidate_index: index as u16,
+                    target_latent: [signal; MEMORY_LATENT_V1_COUNT],
+                    family_value: [signal; MEMORY_VALUE_V1_COUNT],
+                    target_confidence: Confidence::new(confidence).unwrap(),
+                    family_confidence: Confidence::new(confidence).unwrap(),
+                    target_source_count: sources,
+                    family_source_count: sources,
+                    best_target_source: Some(MemoryId(index as u64 + 1)),
+                    best_family_source: Some(MemoryId(index as u64 + 1)),
+                },
+                social_emission: None,
+            })
+            .collect();
+        let profile = crate::SensorProfileIdentity {
+            profile_id: crate::SensorProfile::GroundedObjectSlotsV1.into(),
+            profile_schema_version: 1,
+            sensory_abi_version: crate::SensoryAbiVersion::CURRENT.raw(),
+        };
+        let cache = RuntimeMemoryRecallCache::from_entries(811, profile, entries).unwrap();
+        let cues = cache.attention_evidence();
+        assert!(cues[1].salience.raw() > cues[0].salience.raw());
+        assert_eq!(cues[0].confidence.raw(), 0.01);
+        assert_eq!(cues[1].source_count, 4);
     }
 }
