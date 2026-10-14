@@ -1,0 +1,225 @@
+//! Ordinary play uses intermittent recall and concept summaries. Immediate
+//! perception, neural action selection and outcome learning stay at tick rate.
+use super::cpu_preparation::{
+    CpuPreparationJob, CpuPreparationOutcome, CpuPreparationTiming, PreparedCpuFrame,
+};
+use super::*;
+use std::sync::Arc;
+
+pub(super) const RECALL_INTERVAL: u64 = 4;
+pub(super) const CONCEPT_INTERVAL: u64 = 10;
+
+#[derive(Debug, Clone, Default)]
+pub(super) struct ApproximateCognitionCache {
+    pub recall: Arc<alife_core::RuntimeMemoryRecallCache>,
+    pub summary: Option<Arc<CognitiveContextFrame>>,
+    pub object_evidence: Arc<ObjectTopologyEvidence>,
+    pub last_recall_tick: Option<Tick>,
+    pub last_summary_tick: Option<Tick>,
+    pub last_topology_tick: Option<Tick>,
+    pub targets: Arc<[alife_core::TrackedObjectId]>,
+    pub drives: [f32; alife_core::DriveSnapshot::CHANNEL_COUNT],
+    pub force_refresh: bool,
+}
+
+fn due(last: Option<Tick>, now: Tick, interval: u64) -> bool {
+    last.is_none_or(|last| now.raw() < last.raw() || now.raw() - last.raw() >= interval)
+}
+
+pub(super) fn important_outcome(outcome: &PostActionOutcome) -> bool {
+    outcome.pain_delta.raw() > 0.01
+        || outcome.reward_valence.raw().abs() > 0.15
+        || outcome
+            .homeostatic_delta
+            .drives
+            .to_array()
+            .iter()
+            .any(|change| change.abs() > 0.03)
+        || outcome.contradiction_observed
+        || outcome.teacher_feedback.is_some()
+}
+
+pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparationOutcome {
+    let input = job.input;
+    let old = input.approximate_cache.as_ref().expect("approximate row");
+    let mut next = (**old).clone();
+    let mut timing = CpuPreparationTiming::default();
+    let mut hysteresis = None;
+    let mut stage = "cached attention";
+    let result = (|| {
+        let memory = job
+            .memory
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let topology = job
+            .topology
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let predictor = job
+            .predictor
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        let draft = &input.draft;
+        let tick = draft.tick();
+        let owner = draft.organism_id();
+        let slots = draft.grounded_object_slots();
+        let new_target = slots
+            .iter()
+            .any(|slot| !old.targets.contains(&slot.tracked_object_id));
+        let drives = input.homeostasis.drives.to_array();
+        let drive_change = drives
+            .iter()
+            .zip(&old.drives)
+            .any(|(now, old)| (now - old).abs() > 0.15);
+        let urgent = old.force_refresh || new_target || drive_change;
+        let refresh_recall = urgent || due(old.last_recall_tick, tick, RECALL_INTERVAL);
+        let refresh_summary = urgent || due(old.last_summary_tick, tick, CONCEPT_INTERVAL);
+        let started = measure.then(Instant::now);
+        if refresh_summary {
+            next.object_evidence = Arc::new(topology_evidence_for_draft(draft, topology)?);
+        }
+        let mut context = CognitiveContextFrame::empty(owner, input.sequence_id, tick)?;
+        if let Some(summary) = &old.summary {
+            context.memory = summary.memory.clone();
+            context.concept = summary.concept.clone();
+            context.gap = summary.gap.clone();
+        }
+        let evidence = old.recall.attention_evidence();
+        let mut summaries = grounded_peripheral_summaries(draft.grounded_object_slots())?;
+        let body_need = drives.iter().copied().fold(0.0, f32::max);
+        apply_predecision_attention_evidence(
+            &mut summaries,
+            body_need,
+            evidence,
+            &context,
+            &next.object_evidence,
+            input.receptor_effects,
+        )?;
+        // Familiarity is a cheap indexed cue. It does not trigger a second recall.
+        for summary in &mut summaries {
+            if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
+                summary.salience.novelty = NormalizedScalar::new(
+                    1.0 - memory
+                        .bank()
+                        .object_familiarity(owner, id, memory.profile()),
+                )?;
+            }
+        }
+        let attention = select_focal_targets(
+            owner,
+            input.sequence_id,
+            tick,
+            &summaries,
+            input.hysteresis,
+            input.policy,
+        )?;
+        hysteresis = Some(attention.hysteresis);
+        let routed = route_focal_candidates(draft, &attention)?;
+        let novelty = attention
+            .focal_targets
+            .first()
+            .and_then(|id| match id {
+                alife_core::StableFocusIdentity::TrackedObject(id) => Some(
+                    1.0 - memory
+                        .bank()
+                        .object_familiarity(owner, *id, memory.profile()),
+                ),
+                _ => None,
+            })
+            .unwrap_or(0.0);
+        let routed = routed.with_remembered_novelty(novelty)?;
+        timing.attention_context_wall_ns = started.map_or(0, elapsed_ns);
+        stage = "focused runtime recall";
+        let started = measure.then(Instant::now);
+        let (recall, refreshed) =
+            memory.recall_frame_runtime(&routed, &old.recall, refresh_recall)?;
+        if let Some(refreshed) = refreshed {
+            next.recall = Arc::new(refreshed);
+            next.last_recall_tick = Some(tick);
+        }
+        timing.episodic_retrieval_wall_ns = started.map_or(0, elapsed_ns);
+        let started = measure.then(Instant::now);
+        let mut context = if refresh_summary {
+            cognitive_context_for_recall(owner, input.sequence_id, &recall, topology)?
+        } else {
+            let mut fresh = cognitive_memory_context_for_recall(owner, input.sequence_id, &recall)?;
+            if let Some(summary) = &old.summary {
+                fresh.concept = summary.concept.clone();
+                fresh.gap = summary.gap.clone();
+            }
+            fresh
+        };
+        if refresh_summary {
+            next.last_summary_tick = Some(tick);
+        }
+        // Keep small summary buffers shared until the next recall/graph refresh.
+        if refresh_summary || next.last_recall_tick != old.last_recall_tick {
+            next.summary = Some(Arc::new(context.clone()));
+        }
+        context = cognitive_context_with_attention(context, attention)?;
+        let projection = cognitive_projection_for_draft(
+            &routed,
+            &recall,
+            input.sequence_id,
+            predictor,
+            &next.object_evidence,
+        )?;
+        context = cognitive_context_with_projection(context, projection)?;
+        let (frame, memory_recall) = recall.with_cognitive_context(context)?.finalize(routed)?;
+        timing.topology_concept_wall_ns = started.map_or(0, elapsed_ns);
+        stage = "GPU memory upload";
+        let started = measure.then(Instant::now);
+        let slot = job
+            .slot
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        // The old path encoded an entire perception payload solely to discard
+        // it and keep this binding. The real backend still packs the payload.
+        let record = slot.record();
+        let binding = alife_gpu_backend::GpuPerceptionFrameBinding {
+            perception_header_index: 0,
+            slot: record.slot,
+            slot_generation: record.slot_generation,
+            tick: frame.tick(),
+            candidate_count: frame.candidates().len() as u16,
+            base_frame_digest: frame.base_digest(),
+            context_digest: frame.context().canonical_digest(),
+            final_frame_digest: frame.frame_digest(),
+        };
+        let memory_upload =
+            GpuMemoryContextUpload::try_from_finalized(&frame, &memory_recall, binding, slot)
+                .map_err(super::cpu_preparation::upload_error)?
+                .bind_neural_receptor_effects(input.receptor_effects)
+                .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+        timing.gpu_upload_wall_ns = started.map_or(0, elapsed_ns);
+        if !slots
+            .iter()
+            .map(|slot| slot.tracked_object_id)
+            .eq(old.targets.iter().copied())
+        {
+            next.targets = slots.iter().map(|slot| slot.tracked_object_id).collect();
+        }
+        next.drives = drives;
+        next.force_refresh = false;
+        Ok(PreparedCpuFrame {
+            frame,
+            memory_recall,
+            memory_upload,
+        })
+    })();
+    CpuPreparationOutcome {
+        result,
+        stage,
+        hysteresis,
+        timing,
+        approximate_cache: Some(Arc::new(next)),
+    }
+}
+
+pub(super) fn should_observe_topology(
+    cache: &ApproximateCognitionCache,
+    outcome: &PostActionOutcome,
+) -> bool {
+    important_outcome(outcome)
+        || due(
+            cache.last_topology_tick,
+            outcome.outcome_tick,
+            CONCEPT_INTERVAL,
+        )
+}

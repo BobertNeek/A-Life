@@ -89,6 +89,9 @@ pub struct CandidateMemoryRecallReceipt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemoryRecallReceipt {
+    /// Runtime recall uses an owner/generation binding, not a whole-bank audit.
+    #[serde(default)]
+    pub runtime_approximate: bool,
     pub schema_version: u16,
     pub organism_id_raw: u64,
     pub input_generation: u64,
@@ -105,6 +108,16 @@ pub struct MemoryRecallReceipt {
 
 impl MemoryRecallReceipt {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        if self.runtime_approximate {
+            return if self.organism_id_raw != 0
+                && usize::from(self.candidate_count) <= MAX_ACTION_CANDIDATES
+                && self.candidate_count != 0
+            {
+                Ok(())
+            } else {
+                Err(ScaffoldContractError::InvalidMemoryQuery)
+            };
+        }
         if self.schema_version != MEMORY_RECALL_SCHEMA_VERSION
             || self.organism_id_raw == 0
             || usize::from(self.candidate_count) != self.candidates.len()
@@ -194,6 +207,9 @@ impl PreparedMemoryRecall {
         &self,
         draft: &PerceptionFrameDraft,
     ) -> Result<(), ScaffoldContractError> {
+        if self.receipt.runtime_approximate {
+            return self.validate_runtime_binding(draft);
+        }
         draft
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
@@ -327,6 +343,18 @@ pub struct FinalizedMemoryRecall {
 
 impl FinalizedMemoryRecall {
     pub fn validate_for_frame(&self, frame: &PerceptionFrame) -> Result<(), ScaffoldContractError> {
+        if self.receipt.runtime_approximate {
+            if self.receipt.organism_id_raw != frame.organism_id().raw()
+                || self.context.tick != frame.tick()
+                || self.context.profile != frame.profile_provenance().identity()
+                || self.candidate_keys.len() != frame.candidates().len()
+                || self.final_frame_digest != frame.frame_digest()
+                || self.base_frame_digest != frame.base_digest()
+            {
+                return Err(ScaffoldContractError::InvalidMemoryQuery);
+            }
+            return Ok(());
+        }
         frame
             .validate_contract()
             .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
@@ -424,6 +452,9 @@ pub use sidecar::{
 };
 
 mod candidate_index;
+
+mod runtime;
+pub use runtime::{RuntimeMemoryRecallCache, RUNTIME_MEMORY_SEARCH_CAP};
 
 use candidate_index::{
     keys_for_query, CandidateMemoryRecordV2, CandidateMemoryStoreV2, MemoryBucketKey,
@@ -1043,6 +1074,7 @@ impl MemoryBank {
         let context = EpisodicRetrievalContextV1::new(draft.tick(), profile, candidate_contexts)?;
         let context_digest = context.to_perception_context_block()?.canonical_digest();
         let receipt = MemoryRecallReceipt {
+            runtime_approximate: false,
             schema_version: MEMORY_RECALL_SCHEMA_VERSION,
             organism_id_raw: draft.organism_id().raw(),
             input_generation: self.candidate_store.generation,
@@ -1076,7 +1108,24 @@ impl MemoryBank {
         &mut self,
         patch: &ExperiencePatch,
     ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
-        patch.validate_contract()?;
+        self.observe_sealed_patch_impl(patch, false)
+    }
+
+    pub fn observe_sealed_patch_runtime(
+        &mut self,
+        patch: &ExperiencePatch,
+    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+        self.observe_sealed_patch_impl(patch, true)
+    }
+
+    fn observe_sealed_patch_impl(
+        &mut self,
+        patch: &ExperiencePatch,
+        runtime: bool,
+    ) -> Result<MemoryUpdateReceipt, ScaffoldContractError> {
+        if !runtime {
+            patch.validate_contract()?;
+        }
         if self.len != 0 || !self.lifetime_records.is_empty() {
             return Err(ScaffoldContractError::MemoryModeConflict);
         }
@@ -1084,7 +1133,9 @@ impl MemoryBank {
             .decision()
             .episodic_key()
             .ok_or(ScaffoldContractError::InvalidMemoryQuery)?;
-        key.validate_contract()?;
+        if !runtime {
+            key.validate_contract()?;
+        }
         let query = key.query();
         let organism_id_raw = patch.pre_action().organism_id.raw();
         let sequence_raw = patch.header().sequence_id.raw();
@@ -1100,7 +1151,11 @@ impl MemoryBank {
             return Err(ScaffoldContractError::MemoryReplayRejected);
         }
 
-        let before_digest = self.candidate_store.digest(self.config.capacity)?;
+        let before_digest = if runtime {
+            self.runtime_generation_binding(OrganismId(organism_id_raw))
+        } else {
+            self.candidate_store.digest(self.config.capacity)?
+        };
         let input_generation = self.candidate_store.generation;
         let output_generation = input_generation
             .checked_add(1)
@@ -1109,7 +1164,11 @@ impl MemoryBank {
             .map_err(|_| ScaffoldContractError::ScalarOutOfRange)?;
         let candidate_memory_id = MemoryId(self.candidate_store.next_memory_id);
         candidate_memory_id.validate()?;
-        let candidate_record = candidate_record_from_patch(candidate_memory_id, patch)?;
+        let candidate_record = if runtime {
+            candidate_recall::candidate_record_from_patch_runtime(candidate_memory_id, patch)?
+        } else {
+            candidate_record_from_patch(candidate_memory_id, patch)?
+        };
         let (target_key, family_key) = keys_for_query(query);
 
         let mut merge_id: Option<MemoryId> = None;
@@ -1333,7 +1392,12 @@ impl MemoryBank {
             .last_sequence_by_organism
             .insert(organism_id_raw, sequence_raw);
 
-        let after_digest = match self.candidate_store.digest(self.config.capacity) {
+        let digest_result = if runtime {
+            Ok(self.runtime_generation_binding(OrganismId(organism_id_raw)))
+        } else {
+            self.candidate_store.digest(self.config.capacity)
+        };
+        let after_digest = match digest_result {
             Ok(digest) => digest,
             Err(error) => {
                 self.candidate_store.generation = input_generation;
@@ -1377,6 +1441,7 @@ impl MemoryBank {
         };
 
         Ok(MemoryUpdateReceipt {
+            runtime_approximate: runtime,
             sealed_sequence_id: patch.header().sequence_id,
             organism_id_raw,
             bucket: family_key.receipt(),

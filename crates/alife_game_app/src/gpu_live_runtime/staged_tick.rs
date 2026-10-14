@@ -580,6 +580,8 @@ impl GpuLiveBrainRuntime {
                     handle,
                     world_entity_id,
                     input: CapturedCpuPreparation {
+                        approximate_cache: (!cfg!(feature = "foundation-training"))
+                            .then(|| resident.approximate_cache.clone()),
                         draft,
                         sequence_id: ExperienceSequenceId(resident.next_sequence),
                         homeostasis: resident.homeostasis,
@@ -1166,6 +1168,15 @@ fn collect_preparation(
     collection: &mut CpuPreparationCollection<'_>,
 ) -> Result<(), ScaffoldContractError> {
     let raw = captured.input.draft.organism_id().raw();
+    if outcome.result.is_ok() {
+        if let Some(cache) = outcome.approximate_cache {
+            runtime
+                .residents
+                .get_mut(&raw)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .approximate_cache = cache;
+        }
+    }
     if let Some(hysteresis) = outcome.hysteresis {
         runtime
             .residents

@@ -4,6 +4,8 @@ use alife_gpu_backend::{GpuBrainSlot, GpuClosedLoopError};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub(super) struct CapturedCpuPreparation {
+    pub approximate_cache:
+        Option<std::sync::Arc<super::approximate_cognition::ApproximateCognitionCache>>,
     pub draft: PerceptionFrameDraft,
     pub sequence_id: ExperienceSequenceId,
     pub homeostasis: HomeostaticSnapshot,
@@ -43,6 +45,8 @@ pub(super) struct CpuPreparationTiming {
 }
 
 pub(super) struct CpuPreparationOutcome {
+    pub approximate_cache:
+        Option<std::sync::Arc<super::approximate_cognition::ApproximateCognitionCache>>,
     pub result: Result<PreparedCpuFrame, ScaffoldContractError>,
     pub stage: &'static str,
     pub hysteresis: Option<alife_core::HysteresisState>,
@@ -59,7 +63,7 @@ pub(super) fn preparation_worker_count(rows: usize, available: usize) -> usize {
     }
 }
 
-fn upload_error(error: GpuClosedLoopError) -> ScaffoldContractError {
+pub(super) fn upload_error(error: GpuClosedLoopError) -> ScaffoldContractError {
     match error {
         GpuClosedLoopError::LayoutMismatch => ScaffoldContractError::GpuLayoutMismatch,
         GpuClosedLoopError::StaleOrForeignHandle => ScaffoldContractError::BrainOwnershipMismatch,
@@ -73,6 +77,9 @@ fn upload_error(error: GpuClosedLoopError) -> ScaffoldContractError {
 }
 
 fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparationOutcome {
+    if job.input.approximate_cache.is_some() {
+        return super::approximate_cognition::prepare_row(job, measure);
+    }
     let input = job.input;
     let draft = &input.draft;
     let receptor_effects = input.receptor_effects;
@@ -220,6 +227,7 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
         })
     })();
     CpuPreparationOutcome {
+        approximate_cache: None,
         result,
         stage: preparation_stage,
         hysteresis,

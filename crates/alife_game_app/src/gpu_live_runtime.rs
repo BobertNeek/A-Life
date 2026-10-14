@@ -6,6 +6,7 @@
 
 #[cfg(all(test, feature = "gpu-tests"))]
 mod action_credit_food_tests;
+mod approximate_cognition;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod checkpoint_manifest_pruning_tests;
 mod checkpoint_poll;
@@ -143,6 +144,8 @@ use alife_core::channel_command_for_action;
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct ResidentCognition {
+    #[serde(skip)]
+    approximate_cache: std::sync::Arc<approximate_cognition::ApproximateCognitionCache>,
     phenotype: alife_core::BrainPhenotype,
     compiler_inputs: PhenotypeCompilerInputs,
     legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
@@ -752,6 +755,7 @@ impl ResidentAuthorityPlan {
             life_statistics: PassiveLifeStatistics::new(self.organism_id, self.world_tick)?,
             attention_hysteresis: alife_core::HysteresisState::default(),
             predictor,
+            approximate_cache: Default::default(),
             last_cognitive_context: None,
             last_selected_motor_bundle: None,
             last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -2501,6 +2505,7 @@ pub struct PostSealLearningFailure {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TopologyObservationDisposition {
+    DeferredRuntimeCadence { organism_id: OrganismId, tick: Tick },
     Observed(Box<TopologyObservationReceipt>),
     RejectedMissingOwner { organism_id: OrganismId },
 }
@@ -2516,7 +2521,7 @@ impl TopologyObservationDisposition {
     pub fn receipt(&self) -> Option<&TopologyObservationReceipt> {
         match self {
             Self::Observed(receipt) => Some(receipt),
-            Self::RejectedMissingOwner { .. } => None,
+            Self::RejectedMissingOwner { .. } | Self::DeferredRuntimeCadence { .. } => None,
         }
     }
 }
@@ -4005,11 +4010,10 @@ fn validate_restore_checkpoint_coverage(
     Ok(())
 }
 
-fn cognitive_context_for_recall(
+fn cognitive_memory_context_for_recall(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
     recall: &PreparedMemoryRecall,
-    topology: &TopologySidecar,
 ) -> Result<CognitiveContextFrame, ScaffoldContractError> {
     let mut context =
         CognitiveContextFrame::empty(organism_id, sequence_id, recall.context().tick)?;
@@ -4033,6 +4037,16 @@ fn cognitive_context_for_recall(
             });
         }
     }
+    Ok(context)
+}
+
+fn cognitive_context_for_recall(
+    organism_id: OrganismId,
+    sequence_id: ExperienceSequenceId,
+    recall: &PreparedMemoryRecall,
+    topology: &TopologySidecar,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    let mut context = cognitive_memory_context_for_recall(organism_id, sequence_id, recall)?;
     let mut concepts = topology.map().concepts().iter().collect::<Vec<_>>();
     concepts.sort_by(|left, right| {
         (right.salience.raw() * right.confidence.raw())
@@ -5528,6 +5542,7 @@ impl GpuLiveBrainRuntime {
                 predictor: predictor_for_phenotype(&phenotype).map_err(|error| {
                     CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
                 })?,
+                approximate_cache: Default::default(),
                 last_cognitive_context: None,
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -6544,6 +6559,7 @@ impl GpuLiveBrainRuntime {
                         None
                     };
                     let resident = ResidentCognition {
+                        approximate_cache: Default::default(),
                         phenotype: authority.phenotype.clone(),
                         genome: authority.genome.clone(),
                         development: authority.development.clone(),
@@ -9409,12 +9425,15 @@ impl GpuLiveBrainRuntime {
                 .performance_metrics
                 .state_reference_hash_wall_ns
                 .saturating_add(elapsed_ns(hash_started));
-            let memory_digest = self
+            let memory = self
                 .memories
                 .get(&organism_id.raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                .compaction_checkpoint()
-                .active_digest;
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let memory_digest = if cfg!(feature = "foundation-training") {
+                memory.compaction_checkpoint().active_digest
+            } else {
+                memory.runtime_generation_binding()
+            };
             let mut record = self
                 .world
                 .organism_registry()
@@ -9518,8 +9537,21 @@ impl GpuLiveBrainRuntime {
         let mut memory_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
+            if !cfg!(feature = "foundation-training")
+                && approximate_cognition::important_outcome(selection.patch.outcome())
+            {
+                if let Some(resident) = self.residents.get_mut(&organism_id.raw()) {
+                    std::sync::Arc::make_mut(&mut resident.approximate_cache).force_refresh = true;
+                }
+            }
             let observation = match self.memories.get_mut(&organism_id.raw()) {
-                Some(memory) => memory.observe_sealed_patch(&selection.patch),
+                Some(memory) => {
+                    if cfg!(feature = "foundation-training") {
+                        memory.observe_sealed_patch(&selection.patch)
+                    } else {
+                        memory.observe_sealed_patch_runtime(&selection.patch)
+                    }
+                }
                 None => Err(ScaffoldContractError::BrainOwnershipMismatch),
             };
             match observation {
@@ -9541,6 +9573,26 @@ impl GpuLiveBrainRuntime {
         let mut topology_updates = Vec::with_capacity(sealed.len());
         for selection in sealed {
             let organism_id = selection.handle.organism_id();
+            if !cfg!(feature = "foundation-training") {
+                let cache = &mut self
+                    .residents
+                    .get_mut(&organism_id.raw())
+                    .expect("sealed resident remains owned")
+                    .approximate_cache;
+                if !approximate_cognition::should_observe_topology(cache, selection.patch.outcome())
+                {
+                    topology_updates.push(false);
+                    self.last_topology_observations.push(
+                        TopologyObservationDisposition::DeferredRuntimeCadence {
+                            organism_id,
+                            tick: selection.patch.outcome().outcome_tick,
+                        },
+                    );
+                    continue;
+                }
+                std::sync::Arc::make_mut(cache).last_topology_tick =
+                    Some(selection.patch.outcome().outcome_tick);
+            }
             let disposition = match self.topologies.get_mut(&organism_id.raw()) {
                 Some(sidecar) if sidecar.organism_id() == organism_id => {
                     let receipt = sidecar.observe_sealed_patch(&selection.patch);
@@ -11940,6 +11992,7 @@ mod tests {
                             .unwrap(),
                         attention_hysteresis: alife_core::HysteresisState::default(),
                         predictor: GroundedSuccessorPredictor::default(),
+                        approximate_cache: Default::default(),
                         last_cognitive_context: None,
                         last_selected_motor_bundle: None,
                         last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -13742,6 +13795,7 @@ mod tests {
                 life_statistics: PassiveLifeStatistics::new(organism_id, Tick::ZERO).unwrap(),
                 attention_hysteresis: alife_core::HysteresisState::default(),
                 predictor: GroundedSuccessorPredictor::default(),
+                approximate_cache: Default::default(),
                 last_cognitive_context: None,
                 last_selected_motor_bundle: None,
                 last_cognitive_work: CognitiveWorkReceipt::zero(),
@@ -13792,6 +13846,7 @@ mod tests {
         let cognitive_context =
             CognitiveContextFrame::empty(organism_id, sequence_id, frame.tick()).unwrap();
         let memory = MemoryRecallReceipt {
+            runtime_approximate: false,
             schema_version: 1,
             organism_id_raw: organism_id.raw(),
             input_generation: 1,

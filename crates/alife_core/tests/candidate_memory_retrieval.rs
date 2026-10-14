@@ -172,6 +172,72 @@ fn empty_bank() -> MemoryBank {
         .unwrap()
 }
 
+#[test]
+fn runtime_recall_reuses_values_but_rebinds_current_decision_keys() {
+    let mut bank = empty_bank();
+    bank.observe_sealed_patch_runtime(&sequenced_patch(1, 1, 71, 0.4, -0.6, 0.5))
+        .unwrap();
+    let first = grounded_draft(0.4);
+    let (recall, cache) = bank
+        .recall_frame_runtime(&first, &Default::default(), true)
+        .unwrap();
+    let cache = cache.unwrap();
+    assert!(recall.receipt().runtime_approximate);
+    assert!(recall.receipt().similarity_evaluations > 0);
+    let changed = grounded_draft(0.45);
+    let (cached, refreshed) = bank.recall_frame_runtime(&changed, &cache, false).unwrap();
+    assert!(refreshed.is_none());
+    assert_eq!(cached.receipt().similarity_evaluations, 0);
+    assert_eq!(recall.context().candidates, cached.context().candidates);
+    let (frame, finalized) = cached.finalize(changed).unwrap();
+    for (key, candidate) in finalized.candidate_keys().iter().zip(frame.candidates()) {
+        key.query()
+            .validate_against_frame(&frame, candidate)
+            .unwrap();
+    }
+    assert!(!cache.attention_evidence().is_empty());
+}
+
+#[test]
+fn runtime_memory_export_restore_keeps_every_learned_record_and_real_checksum() {
+    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    let mut sidecar = grounded_sidecar(config);
+    for sequence in 1..=3 {
+        let receipt = sidecar
+            .observe_sealed_patch_runtime(&sequenced_patch(
+                sequence,
+                sequence,
+                70 + sequence,
+                0.4,
+                -0.5,
+                0.4,
+            ))
+            .unwrap();
+        assert!(receipt.runtime_approximate);
+    }
+    let binding = sidecar.runtime_generation_binding();
+    let asset = sidecar.export_active_bank().unwrap();
+    let checkpoint = *sidecar.compaction_checkpoint();
+    assert_eq!(checkpoint.active_digest, asset.active_bank_digest);
+    assert_ne!(checkpoint.active_digest, binding);
+    let restored =
+        MemorySidecarState::restore_portable(sidecar.profile(), checkpoint, asset.clone(), None)
+            .unwrap();
+    assert_eq!(restored.export_active_bank().unwrap(), asset);
+    assert_eq!(restored.latest_durable_sequence_raw(), 3);
+    sidecar
+        .observe_sealed_patch_runtime(&sequenced_patch(4, 4, 74, 0.4, 0.5, 0.0))
+        .unwrap();
+    assert_ne!(
+        sidecar.compaction_checkpoint().active_digest,
+        checkpoint.active_digest
+    );
+    assert_eq!(
+        sidecar.compaction_checkpoint().active_digest,
+        sidecar.export_active_bank().unwrap().active_bank_digest
+    );
+}
+
 fn grounded_sidecar(config: MemoryBankConfig) -> MemorySidecarState {
     MemorySidecarState::new_profiled(
         ORGANISM,
