@@ -82,6 +82,122 @@ pub struct ArchivedSuccessInspection {
     pub weights_modified: bool,
 }
 
+/// Exact-file evidence from read-only checkpoint admission, not a promotion or
+/// behavioral receipt. File digests bind the bytes that were actually checked.
+#[derive(Debug, serde::Serialize)]
+pub struct FoundationCheckpointInspection {
+    pub expected_policy_version: u64,
+    pub policy_version: u64,
+    pub founder_seed_base: u64,
+    pub foundation_digest: Blake3Digest,
+    pub actor_optimizer_step: u32,
+    pub value_optimizer_step: u32,
+    pub file_digests: Vec<FoundationCheckpointFileDigest>,
+    pub neural_execution: bool,
+    pub weights_modified: bool,
+    pub archive_checked: bool,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct FoundationCheckpointFileDigest {
+    pub file_name: &'static str,
+    pub encoded_bytes: usize,
+    pub digest: Blake3Digest,
+}
+
+fn read_checkpoint_file(directory: &Path, file_name: &str) -> Result<Vec<u8>> {
+    Ok(std::fs::read(directory.join(file_name)).map_err(|error| {
+        std::io::Error::new(error.kind(), format!("cannot read {file_name}: {error}"))
+    })?)
+}
+
+/// Validate one exact sealed-cycle checkpoint without an archive, GPU session,
+/// neural execution, optimizer updates, runtime stepping or input writes.
+/// Founder construction below compiles CPU metadata only, as in archive inspection.
+pub fn inspect_foundation_checkpoint(
+    source_cycle: &Path,
+    expected_policy_version: u64,
+) -> Result<FoundationCheckpointInspection> {
+    for marker in ["adaptation.json", "warmup.json"] {
+        match std::fs::symlink_metadata(source_cycle.join(marker)) {
+            Ok(_) => {
+                return Err(format!("checkpoint inspection rejects route marker {marker}").into())
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    let cycle_bytes = read_checkpoint_file(source_cycle, "cycle.json")?;
+    let cycle: FoundationCycleReceipt = serde_json::from_slice(&cycle_bytes)?;
+    if cycle.policy_version != expected_policy_version {
+        return Err(format!(
+            "checkpoint policy mismatch: expected {expected_policy_version}, found {}",
+            cycle.policy_version
+        )
+        .into());
+    }
+    cycle
+        .policy_version
+        .checked_add(1)
+        .ok_or("policy version overflow")?;
+    if cycle.biological_objective_version != 2
+        || cycle.objective_state_reset
+        || cycle.founder_seed_base == 0
+    {
+        return Err("checkpoint inspection requires an objective2 source with a nonzero founder and no state reset".into());
+    }
+    let asset_bytes = read_checkpoint_file(source_cycle, "trained.alife-foundation")?;
+    let asset = FoundationWeightAsset::decode_canonical(&asset_bytes)?;
+    let asset_digest = asset.digest();
+    let digest_hex: String = asset_digest
+        .bytes()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    if digest_hex != cycle.new_asset_digest {
+        return Err("checkpoint export digest disagrees with its cycle".into());
+    }
+    let actor_bytes = read_checkpoint_file(source_cycle, "actor-checkpoint.json")?;
+    let actor: FoundationTrainerCheckpoint = serde_json::from_slice(&actor_bytes)?;
+    let value_bytes = read_checkpoint_file(source_cycle, "value-checkpoint.json")?;
+    let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(&value_bytes)?;
+    crate::foundation_training_cycle::validate_cycle_optimizer_handoff(
+        &cycle, &asset, &actor, &value,
+    )?;
+    let current = compile_source(asset, cycle.seed, cycle.founder_seed_base)?;
+    actor.validate_for(&current, asset_digest)?;
+    if value.feature_count != current.neuron_count() {
+        return Err("checkpoint value head is bound to a different feature count".into());
+    }
+    let value_optimizer_step = value.optimizer_step;
+    PpoTrainingState::from_checkpoint(value)?;
+    let file_digests = [
+        ("cycle.json", cycle_bytes),
+        ("trained.alife-foundation", asset_bytes),
+        ("actor-checkpoint.json", actor_bytes),
+        ("value-checkpoint.json", value_bytes),
+    ]
+    .into_iter()
+    .map(|(file_name, bytes)| FoundationCheckpointFileDigest {
+        file_name,
+        encoded_bytes: bytes.len(),
+        digest: Blake3Digest::from_bytes(*blake3::hash(&bytes).as_bytes()),
+    })
+    .collect();
+    Ok(FoundationCheckpointInspection {
+        expected_policy_version,
+        policy_version: cycle.policy_version,
+        founder_seed_base: cycle.founder_seed_base,
+        foundation_digest: asset_digest,
+        actor_optimizer_step: actor.optimizer_step,
+        value_optimizer_step,
+        file_digests,
+        neural_execution: false,
+        weights_modified: false,
+        archive_checked: false,
+    })
+}
+
 /// Validate the same native source, graph, replay and action-label contracts
 /// used by archived rehearsal, without allocating its GPU training state.
 pub fn inspect_archived_successes(
@@ -645,6 +761,171 @@ mod tests {
         archive.entries[0].episode = directory.join("missing-archive-entry");
         write_json("manifest.json", &serde_json::to_value(&archive).unwrap());
         (directory, actor, value)
+    }
+
+    const CHECKPOINT_FILES: [&str; 4] = [
+        "cycle.json",
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+    ];
+
+    fn checkpoint_fixture(policy: u64) -> PathBuf {
+        let (directory, _, _) = selected_source_fixture();
+        for (name, field) in [
+            ("cycle.json", "policy_version"),
+            ("value-checkpoint.json", "last_updated_policy_version"),
+        ] {
+            let path = directory.join(name);
+            let mut data: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            data[field] = serde_json::json!(policy);
+            std::fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
+        }
+        directory
+    }
+
+    fn checkpoint_bytes(directory: &Path) -> Vec<(String, Vec<u8>)> {
+        CHECKPOINT_FILES
+            .into_iter()
+            .filter_map(|name| {
+                std::fs::read(directory.join(name))
+                    .ok()
+                    .map(|bytes| (name.to_string(), bytes))
+            })
+            .collect()
+    }
+
+    fn checkpoint_error_without_mutation(directory: &Path, expected_policy: u64) -> String {
+        let before = checkpoint_bytes(directory);
+        let error = inspect_foundation_checkpoint(directory, expected_policy)
+            .unwrap_err()
+            .to_string();
+        assert_eq!(checkpoint_bytes(directory), before);
+        error
+    }
+
+    #[test]
+    fn checkpoint_only_accepts_expected_policy_without_archive_or_mutation() {
+        let directory = checkpoint_fixture(3238);
+        // Even an unusable archive manifest must not become a prerequisite.
+        std::fs::write(directory.join("manifest.json"), b"invalid archive JSON").unwrap();
+        let before = checkpoint_bytes(&directory);
+        let receipt = inspect_foundation_checkpoint(&directory, 3238).unwrap();
+        assert_eq!(checkpoint_bytes(&directory), before);
+        assert_eq!(
+            std::fs::read(directory.join("manifest.json")).unwrap(),
+            b"invalid archive JSON"
+        );
+        assert_eq!(receipt.policy_version, 3238);
+        assert_eq!(receipt.expected_policy_version, 3238);
+        assert_eq!(receipt.actor_optimizer_step, 1);
+        assert_eq!(receipt.value_optimizer_step, 1);
+        assert!(!receipt.neural_execution && !receipt.weights_modified && !receipt.archive_checked);
+        assert_eq!(receipt.file_digests.len(), 4);
+        for ((name, bytes), actual) in before.iter().zip(&receipt.file_digests) {
+            assert_eq!(actual.file_name, name);
+            assert_eq!(actual.encoded_bytes, bytes.len());
+            assert_eq!(actual.digest.bytes(), blake3::hash(bytes).as_bytes());
+        }
+    }
+
+    #[test]
+    fn checkpoint_only_rejects_wrong_policy_and_all_route_marker_forms() {
+        let directory = checkpoint_fixture(3237);
+        assert_eq!(
+            checkpoint_error_without_mutation(&directory, 3238),
+            "checkpoint policy mismatch: expected 3238, found 3237"
+        );
+        let overflow = checkpoint_fixture(u64::MAX);
+        assert_eq!(
+            checkpoint_error_without_mutation(&overflow, u64::MAX),
+            "policy version overflow"
+        );
+        for marker in ["adaptation.json", "warmup.json"] {
+            let path = directory.join(marker);
+            std::fs::write(&path, b"marker").unwrap();
+            assert!(checkpoint_error_without_mutation(&directory, 3237).contains(marker));
+            assert_eq!(std::fs::read(&path).unwrap(), b"marker");
+            std::fs::remove_file(&path).unwrap();
+            std::fs::create_dir(&path).unwrap();
+            assert!(checkpoint_error_without_mutation(&directory, 3237).contains(marker));
+            assert!(path.is_dir());
+            std::fs::remove_dir(&path).unwrap();
+            #[cfg(unix)]
+            {
+                std::os::unix::fs::symlink("intentionally-absent-marker-target", &path).unwrap();
+                assert!(checkpoint_error_without_mutation(&directory, 3237).contains(marker));
+                assert!(std::fs::symlink_metadata(&path)
+                    .unwrap()
+                    .file_type()
+                    .is_symlink());
+                std::fs::remove_file(&path).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn checkpoint_only_rejects_corruption_and_incomplete_handoffs_without_mutation() {
+        let directory = checkpoint_fixture(3238);
+        let originals = checkpoint_bytes(&directory);
+        for (file, field) in [
+            ("actor-checkpoint.json", "first_moment"),
+            ("actor-checkpoint.json", "phenotype_hash"),
+            ("actor-checkpoint.json", "weights"),
+            ("value-checkpoint.json", "parameters"),
+            ("value-checkpoint.json", "last_updated_policy_version"),
+            ("cycle.json", "next_cohort_tick_captured"),
+            ("cycle.json", "next_cohort_optimizer_rebound"),
+            ("cycle.json", "biological_objective_version"),
+            ("cycle.json", "objective_state_reset"),
+            ("cycle.json", "founder_seed_base"),
+            ("cycle.json", "new_asset_digest"),
+        ] {
+            let path = directory.join(file);
+            let original = &originals.iter().find(|(name, _)| name == file).unwrap().1;
+            let mut data: serde_json::Value = serde_json::from_slice(original).unwrap();
+            match field {
+                "first_moment" => {
+                    data[field].as_array_mut().unwrap().pop();
+                }
+                "phenotype_hash" => {
+                    data[field][0] = serde_json::json!(data[field][0].as_u64().unwrap() ^ 1)
+                }
+                "weights" => {
+                    data[field][0] = serde_json::json!(data[field][0].as_f64().unwrap() + 0.5)
+                }
+                "parameters" => data[field] = serde_json::json!([]),
+                "last_updated_policy_version" => data[field] = serde_json::json!(3237),
+                "next_cohort_tick_captured" | "next_cohort_optimizer_rebound" => {
+                    data[field] = serde_json::json!(false)
+                }
+                "biological_objective_version" => data[field] = serde_json::json!(1),
+                "objective_state_reset" => data[field] = serde_json::json!(true),
+                "founder_seed_base" => data[field] = serde_json::json!(0),
+                "new_asset_digest" => data[field] = serde_json::json!("wrong"),
+                _ => unreachable!(),
+            }
+            std::fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+            assert!(
+                !checkpoint_error_without_mutation(&directory, 3238).is_empty(),
+                "{field}"
+            );
+            std::fs::write(path, original).unwrap();
+        }
+    }
+
+    #[test]
+    fn checkpoint_only_reports_each_missing_file_without_rewriting_remaining_inputs() {
+        let directory = checkpoint_fixture(3238);
+        for file in CHECKPOINT_FILES {
+            let path = directory.join(file);
+            let original = std::fs::read(&path).unwrap();
+            std::fs::remove_file(&path).unwrap();
+            assert!(checkpoint_error_without_mutation(&directory, 3238).contains(file));
+            assert!(!path.exists());
+            std::fs::write(path, original).unwrap();
+        }
     }
 
     #[test]
