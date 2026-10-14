@@ -91,6 +91,13 @@ pub(crate) fn memory_attention_evidence_for_candidate(
     if query.candidate_index() != candidate.candidate_index {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }
+    memory_attention_evidence_for_context(query.tracked_object_id(), candidate)
+}
+
+pub(crate) fn memory_attention_evidence_for_context(
+    tracked_object_id: Option<TrackedObjectId>,
+    candidate: &CandidateMemoryContextV1,
+) -> Result<FinalizedMemoryAttentionEvidence, ScaffoldContractError> {
     let confidence = candidate
         .target_confidence
         .raw()
@@ -110,7 +117,7 @@ pub(crate) fn memory_attention_evidence_for_candidate(
         (confidence * 0.6 + source_support * 0.2 + signal * 0.2).clamp(0.0, 1.0),
     )?;
     let entry = FinalizedMemoryAttentionEvidence {
-        tracked_object_id: query.tracked_object_id(),
+        tracked_object_id,
         salience,
         confidence: Confidence::new(confidence)?,
         source_count,
