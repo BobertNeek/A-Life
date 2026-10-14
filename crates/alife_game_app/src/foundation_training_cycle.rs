@@ -80,6 +80,20 @@ fn validate_objective_continuation(
     .into())
 }
 
+// Keep the captured GPU bytes as replay identity after exact restore verification.
+fn initial_actor_checkpoint_bytes(
+    restored: Option<&alife_training::FoundationTrainerCheckpoint>,
+    capture: impl FnOnce() -> Result<Vec<u8>>,
+) -> Result<Vec<u8>> {
+    let initial_checkpoint = capture()?;
+    if let Some(checkpoint) = restored {
+        if initial_checkpoint != serde_json::to_vec(checkpoint)? {
+            return Err("restored actor weights/optimizer state changed before training".into());
+        }
+    }
+    Ok(initial_checkpoint)
+}
+
 fn training_receptor_profile(
     phenotype: &alife_core::CreaturePhenotype,
 ) -> alife_core::PlasticityReceptorProfile {
@@ -1374,6 +1388,124 @@ mod founder_refresh_tests {
             last_updated_policy_version: Some(4),
         };
         (receipt, asset, actor, value)
+    }
+
+    #[test]
+    fn initial_actor_checkpoint_captures_once_and_reuses_exact_bytes_and_digest() {
+        let (_, _, checkpoint, _) = cycle_handoff();
+        let expected = serde_json::to_vec(&checkpoint).unwrap();
+        for restored in [None, Some(&checkpoint)] {
+            let mut captures =
+                std::collections::VecDeque::from([expected.clone(), expected.clone()]);
+            let captured_pointer = captures.front().unwrap().as_ptr();
+            let mut capture_count = 0;
+            let bytes = initial_actor_checkpoint_bytes(restored, || {
+                capture_count += 1;
+                Ok(captures.pop_front().unwrap())
+            })
+            .unwrap();
+            assert_eq!(capture_count, 1);
+            assert_eq!(bytes.as_ptr(), captured_pointer);
+            assert_eq!(bytes, expected);
+            assert_eq!(blake3::hash(&bytes), blake3::hash(&expected));
+            assert_eq!(
+                serde_json::from_slice::<alife_training::FoundationTrainerCheckpoint>(&bytes)
+                    .unwrap(),
+                checkpoint
+            );
+        }
+    }
+
+    #[test]
+    fn initial_actor_checkpoint_rejects_every_changed_state_lane_before_replay() {
+        let (_, _, checkpoint, _) = cycle_handoff();
+        let expected = serde_json::to_vec(&checkpoint).unwrap();
+        let original = serde_json::to_value(&checkpoint).unwrap();
+        let mut changed = Vec::new();
+        for field in ["schema_version", "optimizer_step"] {
+            let mut actual = original.clone();
+            actual[field] = serde_json::json!(actual[field].as_u64().unwrap() + 1);
+            changed.push((field, actual));
+        }
+        for field in ["phenotype_hash", "source_foundation_digest", "update_ages"] {
+            let mut actual = original.clone();
+            actual[field][0] = serde_json::json!(actual[field][0].as_u64().unwrap() ^ 1);
+            changed.push((field, actual));
+        }
+        for field in ["weights", "first_moment", "second_moment"] {
+            let mut actual = original.clone();
+            actual[field][0] = serde_json::json!(actual[field][0].as_f64().unwrap() + 0.5);
+            changed.push((field, actual));
+        }
+        for field in [
+            "learning_rate",
+            "beta1",
+            "beta2",
+            "epsilon",
+            "weight_decay",
+            "gradient_clip",
+        ] {
+            let mut actual = original.clone();
+            actual["config"][field] =
+                serde_json::json!(actual["config"][field].as_f64().unwrap() * 0.5);
+            changed.push((field, actual));
+        }
+        let mut actual = original.clone();
+        actual["stage_mask"]["words"][0] =
+            serde_json::json!(actual["stage_mask"]["words"][0].as_u64().unwrap() ^ 1);
+        changed.push(("stage_mask", actual));
+        // Numeric equality is insufficient: preserve the original exact-byte check.
+        let mut signed_zero = checkpoint.clone();
+        signed_zero.first_moment[0] = -0.0;
+        let mut positive_zero = signed_zero.clone();
+        positive_zero.first_moment[0] = 0.0;
+        assert_eq!(signed_zero, positive_zero);
+        assert!(initial_actor_checkpoint_bytes(Some(&positive_zero), || {
+            Ok(serde_json::to_vec(&signed_zero)?)
+        })
+        .is_err());
+        for (field, actual) in changed {
+            let actual: alife_training::FoundationTrainerCheckpoint =
+                serde_json::from_value(actual).unwrap();
+            let actual_bytes = serde_json::to_vec(&actual).unwrap();
+            assert_ne!(actual_bytes, expected, "{field}");
+            let mut captures = 0;
+            let mut replay_created = false;
+            let result = initial_actor_checkpoint_bytes(Some(&checkpoint), || {
+                captures += 1;
+                Ok(actual_bytes.clone())
+            })
+            .inspect(|_| replay_created = true);
+            assert_eq!(captures, 1, "{field}");
+            assert!(!replay_created, "{field}");
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "restored actor weights/optimizer state changed before training",
+                "{field}"
+            );
+        }
+    }
+
+    #[test]
+    fn initial_actor_checkpoint_capture_and_serialization_errors_stop_before_replay() {
+        let (_, _, checkpoint, _) = cycle_handoff();
+        for restored in [None, Some(&checkpoint)] {
+            for error in [
+                "checkpoint capture failed",
+                "checkpoint serialization failed",
+            ] {
+                let mut captures = 0;
+                let mut replay_created = false;
+                let result = initial_actor_checkpoint_bytes(restored, || {
+                    captures += 1;
+                    Err(error.into())
+                })
+                .inspect(|_| replay_created = true);
+                assert_eq!(captures, 1);
+                assert!(!replay_created);
+                assert_eq!(result.unwrap_err().to_string(), error);
+            }
+        }
     }
 
     #[test]
@@ -2734,12 +2866,11 @@ fn run_foundation_training_cycle_in_owned_output(
     )?;
     if let Some(checkpoint) = &restored_actor {
         trainer.restore_checkpoint(checkpoint)?;
-        if serde_json::to_vec(&trainer.checkpoint()?)? != serde_json::to_vec(checkpoint)? {
-            return Err("restored actor weights/optimizer state changed before training".into());
-        }
     }
+    let initial_checkpoint = initial_actor_checkpoint_bytes(restored_actor.as_ref(), || {
+        Ok(serde_json::to_vec(&trainer.checkpoint()?)?)
+    })?;
     let actor_optimizer_step_before = trainer.optimizer_step();
-    let initial_checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
     let source = foundation_replay_source(&phenotype, &asset, policy_version, &initial_checkpoint)?;
     let budget = FoundationReplayBudget::default();
     let replay_dir = output.join("replay");
