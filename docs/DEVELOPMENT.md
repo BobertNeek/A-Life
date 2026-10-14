@@ -34,7 +34,15 @@ it while restoring the prior pause state; Speed and Settings use Back/Escape to
 return to the main menu. The menu captures world, camera, and teaching input,
 including the dismissal frame and held keys/buttons. Typed and creature speech
 remain unchanged. Save and Load use the existing authoritative checkpoint
-paths; Load waits for pending publication and keeps an open menu paused.
+paths. Load and L first open a paused replacement warning, with Cancel selected;
+Load replaces the current world and discards unsaved changes only after a separate
+confirmation. Escape/Cancel returns to the invoking page, or closes a prompt opened
+from play while restoring only menu-owned pause. Opening input must be released;
+keyboard confirmation needs a fresh Enter after selecting Load, and pointer
+confirmation needs a fresh move into its separate hit target after release. L never
+confirms. Checkpoint publication must be idle at request, confirmation and application;
+busy attempts require another action. Success/failure returns to the paused main menu,
+with the existing world preserved on a rejected load. No automatic pre-load save is made.
 Speed offers the existing 1x and Max graphical modes. Settings' Autopause toggle
 controls the existing pause-on-focus-loss setting. Quit saves at the current
 paused tick and exits only after that exact checkpoint and journal publication

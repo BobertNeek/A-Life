@@ -89,9 +89,10 @@ pub(super) fn handle_fvr05_production_ux_input(
                     .as_deref_mut()
                     .map(|runtime| &mut runtime.runtime),
             ),
-            menu::Action::Load => {
+            menu::Action::ConfirmLoad => {
                 #[cfg(feature = "gpu-runtime")]
                 menu::queue_load(
+                    &mut menu_state,
                     &mut ux,
                     &mut load_request,
                     gpu_runtime.as_deref().map(|runtime| &runtime.runtime),
@@ -277,19 +278,6 @@ pub(super) fn handle_fvr05_production_ux_input(
         #[cfg(not(feature = "gpu-runtime"))]
         if ux.last_error.is_none() {
             ux.persist_ui_settings();
-        }
-    }
-    if keyboard.just_pressed(KeyCode::KeyL) {
-        #[cfg(feature = "gpu-runtime")]
-        menu::queue_load(
-            &mut ux,
-            &mut load_request,
-            gpu_runtime.as_deref().map(|runtime| &runtime.runtime),
-        );
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.last_error = Some("GPU runtime unavailable; load was not queued".into());
-            ux.last_action = "Load unavailable".into();
         }
     }
     if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyQ) {
