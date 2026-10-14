@@ -271,7 +271,7 @@ class GrabNightTests(unittest.TestCase):
 
     def fixture_run(self, failures=None, fail_episode=None, final_grab_seconds=0, final_remaining_seconds=None,
                     invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False,
-                    retention_meals=None, retention_changes=None, recipe_options=()):
+                    retention_meals=None, retention_changes=None, recipe_options=(), command_seconds=None):
         """Exercise real orchestration/validators with a nonexecuting child stub."""
         self.run_index = getattr(self, "run_index", 0) + 1
         output = self.root / "target/founder-training" / f"run-{self.run_index}"
@@ -279,6 +279,7 @@ class GrabNightTests(unittest.TestCase):
         binary.write_bytes(b"fixture; never execute")
         now = dt.datetime.now(night.UTC)
         clock = [now]
+        monotonic_clock = [0.]
         cutoff = now + dt.timedelta(hours=1)
         argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
                 "--cutoff", cutoff.isoformat(), "--target-episodes", "1" if fail_episode is None else "2",
@@ -316,6 +317,11 @@ class GrabNightTests(unittest.TestCase):
             launched.append(name)
             directory = Path(command[2] if command[1] == "--evaluate" else command[3])
             directory.mkdir()
+            if command_seconds is not None:
+                seconds = command_seconds.get(name, 0)
+                clock[0] += dt.timedelta(seconds=seconds)
+                monotonic_clock[0] += seconds
+                self.assertLessEqual(clock[0], deadline)
             if name.startswith("frozen-final"):
                 clock[0] += dt.timedelta(seconds=final_grab_seconds)
                 self.assertLessEqual(clock[0], deadline)
@@ -328,8 +334,9 @@ class GrabNightTests(unittest.TestCase):
                 previous = Path(command[2])
                 (directory / "initial.alife-foundation").write_bytes(
                     (previous / "trained.alife-foundation").read_bytes())
-                self.write_cycle(directory, 603, 1845, 1205, {
-                    "seed": int(command[6]), "lesson": "grab_food", "grab_food_setup": setup(),
+                self.write_cycle(directory, 603 + index, 1845 + index, 1205 + index, {
+                    "seed": int(command[6]), "lesson": "grab_food",
+                    "grab_food_setup": {**setup(), "realized_body_yaw": index * .1},
                     "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1],
                     "prepared_grab_food_opportunities": 1, "training_ticks": 1,
                     "captured_replay_rows": 2, "trained_replay_rows": 1, "bootstrap_replay_rows": 1,
@@ -387,11 +394,19 @@ class GrabNightTests(unittest.TestCase):
                 return "fixture mismatched checkpoint digest"
             return real_sha256(path)
 
+        real_monotonic = night.time.monotonic
+
+        def fake_monotonic():
+            return monotonic_clock[0] if command_seconds is not None else real_monotonic()
+
         with patch.object(night.dt, "datetime", FixtureDatetime), \
+             patch.object(night.time, "monotonic", side_effect=fake_monotonic), \
              patch.object(night, "__file__", str(self.root / "scripts/runner.py")), \
              patch.object(night.Path, "cwd", return_value=self.root), \
              patch.object(night, "run_child", side_effect=fake_child), \
              patch.object(night, "resource_snapshot", side_effect=fake_resources), \
+             patch.object(night.shutil, "disk_usage", return_value=night.shutil.disk_usage(self.root)._replace(
+                 free=resources["disk_free_bytes"])), \
              patch.object(night, "assert_lane_idle", side_effect=fake_lane), \
              patch.object(night, "sha256", side_effect=fake_sha256), \
              patch.object(night.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="")), \
@@ -403,7 +418,8 @@ class GrabNightTests(unittest.TestCase):
         self.assertEqual(state, night.read_json(state_path))
         self.assertFalse((output.parent / ".eat-held-food-owner.lock").exists())
         self.assertFalse(state["promoted"])
-        accepted = self.source if not state["distinct_completed_episodes"] else output / "episode-00000"
+        accepted = (self.source if not state["distinct_completed_episodes"] else
+                    output / f"episode-{state['distinct_completed_episodes'] - 1:05d}")
         self.assertEqual(state["latest_checkpoint"], str(accepted))
         for path, expected in checkpoint_hashes.items():
             self.assertEqual(night.sha256(path), expected, path)
@@ -412,6 +428,82 @@ class GrabNightTests(unittest.TestCase):
         self.assertTrue(all(attempt[1][3] == str(accepted / "trained.alife-foundation")
                             for attempt in finals))
         return state, finals, launched
+
+    def test_recipe_capacity_amortizes_both_probe_maxima_without_episode_credit(self):
+        durations = {"frozen-before": 6, "eating-retention-before": 7,
+                     "frozen-after-00000": 3, "eating-retention-after-00000": 8,
+                     "frozen-after-00001": 5, "eating-retention-after-00001": 4,
+                     "frozen-after-00003": 4, "eating-retention-after-00003": 6,
+                     "episode-00000": 9, **{f"episode-{index:05d}": 2 for index in range(1, 5)}}
+        state, finals, launched = self.fixture_run(command_seconds=durations,
+            recipe_options=("--max-stalled-batches", "64", "--target-episodes", "5"))
+        estimate = state["throughput_estimate"]
+        # Startup cost is replaced by ordinary windows. Grab/Eat maxima can
+        # come from different probes; both recur at the two-episode cadence.
+        self.assertEqual(estimate["seconds_per_episode_with_margin"], (2 + (6 + 8) / 2) * 1.25)
+        self.assertEqual(estimate["estimated_remaining_episodes"], 234)
+        self.assertEqual(estimate["ordinary_episode_samples"], 3)
+        self.assertFalse(estimate["provisional"])
+        self.assertTrue(state["target_attainable_at_measured_rate"])
+        self.assertEqual(state["status"], "completed")
+        self.assertEqual([episode["seconds"] for episode in state["episodes"]], [9, 2, 2, 2, 2])
+        for field, expected in (("distinct_completed_episodes", 5), ("trained_decision_rows", 5),
+                                ("bootstrap_rows", 5), ("captured_decision_rows", 10),
+                                ("actor_optimizer_updates", 5), ("value_optimizer_updates", 5)):
+            self.assertEqual(state[field], expected, field)
+        self.assertEqual(len(state["assessments"]), 5)
+        self.assertEqual(len(state["retention_assessments"]), 5)
+        self.assertEqual(len(finals), 2)
+        self.assertEqual(len([name for name in launched if name.startswith("episode-")]), 5)
+
+    def test_nonrecipe_capacity_keeps_grab_only_periodic_overhead(self):
+        state, finals, launched = self.fixture_run(command_seconds={
+            "frozen-before": 6, "eating-retention-before": 9, "frozen-after-00000": 3,
+            "episode-00000": 9, "episode-00001": 2, "episode-00002": 2},
+            recipe_options=("--target-episodes", "3"))
+        self.assertEqual(state["throughput_estimate"]["seconds_per_episode_with_margin"],
+                         (2 + 6 / 2) * 1.25)
+        self.assertEqual(state["status"], "completed")
+        self.assertEqual(state["distinct_completed_episodes"], 3)
+        self.assertEqual(len(state["retention_assessments"]), 2)
+        self.assertFalse(any(name.startswith("eating-retention-after-") for name in launched))
+        self.assertEqual(len(finals), 2)
+
+    def test_combined_probe_overhead_stops_optimistic_last_recipe_launch(self):
+        # Five collection seconds remain after this successful Eat probe.
+        # Grab-only cost would admit another cycle at 2.5s; both probes need 7.5s.
+        state, finals, launched = self.fixture_run(final_remaining_seconds=911,
+            command_seconds={"frozen-before": 2, "eating-retention-before": 8,
+                             "frozen-after-00000": 2, "eating-retention-after-00000": 6,
+                             "episode-00000": 1},
+            recipe_options=("--max-stalled-batches", "64", "--target-episodes", "2", "--startup-seconds", "3600"))
+        estimate = state["throughput_estimate"]
+        self.assertEqual(estimate["seconds_per_episode_with_margin"], (1 + (2 + 8) / 2) * 1.25)
+        self.assertEqual(estimate["estimated_remaining_episodes"], 0)
+        self.assertIsNone(state["target_attainable_at_measured_rate"])
+        self.assertNotIn("episode-00001", launched)
+        self.assertEqual(state["status"], "incomplete")
+        self.assertIsNone(state["partial_episode"])
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+        self.assertEqual(state["captured_decision_rows"], 2)
+        self.assertEqual(len(finals), 2)
+
+    def test_recipe_retention_probe_timeout_keeps_shared_cutoff_and_accepted_cycle(self):
+        state, finals, launched = self.fixture_run(
+            {"eating-retention-after-00000": night.CommandTimeoutError("Eat reached collection cutoff")},
+            final_remaining_seconds=905,
+            command_seconds={"frozen-before": 2, "eating-retention-before": 8,
+                             "frozen-after-00000": 2, "eating-retention-after-00000": 5,
+                             "episode-00000": 1},
+            recipe_options=("--max-stalled-batches", "64", "--target-episodes", "2", "--startup-seconds", "3600"))
+        self.assertEqual(state["status"], "interrupted")
+        self.assertEqual(state["error"], "Eat reached collection cutoff")
+        self.assertIn("eating-retention-after-00000", launched)
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+        self.assertEqual(state["trained_decision_rows"], 1)
+        self.assertIsNone(state["partial_episode"])
+        self.assertNotIn("episode-00001", launched)
+        self.assertEqual(finals, [])
 
     def test_final_grab_confirmed_timeout_still_attempts_eat_once(self):
         error = night.CommandTimeoutError("fixture Grab command timeout")
