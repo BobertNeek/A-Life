@@ -734,6 +734,48 @@ pub struct FoundationTrainerCheckpoint {
     pub update_ages: Vec<u32>,
 }
 
+impl FoundationTrainerCheckpoint {
+    /// Validate the exact restore contract without creating a GPU session or
+    /// writing optimizer buffers. The source digest binds the admitted asset.
+    pub fn validate_for(
+        &self,
+        phenotype: &BrainPhenotype,
+        source_foundation_digest: alife_core::Blake3Digest,
+    ) -> Result<(), ScaffoldContractError> {
+        self.config.validate()?;
+        self.stage_mask.validate_for(phenotype)?;
+        let n = phenotype.synapses().len();
+        if self.schema_version != 2
+            || self.phenotype_hash != phenotype.phenotype_hash()
+            || self.source_foundation_digest != source_foundation_digest
+            || self.weights.len() != n
+            || self.first_moment.len() != n
+            || self.second_moment.len() != n
+            || self.update_ages.len() != n
+            || self
+                .update_ages
+                .iter()
+                .any(|age| *age > self.optimizer_step)
+            || self
+                .update_ages
+                .iter()
+                .zip(&self.first_moment)
+                .zip(&self.second_moment)
+                .any(|((age, m), v)| *age == 0 && (*m != 0.0 || *v != 0.0))
+            || self
+                .weights
+                .iter()
+                .chain(&self.first_moment)
+                .chain(&self.second_moment)
+                .any(|v| !v.is_finite())
+            || self.second_moment.iter().any(|v| *v < 0.0)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SequenceEvaluation {
     mean_loss: f32,

@@ -38,19 +38,18 @@ function Publish-State {
     Atomic-Json $latest $state
 }
 function Assert-PriorHealth($Receipt, [string]$Context) {
-    if ($env:ALIFE_SLM_PRIOR -eq 'off') { return }
+    if ($env:ALIFE_SLM_PRIOR -eq 'off' -or $env:ALIFE_SLM_PRIOR_BACKEND -eq 'off') { return }
     $prior = $Receipt.semantic_prior
     if ($null -eq $prior -or $prior.failures -gt 0 -or $prior.prime_timeouts -gt 0) {
-        throw "${Context}: configured semantic prior was unavailable or failed; inspect its receipt before continuing."
+        Write-Warning "${Context}: optional semantic prior unavailable or failed; continuing with genuine episode receipts."
+        return
     }
-    # Deliberate whole-cohort dropout has no requests or delivered hints. A
-    # missing or timed-out provider must never be mistaken for that dropout.
     $dropout = $prior.dropout_frames -gt 0 -and $prior.requests -eq 0 -and $prior.cache_hits -eq 0
     if ($prior.delivered_frames -lt 1 -and -not $dropout) {
-        throw "${Context}: configured semantic prior delivered no grounded hints."
+        Write-Warning "${Context}: no grounded language prior hints delivered; continuing unaided."
     }
-    if ($env:ALIFE_SLM_PRIOR_MODEL -and $prior.model -ne $env:ALIFE_SLM_PRIOR_MODEL) {
-        throw "${Context}: semantic prior model differs from the requested model."
+    if ((-not $env:ALIFE_SLM_PRIOR_BACKEND -or $env:ALIFE_SLM_PRIOR_BACKEND -eq 'local') -and $env:ALIFE_SLM_PRIOR_MODEL -and $prior.model -ne $env:ALIFE_SLM_PRIOR_MODEL) {
+        Write-Warning "${Context}: semantic prior model differs from requested local model; inspect provenance."
     }
 }
 function Run-Command([string]$Program, [string[]]$Arguments, [string]$Log, [switch]$OneTest, [datetime]$DeadlineUtc = [datetime]::MaxValue) {

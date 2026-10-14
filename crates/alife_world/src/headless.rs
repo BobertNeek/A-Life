@@ -626,9 +626,22 @@ mod terrain_vision_tests {
             .build()
             .unwrap();
         let food = clear.entity_id("food").unwrap();
-        // Offering a held meal is legal; grabbing another's possession is separate.
+        // Another creature's possession cannot be consumed, even within reach.
         clear.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
         let eat = HeadlessWorldCommand::eat(OrganismId(1), food).unwrap();
+        assert!(!clear.apply_command(&eat).unwrap().execution.succeeded);
+        assert_eq!(clear.objects[&food.raw()].carried_by, Some(OrganismId(2)));
+        assert!(!clear.objects[&food.raw()].consumed);
+        clear.objects.get_mut(&food.raw()).unwrap().carried_by = None;
+        let grab = HeadlessWorldCommand::structured(
+            OrganismId(1),
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(food),
+            None,
+        )
+        .unwrap();
+        assert!(clear.apply_command(&grab).unwrap().execution.succeeded);
         assert!(clear.apply_command(&eat).unwrap().execution.succeeded);
         assert_eq!(clear.objects[&food.raw()].carried_by, None);
         assert!(!clear.apply_command(&eat).unwrap().execution.succeeded);
@@ -648,6 +661,122 @@ mod terrain_vision_tests {
             .visible
             .iter()
             .any(|object| object.transport_entity == target)
+    }
+
+    #[test]
+    fn coincident_xz_sight_is_gaze_independent_for_general_objects() {
+        let mut world = HeadlessScenarioBuilder::new(60_012)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .hazard("object", Vec3f::ZERO, 0.6)
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        let target = world.entity_id("object").unwrap();
+        for position in [Vec3f::ZERO, Vec3f::new(-0.0, 0.0, -0.0)] {
+            world.editor_move_object(target, position).unwrap();
+            for gaze in [0.0_f32, 70.0, -70.0, 133.32324, -133.32324, 180.0] {
+                world.objects.get_mut(&observer.raw()).unwrap().body_yaw = gaze.to_radians();
+                assert!(seen(&world, target), "gaze={gaze}, position={position:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn noncoincident_rear_contact_still_obeys_the_sight_cone() {
+        let gaze = 133.32324_f32.to_radians();
+        let mut world = HeadlessScenarioBuilder::new(60_013)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food(
+                "rear",
+                Vec3f::new(-0.05 * gaze.cos(), 0.0, -0.05 * gaze.sin()),
+                0.6,
+            )
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        let target = world.entity_id("rear").unwrap();
+        world.objects.get_mut(&observer.raw()).unwrap().body_yaw = gaze;
+        for separation in [0.05, f32::EPSILON * 0.5] {
+            world
+                .editor_move_object(
+                    target,
+                    Vec3f::new(-separation * gaze.cos(), 0.0, -separation * gaze.sin()),
+                )
+                .unwrap();
+            assert!(
+                distance(Vec3f::ZERO, world.entity(target).unwrap().position)
+                    < world.entity(target).unwrap().radius
+            );
+            assert!(!seen(&world, target), "separation={separation}");
+        }
+    }
+
+    #[test]
+    fn coincident_xz_sight_preserves_occlusion_range_and_consumed_filters() {
+        let mut world = HeadlessScenarioBuilder::new(60_014)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .food("above", Vec3f::new(0.0, 2.0, 0.0), 0.6)
+            .obstacle("barrier", Vec3f::new(0.0, 1.5, 0.0), 0.1)
+            .build()
+            .unwrap();
+        let observer = world.entity_id("observer").unwrap();
+        let target = world.entity_id("above").unwrap();
+        let barrier = world.entity_id("barrier").unwrap();
+        world.objects.get_mut(&observer.raw()).unwrap().body_yaw = 133.32324_f32.to_radians();
+        world.editor_set_optical_opacity(barrier, 0.0).unwrap();
+        assert!(seen(&world, target));
+        let snapshot = world
+            .physical_observation_snapshot_from_objects(
+                OrganismId(1),
+                Tick::ZERO,
+                world.agent_for(OrganismId(1)).unwrap(),
+                world.objects.values(),
+                true,
+            )
+            .unwrap();
+        assert!(
+            !snapshot
+                .visible
+                .iter()
+                .find(|object| object.transport_entity == target)
+                .unwrap()
+                .contact
+        );
+        world.editor_set_optical_opacity(barrier, 1.0).unwrap();
+        assert!(!seen(&world, target));
+        world.editor_set_optical_opacity(barrier, 0.0).unwrap();
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 9],
+                    obstacles: vec![[-0.1, -0.1, 0.1, 0.1, 1.4, 1.6]],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        assert!(!seen(&world, target));
+        world.terrain = None;
+        assert!(seen(&world, target));
+        world
+            .editor_move_object(target, Vec3f::new(0.0, HEADLESS_VISION_RADIUS, 0.0))
+            .unwrap();
+        assert!(seen(&world, target));
+        let just_outside = f32::from_bits(HEADLESS_VISION_RADIUS.to_bits() + 1);
+        world
+            .editor_move_object(target, Vec3f::new(0.0, just_outside, 0.0))
+            .unwrap();
+        assert!(!seen(&world, target));
+        world.editor_move_object(target, Vec3f::ZERO).unwrap();
+        assert!(seen(&world, target));
+        world.objects.get_mut(&target.raw()).unwrap().consumed = true;
+        assert!(!seen(&world, target));
     }
 
     #[test]
@@ -3741,13 +3870,17 @@ impl HeadlessWorld {
 
     fn object_in_sight(&self, observer: &WorldObject, target: &WorldObject) -> bool {
         let relative = subtract(target.position, observer.position);
-        let bearing = relative.z.atan2(relative.x);
-        let gaze = observer.body_yaw + observer.head_yaw;
-        let angular_delta = (bearing - gaze + std::f32::consts::PI)
-            .rem_euclid(std::f32::consts::TAU)
-            - std::f32::consts::PI;
-        if angular_delta.abs() > VISION_HALF_ANGLE {
-            return false;
+        // Coincident X/Z has no azimuth. Do not let atan2(0, 0) assign an
+        // arbitrary world bearing; keep range and physical occlusion below.
+        if relative.x != 0.0 || relative.z != 0.0 {
+            let bearing = relative.z.atan2(relative.x);
+            let gaze = observer.body_yaw + observer.head_yaw;
+            let angular_delta = (bearing - gaze + std::f32::consts::PI)
+                .rem_euclid(std::f32::consts::TAU)
+                - std::f32::consts::PI;
+            if angular_delta.abs() > VISION_HALF_ANGLE {
+                return false;
+            }
         }
         let eye = Vec3f::new(
             observer.position.x,
@@ -4803,9 +4936,12 @@ impl HeadlessWorld {
     ) -> Result<HeadlessActionResult, ScaffoldContractError> {
         let positions = self.carried_interval_positions(
             command.organism_id,
-            (classify_action(command) == HeadlessAction::Grab)
-                .then_some(command.target_entity)
-                .flatten(),
+            matches!(
+                classify_action(command),
+                HeadlessAction::Grab | HeadlessAction::Eat
+            )
+            .then_some(command.target_entity)
+            .flatten(),
         );
         let result = self.execute_command_inner(command)?;
         self.commit_carried_interval_velocity(command.organism_id, &positions);
@@ -5064,36 +5200,27 @@ impl HeadlessWorld {
         )
     }
 
-    fn execute_grab(
-        &mut self,
-        command: ActionCommand,
+    fn grab_target_is_legal(
+        &self,
+        organism_id: OrganismId,
         agent_id: WorldEntityId,
-    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
-        let target = match self.require_target(&command) {
-            Ok(target) => target,
-            Err(_) => return self.invalid_target(command, command.target_entity),
+        target: WorldEntityId,
+    ) -> bool {
+        let Some(agent) = self.objects.get(&agent_id.raw()) else {
+            return false;
         };
-        let agent_position = self
-            .objects
-            .get(&agent_id.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?
-            .position;
-        let (target_position, target_kind, target_organism, target_carried_by, target_consumed) =
-            self.objects
-                .get(&target.raw())
-                .map(|object| {
-                    (
-                        object.position,
-                        object.kind,
-                        object.organism_id,
-                        object.carried_by,
-                        object.consumed,
-                    )
-                })
-                .ok_or(ScaffoldContractError::InvalidId)?;
+        let agent_position = agent.position;
+        let Some(object) = self.objects.get(&target.raw()) else {
+            return false;
+        };
+        let target_position = object.position;
+        let target_kind = object.kind;
+        let target_organism = object.organism_id;
+        let target_carried_by = object.carried_by;
+        let target_consumed = object.consumed;
         let has_manipulation_effector =
             self.organism_registry
-                .get(command.organism_id)
+                .get(organism_id)
                 .is_none_or(|record| {
                     record
                         .embodiment()
@@ -5113,21 +5240,52 @@ impl HeadlessWorld {
                 | WorldObjectKind::Token
                 | WorldObjectKind::Ball
         );
-        let target_is_self = target == agent_id || target_organism == Some(command.organism_id);
-        let owned_by_other = target_carried_by.is_some_and(|owner| owner != command.organism_id);
-        let agent = &self.objects[&agent_id.raw()];
+        let target_is_self = target == agent_id || target_organism == Some(organism_id);
+        let owned_by_other = target_carried_by.is_some_and(|owner| owner != organism_id);
         let grip = Self::carry_grip(agent.position, agent.body_yaw);
         let within_reach = self.physical_contact_reachable(agent_position, target_position)
-            && (target_carried_by == Some(command.organism_id)
+            && (target_carried_by == Some(organism_id)
                 || (self.solid_segment_clear(agent_position, grip)
                     && self.solid_segment_clear(target_position, grip)));
-        if !has_manipulation_effector
-            || !target_is_live
-            || !target_is_mobile
-            || target_is_self
-            || owned_by_other
-            || !within_reach
-        {
+        has_manipulation_effector
+            && target_is_live
+            && target_is_mobile
+            && !target_is_self
+            && !owned_by_other
+            && within_reach
+    }
+
+    fn eat_can_pick_up(&self, organism_id: OrganismId, target: WorldEntityId) -> bool {
+        let Some(food) = self.objects.get(&target.raw()) else {
+            return false;
+        };
+        let Ok(agent_id) = self.agent_entity_id(organism_id) else {
+            return false;
+        };
+        // This convenience action has one free grip. Never replace, release,
+        // or silently stack another possession, including the player's hold.
+        food.kind == WorldObjectKind::Food
+            && food.hazard_pain == 0.0
+            && food.carried_by.is_none()
+            && self.player_held_object() != Some(target)
+            && !self
+                .objects
+                .values()
+                .any(|object| !object.consumed && object.carried_by == Some(organism_id))
+            && self.grab_target_is_legal(organism_id, agent_id, target)
+    }
+
+    fn execute_grab(
+        &mut self,
+        command: ActionCommand,
+        agent_id: WorldEntityId,
+    ) -> Result<HeadlessActionResult, ScaffoldContractError> {
+        let target = match self.require_target(&command) {
+            Ok(target) => target,
+            Err(_) => return self.invalid_target(command, command.target_entity),
+        };
+        let target_carried_by = self.objects[&target.raw()].carried_by;
+        if !self.grab_target_is_legal(command.organism_id, agent_id, target) {
             return self.finish_action(
                 command,
                 false,
@@ -5215,10 +5373,20 @@ impl HeadlessWorld {
                 Vec::new(),
             );
         }
+        if self.eat_can_pick_up(command.organism_id, target) {
+            // Acquire only in this decision. The original Eat identity stays in
+            // action, channel, and sealed learning receipts; it is not a sampled
+            // Grab and must not earn explicit-Grab curriculum credit.
+            let agent_id = self.agent_entity_id(command.organism_id)?;
+            return self.execute_grab(command, agent_id);
+        }
         let Some(object) = self.objects.get(&target.raw()) else {
             return self.invalid_target(command, Some(target));
         };
-        if object.kind != WorldObjectKind::Food || object.consumed {
+        if object.kind != WorldObjectKind::Food
+            || object.consumed
+            || object.carried_by != Some(command.organism_id)
+        {
             let consumed = object.consumed;
             let kind = object.kind;
             let hazard_pain = object.hazard_pain;
@@ -6537,13 +6705,22 @@ impl crate::ActionLegalityChecker for HeadlessWorld {
             return crate::ActionLegality::ImpossibleTarget;
         }
         if classify_action(action) == HeadlessAction::Eat {
-            if let Some(target) = action.target_entity {
-                let Some(object) = self.objects.get(&target.raw()) else {
-                    return crate::ActionLegality::ImpossibleTarget;
-                };
-                if object.kind != WorldObjectKind::Food || object.consumed {
-                    return crate::ActionLegality::BlockedByWorldState;
-                }
+            let Some(target) = action.target_entity else {
+                return crate::ActionLegality::ImpossibleTarget;
+            };
+            let Some(object) = self.objects.get(&target.raw()) else {
+                return crate::ActionLegality::ImpossibleTarget;
+            };
+            let Ok(agent) = self.agent_for(action.organism_id) else {
+                return crate::ActionLegality::BlockedByWorldState;
+            };
+            if object.kind != WorldObjectKind::Food
+                || object.consumed
+                || (object.carried_by != Some(action.organism_id)
+                    && !self.eat_can_pick_up(action.organism_id, target))
+                || !self.physical_contact_reachable(agent.position, object.position)
+            {
+                return crate::ActionLegality::BlockedByWorldState;
             }
         }
         crate::ActionLegality::Legal
@@ -7613,6 +7790,21 @@ mod task_6_factorized_motor_tests {
         (world, agent, food, bundle)
     }
 
+    // Establish actual possession before the biology transaction being tested.
+    fn hold_food_for_meal(world: &mut HeadlessWorld, food: WorldEntityId) {
+        let grab = HeadlessWorldCommand::structured(
+            ORGANISM_ID,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(food),
+            None,
+        )
+        .unwrap();
+        assert!(world.apply_command(&grab).unwrap().execution.succeeded);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(!world.entity(food).unwrap().consumed);
+    }
+
     #[test]
     fn carry_pose_joint_interval_keeps_translation_and_rotation_through_later_channels() {
         for orientation in [HeadlessActionIds::TURN_LEFT, HeadlessActionIds::LOOK_LEFT] {
@@ -7863,6 +8055,120 @@ mod task_6_factorized_motor_tests {
         assert!(!fixed_grab_result.execution.succeeded);
         assert_eq!(world.entity(fixed_obstacle).unwrap().carried_by, None);
         assert_eq!(world.entity(agent).unwrap().organism_id, Some(ORGANISM_ID));
+    }
+
+    #[test]
+    fn registered_eat_pickup_and_later_meal_keep_selected_channel_and_measured_biology() {
+        let (mut world, agent, food, mut bundle) = prepared_world();
+        bundle
+            .channels
+            .retain(|channel| channel.channel == MotorChannel::Manipulation);
+        let pickup = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+        assert_eq!(pickup.bundle, bundle);
+        assert!(pickup.succeeded);
+        assert_eq!(pickup.channel_receipts.len(), 1);
+        assert_eq!(
+            pickup.channel_receipts[0].command.primitive,
+            HeadlessActionIds::EAT
+        );
+        assert_eq!(
+            pickup.channel_receipts[0].physical.contact,
+            PhysicalContactKind::Touch
+        );
+        assert_eq!(
+            pickup.joint.channel_outcomes[0].physical.target_entity,
+            Some(food)
+        );
+        assert_eq!(pickup.body_event.nutrition, 0.0);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
+        assert!(!world.entity(food).unwrap().consumed);
+        assert_eq!(
+            pickup.biology_after,
+            pickup
+                .biology_before
+                .advance(
+                    pickup.outcome_tick,
+                    pickup.body_event,
+                    world
+                        .organism_registry()
+                        .get(ORGANISM_ID)
+                        .unwrap()
+                        .phenotype(),
+                )
+                .unwrap()
+        );
+        world.try_advance_tick().unwrap();
+        bundle.tick = world.tick();
+        bundle.sequence_id = alife_core::ExperienceSequenceId(2);
+        let meal = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+        assert_eq!(meal.bundle, bundle);
+        assert!(meal.succeeded);
+        assert_eq!(
+            meal.channel_receipts[0].command.primitive,
+            HeadlessActionIds::EAT
+        );
+        assert_eq!(
+            meal.channel_receipts[0].physical.contact,
+            PhysicalContactKind::Consumed
+        );
+        assert_eq!(meal.body_event.nutrition, 0.6);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+        assert!(world.entity(food).unwrap().consumed);
+        assert_eq!(
+            meal.biology_after,
+            meal.biology_before
+                .advance(
+                    meal.outcome_tick,
+                    meal.body_event,
+                    world
+                        .organism_registry()
+                        .get(ORGANISM_ID)
+                        .unwrap()
+                        .phenotype(),
+                )
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn eat_pickup_requires_the_existing_manipulation_effector() {
+        let (mut world, agent, food, _) = prepared_world();
+        let mut record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        // A valid body fixture without a manipulation port. Retain all other
+        // controls and advance the authoritative embodiment revision.
+        let mut value = serde_json::to_value(record.embodiment()).unwrap();
+        let ports = value["effectors"].as_array_mut().unwrap();
+        let index = ports
+            .iter()
+            .position(|port| port["capability"] == "Manipulation")
+            .unwrap();
+        let start: usize = ports[..index]
+            .iter()
+            .map(|port| port["command_lanes"].as_u64().unwrap() as usize)
+            .sum();
+        let width = ports[index]["command_lanes"].as_u64().unwrap() as usize;
+        ports.remove(index);
+        value["effector_controllability"]
+            .as_array_mut()
+            .unwrap()
+            .drain(start..start + width);
+        value["revision"] = serde_json::json!(record.embodiment().revision() + 1);
+        record
+            .replace_embodiment_state(serde_json::from_value(value).unwrap())
+            .unwrap();
+        world.replace_organism_record_exact(record).unwrap();
+        let eat = HeadlessWorldCommand::eat(ORGANISM_ID, food).unwrap();
+        assert_eq!(
+            crate::ActionLegalityChecker::check_action(&world, &eat),
+            crate::ActionLegality::BlockedByWorldState
+        );
+        let before = world.entity(agent).unwrap().position;
+        let result = world.apply_command(&eat).unwrap();
+        assert!(!result.execution.succeeded);
+        assert_eq!(result.body_event.nutrition, 0.0);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+        assert!(!world.entity(food).unwrap().consumed);
+        assert_eq!(world.entity(agent).unwrap().position, before);
     }
 
     fn posture_bundle(primitive: ActionId, target: Option<WorldEntityId>) -> MotorCommandBundle {
@@ -8330,6 +8636,7 @@ mod task_6_factorized_motor_tests {
     #[test]
     fn factorized_bundle_executes_as_one_joint_transaction_and_rolls_back() {
         let (mut world, agent, food, bundle) = prepared_world();
+        hold_food_for_meal(&mut world, food);
         let biology_before = *world
             .organism_registry()
             .get(ORGANISM_ID)
@@ -8494,7 +8801,8 @@ mod task_6_factorized_motor_tests {
         );
         assert!(!domain_world.entity(domain_food).unwrap().is_consumed());
 
-        let (mut failing_world, failing_agent, _, failing_bundle) = prepared_world();
+        let (mut failing_world, failing_agent, failing_food, failing_bundle) = prepared_world();
+        hold_food_for_meal(&mut failing_world, failing_food);
         let before_signature = failing_world.canonical_signature_digest().unwrap();
         let before_objects = failing_world.object_snapshots();
         let before_record = failing_world
@@ -8530,6 +8838,13 @@ mod task_6_factorized_motor_tests {
         world
             .editor_move_object(food, Vec3f::new(0.0, 0.0, 0.5))
             .unwrap();
+        hold_food_for_meal(&mut world, food);
+        // Grab projects to the forward carry position. This fixture keeps the
+        // genuinely held food lateral so only the locomotion path is blocked.
+        world
+            .editor_move_object(food, Vec3f::new(0.0, 0.0, 0.5))
+            .unwrap();
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM_ID));
         let locomotion = bundle
             .channels
             .iter_mut()
@@ -8825,6 +9140,21 @@ mod task_3_2a_tests {
             )
             .unwrap();
 
+            if case.label == Some("legal-food") {
+                let grab = HeadlessWorldCommand::structured(
+                    ORGANISM_ID,
+                    HeadlessActionIds::GRAB,
+                    ActionKind::Hold,
+                    target,
+                    None,
+                )
+                .unwrap();
+                assert!(world.apply_command(&grab).unwrap().execution.succeeded);
+                assert_eq!(
+                    world.entity(target.unwrap()).unwrap().carried_by,
+                    Some(ORGANISM_ID)
+                );
+            }
             let result = world.apply_command(&command).unwrap();
 
             assert_eq!(result.execution.succeeded, case.expected_success);
@@ -9203,6 +9533,19 @@ mod task_3_2a_tests {
 
     fn task_4_1_consume_and_prepare_resource(world: &mut HeadlessWorld) -> WorldEntityId {
         let food = world.entity_id("food").unwrap();
+        let grab = HeadlessWorldCommand::structured(
+            TASK_4_1_LOW_ORGANISM,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(food),
+            None,
+        )
+        .unwrap();
+        assert!(world.apply_command(&grab).unwrap().execution.succeeded);
+        assert_eq!(
+            world.entity(food).unwrap().carried_by,
+            Some(TASK_4_1_LOW_ORGANISM)
+        );
         let result = world
             .apply_command(&HeadlessWorldCommand::eat(TASK_4_1_LOW_ORGANISM, food).unwrap())
             .unwrap();
@@ -10488,5 +10831,261 @@ mod task_4_3a2_tests {
             before_signature
         );
         assert_eq!(next_tick, Tick(before_tick.raw() + 1));
+    }
+}
+
+#[cfg(test)]
+mod eat_possession_tests {
+    use super::*;
+    use crate::{ActionLegality, ActionLegalityChecker};
+
+    const ORGANISM: OrganismId = OrganismId(1);
+
+    fn world() -> (HeadlessWorld, WorldEntityId) {
+        let world = HeadlessScenarioBuilder::new(70_007)
+            .agent("learner", ORGANISM, Vec3f::ZERO)
+            .food("food", Vec3f::new(0.0, 0.0, 0.6), 0.6)
+            .build()
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        (world, food)
+    }
+
+    fn grab(food: WorldEntityId) -> ActionCommand {
+        HeadlessWorldCommand::structured(
+            ORGANISM,
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(food),
+            None,
+        )
+        .unwrap()
+    }
+
+    fn assert_rejected(world: &mut HeadlessWorld, food: WorldEntityId) {
+        let command = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+        assert_eq!(
+            world.check_action(&command),
+            ActionLegality::BlockedByWorldState
+        );
+        let result = world.apply_command(&command).unwrap();
+        assert!(!result.execution.succeeded);
+        assert_eq!(
+            result.execution.failure,
+            Some(ReferenceActionFailure::MissingAffordance)
+        );
+        assert_eq!(result.body_event.nutrition, 0.0);
+        assert!(!world.entity(food).unwrap().consumed);
+        assert!(!world.ingestion_observations.contains_key(&ORGANISM.raw()));
+    }
+
+    #[test]
+    fn reachable_loose_food_eat_acquires_only_then_later_eat_consumes_same_target() {
+        let (mut world, food) = world();
+        let command = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+        let position_before = world.entity(food).unwrap().position;
+        let ecology_before = world.ecology.clone();
+        assert_eq!(world.check_action(&command), ActionLegality::Legal);
+        let pickup = world.apply_command(&command).unwrap();
+        assert_eq!(pickup.command, command);
+        assert!(pickup.execution.succeeded);
+        assert_eq!(
+            pickup.execution.physical.contact,
+            PhysicalContactKind::Touch
+        );
+        assert_eq!(pickup.execution.physical.target_entity, Some(food));
+        assert_eq!(pickup.execution.physical.displacement, Vec3f::ZERO);
+        assert_eq!(pickup.touched_entities, vec![food]);
+        assert_eq!(pickup.body_event.nutrition, 0.0);
+        assert_eq!(pickup.observation.homeostatic_delta.drives.hunger, 0.0);
+        assert_eq!(pickup.observation.frustration_delta.raw(), 0.0);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
+        assert!(!world.entity(food).unwrap().consumed);
+        assert_eq!(world.entity(food).unwrap().nutrition, 0.6);
+        let grip = HeadlessWorld::carry_grip(Vec3f::ZERO, 0.0);
+        assert_eq!(world.entity(food).unwrap().position, grip);
+        assert_eq!(
+            world.entity(food).unwrap().grounded_physical.velocity,
+            subtract(grip, position_before)
+        );
+        assert_eq!(world.ecology, ecology_before);
+        assert!(!world.ingestion_observations.contains_key(&ORGANISM.raw()));
+
+        world.advance_tick();
+        let meal = world.apply_command(&command).unwrap();
+        assert_eq!(meal.command, command);
+        assert!(meal.execution.succeeded);
+        assert_eq!(
+            meal.execution.physical.contact,
+            PhysicalContactKind::Consumed
+        );
+        assert_eq!(meal.execution.physical.target_entity, Some(food));
+        assert_eq!(meal.body_event.nutrition, 0.6);
+        assert!(world.entity(food).unwrap().consumed);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+        assert!(world.ingestion_observations.contains_key(&ORGANISM.raw()));
+        let stale = world.apply_command(&command).unwrap();
+        assert!(!stale.execution.succeeded);
+        assert_eq!(stale.body_event.nutrition, 0.0);
+    }
+
+    #[test]
+    fn another_creatures_held_food_cannot_be_eaten_or_stolen() {
+        let (mut world, food) = world();
+        world.objects.get_mut(&food.raw()).unwrap().carried_by = Some(OrganismId(2));
+        assert_rejected(&mut world, food);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(OrganismId(2)));
+    }
+
+    #[test]
+    fn released_food_selected_eat_reacquires_without_consuming() {
+        let (mut world, food) = world();
+        let command = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+        assert!(
+            world
+                .apply_command(&grab(food))
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        assert_eq!(world.check_action(&command), ActionLegality::Legal);
+        assert!(
+            world
+                .apply_command(&grab(food))
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+        assert_eq!(world.check_action(&command), ActionLegality::Legal);
+        let reacquired = world.apply_command(&command).unwrap();
+        assert!(reacquired.execution.succeeded);
+        assert_eq!(reacquired.command, command);
+        assert_eq!(
+            reacquired.execution.physical.contact,
+            PhysicalContactKind::Touch
+        );
+        assert_eq!(reacquired.body_event.nutrition, 0.0);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
+        assert!(!world.entity(food).unwrap().consumed);
+    }
+
+    #[test]
+    fn possession_of_a_different_target_does_not_authorize_eating_loose_food() {
+        let (mut world, food) = world();
+        let other = world
+            .insert_object(SpawnSpec {
+                label: "other",
+                kind: WorldObjectKind::Food,
+                organism_id: None,
+                position: Vec3f::new(0.5, 0.0, 0.0),
+                nutrition: 0.4,
+                hazard_pain: 0.0,
+                token_id: None,
+                social_affinity: 0.0,
+                teacher_channel: None,
+            })
+            .unwrap();
+        assert!(
+            world
+                .apply_command(&grab(other))
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        assert_rejected(&mut world, food);
+        assert_eq!(world.entity(other).unwrap().carried_by, Some(ORGANISM));
+        assert!(!world.entity(other).unwrap().consumed);
+    }
+
+    #[test]
+    fn eat_pickup_never_navigates_or_acquires_unsafe_nonfood_or_player_held_targets() {
+        for case in ["out_of_reach", "unsafe", "nonfood", "player_held"] {
+            let (mut world, food) = world();
+            match case {
+                "out_of_reach" => {
+                    world.objects.get_mut(&food.raw()).unwrap().position = Vec3f::new(4.0, 0.0, 0.0)
+                }
+                "unsafe" => world.objects.get_mut(&food.raw()).unwrap().hazard_pain = 0.3,
+                "nonfood" => {
+                    world.objects.get_mut(&food.raw()).unwrap().kind = WorldObjectKind::Ball
+                }
+                "player_held" => {
+                    world.begin_player_hold(food).unwrap();
+                    world.move_player_hold(Vec3f::new(0.0, 0.0, -0.2)).unwrap();
+                }
+                _ => unreachable!(),
+            }
+            let agent_before = world.agent_for(ORGANISM).unwrap().position;
+            let food_before = world.entity(food).unwrap().clone();
+            assert_rejected(&mut world, food);
+            assert_eq!(
+                world.agent_for(ORGANISM).unwrap().position,
+                agent_before,
+                "{case}"
+            );
+            assert_eq!(world.entity(food).unwrap(), &food_before, "{case}");
+            if case == "player_held" {
+                assert_eq!(world.player_held_object(), Some(food));
+            }
+        }
+    }
+
+    #[test]
+    fn eat_pickup_rejects_blocked_grip_even_with_clear_body_to_food_contact() {
+        let (mut world, food) = world();
+        // Food is lateral and reachable, but the forward carry grip intersects
+        // the solid wall. Acquisition must not teleport through it.
+        world.terrain = Some(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 3,
+                    depth: 3,
+                    origin_x: -1.0,
+                    origin_z: -1.0,
+                    spacing: 1.0,
+                    heights: vec![0.0; 9],
+                    obstacles: vec![[0.4, -0.1, 0.6, 0.1, 0.0, 2.0]],
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )
+            .unwrap(),
+        );
+        assert!(world.physical_contact_reachable(Vec3f::ZERO, world.entity(food).unwrap().position));
+        assert_rejected(&mut world, food);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+    }
+
+    #[test]
+    fn self_held_consumption_keeps_nutrition_taste_and_ownership_cleanup() {
+        let (mut world, food) = world();
+        let taste = world.entity(food).unwrap().grounded_physical.chemical[2];
+        assert!(
+            world
+                .apply_command(&grab(food))
+                .unwrap()
+                .execution
+                .succeeded
+        );
+        let command = HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+        assert_eq!(world.check_action(&command), ActionLegality::Legal);
+        let result = world.apply_command(&command).unwrap();
+        assert!(result.execution.succeeded);
+        assert_eq!(
+            result.execution.physical.contact,
+            PhysicalContactKind::Consumed
+        );
+        assert_eq!(result.body_event.nutrition, 0.6);
+        assert!(world.entity(food).unwrap().consumed);
+        assert_eq!(world.entity(food).unwrap().carried_by, None);
+        assert_eq!(world.ingestion_observations[&ORGANISM.raw()].taste, taste);
+        assert_eq!(
+            world.check_action(&command),
+            ActionLegality::BlockedByWorldState
+        );
+        let stale = world.apply_command(&command).unwrap();
+        assert!(!stale.execution.succeeded);
+        assert_eq!(stale.body_event.nutrition, 0.0);
     }
 }

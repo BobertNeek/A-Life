@@ -7,8 +7,8 @@ use alife_core::{
     WorldEntityId,
 };
 use alife_world::{
-    AudibleUtterance, HeadlessActionResult, HeadlessScenarioBuilder, HeadlessWorld,
-    HeadlessWorldCommand, WorldEditorSpawnSpec, WorldObjectKind,
+    AudibleUtterance, HeadlessActionIds, HeadlessActionResult, HeadlessScenarioBuilder,
+    HeadlessWorld, HeadlessWorldCommand, WorldEditorSpawnSpec, WorldObjectKind,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -313,6 +313,19 @@ impl LanguageNursery {
                     self.world
                         .apply_command(&HeadlessWorldCommand::approach(peer, target)?)?,
                 );
+                actions.push(self.world.apply_command(&ActionCommand::structured(
+                    peer,
+                    HeadlessActionIds::GRAB,
+                    ActionKind::Hold,
+                    ActionTarget::new(Some(target), None),
+                    Intensity::new(1.0)?,
+                    DurationTicks::new(1),
+                    Confidence::new(0.9)?,
+                    0,
+                    None,
+                    None,
+                    None,
+                )?)?);
                 actions.push(
                     self.world
                         .apply_command(&HeadlessWorldCommand::eat(peer, target)?)?,

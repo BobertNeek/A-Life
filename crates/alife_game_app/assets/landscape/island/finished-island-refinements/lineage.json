@@ -1,0 +1,627 @@
+{
+  "schema": 1,
+  "source_pack": {
+    "filename": "A-Life-island-props-and-trees-2026-10-04.zip",
+    "bytes": 18717344,
+    "sha256": "e5e6b20c438d5b63cdd6c7f1b9155e74be2068696adb65de99b83288243e47f5"
+  },
+  "integration_base": "326a674538bba255936e0360236329938eaeee63",
+  "decision": "Retain later saved refinements; all six repository assets were still Oct 1 originals. The saved Oct 4 source-pack baseline is a distinct geometry refinement, not an exact installed baseline. Both are pinned separately.",
+  "assets": [
+    {
+      "name": "Flowers",
+      "asset_id": "approved-island-flowers",
+      "runtime_path": "crates/alife_game_app/assets/landscape/island/Flowers.glb",
+      "archive": {
+        "filename": "A-Life-Flowers-biocolor-v2-2026-10-09.zip",
+        "bytes": 3573730,
+        "sha256": "4c090fff264c2582315cc806d8aca2fec871f8bb34f4cc6613988cb443400c4e"
+      },
+      "preintegration": {
+        "file": "Flowers.preintegration.glb",
+        "bytes": 105464,
+        "sha256": "2de88ffa1540e857f0e37619c7b9fcc274732a26570312c075d37a2b1b92008b"
+      },
+      "source_pack_baseline": {
+        "file": "Flowers.source-pack-baseline.glb",
+        "bytes": 122672,
+        "sha256": "347562a5898364fee463fc7f26c3d2e4b58b55eb7245df2c2117ea7cde8aa6be"
+      },
+      "editable_source": {
+        "file": "Flowers-biocolor-v2.blend",
+        "sha256": "1d3f95bfa7aaa99256fbf242b38a502973dcd38aeadfebe1dddf6386d0aa7506",
+        "source_kind": "GLB-derived native editable reconstruction; original newer-format native source untouched",
+        "blender": "4.3.2"
+      },
+      "runtime": {
+        "bytes": 122672,
+        "sha256": "7f6c33bf2dce805a3b386e4801ec0097de77c69e0cd7b6e2e72950d094e0f3d8",
+        "fnv1a64": "fnv1a64:ff9733c199934560"
+      },
+      "lods": [
+        {
+          "level": 0,
+          "node_and_mesh_name": "Flowers_L0",
+          "triangles": 848,
+          "vertices": 2458,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.3499999940395355,
+            0,
+            -0.30000001192092896
+          ],
+          "runtime_aabb_max": [
+            0.3499999940395355,
+            0.6000000238418579,
+            0.30000001192092896
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 1,
+          "node_and_mesh_name": "Flowers_L1",
+          "triangles": 373,
+          "vertices": 1073,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.3505088686943054,
+            -0.0006690830341540277,
+            -0.3012729287147522
+          ],
+          "runtime_aabb_max": [
+            0.35105860233306885,
+            0.6000000238418579,
+            0.3009316325187683
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 2,
+          "node_and_mesh_name": "Flowers_L2",
+          "triangles": 155,
+          "vertices": 463,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.3505088686943054,
+            -0.0006690830341540277,
+            -0.3012729287147522
+          ],
+          "runtime_aabb_max": [
+            0.35105860233306885,
+            0.595524787902832,
+            0.3009316325187683
+          ],
+          "actual_bounds_equal_original": true
+        }
+      ],
+      "verified_contract": {
+        "exact_original_json_metadata": true,
+        "exact_original_index_buffers": true,
+        "names_pivots_identity_transforms": true,
+        "one_primitive_per_lod": true,
+        "one_existing_shared_material": true,
+        "normalized_byte_COLOR_0": true,
+        "no_textures_extensions_animation_rig_custom_shader": true,
+        "source_reloaded_and_runtime_reimported": true,
+        "khronos_errors": 0,
+        "khronos_warnings": 0
+      }
+    },
+    {
+      "name": "BoulderA",
+      "asset_id": "approved-island-bouldera",
+      "runtime_path": "crates/alife_game_app/assets/landscape/island/BoulderA.glb",
+      "archive": {
+        "filename": "A-Life-Boulders-basalt-v2-2026-10-09.zip",
+        "bytes": 10985203,
+        "sha256": "a3aa8b4469cf8e7cc3547611d31c5d314e043b3378cafe2dfc5eec364cf2cb8a"
+      },
+      "preintegration": {
+        "file": "BoulderA.preintegration.glb",
+        "bytes": 35724,
+        "sha256": "78b320983f93bb9ef82558a64445fd3bb3ad1fb812251daec84f79a5176f3460"
+      },
+      "source_pack_baseline": {
+        "file": "BoulderA.source-pack-baseline.glb",
+        "bytes": 35576,
+        "sha256": "273255e2d54b4536b3bc6ab57df6616c27f2a0585b77aea647e7e22b41dd390d"
+      },
+      "editable_source": {
+        "file": "BoulderA-basalt-v2.blend",
+        "sha256": "c31749f9be2de52d5030a6a95879c719720a4667b186d58beaf60cf9cca81ce0",
+        "source_kind": "GLB-derived native editable reconstruction; original newer-format native source untouched",
+        "blender": "4.3.2"
+      },
+      "runtime": {
+        "bytes": 35576,
+        "sha256": "3c9fa625793b4e16196147393e861c1581fb600703ea9101f8cb010b37116368",
+        "fnv1a64": "fnv1a64:b4b9eab96e853f5c"
+      },
+      "lods": [
+        {
+          "level": 0,
+          "node_and_mesh_name": "BoulderA_L0",
+          "triangles": 312,
+          "vertices": 596,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -1.2000000476837158,
+            0,
+            -1
+          ],
+          "runtime_aabb_max": [
+            1.2000000476837158,
+            1.7999999523162842,
+            1
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 1,
+          "node_and_mesh_name": "BoulderA_L1",
+          "triangles": 140,
+          "vertices": 318,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -1.17444908618927,
+            -0.000598376092966646,
+            -0.9746811985969543
+          ],
+          "runtime_aabb_max": [
+            1.1811256408691406,
+            1.7999999523162842,
+            0.9809417724609375
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 2,
+          "node_and_mesh_name": "BoulderA_L2",
+          "triangles": 62,
+          "vertices": 156,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -1.0701974630355835,
+            -0.017585795372724533,
+            -0.9920822978019714
+          ],
+          "runtime_aabb_max": [
+            1.1597036123275757,
+            1.7105578184127808,
+            0.9871947169303894
+          ],
+          "actual_bounds_equal_original": true
+        }
+      ],
+      "verified_contract": {
+        "exact_original_json_metadata": true,
+        "exact_original_index_buffers": true,
+        "names_pivots_identity_transforms": true,
+        "one_primitive_per_lod": true,
+        "one_existing_shared_material": true,
+        "normalized_byte_COLOR_0": true,
+        "no_textures_extensions_animation_rig_custom_shader": true,
+        "source_reloaded_and_runtime_reimported": true,
+        "khronos_errors": 0,
+        "khronos_warnings": 0
+      }
+    },
+    {
+      "name": "BoulderB",
+      "asset_id": "approved-island-boulderb",
+      "runtime_path": "crates/alife_game_app/assets/landscape/island/BoulderB.glb",
+      "archive": {
+        "filename": "A-Life-Boulders-basalt-v2-2026-10-09.zip",
+        "bytes": 10985203,
+        "sha256": "a3aa8b4469cf8e7cc3547611d31c5d314e043b3378cafe2dfc5eec364cf2cb8a"
+      },
+      "preintegration": {
+        "file": "BoulderB.preintegration.glb",
+        "bytes": 36180,
+        "sha256": "ef1ce571573a3d86b0f971369f1ec4b68ea5577aaba1ef3b21825d7abcc40878"
+      },
+      "source_pack_baseline": {
+        "file": "BoulderB.source-pack-baseline.glb",
+        "bytes": 35920,
+        "sha256": "cd5d89ae2208141d1e468584b106701a67dff9d458528e017e52df85de890560"
+      },
+      "editable_source": {
+        "file": "BoulderB-basalt-v2.blend",
+        "sha256": "1771b3b4687593bf793cdc4b6f60ff7b5b356dd6a81a507918cc109894cd1b41",
+        "source_kind": "GLB-derived native editable reconstruction; original newer-format native source untouched",
+        "blender": "4.3.2"
+      },
+      "runtime": {
+        "bytes": 35920,
+        "sha256": "d3b09e634ba7f66453ffee05ae5eb61b862953e88cfa1935f39434a737cade1d",
+        "fnv1a64": "fnv1a64:897b6fa1f012b408"
+      },
+      "lods": [
+        {
+          "level": 0,
+          "node_and_mesh_name": "BoulderB_L0",
+          "triangles": 312,
+          "vertices": 594,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.8999999761581421,
+            0,
+            -0.75
+          ],
+          "runtime_aabb_max": [
+            0.8999999761581421,
+            1.2000000476837158,
+            0.75
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 1,
+          "node_and_mesh_name": "BoulderB_L1",
+          "triangles": 140,
+          "vertices": 334,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.8832198977470398,
+            -0.0004252724174875766,
+            -0.7469820976257324
+          ],
+          "runtime_aabb_max": [
+            0.8832206726074219,
+            1.2000000476837158,
+            0.7391044497489929
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 2,
+          "node_and_mesh_name": "BoulderB_L2",
+          "triangles": 62,
+          "vertices": 154,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.903266966342926,
+            -0.005245780106633902,
+            -0.7469820976257324
+          ],
+          "runtime_aabb_max": [
+            0.8743311762809753,
+            1.1475545167922974,
+            0.7391044497489929
+          ],
+          "actual_bounds_equal_original": true
+        }
+      ],
+      "verified_contract": {
+        "exact_original_json_metadata": true,
+        "exact_original_index_buffers": true,
+        "names_pivots_identity_transforms": true,
+        "one_primitive_per_lod": true,
+        "one_existing_shared_material": true,
+        "normalized_byte_COLOR_0": true,
+        "no_textures_extensions_animation_rig_custom_shader": true,
+        "source_reloaded_and_runtime_reimported": true,
+        "khronos_errors": 0,
+        "khronos_warnings": 0
+      }
+    },
+    {
+      "name": "BoulderC",
+      "asset_id": "approved-island-boulderc",
+      "runtime_path": "crates/alife_game_app/assets/landscape/island/BoulderC.glb",
+      "archive": {
+        "filename": "A-Life-Boulders-basalt-v2-2026-10-09.zip",
+        "bytes": 10985203,
+        "sha256": "a3aa8b4469cf8e7cc3547611d31c5d314e043b3378cafe2dfc5eec364cf2cb8a"
+      },
+      "preintegration": {
+        "file": "BoulderC.preintegration.glb",
+        "bytes": 35948,
+        "sha256": "cd80f4323a310d8cd04cfea967507d89f97a539f3afd796fbd48893838f78289"
+      },
+      "source_pack_baseline": {
+        "file": "BoulderC.source-pack-baseline.glb",
+        "bytes": 35800,
+        "sha256": "9cc4b3fabe03c8166f08c9886a4f5e135d5326b92d31daab19a006ebfe3fac2a"
+      },
+      "editable_source": {
+        "file": "BoulderC-basalt-v2.blend",
+        "sha256": "c6ca48301710c67bf0bae984494eae3112d24b1ded0f53d58a80d6daafea09e9",
+        "source_kind": "GLB-derived native editable reconstruction; original newer-format native source untouched",
+        "blender": "4.3.2"
+      },
+      "runtime": {
+        "bytes": 35800,
+        "sha256": "d730a2e12234a420728abb52376836b172decbd429015c03743a99ab3a75d3c8",
+        "fnv1a64": "fnv1a64:255a85bfd74b2d40"
+      },
+      "lods": [
+        {
+          "level": 0,
+          "node_and_mesh_name": "BoulderC_L0",
+          "triangles": 312,
+          "vertices": 598,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.6000000238418579,
+            0,
+            -0.5
+          ],
+          "runtime_aabb_max": [
+            0.6000000238418579,
+            0.75,
+            0.5
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 1,
+          "node_and_mesh_name": "BoulderC_L1",
+          "triangles": 140,
+          "vertices": 322,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.5860778093338013,
+            0,
+            -0.5
+          ],
+          "runtime_aabb_max": [
+            0.5750448703765869,
+            0.75,
+            0.5129935145378113
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 2,
+          "node_and_mesh_name": "BoulderC_L2",
+          "triangles": 62,
+          "vertices": 160,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.611960232257843,
+            0.001308521954342723,
+            -0.47573232650756836
+          ],
+          "runtime_aabb_max": [
+            0.5707048177719116,
+            0.7072345018386841,
+            0.47886133193969727
+          ],
+          "actual_bounds_equal_original": true
+        }
+      ],
+      "verified_contract": {
+        "exact_original_json_metadata": true,
+        "exact_original_index_buffers": true,
+        "names_pivots_identity_transforms": true,
+        "one_primitive_per_lod": true,
+        "one_existing_shared_material": true,
+        "normalized_byte_COLOR_0": true,
+        "no_textures_extensions_animation_rig_custom_shader": true,
+        "source_reloaded_and_runtime_reimported": true,
+        "khronos_errors": 0,
+        "khronos_warnings": 0
+      }
+    },
+    {
+      "name": "Grass",
+      "asset_id": "approved-island-grass",
+      "runtime_path": "crates/alife_game_app/assets/landscape/island/Grass.glb",
+      "archive": {
+        "filename": "A-Life-Grass-meadow-v2-2026-10-09.zip",
+        "bytes": 4404124,
+        "sha256": "f1c5af56178e6fd2db1bd7ccb35acfbb3bd0aa258b9e1cdb1f566dbee5ee3f3c"
+      },
+      "preintegration": {
+        "file": "Grass.preintegration.glb",
+        "bytes": 35396,
+        "sha256": "02d9a004309c63c968d8ebb23913e684620048f1d5726f23dfc99a7813cce876"
+      },
+      "source_pack_baseline": {
+        "file": "Grass.source-pack-baseline.glb",
+        "bytes": 43032,
+        "sha256": "ab0aa293c2fb445817b29d359ea086ff66df6dc2911f2fc1e79defdd46f47f50"
+      },
+      "editable_source": {
+        "file": "Grass-meadow-v2.blend",
+        "sha256": "c408ae5176d18d9b1902da708d9a6f953a345399b9136d1e1c7631bf8081183d",
+        "source_kind": "GLB-derived native editable reconstruction; original newer-format native source untouched",
+        "blender": "4.3.2"
+      },
+      "runtime": {
+        "bytes": 43032,
+        "sha256": "7b1d5ea168eb58026405ddddb8268a493e1b4df6766cdb74ceb9716763791fb6",
+        "fnv1a64": "fnv1a64:ab6b888f9f115d05"
+      },
+      "lods": [
+        {
+          "level": 0,
+          "node_and_mesh_name": "Grass_L0",
+          "triangles": 288,
+          "vertices": 858,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.30000001192092896,
+            0.0,
+            -0.25
+          ],
+          "runtime_aabb_max": [
+            0.30000001192092896,
+            0.44999998807907104,
+            0.25
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 1,
+          "node_and_mesh_name": "Grass_L1",
+          "triangles": 128,
+          "vertices": 316,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.3001863956451416,
+            -0.00044302779133431613,
+            -0.2516409158706665
+          ],
+          "runtime_aabb_max": [
+            0.3007507920265198,
+            0.44897007942199707,
+            0.2510615587234497
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 2,
+          "node_and_mesh_name": "Grass_L2",
+          "triangles": 57,
+          "vertices": 171,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -0.3001863956451416,
+            -0.00044302779133431613,
+            -0.2516409158706665
+          ],
+          "runtime_aabb_max": [
+            0.3007507920265198,
+            0.44897007942199707,
+            0.2510615587234497
+          ],
+          "actual_bounds_equal_original": true
+        }
+      ],
+      "verified_contract": {
+        "exact_original_json_metadata": true,
+        "exact_original_index_buffers": true,
+        "names_pivots_identity_transforms": true,
+        "one_primitive_per_lod": true,
+        "one_existing_shared_material": true,
+        "normalized_byte_COLOR_0": true,
+        "no_textures_extensions_animation_rig_custom_shader": true,
+        "source_reloaded_and_runtime_reimported": true,
+        "khronos_errors": 0,
+        "khronos_warnings": 0
+      }
+    },
+    {
+      "name": "Cliff",
+      "asset_id": "approved-island-cliff",
+      "runtime_path": "crates/alife_game_app/assets/landscape/island/Cliff.glb",
+      "archive": {
+        "filename": "A-Life-Cliff-sea-gray-v1-2026-10-09.zip",
+        "bytes": 3480052,
+        "sha256": "a0b175409d1c95a38d6a3e99f1cd5b9eaa2a7de82a107a2cf2dcb56c7ba87f5f"
+      },
+      "preintegration": {
+        "file": "Cliff.preintegration.glb",
+        "bytes": 82300,
+        "sha256": "620b62e0c365476ee68e89cc4aa7c9106115665e9200dec9fb5c2a77cdc5151c"
+      },
+      "source_pack_baseline": {
+        "file": "Cliff.source-pack-baseline.glb",
+        "bytes": 82484,
+        "sha256": "10a0e2befd515e61b4f81a87f05d300eaae508c02fb663fc690ed382d05a848b"
+      },
+      "editable_source": {
+        "file": "Cliff-sea-gray-v1.blend",
+        "sha256": "41d549ef5a1dfe59ba35f2fb410185a395008df7a57004bfc5705a0f506419d7",
+        "source_kind": "GLB-derived native editable reconstruction; original newer-format native source untouched",
+        "blender": "4.3.2"
+      },
+      "runtime": {
+        "bytes": 82484,
+        "sha256": "939820b109d5a70112f96a06a260892edb128e5c976548a2cb343eccab3c40a0",
+        "fnv1a64": "fnv1a64:9d9a3db0160cd462"
+      },
+      "lods": [
+        {
+          "level": 0,
+          "node_and_mesh_name": "Cliff_L0",
+          "triangles": 728,
+          "vertices": 1400,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -4,
+            0,
+            -2
+          ],
+          "runtime_aabb_max": [
+            4,
+            12,
+            2
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 1,
+          "node_and_mesh_name": "Cliff_L1",
+          "triangles": 326,
+          "vertices": 816,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -3.976883888244629,
+            -0.0011514663929119706,
+            -1.9888757467269897
+          ],
+          "runtime_aabb_max": [
+            3.9755311012268066,
+            12,
+            1.9502135515213013
+          ],
+          "actual_bounds_equal_original": true
+        },
+        {
+          "level": 2,
+          "node_and_mesh_name": "Cliff_L2",
+          "triangles": 144,
+          "vertices": 386,
+          "primitive_count": 1,
+          "material_index": 0,
+          "runtime_aabb_min": [
+            -4.0854668617248535,
+            -0.004753299988806248,
+            -2.036224126815796
+          ],
+          "runtime_aabb_max": [
+            4.0158538818359375,
+            12,
+            2.071373462677002
+          ],
+          "actual_bounds_equal_original": true
+        }
+      ],
+      "verified_contract": {
+        "exact_original_json_metadata": true,
+        "exact_original_index_buffers": true,
+        "exact_original_position_normal_bytes": true,
+        "only_COLOR_0_bytes_changed": true,
+        "exact_original_total_byte_size": true,
+        "names_pivots_identity_transforms": true,
+        "one_primitive_per_lod": true,
+        "one_existing_shared_material": true,
+        "normalized_byte_COLOR_0": true,
+        "no_textures_extensions_animation_rig_custom_shader": true,
+        "source_reloaded_and_runtime_reimported": true,
+        "khronos_errors": 0,
+        "khronos_warnings": 0
+      }
+    }
+  ]
+}

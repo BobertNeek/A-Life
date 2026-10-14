@@ -169,6 +169,15 @@ fn action_execution_supports_move_inspect_eat_rest_and_idle() {
     assert!(inspected.execution.succeeded);
     assert_eq!(inspected.observation.reward_valence.raw(), 0.0);
 
+    let pickup = world
+        .apply_command(&command(
+            HeadlessActionIds::GRAB,
+            ActionKind::Hold,
+            Some(berry),
+            None,
+        ))
+        .unwrap();
+    assert!(pickup.execution.succeeded);
     let eaten = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
         .unwrap();
@@ -299,6 +308,18 @@ fn food_biology_and_hazard_pain_are_measured_without_host_reward() {
     let mut world = world_with_food_and_hazard();
     let berry = world.entity_id("berry").unwrap();
     let thorn = world.entity_id("thorn").unwrap();
+    assert!(
+        world
+            .apply_command(&command(
+                HeadlessActionIds::GRAB,
+                ActionKind::Hold,
+                Some(berry),
+                None
+            ))
+            .unwrap()
+            .execution
+            .succeeded
+    );
 
     let food = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
@@ -344,6 +365,18 @@ fn ingesting_one_edible_poison_applies_nutrition_and_pain_together() {
         })
         .unwrap();
 
+    assert!(
+        world
+            .apply_command(&command(
+                HeadlessActionIds::GRAB,
+                ActionKind::Hold,
+                Some(poisoned_food),
+                None
+            ))
+            .unwrap()
+            .execution
+            .succeeded
+    );
     let outcome = world
         .apply_command(&HeadlessWorldCommand::eat(organism(), poisoned_food).unwrap())
         .unwrap();

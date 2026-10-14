@@ -7,6 +7,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args
         .next()
         .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N] | --refresh-terrain-founder SOURCE_DIRECTORY OUTPUT_DIRECTORY")?;
+    if mode == "--prior-context-contract" {
+        if args.next().is_some() {
+            return Err("unexpected prior-context-contract argument".into());
+        }
+        println!(
+            "{}",
+            alife_game_app::GpuLiveBrainRuntime::semantic_prior_context_contract()
+        );
+        return Ok(());
+    }
     if mode == "--refresh-terrain-founder" {
         let source = std::path::PathBuf::from(args.next().ok_or("missing terrain source")?);
         let output =
@@ -37,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .to_string_lossy()
             .as_ref()
         {
+            "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
             "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
             "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
             "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
@@ -55,6 +66,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let receipt = alife_game_app::run_adapted_foundation_teacher_pilot(
             &source, &output, seed, ticks, lesson,
+        )?;
+        println!("{}", serde_json::to_string_pretty(&receipt)?);
+        return Ok(());
+    }
+    if mode == "--continue-terrain" {
+        let source = std::path::PathBuf::from(args.next().ok_or("missing source cohort")?);
+        let output = std::path::PathBuf::from(args.next().ok_or("missing continuation output")?);
+        let mut preserve_from = None;
+        let mut legacy = None;
+        let mut template = None;
+        while let Some(flag) = args.next() {
+            let value = args.next().ok_or("missing continuation flag value")?;
+            if flag == "--preserve-objective-state-from" {
+                preserve_from = Some(value.to_string_lossy().parse::<u16>()?);
+            } else if flag == "--legacy-source-phenotype" {
+                legacy = Some(std::path::PathBuf::from(value));
+            } else if flag == "--terrain-template" {
+                template = Some(std::path::PathBuf::from(value));
+            } else {
+                return Err("unexpected continuation flag".into());
+            }
+        }
+        let receipt = alife_game_app::continue_foundation_to_terrain_with_legacy(
+            &source,
+            &output,
+            preserve_from,
+            legacy.as_deref(),
+            template.as_deref(),
         )?;
         println!("{}", serde_json::to_string_pretty(&receipt)?);
         return Ok(());
@@ -92,13 +131,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-imitation-warmup".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                alife_game_app::run_foundation_imitation_warmup(&output, &manifest, epochs).map_err(
-                    |error| {
-                        let message = error.to_string();
-                        let _ = std::fs::write(output.join("failure.txt"), &message);
-                        message
-                    },
-                )
+                alife_game_app::run_foundation_imitation_warmup(&output, &manifest, epochs)
+                    .map_err(|error| error.to_string())
             })?
             .join()
             .map_err(|_| "warm-up thread panicked")??;
@@ -114,6 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .to_string_lossy()
             .as_ref()
         {
+            "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
             "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
             "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
             "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
@@ -180,7 +215,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let asset =
             alife_core::FoundationWeightAsset::decode_canonical(&std::fs::read(asset_path)?)?;
-        let receipt = if let Some(token) = request_token {
+        if request_token.is_some() {
             if lesson != alife_game_app::FoundationTeacherLesson::VocabularyReception
                 || food_position.is_some()
             {
@@ -188,25 +223,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "request comparison applies to reception without food relocation".into(),
                 );
             }
-            alife_game_app::run_foundation_request_evaluation(
-                &output,
-                seed,
-                founder_seed_base,
-                ticks,
-                asset,
-                alife_game_app::FoundationEvaluationRequest { token, silent },
-            )?
-        } else {
-            alife_game_app::run_foundation_evaluation_pilot(
-                &output,
-                seed,
-                founder_seed_base,
-                ticks,
-                lesson,
-                food_position,
-                asset,
-            )?
-        };
+        }
+        // Evaluation uses the same production debug runtime as training. Give
+        // its bounded worker the same Windows stack rather than overflowing main.
+        let receipt = std::thread::Builder::new()
+            .name("foundation-evaluation".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || {
+                let result = if let Some(token) = request_token {
+                    alife_game_app::run_foundation_request_evaluation(
+                        &output,
+                        seed,
+                        founder_seed_base,
+                        ticks,
+                        asset,
+                        alife_game_app::FoundationEvaluationRequest { token, silent },
+                    )
+                } else {
+                    alife_game_app::run_foundation_evaluation_pilot(
+                        &output,
+                        seed,
+                        founder_seed_base,
+                        ticks,
+                        lesson,
+                        food_position,
+                        asset,
+                    )
+                };
+                result.map_err(|error| error.to_string())
+            })?
+            .join()
+            .map_err(|_| "evaluation thread panicked")??;
         println!("{}", serde_json::to_string_pretty(&receipt)?);
         return Ok(());
     }
@@ -239,6 +286,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut founder_seed_base = None;
     let mut food_position = None;
     let mut lesson = None;
+    let mut preserve_objective_from = None;
+    let mut sampling_temperature = None;
+    let mut acquisition_rehearsal_epochs = None;
+    let mut archived_success_manifest = None;
+    let mut archived_success_epochs = None;
     while let Some(flag) = next {
         if flag == "--seed" {
             seed = args
@@ -246,6 +298,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing training seed")?
                 .to_string_lossy()
                 .parse::<u64>()?;
+        } else if flag == "--archived-success-manifest" {
+            if archived_success_manifest.is_some() {
+                return Err("duplicate archived success manifest".into());
+            }
+            archived_success_manifest = Some(std::path::PathBuf::from(
+                args.next().ok_or("missing archived success manifest")?,
+            ));
+        } else if flag == "--archived-success-epochs" {
+            if archived_success_epochs.is_some() {
+                return Err("duplicate archived success epochs".into());
+            }
+            archived_success_epochs = Some(
+                args.next()
+                    .ok_or("missing archived success epochs")?
+                    .to_string_lossy()
+                    .parse::<u32>()?,
+            );
+        } else if flag == "--acquisition-rehearsal-epochs" {
+            if acquisition_rehearsal_epochs.is_some() {
+                return Err("duplicate acquisition rehearsal epochs".into());
+            }
+            acquisition_rehearsal_epochs = Some(
+                args.next()
+                    .ok_or("missing acquisition rehearsal epochs")?
+                    .to_string_lossy()
+                    .parse::<u32>()?,
+            );
+        } else if flag == "--sampling-temperature" {
+            if sampling_temperature.is_some() {
+                return Err("duplicate sampling temperature".into());
+            }
+            sampling_temperature = Some(
+                args.next()
+                    .ok_or("missing sampling temperature")?
+                    .to_string_lossy()
+                    .parse::<f32>()?,
+            );
         } else if flag == "--food-after-world-tick" {
             if food_after_world_tick.is_some() {
                 return Err("duplicate food availability flag".into());
@@ -280,6 +369,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string_lossy()
                     .parse::<f32>()?,
             ]);
+        } else if flag == "--preserve-objective-state-from" {
+            if preserve_objective_from.is_some() {
+                return Err("duplicate objective transition flag".into());
+            }
+            preserve_objective_from = Some(
+                args.next()
+                    .ok_or("missing source objective version")?
+                    .to_string_lossy()
+                    .parse::<u16>()?,
+            );
         } else if flag == "--lesson" {
             if lesson.is_some() {
                 return Err("duplicate lesson flag".into());
@@ -291,6 +390,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string_lossy()
                     .as_ref()
                 {
+                    "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
                     "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
                     "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
                     "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
@@ -313,6 +413,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("unexpected argument".into());
         }
         next = args.next();
+    }
+    if preserve_objective_from.is_some()
+        && (mode != "--resume-cycle" || food_after_world_tick.is_some())
+    {
+        return Err(
+            "objective transition requires --resume-cycle without a food-delay override".into(),
+        );
+    }
+    if sampling_temperature.is_some()
+        && (mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson.is_none()
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some())
+    {
+        return Err(
+            "sampling temperature requires an existing compatible --resume-cycle with --lesson"
+                .into(),
+        );
+    }
+    if acquisition_rehearsal_epochs.is_some()
+        && (mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson != Some(alife_game_app::FoundationTeacherLesson::GrabFood)
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some())
+    {
+        return Err("acquisition rehearsal requires a sealed GrabFood --resume-cycle without an objective or food-delay transition".into());
+    }
+    if (archived_success_manifest.is_some() || archived_success_epochs.is_some())
+        && (archived_success_manifest.is_none()
+            || archived_success_epochs.is_none()
+            || mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson != Some(alife_game_app::FoundationTeacherLesson::GrabFood)
+            || acquisition_rehearsal_epochs.is_some()
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some())
+    {
+        return Err("archived success replay needs both archive flags and a sealed GrabFood resume, without other practice or objective overrides".into());
     }
     if mode == "--pilot" || mode == "--teacher-pilot" {
         if food_after_world_tick.is_some() {
@@ -356,51 +496,86 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = match (previous, food_after_world_tick, lesson) {
-                    (previous, None, Some(lesson)) => {
-                        alife_game_app::run_foundation_training_cycle_with_lesson(
-                            previous.as_deref(),
-                            &output,
-                            seed,
-                            ticks,
-                            lesson,
-                        )
-                    }
-                    (_, Some(_), Some(_)) => Err("food delay and lesson cannot be combined".into()),
-                    (Some(previous), Some(food_after), None) => {
-                        alife_game_app::resume_foundation_training_cycle_with_food_delay(
-                            &previous, &output, seed, ticks, food_after,
-                        )
-                    }
-                    (Some(previous), None, None) => {
-                        alife_game_app::resume_foundation_training_cycle(
-                            &previous, &output, seed, ticks,
-                        )
-                    }
-                    (None, Some(food_after), None) => {
-                        alife_game_app::run_foundation_training_cycle_with_food_delay(
-                            &output, seed, ticks, food_after,
-                        )
-                    }
-                    (None, None, None) => {
-                        alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
+                let result = if let Some(manifest) = archived_success_manifest {
+                    alife_game_app::resume_foundation_grab_cycle_with_archived_success_replay(
+                        previous
+                            .as_deref()
+                            .ok_or("archived replay needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        sampling_temperature.unwrap_or(1.0),
+                        &manifest,
+                        archived_success_epochs.ok_or("archived replay needs an epoch budget")?,
+                    )
+                } else if let Some(epochs) = acquisition_rehearsal_epochs {
+                    alife_game_app::resume_foundation_grab_cycle_with_acquisition_rehearsal(
+                        previous
+                            .as_deref()
+                            .ok_or("acquisition rehearsal needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        sampling_temperature.unwrap_or(1.0),
+                        epochs,
+                    )
+                } else if let Some(temperature) = sampling_temperature {
+                    alife_game_app::resume_foundation_training_cycle_with_lesson_temperature(
+                        previous
+                            .as_deref()
+                            .ok_or("sampling diagnostic needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        lesson.ok_or("sampling diagnostic needs lesson")?,
+                        temperature,
+                    )
+                } else if let Some(source_version) = preserve_objective_from {
+                    alife_game_app::resume_foundation_training_cycle_with_objective_transition(
+                        previous
+                            .as_deref()
+                            .ok_or("objective transition needs a source cycle")?,
+                        &output,
+                        seed,
+                        ticks,
+                        source_version,
+                        lesson,
+                    )
+                } else {
+                    match (previous, food_after_world_tick, lesson) {
+                        (previous, None, Some(lesson)) => {
+                            alife_game_app::run_foundation_training_cycle_with_lesson(
+                                previous.as_deref(),
+                                &output,
+                                seed,
+                                ticks,
+                                lesson,
+                            )
+                        }
+                        (_, Some(_), Some(_)) => {
+                            Err("food delay and lesson cannot be combined".into())
+                        }
+                        (Some(previous), Some(food_after), None) => {
+                            alife_game_app::resume_foundation_training_cycle_with_food_delay(
+                                &previous, &output, seed, ticks, food_after,
+                            )
+                        }
+                        (Some(previous), None, None) => {
+                            alife_game_app::resume_foundation_training_cycle(
+                                &previous, &output, seed, ticks,
+                            )
+                        }
+                        (None, Some(food_after), None) => {
+                            alife_game_app::run_foundation_training_cycle_with_food_delay(
+                                &output, seed, ticks, food_after,
+                            )
+                        }
+                        (None, None, None) => {
+                            alife_game_app::run_foundation_training_cycle(&output, seed, ticks)
+                        }
                     }
                 };
-                result.map_err(|error| {
-                    let message = error.to_string();
-                    let _ = std::fs::write(
-                        output.join("failure.json"),
-                        serde_json::to_vec_pretty(&serde_json::json!({
-                            "error": message,
-                            "seed": seed,
-                            "requested_waking_decisions": ticks,
-                            "food_available_world_tick": food_after_world_tick,
-                            "lesson": lesson,
-                        }))
-                        .unwrap_or_default(),
-                    );
-                    message
-                })
+                result.map_err(|error| error.to_string())
             })?
             .join()
             .map_err(|_| "training cycle thread panicked")??;

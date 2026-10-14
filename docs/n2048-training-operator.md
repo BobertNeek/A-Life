@@ -3,7 +3,7 @@
 Cassidy's first primitive is now available as `eat_held_food`. See the
 [October 5 eating lesson and bounded night plan](reviews/2026-10-05-eat-held-food.md)
 for legal held-food setup, contextual spatial speech without speech labels,
-required semantic-prior input receipts, startup qualification and the separate
+semantic-prior coverage receipts, startup qualification and the separate
 held-food runner targeting thousands of fresh episodes with bounded batches.
 Its GPU behavior and the PC provider are Unrun/Unknown until tonight's owner
 records the checks; it is not added to the automatic multi-skill campaign.
@@ -23,6 +23,113 @@ to launch a campaign. The normal operator `status.json` retains campaign history
 this bounded qualification did not overwrite it. Visible 1x toy/care acceptance
 remains pending foreground availability. Incomplete corpora ending in `-01`/`-02`
 must not be used for warmup.
+
+## Swappable optional language priors (October 10)
+
+The current policy is **log a language-prior failure and continue the genuine
+episode without that prior**. Initial and mid-collection priming poll/submit once;
+there is no per-decision five-second wait. Provider errors, parse/validation
+failures, unavailable workers, bounded asynchronous timeouts, and schema-valid
+zero hints produce warning/diagnostic receipts. Failed providers have a shared
+one-second submission cooldown. Valid later replies can recover, but an active
+hint is never carried into a different bounded current context. Ordinary spatial
+teacher hearing, grounded perception, biology, WGSL cognition, acquired weights,
+Adam state and sealed checkpoint lineage retain their existing contracts. Invalid
+organism/sequence IDs, malformed checkpoint state, numerical errors, resource
+limits and ordinary admission/receipt checks remain fatal. Missing prior coverage
+is reported honestly rather than used as a food-lesson completion gate.
+
+Select a backend with one environment variable before the ordinary training
+command; no lesson or brain code changes are needed:
+
+- `ALIFE_SLM_PRIOR_BACKEND=deterministic` (training default): synchronous bounded
+  compositional association hints from current sensed/heard context; no model,
+  service, queue or prerecorded outputs. Ordinary gameplay keeps its local default
+- `ALIFE_SLM_PRIOR_BACKEND=local`: existing localhost llama.cpp transport;
+  `ALIFE_SLM_PRIOR_MODEL` selects its model alias and
+  `ALIFE_SLM_PRIOR_MODEL_SHA256` records the declared model digest
+- `ALIFE_SLM_PRIOR_BACKEND=luna`: trusted installed Codex CLI with its existing
+  ChatGPT login; `ALIFE_SLM_PRIOR_LUNA_EXECUTABLE` is a single executable path
+  (default `codex`), and `ALIFE_SLM_PRIOR_LUNA_MODEL` defaults to `gpt-6-luna`
+- `ALIFE_SLM_PRIOR_BACKEND=recorded`: immutable bank named by
+  `ALIFE_SLM_PRIOR_BANK`; exact current-context hits only, with no provider worker,
+  live inference, retry, scenario-name/time lookup, or nearest-context substitution
+- `ALIFE_SLM_PRIOR_BACKEND=off`: unaided service-off mode; legacy
+  `ALIFE_SLM_PRIOR=off` also takes precedence
+
+Deterministic rules retain at most three candidate associations: heard words
+and simple word relations, genuine hunger/fatigue clauses, and conservative
+joint shape-plus-chemistry hypotheses. Unknown visuals support generic look
+attention; color, scent or grip alone never identifies food or a held item.
+Recipes are explicitly uncertain, and ambiguous/novel combinations stay generic.
+This is a small rule library, not model output, comprehension or learned competence.
+
+The shared `BoundedSlmPriorProvider` interface accepts only bounded context and
+returns validated `LocalSlmPriorOutput`. Live calls run behind the same bounded
+asynchronous queue. The Luna adapter fixes read-only, ephemeral Codex arguments,
+requires ChatGPT authentication rather than API-key routing, explicitly disables
+supported image/browser/computer/plugin/shell feature flags, and accepts only
+strict four-field JSON with receiver-vocabulary associations.
+It does not log in, read credentials, create tokens, install software, or modify
+account settings. Missing executables, unsupported CLI versions, missing login,
+quota/model-access errors and timeouts follow the same unaided failure policy.
+The default live request timeout is 30 seconds; collection never waits for it.
+All fixed overrides passed actual version 0.159.2 strict configuration admission
+without authentication or inference. Effective image/browser/computer/plugin/shell
+flags read back disabled. The host still reports `unified_exec=true` despite the
+requested false override, so absence of advertised execution tools is unverified.
+Live Luna subscription output remains unverified by this change. Owned timeout/error process
+trees are cleaned up; guaranteed descendant cleanup after a normal CLI exit is
+not established. Windows taskkill behavior is unrun. The optional Luna adapter
+needs Windows live qualification before production use. Dropping the shared
+queue skips waiting requests; dropping an individual receiver does not cancel
+its queued/in-flight call while the queue lives. Already-running calls remain
+provider-timeout bounded.
+
+Receipts distinguish backend, configuration identity, model/digest declaration,
+context contract, and (for recordings) source provider plus bank digest. Provider
+enabled-provider swaps preserve validated developmental gain but discard
+incompatible old active hints; malformed checkpoint/controller/packet data still
+fails. Off mode keeps a dormant state carrier with no worker or delivered hints,
+so on-to-off-to-save-to-on also preserves validated developmental/fade history.
+Neural weights, Adam and ordinary checkpoint lineage are unaffected. Runtime-source
+changes intentionally select a new live cache identity. Old caches are never
+silently migrated or represented as freshly captured responses.
+
+To freeze **existing actual captured responses**, copy provider_identity, model,
+model_sha256 and context_contract from the source runtime receipt into an origin
+JSON file. The read-only `train_n2048_care --prior-context-contract` command prints
+the current compatibility fingerprint without starting a GPU, world, provider or
+training. A bank from a different context/prompt/vocabulary contract is rejected.
+Export and inspect offline:
+
+```powershell
+cargo run -p alife_semantic --features local-llamacpp --example recorded_prior_bank -- export CAPTURED_CACHE.json CAPTURE_ORIGIN.json CURRENT_CONTEXT_CONTRACT NEW_BANK.json
+cargo run -p alife_semantic --features local-llamacpp --example recorded_prior_bank -- inspect NEW_BANK.json CURRENT_CONTEXT_CONTRACT
+```
+
+Export validates bounded provenance and output shape, refuses to overwrite an
+existing bank, and performs no inference. Source provenance remains a declaration,
+not independent proof that a model produced an entry; `unverified-model` is an
+honest digest marker. Valid zero-salience entries stay zero and misses continue
+unaided. No genuine recording bank was generated in these CPU tests. Obtaining
+coverage requires capturing real bounded contexts/outputs first; this change does
+not prerecord hidden outcomes, fabricate hints or launch a scenario collection.
+The October 7 sole-owner launcher is historical and keeps its original cutoff and
+listener/process security checks. A future night owner must make provider
+preparation optional while preserving those security, source and resource checks.
+
+Architecture trace: AOA-SLM-001/002/003/004/005/006, AOA-CTX-004,
+AOA-INV-001/006/008/009, AOA-OBS-005. These implementation choices do not amend
+v2.0 or establish learning improvement, GPU qualification or promotion.
+
+CPU validation of this candidate: 21 isolated exact-runtime-module tests, 46
+exact semantic-crate unit tests, two offline recording-export tests and 28 night
+orchestration tests passed against reused dependency artifacts. Full app and
+training CLI source metadata/type checks, formatting, whitespace, static core
+boundaries and 77 documentation assertions passed. These are bounded CPU checks,
+not a full workspace Cargo build/test/Clippy pass, live account inference,
+training, GPU evidence or an actual captured recording bank.
 
 ## Tiny local prior trial (September 28)
 
@@ -84,7 +191,73 @@ words twice, including real hunger/tiredness and food/toy subtypes.
 have a 1,024-decision cap, vocabulary 64, and other lessons 128. Meal lessons stop
 when they eat; vocabulary records hearing, named actions, and speaking opportunities.
 Use `-Curriculum Care` explicitly for the earlier balanced 32-lesson care corpus.
+Imitation warmup accepts ten-category manifests, including `EatHeldFood` and
+`GrabFood`, and mixes their windows with the other lessons while preserving one
+loss budget per demonstration. Existing eight- and nine-category manifests remain
+valid only when their omitted later categories have no demonstrations. This is
+corpus admission and scheduling support; retained grabbing competence still
+requires frozen behavioral evaluation. Warmup initializes its training heads;
+use the sealed-cycle continuation path to preserve an existing campaign's actor,
+value head and optimizer history.
+For an opt-in GrabFood learning experiment, a sealed `--resume-cycle` can add
+`--lesson grab_food --sampling-temperature 32 --acquisition-rehearsal-epochs 8`.
+After the ordinary PPO update, the actor rehearses only the first captured loss
+row that actually acquired food. Its sampled manipulation command is the label;
+other motor factors and speech stay unconstrained. Replay retains up to 128
+same-segment burn-in rows. Bootstrap and release/regrab events add no labels.
+The explicit offline epoch budget is 1..=512. The larger ceiling allows a
+separate dose comparison: the [October 8 trials](n2048-grab-rehearsal-dose-2026-10-08.md)
+found that 32 updates still left very low likelihood on the successful actions.
+Only budgets up to 32 have executed GPU qualification. Higher budgets need their
+own bounded GPU trial and frozen GrabFood/Eat comparison; the ceiling does not
+establish competence or enable a campaign.
+The existing actor optimizer continues and the value checkpoint must remain
+byte-identical during rehearsal. The cycle reports these extra offline epochs
+separately; they add no distinct lives or real experience. This option changes
+no ordinary runtime action policy and is not enabled in the prepared serial
+campaign. GPU qualification and frozen GrabFood/Eat retention comparisons are
+required before using it for a campaign or claiming improvement.
 All records and separate speech labels bind to the same inherited asset and compiler.
+Launch training from the qualified Git checkout. Replay source revision comes
+from that launch checkout, rather than the compile machine's absolute path;
+the operator still pins the source revision and executable hash.
+
+The GrabFood night runner can opt into `--acquisition-rehearsal-epochs 512`
+with `--sampling-temperature 32 --sampling-temperature-floor 1`
+and `--max-stalled-batches 2`, after the chosen dose passes its private GPU and
+frozen behavior comparison. These flags do not change legacy defaults.
+Every credited acquisition must complete its reported offline dose, preserving
+the value checkpoint and exact actor optimizer delta. A life without credit
+performs zero rehearsal updates. The runner checks eating retention at every
+batch, and halves exploration temperature only when ordinary-temperature
+GrabFood and EatHeldFood both pass. It stops after the requested number of full
+batches without frozen grabbing, rather than spending the whole window on an
+unchanged failing recipe. Cooling changes collection and matching PPO temperature
+together; frozen assessments stay at temperature 1. Extra offline updates remain
+separate from distinct world lives and captured experience.
+
+An explicit archived-success experiment can resume the current sealed cycle
+with `--archived-success-manifest MANIFEST --archived-success-epochs 16`.
+Use `--resume-cycle` with `--lesson grab_food`; archive practice and the
+single-acquisition rehearsal flag cannot be combined in one invocation.
+The schema1 manifest names 1..128 immutable older event records and their
+actual parent checkpoints. Every selected Grab must match a real ownership
+transition. Every selected Eat must follow acquisition and consume that same
+target. The native loader checks the original record digests, actor/asset
+bindings, recurrent continuity, and complete graph compatibility before any
+extra update. Only genetic weights and their compiler identity may differ.
+The in-memory training sequence then uses the current actor; original records,
+policy identities, and rewards remain intact. Historical behavior probabilities
+authenticate collection and are never treated as current PPO samples.
+
+Archived practice uses temperature 1, eight-example effective batches, and
+1..128 epochs. Acquisition and eating receive equal aggregate learning weight
+when both are present. The receipt records the exact examples, manifest digest,
+finite losses, completed actor updates, and preserved value checkpoint. These
+are extra offline updates, not new lives. Repeat frozen acquisition and eating
+checks after this private experiment; a source-bound replay run alone proves
+neither transfer nor founder competence.
+
 Collection pins the Git revision and executable hash and stops if either changes.
 Keep the checkout and executable fixed until collection completes. Compact replay
 schema 2 always writes candidate innate-bias fields, including zero values. Schema
@@ -125,6 +298,30 @@ The cycle collects ordinary GPU decisions, streams Zstd-compressed binary replay
 For a held-out check of a frozen checkpoint, use `--evaluate OUTPUT ASSET LESSON TICKS WORLD_SEED FOUNDER_SEED`. It performs ordinary production collection and replay verification without an optimizer update. Use seeds outside the campaign and demonstration bands. Reserve the long delayed-food gate for post-training acceptance.
 
 `--food-after-world-tick N` in cycle mode temporarily moves the existing food resource to a distant legal world position, then returns it at world tick `N`. `scenario.json` records both positions, and `cycle.json` records the availability tick, first meal, and energy. It changes no physiology or policy. `--teacher-pilot OUTPUT [TICKS] --seed WORLD_SEED --founder-seed-base GENOME_SEED --lesson feeding|hazard_avoidance|obstacle_navigation|recovery` produces source-bound compact demonstration replay in the same format as the cycle. The optional `--food-position X Z` applies to feeding only; the second coordinate is horizontal Z, not elevation. `--cycle` and `--resume-cycle` also accept `--lesson` to place the same scenery around a teacher-free policy; a delayed-food gate cannot be combined with a lesson. Each teacher lesson must complete its measured world outcome before replay is accepted. Successful lessons write `lesson-trace.json`; failed lessons write `lesson-diagnostic.json`, both with every chosen action, sensed object slot, physical contact, and measured physiology.
+
+Each lesson step also copies `organism_id`, `sequence_id`, `decision_tick`, and
+`outcome_tick` from its sealed decision/outcome receipts. The legacy `tick`
+remains the perception/pre-decision tick. `frame_digest` and
+`dispatch_generation` come from the decision's neural evidence, or are null
+when that evidence is absent; `behavior` comes from the rollout receipt
+(`OnPolicy` or `Demonstrator`). These additive fields remain available in a
+failed pilot's diagnostic even when early return prevents replay export. Join
+within the same run/life using organism and sequence identity, cross-checking
+ticks and neural provenance. They do not establish praise application or
+exclusive credit for an earlier action.
+
+The compact lesson trace also preserves the raw pre-decision global grip signal
+(`global_grip_before_decision`, tactile channel 2), joint `success`, raw
+`frustration_delta` and `prediction_error`, and at most six `selected_commands`
+from the sealed motor bundle. Each command records channel, primitive,
+and target `{entity, position}`; an absent bundle, target, or position stays null.
+The existing `chosen_*` fields still describe the representative candidate, which
+can differ from the actual Manipulation command. Candidate `observation` joins
+an `ObjectSlot` reference to `object_slots`, and `target_position` retains its
+exact optional world position. Global grip does not establish any candidate's
+ownership, and joint success is not a per-channel success flag. These additive
+JSON diagnostics use already-resident CPU receipts and do not change the compact
+replay schema or backfill historical traces.
 
 The teacher's action sequence is a causal contract, not a script of desired labels alone:
 

@@ -4,6 +4,8 @@
 //! previous monolithic `lib.rs` into focused modules. Bevy construction remains
 //! behind the `bevy-app` feature and GPU runtime support remains optional.
 
+#![recursion_limit = "256"]
+
 mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 
@@ -139,9 +141,28 @@ mod production_voxel_frontend;
 pub use production_voxel_frontend::*;
 
 #[cfg(feature = "foundation-training")]
+mod foundation_acquisition_rehearsal;
+#[cfg(feature = "foundation-training")]
+pub use foundation_acquisition_rehearsal::FoundationAcquisitionRehearsalReceipt;
+#[cfg(feature = "foundation-training")]
+mod foundation_archived_success_replay;
+#[cfg(feature = "foundation-training")]
+pub use foundation_archived_success_replay::{
+    inspect_archived_successes, ArchivedSuccessEntry, ArchivedSuccessInspection,
+    ArchivedSuccessManifest, ArchivedSuccessReplayReceipt,
+};
+#[cfg(feature = "foundation-training")]
+mod foundation_grab_food;
+#[cfg(feature = "foundation-training")]
 mod foundation_training;
 #[cfg(feature = "foundation-training")]
 mod foundation_training_cycle;
+#[cfg(feature = "foundation-training")]
+pub use foundation_grab_food::{
+    FoundationCurriculumRewardRow, FoundationGrabAcquisition, FoundationGrabFoodSetup,
+};
+#[cfg(feature = "foundation-training")]
+mod foundation_training_output;
 #[cfg(feature = "foundation-training")]
 mod foundation_training_warmup;
 mod new_game_lifecycle;

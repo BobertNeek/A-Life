@@ -15,6 +15,25 @@ fn organism() -> OrganismId {
     OrganismId(707)
 }
 
+fn grab_resource(world: &mut alife_world::HeadlessWorld, target: WorldEntityId) {
+    let command = alife_core::ActionCommand::structured(
+        organism(),
+        alife_world::HeadlessActionIds::GRAB,
+        ActionKind::Hold,
+        ActionTarget::new(Some(target), None),
+        Intensity::new(1.0).unwrap(),
+        DurationTicks::new(1),
+        Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(world.apply_command(&command).unwrap().execution.succeeded);
+    assert_eq!(world.entity(target).unwrap().carried_by, Some(organism()));
+}
+
 fn pos(x: f32, y: f32) -> Vec3f {
     Vec3f::new(x, y, 0.0)
 }
@@ -70,6 +89,9 @@ fn resource_regrowth_is_deterministic_and_preserves_bounds() {
     let mut second = ecology_world();
     let berry = first.entity_id("berry").unwrap();
 
+    grab_resource(&mut first, berry);
+    grab_resource(&mut second, berry);
+
     first
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
         .unwrap();
@@ -87,6 +109,68 @@ fn resource_regrowth_is_deterministic_and_preserves_bounds() {
     assert!(!first.entity(berry).unwrap().is_consumed());
     assert_eq!(first.stable_signature(), second.stable_signature());
     assert_eq!(first.ecology_metrics().resources_regrown, 1);
+}
+
+#[test]
+fn repeated_eat_reacquires_regrown_food_before_consuming() {
+    let mut world = ecology_world();
+    let berry = world.entity_id("berry").unwrap();
+    let command = HeadlessWorldCommand::eat(organism(), berry).unwrap();
+
+    grab_resource(&mut world, berry);
+    let consumed = world.apply_command(&command).unwrap();
+    assert_eq!(consumed.command, command);
+    assert!(consumed.execution.succeeded);
+    assert_eq!(
+        consumed.execution.physical.contact,
+        PhysicalContactKind::Consumed
+    );
+    assert_eq!(consumed.body_event.nutrition, 0.7);
+    assert!(world.entity(berry).unwrap().is_consumed());
+    assert_eq!(world.entity(berry).unwrap().carried_by, None);
+
+    // Failed Eat attempts across exhausted ticks must not restart regrowth.
+    for _ in 0..2 {
+        let stale = world.apply_command(&command).unwrap();
+        assert_eq!(stale.command, command);
+        assert!(!stale.execution.succeeded);
+        assert_eq!(stale.body_event.nutrition, 0.0);
+        assert!(world.entity(berry).unwrap().is_consumed());
+        assert_eq!(world.entity(berry).unwrap().carried_by, None);
+        world.advance_tick();
+    }
+
+    assert_eq!(world.tick(), Tick::new(2));
+    assert_eq!(world.entity_id("berry"), Some(berry));
+    assert!(!world.entity(berry).unwrap().is_consumed());
+    assert_eq!(world.entity(berry).unwrap().carried_by, None);
+    assert_eq!(world.entity(berry).unwrap().nutrition, 0.7);
+    assert_eq!(world.ecology_metrics().resources_regrown, 1);
+
+    // Regrowth restores loose food. This Eat only reacquires that same entity.
+    let reacquired = world.apply_command(&command).unwrap();
+    assert_eq!(reacquired.command, command);
+    assert!(reacquired.execution.succeeded);
+    assert_eq!(
+        reacquired.execution.physical.contact,
+        PhysicalContactKind::Touch
+    );
+    assert_eq!(reacquired.execution.physical.target_entity, Some(berry));
+    assert_eq!(reacquired.body_event.nutrition, 0.0);
+    assert!(!world.entity(berry).unwrap().is_consumed());
+    assert_eq!(world.entity(berry).unwrap().carried_by, Some(organism()));
+
+    let meal = world.apply_command(&command).unwrap();
+    assert_eq!(meal.command, command);
+    assert!(meal.execution.succeeded);
+    assert_eq!(
+        meal.execution.physical.contact,
+        PhysicalContactKind::Consumed
+    );
+    assert_eq!(meal.execution.physical.target_entity, Some(berry));
+    assert_eq!(meal.body_event.nutrition, 0.7);
+    assert!(world.entity(berry).unwrap().is_consumed());
+    assert_eq!(world.entity(berry).unwrap().carried_by, None);
 }
 
 #[test]
@@ -185,6 +269,7 @@ fn spawn_policy_and_world_caps_are_deterministic_and_bounded() {
 fn save_load_preserves_ecology_state_and_resource_lifecycle() {
     let mut world = ecology_world();
     let berry = world.entity_id("berry").unwrap();
+    grab_resource(&mut world, berry);
     world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
         .unwrap();
