@@ -38,6 +38,10 @@ the audited path explicitly. Ordinary play uses approximation even when the
 binary includes training support. Those diagnostic protocols do not measure
 the approximate production policy's performance or behavioral competence.
 
+Untracked object candidates retain their current world entity identity in the
+transient cache key, so same-action objects cannot reuse each other's
+expectancies.
+
 Cached expectancies deliberately omit exact current features. Current
 perception, frame binding, candidate index, query and episodic decision key
 are reconstructed every tick, so the selected action's sealed experience
