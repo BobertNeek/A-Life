@@ -766,6 +766,7 @@ def run_night(args, state, state_path, input_hashes):
         regressions = 0
         stalled_batches = 0
         for index in range(args.target_episodes):
+            batch_assessment_due = index == 0 or (index + 1) % args.batch_episodes == 0
             if dt.datetime.now(UTC) >= collection_cutoff:
                 break
             if index and samples:
@@ -785,7 +786,12 @@ def run_night(args, state, state_path, input_hashes):
                 state["throughput_estimate"] = estimate
                 state["target_attainable_at_measured_rate"] = None if estimate["provisional"] else (
                     estimate["estimated_remaining_episodes"] >= args.target_episodes - index)
-                if remaining < estimate["seconds_per_episode_with_margin"]:
+                # Admission reserves the actual next work, rather than its
+                # amortized rate: a boundary episode immediately runs full probes.
+                next_assessment_seconds = batch_assessment_seconds if batch_assessment_due else 0
+                next_episode_seconds = max(sample["seconds"] for sample in (samples[1:] or samples))
+                next_work_seconds_with_margin = (next_episode_seconds + next_assessment_seconds) * 1.25
+                if remaining < next_work_seconds_with_margin:
                     break
             guard()
             seed = args.seed + index
@@ -832,7 +838,7 @@ def run_night(args, state, state_path, input_hashes):
                                       "bytes": size, "input_sha256": hashes, "policy_version": receipt["policy_version"],
                                       "sampling_temperature": temperature, "offline_rehearsal_epochs": offline_epochs})
             publish()
-            if index == 0 or (index + 1) % args.batch_episodes == 0:
+            if batch_assessment_due:
                 current = probe(f"frozen-after-{index:05d}", previous,
                                 startup_cutoff if index == 0 else collection_cutoff)
                 if recipe_enabled:
