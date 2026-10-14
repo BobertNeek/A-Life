@@ -29,6 +29,9 @@ absolute valence above 0.15, an absolute drive delta above 0.03, contradiction
 or teacher feedback triggers an immediate refresh. Newly visible tracked
 objects and a drive change above 0.15 also refresh preparation. Missing or
 evicted cached sources and new target/action identities force real retrieval.
+Untracked object candidates retain their current world entity identity in the
+transient cache key, so same-action objects cannot reuse each other's
+expectancies.
 
 Cached expectancies deliberately omit exact current features. Current
 perception, frame binding, candidate index, query and episodic decision key

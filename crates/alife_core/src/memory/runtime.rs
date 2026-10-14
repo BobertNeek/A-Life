@@ -54,6 +54,7 @@ pub(super) fn retain_observed_social_recognition(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct RecallKey {
     target: Option<crate::TrackedObjectId>,
+    untracked_entity: Option<crate::WorldEntityId>,
     family: u8,
     action: u32,
 }
@@ -66,9 +67,16 @@ struct CachedCandidate {
 }
 
 impl RecallKey {
-    fn from_query(query: &CandidateMemoryQueryV2) -> Self {
+    fn from_candidate(query: &CandidateMemoryQueryV2, candidate: &crate::ActionCandidate) -> Self {
         Self {
             target: query.tracked_object_id(),
+            // PrivilegedAffordanceV1 has no object slots. Keep its distinct
+            // current entities separate without changing durable query keys.
+            untracked_entity: query
+                .tracked_object_id()
+                .is_none()
+                .then_some(candidate.target.entity)
+                .flatten(),
             family: query.action_family().raw(),
             action: query.action_id().raw(),
         }
@@ -180,7 +188,7 @@ impl MemoryBank {
         let mut searched_any = refresh;
         for candidate in draft.candidates() {
             let query = MemoryQueryEncoderV2::encode_validated_candidate(draft, candidate)?;
-            let key = RecallKey::from_query(&query);
+            let key = RecallKey::from_candidate(&query, candidate);
             let (target_bucket, family_bucket) = keys_for_query(&query);
             let cached = (!refresh)
                 .then(|| cache.entries.iter().find(|entry| entry.key == key))
@@ -244,13 +252,16 @@ impl MemoryBank {
                     profile,
                     queries
                         .iter()
+                        .zip(draft.candidates())
                         .zip(&contexts)
                         .zip(emissions)
-                        .map(|((query, context), social_emission)| CachedCandidate {
-                            key: RecallKey::from_query(query),
-                            context: *context,
-                            social_emission,
-                        })
+                        .map(
+                            |(((query, candidate), context), social_emission)| CachedCandidate {
+                                key: RecallKey::from_candidate(query, candidate),
+                                context: *context,
+                                social_emission,
+                            },
+                        )
                         .collect(),
                 )
             })

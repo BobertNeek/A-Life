@@ -2377,3 +2377,96 @@ fn prepared_attention_and_finalization_reject_changed_draft_and_cognitive_owner(
     }
     prepared.attention_evidence_for_draft(&draft).unwrap();
 }
+
+fn privileged_runtime_draft(tick: Tick, objects: &[(u64, f32)]) -> PerceptionFrameDraft {
+    let candidates = objects
+        .iter()
+        .enumerate()
+        .map(|(index, (entity, signature))| {
+            let mut features = alife_core::CandidateFeatureVector::zero();
+            features.0[3] = *signature;
+            ActionCandidate::new(
+                index as u16,
+                ActionId(200),
+                ActionKind::Interact,
+                CandidateActionFamily::Ingest,
+                CandidateObservationRef::None,
+                ActionTarget::new(Some(WorldEntityId(*entity)), None),
+                features,
+                Confidence::new(0.9).unwrap(),
+                NormalizedScalar::new(0.2).unwrap(),
+                DurationTicks::new(1),
+                DurationTicks::new(2),
+            )
+            .unwrap()
+        })
+        .collect();
+    PerceptionFrameDraft::new(
+        ORGANISM,
+        tick,
+        SensorProfile::PrivilegedAffordanceV1,
+        SensorySnapshot::new(
+            ORGANISM,
+            tick,
+            Vec3f::ZERO,
+            SensoryChannels::ZERO,
+            Default::default(),
+        )
+        .unwrap(),
+        BodySnapshot {
+            pose: Pose::IDENTITY,
+            velocity: Velocity::ZERO,
+        },
+        HomeostaticSnapshot::baseline(tick),
+        candidates,
+        SensorProfileProvenance::new(
+            SensorProfile::PrivilegedAffordanceV1,
+            SensoryAbiVersion::CURRENT,
+            tick,
+        )
+        .unwrap(),
+        vec![],
+    )
+    .unwrap()
+}
+
+#[test]
+fn runtime_recall_keeps_untracked_object_expectancies_separate() {
+    let mut bank = empty_bank();
+    for (sequence, entity, signature, reward, pain) in
+        [(1, 9_071, -0.9, -0.8, 0.9), (2, 9_072, 0.9, 0.8, 0.0)]
+    {
+        let patch = observation_from_draft(
+            &bank,
+            sequence,
+            privileged_runtime_draft(Tick::new(sequence), &[(entity, signature)]),
+            reward,
+            pain,
+            |outcome| outcome.physical.target_entity = Some(WorldEntityId(entity)),
+        );
+        bank.observe_sealed_patch_runtime(&patch).unwrap();
+    }
+    let draft = privileged_runtime_draft(Tick::new(10), &[(9_071, -0.9), (9_072, 0.9)]);
+    let (fresh, cache) = bank
+        .recall_frame_runtime(&draft, &Default::default(), true)
+        .unwrap();
+    assert!(fresh.context().candidates[0].family_value[0] < -0.7);
+    assert!(fresh.context().candidates[1].family_value[0] > 0.7);
+    let cache = cache.unwrap();
+    let (cached, replacement) = bank.recall_frame_runtime(&draft, &cache, false).unwrap();
+    assert!(replacement.is_none());
+    assert_eq!(cached.receipt().similarity_evaluations, 0);
+    assert_eq!(fresh.context().candidates, cached.context().candidates);
+
+    let reversed = privileged_runtime_draft(Tick::new(11), &[(9_072, 0.9), (9_071, -0.9)]);
+    let (reordered, replacement) = bank.recall_frame_runtime(&reversed, &cache, false).unwrap();
+    assert!(replacement.is_none());
+    assert!(reordered.context().candidates[0].family_value[0] > 0.7);
+    assert!(reordered.context().candidates[1].family_value[0] < -0.7);
+    let (frame, finalized) = reordered.finalize(reversed).unwrap();
+    for (key, candidate) in finalized.candidate_keys().iter().zip(frame.candidates()) {
+        key.query()
+            .validate_against_frame(&frame, candidate)
+            .unwrap();
+    }
+}
