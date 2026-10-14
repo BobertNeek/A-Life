@@ -11697,7 +11697,7 @@ mod tests {
             .cloned()
             .collect::<Vec<_>>();
         let before_resident = runtime.residents.get(&organism_id.raw()).unwrap().clone();
-        let sealed_before_failure = runtime.sealed_patches().len();
+        let sealed_before_failure = runtime.sealed_patch_count();
         runtime.force_late_advance_failure_for_test();
         let result = runtime.tick();
         assert!(matches!(
@@ -11707,7 +11707,23 @@ mod tests {
             ))
         ));
         assert_eq!(runtime.last_learning_receipts().len(), 1);
-        assert_eq!(runtime.sealed_patches().len(), sealed_before_failure + 1);
+        assert_eq!(runtime.sealed_patch_count(), sealed_before_failure + 1);
+        assert!(
+            runtime.sealed_patches().len()
+                <= before_resident
+                    .phenotype
+                    .replay_capture_plan()
+                    .event_capacity() as usize
+        );
+        assert_eq!(
+            runtime
+                .latest_sealed_patch_for(organism_id)
+                .unwrap()
+                .header()
+                .sequence_id
+                .raw(),
+            before_resident.next_sequence
+        );
         assert_eq!(runtime.world.tick(), before_tick);
         assert_eq!(runtime.world.object_snapshots(), before_objects);
         assert_eq!(
