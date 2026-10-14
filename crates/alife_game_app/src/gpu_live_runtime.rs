@@ -11516,12 +11516,13 @@ mod tests {
     fn v11_authoritative_admission_real_runtime() {
         let organism_id = OrganismId(1);
         let seed = 7_701;
-        let world = HeadlessScenarioBuilder::new(seed)
+        let mut world = HeadlessScenarioBuilder::new(seed)
             .agent("learner", organism_id, Vec3f::ZERO)
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.9)
             .hazard("hazard", Vec3f::new(-2.0, 0.0, 0.0), 0.7)
             .build()
             .unwrap();
+        register_sealing_test_organism(&mut world, organism_id);
         let mut runtime = GpuLiveBrainRuntime::new(
             GpuClosedLoopBackend::new_required(
                 alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -11696,7 +11697,11 @@ mod tests {
             .cloned()
             .collect::<Vec<_>>();
         let before_resident = runtime.residents.get(&organism_id.raw()).unwrap().clone();
-        let sealed_before_failure = runtime.sealed_patches().len();
+        let before_sealed_patches = runtime.sealed_patches().to_vec();
+        let before_latest_patches = runtime.last_sealed_patches.clone();
+        let before_memories = runtime.memories.clone();
+        let before_topologies = runtime.topologies.clone();
+        let sealed_before_failure = runtime.sealed_patch_count();
         runtime.force_late_advance_failure_for_test();
         let result = runtime.tick();
         assert!(matches!(
@@ -11706,7 +11711,14 @@ mod tests {
             ))
         ));
         assert_eq!(runtime.last_learning_receipts().len(), 1);
-        assert_eq!(runtime.sealed_patches().len(), sealed_before_failure + 1);
+        // Host authority rolls back after the irreversible device commit.
+        // Further neural actions must stop instead of reusing the old sequence.
+        assert_eq!(runtime.sealed_patch_count(), sealed_before_failure);
+        assert_eq!(runtime.sealed_patches(), before_sealed_patches.as_slice());
+        assert_eq!(runtime.last_sealed_patches, before_latest_patches);
+        assert_eq!(runtime.memories, before_memories);
+        assert_eq!(runtime.topologies, before_topologies);
+        assert!(runtime.backend.ensure_neural_actions_available().is_err());
         assert_eq!(runtime.world.tick(), before_tick);
         assert_eq!(runtime.world.object_snapshots(), before_objects);
         assert_eq!(

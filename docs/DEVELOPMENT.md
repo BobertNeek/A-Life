@@ -278,6 +278,24 @@ Do not invoke the worker directly or add that retired pack to the production man
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
 
+### Grab-night throughput estimate
+
+The host runner amortizes the maximum observed Grab assessment duration over
+`--batch-episodes`. Recipe mode also adds the maximum observed held-food Eat
+retention assessment duration, because both probes recur at recipe batch checks.
+Non-recipe batches retain Grab-only overhead. The existing 25% estimate margin,
+provisional-sample policy and absolute child cutoffs are unchanged. Assessments
+never add accepted episodes or learner rows. These measured estimates help bound
+collection admission; they do not establish actual PC throughput or mastery.
+
+Admission separately reserves the maximum observed ordinary episode cost plus
+the full probe cost due immediately after that episode, with the same 25% margin.
+A recipe batch boundary reserves both Grab and held-food Eat probes; a non-recipe
+boundary reserves only Grab. Non-boundary episodes reserve only their own cost.
+Throughput reporting retains the amortized probe costs above. Startup qualification,
+the final-assessment reserve, absolute child cutoffs and sealed-checkpoint acceptance
+are unchanged.
+
 ### Grab-night final assessments
 
 `scripts/run_grab_food_night.py` attempts final Grab and held-food Eat assessments
