@@ -11697,6 +11697,10 @@ mod tests {
             .cloned()
             .collect::<Vec<_>>();
         let before_resident = runtime.residents.get(&organism_id.raw()).unwrap().clone();
+        let before_sealed_patches = runtime.sealed_patches().to_vec();
+        let before_latest_patches = runtime.last_sealed_patches.clone();
+        let before_memories = runtime.memories.clone();
+        let before_topologies = runtime.topologies.clone();
         let sealed_before_failure = runtime.sealed_patch_count();
         runtime.force_late_advance_failure_for_test();
         let result = runtime.tick();
@@ -11707,23 +11711,14 @@ mod tests {
             ))
         ));
         assert_eq!(runtime.last_learning_receipts().len(), 1);
-        assert_eq!(runtime.sealed_patch_count(), sealed_before_failure + 1);
-        assert!(
-            runtime.sealed_patches().len()
-                <= before_resident
-                    .phenotype
-                    .replay_capture_plan()
-                    .event_capacity() as usize
-        );
-        assert_eq!(
-            runtime
-                .latest_sealed_patch_for(organism_id)
-                .unwrap()
-                .header()
-                .sequence_id
-                .raw(),
-            before_resident.next_sequence
-        );
+        // Host authority rolls back after the irreversible device commit.
+        // Further neural actions must stop instead of reusing the old sequence.
+        assert_eq!(runtime.sealed_patch_count(), sealed_before_failure);
+        assert_eq!(runtime.sealed_patches(), before_sealed_patches.as_slice());
+        assert_eq!(runtime.last_sealed_patches, before_latest_patches);
+        assert_eq!(runtime.memories, before_memories);
+        assert_eq!(runtime.topologies, before_topologies);
+        assert!(runtime.backend.ensure_neural_actions_available().is_err());
         assert_eq!(runtime.world.tick(), before_tick);
         assert_eq!(runtime.world.object_snapshots(), before_objects);
         assert_eq!(
