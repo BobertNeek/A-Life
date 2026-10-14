@@ -6,7 +6,11 @@
 
 use std::{
     collections::VecDeque,
-    sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError},
+        Arc,
+    },
     thread,
     time::Duration,
 };
@@ -31,6 +35,13 @@ pub const CA27_MAX_SALIENCE_LABELS: usize = 4;
 pub const CA27_MAX_LEXICON_ASSOCIATIONS: usize = 6;
 pub const CA27_MAX_PERCEPTION_TAGS: usize = 6;
 pub const CA27_MAX_QUEUE_DEPTH: usize = 4;
+pub const CA27_UNUSABLE_HINT_FEEDBACK_VERSION: &str = "unusable-hint-reconsideration-v1";
+pub const CA27_UNUSABLE_HINT_FEEDBACK: &str = concat!(
+    " Feedback: the previous reply was schema-valid but supplied no usable receiver-vocabulary association for this rich-information lesson. ",
+    "Reconsider only associations supported by this same context or the heard words. ",
+    "Use positive salience only for a meaningful association; if none applies, keep zero salience. ",
+    "Do not invent observations, prescribe actions, or change the context."
+);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LlamaCppSlmPriorConfig {
@@ -210,7 +221,18 @@ enum LocalSlmPriorWork {
     Generate(
         LocalSlmPriorRequest,
         mpsc::Sender<Result<LocalSlmPriorOutput, String>>,
+        bool,
     ),
+}
+
+/// Swappable bounded text-in/hints-out provider. It owns no learner state.
+/// Calls run only on the bounded asynchronous worker, never the organism step.
+pub trait BoundedSlmPriorProvider: Send + 'static {
+    fn generate_prior(
+        &self,
+        bounded_context: &str,
+        unusable_hint_feedback: bool,
+    ) -> Result<LocalSlmPriorOutput, String>;
 }
 
 /// Bounded asynchronous worker queue for CA27 local SLM prior requests.
@@ -223,18 +245,33 @@ enum LocalSlmPriorWork {
 pub struct LocalSlmPriorAsyncQueue {
     config: LlamaCppSlmPriorConfig,
     sender: SyncSender<LocalSlmPriorWork>,
+    alive: Arc<AtomicBool>,
 }
 
 impl LocalSlmPriorAsyncQueue {
     pub fn new(config: LlamaCppSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
-        config.validate()?;
         let provider = LlamaCppSlmPriorProvider::new(config.clone())?;
+        Self::with_provider(config, Box::new(provider))
+    }
+
+    pub fn with_provider(
+        config: LlamaCppSlmPriorConfig,
+        provider: Box<dyn BoundedSlmPriorProvider>,
+    ) -> Result<Self, ScaffoldContractError> {
+        config.validate()?;
+        let max_prompt_chars = config.max_prompt_chars;
         let (sender, receiver) = mpsc::sync_channel(config.max_queue_depth);
+        let alive = Arc::new(AtomicBool::new(true));
+        let worker_alive = alive.clone();
         thread::Builder::new()
-            .name("alife-ca27-local-slm-prior".to_string())
-            .spawn(move || run_slm_prior_worker(provider, receiver))
+            .name("alife-bounded-semantic-prior".to_string())
+            .spawn(move || run_slm_prior_worker(provider, max_prompt_chars, receiver, worker_alive))
             .map_err(|_| ScaffoldContractError::MissingPhaseData)?;
-        Ok(Self { config, sender })
+        Ok(Self {
+            config,
+            sender,
+            alive,
+        })
     }
 
     pub fn capacity(&self) -> usize {
@@ -249,12 +286,30 @@ impl LocalSlmPriorAsyncQueue {
         &self,
         request: LocalSlmPriorRequest,
     ) -> Result<Receiver<Result<LocalSlmPriorOutput, String>>, ScaffoldContractError> {
+        self.submit_inner(request, false)
+    }
+
+    /// Reconsider the same bounded observation after a valid but unusable reply.
+    /// The caller owns the retry budget; a positive association is never forced.
+    pub fn submit_unusable_hint_retry(
+        &self,
+        request: LocalSlmPriorRequest,
+    ) -> Result<Receiver<Result<LocalSlmPriorOutput, String>>, ScaffoldContractError> {
+        self.submit_inner(request, true)
+    }
+
+    fn submit_inner(
+        &self,
+        request: LocalSlmPriorRequest,
+        unusable_hint_feedback: bool,
+    ) -> Result<Receiver<Result<LocalSlmPriorOutput, String>>, ScaffoldContractError> {
         request.validate(self.config.max_prompt_chars)?;
         let (reply_tx, reply_rx) = mpsc::channel();
-        match self
-            .sender
-            .try_send(LocalSlmPriorWork::Generate(request, reply_tx))
-        {
+        match self.sender.try_send(LocalSlmPriorWork::Generate(
+            request,
+            reply_tx,
+            unusable_hint_feedback,
+        )) {
             Ok(()) => Ok(reply_rx),
             Err(TrySendError::Full(_)) => Err(ScaffoldContractError::ScalarOutOfRange),
             Err(TrySendError::Disconnected(_)) => Err(ScaffoldContractError::MissingPhaseData),
@@ -278,17 +333,30 @@ impl LocalSlmPriorAsyncQueue {
     }
 }
 
+impl Drop for LocalSlmPriorAsyncQueue {
+    fn drop(&mut self) {
+        // Never start queued work after its owning runtime has gone away.
+        // A request already in flight remains bounded by the provider timeout.
+        self.alive.store(false, Ordering::Release);
+    }
+}
+
 fn run_slm_prior_worker(
-    provider: LlamaCppSlmPriorProvider,
+    provider: Box<dyn BoundedSlmPriorProvider>,
+    max_prompt_chars: usize,
     receiver: mpsc::Receiver<LocalSlmPriorWork>,
+    alive: Arc<AtomicBool>,
 ) {
     while let Ok(work) = receiver.recv() {
+        if !alive.load(Ordering::Acquire) {
+            break;
+        }
         match work {
-            LocalSlmPriorWork::Generate(request, reply) => {
+            LocalSlmPriorWork::Generate(request, reply, unusable_hint_feedback) => {
                 let result = request
-                    .validate(provider.config.max_prompt_chars)
+                    .validate(max_prompt_chars)
                     .map_err(|err| format!("CA27 queued request invalid: {err:?}"))
-                    .and_then(|_| provider.generate_prior(&request.prompt));
+                    .and_then(|_| provider.generate_prior(&request.prompt, unusable_hint_feedback));
                 let _ = reply.send(result);
             }
         }
@@ -336,6 +404,16 @@ pub struct LlamaCppSlmPriorProvider {
     pub config: LlamaCppSlmPriorConfig,
 }
 
+impl BoundedSlmPriorProvider for LlamaCppSlmPriorProvider {
+    fn generate_prior(
+        &self,
+        bounded_context: &str,
+        unusable_hint_feedback: bool,
+    ) -> Result<LocalSlmPriorOutput, String> {
+        self.generate_prior_inner(bounded_context, unusable_hint_feedback)
+    }
+}
+
 impl LlamaCppSlmPriorProvider {
     pub fn new(config: LlamaCppSlmPriorConfig) -> Result<Self, ScaffoldContractError> {
         config.validate()?;
@@ -343,6 +421,14 @@ impl LlamaCppSlmPriorProvider {
     }
 
     pub fn generate_prior(&self, bounded_context: &str) -> Result<LocalSlmPriorOutput, String> {
+        self.generate_prior_inner(bounded_context, false)
+    }
+
+    fn generate_prior_inner(
+        &self,
+        bounded_context: &str,
+        unusable_hint_feedback: bool,
+    ) -> Result<LocalSlmPriorOutput, String> {
         self.config
             .validate()
             .map_err(|err| format!("invalid CA27 local SLM prior config: {err:?}"))?;
@@ -352,7 +438,7 @@ impl LlamaCppSlmPriorProvider {
         }
         .validate(self.config.max_prompt_chars)
         .map_err(|err| format!("invalid CA27 SLM context: {err:?}"))?;
-        let raw = self.request_generate(bounded_context)?;
+        let raw = self.request_generate(bounded_context, unusable_hint_feedback)?;
         let output = parse_slm_prior_json(&self.config.model, &raw)?;
         if !self.config.association_vocabulary.is_empty()
             && output.lexicon_associations.iter().any(|association| {
@@ -367,7 +453,7 @@ impl LlamaCppSlmPriorProvider {
         Ok(output)
     }
 
-    fn request_generate(&self, bounded_context: &str) -> Result<String, String> {
+    fn request_body(&self, bounded_context: &str, unusable_hint_feedback: bool) -> Value {
         let system_prompt = concat!(
             "You are a private A-Life subconscious semantic prior. ",
             "Return exactly one compact JSON object and no prose. ",
@@ -395,6 +481,9 @@ impl LlamaCppSlmPriorProvider {
             user_prompt.push_str(&format!(" Receiver association vocabulary: {}. Associate the heard words using these codes; general associations may include a heard word itself. These are hints, not commands.", self.config.association_vocabulary.join(", ")));
             serde_json::json!({"type":"string","enum":self.config.association_vocabulary})
         };
+        if unusable_hint_feedback {
+            user_prompt.push_str(CA27_UNUSABLE_HINT_FEEDBACK);
+        }
         let schema = serde_json::json!({
             "type":"object", "additionalProperties":false,
             "required":["salience_labels","context_summary","lexicon_associations","perception_tags"],
@@ -421,7 +510,17 @@ impl LlamaCppSlmPriorProvider {
                 "name":"bounded_semantic_prior", "strict":true,"schema":schema
             }}
         });
-        let body = request.to_string();
+        request
+    }
+
+    fn request_generate(
+        &self,
+        bounded_context: &str,
+        unusable_hint_feedback: bool,
+    ) -> Result<String, String> {
+        let body = self
+            .request_body(bounded_context, unusable_hint_feedback)
+            .to_string();
         let client = LlamaCppServerClient::new(
             self.config.host.clone(),
             self.config.port,
@@ -691,6 +790,28 @@ mod tests {
     }
 
     #[test]
+    fn unusable_hint_feedback_preserves_context_and_allows_honest_zero_output() {
+        let provider = LlamaCppSlmPriorProvider::new(LlamaCppSlmPriorConfig {
+            association_vocabulary: vec!["food".into(), "hungry".into()],
+            ..Default::default()
+        })
+        .unwrap();
+        let context = "heard words food; hunger low; sees nearby terrain surface";
+        let ordinary = provider.request_body(context, false);
+        let retry = provider.request_body(context, true);
+        let ordinary_user = ordinary["messages"][1]["content"].as_str().unwrap();
+        let retry_user = retry["messages"][1]["content"].as_str().unwrap();
+        assert!(retry_user.starts_with(ordinary_user));
+        assert!(retry_user.contains("schema-valid"));
+        assert!(retry_user.contains("if none applies, keep zero salience"));
+        assert_eq!(ordinary["response_format"], retry["response_format"]);
+        assert_eq!(ordinary["temperature"], retry["temperature"]);
+        let zero = parse_slm_prior_json("test", r#"{"salience_labels":["food"],"context_summary":"heard food","lexicon_associations":[{"token":"food","salience":0.0}],"perception_tags":["heard"]}"#).unwrap();
+        assert_eq!(zero.lexicon_associations[0].salience, 0.0);
+        zero.validate().unwrap();
+    }
+
+    #[test]
     fn parser_accepts_bounded_structured_prior_without_authority() {
         let output = parse_slm_prior_json(CA27_DEFAULT_LLAMA_CPP_SLM_ALIAS, valid_json()).unwrap();
         assert_eq!(output.salience_labels.len(), 2);
@@ -796,5 +917,56 @@ mod tests {
         .unwrap();
         let err = provider.generate_prior("teacher token food").unwrap_err();
         assert!(err.contains("USER_ACTION_REQUIRED"));
+    }
+}
+
+#[cfg(test)]
+mod bounded_worker_tests {
+    use super::*;
+    struct BlockingProvider {
+        started: mpsc::Sender<()>,
+        release: Receiver<()>,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    impl BoundedSlmPriorProvider for BlockingProvider {
+        fn generate_prior(&self, _: &str, _: bool) -> Result<LocalSlmPriorOutput, String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.started.send(()).unwrap();
+            self.release.recv().unwrap();
+            Err("CPU fixture".into())
+        }
+    }
+    #[test]
+    fn dropped_queue_never_starts_its_waiting_provider_requests() {
+        let (started, start) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let queue = LocalSlmPriorAsyncQueue::with_provider(
+            LlamaCppSlmPriorConfig::default(),
+            Box::new(BlockingProvider {
+                started,
+                release: released,
+                calls: calls.clone(),
+            }),
+        )
+        .unwrap();
+        let first = queue
+            .submit(LocalSlmPriorRequest {
+                request_id: 1,
+                prompt: "heard words food".into(),
+            })
+            .unwrap();
+        start.recv_timeout(Duration::from_secs(1)).unwrap();
+        let second = queue
+            .submit(LocalSlmPriorRequest {
+                request_id: 2,
+                prompt: "heard words toy".into(),
+            })
+            .unwrap();
+        drop(queue);
+        release.send(()).unwrap();
+        assert!(first.recv_timeout(Duration::from_secs(1)).unwrap().is_err());
+        assert!(second.recv_timeout(Duration::from_secs(1)).is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }

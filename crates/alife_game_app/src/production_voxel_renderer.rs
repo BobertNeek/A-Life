@@ -69,6 +69,7 @@ use crate::{
 };
 
 mod camera_navigation;
+pub(crate) mod care_dock;
 mod creature_grounding;
 mod god_hand;
 mod graphics_capture;
@@ -79,12 +80,14 @@ mod island;
 mod landscape;
 mod live_creature_projection;
 mod live_food_projection;
+pub(crate) mod menu;
 #[cfg(feature = "gpu-runtime")]
 mod performance_receipt;
 #[cfg(feature = "gpu-runtime")]
 mod phase31_performance_health;
 #[cfg(feature = "gpu-runtime")]
 mod phase31_slow_frame_ranking;
+mod status_hud;
 mod terrain_water;
 mod ux_input;
 use crate::{
@@ -1734,6 +1737,11 @@ fn configure_production_voxel_presentation_schedule(app: &mut App) {
         )
             .chain(),
     );
+    app.add_systems(
+        Update,
+        live_food_projection::align_carried_care_objects
+            .in_set(ProductionVoxelPresentationSet::RootReaders),
+    );
 }
 
 #[cfg(feature = "gpu-runtime")]
@@ -1913,7 +1921,10 @@ fn apply_production_runtime_load(world: &mut World) {
                     message: format!("same-device staging backend unavailable: {error}"),
                 })?
         };
-        let playback = if candidate_settings.paused {
+        let menu_open = world
+            .get_resource::<menu::MenuState>()
+            .is_some_and(menu::is_open);
+        let playback = if menu_open || candidate_settings.paused {
             RuntimePlaybackState::Paused
         } else {
             RuntimePlaybackState::Running
@@ -1931,13 +1942,22 @@ fn apply_production_runtime_load(world: &mut World) {
                 .replace_from_durable_save(staging_backend, durable)?;
         }
 
+        if let Some(mut menu) = world.get_resource_mut::<menu::MenuState>() {
+            menu.note_loaded_pause(candidate_settings.paused);
+        }
         world.insert_resource(candidate_frame);
+        if let Some(mut dock) = world.get_resource_mut::<care_dock::State>() {
+            dock.reset();
+        }
         world
             .resource_mut::<ProductionGpuBrainTickScheduleResource>()
             .reset_after_load(playback, mode);
         {
             let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
             ux.settings = candidate_settings;
+            if menu_open {
+                ux.settings.paused = true;
+            }
             ux.settings.selected_stable_id = None;
             ux.settings.follow_selection = false;
             ux.source_save_path = save_path.clone();
@@ -2081,17 +2101,40 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
-            handle_fvr03_mouse_selection.before(god_hand::input),
-            god_hand::input.before(handle_fvr05_production_ux_input),
-            handle_fvr03_camera_mode_input,
-            camera_navigation::zoom_camera,
-            handle_fvr04_camera_follow_input,
+            care_dock::collect_input.before(menu::handle_input),
+            handle_fvr03_mouse_selection
+                .before(god_hand::input)
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
+            god_hand::input
+                .before(handle_fvr05_production_ux_input)
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
+            handle_fvr03_camera_mode_input
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
+            camera_navigation::zoom_camera
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
+            handle_fvr04_camera_follow_input
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
             camera_navigation::pan_camera
                 .after(handle_fvr03_camera_mode_input)
                 .after(handle_fvr04_camera_follow_input)
-                .before(handle_fvr05_production_ux_input),
-            handle_pause_on_focus_loss.before(handle_fvr05_production_ux_input),
-            handle_fvr05_production_ux_input,
+                .before(handle_fvr05_production_ux_input)
+                .after(menu::handle_input)
+                .run_if(menu::world_input_allowed)
+                .run_if(care_dock::world_input_allowed),
+            handle_pause_on_focus_loss
+                .before(handle_fvr05_production_ux_input)
+                .before(menu::handle_input),
+            handle_fvr05_production_ux_input.after(menu::handle_input),
         )
             .in_set(ProductionVoxelPresentationSet::Input),
     )
@@ -2132,10 +2175,11 @@ pub fn spawn_fvr03_production_voxel_scene(
     .add_systems(
         Update,
         (
-            sync_v0_player_status_chip,
-            sync_v0_player_creature_panel,
             sync_v0_player_control_strip,
+            care_dock::sync,
+            status_hud::sync,
         )
+            .chain()
             .in_set(ProductionVoxelPresentationSet::RootReaders),
     );
     #[cfg(not(feature = "vfx-hanabi"))]
@@ -2233,6 +2277,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         })
         .add_systems(Update, request_fvr03_recorded_screenshot);
     }
+    menu::install(app, summary);
     spawn_fvr05_production_ux_ui(app);
     spawn_v0_player_experience_ui(app);
     spawn_fvr04_creature_world_label(app, selected);
@@ -5108,47 +5153,11 @@ const V0_PLAYER_CONTROL_HINTS: &str =
     "Click Select | Hold Carry | Wheel Zoom | Edges Pan | E Food | C Touch | J Play | K Praise | Enter Speak | Space Pause | F1 Help";
 
 fn spawn_v0_player_experience_ui(app: &mut App) {
+    status_hud::spawn(app.world_mut());
+    care_dock::spawn(app.world_mut());
     app.world_mut().spawn((
-        Name::new("A-Life V0 player status chip"),
-        Text::new("A-LIFE"),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.96, 0.91, 0.70)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(18.0),
-            left: Val::Px(18.0),
-            padding: bevy::ui::UiRect::axes(Val::Px(14.0), Val::Px(9.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.055, 0.075, 0.048, 0.88)),
-        V0PlayerStatusChip,
-    ));
-    app.world_mut().spawn((
-        Name::new("A-Life V0 selected creature panel"),
+        Name::new("A-Life explicit keyboard help"),
         Visibility::Hidden,
-        Text::new(""),
-        TextFont {
-            font_size: 14.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.95, 0.93, 0.82)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(62.0),
-            right: Val::Px(18.0),
-            width: Val::Px(318.0),
-            max_width: Val::Px(318.0),
-            padding: bevy::ui::UiRect::all(Val::Px(16.0)),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.055, 0.070, 0.046, 0.91)),
-        V0PlayerCreaturePanel,
-    ));
-    app.world_mut().spawn((
-        Name::new("A-Life V0 player control strip"),
         Text::new(V0_PLAYER_CONTROL_HINTS),
         TextFont {
             font_size: 13.0,
@@ -5159,7 +5168,7 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
             position_type: PositionType::Absolute,
             left: Val::Px(18.0),
             max_width: Val::Percent(95.0),
-            bottom: Val::Px(18.0),
+            bottom: Val::Px(92.0),
             padding: bevy::ui::UiRect::axes(Val::Px(16.0), Val::Px(10.0)),
             ..default()
         },
@@ -5168,62 +5177,13 @@ fn spawn_v0_player_experience_ui(app: &mut App) {
     ));
 }
 
-fn sync_v0_player_status_chip(
-    scene: Res<Fvr03ProductionVoxelSceneResource>,
-    ux: Res<Fvr05ProductionUxStateResource>,
-    mut chips: bevy::prelude::Query<&mut Text, With<V0PlayerStatusChip>>,
-) {
-    if !scene.is_changed() && !ux.is_changed() {
-        return;
-    }
-    let playback = if ux.settings.paused {
-        " | Paused".to_string()
-    } else if ux.settings.playback_mode() != crate::ProductionRunMode::OneX {
-        format!(" | {}", ux.settings.playback_mode().label())
-    } else {
-        String::new()
-    };
-    let noun = if scene.creature_render_count == 1 {
-        "creature"
-    } else {
-        "creatures"
-    };
-    let text = format!("{} {noun}{playback}", scene.creature_render_count);
-    for mut chip in &mut chips {
-        chip.0 = text.clone();
-    }
-}
-
-fn sync_v0_player_creature_panel(
-    selection: Res<Fvr03ProductionVoxelSelectionResource>,
-    creatures: Res<Fvr04ProductionCreatureSceneResource>,
-    ux: Res<Fvr05ProductionUxStateResource>,
-    mut panels: bevy::prelude::Query<(&mut Text, &mut Visibility), With<V0PlayerCreaturePanel>>,
-) {
-    if !selection.is_changed() && !creatures.is_changed() && !ux.is_changed() {
-        return;
-    }
-    let sample = selection
-        .selected
-        .filter(|selected| selected.kind == StableVoxelRefKind::Creature)
-        .and_then(|selected| selected.stable_id)
-        .and_then(|stable_id| creatures.sample_for_stable_id(stable_id));
-    for (mut panel, mut visibility) in &mut panels {
-        *visibility = if sample.is_some() && !ux.debug_mode {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-        if let Some(sample) = sample {
-            panel.0 = v0_selected_creature_text(sample);
-        }
-    }
-}
-
 fn sync_v0_player_control_strip(
     ux: Res<Fvr05ProductionUxStateResource>,
     #[cfg(feature = "gpu-runtime")] authority: Option<Res<ProductionGpuBrainAuthorityResource>>,
-    mut strips: bevy::prelude::Query<&mut Text, With<V0PlayerControlStrip>>,
+    mut strips: bevy::prelude::Query<
+        (&mut Text, &mut Visibility, &mut Node),
+        With<V0PlayerControlStrip>,
+    >,
 ) {
     #[cfg(feature = "gpu-runtime")]
     let authority_changed = authority.as_ref().is_some_and(|state| state.is_changed());
@@ -5319,15 +5279,21 @@ fn sync_v0_player_control_strip(
     if ux.pending_food_move.is_some() && !ux.debug_mode {
         text.push_str("\nFood chosen to move: click ground, then G. Esc cancels.");
     }
-    for mut strip in &mut strips {
+    for (mut strip, mut visibility, mut node) in &mut strips {
+        node.bottom = Val::Px(if ux.last_error.is_some() { 108.0 } else { 92.0 });
         strip.0 = text.clone();
+        *visibility = if ux.show_help || ux.debug_mode {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
 fn v0_selected_creature_text(sample: &Fvr04CreatureExpressionSample) -> String {
     let display_name = v0_player_creature_name(&sample.display_label, sample.stable_id.raw());
     let mut text = format!(
-        "{display_name}\n{} | {}\n\nHunger  {}\nEnergy  {}\nTiredness  {}\nSafety  {}\nSleepiness  {}\nPraise  {}",
+        "{display_name}\n{} | {}\n\nHunger drive  {}\nBody-energy reserve  {}\nFatigue drive  {}\nCalm (1-fear)  {}\nSleep pressure  {}\nPraise hormone  {}",
         sample.animation.label(),
         sample.expression.label(),
         v0_need_bar(sample.hunger),
@@ -5416,6 +5382,9 @@ fn v0_player_creature_name(label: &str, stable_id: u64) -> String {
 }
 
 fn v0_need_bar(value: f32) -> String {
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        return "unavailable".to_string();
+    }
     let filled = (value.clamp(0.0, 1.0) * 8.0).round() as usize;
     format!("[{}{}]", "=".repeat(filled), "-".repeat(8 - filled))
 }
@@ -5487,42 +5456,7 @@ fn handle_fvr03_mouse_selection(
         // Pick the actual elevated creature body, not the terrain tile behind
         // its face. The same ray and positions work at every orthographic zoom.
         let body = frame.as_ref().and_then(|frame| {
-            frame
-                .current
-                .objects()
-                .filter(|o| {
-                    !o.consumed
-                        && o.carried_by.is_none()
-                        && matches!(
-                            o.kind,
-                            WorldObjectKind::Agent
-                                | WorldObjectKind::Food
-                                | WorldObjectKind::Ball
-                                | WorldObjectKind::Token
-                        )
-                })
-                .filter_map(|o| {
-                    let p = world_position_for_render(o.position, highland.is_some());
-                    let samples: &[(f32, f32)] = if o.kind == WorldObjectKind::Agent {
-                        &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]
-                    } else {
-                        &[(0.30, 0.42)]
-                    };
-                    let nearest = samples
-                        .iter()
-                        .filter_map(|(lift, radius)| {
-                            let center = p + Vec3::Y * lift;
-                            let along = (center - ray.origin).dot(*ray.direction);
-                            let closest = ray.origin + *ray.direction * along;
-                            (along >= 0.0
-                                && along <= (position - ray.origin).length() + 0.5
-                                && closest.distance_squared(center) <= radius * radius)
-                                .then_some(along)
-                        })
-                        .min_by(f32::total_cmp)?;
-                    Some((nearest, o.id, o.kind, p))
-                })
-                .min_by(|a, b| a.0.total_cmp(&b.0))
+            pick_live_object_body(&frame.current, highland.is_some(), &surface, &ray, position)
         });
         if let Some((_, id, kind, p)) = body {
             let tile = VoxelTileCoord::new(p.x.floor() as i32, p.z.floor() as i32);
@@ -5543,32 +5477,7 @@ fn handle_fvr03_mouse_selection(
             return Some(selected);
         }
         let food = frame.as_ref().and_then(|frame| {
-            frame
-                .current
-                .objects()
-                .filter(|object| {
-                    object.kind == WorldObjectKind::Food
-                        && !object.consumed
-                        && object.carried_by.is_none()
-                })
-                .filter_map(|object| {
-                    let rendered = world_position_for_render(object.position, highland.is_some());
-                    let ground = Vec3::new(rendered.x, 0.0, rendered.z);
-                    // Match the existing food projection's center.
-                    let height = if highland.is_some() {
-                        surface.height(ground).unwrap_or(rendered.y)
-                    } else {
-                        surface.height(ground).unwrap_or(0.44) + rendered.y
-                    };
-                    let center = ground + Vec3::Y * (height + 0.30);
-                    let along = (center - ray.origin).dot(*ray.direction);
-                    let closest = ray.origin + *ray.direction * along;
-                    (along >= 0.0
-                        && along <= (position - ray.origin).length() + 0.42
-                        && closest.distance_squared(center) <= 0.42_f32.powi(2))
-                    .then_some((along, object.id, ground))
-                })
-                .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+            pick_live_food(&frame.current, highland.is_some(), &surface, &ray, position)
         });
         Some(food.map_or(selected, |(_, stable_id, ground)| {
             let tile = VoxelTileCoord::new(ground.x.floor() as i32, ground.z.floor() as i32);
@@ -5590,6 +5499,84 @@ fn handle_fvr03_mouse_selection(
     );
 }
 
+// Keep the ray paths independently testable without creating a window or GPU.
+fn pick_live_object_body(
+    frame: &LiveBrainPresentationFrame,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    ray: &bevy::math::Ray3d,
+    ground_hit: Vec3,
+) -> Option<(f32, WorldEntityId, WorldObjectKind, Vec3)> {
+    frame
+        .objects()
+        .filter(|object| {
+            !object.consumed
+                && object.carried_by.is_none()
+                && matches!(
+                    object.kind,
+                    WorldObjectKind::Agent
+                        | WorldObjectKind::Food
+                        | WorldObjectKind::Ball
+                        | WorldObjectKind::Token
+                )
+        })
+        .filter_map(|object| {
+            let position = world_position_for_render(object.position, terrain_bound);
+            let (base, samples): (Vec3, &[(f32, f32)]) = match object.kind {
+                WorldObjectKind::Agent => (position, &[(0.35, 0.40), (0.90, 0.48), (1.35, 0.38)]),
+                WorldObjectKind::Food | WorldObjectKind::Ball => (
+                    live_food_projection::care_object_center(
+                        object.position,
+                        terrain_bound,
+                        surface,
+                    ),
+                    &[(0.0, 0.42)],
+                ),
+                _ => (position, &[(0.30, 0.42)]),
+            };
+            let nearest = samples
+                .iter()
+                .filter_map(|(lift, radius)| {
+                    let center = base + Vec3::Y * lift;
+                    let along = (center - ray.origin).dot(*ray.direction);
+                    let closest = ray.origin + *ray.direction * along;
+                    (along >= 0.0
+                        && along <= (ground_hit - ray.origin).length() + 0.5
+                        && closest.distance_squared(center) <= radius * radius)
+                        .then_some(along)
+                })
+                .min_by(f32::total_cmp)?;
+            Some((nearest, object.id, object.kind, position))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+}
+
+fn pick_live_food(
+    frame: &LiveBrainPresentationFrame,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+    ray: &bevy::math::Ray3d,
+    ground_hit: Vec3,
+) -> Option<(f32, WorldEntityId, Vec3)> {
+    frame
+        .objects()
+        .filter(|object| {
+            object.kind == WorldObjectKind::Food && !object.consumed && object.carried_by.is_none()
+        })
+        .filter_map(|object| {
+            let center =
+                live_food_projection::care_object_center(object.position, terrain_bound, surface);
+            let ground = Vec3::new(center.x, 0.0, center.z);
+            let along = (center - ray.origin).dot(*ray.direction);
+            let closest = ray.origin + *ray.direction * along;
+            (along >= 0.0
+                && along <= (ground_hit - ray.origin).length() + 0.42
+                && closest.distance_squared(center) <= 0.42_f32.powi(2))
+            .then_some((along, object.id, ground))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.raw().cmp(&b.1.raw())))
+}
+
 fn apply_fvr03_pointer_sample(
     selection: &mut Fvr03ProductionVoxelSelectionResource,
     hovered: Option<StableVoxelObjectRef>,
@@ -5606,6 +5593,7 @@ fn apply_fvr03_pointer_sample(
 fn handle_pause_on_focus_loss(
     mut focus_events: MessageReader<WindowFocused>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
+    menu: Option<ResMut<menu::MenuState>>,
     #[cfg(feature = "gpu-runtime")] mut schedule: Option<
         ResMut<crate::bevy_shell::ProductionGpuBrainTickScheduleResource>,
     >,
@@ -5613,6 +5601,9 @@ fn handle_pause_on_focus_loss(
     let lost_focus = focus_events.read().any(|event| !event.focused);
     if !lost_focus || !ux.settings.pause_on_focus_loss {
         return;
+    }
+    if let Some(mut menu) = menu {
+        menu.note_external_pause();
     }
     #[cfg(feature = "gpu-runtime")]
     if let Some(schedule) = schedule.as_deref_mut() {
@@ -5947,13 +5938,19 @@ fn sync_fvr05_right_inspector_panel(
     });
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
-            "{}\n\nDEBUG AUTHORITY\n{}",
+            "{}\n\nPRESENTATION DETAIL\n{}\n\nDEBUG AUTHORITY\n{}",
             fvr04_live_creature_inspector_text(
                 selection.selected,
                 &creatures,
                 live_state,
                 frame.as_deref(),
             ),
+            selection
+                .selected
+                .and_then(|r| r.stable_id)
+                .and_then(|id| creatures.sample_for_stable_id(id))
+                .map(v0_selected_creature_text)
+                .unwrap_or_else(|| "unavailable".to_string()),
             ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {

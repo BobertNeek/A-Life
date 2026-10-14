@@ -17,6 +17,8 @@ pub(super) fn handle_fvr05_production_ux_input(
     mut follow: ResMut<Fvr04ProductionCreatureFollowResource>,
     #[cfg(feature = "gpu-runtime")] mut frame: ResMut<LiveBrainPresentationFrameResource>,
     mut ux: ResMut<Fvr05ProductionUxStateResource>,
+    mut menu_state: ResMut<menu::MenuState>,
+    mut dock: ResMut<care_dock::State>,
     #[cfg(feature = "gpu-runtime")] mut gpu_runtime: Option<
         bevy::prelude::NonSendMut<crate::bevy_shell::ProductionGpuBrainRuntimeResource>,
     >,
@@ -77,6 +79,66 @@ pub(super) fn handle_fvr05_production_ux_input(
         ux.pending_food_move = None;
         ux.last_error = Some("food move source unavailable".to_string());
         ux.last_action = "Food move cancelled; source is no longer loose".to_string();
+    }
+    if let Some(action) = menu_state.pending.take() {
+        match action {
+            menu::Action::Save => menu::save(
+                &mut ux,
+                #[cfg(feature = "gpu-runtime")]
+                gpu_runtime
+                    .as_deref_mut()
+                    .map(|runtime| &mut runtime.runtime),
+            ),
+            menu::Action::Load => {
+                #[cfg(feature = "gpu-runtime")]
+                menu::queue_load(
+                    &mut ux,
+                    &mut load_request,
+                    gpu_runtime.as_deref().map(|runtime| &runtime.runtime),
+                );
+                #[cfg(not(feature = "gpu-runtime"))]
+                {
+                    ux.last_error = Some("GPU runtime unavailable; load was not queued".into());
+                    ux.last_action = "Load unavailable".into();
+                }
+            }
+            menu::Action::OneX | menu::Action::Max => menu::speed(
+                if action == menu::Action::OneX {
+                    crate::ProductionRunMode::OneX
+                } else {
+                    crate::ProductionRunMode::MaxSpeed
+                },
+                &mut ux,
+                #[cfg(feature = "gpu-runtime")]
+                schedule.as_deref_mut(),
+                frontend.summary.record_performance,
+                true,
+            ),
+            menu::Action::Focus => {
+                ux.settings.pause_on_focus_loss = !ux.settings.pause_on_focus_loss;
+                ux.persist_ui_settings();
+            }
+            menu::Action::Quit => {
+                #[cfg(feature = "gpu-runtime")]
+                menu::begin_quit(
+                    &mut menu_state,
+                    &mut ux,
+                    gpu_runtime
+                        .as_deref_mut()
+                        .map(|runtime| &mut runtime.runtime),
+                );
+                #[cfg(not(feature = "gpu-runtime"))]
+                {
+                    ux.last_error =
+                        Some("GPU runtime unavailable; quit save was not queued".into());
+                    ux.last_action = "Quit unavailable".into();
+                }
+            }
+            _ => {}
+        }
+    }
+    if menu::is_open(&menu_state) || menu::is_captured(&menu_state) {
+        return;
     }
     #[cfg(feature = "gpu-runtime")]
     if conversation
@@ -156,137 +218,43 @@ pub(super) fn handle_fvr05_production_ux_input(
         (KeyCode::BracketRight, crate::ProductionRunMode::MaxSpeed),
     ] {
         if keyboard.just_pressed(key) && !fvr05_overlay_modifier_pressed(&keyboard) {
-            if mode == crate::ProductionRunMode::HeadlessMaxSpeed
-                && frontend.summary.record_performance
-            {
-                ux.last_error = Some(
-                    "Finish graphical performance recording before entering headless mode"
-                        .to_string(),
-                );
-                continue;
-            }
-            #[cfg(feature = "gpu-runtime")]
-            if let Some(schedule) = schedule.as_deref_mut() {
-                schedule.set_run_mode(mode);
-                if mode == crate::ProductionRunMode::HeadlessMaxSpeed && schedule.is_paused() {
-                    schedule.toggle_playback();
-                }
-                ux.settings.paused = schedule.is_paused();
-                ux.settings.run_mode = Some(mode);
-                ux.last_action = format!("Simulation: {}", mode.label());
-            }
-            #[cfg(not(feature = "gpu-runtime"))]
-            {
-                ux.last_error = Some("Playback requires the GPU runtime".to_string());
-            }
+            menu::speed(
+                mode,
+                &mut ux,
+                #[cfg(feature = "gpu-runtime")]
+                schedule.as_deref_mut(),
+                frontend.summary.record_performance,
+                false,
+            );
         }
     }
-    if keyboard.just_pressed(KeyCode::KeyE) {
-        #[cfg(feature = "gpu-runtime")]
-        let selected_tile = selection
-            .selected
-            .and_then(|selected| (selected.is_stable()).then_some(selected.tile).flatten());
-        #[cfg(feature = "gpu-runtime")]
-        match (gpu_runtime.as_mut(), selected_tile) {
-            (Some(runtime), Some(tile)) => {
-                let position = if runtime.runtime.world().terrain_binding().is_some() {
-                    Vec3f::new(tile.x as f32 + 0.5, 0.0, tile.z as f32 + 0.5)
-                } else {
-                    Vec3f::new(tile.x as f32 + 0.5, tile.z as f32 + 0.5, 0.0)
-                };
-                match runtime.runtime.place_player_food(position) {
-                    Ok(_receipt) => {
-                        frame.refresh_world_objects(runtime.runtime.world());
-                        ux.last_error = None;
-                        ux.last_action = "Food placed".to_string();
-                    }
-                    Err(error) => {
-                        ux.last_error = Some(error.to_string());
-                        ux.last_action =
-                            "Food placement rejected; world left unchanged".to_string();
-                    }
-                }
-            }
-            (Some(_), None) => {
-                ux.last_error = Some("select a visible terrain tile first".to_string());
-                ux.last_action = "Food placement rejected; world left unchanged".to_string();
-            }
-            (None, _) => {
-                ux.last_error = Some("GPU runtime unavailable".to_string());
-                ux.last_action = "Food placement unavailable".to_string();
-            }
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            ux.last_error = Some("GPU runtime unavailable".to_string());
-            ux.last_action = "Food placement unavailable".to_string();
-        }
-    }
-    #[cfg(feature = "gpu-runtime")]
-    for (key, label) in [
-        (KeyCode::KeyC, "Gentle touch"),
-        (KeyCode::KeyJ, "Play"),
-        (KeyCode::KeyK, "Praise reward"),
-    ] {
-        if keyboard.just_pressed(key) && !ux.debug_mode {
-            let result = (|| -> Result<(), crate::GameAppShellError> {
-                let runtime = gpu_runtime.as_mut().ok_or_else(|| {
-                    crate::GameAppShellError::InvalidProductionFrontend {
-                        message: "GPU runtime unavailable".to_string(),
-                    }
-                })?;
-                let selected = selection
-                    .selected
-                    .and_then(|s| s.stable_id)
-                    .and_then(|id| runtime.runtime.world().entity(id))
-                    .filter(|object| object.kind == WorldObjectKind::Agent)
-                    .ok_or_else(|| crate::GameAppShellError::InvalidProductionFrontend {
-                        message: "select a living creature first".to_string(),
-                    })?;
-                let organism = selected
-                    .organism_id
-                    .ok_or(alife_core::ScaffoldContractError::InvalidId)?;
-                let hand_position = selected.position;
-                if key == KeyCode::KeyJ {
-                    runtime.runtime.offer_player_play(organism)?;
-                } else {
-                    runtime.runtime.provide_player_care(
-                        organism,
-                        hand_position,
-                        key == KeyCode::KeyK,
-                    )?;
-                }
-                frame.refresh_world_objects(runtime.runtime.world());
-                Ok(())
-            })();
-            match result {
-                Ok(()) => {
-                    ux.last_error = None;
-                    ux.last_action = if key == KeyCode::KeyJ {
-                        "Plaything offered; creature chooses whether to investigate".to_string()
-                    } else {
-                        format!("{label} offered; chemistry updates at the next simulation tick")
-                    };
-                }
-                Err(error) => {
-                    ux.last_error = Some(error.to_string());
-                    ux.last_action = format!("{label} unavailable");
-                }
-            }
+    dock.observe_selection(selection.selected);
+    let pointer_action = dock.take_pending();
+    for action in care_dock::ACTIONS
+        .into_iter()
+        .filter(|a| *a != care_dock::Action::Speech)
+    {
+        if care_dock::requested(action, pointer_action, &keyboard, ux.debug_mode) {
+            let evidence = care_dock::dispatch(
+                action,
+                selection.selected,
+                &mut ux,
+                #[cfg(feature = "gpu-runtime")]
+                gpu_runtime.as_deref_mut().map(|r| &mut r.runtime),
+                #[cfg(feature = "gpu-runtime")]
+                &mut frame,
+            );
+            dock.record(action, evidence);
         }
     }
     if keyboard.just_pressed(KeyCode::KeyS) {
-        #[cfg(feature = "gpu-runtime")]
-        if let Some(runtime) = gpu_runtime.as_mut() {
-            ux.write_gpu_runtime_save(false, &mut runtime.runtime);
-        } else {
-            ux.write_runtime_save(false);
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        ux.write_runtime_save(false);
-        if ux.last_error.is_none() {
-            ux.persist_ui_settings();
-        }
+        menu::save(
+            &mut ux,
+            #[cfg(feature = "gpu-runtime")]
+            gpu_runtime
+                .as_deref_mut()
+                .map(|runtime| &mut runtime.runtime),
+        );
     }
     if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyN) {
         #[cfg(feature = "gpu-runtime")]
@@ -313,14 +281,15 @@ pub(super) fn handle_fvr05_production_ux_input(
     }
     if keyboard.just_pressed(KeyCode::KeyL) {
         #[cfg(feature = "gpu-runtime")]
-        if load_request.queue() {
-            ux.last_error = None;
-            ux.last_action = "Queued authoritative production runtime load".to_string();
-        }
+        menu::queue_load(
+            &mut ux,
+            &mut load_request,
+            gpu_runtime.as_deref().map(|runtime| &runtime.runtime),
+        );
         #[cfg(not(feature = "gpu-runtime"))]
         {
-            ux.last_error = Some("GPU runtime unavailable; load was not queued".to_string());
-            ux.last_action = "Load unavailable without GPU runtime".to_string();
+            ux.last_error = Some("GPU runtime unavailable; load was not queued".into());
+            ux.last_action = "Load unavailable".into();
         }
     }
     if ux.debug_mode && keyboard.just_pressed(KeyCode::KeyQ) {

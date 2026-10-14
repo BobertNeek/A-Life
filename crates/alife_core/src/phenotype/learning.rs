@@ -662,8 +662,14 @@ fn receptor_scale(
     section_policy: Option<FoundationSectionPolicy>,
     local_index: u32,
 ) -> (f32, u8) {
-    if matches!(kind, CompiledSynapseKind::Decoder(_)) {
-        return (1.0, 0);
+    if let CompiledSynapseKind::Decoder(coordinate) = kind {
+        let scale = genome
+            .plasticity_parameters()
+            .decoder_lifetime_rate_policy()
+            .map_or(1.0, |policy| {
+                policy.scale_for(coordinate.head(), coordinate.family())
+            });
+        return (scale, 0);
     }
     if let Some(policy) = section_policy {
         let fixed_end = policy.count(LifetimePlasticityBand::Fixed);
@@ -794,6 +800,100 @@ mod tests {
             restored.plasticity_parameters(),
             genome.plasticity_parameters()
         );
+    }
+
+    #[test]
+    fn cognitive_decoder_rate_policy_is_isolated_in_receptor_construction() {
+        let capacity = BrainCapacityClass::n512();
+        let baseline = BrainGenome::scaffold(0xDEC0_0007, capacity.id());
+        let development = DevelopmentState::new(
+            baseline.id,
+            crate::Tick::ZERO,
+            crate::NormalizedScalar::new(0.35).unwrap(),
+        );
+        let phenotype = super::super::PhenotypeCompiler::compile(
+            &baseline,
+            &capacity,
+            &development,
+            crate::SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        // CognitiveContext is available only through a strict optional candidate
+        // admission in this base. Qualify the resolver through real receptor
+        // construction using test-only coordinate substitution, not a new ABI.
+        let mut source = phenotype.synapses().to_vec();
+        let selected = source.iter().position(|synapse| matches!(synapse.kind(),
+            CompiledSynapseKind::Decoder(c) if c.head() == super::super::DecoderHeadKind::MemoryContext
+        )).unwrap();
+        let row = source[selected];
+        let CompiledSynapseKind::Decoder(coordinate) = row.kind() else {
+            unreachable!()
+        };
+        source[selected] = CompiledSynapse::new(
+            row.source(),
+            row.target(),
+            row.genetic_weight(),
+            row.alpha(),
+            row.route_index(),
+            CompiledSynapseKind::Decoder(super::super::DecoderSynapseCoordinate::new(
+                super::super::DecoderHeadKind::CognitiveContext,
+                coordinate.family(),
+                coordinate.input_lane(),
+                coordinate.motor_index(),
+            )),
+        );
+        let mut before_synapses = source.clone();
+        let before = compile_learning_plans(
+            &baseline,
+            &development,
+            &capacity,
+            phenotype.projections(),
+            &mut before_synapses,
+        )
+        .unwrap();
+        for scale in [0.0, 0.5] {
+            let policy = crate::DecoderLifetimeRatePolicyV1::default()
+                .with_head_scale(super::super::DecoderHeadKind::CognitiveContext, scale)
+                .unwrap();
+            let genome = baseline
+                .clone()
+                .with_plasticity_parameters(
+                    baseline
+                        .plasticity_parameters()
+                        .with_decoder_lifetime_rate_policy(Some(policy))
+                        .unwrap(),
+                )
+                .unwrap();
+            let mut after_synapses = source.clone();
+            let after = compile_learning_plans(
+                &genome,
+                &development,
+                &capacity,
+                phenotype.projections(),
+                &mut after_synapses,
+            )
+            .unwrap();
+            for (index, (a, b)) in before_synapses.iter().zip(&after_synapses).enumerate() {
+                let left = before.receptors[usize::from(a.receptor_index())];
+                let right = after.receptors[usize::from(b.receptor_index())];
+                if index == selected {
+                    assert_eq!(
+                        (left.learning_rate() * scale).to_bits(),
+                        right.learning_rate().to_bits()
+                    );
+                    assert_eq!(
+                        (left.normalization_rate() * scale).to_bits(),
+                        right.normalization_rate().to_bits()
+                    );
+                    assert_eq!(
+                        (left.sleep_replay_rate() * scale).to_bits(),
+                        right.sleep_replay_rate().to_bits()
+                    );
+                } else {
+                    assert_eq!(left, right);
+                }
+            }
+        }
     }
 
     #[test]

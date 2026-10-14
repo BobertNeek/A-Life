@@ -5,6 +5,24 @@ use bevy::prelude::{Cuboid, Meshable, Query, Sphere};
 #[derive(Component)]
 pub(super) struct LiveCareObject(pub(super) WorldEntityId);
 
+/// Care-object geometry, picking and hand contact share this presentation center.
+/// Terrain-bound world positions already include elevation; unbound positions
+/// retain their canonical Y above the rendered surface (or the existing fallback).
+pub(super) fn care_object_center(
+    position: Vec3f,
+    terrain_bound: bool,
+    surface: &creature_grounding::RenderedTerrainSurface,
+) -> Vec3 {
+    let rendered = world_position_for_render(position, terrain_bound);
+    let ground = Vec3::new(rendered.x, 0.0, rendered.z);
+    let height = if terrain_bound {
+        rendered.y
+    } else {
+        surface.height(ground).unwrap_or(0.44) + rendered.y
+    };
+    ground + Vec3::Y * (height + 0.30)
+}
+
 #[allow(
     clippy::too_many_arguments,
     reason = "Bevy injects independent ECS system parameters."
@@ -37,16 +55,7 @@ pub(super) fn sync_care_objects(
         })
         .map(|object| (object.id.raw(), object))
         .collect();
-    let translation = |position: Vec3f| {
-        let rendered = world_position_for_render(position, highlands.is_some());
-        let ground = Vec3::new(rendered.x, 0.0, rendered.z);
-        let height = if highlands.is_some() {
-            rendered.y
-        } else {
-            surface.height(ground).unwrap_or(0.44) + rendered.y
-        };
-        ground + Vec3::Y * (height + 0.30)
-    };
+    let translation = |position| care_object_center(position, highlands.is_some(), &surface);
     for (entity, marker, mut transform) in &mut object_entities {
         if let Some(object) = objects.remove(&marker.0.raw()) {
             transform.translation = translation(object.position);
@@ -91,6 +100,45 @@ pub(super) fn sync_care_objects(
                     Transform::from_scale(shape),
                 ));
             });
+    }
+}
+
+/// Follow the displayed carrier between world ticks without changing physical placement.
+/// Always start from the snapshot, so offsets cannot accumulate or survive release.
+pub(super) fn align_carried_care_objects(
+    frame: Option<Res<LiveBrainPresentationFrameResource>>,
+    roots: Query<(&ProductionCreatureAssemblyRoot, &Transform), Without<LiveCareObject>>,
+    mut objects: Query<(&LiveCareObject, &mut Transform), Without<ProductionCreatureAssemblyRoot>>,
+) {
+    let Some(frame) = frame else {
+        return;
+    };
+    let carrier_offsets: BTreeMap<_, _> = roots
+        .iter()
+        .filter_map(|(root, transform)| {
+            let carrier = frame.current.object(root.stable_id)?;
+            (carrier.kind == WorldObjectKind::Agent
+                && carrier.organism_id == Some(root.organism_id))
+            .then_some((
+                root.organism_id.raw(),
+                transform.translation - world_position_for_render(carrier.position, false),
+            ))
+        })
+        .collect();
+    for (marker, mut transform) in &mut objects {
+        let Some(object) = frame.current.object(marker.0) else {
+            continue;
+        };
+        let offset = object
+            .carried_by
+            .and_then(|carrier| carrier_offsets.get(&carrier.raw()))
+            .copied()
+            .unwrap_or(Vec3::ZERO);
+        // Hearthling heading follows world yaw directly; retain the world's grip
+        // offset and existing object height, correcting only the smoothed X/Z.
+        let position = world_position_for_render(object.position, false) + offset;
+        transform.translation.x = position.x;
+        transform.translation.z = position.z;
     }
 }
 
@@ -164,5 +212,468 @@ mod tests {
                 world.tick()
             );
         }
+    }
+
+    fn surface_with_height(height: Option<f32>) -> creature_grounding::RenderedTerrainSurface {
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        );
+        if let Some(height) = height {
+            mesh.insert_attribute(
+                Mesh::ATTRIBUTE_POSITION,
+                vec![
+                    [0.0, height, 0.0],
+                    [0.0, height, 1.0],
+                    [1.0, height, 1.0],
+                    [1.0, height, 0.0],
+                ],
+            );
+        }
+        creature_grounding::RenderedTerrainSurface::from_meshes([&mesh], 1.0)
+    }
+
+    #[test]
+    fn care_object_center_preserves_canonical_height_and_uses_only_unbound_surface_lift() {
+        let position = Vec3f::new(0.5, 2.0, 0.5);
+        for (terrain_bound, surface_height, expected_y) in [
+            (false, Some(0.9), 3.2),
+            (false, None, 2.74),
+            (true, Some(0.9), 2.3),
+            (true, None, 2.3),
+        ] {
+            let surface = surface_with_height(surface_height);
+            let center = care_object_center(position, terrain_bound, &surface);
+            assert_eq!(center.x, position.x);
+            assert_eq!(center.z, position.z);
+            assert!((center.y - expected_y).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn care_object_render_and_both_pick_paths_share_measured_and_fallback_centers() {
+        for terrain_bound in [false, true] {
+            for surface_height in [Some(0.9), None] {
+                let world = alife_world::HeadlessScenarioBuilder::new(7)
+                    .food("apple", Vec3f::new(0.5, 2.0, 0.5), 0.25)
+                    .build()
+                    .unwrap();
+                let original = world.object_snapshots();
+                let id = original[0].id;
+                let mut app = App::new();
+                app.insert_resource(
+                    LiveBrainPresentationFrameResource::from_authoritative_world(&world).unwrap(),
+                )
+                .insert_resource(surface_with_height(surface_height))
+                .insert_resource(Assets::<Mesh>::default())
+                .insert_resource(Assets::<StandardMaterial>::default())
+                .add_systems(Update, sync_care_objects);
+                if terrain_bound {
+                    app.insert_resource(creature_grounding::SelectedTerrain(
+                        alife_world::island_terrain(),
+                    ));
+                }
+                for y in [2.0, 2.0, 5.0, 5.0, 2.0] {
+                    let mut objects = original.clone();
+                    objects[0].position.y = y;
+                    let frame =
+                        LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects)
+                            .unwrap();
+                    app.world_mut()
+                        .resource_mut::<LiveBrainPresentationFrameResource>()
+                        .current = frame;
+                    app.update();
+                    let mut query = app.world_mut().query::<(&LiveCareObject, &Transform)>();
+                    let (marker, transform) = query.single(app.world()).unwrap();
+                    assert_eq!(marker.0, id);
+                    let center = transform.translation;
+                    let frame = &app
+                        .world()
+                        .resource::<LiveBrainPresentationFrameResource>()
+                        .current;
+                    let surface = app
+                        .world()
+                        .resource::<creature_grounding::RenderedTerrainSurface>();
+                    assert_eq!(
+                        center,
+                        care_object_center(
+                            frame.object(id).unwrap().position,
+                            terrain_bound,
+                            surface
+                        )
+                    );
+                    let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
+                    let ground_hit = Vec3::new(4.0, 0.0, 0.5);
+                    assert_eq!(
+                        pick_live_object_body(frame, terrain_bound, surface, &ray, ground_hit)
+                            .unwrap()
+                            .1,
+                        id
+                    );
+                    assert_eq!(
+                        pick_live_food(frame, terrain_bound, surface, &ray, ground_hit)
+                            .unwrap()
+                            .1,
+                        id
+                    );
+                    if !terrain_bound {
+                        // The former primary/contact center was below the visible food.
+                        let wrong = Vec3::new(0.5, y + 0.30, 0.5);
+                        let wrong_ray =
+                            bevy::math::Ray3d::new(wrong - Vec3::X * 2.0, bevy::math::Dir3::X);
+                        assert!(pick_live_object_body(
+                            frame,
+                            terrain_bound,
+                            surface,
+                            &wrong_ray,
+                            ground_hit
+                        )
+                        .is_none());
+                        assert!(pick_live_food(
+                            frame,
+                            terrain_bound,
+                            surface,
+                            &wrong_ray,
+                            ground_hit
+                        )
+                        .is_none());
+                    }
+                    assert_eq!(frame.authoritative_world_tick, world.tick());
+                    assert_eq!(frame.object(id).unwrap().position.y, y);
+                }
+                assert_eq!(world.object_snapshots(), original);
+            }
+        }
+    }
+
+    #[test]
+    fn both_food_pick_paths_reject_carried_and_consumed_objects_and_recover_after_drop() {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .food("apple", Vec3f::new(0.5, 2.0, 0.5), 0.25)
+            .build()
+            .unwrap();
+        let original = world.object_snapshots();
+        let id = original[0].id;
+        for terrain_bound in [false, true] {
+            let surface = surface_with_height(Some(0.9));
+            let center = care_object_center(original[0].position, terrain_bound, &surface);
+            let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
+            let ground_hit = Vec3::new(4.0, 0.0, 0.5);
+            for (carried_by, consumed) in [
+                (None, false),
+                (Some(OrganismId(11)), false),
+                (Some(OrganismId(11)), false),
+                (None, false),
+                (None, true),
+                (None, false),
+            ] {
+                let mut objects = original.clone();
+                objects[0].carried_by = carried_by;
+                objects[0].consumed = consumed;
+                let frame =
+                    LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects).unwrap();
+                let expected = (carried_by.is_none() && !consumed).then_some(id);
+                assert_eq!(
+                    pick_live_object_body(&frame, terrain_bound, &surface, &ray, ground_hit)
+                        .map(|hit| hit.1),
+                    expected
+                );
+                assert_eq!(
+                    pick_live_food(&frame, terrain_bound, &surface, &ray, ground_hit)
+                        .map(|hit| hit.1),
+                    expected
+                );
+            }
+        }
+        assert_eq!(world.object_snapshots(), original);
+    }
+
+    #[test]
+    fn ball_primary_pick_uses_visual_height_and_preserves_eligibility() {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .toy("ball", Vec3f::new(0.5, 2.0, 0.5), true)
+            .build()
+            .unwrap();
+        let original = world.object_snapshots();
+        assert_eq!(original[0].kind, WorldObjectKind::Ball);
+        for terrain_bound in [false, true] {
+            for height in [Some(0.9), None] {
+                let surface = surface_with_height(height);
+                let center = care_object_center(original[0].position, terrain_bound, &surface);
+                let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
+                let ground_hit = Vec3::new(4.0, 0.0, 0.5);
+                for (carried_by, consumed) in
+                    [(None, false), (Some(OrganismId(11)), false), (None, true)]
+                {
+                    let mut objects = original.clone();
+                    objects[0].carried_by = carried_by;
+                    objects[0].consumed = consumed;
+                    let frame =
+                        LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects)
+                            .unwrap();
+                    let expected = (carried_by.is_none() && !consumed).then_some(original[0].id);
+                    assert_eq!(
+                        pick_live_object_body(&frame, terrain_bound, &surface, &ray, ground_hit)
+                            .map(|hit| hit.1),
+                        expected
+                    );
+                    assert!(
+                        pick_live_food(&frame, terrain_bound, &surface, &ray, ground_hit).is_none()
+                    );
+                }
+            }
+        }
+        assert_eq!(world.object_snapshots(), original);
+    }
+
+    #[test]
+    fn primary_pick_preserves_agent_and_token_height_rules() {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .agent("walker", OrganismId(11), Vec3f::new(0.5, 2.0, 0.5))
+            .token("token", Vec3f::new(0.5, 2.0, 0.5), 1)
+            .build()
+            .unwrap();
+        let surface = surface_with_height(Some(9.0));
+        for object in world.object_snapshots() {
+            let frame =
+                LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), vec![object.clone()])
+                    .unwrap();
+            let lift = if object.kind == WorldObjectKind::Agent {
+                0.90
+            } else {
+                0.30
+            };
+            let center = world_position_for_render(object.position, false) + Vec3::Y * lift;
+            let ray = bevy::math::Ray3d::new(center - Vec3::X * 2.0, bevy::math::Dir3::X);
+            assert_eq!(
+                pick_live_object_body(&frame, false, &surface, &ray, Vec3::new(4.0, 0.0, 0.5))
+                    .unwrap()
+                    .1,
+                object.id
+            );
+        }
+    }
+
+    #[derive(Resource, Default)]
+    struct DisplayedCarrierPositions(BTreeMap<u64, Vec3>);
+
+    fn present_carrier_positions(
+        positions: Res<DisplayedCarrierPositions>,
+        mut roots: Query<(&ProductionCreatureAssemblyRoot, &mut Transform)>,
+    ) {
+        for (root, mut transform) in &mut roots {
+            if let Some(position) = positions.0.get(&root.organism_id.raw()) {
+                transform.translation = *position;
+            }
+        }
+    }
+
+    fn carried_fixture(highlands: bool) -> (App, Vec<alife_world::WorldObject>, [Entity; 2]) {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .agent("carrier", OrganismId(11), Vec3f::new(4.0, 2.0, 6.0))
+            .agent("other", OrganismId(22), Vec3f::new(-8.0, 2.0, -9.0))
+            .food("held", Vec3f::new(4.5, 2.0, 6.0), 0.25)
+            .food("loose", Vec3f::new(10.0, 2.0, 10.0), 0.25)
+            .build()
+            .unwrap();
+        let mut objects = world.object_snapshots();
+        objects[2].carried_by = Some(OrganismId(11));
+        let frame =
+            LiveBrainPresentationFrame::try_new(Vec::new(), world.tick(), objects.clone()).unwrap();
+        let mut app = App::new();
+        app.insert_resource(LiveBrainPresentationFrameResource {
+            previous: frame.clone(),
+            current: frame,
+        })
+        .insert_resource(creature_grounding::RenderedTerrainSurface::from_meshes(
+            std::iter::empty(),
+            1.0,
+        ))
+        .insert_resource(Assets::<Mesh>::default())
+        .insert_resource(Assets::<StandardMaterial>::default())
+        .insert_resource(DisplayedCarrierPositions(BTreeMap::from([
+            (11, Vec3::new(3.0, 99.0, 5.0)),
+            (22, Vec3::new(90.0, 88.0, 90.0)),
+        ])));
+        if highlands {
+            app.insert_resource(creature_grounding::SelectedTerrain(
+                alife_world::island_terrain(),
+            ));
+        }
+        let roots = std::array::from_fn(|index| {
+            let object = &objects[index];
+            app.world_mut()
+                .spawn((
+                    ProductionCreatureAssemblyRoot {
+                        stable_id: object.id,
+                        organism_id: object.organism_id.unwrap(),
+                        display_only: true,
+                    },
+                    Transform::from_translation(Vec3::new(
+                        object.position.x,
+                        object.position.y,
+                        object.position.z,
+                    )),
+                ))
+                .id()
+        });
+        // Use the production registration and its real ECS systems, with CPU-only
+        // displayed root poses supplied in the animation set instead of a GLB.
+        configure_production_voxel_presentation_schedule(&mut app);
+        app.add_systems(
+            Update,
+            sync_care_objects.in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
+        )
+        .add_systems(
+            Update,
+            present_carrier_positions.in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
+        );
+        (app, objects, roots)
+    }
+
+    fn care_entity(app: &mut App, id: WorldEntityId) -> Option<Entity> {
+        let mut query = app.world_mut().query::<(Entity, &LiveCareObject)>();
+        query
+            .iter(app.world())
+            .find_map(|(entity, marker)| (marker.0 == id).then_some(entity))
+    }
+
+    fn care_position(app: &mut App, id: WorldEntityId) -> Vec3 {
+        let entity = care_entity(app, id).unwrap();
+        app.world().get::<Transform>(entity).unwrap().translation
+    }
+
+    fn replace_objects(app: &mut App, objects: &[alife_world::WorldObject]) {
+        let tick = app
+            .world()
+            .resource::<LiveBrainPresentationFrameResource>()
+            .current
+            .authoritative_world_tick;
+        app.world_mut()
+            .resource_mut::<LiveBrainPresentationFrameResource>()
+            .current =
+            LiveBrainPresentationFrame::try_new(Vec::new(), tick, objects.to_vec()).unwrap();
+    }
+
+    #[test]
+    fn carried_care_objects_follow_exact_displayed_carrier_between_ticks_without_drift() {
+        for highlands in [false, true] {
+            let (mut app, objects, _) = carried_fixture(highlands);
+            let authoritative = app
+                .world()
+                .resource::<LiveBrainPresentationFrameResource>()
+                .clone();
+            for x in [3.0, 3.25, 3.5, 3.75, 3.75, 4.0, 4.0] {
+                app.world_mut()
+                    .resource_mut::<DisplayedCarrierPositions>()
+                    .0
+                    .insert(11, Vec3::new(x, 99.0, x + 2.0));
+                app.update();
+                let held = care_position(&mut app, objects[2].id);
+                assert!((held.x - (x + 0.5)).abs() < 1e-6);
+                assert!((held.z - (x + 2.0)).abs() < 1e-6);
+                assert!((held.y - if highlands { 2.30 } else { 2.74 }).abs() < 1e-5);
+                let loose = care_position(&mut app, objects[3].id);
+                assert_eq!((loose.x, loose.z), (10.0, 10.0));
+                assert_eq!(
+                    app.world().resource::<LiveBrainPresentationFrameResource>(),
+                    &authoritative,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn carried_care_objects_preserve_world_grip_on_turn_release_and_regrab() {
+        let (mut app, mut objects, roots) = carried_fixture(true);
+        for yaw in [0.0, std::f32::consts::FRAC_PI_2, std::f32::consts::PI] {
+            objects[0].body_yaw = yaw;
+            objects[2].position = Vec3f::new(4.0 + 0.5 * yaw.cos(), 2.0, 6.0 + 0.5 * yaw.sin());
+            app.world_mut()
+                .get_mut::<Transform>(roots[0])
+                .unwrap()
+                .rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2 - yaw);
+            replace_objects(&mut app, &objects);
+            app.update();
+            let held = care_position(&mut app, objects[2].id);
+            assert!((held.x - (3.0 + 0.5 * yaw.cos())).abs() < 1e-6);
+            assert!((held.z - (5.0 + 0.5 * yaw.sin())).abs() < 1e-6);
+        }
+        objects[2].carried_by = None;
+        objects[2].position = Vec3f::new(7.0, 2.0, 8.0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(7.0, 2.30, 8.0)
+        );
+        objects[2].carried_by = Some(OrganismId(22));
+        objects[2].position = Vec3f::new(-7.5, 2.0, -9.0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(90.5, 2.30, 90.0)
+        );
+    }
+
+    #[test]
+    fn carried_care_objects_fall_back_when_carrier_is_despawned_missing_or_mismatched() {
+        let (mut app, mut objects, roots) = carried_fixture(true);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(3.5, 2.30, 5.0)
+        );
+        app.world_mut().despawn(roots[0]);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+        // A stale root with the owner's organism ID and another stable ID must
+        // not attach the food to that unrelated entity.
+        app.world_mut()
+            .get_mut::<ProductionCreatureAssemblyRoot>(roots[1])
+            .unwrap()
+            .organism_id = OrganismId(11);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+        objects.remove(0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_eq!(
+            care_position(&mut app, objects[1].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+    }
+
+    #[test]
+    fn carried_care_objects_keep_consumption_regrowth_and_removal_lifecycle() {
+        let (mut app, mut objects, _) = carried_fixture(true);
+        app.update();
+        let old_entity = care_entity(&mut app, objects[2].id).unwrap();
+        objects[2].consumed = true;
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert!(care_entity(&mut app, objects[2].id).is_none());
+        assert!(app.world().get_entity(old_entity).is_err());
+        objects[2].consumed = false;
+        objects[2].carried_by = None;
+        objects[2].position = Vec3f::new(12.0, 2.0, 13.0);
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert_ne!(care_entity(&mut app, objects[2].id).unwrap(), old_entity);
+        assert_eq!(
+            care_position(&mut app, objects[2].id),
+            Vec3::new(12.0, 2.30, 13.0)
+        );
+        let removed_id = objects.remove(2).id;
+        replace_objects(&mut app, &objects);
+        app.update();
+        assert!(care_entity(&mut app, removed_id).is_none());
     }
 }

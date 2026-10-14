@@ -620,6 +620,7 @@ impl GpuLiveBrainRuntime {
                                 tick_before,
                                 tick_after,
                                 timing: &mut cpu_timing,
+                                measure: measure_preparation,
                             },
                         )?;
                     } else {
@@ -664,6 +665,7 @@ impl GpuLiveBrainRuntime {
                         tick_before,
                         tick_after,
                         timing: &mut cpu_timing,
+                        measure: measure_preparation,
                     },
                 )?;
             }
@@ -713,6 +715,43 @@ impl GpuLiveBrainRuntime {
             .performance_metrics
             .preparation_topology_concept_wall_ns
             .saturating_add(cpu_timing.topology_concept_wall_ns);
+        if measure_preparation {
+            self.performance_metrics.preparation_baseline_recall_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_recall_wall_ns
+                .saturating_add(cpu_timing.baseline_recall_wall_ns);
+            self.performance_metrics
+                .preparation_baseline_context_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_context_wall_ns
+                .saturating_add(cpu_timing.baseline_context_wall_ns);
+            self.performance_metrics
+                .preparation_baseline_attention_evidence_wall_ns = self
+                .performance_metrics
+                .preparation_baseline_attention_evidence_wall_ns
+                .saturating_add(cpu_timing.baseline_attention_evidence_wall_ns);
+            self.performance_metrics.preparation_routed_recall_wall_ns = self
+                .performance_metrics
+                .preparation_routed_recall_wall_ns
+                .saturating_add(cpu_timing.routed_recall_wall_ns);
+            self.performance_metrics.preparation_routed_context_wall_ns = self
+                .performance_metrics
+                .preparation_routed_context_wall_ns
+                .saturating_add(cpu_timing.routed_context_wall_ns);
+            self.performance_metrics
+                .preparation_cognitive_projection_wall_ns = self
+                .performance_metrics
+                .preparation_cognitive_projection_wall_ns
+                .saturating_add(cpu_timing.cognitive_projection_wall_ns);
+            self.performance_metrics.preparation_routed_finalize_wall_ns = self
+                .performance_metrics
+                .preparation_routed_finalize_wall_ns
+                .saturating_add(cpu_timing.routed_finalize_wall_ns);
+            self.performance_metrics.preparation_routed_validate_wall_ns = self
+                .performance_metrics
+                .preparation_routed_validate_wall_ns
+                .saturating_add(cpu_timing.routed_validate_wall_ns);
+        }
         self.performance_metrics.preparation_gpu_upload_wall_ns = self
             .performance_metrics
             .preparation_gpu_upload_wall_ns
@@ -783,6 +822,7 @@ impl GpuLiveBrainRuntime {
             self.record_gpu_tick_metrics(&[])?;
             Vec::new()
         } else {
+            let input_rows_started = measure_preparation.then(Instant::now);
             let memory_inputs = batch
                 .iter()
                 .map(|prepared| {
@@ -796,7 +836,21 @@ impl GpuLiveBrainRuntime {
                 .map_err(|error| GameAppShellError::InvalidProductionFrontend {
                     message: format!("neural input preparation failed: {error}"),
                 })?;
+            if let Some(started) = input_rows_started {
+                self.performance_metrics.neural_input_rows_wall_ns = self
+                    .performance_metrics
+                    .neural_input_rows_wall_ns
+                    .saturating_add(elapsed_ns(started));
+            }
+            let input_batch_started = measure_preparation.then(Instant::now);
             let memory_batch = GpuClosedLoopMemoryBatchInput::try_new(memory_inputs)?;
+            if let Some(started) = input_batch_started {
+                self.performance_metrics
+                    .neural_input_batch_validation_wall_ns = self
+                    .performance_metrics
+                    .neural_input_batch_validation_wall_ns
+                    .saturating_add(elapsed_ns(started));
+            }
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             #[cfg(feature = "foundation-training")]
             let before_training = if self.training_sampling.is_some() {
@@ -1205,6 +1259,7 @@ struct CpuPreparationCollection<'a> {
     tick_before: Tick,
     tick_after: Tick,
     timing: &'a mut cpu_preparation::CpuPreparationTiming,
+    measure: bool,
 }
 
 fn collect_preparation(
@@ -1221,22 +1276,9 @@ fn collect_preparation(
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
             .attention_hysteresis = hysteresis;
     }
-    collection.timing.episodic_retrieval_wall_ns = collection
-        .timing
-        .episodic_retrieval_wall_ns
-        .saturating_add(outcome.timing.episodic_retrieval_wall_ns);
-    collection.timing.attention_context_wall_ns = collection
-        .timing
-        .attention_context_wall_ns
-        .saturating_add(outcome.timing.attention_context_wall_ns);
-    collection.timing.topology_concept_wall_ns = collection
-        .timing
-        .topology_concept_wall_ns
-        .saturating_add(outcome.timing.topology_concept_wall_ns);
-    collection.timing.gpu_upload_wall_ns = collection
-        .timing
-        .gpu_upload_wall_ns
-        .saturating_add(outcome.timing.gpu_upload_wall_ns);
+    if collection.measure {
+        collection.timing.accumulate(&outcome.timing);
+    }
     match outcome.result {
         Ok(prepared) => collection.batch.push(PreparedGpuBrainFrame {
             handle: captured.handle,

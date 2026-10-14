@@ -1090,6 +1090,145 @@ impl ActionCandidateCreditProfileV1 {
     }
 }
 
+/// Opt-in inherited scales for semantic decoder heads. An action-family override
+/// replaces the ActionCandidate head scale for that family only. This controls
+/// lifetime delta rates, not genetic/acquired mixing or motor competence.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct DecoderLifetimeRatePolicyV1 {
+    action_candidate_scale: f32,
+    memory_context_scale: f32,
+    speech_payload_scale: f32,
+    cognitive_context_scale: f32,
+    // CandidateActionFamily::raw order: Idle, Rest, Inspect, Approach, Avoid,
+    // Contact, Ingest, Other. None uses the ActionCandidate head scale.
+    action_candidate_family_scales: [Option<f32>; 8],
+}
+
+impl Default for DecoderLifetimeRatePolicyV1 {
+    fn default() -> Self {
+        Self {
+            action_candidate_scale: 1.0,
+            memory_context_scale: 1.0,
+            speech_payload_scale: 1.0,
+            cognitive_context_scale: 1.0,
+            action_candidate_family_scales: [None; 8],
+        }
+    }
+}
+
+impl DecoderLifetimeRatePolicyV1 {
+    pub fn with_head_scale(
+        mut self,
+        head: crate::DecoderHeadKind,
+        scale: f32,
+    ) -> Result<Self, ScaffoldContractError> {
+        match head {
+            crate::DecoderHeadKind::ActionCandidate => self.action_candidate_scale = scale,
+            crate::DecoderHeadKind::MemoryContext => self.memory_context_scale = scale,
+            crate::DecoderHeadKind::SpeechPayload => self.speech_payload_scale = scale,
+            crate::DecoderHeadKind::CognitiveContext => self.cognitive_context_scale = scale,
+        }
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub fn with_action_candidate_family_scale(
+        mut self,
+        family: crate::CandidateActionFamily,
+        scale: Option<f32>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.action_candidate_family_scales[usize::from(family.raw())] = scale;
+        self.validate_contract()?;
+        Ok(self)
+    }
+
+    pub fn scale_for(
+        &self,
+        head: crate::DecoderHeadKind,
+        family: crate::CandidateActionFamily,
+    ) -> f32 {
+        match head {
+            crate::DecoderHeadKind::ActionCandidate => self.action_candidate_family_scales
+                [usize::from(family.raw())]
+            .unwrap_or(self.action_candidate_scale),
+            crate::DecoderHeadKind::MemoryContext => self.memory_context_scale,
+            crate::DecoderHeadKind::SpeechPayload => self.speech_payload_scale,
+            crate::DecoderHeadKind::CognitiveContext => self.cognitive_context_scale,
+        }
+    }
+
+    pub(crate) fn write_canonical(
+        &self,
+        digest: &mut crate::CanonicalDigestBuilder,
+    ) -> Result<(), ScaffoldContractError> {
+        self.validate_contract()?;
+        digest.write_utf8("alife.decoder-lifetime-rates.v1");
+        for scale in [
+            self.action_candidate_scale,
+            self.memory_context_scale,
+            self.speech_payload_scale,
+            self.cognitive_context_scale,
+        ] {
+            digest.write_f32(scale)?;
+        }
+        for scale in self.action_candidate_family_scales {
+            digest.write_bool(scale.is_some());
+            if let Some(scale) = scale {
+                digest.write_f32(scale)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Validate for DecoderLifetimeRatePolicyV1 {
+    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
+        for scale in [
+            self.action_candidate_scale,
+            self.memory_context_scale,
+            self.speech_payload_scale,
+            self.cognitive_context_scale,
+        ]
+        .into_iter()
+        .chain(self.action_candidate_family_scales.into_iter().flatten())
+        {
+            if !scale.is_finite() {
+                return Err(ScaffoldContractError::NonFiniteFloat);
+            }
+            if !(0.0..=1.0).contains(&scale) {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for DecoderLifetimeRatePolicyV1 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            action_candidate_scale: f32,
+            memory_context_scale: f32,
+            speech_payload_scale: f32,
+            cognitive_context_scale: f32,
+            action_candidate_family_scales: [Option<f32>; 8],
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        let value = Self {
+            action_candidate_scale: wire.action_candidate_scale,
+            memory_context_scale: wire.memory_context_scale,
+            speech_payload_scale: wire.speech_payload_scale,
+            cognitive_context_scale: wire.cognitive_context_scale,
+            action_candidate_family_scales: wire.action_candidate_family_scales,
+        };
+        value.validate_contract().map_err(D::Error::custom)?;
+        Ok(value)
+    }
+}
+
 /// Versioned heritable parameters from which phenotype receptor and sleep
 /// plans are compiled. Fields are private so invalid learning lanes cannot be
 /// introduced through struct literals or unchecked deserialization.
@@ -1103,6 +1242,8 @@ pub struct PlasticityGenomeParameters {
     receptor_profile: crate::PlasticityReceptorProfile,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     action_candidate_credit_profile: Option<ActionCandidateCreditProfileV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    decoder_lifetime_rate_policy: Option<DecoderLifetimeRatePolicyV1>,
     fast_min: f32,
     fast_max: f32,
     sleep_staging_rate: f32,
@@ -1138,7 +1279,7 @@ impl PlasticityGenomeParameters {
             *weight = map(*weight, *other, -2.0, 2.0)?;
         }
         child.receptor_profile = crate::PlasticityReceptorProfile::try_new(weights)?;
-        // Foundation-specific action-credit profiles are a coherent immutable block.
+        // Named decoder policies are coherent inherited blocks, not averaged rates.
         child.validate_contract()?;
         Ok(child)
     }
@@ -1163,6 +1304,7 @@ impl PlasticityGenomeParameters {
             sleep_replay_rate,
             receptor_profile,
             action_candidate_credit_profile: None,
+            decoder_lifetime_rate_policy: None,
             fast_min,
             fast_max,
             sleep_staging_rate,
@@ -1205,6 +1347,7 @@ impl PlasticityGenomeParameters {
                 -0.5 * modulator_sign,
             ])?,
             action_candidate_credit_profile: None,
+            decoder_lifetime_rate_policy: None,
             fast_min,
             fast_max,
             sleep_staging_rate,
@@ -1229,6 +1372,7 @@ impl PlasticityGenomeParameters {
             action_candidate_credit_profile: Some(
                 ActionCandidateCreditProfileV1::SignedChoiceReadouts,
             ),
+            decoder_lifetime_rate_policy: None,
             fast_min: -2.0,
             fast_max: 2.0,
             sleep_staging_rate: 0.5,
@@ -1258,8 +1402,9 @@ impl PlasticityGenomeParameters {
     pub const fn action_candidate_credit_profile(&self) -> Option<ActionCandidateCreditProfileV1> {
         self.action_candidate_credit_profile
     }
-    pub(crate) fn with_inherited_credit_profile_from(mut self, source: &Self) -> Self {
+    pub(crate) fn with_inherited_decoder_policies_from(mut self, source: &Self) -> Self {
         self.action_candidate_credit_profile = source.action_candidate_credit_profile;
+        self.decoder_lifetime_rate_policy = source.decoder_lifetime_rate_policy;
         self
     }
     pub fn with_action_candidate_credit_profile(
@@ -1267,6 +1412,18 @@ impl PlasticityGenomeParameters {
         profile: ActionCandidateCreditProfileV1,
     ) -> Result<Self, ScaffoldContractError> {
         self.action_candidate_credit_profile = Some(profile);
+        self.validate_contract()?;
+        Ok(self)
+    }
+    pub const fn decoder_lifetime_rate_policy(&self) -> Option<DecoderLifetimeRatePolicyV1> {
+        self.decoder_lifetime_rate_policy
+    }
+    /// Opt in explicitly; passing None restores the legacy decoder scales.
+    pub fn with_decoder_lifetime_rate_policy(
+        mut self,
+        policy: Option<DecoderLifetimeRatePolicyV1>,
+    ) -> Result<Self, ScaffoldContractError> {
+        self.decoder_lifetime_rate_policy = policy;
         self.validate_contract()?;
         Ok(self)
     }
@@ -1287,6 +1444,9 @@ impl PlasticityGenomeParameters {
 impl Validate for PlasticityGenomeParameters {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         ensure_current_version(SchemaKind::Learning, self.schema_version)?;
+        if let Some(policy) = self.decoder_lifetime_rate_policy {
+            policy.validate_contract()?;
+        }
         let values = [
             self.eligibility_decay,
             self.base_learning_rate,
@@ -1336,6 +1496,8 @@ impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
             receptor_profile: crate::PlasticityReceptorProfile,
             #[serde(default)]
             action_candidate_credit_profile: Option<ActionCandidateCreditProfileV1>,
+            #[serde(default)]
+            decoder_lifetime_rate_policy: Option<DecoderLifetimeRatePolicyV1>,
             fast_min: f32,
             fast_max: f32,
             sleep_staging_rate: f32,
@@ -1351,6 +1513,7 @@ impl<'de> Deserialize<'de> for PlasticityGenomeParameters {
             sleep_replay_rate: wire.sleep_replay_rate,
             receptor_profile: wire.receptor_profile,
             action_candidate_credit_profile: wire.action_candidate_credit_profile,
+            decoder_lifetime_rate_policy: wire.decoder_lifetime_rate_policy,
             fast_min: wire.fast_min,
             fast_max: wire.fast_max,
             sleep_staging_rate: wire.sleep_staging_rate,

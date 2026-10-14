@@ -86,6 +86,112 @@ fn looking_straight_at_food_after_approach_keeps_the_terrain_frame_valid() {
 }
 
 #[test]
+fn coincident_terrain_food_stays_visible_and_eat_pickup_precedes_consumption() {
+    for angle in [
+        133.32324_f32.to_radians(),
+        -133.32324_f32.to_radians(),
+        std::f32::consts::PI,
+    ] {
+        let target = Vec3f::new(6.138_172, 0.0, -2.085_676_2);
+        let start = Vec3f::new(
+            target.x - 0.15 * angle.cos(),
+            target.y,
+            target.z - 0.15 * angle.sin(),
+        );
+        let mut world = HeadlessScenarioBuilder::new(4_310)
+            .agent("agent", ORGANISM, start)
+            .food("food", target, 0.6)
+            .build()
+            .unwrap();
+        let agent = world.entity_id("agent").unwrap();
+        let food = world.entity_id("food").unwrap();
+        let approach = alife_world::HeadlessWorldCommand::approach(ORGANISM, food).unwrap();
+        let mut grab = None;
+        for snapped in [false, true] {
+            assert!(world.apply_command(&approach).unwrap().execution.succeeded);
+            assert_eq!(world.entity(agent).unwrap().position == target, snapped);
+            let mut indexed_world = world.clone();
+            let index = indexed_world.build_perception_batch_index().unwrap();
+            let frame = world
+                .perception_frame_draft(
+                    ORGANISM,
+                    Tick::ZERO,
+                    SensorProfile::GroundedTerrainVisionV1,
+                    HomeostaticSnapshot::baseline(Tick::ZERO),
+                )
+                .unwrap();
+            let indexed_frame = indexed_world
+                .perception_frame_draft_indexed(
+                    ORGANISM,
+                    Tick::ZERO,
+                    SensorProfile::GroundedTerrainVisionV1,
+                    HomeostaticSnapshot::baseline(Tick::ZERO),
+                    &index,
+                )
+                .unwrap();
+            assert_eq!(frame, indexed_frame);
+            assert_eq!(
+                frame.grounded_object_slots().len(),
+                1,
+                "angle={angle}, snapped={snapped}"
+            );
+            let slot = frame.grounded_object_slots()[0];
+            assert!(slot.bearing.into_iter().all(f32::is_finite));
+            assert_eq!(slot.contact, 1.0);
+            let grab_candidate = frame
+                .candidates()
+                .iter()
+                .find(|candidate| {
+                    candidate.action_id == HeadlessActionIds::GRAB
+                        && candidate.target.entity == Some(food)
+                })
+                .unwrap();
+            grab = Some(
+                grab_candidate
+                    .to_command(ORGANISM, alife_core::Confidence::new(1.0).unwrap())
+                    .unwrap(),
+            );
+            assert!(frame.candidates().iter().any(|candidate| {
+                candidate.family == CandidateActionFamily::Ingest
+                    && candidate.target.entity == Some(food)
+            }));
+        }
+
+        // Both paths acquire real possession, but only the explicit path has
+        // a selected Grab. Neither acquisition consumes or nourishes.
+        let mut explicit = world.clone();
+        let grab_result = explicit.apply_command(&grab.unwrap()).unwrap();
+        assert!(grab_result.execution.succeeded);
+        assert_eq!(grab_result.command.action_id, HeadlessActionIds::GRAB);
+        assert_eq!(explicit.entity(food).unwrap().carried_by, Some(ORGANISM));
+        assert!(!explicit.entity(food).unwrap().consumed);
+        assert_eq!(grab_result.body_event.nutrition, 0.0);
+
+        let eat = alife_world::HeadlessWorldCommand::eat(ORGANISM, food).unwrap();
+        let pickup = world.apply_command(&eat).unwrap();
+        assert!(pickup.execution.succeeded);
+        assert_eq!(pickup.command, eat);
+        assert_eq!(
+            pickup.execution.physical.contact,
+            alife_core::PhysicalContactKind::Touch
+        );
+        assert_eq!(pickup.body_event.nutrition, 0.0);
+        assert_eq!(world.entity(food).unwrap().carried_by, Some(ORGANISM));
+        assert!(!world.entity(food).unwrap().consumed);
+        world.advance_tick();
+        let meal = world.apply_command(&eat).unwrap();
+        assert!(meal.execution.succeeded);
+        assert_eq!(meal.command, eat);
+        assert_eq!(
+            meal.execution.physical.contact,
+            alife_core::PhysicalContactKind::Consumed
+        );
+        assert_eq!(meal.body_event.nutrition, 0.6);
+        assert!(world.entity(food).unwrap().consumed);
+    }
+}
+
+#[test]
 fn grounded_horizontal_bearing_distinguishes_xz_cardinals_and_diagonals() {
     for (offset, expected) in [
         (Vec3f::new(0.0, 0.0, 1.0), [1.0, 0.0]),

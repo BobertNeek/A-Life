@@ -391,6 +391,140 @@ fn assert_once(faults: &PreparationFaults) {
 }
 
 #[test]
+fn leaf_measurement_flag_preserves_serial_and_worker_results() {
+    let fixtures: Vec<_> = (1..=8)
+        .map(|owner| OwnerFixture::new(owner, true))
+        .collect();
+    let before: Vec<_> = fixtures.iter().map(OwnerFixture::snapshot).collect();
+    let slots = canonical_slots(fixtures.len());
+    let jobs: Vec<_> = fixtures
+        .iter()
+        .zip(&slots)
+        .map(|(owner, slot)| owner.job(slot))
+        .collect();
+    let reference = prepare_cpu_rows(&jobs, 1, false).unwrap();
+    for workers in [1, 2] {
+        let disabled = prepare_cpu_rows(&jobs, workers, false).unwrap();
+        let measured = prepare_cpu_rows(&jobs, workers, true).unwrap();
+        for ((expected, disabled), measured) in reference.iter().zip(&disabled).zip(&measured) {
+            assert!(measured.result.is_ok());
+            assert_same_trace(disabled, expected);
+            assert_same_trace(measured, expected);
+            assert_eq!(disabled.timing, CpuPreparationTiming::default());
+            let baseline_leaves = measured
+                .timing
+                .baseline_recall_wall_ns
+                .saturating_add(measured.timing.baseline_context_wall_ns)
+                .saturating_add(measured.timing.baseline_attention_evidence_wall_ns);
+            let routed_leaves = measured
+                .timing
+                .routed_recall_wall_ns
+                .saturating_add(measured.timing.routed_context_wall_ns)
+                .saturating_add(measured.timing.cognitive_projection_wall_ns)
+                .saturating_add(measured.timing.routed_finalize_wall_ns)
+                .saturating_add(measured.timing.routed_validate_wall_ns);
+            assert!(baseline_leaves > 0);
+            assert!(routed_leaves > 0);
+            // Compare children only to their enclosing per-owner timers, never
+            // to the parallel batch's elapsed critical-path wall time.
+            assert!(measured.timing.episodic_retrieval_wall_ns >= baseline_leaves);
+            assert!(measured.timing.topology_concept_wall_ns >= routed_leaves);
+        }
+    }
+    assert_eq!(
+        fixtures
+            .iter()
+            .map(OwnerFixture::snapshot)
+            .collect::<Vec<_>>(),
+        before
+    );
+}
+
+#[test]
+fn leaf_measurement_accumulation_and_deltas_saturate() {
+    let mut timing = CpuPreparationTiming::default();
+    let mut increment = CpuPreparationTiming::default();
+    macro_rules! timing_saturates {
+        ($field:ident) => {
+            timing.$field = u64::MAX - 1;
+            increment.$field = 7;
+        };
+    }
+    timing_saturates!(episodic_retrieval_wall_ns);
+    timing_saturates!(attention_context_wall_ns);
+    timing_saturates!(topology_concept_wall_ns);
+    timing_saturates!(gpu_upload_wall_ns);
+    timing_saturates!(baseline_recall_wall_ns);
+    timing_saturates!(baseline_context_wall_ns);
+    timing_saturates!(baseline_attention_evidence_wall_ns);
+    timing_saturates!(routed_recall_wall_ns);
+    timing_saturates!(routed_context_wall_ns);
+    timing_saturates!(cognitive_projection_wall_ns);
+    timing_saturates!(routed_finalize_wall_ns);
+    timing_saturates!(routed_validate_wall_ns);
+    timing.accumulate(&increment);
+    assert_eq!(timing.episodic_retrieval_wall_ns, u64::MAX);
+    assert_eq!(timing.attention_context_wall_ns, u64::MAX);
+    assert_eq!(timing.topology_concept_wall_ns, u64::MAX);
+    assert_eq!(timing.gpu_upload_wall_ns, u64::MAX);
+    assert_eq!(timing.baseline_recall_wall_ns, u64::MAX);
+    assert_eq!(timing.baseline_context_wall_ns, u64::MAX);
+    assert_eq!(timing.baseline_attention_evidence_wall_ns, u64::MAX);
+    assert_eq!(timing.routed_recall_wall_ns, u64::MAX);
+    assert_eq!(timing.routed_context_wall_ns, u64::MAX);
+    assert_eq!(timing.cognitive_projection_wall_ns, u64::MAX);
+    assert_eq!(timing.routed_finalize_wall_ns, u64::MAX);
+    assert_eq!(timing.routed_validate_wall_ns, u64::MAX);
+
+    let mut before = GpuLivePerformanceMetrics::default();
+    let mut current = GpuLivePerformanceMetrics::default();
+    macro_rules! set_metric {
+        ($field:ident) => {
+            before.$field = 9;
+            current.$field = 14;
+        };
+    }
+    set_metric!(preparation_baseline_recall_wall_ns);
+    set_metric!(preparation_baseline_context_wall_ns);
+    set_metric!(preparation_baseline_attention_evidence_wall_ns);
+    set_metric!(preparation_routed_recall_wall_ns);
+    set_metric!(preparation_routed_context_wall_ns);
+    set_metric!(preparation_cognitive_projection_wall_ns);
+    set_metric!(preparation_routed_finalize_wall_ns);
+    set_metric!(preparation_routed_validate_wall_ns);
+    set_metric!(neural_input_rows_wall_ns);
+    set_metric!(neural_input_batch_validation_wall_ns);
+    set_metric!(sidecar_topology_observe_wall_ns);
+    set_metric!(sidecar_topology_lifecycle_wall_ns);
+    let delta = current.delta_from(before);
+    let reversed = before.delta_from(current);
+    assert_eq!(delta.preparation_baseline_recall_wall_ns, 5);
+    assert_eq!(reversed.preparation_baseline_recall_wall_ns, 0);
+    assert_eq!(delta.preparation_baseline_context_wall_ns, 5);
+    assert_eq!(reversed.preparation_baseline_context_wall_ns, 0);
+    assert_eq!(delta.preparation_baseline_attention_evidence_wall_ns, 5);
+    assert_eq!(reversed.preparation_baseline_attention_evidence_wall_ns, 0);
+    assert_eq!(delta.preparation_routed_recall_wall_ns, 5);
+    assert_eq!(reversed.preparation_routed_recall_wall_ns, 0);
+    assert_eq!(delta.preparation_routed_context_wall_ns, 5);
+    assert_eq!(reversed.preparation_routed_context_wall_ns, 0);
+    assert_eq!(delta.preparation_cognitive_projection_wall_ns, 5);
+    assert_eq!(reversed.preparation_cognitive_projection_wall_ns, 0);
+    assert_eq!(delta.preparation_routed_finalize_wall_ns, 5);
+    assert_eq!(reversed.preparation_routed_finalize_wall_ns, 0);
+    assert_eq!(delta.preparation_routed_validate_wall_ns, 5);
+    assert_eq!(reversed.preparation_routed_validate_wall_ns, 0);
+    assert_eq!(delta.neural_input_rows_wall_ns, 5);
+    assert_eq!(reversed.neural_input_rows_wall_ns, 0);
+    assert_eq!(delta.neural_input_batch_validation_wall_ns, 5);
+    assert_eq!(reversed.neural_input_batch_validation_wall_ns, 0);
+    assert_eq!(delta.sidecar_topology_observe_wall_ns, 5);
+    assert_eq!(reversed.sidecar_topology_observe_wall_ns, 0);
+    assert_eq!(delta.sidecar_topology_lifecycle_wall_ns, 5);
+    assert_eq!(reversed.sidecar_topology_lifecycle_wall_ns, 0);
+}
+
+#[test]
 fn worker_policy_bounds_workers_after_serial_hint_capture() {
     for rows in [8, 16, 50, 1_000] {
         for available in [2, 4, 64] {
