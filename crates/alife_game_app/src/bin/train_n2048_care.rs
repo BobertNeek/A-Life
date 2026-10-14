@@ -177,76 +177,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("missing evaluation founder seed")?
             .to_string_lossy()
             .parse::<u64>()?;
-        let tail: Vec<_> = args.collect();
-        let mut food_position = None;
-        let mut request_token = None;
-        let mut silent = false;
-        let mut i = 0;
-        while i < tail.len() {
-            match tail[i].to_string_lossy().as_ref() {
-                "--request-token" => {
-                    i += 1;
-                    if request_token.is_some() {
-                        return Err("duplicate request token".into());
-                    }
-                    request_token = Some(
-                        tail.get(i)
-                            .ok_or("missing request token")?
-                            .to_string_lossy()
-                            .parse::<u16>()?,
-                    );
-                }
-                "--silent-request" => {
-                    silent = true;
-                }
-                _ if i == 0 && tail.len() == 2 => {
-                    food_position = Some([
-                        tail[0].to_string_lossy().parse::<f32>()?,
-                        tail[1].to_string_lossy().parse::<f32>()?,
-                    ]);
-                    i += 1;
-                }
-                _ => return Err("unexpected evaluation argument".into()),
-            }
-            i += 1;
-        }
-        if silent && request_token.is_none() {
-            return Err("silence requires controlled request token".into());
-        }
+        let options = parse_evaluation_options(&args.collect::<Vec<_>>(), lesson)?;
         let asset =
             alife_core::FoundationWeightAsset::decode_canonical(&std::fs::read(asset_path)?)?;
-        if request_token.is_some() {
-            if lesson != alife_game_app::FoundationTeacherLesson::VocabularyReception
-                || food_position.is_some()
-            {
-                return Err(
-                    "request comparison applies to reception without food relocation".into(),
-                );
-            }
-        }
         // Evaluation uses the same production debug runtime as training. Give
         // its bounded worker the same Windows stack rather than overflowing main.
         let receipt = std::thread::Builder::new()
             .name("foundation-evaluation".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if let Some(token) = request_token {
+                let result = if let Some(token) = options.request_token {
                     alife_game_app::run_foundation_request_evaluation(
                         &output,
                         seed,
                         founder_seed_base,
                         ticks,
                         asset,
-                        alife_game_app::FoundationEvaluationRequest { token, silent },
+                        alife_game_app::FoundationEvaluationRequest {
+                            token,
+                            silent: options.silent,
+                        },
                     )
                 } else {
-                    alife_game_app::run_foundation_evaluation_pilot(
+                    alife_game_app::run_foundation_evaluation_pilot_with_config(
                         &output,
                         seed,
                         founder_seed_base,
                         ticks,
                         lesson,
-                        food_position,
+                        options.evaluation,
                         asset,
                     )
                 };
@@ -587,6 +546,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[derive(Debug, Default)]
+struct EvaluationOptions {
+    evaluation: alife_game_app::FoundationEvaluationConfig,
+    request_token: Option<u16>,
+    silent: bool,
+}
+
+fn parse_evaluation_options(
+    tail: &[std::ffi::OsString],
+    lesson: alife_game_app::FoundationTeacherLesson,
+) -> Result<EvaluationOptions, Box<dyn std::error::Error>> {
+    let mut options = EvaluationOptions::default();
+    let mut temperature_specified = false;
+    let mut i = 0;
+    // Preserve the legacy optional X/Z relocation, then accept explicit controls.
+    if tail
+        .first()
+        .is_some_and(|value| !value.to_string_lossy().starts_with("--"))
+    {
+        options.evaluation.food_position = Some([
+            tail[0].to_string_lossy().parse::<f32>()?,
+            tail.get(1)
+                .ok_or("missing evaluation food Z")?
+                .to_string_lossy()
+                .parse::<f32>()?,
+        ]);
+        i = 2;
+    }
+    while i < tail.len() {
+        match tail[i].to_string_lossy().as_ref() {
+            "--evaluation-sampling-temperature" => {
+                if temperature_specified {
+                    return Err("duplicate evaluation sampling temperature".into());
+                }
+                temperature_specified = true;
+                i += 1;
+                options.evaluation.sampling_temperature = tail
+                    .get(i)
+                    .ok_or("missing evaluation sampling temperature")?
+                    .to_string_lossy()
+                    .parse::<f32>()?;
+            }
+            "--request-token" => {
+                i += 1;
+                if options.request_token.is_some() {
+                    return Err("duplicate request token".into());
+                }
+                options.request_token = Some(
+                    tail.get(i)
+                        .ok_or("missing request token")?
+                        .to_string_lossy()
+                        .parse::<u16>()?,
+                );
+            }
+            "--silent-request" => options.silent = true,
+            _ => return Err("unexpected evaluation argument".into()),
+        }
+        i += 1;
+    }
+    options.evaluation.validate()?;
+    if options.silent && options.request_token.is_none() {
+        return Err("silence requires controlled request token".into());
+    }
+    if options.request_token.is_some() {
+        if lesson != alife_game_app::FoundationTeacherLesson::VocabularyReception
+            || options.evaluation.food_position.is_some()
+        {
+            return Err("request comparison applies to reception without food relocation".into());
+        }
+        if temperature_specified {
+            return Err(
+                "evaluation sampling temperature does not apply to controlled request comparisons"
+                    .into(),
+            );
+        }
+    }
+    Ok(options)
+}
+
 fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
     let manifest_path = directory.join("replay-manifest.json");
     let references: Option<Vec<alife_game_app::FoundationReplayRecordRef>> = manifest_path
@@ -729,4 +767,158 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
         }))?
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod evaluation_options_tests {
+    use super::*;
+    use alife_game_app::FoundationTeacherLesson;
+
+    fn parse(
+        values: &[&str],
+        lesson: FoundationTeacherLesson,
+    ) -> Result<EvaluationOptions, Box<dyn std::error::Error>> {
+        parse_evaluation_options(
+            &values
+                .iter()
+                .map(std::ffi::OsString::from)
+                .collect::<Vec<_>>(),
+            lesson,
+        )
+    }
+
+    #[test]
+    fn omitted_temperature_preserves_default_evaluation_controls() {
+        let options = parse(&[], FoundationTeacherLesson::GrabFood).unwrap();
+        assert_eq!(
+            options.evaluation,
+            alife_game_app::FoundationEvaluationConfig::default()
+        );
+        assert!(options.request_token.is_none());
+        assert!(!options.silent);
+    }
+
+    #[test]
+    fn explicit_temperatures_are_forwarded_without_clamping() {
+        for (value, expected) in [
+            ("1", 1.0),
+            ("32", 32.0),
+            ("0.0001", 0.0001),
+            ("3.402823e38", 3.402823e38_f32),
+        ] {
+            let options = parse(
+                &["--evaluation-sampling-temperature", value],
+                FoundationTeacherLesson::GrabFood,
+            )
+            .unwrap();
+            assert_eq!(options.evaluation.sampling_temperature, expected);
+        }
+    }
+
+    #[test]
+    fn invalid_temperatures_are_rejected() {
+        for value in [
+            "0",
+            "-1",
+            "NaN",
+            "inf",
+            "-inf",
+            "1e100",
+            "3.4028235e38",
+            "0.00001",
+            "1e-45",
+            "garbage",
+        ] {
+            assert!(
+                parse(
+                    &["--evaluation-sampling-temperature", value],
+                    FoundationTeacherLesson::GrabFood
+                )
+                .is_err(),
+                "accepted {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn incomplete_duplicate_and_training_controls_are_rejected() {
+        for values in [
+            vec!["--evaluation-sampling-temperature"],
+            vec![
+                "--evaluation-sampling-temperature",
+                "32",
+                "--evaluation-sampling-temperature",
+                "1",
+            ],
+            vec!["--evaluation-sampling-temperature", "--silent-request"],
+            vec!["--sampling-temperature", "32"],
+            vec!["--acquisition-rehearsal-epochs", "8"],
+            vec!["--request-token"],
+            vec!["--request-token", "1", "--request-token", "2"],
+            vec!["--unknown-control"],
+            vec!["1"],
+            vec!["1", "2", "3"],
+        ] {
+            assert!(
+                parse(&values, FoundationTeacherLesson::GrabFood).is_err(),
+                "accepted {values:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_food_relocation_and_explicit_temperature_coexist() {
+        for values in [
+            vec!["-1.25", "3.5"],
+            vec!["-1.25", "3.5", "--evaluation-sampling-temperature", "32"],
+        ] {
+            let options = parse(&values, FoundationTeacherLesson::GrabFood).unwrap();
+            assert_eq!(options.evaluation.food_position, Some([-1.25, 3.5]));
+            assert_eq!(
+                options.evaluation.sampling_temperature,
+                if values.len() == 2 { 1.0 } else { 32.0 }
+            );
+        }
+    }
+
+    #[test]
+    fn controlled_request_comparisons_remain_default_only() {
+        let options = parse(
+            &["--request-token", "1", "--silent-request"],
+            FoundationTeacherLesson::VocabularyReception,
+        )
+        .unwrap();
+        assert_eq!(options.request_token, Some(1));
+        assert!(options.silent);
+        assert_eq!(options.evaluation.sampling_temperature, 1.0);
+        for value in ["1", "32"] {
+            for values in [
+                vec![
+                    "--request-token",
+                    "1",
+                    "--evaluation-sampling-temperature",
+                    value,
+                ],
+                vec![
+                    "--evaluation-sampling-temperature",
+                    value,
+                    "--request-token",
+                    "1",
+                ],
+            ] {
+                assert!(parse(&values, FoundationTeacherLesson::VocabularyReception).is_err());
+            }
+        }
+        assert!(parse(
+            &["--silent-request"],
+            FoundationTeacherLesson::VocabularyReception
+        )
+        .is_err());
+        assert!(parse(&["--request-token", "1"], FoundationTeacherLesson::GrabFood).is_err());
+        assert!(parse(
+            &["1", "2", "--request-token", "1"],
+            FoundationTeacherLesson::VocabularyReception
+        )
+        .is_err());
+    }
 }
