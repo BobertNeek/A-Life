@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "measured_utc": "2026-10-14T06:07:49.3264979Z",
-  "source_commit": "cbf5e8bc20cabbab04fc220ff24bbb759fd51451",
-  "integrated_base": "9a4e3b3d",
+  "measured_utc": "2026-10-14T07:10:48.3662149Z",
+  "source_commit": "e94e61a19d1962870e542b79cb4f68e0984bd875",
+  "integrated_base": "6f295921",
   "features": "gpu-tests",
   "runner": "gpu_live_runtime::cpu_preparation::tests::approximate_preparation_cpu_timing_evidence",
-  "executable_sha256": "F0E91ED6D082418A6C67479D89BA0A77D5AFFDCF337B37D5E1FC603430109D21",
+  "executable_sha256": "7AED54C52BEE1E21F0992F8C5B19E1BE0C55C9DA52B558FAA52BEF6AEAB1328A",
   "rustc": "1.96.0 (ac68faa20 2026-05-25)",
   "cargo": "1.96.0 (30a34c682 2026-05-25)",
   "cpu": "Intel(R) Core(TM) i7-3770K CPU @ 3.50GHz",
@@ -15,10 +15,10 @@
       "cycle_ticks": 20,
       "gpu": false,
       "median_ns": [
-        21547800,
-        4874700,
-        4131500,
-        3981800
+        12664200,
+        2507300,
+        2356600,
+        2403555
       ],
       "modes": [
         "audited",
@@ -31,48 +31,48 @@
       "records": 64,
       "samples_ns": [
         [
-          16771800,
-          17689300,
-          21671000,
-          26153100,
-          25702100,
-          23006500,
-          21547800,
-          18340300,
-          20315300
+          13725200,
+          15133000,
+          12664200,
+          12823100,
+          10321600,
+          12724900,
+          12516100,
+          11421000,
+          12660700
         ],
         [
-          4874700,
-          2358000,
-          6801300,
-          5146000,
-          5611400,
-          4730100,
-          2761200,
-          4336100,
-          5271800
+          2756400,
+          2507300,
+          2446900,
+          2759800,
+          2288600,
+          2707100,
+          2488800,
+          2266800,
+          2843700
         ],
         [
-          4131500,
-          2677200,
-          4605400,
-          5269100,
-          3624700,
-          4364900,
-          4759300,
-          4114600,
-          3827200
+          2315300,
+          2206200,
+          3461000,
+          2658300,
+          2310100,
+          2316000,
+          3737500,
+          3219000,
+          2356600
         ],
         [
-          3341065,
-          3981800,
-          4024820,
-          4307405,
-          4760725,
-          4253155,
-          3846790,
-          3970350,
-          3109200
+          2350455,
+          2672965,
+          2328825,
+          2331365,
+          2480070,
+          2403555,
+          2306895,
+          2450855,
+          2488830
         ]
       ],
       "workers": 2
@@ -82,10 +82,10 @@
       "cycle_ticks": 20,
       "gpu": false,
       "median_ns": [
-        122491400,
-        26811600,
-        22019000,
-        22695165
+        80292700,
+        16942300,
+        14619200,
+        15061275
       ],
       "modes": [
         "audited",
@@ -98,48 +98,48 @@
       "records": 64,
       "samples_ns": [
         [
-          137429900,
-          125416000,
-          122543700,
-          126519400,
-          93091900,
-          120155900,
-          106878900,
-          122491400,
-          120908400
+          74211600,
+          82756800,
+          80292700,
+          74996000,
+          82841400,
+          76303800,
+          76041100,
+          90441000,
+          91630600
         ],
         [
-          25602700,
-          24198000,
-          21152500,
-          36661000,
-          26811600,
-          28039100,
-          27893300,
-          23224900,
-          30479900
+          13878000,
+          18934500,
+          17323800,
+          15925000,
+          14935100,
+          20590500,
+          15067500,
+          25809400,
+          16942300
         ],
         [
-          23783800,
-          20639900,
-          16562400,
-          31775100,
-          21521700,
-          22792300,
-          22265400,
-          22019000,
-          19738700
+          14192300,
+          15709800,
+          14466300,
+          14619200,
+          13522700,
+          14641500,
+          14315100,
+          15874700,
+          20298400
         ],
         [
-          21576570,
-          24375300,
-          21979800,
-          22695165,
-          21991280,
-          22437485,
-          22818640,
-          24141150,
-          22840460
+          14233710,
+          15061275,
+          14815195,
+          14078915,
+          15927180,
+          14702865,
+          15070385,
+          16722810,
+          15316170
         ]
       ],
       "workers": 2
@@ -148,7 +148,7 @@
   "limitations": [
     "CPU preparation only; no device, world simulation, GPU learning or rendered frame rate measured.",
     "Optimized test hot-path crates at opt-level 2 with debug assertions, rather than a release game executable.",
-    "Other local CPU verification was active during some samples; modes alternate order and all nine samples are retained.",
+    "Core verification compiled during some samples; alternating mode order and all nine samples retained. Timings are host-load dependent.",
     "Quiet fixed geometry and drive fixtures; new targets and important outcomes can trigger more cold refreshes.",
     "Cycle measurement averages preparation over 20 sequential ticks; draft construction and result publication are outside the timer."
   ]

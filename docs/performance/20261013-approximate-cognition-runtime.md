@@ -7,7 +7,8 @@ not a revision of the controlling v2.0 architecture.
 
 Implementation branch: `codex/approximate-cognition-runtime-20261013`.
 Initial checkout: `d2e4a157`; integrated main: `6f295921` (consolidated main).
-Runtime implementation and the candidate-churn fix are present in `e2126b38`.
+Final measured code: `e94e61a1`, including the full-refresh deadline,
+untracked-entity isolation and confidence-weighted attention fixes.
 
 ## Runtime policy
 
@@ -62,6 +63,9 @@ sorts; the episodic shortlist uses the index's retained order instead of sorting
 the complete neighbor union. The app constructs the GPU frame binding
 directly instead of encoding and discarding a duplicate perception payload;
 the backend still uploads the actual current perception.
+Cached attention cues use the same confidence, source support and signal
+weighting as audited recall. Weak extreme outcomes cannot gain maximum
+salience merely because their raw value is large.
 
 ## Requirements and limits
 
@@ -81,30 +85,47 @@ remain **Unknown** until measured. Focused tests cannot establish those claims.
 
 ## Verification
 
-Candidate-memory suite: 46 passed, one benchmark ignored. The CPU preparation
+Candidate-memory suite: 47 passed, one benchmark ignored. The CPU preparation
 suite passed 16 tests with three benchmarks ignored, including five recall
 refreshes and two summary refreshes over 20 quiet ticks, fresh query keys,
 unchanged retained records and an off-cadence forced refresh. A separate
 candidate-churn regression passed: cache updates on every tick retain full
 refreshes at ticks 100, 104, 108, 112 and 116. Concept/gap selection matches the
 audited bounded output. Initial core boundaries, 77 documentation assertions
-and GPU-feature Clippy passed. These results precede the final consolidated-main
-verification recorded below.
+and GPU-feature Clippy passed before consolidation. Final focused runtime
+library Clippy (`--no-deps --features gpu-runtime --lib -- -D warnings`)
+passed on consolidated main. The broader training-feature lint command remains
+blocked by pre-existing trainer warnings and the Windows-only unused `mut` in
+`alife_semantic/src/luna_prior.rs`; those unrelated files were not changed.
 
-The first [CPU receipt](evidence/20261013-approximate-cognition-runtime.json)
-is source-bound to `cbf5e8bc`, an optimized test build with debug assertions.
+The final weighted-cue regression passes: supported moderate evidence outranks
+weak extreme evidence. The refresh-cadence, fresh-key, bounded-summary and
+candidate-churn regressions pass with the final app executable.
+
+Real GPU validation on an NVIDIA GeForce RTX 3050 passed the canonical
+four-creature portable-checkpoint test. It performed live neural ticks,
+retained old and new saves and restored both on the GPU: 52 current manifest
+roots, 40 obsolete roots excluded from the new manifest and 12 shared roots
+retained. This is checkpoint/integration evidence, not a behavioral assay.
+The legacy `v11_authoritative_admission_real_runtime` fixture fails before
+neural admission because it creates no organism registry record; it was not
+used as the final gate or repaired in this performance change.
+
+The [final CPU receipt](evidence/20261013-approximate-cognition-runtime.json)
+is source-bound to `e94e61a1`, an optimized test build with debug assertions.
 Nine samples alternate mode order. Two workers prepare 26 candidates and 64
 retained records per creature. The cycle column includes both scheduled recall
 and summary refreshes over 20 sequential ticks, rather than only warm hits.
 
 | Creatures | Audited preparation | Runtime cold | Runtime cached | Runtime cycle average |
 | --- | ---: | ---: | ---: | ---: |
-| 8 | 21.55 ms | 4.87 ms | 4.13 ms | 3.98 ms |
-| 50 | 122.49 ms | 26.81 ms | 22.02 ms | 22.70 ms |
+| 8 | 12.66 ms | 2.51 ms | 2.36 ms | 2.40 ms |
+| 50 | 80.29 ms | 16.94 ms | 14.62 ms | 15.06 ms |
 
-This is about 81.5% less CPU preparation time in quiet fixtures. Some samples
-overlap other local CPU verification; every raw sample is retained. The timer
+This is about 81% less CPU preparation time in quiet fixtures. Some samples
+overlap local core compilation; every raw sample is retained. The timer
 excludes draft construction and publication, world stepping, sealed memory
 observation, GPU execution and rendering. It cannot establish game FPS/TPS.
-Changed scenes can force more cold refreshes. The receipt predates the churn
-fix and consolidation; final-source measurements follow before completion.
+Changed scenes can force more cold refreshes. These measurements include all
+three cache fixes and consolidated main. Earlier measurements remain in Git
+history and do not replace this final-source receipt.
