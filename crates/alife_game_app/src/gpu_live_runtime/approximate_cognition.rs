@@ -216,7 +216,9 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             }
         }
         timing.episodic_retrieval_wall_ns = started.map_or(0, elapsed_ns);
+        timing.routed_recall_wall_ns = timing.episodic_retrieval_wall_ns;
         let started = measure.then(Instant::now);
+        let leaf_started = started;
         let mut context = if refresh_summary {
             summary_for_recall(owner, input.sequence_id, &recall, topology)?
         } else {
@@ -235,6 +237,8 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             next.summary = Some(Arc::new(context.clone()));
         }
         context = cognitive_context_with_attention(context, attention)?;
+        timing.routed_context_wall_ns = leaf_started.map_or(0, elapsed_ns);
+        let leaf_started = measure.then(Instant::now);
         let projection = cognitive_projection_for_draft(
             &routed,
             &recall,
@@ -243,7 +247,10 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             &next.object_evidence,
         )?;
         context = cognitive_context_with_projection(context, projection)?;
+        timing.cognitive_projection_wall_ns = leaf_started.map_or(0, elapsed_ns);
+        let leaf_started = measure.then(Instant::now);
         let (frame, memory_recall) = recall.with_cognitive_context(context)?.finalize(routed)?;
+        timing.routed_finalize_wall_ns = leaf_started.map_or(0, elapsed_ns);
         timing.topology_concept_wall_ns = started.map_or(0, elapsed_ns);
         stage = "GPU memory upload";
         let started = measure.then(Instant::now);
