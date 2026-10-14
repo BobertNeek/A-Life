@@ -1233,6 +1233,64 @@ fn approximate_preparation_retains_memory_and_fresh_keys_between_refreshes() {
 }
 
 #[test]
+fn candidate_churn_cannot_postpone_full_expectancy_refresh() {
+    let mut fixture = OwnerFixture::new(811, true);
+    seed_memory(&mut fixture, 64);
+    with_candidate_count(&mut fixture, 26);
+    fixture.input.approximate_cache = Some(Default::default());
+    let slot = canonical_slots(1).remove(0);
+    let mut full_refreshes = 0;
+    for raw in 100..120 {
+        move_fixture_tick(&mut fixture, Tick::new(raw));
+        let draft = &fixture.input.draft;
+        let mut candidates = draft.candidates().to_vec();
+        // A changing non-object action creates a cache miss without changing
+        // visible identities, drives or the retained object-action queries.
+        let changing = candidates
+            .iter_mut()
+            .find(|candidate| candidate.observation == alife_core::CandidateObservationRef::None)
+            .unwrap();
+        changing.action_id = alife_core::ActionId(50_000 + raw as u32);
+        fixture.input.draft = PerceptionFrameDraft::new(
+            draft.organism_id(),
+            draft.tick(),
+            draft.sensor_profile(),
+            draft.sensory().clone(),
+            draft.body(),
+            *draft.homeostasis(),
+            candidates,
+            draft.profile_provenance(),
+            draft.grounded_object_slots().to_vec(),
+        )
+        .unwrap();
+        let old = fixture.input.approximate_cache.as_ref().unwrap();
+        let output = prepare_cpu_row(&fixture.job(&slot), false);
+        let prepared = output.result.unwrap();
+        let cache = output.approximate_cache.unwrap();
+        let expected_full_tick = Tick::new(100 + (raw - 100) / 4 * 4);
+        assert_eq!(cache.last_recall_tick, Some(expected_full_tick));
+        assert!(
+            !std::sync::Arc::ptr_eq(&cache.recall, &old.recall),
+            "the changing candidate must actually refresh the cache each tick"
+        );
+        if raw == expected_full_tick.raw() {
+            full_refreshes += 1;
+            assert!(
+                prepared.memory_recall.receipt().similarity_evaluations > 0,
+                "a due refresh must search the retained learned object evidence"
+            );
+        }
+        assert_eq!(
+            cache.summary.as_ref().unwrap().world_tick,
+            Tick::new(raw),
+            "partial updates must still publish fresh attention memory cues"
+        );
+        fixture.input.approximate_cache = Some(cache);
+    }
+    assert_eq!(full_refreshes, 5);
+}
+
+#[test]
 #[ignore = "Explicit bounded CPU comparison of audited, cold and cached runtime preparation"]
 fn approximate_preparation_cpu_timing_evidence() {
     for owners in [8, 50] {

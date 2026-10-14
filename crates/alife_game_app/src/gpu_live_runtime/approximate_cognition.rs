@@ -206,9 +206,14 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
         let started = measure.then(Instant::now);
         let (recall, refreshed) =
             memory.recall_frame_runtime(&routed, &old.recall, refresh_recall)?;
+        let recall_changed = refreshed.is_some();
         if let Some(refreshed) = refreshed {
             next.recall = Arc::new(refreshed);
-            next.last_recall_tick = Some(tick);
+            // Missing candidate keys refresh only those entries. They must not
+            // postpone the deadline for refreshing the retained expectancies.
+            if refresh_recall {
+                next.last_recall_tick = Some(tick);
+            }
         }
         timing.episodic_retrieval_wall_ns = started.map_or(0, elapsed_ns);
         let started = measure.then(Instant::now);
@@ -226,7 +231,7 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             next.last_summary_tick = Some(tick);
         }
         // Keep small summary buffers shared until the next recall/graph refresh.
-        if refresh_summary || next.last_recall_tick != old.last_recall_tick {
+        if refresh_summary || recall_changed {
             next.summary = Some(Arc::new(context.clone()));
         }
         context = cognitive_context_with_attention(context, attention)?;

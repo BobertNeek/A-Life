@@ -1772,6 +1772,7 @@ fn run_exact_population_checkpoint_finalize_worker(
 
 #[derive(Debug, Clone, Copy)]
 struct GpuLiveRuntimeConstructionOptions {
+    audited_cognition: bool,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
     homeostatic_parameters: HomeostaticParameters,
@@ -1784,6 +1785,7 @@ struct GpuLiveRuntimeConstructionOptions {
 impl GpuLiveRuntimeConstructionOptions {
     const fn production() -> Self {
         Self {
+            audited_cognition: false,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -1801,6 +1803,7 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn benchmark(homeostatic_parameters: HomeostaticParameters) -> Self {
         Self {
+            audited_cognition: false,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters,
@@ -1813,6 +1816,7 @@ impl GpuLiveRuntimeConstructionOptions {
 
     const fn causal_acceptance() -> Self {
         Self {
+            audited_cognition: true,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -1829,6 +1833,7 @@ impl GpuLiveRuntimeConstructionOptions {
     #[cfg(feature = "gpu-tests")]
     const fn soak() -> Self {
         Self {
+            audited_cognition: true,
             #[cfg(feature = "foundation-training")]
             training_sampling: None,
             homeostatic_parameters: HomeostaticParameters::reference(),
@@ -3367,6 +3372,7 @@ pub struct FoundationTrainingStep {
 }
 
 pub struct GpuLiveBrainRuntime {
+    audited_cognition: bool,
     semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
@@ -5030,11 +5036,11 @@ impl GpuLiveBrainRuntime {
     fn uses_audited_cognition(&self) -> bool {
         #[cfg(feature = "foundation-training")]
         {
-            self.training_sampling.is_some()
+            self.audited_cognition || self.training_sampling.is_some()
         }
         #[cfg(not(feature = "foundation-training"))]
         {
-            false
+            self.audited_cognition
         }
     }
 
@@ -6238,6 +6244,7 @@ impl GpuLiveBrainRuntime {
             consumer
         };
         let mut runtime = Self {
+            audited_cognition: options.audited_cognition,
             semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
                 deterministic_seed,
                 consumer == GpuSessionConsumerKind::Training,
@@ -6431,6 +6438,7 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
             sensor_profile,
+            audited_cognition: false,
             homeostatic_parameters: HomeostaticParameters::reference(),
             cognitive_work_cost_policy: GpuLiveRuntimeConstructionOptions::production()
                 .cognitive_work_cost_policy,
