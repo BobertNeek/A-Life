@@ -39,6 +39,82 @@ pub(super) fn important_outcome(outcome: &PostActionOutcome) -> bool {
         || outcome.teacher_feedback.is_some()
 }
 
+fn bounded_best<'a, T>(
+    items: impl Iterator<Item = &'a T>,
+    cap: usize,
+    compare: impl Fn(&T, &T) -> std::cmp::Ordering,
+) -> Vec<&'a T> {
+    let mut selected: Vec<&T> = Vec::with_capacity(cap);
+    for item in items {
+        let at = selected.partition_point(|old| compare(old, item).is_le());
+        if at < cap {
+            if selected.len() == cap {
+                selected.pop();
+            }
+            selected.insert(at, item);
+        }
+    }
+    selected
+}
+
+pub(super) fn summary_for_recall(
+    owner: OrganismId,
+    sequence: ExperienceSequenceId,
+    recall: &PreparedMemoryRecall,
+    topology: &TopologySidecar,
+) -> Result<CognitiveContextFrame, ScaffoldContractError> {
+    let mut context = cognitive_memory_context_for_recall(owner, sequence, recall)?;
+    let concepts = bounded_best(
+        topology.map().concepts().iter(),
+        MAX_ACTIVE_CONCEPTS,
+        |left, right| {
+            (right.salience.raw() * right.confidence.raw())
+                .total_cmp(&(left.salience.raw() * left.confidence.raw()))
+                .then_with(|| left.id.raw().cmp(&right.id.raw()))
+        },
+    );
+    context.concept.active_concepts = concepts
+        .into_iter()
+        .map(|concept| {
+            Ok(CognitiveConceptActivation {
+                concept_id: concept.id,
+                activation: concept.salience,
+                utility: NormalizedScalar::new(concept.confidence.raw())?,
+            })
+        })
+        .collect::<Result<_, ScaffoldContractError>>()?;
+    context.concept.topology_digest = topology.diagnostics().canonical_digest;
+    let salience =
+        |gap: &alife_core::UnresolvedGap| gap.salience.raw().max(gap.curiosity_voltage.raw());
+    let gaps = bounded_best(
+        topology.map().unresolved_gaps().iter().filter(|gap| {
+            matches!(
+                gap.status,
+                alife_core::GapResolutionStatus::Open
+                    | alife_core::GapResolutionStatus::BiasingCuriosity
+            )
+        }),
+        MAX_ACTIVE_GAPS,
+        |left, right| {
+            salience(right)
+                .total_cmp(&salience(left))
+                .then_with(|| left.id.raw().cmp(&right.id.raw()))
+        },
+    );
+    context.gap.gap_voltage = NormalizedScalar::new(gaps.first().map_or(0.0, |gap| salience(gap)))?;
+    context.gap.active_gaps = gaps
+        .into_iter()
+        .map(|gap| {
+            Ok(CognitiveGapActivation {
+                gap_id: gap.id,
+                voltage: NormalizedScalar::new(salience(gap))?,
+                uncertainty: NormalizedScalar::new((1.0 - gap.confidence.raw()).clamp(0.0, 1.0))?,
+            })
+        })
+        .collect::<Result<_, ScaffoldContractError>>()?;
+    Ok(context)
+}
+
 pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparationOutcome {
     let input = job.input;
     let old = input.approximate_cache.as_ref().expect("approximate row");
@@ -137,7 +213,7 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
         timing.episodic_retrieval_wall_ns = started.map_or(0, elapsed_ns);
         let started = measure.then(Instant::now);
         let mut context = if refresh_summary {
-            cognitive_context_for_recall(owner, input.sequence_id, &recall, topology)?
+            summary_for_recall(owner, input.sequence_id, &recall, topology)?
         } else {
             let mut fresh = cognitive_memory_context_for_recall(owner, input.sequence_id, &recall)?;
             if let Some(summary) = &old.summary {

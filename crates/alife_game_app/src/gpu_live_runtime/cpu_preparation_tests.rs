@@ -1154,6 +1154,25 @@ fn move_fixture_tick(fixture: &mut OwnerFixture, tick: Tick) {
 }
 
 #[test]
+fn bounded_runtime_summary_preserves_concept_and_gap_selection() {
+    let fixture = OwnerFixture::new(811, true);
+    let recall = fixture.memory.recall_frame(&fixture.input.draft).unwrap();
+    let owner = fixture.input.draft.organism_id();
+    let sequence = fixture.input.sequence_id;
+    let audited =
+        cognitive_context_for_recall(owner, sequence, &recall, &fixture.topology).unwrap();
+    let bounded = super::super::approximate_cognition::summary_for_recall(
+        owner,
+        sequence,
+        &recall,
+        &fixture.topology,
+    )
+    .unwrap();
+    assert_eq!(bounded.concept, audited.concept);
+    assert_eq!(bounded.gap, audited.gap);
+}
+
+#[test]
 fn approximate_preparation_retains_memory_and_fresh_keys_between_refreshes() {
     let mut fixture = OwnerFixture::new(811, true);
     seed_memory(&mut fixture, 64);
