@@ -10746,9 +10746,14 @@ mod tests {
     fn finish_failed_checkpoint_worker_join(
         failed: &mut FailedExactPopulationCheckpointWorkerJoinV1,
     ) -> (GameAppShellError, bool) {
-        for _ in 0..10_000 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
             match failed.poll() {
                 FailedExactPopulationCheckpointWorkerJoinPollV1::Pending => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "checkpoint worker did not terminate within the join poll timeout"
+                    );
                     std::thread::yield_now();
                 }
                 FailedExactPopulationCheckpointWorkerJoinPollV1::Ready {
@@ -10757,7 +10762,6 @@ mod tests {
                 } => return (error, worker_panicked),
             }
         }
-        panic!("checkpoint worker did not terminate within the bounded join poll budget");
     }
 
     #[test]
@@ -10788,12 +10792,18 @@ mod tests {
         let worker_lease = Arc::clone(&lease);
         let (command_sender, command_receiver) = mpsc::sync_channel(1);
         let (event_sender, event_receiver) = mpsc::sync_channel(1);
+        let (abort_received_sender, abort_received_receiver) = mpsc::sync_channel(0);
+        let (release_sender, release_receiver) = mpsc::sync_channel::<()>(0);
         let join_handle = std::thread::spawn(move || {
             let _lease = worker_lease;
             assert!(matches!(
                 command_receiver.recv(),
                 Ok(ExactPopulationCheckpointWorkerCommandV1::Abort)
             ));
+            abort_received_sender.send(()).unwrap();
+            // Hold the lease until the test has checked the pending join. A
+            // disconnected release channel also lets the worker exit on unwind.
+            let _ = release_receiver.recv();
             drop(event_sender);
         });
         let worker = ExactPopulationCheckpointWorkerOwnerV1 {
@@ -10806,7 +10816,13 @@ mod tests {
             failed.abort_delivery(),
             ExactPopulationCheckpointAbortDeliveryV1::Enqueued
         );
+        abort_received_receiver.recv().unwrap();
+        assert!(matches!(
+            failed.poll(),
+            FailedExactPopulationCheckpointWorkerJoinPollV1::Pending
+        ));
         assert_eq!(Arc::strong_count(&lease), 2);
+        release_sender.send(()).unwrap();
 
         let (_, worker_panicked) = finish_failed_checkpoint_worker_join(&mut failed);
         assert!(!worker_panicked);
