@@ -1,5 +1,7 @@
 //! A small modal player menu. Debug rails remain separate; world truth stays in runtime.
 use super::*;
+use bevy::ecs::message::MessageCursor;
+use bevy::input::{keyboard::KeyboardInput, ButtonState};
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, BorderRadius, UiRect};
 
@@ -10,6 +12,7 @@ enum Screen {
     Main,
     Speed,
     Settings,
+    ConfirmLoad,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,6 +21,8 @@ pub(super) enum Action {
     Play,
     Save,
     Load,
+    ConfirmLoad,
+    CancelLoad,
     Speed,
     Settings,
     Quit,
@@ -42,6 +47,45 @@ const SPEED: [(Action, &str); 3] = [
 ];
 const SETTINGS: [(Action, &str); 2] = [(Action::Focus, "Autopause"), (Action::Back, "Back")];
 
+const CONFIRM_LOAD: [(Action, &str); 2] = [
+    (Action::CancelLoad, "Cancel"),
+    (Action::ConfirmLoad, "Load"),
+];
+const LOAD_WARNING: &str = "Load replaces this world.\nUnsaved changes are lost.";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+enum LoadPhase {
+    #[default]
+    Idle,
+    Confirming,
+    Queued,
+    Applying,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LoadAvailability {
+    Ready,
+    Busy,
+    Unavailable,
+}
+
+impl LoadAvailability {
+    fn error(self) -> Option<&'static str> {
+        match self {
+            Self::Ready => None,
+            Self::Busy => Some("Wait for checkpoint publication before loading"),
+            Self::Unavailable => Some("GPU runtime unavailable; load was not queued"),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct InputOutcome {
+    opening: bool,
+    resume: Option<bool>,
+    load_error: Option<&'static str>,
+}
+
 #[derive(Debug, Default, Resource)]
 pub(crate) struct MenuState {
     screen: Screen,
@@ -52,6 +96,11 @@ pub(crate) struct MenuState {
     release_gate: bool,
     initialized: bool,
     selected: usize,
+    load_phase: LoadPhase,
+    load_origin: Screen,
+    pointer_confirm_armed: bool,
+    last_cursor: Option<Vec2>,
+    key_reader: MessageCursor<KeyboardInput>,
     pub(super) pending: Option<Action>,
     #[cfg(feature = "gpu-runtime")]
     quit: Option<QuitCheckpoint>,
@@ -84,7 +133,7 @@ impl MenuState {
         }
         self.screen = Screen::Main;
         self.resume_on_close = !was_paused;
-        self.external_pause = false;
+        self.external_pause &= was_paused;
         self.selected = 0;
         self.captured = true;
     }
@@ -92,6 +141,11 @@ impl MenuState {
         let resume = play || self.resume_on_close;
         self.screen = Screen::Closed;
         self.pending = None;
+        self.load_phase = LoadPhase::Idle;
+        self.pointer_confirm_armed = false;
+        if play {
+            self.external_pause = false;
+        }
         self.release_gate = true;
         self.captured = true;
         resume
@@ -105,15 +159,230 @@ impl MenuState {
             Screen::Main => &MAIN,
             Screen::Speed => &SPEED,
             Screen::Settings => &SETTINGS,
+            Screen::ConfirmLoad => &CONFIRM_LOAD,
             Screen::Closed => &[],
         }
     }
+    fn request_load(&mut self, paused: bool, availability: LoadAvailability) -> bool {
+        if self.load_phase != LoadPhase::Idle || availability != LoadAvailability::Ready {
+            return false;
+        }
+        self.load_origin = self.screen;
+        if self.screen == Screen::Closed {
+            self.open(paused);
+        }
+        self.screen = Screen::ConfirmLoad;
+        self.load_phase = LoadPhase::Confirming;
+        self.selected = 0;
+        self.pending = None;
+        self.release_gate = true;
+        self.pointer_confirm_armed = false;
+        self.captured = true;
+        true
+    }
+
+    fn cancel_load(&mut self) -> Option<bool> {
+        self.pending = None;
+        self.load_phase = LoadPhase::Idle;
+        self.pointer_confirm_armed = false;
+        self.release_gate = true;
+        self.selected = 0;
+        if self.load_origin == Screen::Closed {
+            Some(self.close(false))
+        } else {
+            self.screen = self.load_origin;
+            None
+        }
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    fn queue_confirmed_load(&mut self, availability: LoadAvailability) -> bool {
+        if self.screen != Screen::ConfirmLoad
+            || self.load_phase != LoadPhase::Confirming
+            || self.release_gate
+        {
+            return false;
+        }
+        if availability != LoadAvailability::Ready {
+            self.selected = 0;
+            self.pointer_confirm_armed = false;
+            self.release_gate = true;
+            return false;
+        }
+        self.load_phase = LoadPhase::Queued;
+        self.pending = None;
+        true
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) fn begin_load_application(&mut self, available: bool) -> bool {
+        if self.screen != Screen::ConfirmLoad || self.load_phase != LoadPhase::Queued {
+            return false;
+        }
+        if !available {
+            self.finish_load();
+            return false;
+        }
+        self.load_phase = LoadPhase::Applying;
+        true
+    }
+
+    #[cfg(feature = "gpu-runtime")]
+    pub(super) fn finish_load(&mut self) {
+        self.load_phase = LoadPhase::Idle;
+        self.pending = None;
+        self.pointer_confirm_armed = false;
+        self.release_gate = true;
+        self.back();
+    }
+
     fn busy(&self) -> bool {
+        if matches!(self.load_phase, LoadPhase::Queued | LoadPhase::Applying) {
+            return true;
+        }
         #[cfg(feature = "gpu-runtime")]
         if self.quit.is_some() {
             return true;
         }
         false
+    }
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "One snapshot of the modal's input and readiness."
+    )]
+    fn input(
+        &mut self,
+        keyboard: &ButtonInput<KeyCode>,
+        left_down: bool,
+        left_pressed: bool,
+        fresh_enter: bool,
+        cursor: Option<Vec2>,
+        confirm_hit: bool,
+        clicks: &[(Screen, Action)],
+        paused: bool,
+        conversation_open: bool,
+        availability: LoadAvailability,
+    ) -> InputOutcome {
+        let mut outcome = InputOutcome::default();
+        let gated = self.release_gate;
+        if gated && !left_down && keyboard.get_pressed().next().is_none() {
+            self.release_gate = false;
+        }
+        self.captured = self.screen != Screen::Closed || self.release_gate || self.busy();
+        let conversation_capture = conversation_open
+            || (self.screen == Screen::Closed
+                && (keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::KeyY)));
+        outcome.opening = conversation_capture && !self.conversation_capture;
+        self.conversation_capture = conversation_capture;
+        if !self.initialized {
+            self.initialized = true;
+            outcome.opening |= self.screen != Screen::Closed;
+        }
+        let moved = self
+            .last_cursor
+            .zip(cursor)
+            .is_some_and(|(old, new)| old != new);
+        self.last_cursor = cursor;
+        if self.load_phase == LoadPhase::Confirming {
+            if !confirm_hit || availability != LoadAvailability::Ready {
+                self.pointer_confirm_armed = false;
+            } else if !gated && !left_down && moved {
+                self.pointer_confirm_armed = true;
+            }
+        }
+        if conversation_open {
+            return outcome;
+        }
+        // Escape wins even if a confirm click arrives on the same frame.
+        if keyboard.just_pressed(KeyCode::Escape)
+            && self.screen == Screen::ConfirmLoad
+            && self.load_phase != LoadPhase::Applying
+        {
+            outcome.resume = self.cancel_load();
+            return outcome;
+        }
+        if self.busy() || gated {
+            return outcome;
+        }
+        let mut action = clicks.iter().find_map(|&(screen, action)| {
+            (screen == self.screen
+                && (action != Action::ConfirmLoad
+                    || (self.pointer_confirm_armed && left_pressed && confirm_hit)))
+                .then_some(action)
+        });
+        if keyboard.just_pressed(KeyCode::Escape) {
+            if self.screen == Screen::Closed {
+                action = Some(Action::Open);
+            } else if self.screen == Screen::Main {
+                outcome.resume = Some(self.close(false));
+                action = None;
+            } else {
+                action = Some(Action::Back);
+            }
+        } else if self.screen == Screen::Closed {
+            if keyboard.just_pressed(KeyCode::KeyL) {
+                action = Some(Action::Load);
+            }
+        } else {
+            let count = self.rows().len();
+            if keyboard.just_pressed(KeyCode::ArrowDown) {
+                self.selected = (self.selected + 1) % count;
+            }
+            if keyboard.just_pressed(KeyCode::ArrowUp) {
+                self.selected = (self.selected + count - 1) % count;
+            }
+            if keyboard.just_pressed(KeyCode::Enter)
+                && (self.screen != Screen::ConfirmLoad || fresh_enter)
+            {
+                action = Some(self.rows()[self.selected].0);
+            }
+            if self.screen != Screen::ConfirmLoad {
+                if keyboard.just_pressed(KeyCode::KeyS) {
+                    action = Some(Action::Save);
+                }
+                if keyboard.just_pressed(KeyCode::KeyL) {
+                    action = Some(Action::Load);
+                }
+            }
+        }
+        match action {
+            Some(Action::Open) => {
+                self.open(paused);
+                outcome.opening = true;
+            }
+            Some(Action::Load) => {
+                if self.request_load(paused, availability) {
+                    outcome.opening = true;
+                    self.conversation_capture = false;
+                } else {
+                    outcome.load_error = availability.error();
+                }
+            }
+            Some(Action::ConfirmLoad) => {
+                if availability == LoadAvailability::Ready {
+                    self.pending = Some(Action::ConfirmLoad);
+                } else {
+                    self.selected = 0;
+                    self.pointer_confirm_armed = false;
+                    self.release_gate = true;
+                    outcome.load_error = availability.error();
+                }
+            }
+            Some(Action::CancelLoad) => outcome.resume = self.cancel_load(),
+            Some(Action::Play) => outcome.resume = Some(self.close(true)),
+            Some(Action::Speed) => {
+                self.screen = Screen::Speed;
+                self.selected = 0;
+            }
+            Some(Action::Settings) => {
+                self.screen = Screen::Settings;
+                self.selected = 0;
+            }
+            Some(Action::Back) => self.back(),
+            Some(action) => self.pending = Some(action),
+            None => {}
+        }
+        outcome
     }
 }
 
@@ -149,6 +418,8 @@ struct MenuButton {
 }
 #[derive(Component)]
 struct Status;
+#[derive(Component)]
+struct LoadWarning;
 
 pub(super) fn install(app: &mut App, summary: &ProductionVoxelLaunchSummary) {
     let mut state = MenuState::default();
@@ -215,6 +486,7 @@ fn spawn_ui(world: &mut World) {
         (Screen::Main, MAIN.as_slice()),
         (Screen::Speed, SPEED.as_slice()),
         (Screen::Settings, SETTINGS.as_slice()),
+        (Screen::ConfirmLoad, CONFIRM_LOAD.as_slice()),
     ] {
         world
             .spawn((
@@ -239,9 +511,33 @@ fn spawn_ui(world: &mut World) {
                     bevel(true),
                 ))
                 .with_children(|panel| {
+                    if screen == Screen::ConfirmLoad {
+                        panel.spawn((
+                            Name::new(
+                                "Load warning: current world replacement and unsaved changes",
+                            ),
+                            LoadWarning,
+                            Text::new(LOAD_WARNING),
+                            TextFont {
+                                font_size: 14.0,
+                                ..default()
+                            },
+                            TextColor(Color::srgb(0.96, 0.76, 0.48)),
+                            Node {
+                                height: Val::Px(48.0),
+                                flex_shrink: 0.0,
+                                ..default()
+                            },
+                        ));
+                    }
                     for (index, (action, label)) in rows.iter().copied().enumerate() {
                         panel
                             .spawn((
+                                Name::new(if action == Action::ConfirmLoad {
+                                    "Load and discard unsaved changes".to_string()
+                                } else {
+                                    label.to_string()
+                                }),
                                 Button,
                                 MenuButton {
                                     screen,
@@ -359,12 +655,39 @@ fn spawn_ui(world: &mut World) {
         });
 }
 
+fn load_availability(world: &World) -> LoadAvailability {
+    #[cfg(feature = "gpu-runtime")]
+    if let Some(runtime) = world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>() {
+        return runtime_load_availability(Some(&runtime.runtime));
+    }
+    LoadAvailability::Unavailable
+}
+
+#[cfg(feature = "gpu-runtime")]
+fn runtime_load_availability(runtime: Option<&crate::GpuLiveBrainRuntime>) -> LoadAvailability {
+    match runtime {
+        Some(runtime) if runtime.persistence_idle_for_shutdown() => LoadAvailability::Ready,
+        Some(_) => LoadAvailability::Busy,
+        None => LoadAvailability::Unavailable,
+    }
+}
+
+#[cfg(feature = "gpu-runtime")]
+pub(super) fn load_application_available(world: &World) -> bool {
+    load_availability(world) == LoadAvailability::Ready
+}
+
 /// Runs before every world-input reader, including on the frame a modal closes.
 pub(crate) fn handle_input(world: &mut World) {
+    let availability = load_availability(world);
+    handle_input_with_availability(world, availability);
+}
+
+fn handle_input_with_availability(world: &mut World, availability: LoadAvailability) {
     let keyboard = world.resource::<ButtonInput<KeyCode>>().clone();
-    let left_down = world
-        .resource::<ButtonInput<MouseButton>>()
-        .pressed(MouseButton::Left);
+    let mouse = world.resource::<ButtonInput<MouseButton>>();
+    let left_down = mouse.pressed(MouseButton::Left);
+    let left_pressed = mouse.just_pressed(MouseButton::Left);
     #[cfg(feature = "gpu-runtime")]
     let conversation_open = world
         .get_resource::<ProductionConversationLineageUiState>()
@@ -397,74 +720,59 @@ pub(crate) fn handle_input(world: &mut World) {
                 .paused
         }
     };
-    let mut opening;
-    let mut resume = None;
-    {
-        let mut state = world.resource_mut::<MenuState>();
-        if state.release_gate && !left_down && keyboard.get_pressed().next().is_none() {
-            state.release_gate = false;
-        }
-        state.captured = state.screen != Screen::Closed || state.release_gate || state.busy();
-        let conversation_capture = conversation_open
-            || (state.screen == Screen::Closed
-                && (keyboard.just_pressed(KeyCode::Enter) || keyboard.just_pressed(KeyCode::KeyY)));
-        opening = conversation_capture && !state.conversation_capture;
-        state.conversation_capture = conversation_capture;
-        if !state.initialized {
-            state.initialized = true;
-            opening |= state.screen != Screen::Closed;
-        }
-        if !conversation_open && !state.busy() && !state.release_gate {
-            let mut action = clicks
-                .into_iter()
-                .find_map(|(screen, action)| (screen == state.screen).then_some(action));
-            if keyboard.just_pressed(KeyCode::Escape) {
-                if state.screen == Screen::Closed {
-                    action = Some(Action::Open);
-                } else if state.screen == Screen::Main {
-                    resume = Some(state.close(false));
-                    action = None;
-                } else {
-                    action = Some(Action::Back);
-                }
-            } else if state.screen != Screen::Closed {
-                let count = state.rows().len();
-                if keyboard.just_pressed(KeyCode::ArrowDown) {
-                    state.selected = (state.selected + 1) % count;
-                }
-                if keyboard.just_pressed(KeyCode::ArrowUp) {
-                    state.selected = (state.selected + count - 1) % count;
-                }
-                if keyboard.just_pressed(KeyCode::Enter) {
-                    action = Some(state.rows()[state.selected].0);
-                }
-                if keyboard.just_pressed(KeyCode::KeyS) {
-                    action = Some(Action::Save);
-                }
-                if keyboard.just_pressed(KeyCode::KeyL) {
-                    action = Some(Action::Load);
-                }
+    let cursor = world
+        .query_filtered::<&Window, With<PrimaryWindow>>()
+        .iter(world)
+        .next()
+        .and_then(Window::physical_cursor_position);
+    let confirm_hit = cursor.is_some_and(|cursor| {
+        world
+            .query::<(&MenuButton, &ComputedNode, &bevy::ui::UiGlobalTransform)>()
+            .iter(world)
+            .any(|(button, node, transform)| {
+                button.screen == Screen::ConfirmLoad
+                    && button.action == Action::ConfirmLoad
+                    && node.contains_point(*transform, cursor)
+            })
+    });
+    let outcome = world.resource_scope(|world, mut state: Mut<MenuState>| {
+        // Drain the whole batch so a second key cannot become later consent.
+        let mut fresh_enter = false;
+        if let Some(messages) = world.get_resource::<bevy::ecs::message::Messages<KeyboardInput>>()
+        {
+            for message in state.key_reader.read(messages) {
+                fresh_enter |= message.key_code == KeyCode::Enter
+                    && message.state == ButtonState::Pressed
+                    && !message.repeat;
             }
-            match action {
-                Some(Action::Open) => {
-                    state.open(paused);
-                    opening = true;
-                }
-                Some(Action::Play) => {
-                    resume = Some(state.close(true));
-                }
-                Some(Action::Speed) => {
-                    state.screen = Screen::Speed;
-                    state.selected = 0;
-                }
-                Some(Action::Settings) => {
-                    state.screen = Screen::Settings;
-                    state.selected = 0;
-                }
-                Some(Action::Back) => state.back(),
-                Some(action) => state.pending = Some(action),
-                None => {}
-            }
+        }
+        state.input(
+            &keyboard,
+            left_down,
+            left_pressed,
+            fresh_enter,
+            cursor,
+            confirm_hit,
+            &clicks,
+            paused,
+            conversation_open,
+            availability,
+        )
+    });
+    let InputOutcome {
+        opening,
+        resume,
+        load_error,
+    } = outcome;
+    if let Some(error) = load_error {
+        let mut ux = world.resource_mut::<Fvr05ProductionUxStateResource>();
+        ux.last_error = Some(error.into());
+        ux.last_action = "Load unavailable".into();
+    }
+    #[cfg(feature = "gpu-runtime")]
+    if world.resource::<MenuState>().load_phase != LoadPhase::Queued {
+        if let Some(mut request) = world.get_resource_mut::<ProductionRuntimeLoadRequest>() {
+            request.take();
         }
     }
     if opening {
@@ -553,13 +861,17 @@ pub(super) fn speed(
 
 #[cfg(feature = "gpu-runtime")]
 pub(super) fn queue_load(
+    state: &mut MenuState,
     ux: &mut Fvr05ProductionUxStateResource,
     request: &mut ProductionRuntimeLoadRequest,
     runtime: Option<&crate::GpuLiveBrainRuntime>,
 ) {
-    if !runtime.is_some_and(|runtime| runtime.persistence_idle_for_shutdown()) {
-        ux.last_error = Some("Wait for checkpoint publication before loading".into());
-        ux.last_action = "Load unavailable".into();
+    let availability = runtime_load_availability(runtime);
+    if !state.queue_confirmed_load(availability) {
+        if let Some(error) = availability.error() {
+            ux.last_error = Some(error.into());
+            ux.last_action = "Load unavailable".into();
+        }
     } else if request.queue() {
         ux.last_error = None;
         ux.last_action = "Queued authoritative production runtime load".into();
@@ -729,6 +1041,8 @@ fn sync_ui(
     }
     let status = if ux.last_error.is_some() {
         "Failed"
+    } else if matches!(state.load_phase, LoadPhase::Queued | LoadPhase::Applying) {
+        "Loading"
     } else if state.busy() || ux.last_action.starts_with("Queued exact") {
         "Saving"
     } else if ux.last_action.starts_with("Saved exact")
@@ -821,6 +1135,10 @@ fn adapt_layout(world: &mut World) {
         });
     apply_layout(world, size);
 }
+
+#[cfg(test)]
+#[path = "menu_load_tests.rs"]
+mod load_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1030,7 +1348,12 @@ mod tests {
             Vec2::new(320.0, 480.0),
             Vec2::new(320.0, 240.0),
         ] {
-            for screen in [Screen::Main, Screen::Speed, Screen::Settings] {
+            for screen in [
+                Screen::Main,
+                Screen::Speed,
+                Screen::Settings,
+                Screen::ConfirmLoad,
+            ] {
                 let mut app = App::new();
                 app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
                     PostUpdate,
@@ -1102,17 +1425,53 @@ mod tests {
                         assert!(!node.contains_point(*transform,max+Vec2::splat(1.0)));
                         serde_json::json!({"action":format!("{:?}",button.action),"min":[min.x,min.y],"max":[max.x,max.y],"center_hit":true})
                     }).collect::<Vec<_>>();
+                if screen == Screen::ConfirmLoad {
+                    let (node, transform) = world
+                        .query_filtered::<(&ComputedNode, &UiGlobalTransform), With<LoadWarning>>()
+                        .single(world)
+                        .unwrap();
+                    let center = transform.affine().translation;
+                    let half = node.size() * 0.5;
+                    assert_eq!(node.size().y, 48.0);
+                    assert!(
+                        center.x - half.x >= 0.0
+                            && center.y - half.y >= 0.0
+                            && center.x + half.x <= size.x
+                            && center.y + half.y <= size.y
+                    );
+                }
                 assert_eq!(
                     rows.len(),
                     match screen {
                         Screen::Main => 6,
                         Screen::Speed => 3,
-                        Screen::Settings => 2,
+                        Screen::Settings | Screen::ConfirmLoad => 2,
                         Screen::Closed => 0,
                     }
                 );
                 receipts.push(serde_json::json!({"viewport":[size.x,size.y],"screen":format!("{:?}",screen),"buttons":rows}));
             }
+        }
+        for screens in receipts.as_chunks::<4>().0 {
+            let load = |screen: usize, action: &str| {
+                screens[screen]["buttons"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["action"] == action)
+                    .unwrap()
+            };
+            let old = load(0, "Load");
+            let confirm = load(3, "ConfirmLoad");
+            let separated = (0..2).any(|axis| {
+                old["max"][axis].as_f64().unwrap() <= confirm["min"][axis].as_f64().unwrap()
+                    || confirm["max"][axis].as_f64().unwrap() <= old["min"][axis].as_f64().unwrap()
+            });
+            assert!(
+                separated,
+                "Load and confirm hit targets overlap: {:?}",
+                screens[0]["viewport"]
+            );
         }
         if let Ok(path) = std::env::var("ALIFE_MENU_CPU_HIT_BOUNDS") {
             fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
@@ -1176,7 +1535,7 @@ mod tests {
                     "border":px(node.border.top),"radius":px(node.border_radius.top_left),"gap":px(node.row_gap),
                     "background":color(background.0),"top":color(border.top),"bottom":color(border.bottom),"rows":rows})
             }).collect::<Vec<_>>();
-                assert_eq!(panels.len(), 3);
+                assert_eq!(panels.len(), 4);
                 fixtures.extend(panels);
             }
         }
