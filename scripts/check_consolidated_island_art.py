@@ -19,7 +19,7 @@ from check_island_boulder_placement import check as check_boulder_placement
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = Path('scripts/consolidated-island-art-profile.json')
-PROFILE_SHA256 = '915c724a84df33e66c0b9475b7936dc1bd0b59e183b1ea475bda2e781c03893d'
+PROFILE_SHA256 = '2c8e26550d5a49a5bf4c962c005e2451b92a8687e84aea75cfb829421c993500'
 
 
 def sha(raw):
@@ -70,14 +70,14 @@ def validate_manifest(root, profile, lineage):
         digest=placement['digest'], size_bytes=placement['bytes'])
     actual = json.loads((root / historical.MANIFEST).read_text())
     entries = historical.entries_by_path(actual)
-    assert actual == expected, 'Manifest differs from reviewed geometry and one placement correction'
+    assert actual == expected, 'Manifest differs from reviewed geometry and five placement corrections'
     for name, entry in entries.items():
         reject_symlinks(root, name)
         raw = (root / name).read_bytes()
         assert len(raw) == entry['size_bytes'], ('Manifest size mismatch', name)
         assert historical.digest_payload(name, raw) == entry['digest'], ('Manifest digest mismatch', name)
     return {'manifest_entries_valid': 48, 'six_refinement_records': 6,
-            'placement_records_corrected': 1, 'other_complete_registrations_retained': 41,
+            'placement_manifest_records_corrected': 1, 'other_complete_registrations_retained': 41,
             'conifer_registration_retained': True}
 
 
@@ -99,12 +99,15 @@ def check(root=ROOT, history_root=None):
     manifest = validate_manifest(root, profile, lineage)
     six = check_finished(root)
     boulder = check_boulder_placement(root)
+    correction = profile['boulder_placement_correction']
+    assert correction['placement_indices'] == [row['placement_index'] for row in boulder['placements']]
+    assert correction['proxy_indices'] == [row['proxy_index'] for row in boulder['placements']]
     shrubs = historical.check_shrub_structures(root,
         lambda path: historical.git_bytes(history_root, historical.BASE, path))
     fern = historical.check_fern(root / historical.HERE / 'fern-readability/Fern.baseline.glb', root / historical.HERE / 'Fern.glb')
     sapling = historical.check_sapling(root / historical.HERE / 'sapling-color/Sapling.baseline.glb', root / historical.HERE / 'Sapling.glb')
     leader = conifer.check_asset(root / historical.HERE / 'conifer-leader/Conifer.baseline.glb', root / historical.HERE / 'Conifer.glb')
-    return dict(manifest, result='PASS', profile='pr24-conifer-six-finished-refinements-boulder-placement-v2',
+    return dict(manifest, result='PASS', profile='pr24-conifer-six-finished-refinements-five-rock-placements-v3',
         reviewed_art_blobs_valid=blobs, six_finished_assets=six,
         boulder_placement=boulder,
         shrubs=shrubs, fern=fern, sapling=sapling, conifer=leader,

@@ -38,6 +38,9 @@ pub(super) struct PropRange {
     current: usize,
     tree: bool,
 }
+
+// Non-tree prop visibility must remain below the L2 selection cutoffs.
+const SOLID_PROP_DRAW_DISTANCE: f32 = 210.0;
 #[derive(Component)]
 pub(super) struct TerrainSun {
     enabled: bool,
@@ -68,6 +71,32 @@ fn grounded_prop_position(
         }
     }
     position
+}
+
+fn prop_view_state(
+    tree: bool,
+    draw_distance: f32,
+    distance: f32,
+    height: f32,
+) -> (Visibility, usize) {
+    let range = if tree {
+        draw_distance.max(height * 0.9)
+    } else {
+        draw_distance
+    };
+    let visibility = if distance < range && (tree || height < 240.0) {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    let lod = if height > 350.0 || distance > 240.0 {
+        2
+    } else if height > 80.0 || distance > 100.0 {
+        1
+    } else {
+        0
+    };
+    (visibility, lod)
 }
 
 pub(super) fn stop(world: &mut World) {
@@ -247,7 +276,7 @@ pub(super) fn update(
             } else if tree {
                 360.0
             } else {
-                210.0
+                SOLID_PROP_DRAW_DISTANCE
             };
             let primitive = &gltf_meshes
                 .get(&gltf.named_meshes[format!("{}_L0", p.kind).as_str()])
@@ -330,23 +359,8 @@ pub(super) fn update(
     }
     for (mut mesh, mut visibility, mut prop) in &mut props {
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();
-        let range = if prop.tree {
-            prop.distance.max(height * 0.9)
-        } else {
-            prop.distance
-        };
-        *visibility = if distance < range && (prop.tree || height < 240.0) {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-        let target = if height > 350.0 || distance > 240.0 {
-            2
-        } else if height > 80.0 || distance > 100.0 {
-            1
-        } else {
-            0
-        };
+        let (next_visibility, target) = prop_view_state(prop.tree, prop.distance, distance, height);
+        *visibility = next_visibility;
         if target != prop.current {
             mesh.0 = prop.meshes[target].clone();
             prop.current = target;
@@ -401,17 +415,80 @@ mod tests {
     use super::*;
 
     #[test]
-    fn corrected_boulder_placement_loads_without_regrounding() {
+    fn corrected_boulder_placements_load_without_regrounding() {
         let props = placements();
-        let prop = &props[1319];
-        assert_eq!(prop.kind, "BoulderC");
-        assert_eq!(prop.position, [35.826_015, 154.784_97, -212.133_06]);
         let terrain = alife_world::island_terrain();
+        for (index, kind, position, proxy) in [
+            (
+                1319,
+                "BoulderC",
+                [35.826_015, 154.784_97, -212.133_06],
+                1310,
+            ),
+            (1325, "BoulderA", [20.672_583, 64.743_13, -79.558_28], 1316),
+            (1364, "BoulderA", [95.546_88, 5.163_428, 368.988_74], 1348),
+            (1541, "BoulderC", [-159.474_44, 85.708_21, -63.083_46], 1489),
+            (
+                1730,
+                "BoulderC",
+                [-57.308_784, 137.131_4, -286.232_33],
+                1631,
+            ),
+        ] {
+            let prop = &props[index];
+            assert_eq!(prop.kind, kind);
+            assert_eq!(prop.position, position);
+            assert_eq!(
+                grounded_prop_position(&prop.kind, prop.position, terrain.surface()),
+                Vec3::from_array(prop.position)
+            );
+            assert_eq!(terrain.state().data.obstacles[proxy][4], prop.position[1]);
+        }
+    }
+
+    #[test]
+    fn solid_prop_l2_is_always_culled_by_shipping_policy() {
+        assert_eq!(placements()[1325].kind, "BoulderA");
+        assert_eq!(SOLID_PROP_DRAW_DISTANCE, 210.0);
+        for height in [
+            9.8, 30.0, 80.0, 80.001, 239.999, 240.0, 240.001, 350.0, 350.001, 1600.0,
+        ] {
+            for distance in [
+                0.0, 99.999, 100.0, 100.001, 209.999, 210.0, 210.001, 240.0, 240.001, 1000.0,
+            ] {
+                let (visibility, lod) =
+                    prop_view_state(false, SOLID_PROP_DRAW_DISTANCE, distance, height);
+                if visibility == Visibility::Inherited {
+                    assert!(distance < 210.0 && height < 240.0);
+                    assert!(lod < 2);
+                }
+            }
+        }
         assert_eq!(
-            grounded_prop_position(&prop.kind, prop.position, terrain.surface()),
-            Vec3::from_array(prop.position)
+            prop_view_state(false, SOLID_PROP_DRAW_DISTANCE, 209.999, 239.999),
+            (Visibility::Inherited, 1)
         );
-        assert_eq!(terrain.state().data.obstacles[1310][4], prop.position[1]);
+        assert_eq!(
+            prop_view_state(false, SOLID_PROP_DRAW_DISTANCE, 210.0, 30.0),
+            (Visibility::Hidden, 1)
+        );
+        assert_eq!(
+            prop_view_state(false, SOLID_PROP_DRAW_DISTANCE, 0.0, 240.0),
+            (Visibility::Hidden, 1)
+        );
+        assert_eq!(
+            prop_view_state(false, SOLID_PROP_DRAW_DISTANCE, 240.001, 30.0),
+            (Visibility::Hidden, 2)
+        );
+        assert_eq!(
+            prop_view_state(false, SOLID_PROP_DRAW_DISTANCE, 0.0, 350.001),
+            (Visibility::Hidden, 2)
+        );
+        // Positive control: the unchanged tree policy can display L2.
+        assert_eq!(
+            prop_view_state(true, 360.0, 241.0, 351.0),
+            (Visibility::Inherited, 2)
+        );
     }
 
     #[test]
@@ -425,19 +502,34 @@ mod tests {
         assert_eq!(restored.state(), current_state);
         assert!(has_baked_art(Some(&restored)));
 
-        let mut previous_state = current_state;
-        previous_state.data.obstacles[1310][4] = 155.707_53;
-        previous_state.data.obstacles[1310][5] = 156.379_7;
-        let previous =
-            alife_world::WorldTerrain::new(previous_state.data.clone(), previous_state.locomotion)
-                .unwrap();
-        let restored =
-            alife_world::WorldTerrain::restore(Some(previous.binding()), Some(&previous_state))
-                .unwrap()
-                .unwrap();
-        assert_eq!(restored.state(), previous_state);
-        assert_ne!(restored.binding(), current.binding());
-        assert!(!has_baked_art(Some(&restored)));
+        for original_main in [false, true] {
+            let mut previous_state = current_state.clone();
+            for (proxy, lo, hi) in [
+                (1316, 0x42826693, 0x4286f3aa),
+                (1348, 0x40a93bb5, 0x40ec0376),
+                (1489, 0x42abb407, 0x42acf04c),
+                (1631, 0x4309422f, 0x430a306d),
+            ] {
+                previous_state.data.obstacles[proxy][4] = f32::from_bits(lo);
+                previous_state.data.obstacles[proxy][5] = f32::from_bits(hi);
+            }
+            if original_main {
+                previous_state.data.obstacles[1310][4] = 155.707_53;
+                previous_state.data.obstacles[1310][5] = 156.379_7;
+            }
+            let previous = alife_world::WorldTerrain::new(
+                previous_state.data.clone(),
+                previous_state.locomotion,
+            )
+            .unwrap();
+            let restored =
+                alife_world::WorldTerrain::restore(Some(previous.binding()), Some(&previous_state))
+                    .unwrap()
+                    .unwrap();
+            assert_eq!(restored.state(), previous_state);
+            assert_ne!(restored.binding(), current.binding());
+            assert!(!has_baked_art(Some(&restored)));
+        }
     }
 
     fn plant_grounding_surface() -> alife_world::TerrainSurface {

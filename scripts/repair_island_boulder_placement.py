@@ -1,4 +1,4 @@
-"""Apply the one reviewed placement correction without rebuilding the island.
+"""Apply the five reviewed placement corrections without rebuilding the island.
 
 Run with the source's Blender 5.2.1 LTS, then register_approved_art.py. The base
 terrain recipe imports the same correction. No prop mesh or height sample moves.
@@ -13,9 +13,7 @@ from pathlib import Path
 import bpy
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from island_placement_corrections import (
-    CORRECTED_Y, KIND, ORIGINAL_Y, PLACEMENT_INDEX, PROXY_INDEX, XZ, corrected_height,
-)
+from island_placement_corrections import CORRECTIONS, corrected_height
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = ROOT / 'crates/alife_game_app/assets/landscape/island'
@@ -69,43 +67,47 @@ def main():
     original_props = props_path.read_bytes()
     props = json.loads(original_props)
     assert (json.dumps(props, separators=(',', ':')) + '\n').encode() == original_props
-    p = props[PLACEMENT_INDEX]
-    x, old_y, z = p['position']
-    new_y = corrected_height(PLACEMENT_INDEX, p['kind'], x, z, old_y)
     original_world = world_path.read_bytes()
     w, d, _, _, _, count = struct.unpack_from('<IIfffI', original_world, 8)
     assert count == 1716 and original_world[:8] == b'HLAND001'
-    offset = 32 + w * d * 4 + PROXY_INDEX * 24
-    box = list(struct.unpack_from('<6f', original_world, offset))
-    assert abs(box[4] - old_y) < .0001, 'Stale source proxy'
     bpy.ops.wm.open_mainfile(filepath=str(native))
     before = scene_snapshot()
-    obj = bpy.data.objects[f'Island_{KIND}_{PLACEMENT_INDEX}']
-    assert abs(obj.location.x - XZ[0]) < .00001 and abs(-obj.location.y - XZ[1]) < .00001
-    assert abs(obj.location.z - old_y) < .0001, 'Native and runtime placements differ'
-    obj.location.z = new_y
     expected = before
-    expected['objects'][obj.name]['location'][2] = obj.location.z
+    updates = []
+    allowed_world_bytes = set()
+    updated_world = bytearray(original_world)
+    for index, correction in CORRECTIONS.items():
+        p = props[index]
+        x, old_y, z = p['position']
+        new_y = corrected_height(index, p['kind'], x, z, old_y)
+        proxy_index = correction['proxy_index']
+        offset = 32 + w * d * 4 + proxy_index * 24
+        box = list(struct.unpack_from('<6f', original_world, offset))
+        assert abs(box[4] - old_y) < .0001, ('Stale source proxy', index)
+        obj = bpy.data.objects[f"Island_{correction['kind']}_{index}"]
+        assert abs(obj.location.x - x) < .00001 and abs(-obj.location.y - z) < .00002
+        assert abs(obj.location.z - old_y) < .0001, ('Native/runtime placements differ', index)
+        obj.location.z = new_y
+        expected['objects'][obj.name]['location'][2] = obj.location.z
+        p['position'][1] = new_y
+        box[4], box[5] = new_y, box[5] + (new_y - old_y)
+        struct.pack_into('<2f', updated_world, offset + 16, *box[4:])
+        allowed_world_bytes.update(range(offset + 16, offset + 24))
+        updates.append({'placement_index': index, 'proxy_index': proxy_index,
+                        'old_y_m': old_y, 'new_y_m': new_y, 'changed': old_y != new_y})
     bpy.context.preferences.filepaths.save_version = 0
-    # A corrected source is a no-op on repeat, avoiding needless reserialization.
-    if old_y != new_y:
+    # Corrected sources are no-ops on repeat, avoiding needless reserialization.
+    if any(row['changed'] for row in updates):
         bpy.ops.wm.save_as_mainfile(filepath=str(native), compress=True, check_existing=False)
     bpy.ops.wm.open_mainfile(filepath=str(native))
     after = scene_snapshot()
     assert after == expected, 'Native save changed unrelated transforms, geometry, paint or packed images'
-    p['position'][1] = new_y
-    updated_props = (json.dumps(props, separators=(',', ':')) + '\n').encode()
-    # Preserve all terrain bytes and every other proxy; move only vertical bounds.
-    updated_world = bytearray(original_world)
-    box[4], box[5] = new_y, box[5] + (new_y - old_y)
-    struct.pack_into('<2f', updated_world, offset + 16, *box[4:])
-    assert updated_world[:offset + 16] == original_world[:offset + 16]
-    assert updated_world[offset + 24:] == original_world[offset + 24:]
-    props_path.write_bytes(updated_props)
+    changed_bytes = {i for i, (a, b) in enumerate(zip(original_world, updated_world)) if a != b}
+    assert len(original_world) == len(updated_world) and changed_bytes <= allowed_world_bytes
+    props_path.write_bytes((json.dumps(props, separators=(',', ':')) + '\n').encode())
     world_path.write_bytes(updated_world)
     receipt = {'result': 'PASS', 'blender': bpy.app.version_string,
-               'placement_index': PLACEMENT_INDEX, 'proxy_index': PROXY_INDEX,
-               'old_y_m': old_y, 'new_y_m': new_y,
+               'placements': updates,
                'native_object_count': len(after['objects']),
                'native_mesh_count': len(after['meshes']),
                'native_unrelated_snapshot_retained': True,

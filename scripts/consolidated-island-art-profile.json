@@ -1416,8 +1416,8 @@
     },
     {
       "path": "crates/alife_game_app/assets/landscape/island/README.md",
-      "bytes": 18211,
-      "sha256": "51ddb9ade1f6dd6533797c01fe914f0ed2332f5c2fa7f87176e93686066ff1cf",
+      "bytes": 19337,
+      "sha256": "ed324fd64e3c0b9c2df8b0d89e64dc10f33c1475d72e634d48c2be12ced1dde7",
       "executable": false
     },
     {
@@ -1590,14 +1590,14 @@
     },
     {
       "path": "crates/alife_game_app/assets/landscape/island/island-terrain.blend",
-      "bytes": 10530150,
-      "sha256": "c3fee97c2ed7d143e390ccb1f2ad42d8e34697213c0605dea6d16cccfb201a06",
+      "bytes": 10530182,
+      "sha256": "818561730e5854020543859e050c13a7aa743034813e6a40fab408bbc612c5eb",
       "executable": false
     },
     {
       "path": "crates/alife_game_app/assets/landscape/island/props.json",
-      "bytes": 517627,
-      "sha256": "a97e381a1bc95609eb42f7525f3855e8bc04d6d03f479d4c3fed21036f149ad3",
+      "bytes": 517624,
+      "sha256": "7f47e3f538ae1c30f8e2d0851f575d126cf3c1ea907776f08a241f7f8ae0ea45",
       "executable": false
     },
     {
@@ -1705,7 +1705,7 @@
     {
       "path": "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
       "bytes": 44709,
-      "sha256": "2c6dbb59eb0a817e2ff531c3e0dc461ce9429b5d5d221f7692785c1782a03a95",
+      "sha256": "9f395fdea2c44eefd4ebaee389340e784320d33050fcf8aa03654336cd3030b6",
       "executable": false
     },
     {
@@ -1987,7 +1987,7 @@
     {
       "path": "crates/alife_world/assets/island-v1.bin",
       "bytes": 535556,
-      "sha256": "b42df566163a6e4334e5d177189d2085ec18ba63e725904c38ea43eee74dccdf",
+      "sha256": "8d0e9cf6343ffe8ea5e82bcb7ad3e4ef77eef7207042cf0274de5d91f2457c38",
       "executable": false
     }
   ],
@@ -2009,17 +2009,29 @@
     "scripts/check_finished_island_assets.py": "9bab11605a614358e86e1de932faacbf5855b2093c9a103bfcb0c1aaa7f7e005",
     "scripts/test_finished_island_assets.py": "fe27a466003c8450b15ecd64a9113543345fd1cdf8c380fa8a84730204ccb11b",
     "scripts/build_island_terrain.py": "d90bc315c2de74d344d5bde276c2c1cac0afc3c43336eac3b6d7596bc5ffd65f",
-    "scripts/island_placement_corrections.py": "20f5a099b132eec53926f6b809572a3e92bab2f67eedb803f119bd7a43d9a117",
-    "scripts/check_island_boulder_placement.py": "35b84e606a799c5c910d0dba8e0c3be296067122cb82bcbb3d03c5e5367721a6",
-    "scripts/repair_island_boulder_placement.py": "1734dde2b30c19384c37f1e68ba992c8b073d2bd19466bd82f37e72d26d71210",
-    "scripts/test_island_boulder_placement.py": "69aec369db9ef34df203de0fb80ec8ef87c5d110242fb481d8a76371e77914f6"
+    "scripts/island_placement_corrections.py": "dc4495e49b1f4e8d3e61de0c20e858a272d509b0c2d4a5214f49f26cbc704715",
+    "scripts/check_island_boulder_placement.py": "eaa08778b99856dfc9007dd71643c791660ab97c4e31160157f7c3b95dbbfff4",
+    "scripts/repair_island_boulder_placement.py": "e189ea947c6748c23c45768201715dd51fcaeb2f1a493afbe326ba8e78903ef1",
+    "scripts/test_island_boulder_placement.py": "9af42453a1e243f6d644faf0722ef7ec2cbc493d332a8a53e09e878873348563"
   },
   "source_aware_six_overlay": "crates/alife_game_app/assets/landscape/island/finished-island-refinements/lineage.json",
   "boulder_placement_correction": {
-    "placement_index": 1319,
-    "proxy_index": 1310,
+    "placement_indices": [
+      1319,
+      1325,
+      1364,
+      1541,
+      1730
+    ],
+    "proxy_indices": [
+      1310,
+      1316,
+      1348,
+      1489,
+      1631
+    ],
     "props_path": "crates/alife_game_app/assets/landscape/island/props.json",
-    "digest": "fnv1a64:b03ffe3cf2abbbc0",
-    "bytes": 517627
+    "digest": "fnv1a64:7047e6631827edea",
+    "bytes": 517624
   }
 }

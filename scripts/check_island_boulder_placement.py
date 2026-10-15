@@ -1,4 +1,4 @@
-"""CPU regression: the corrected BoulderC touches real near terrain at every LOD.
+"""CPU regression: five reviewed rocks touch real near terrain in their support LODs.
 
 Clip each rock triangle's XZ projection against every overlapping authoritative
 terrain triangle. Their vertical separation is linear over each overlap, so its
@@ -13,9 +13,7 @@ import struct
 from pathlib import Path
 
 from check_island_art import Glb
-from island_placement_corrections import (
-    CORRECTED_Y, KIND, PLACEMENT_INDEX, PROXY_INDEX, XZ, corrected_height,
-)
+from island_placement_corrections import CORRECTIONS, corrected_height
 
 ROOT = Path(__file__).resolve().parents[1]
 HERE = Path('crates/alife_game_app/assets/landscape/island')
@@ -83,47 +81,65 @@ def minimum_clearance(vertices, indices, raw):
     return best, contact
 
 
-def check(root=ROOT):
-    root = Path(root)
-    props = json.loads((root / HERE / 'props.json').read_text())
-    placement = props[PLACEMENT_INDEX]
-    assert placement['kind'] == KIND
+def check_placement(root, props, raw, index, correction):
+    placement = props[index]
+    kind = correction['kind']
+    proxy_index = correction['proxy_index']
+    assert placement['kind'] == kind
     x, y, z = placement['position']
-    assert (x, z) == XZ and y == CORRECTED_Y
-    assert corrected_height(PLACEMENT_INDEX, KIND, x, z, y) == y
-    raw = (root / 'crates/alife_world/assets/island-v1.bin').read_bytes()
-    assert raw[:8] == b'HLAND001'
+    assert (x, z) == correction['xz'] and y == correction['corrected_y']
+    assert corrected_height(index, kind, x, z, y) == y
     w, d, _, _, _, count = struct.unpack_from('<IIfffI', raw, 8)
-    # Link the stable prop index to the same proxy emitted by the recipe.
     solid = lambda p: p['kind'] in ('Broadleaf', 'Conifer', 'Sapling', 'Cliff') or p['kind'].startswith('Boulder')
-    assert sum(map(solid, props[:PLACEMENT_INDEX])) == PROXY_INDEX
+    assert sum(map(solid, props[:index])) == proxy_index
     assert sum(map(solid, props)) == count
-    offset = 32 + w * d * 4 + PROXY_INDEX * 24
+    offset = 32 + w * d * 4 + proxy_index * 24
     proxy = struct.unpack_from('<6f', raw, offset)
-    glb = Glb(root / HERE / (KIND + '.glb'))
+    glb = Glb(root / HERE / (kind + '.glb'))
     assert all(not any(k in n for k in ('matrix', 'translation', 'rotation', 'scale')) for n in glb.doc['nodes'])
     rows = []
     for level in range(3):
-        mesh = next(m for m in glb.doc['meshes'] if m['name'] == f'{KIND}_L{level}')
+        mesh = next(m for m in glb.doc['meshes'] if m['name'] == f'{kind}_L{level}')
         assert len(mesh['primitives']) == 1
         primitive = mesh['primitives'][0]
         local = glb.accessor(primitive['attributes']['POSITION'])
         indices = [row[0] for row in glb.accessor(primitive['indices'])]
         vertices = transform(local, placement)
         clearance, contact = minimum_clearance(vertices, indices, raw)
-        # 2 cm at L1, under 5 cm at L0/L2; 1 mm accommodates runtime f32 trig.
-        assert -.051 < clearance < -.019, ('Boulder unsupported or overburied', level, clearance)
-        assert max(v[1] for v in vertices) > contact[1] + .5, ('Boulder buried', level)
-        rows.append({'lod': level, 'minimum_clearance_m': clearance, 'support_ground_xyz': contact})
+        supported = level in correction['support_lods']
+        if supported:
+            # A 1 mm allowance covers runtime f32 trigonometry. Keep the
+            # independently reviewed per-instance embed budget, never hide a
+            # floating LOD by silently widening a global tolerance.
+            assert -correction['maximum_embed_m'] < clearance < -.019, (
+                'Boulder unsupported or overburied', index, level, clearance)
+            assert max(v[1] for v in vertices) > contact[1] + .5, ('Boulder buried', index, level)
+        else:
+            assert index == 1325 and level == 2
+            assert .367 < clearance < .370, ('Approved hidden L2 shape changed', clearance)
+        rows.append({'lod': level, 'support_required': supported,
+                     'minimum_clearance_m': clearance, 'support_ground_xyz': contact})
         if level == 0:
             bounds = [(min(v[k] for v in local), max(v[k] for v in local)) for k in range(3)]
             corners = transform(list(itertools.product(*bounds)), placement)
             expected = [min(v[0] for v in corners), min(v[2] for v in corners),
                         max(v[0] for v in corners), max(v[2] for v in corners),
                         f32(y), max(v[1] for v in corners)]
-            assert max(abs(a - b) for a, b in zip(proxy, expected)) < .0001, ('Stale collision proxy', proxy, expected)
-    return {'result': 'PASS', 'placement_index': PLACEMENT_INDEX, 'proxy_index': PROXY_INDEX,
-            'authored_y_m': y, 'lod_support': rows, 'game_rendering_proof': False}
+            assert max(abs(a - b) for a, b in zip(proxy, expected)) < .0001, (
+                'Stale collision proxy', index, proxy, expected)
+    return {'placement_index': index, 'kind': kind, 'proxy_index': proxy_index,
+            'authored_y_m': y, 'lod_support': rows}
+
+
+def check(root=ROOT):
+    root = Path(root)
+    props = json.loads((root / HERE / 'props.json').read_text())
+    raw = (root / 'crates/alife_world/assets/island-v1.bin').read_bytes()
+    assert raw[:8] == b'HLAND001'
+    rows = [check_placement(root, props, raw, index, correction)
+            for index, correction in CORRECTIONS.items()]
+    return {'result': 'PASS', 'corrected_placements': len(rows),
+            'placements': rows, 'game_rendering_proof': False}
 
 
 if __name__ == '__main__':
