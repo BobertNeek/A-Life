@@ -77,7 +77,9 @@ struct PackedLayout {
     training_words: u64,
 }
 
+#[derive(Clone)]
 struct TrainerPipelines {
+    bind_group_layout: wgpu::BindGroupLayout,
     initialize: wgpu::ComputePipeline,
     forward: wgpu::ComputePipeline,
     candidate_forward: wgpu::ComputePipeline,
@@ -335,6 +337,7 @@ impl FoundationTrainer {
             &zeros,
             &self.stage_mask,
             Some(sequence),
+            Some(&self.gpu.pipelines),
         )?;
         let words = pack_replay_sequence(sequence, next.layout, self.phenotype.neuron_count());
         let headers = build_step_headers(
@@ -1609,7 +1612,7 @@ impl TrainerGpuState {
         initial_weights: &[f32],
         mask: &StageTrainableMask,
     ) -> Result<Self, TrainingError> {
-        Self::new_for_replay(device, phenotype, initial_weights, mask, None)
+        Self::new_for_replay(device, phenotype, initial_weights, mask, None, None)
     }
 
     fn new_for_replay(
@@ -1618,6 +1621,7 @@ impl TrainerGpuState {
         initial_weights: &[f32],
         mask: &StageTrainableMask,
         replay: Option<&TrainingSequence>,
+        cached_pipelines: Option<&TrainerPipelines>,
     ) -> Result<Self, TrainingError> {
         let (meta, layout) = pack_metadata_and_layout(phenotype, replay)?;
         let limits = device.limits();
@@ -1710,7 +1714,13 @@ impl TrainerGpuState {
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
-        let bind_group_layout = create_bind_group_layout(device);
+        // Replay shape changes only buffers and bind groups. These immutable
+        // device-local kernels use the same WGSL and binding ABI for every
+        // window, including a new cohort after rebind_for_next_cohort.
+        let bind_group_layout = cached_pipelines.map_or_else(
+            || create_bind_group_layout(device),
+            |pipelines| pipelines.bind_group_layout.clone(),
+        );
         let make_bind_group = |step: u32| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("foundation-trainer-bind-group"),
@@ -1737,78 +1747,88 @@ impl TrainerGpuState {
         };
         let bind_group = make_bind_group(0);
         let step_bind_groups = (0..total_steps).map(make_bind_group).collect();
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("foundation-trainer-pipeline-layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("foundation-trainer-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(TRAINER_WGSL.into()),
-        });
-        let pipelines = TrainerPipelines {
-            initialize: pipeline(device, &pipeline_layout, &shader, "initialize_replay_state"),
-            forward: pipeline(device, &pipeline_layout, &shader, "forward_microstep"),
-            candidate_forward: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "forward_candidate_logits",
-            ),
-            speech_forward: pipeline(device, &pipeline_layout, &shader, "forward_speech_logits"),
-            loss: pipeline(device, &pipeline_layout, &shader, "reduce_loss"),
-            seed_candidate: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "seed_candidate_activation_gradients",
-            ),
-            seed_speech: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "seed_speech_activation_gradients",
-            ),
-            backward_local: pipeline(device, &pipeline_layout, &shader, "backward_local"),
-            backward_sources: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "backward_recurrent_sources",
-            ),
-            recurrent_gradients: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "recurrent_weight_gradients",
-            ),
-            candidate_gradients: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "candidate_weight_gradients",
-            ),
-            speech_gradients: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "speech_weight_gradients",
-            ),
-            gradient_norm: pipeline(device, &pipeline_layout, &shader, "reduce_gradient_norm"),
-            validate_adamw: pipeline(device, &pipeline_layout, &shader, "validate_adamw"),
-            validate_accumulation: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "validate_accumulation",
-            ),
-            accumulate: pipeline(
-                device,
-                &pipeline_layout,
-                &shader,
-                "accumulate_weight_gradients",
-            ),
-            adamw: pipeline(device, &pipeline_layout, &shader, "apply_adamw"),
+        let pipelines = if let Some(pipelines) = cached_pipelines {
+            pipelines.clone()
+        } else {
+            let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("foundation-trainer-pipeline-layout"),
+                bind_group_layouts: &[Some(&bind_group_layout)],
+                immediate_size: 0,
+            });
+            let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("foundation-trainer-wgsl"),
+                source: wgpu::ShaderSource::Wgsl(TRAINER_WGSL.into()),
+            });
+            TrainerPipelines {
+                bind_group_layout,
+                initialize: pipeline(device, &pipeline_layout, &shader, "initialize_replay_state"),
+                forward: pipeline(device, &pipeline_layout, &shader, "forward_microstep"),
+                candidate_forward: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "forward_candidate_logits",
+                ),
+                speech_forward: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "forward_speech_logits",
+                ),
+                loss: pipeline(device, &pipeline_layout, &shader, "reduce_loss"),
+                seed_candidate: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "seed_candidate_activation_gradients",
+                ),
+                seed_speech: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "seed_speech_activation_gradients",
+                ),
+                backward_local: pipeline(device, &pipeline_layout, &shader, "backward_local"),
+                backward_sources: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "backward_recurrent_sources",
+                ),
+                recurrent_gradients: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "recurrent_weight_gradients",
+                ),
+                candidate_gradients: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "candidate_weight_gradients",
+                ),
+                speech_gradients: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "speech_weight_gradients",
+                ),
+                gradient_norm: pipeline(device, &pipeline_layout, &shader, "reduce_gradient_norm"),
+                validate_adamw: pipeline(device, &pipeline_layout, &shader, "validate_adamw"),
+                validate_accumulation: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "validate_accumulation",
+                ),
+                accumulate: pipeline(
+                    device,
+                    &pipeline_layout,
+                    &shader,
+                    "accumulate_weight_gradients",
+                ),
+                adamw: pipeline(device, &pipeline_layout, &shader, "apply_adamw"),
+            }
         };
         Ok(Self {
             step_headers,
