@@ -400,6 +400,40 @@ pub(super) fn highlight(
     }
 }
 
+/// Cancel a pointer gesture before the menu owns input. Carrying remains a world API.
+pub(super) fn cancel_for_menu(world: &mut World) {
+    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
+        hand.pressed = None;
+    }
+    #[cfg(feature = "gpu-runtime")]
+    if let Some(mut runtime) =
+        world.get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
+    {
+        if runtime.runtime.world().player_held_object().is_some() {
+            if let Err(error) = runtime.runtime.release_player_hold() {
+                if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
+                    ux.last_error = Some(error.to_string());
+                    ux.last_action = "Hand release failed; menu remains paused".into();
+                }
+                return;
+            }
+        }
+    }
+    #[cfg(feature = "gpu-runtime")]
+    world.resource_scope(
+        |world, mut frame: Mut<LiveBrainPresentationFrameResource>| {
+            if let Some(runtime) =
+                world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+            {
+                frame.refresh_world_objects(runtime.runtime.world());
+            }
+        },
+    );
+    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
+        hand.held = None;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -804,39 +838,5 @@ mod tests {
             assert!((3.0 * pointer_scale(extent, false) / extent - 0.125).abs() < 0.0001);
             assert_eq!(pointer_scale(extent, true), 1.0);
         }
-    }
-}
-
-/// Cancel a pointer gesture before the menu owns input. Carrying remains a world API.
-pub(super) fn cancel_for_menu(world: &mut World) {
-    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
-        hand.pressed = None;
-    }
-    #[cfg(feature = "gpu-runtime")]
-    if let Some(mut runtime) =
-        world.get_non_send_resource_mut::<ProductionGpuBrainRuntimeResource>()
-    {
-        if runtime.runtime.world().player_held_object().is_some() {
-            if let Err(error) = runtime.runtime.release_player_hold() {
-                if let Some(mut ux) = world.get_resource_mut::<Fvr05ProductionUxStateResource>() {
-                    ux.last_error = Some(error.to_string());
-                    ux.last_action = "Hand release failed; menu remains paused".into();
-                }
-                return;
-            }
-        }
-    }
-    #[cfg(feature = "gpu-runtime")]
-    world.resource_scope(
-        |world, mut frame: Mut<LiveBrainPresentationFrameResource>| {
-            if let Some(runtime) =
-                world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
-            {
-                frame.refresh_world_objects(runtime.runtime.world());
-            }
-        },
-    );
-    if let Some(mut hand) = world.get_resource_mut::<HandInteraction>() {
-        hand.held = None;
     }
 }
