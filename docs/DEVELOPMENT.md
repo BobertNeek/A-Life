@@ -80,6 +80,14 @@ nodes ignore picking and pass UI focus. The existing menu's modal/entry source
 layers (100/90) remain above the HUD (30); CPU tests guard those layers and
 non-interactive components, without proving combined live input dispatch.
 CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240.
+The feature-gated `Selected-creature HUD CPU regression` CI job runs the exact
+suite below with a single build job and debug symbols disabled. It does not
+enable `gpu-tests`, create a window, or execute a GPU simulation:
+
+```sh
+cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::status_hud:: -- --test-threads=1 --color=never
+```
+
 The ordinary player hint strip is replaced by a five-control wordless care dock:
 food placement (apple over ground), gentle touch (open palm), physical toy offer
 (striped ball), praise offer (thumb), and speech entry (bubble). These real 48px
