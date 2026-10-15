@@ -181,6 +181,36 @@ past the widest view. Overview shadows switch off above a 240 metre view.
 Normalized byte colors reduce file size without changing heights or normals.
 The island heightfield and placements remain authoritative.
 
+The 2026-10-15 placement correction lowers only `Island_BoulderC_1319` at
+XZ `(35.826016966114025, -212.13306068550276)` from Y `155.7075371101759` to
+`154.78496851454123`. The analytic authoring height left this instance wholly
+above the sampled near terrain. Exact triangle-overlap contact against the
+shipping rock's three LODs gives a shallow 2–4.75 cm embed at the corrected
+height. Meshes, terrain samples, other placements and other collision proxies
+are unchanged. Its matching proxy 1310 moves by the same vertical offset.
+
+`scripts/island_placement_corrections.py` supplies the same guarded correction
+to the base authoring recipe. To reapply it to the existing source without a
+full rebuild, use source-matched Blender 5.2.1 LTS:
+`blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/repair_island_boulder_placement.py`
+then run `python scripts/register_approved_art.py` and
+`python -m unittest discover -s scripts -p test_island_boulder_placement.py`.
+The repair saves and reloads the native source, comparing every object transform,
+mesh topology/paint/UV and packed image, apart from this one location. The fixed
+consolidated profile includes the reviewed source, placement and proxy updates.
+The delivered native file uses lossless Zstandard level 19 compression to fit
+repository upload tooling. Its decompressed Blender 5.2.1 stream is unchanged
+(SHA256 `ed8369754af917fc9718beb5657658ddafc60116a043ba0779889b005aa98ec8`)
+and reloads normally in Blender. This packaging does not change scene data;
+ordinary authoring and the idempotent correction need only Blender itself.
+These CPU checks do not establish in-game visual acceptance or GPU performance.
+
+Changing the proxy changes the baked terrain binding. New games and their saves
+use the corrected placement. Older saves retain their own exact terrain and
+creature state, but the existing renderer selects generic heightfield art for
+that older binding instead of current baked island props. This correction does
+not migrate old saves or change training checkpoints.
+
 Rebuild from the repository root, using the explicit Blender 5.2.1 executable:
 
 1. `blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_island_assets.py -- --no-review`

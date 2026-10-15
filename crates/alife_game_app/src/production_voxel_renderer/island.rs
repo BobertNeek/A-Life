@@ -400,6 +400,46 @@ fn constrain_to_surface(
 mod tests {
     use super::*;
 
+    #[test]
+    fn corrected_boulder_placement_loads_without_regrounding() {
+        let props = placements();
+        let prop = &props[1319];
+        assert_eq!(prop.kind, "BoulderC");
+        assert_eq!(prop.position, [35.826_015, 154.784_97, -212.133_06]);
+        let terrain = alife_world::island_terrain();
+        assert_eq!(
+            grounded_prop_position(&prop.kind, prop.position, terrain.surface()),
+            Vec3::from_array(prop.position)
+        );
+        assert_eq!(terrain.state().data.obstacles[1310][4], prop.position[1]);
+    }
+
+    #[test]
+    fn corrected_island_binding_preserves_old_save_state_with_generic_art_fallback() {
+        let current = alife_world::island_terrain();
+        let current_state = current.state();
+        let restored =
+            alife_world::WorldTerrain::restore(Some(current.binding()), Some(&current_state))
+                .unwrap()
+                .unwrap();
+        assert_eq!(restored.state(), current_state);
+        assert!(has_baked_art(Some(&restored)));
+
+        let mut previous_state = current_state;
+        previous_state.data.obstacles[1310][4] = 155.707_53;
+        previous_state.data.obstacles[1310][5] = 156.379_7;
+        let previous =
+            alife_world::WorldTerrain::new(previous_state.data.clone(), previous_state.locomotion)
+                .unwrap();
+        let restored =
+            alife_world::WorldTerrain::restore(Some(previous.binding()), Some(&previous_state))
+                .unwrap()
+                .unwrap();
+        assert_eq!(restored.state(), previous_state);
+        assert_ne!(restored.binding(), current.binding());
+        assert!(!has_baked_art(Some(&restored)));
+    }
+
     fn plant_grounding_surface() -> alife_world::TerrainSurface {
         alife_world::TerrainSurface::from_data(alife_world::TerrainData {
             width: 2,

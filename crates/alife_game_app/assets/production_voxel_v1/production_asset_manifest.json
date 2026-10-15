@@ -1016,7 +1016,7 @@
     {
       "asset_id": "approved-island-props",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:0641773571942bd4",
+      "digest": "fnv1a64:b03ffe3cf2abbbc0",
       "external": false,
       "final_art": false,
       "generated": true,
@@ -1031,7 +1031,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/props.json",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 517626,
+      "size_bytes": 517627,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },

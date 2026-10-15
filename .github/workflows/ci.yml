@@ -7,6 +7,20 @@ on:
     branches: ["main"]
 
 jobs:
+  island-boulder-placement:
+    name: Island boulder placement CPU regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check authored placement, LOD contact and collision proxy
+        run: python -m unittest discover -s scripts -p 'test_island_boulder_placement.py' -v
+
   probe-prior-diagnostics:
     name: Probe prior receipt diagnostics
     runs-on: ubuntu-latest
