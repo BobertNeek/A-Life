@@ -59,6 +59,31 @@ This preserves causal event credit (`AOA-LEARN-002`, `AOA-LEARN-003`) and bounde
 selection of relevant replay (`AOA-SLEEP-005`). It does not implement organism
 sleep or redefine the controlling architecture.
 
+## Validate a checkpoint without an archive
+
+The same inspector has an explicit checkpoint-only mode:
+
+```powershell
+inspect_archived_success --validate-checkpoint SEALED_CYCLE --expected-policy POLICY
+```
+
+The expected policy is mandatory; there is no default. This mode rejects any
+`adaptation.json` or `warmup.json` marker and validates only `cycle.json`,
+`trained.alife-foundation`, `actor-checkpoint.json` and `value-checkpoint.json`.
+It requires objective2 without a state reset, a nonzero founder, an exact sealed
+cohort handoff, matching receipt/export/actor weights and optimizer steps, the
+compiled founder/actor identity, valid actor Adam payloads, and the value head's
+shape, feature count and policy binding. Missing files and policy mismatches are
+errors, including an overflowing next policy. It compiles founder metadata on the CPU, without stepping a runtime,
+creating a GPU session, requiring archive records, or writing input files.
+
+Exit zero prints a checkpoint-admission receipt with the policy, founder,
+optimizer steps and digests of the exact four input files. The receipt explicitly
+reports no neural execution, weight modification or archive validation. This is
+foundation/optimizer package admission only: it does not establish same-individual
+lifetime-state continuation, behavioral readiness, GPU compatibility or promotion.
+The original two-positional archive mode and its receipt are unchanged.
+
 ## Read the original GPU scores
 
 For passive training diagnosis, build and run the feature-gated example:

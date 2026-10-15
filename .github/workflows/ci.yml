@@ -46,6 +46,8 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
       - name: Archived checkpoint inspection CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_archived_success_replay::tests
+      - name: Read-only inspection CLI CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --bin inspect_archived_success
 
   training-output-preservation:
     name: Training output preservation

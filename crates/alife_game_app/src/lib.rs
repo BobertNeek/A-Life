@@ -148,8 +148,9 @@ pub use foundation_acquisition_rehearsal::FoundationAcquisitionRehearsalReceipt;
 mod foundation_archived_success_replay;
 #[cfg(feature = "foundation-training")]
 pub use foundation_archived_success_replay::{
-    inspect_archived_successes, ArchivedSuccessEntry, ArchivedSuccessInspection,
-    ArchivedSuccessManifest, ArchivedSuccessReplayReceipt,
+    inspect_archived_successes, inspect_foundation_checkpoint, ArchivedSuccessEntry,
+    ArchivedSuccessInspection, ArchivedSuccessManifest, ArchivedSuccessReplayReceipt,
+    FoundationCheckpointFileDigest, FoundationCheckpointInspection,
 };
 #[cfg(feature = "foundation-training")]
 mod foundation_grab_food;
