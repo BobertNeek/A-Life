@@ -3399,23 +3399,23 @@ pub struct FoundationTrainingStep {
     pub patch: ExperiencePatch,
 }
 
+#[cfg(feature = "foundation-training")]
+type FoundationTrainingDemonstrator = Box<
+    dyn FnMut(
+            &PerceptionFrame,
+            u32,
+        )
+            -> Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError>
+        + Send,
+>;
+
 pub struct GpuLiveBrainRuntime {
     audited_cognition: bool,
     semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
     #[cfg(feature = "foundation-training")]
-    training_demonstrator: Option<
-        Box<
-            dyn FnMut(
-                    &PerceptionFrame,
-                    u32,
-                ) -> Result<
-                    alife_gpu_backend::GpuTrainingDemonstratorAction,
-                    ScaffoldContractError,
-                > + Send,
-        >,
-    >,
+    training_demonstrator: Option<FoundationTrainingDemonstrator>,
     #[cfg(feature = "foundation-training")]
     last_foundation_training_steps: Vec<FoundationTrainingStep>,
     #[cfg(feature = "foundation-training")]

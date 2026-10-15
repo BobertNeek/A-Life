@@ -276,10 +276,11 @@ fn foundation_replay_sequence_with_upload(
             .homeostasis_words
             .clone(),
     )?;
+    let (homeostasis, _) = homeostasis.as_chunks::<2>();
     let initial = TrainingInitialState {
         activations: snapshot_activation(&first.before)?,
-        activity_ema: homeostasis.chunks_exact(2).map(|r| r[0]).collect(),
-        metabolic_load: homeostasis.chunks_exact(2).map(|r| r[1]).collect(),
+        activity_ema: homeostasis.iter().map(|r| r[0]).collect(),
+        metabolic_load: homeostasis.iter().map(|r| r[1]).collect(),
         dendrites: first.before.v11.dendritic_branches.clone(),
     };
     let mut ticks = Vec::with_capacity(steps.len());
@@ -609,7 +610,18 @@ pub fn run_foundation_training_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None, None, None)
+    run_foundation_training_pilot_inner(
+        output,
+        seed,
+        seed,
+        tick_count,
+        FoundationPilotOptions {
+            teacher_mode: false,
+            food_position: None,
+            lesson: None,
+            asset_override: None,
+        },
+    )
 }
 
 /// Diagnostic of the existing legal teacher path against actual ingestion.
@@ -618,7 +630,18 @@ pub fn run_foundation_teacher_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None, None, None)
+    run_foundation_training_pilot_inner(
+        output,
+        seed,
+        seed,
+        tick_count,
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position: None,
+            lesson: None,
+            asset_override: None,
+        },
+    )
 }
 
 pub fn run_foundation_teacher_pilot_with_scenario(
@@ -633,10 +656,12 @@ pub fn run_foundation_teacher_pilot_with_scenario(
         world_seed,
         founder_seed_base,
         tick_count,
-        true,
-        food_position,
-        None,
-        None,
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position,
+            lesson: None,
+            asset_override: None,
+        },
     )
 }
 
@@ -653,10 +678,12 @@ pub fn run_foundation_teacher_pilot_with_lesson(
         world_seed,
         founder_seed_base,
         tick_count,
-        true,
-        food_position,
-        Some(lesson),
-        None,
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position,
+            lesson: Some(lesson),
+            asset_override: None,
+        },
     )
 }
 
@@ -688,10 +715,12 @@ pub fn run_adapted_foundation_teacher_pilot(
         seed,
         receipt.founder_seed_base,
         ticks,
-        true,
-        None,
-        Some(lesson),
-        Some(asset),
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position: None,
+            lesson: Some(lesson),
+            asset_override: Some(asset),
+        },
     )
 }
 
@@ -726,10 +755,12 @@ pub fn run_foundation_request_evaluation(
         world_seed,
         founder_seed_base,
         tick_count,
-        false,
-        None,
-        Some(FoundationTeacherLesson::VocabularyReception),
-        Some(asset),
+        FoundationPilotOptions {
+            teacher_mode: false,
+            food_position: None,
+            lesson: Some(FoundationTeacherLesson::VocabularyReception),
+            asset_override: Some(asset),
+        },
         Some(request),
         1.0,
     )
@@ -816,10 +847,12 @@ pub fn run_foundation_evaluation_pilot_with_config(
         world_seed,
         founder_seed_base,
         tick_count,
-        false,
-        evaluation.food_position,
-        Some(lesson),
-        Some(asset),
+        FoundationPilotOptions {
+            teacher_mode: false,
+            food_position: evaluation.food_position,
+            lesson: Some(lesson),
+            asset_override: Some(asset),
+        },
         None,
         evaluation.sampling_temperature,
     )
@@ -892,7 +925,7 @@ impl GroundedNavigationTeacher {
         if self.remembered_food.is_none() {
             let id = match self.search_phase % 7 {
                 0 | 1 => Id::LOOK_LEFT,
-                2 | 3 | 4 => Id::LOOK_RIGHT,
+                2..=4 => Id::LOOK_RIGHT,
                 5 => Id::LOOK_CENTER,
                 _ => Id::TURN_LEFT,
             };
@@ -949,16 +982,25 @@ impl GroundedNavigationTeacher {
     }
 }
 
+struct GroundedLessonTargets {
+    food: alife_core::WorldEntityId,
+    hazard: alife_core::WorldEntityId,
+    waypoint: alife_core::WorldEntityId,
+}
+
 fn grounded_lesson_teacher(
     frame: &alife_core::PerceptionFrame,
     enabled_channels: u32,
     lesson: FoundationTeacherLesson,
     waypoint_passed: &mut bool,
-    food: alife_core::WorldEntityId,
-    hazard: alife_core::WorldEntityId,
-    waypoint: alife_core::WorldEntityId,
+    targets: GroundedLessonTargets,
     navigation: &mut GroundedNavigationTeacher,
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
+    let GroundedLessonTargets {
+        food,
+        hazard,
+        waypoint,
+    } = targets;
     use alife_core::CandidateActionFamily as Family;
     let held_targets = navigation.held_targets.lock().unwrap().clone();
     if lesson == FoundationTeacherLesson::GrabFood {
@@ -1514,25 +1556,27 @@ pub(crate) struct DemonstrationSpeechLabels {
     pub targets: Vec<Option<alife_training::ReplaySpeechTarget>>,
 }
 
+// Private launch controls shared by the public pilot wrappers.
+struct FoundationPilotOptions {
+    teacher_mode: bool,
+    food_position: Option<[f32; 2]>,
+    lesson: Option<FoundationTeacherLesson>,
+    asset_override: Option<FoundationWeightAsset>,
+}
+
 fn run_foundation_training_pilot_inner(
     output: &Path,
     seed: u64,
     founder_seed_base: u64,
     tick_count: usize,
-    teacher_mode: bool,
-    food_position: Option<[f32; 2]>,
-    lesson: Option<FoundationTeacherLesson>,
-    asset_override: Option<FoundationWeightAsset>,
+    options: FoundationPilotOptions,
 ) -> Result<FoundationPilotReceipt> {
     run_foundation_training_pilot_with_request(
         output,
         seed,
         founder_seed_base,
         tick_count,
-        teacher_mode,
-        food_position,
-        lesson,
-        asset_override,
+        options,
         None,
         1.0,
     )
@@ -1543,13 +1587,16 @@ fn run_foundation_training_pilot_with_request(
     seed: u64,
     founder_seed_base: u64,
     tick_count: usize,
-    teacher_mode: bool,
-    food_position: Option<[f32; 2]>,
-    lesson: Option<FoundationTeacherLesson>,
-    asset_override: Option<FoundationWeightAsset>,
+    options: FoundationPilotOptions,
     request: Option<FoundationEvaluationRequest>,
     sampling_temperature: f32,
 ) -> Result<FoundationPilotReceipt> {
+    let FoundationPilotOptions {
+        teacher_mode,
+        food_position,
+        lesson,
+        asset_override,
+    } = options;
     let initial_sampling = foundation_pilot_sampling(seed, sampling_temperature)?;
     if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
@@ -1692,9 +1739,11 @@ fn run_foundation_training_pilot_with_request(
                 channels,
                 lesson,
                 &mut waypoint_passed,
-                food,
-                hazard,
-                waypoint,
+                GroundedLessonTargets {
+                    food,
+                    hazard,
+                    waypoint,
+                },
                 &mut navigation,
             )
         })?;
@@ -2344,8 +2393,9 @@ fn run_foundation_training_pilot_with_request(
                 .homeostasis_words
                 .clone(),
         )?;
-        let ema: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[0]).collect();
-        let metabolic: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[1]).collect();
+        let (homeostasis, _) = homeostasis.as_chunks::<2>();
+        let ema: Vec<f32> = homeostasis.iter().map(|row| row[0]).collect();
+        let metabolic: Vec<f32> = homeostasis.iter().map(|row| row[1]).collect();
         maximum_activity_ema_error = maximum_activity_ema_error.max(compare_replay_values(
             i,
             "activity EMA",
@@ -2702,8 +2752,7 @@ pub(crate) fn close_foundation_navigation_gate(
                         .tick()
                         .raw()
                         .saturating_sub(scenario.start_tick)
-                        % 24
-                        == 0
+                        .is_multiple_of(24)
                     && (!matches!(token, 8 | 11)
                         || scenario
                             .vocabulary_target
@@ -2780,10 +2829,11 @@ pub(crate) fn expose_foundation_teacher_cue(
         .entity(scenario.food)
         .ok_or("teacher cue food missing")?;
     let position = food.position;
-    let tokens: &[u16] = if scenario.held_food_setup.is_some() && food.carried_by != Some(subject) {
-        &[1] // Name the released object; do not request the held-food action.
-    } else if scenario.grab_food_setup.is_some() && food.carried_by == Some(subject) {
-        &[1] // Name the acquired object; do not repeat the satisfied Get request.
+    let tokens: &[u16] = if (scenario.held_food_setup.is_some() && food.carried_by != Some(subject))
+        || (scenario.grab_food_setup.is_some() && food.carried_by == Some(subject))
+    {
+        // Name released or acquired food without repeating the satisfied action request.
+        &[1]
     } else {
         &scenario.teacher_cue_tokens
     };
@@ -3271,7 +3321,7 @@ pub(crate) fn configure_foundation_scenario(
             // `get` must select the movable example. Noun lessons alternate
             // physical toy uses across seeds rather than equating toy with a ball.
             let movable = matches!(vocabulary_token, Some(9 | 14))
-                || (vocabulary_token != Some(18) && (seed / 18) % 2 == 0);
+                || (vocabulary_token != Some(18) && (seed / 18).is_multiple_of(2));
             let toy = world.spawn_toy(
                 "vocabulary-toy",
                 alife_core::Vec3f::new(origin.x + 1.5, origin.y, origin.z + 2.0),
@@ -3372,7 +3422,7 @@ pub(crate) fn configure_foundation_scenario(
                 1 => 15 + ((seed / 12) % 3) as u16,
                 2 => {
                     if matches!(vocabulary_token, Some(9 | 14))
-                        || (vocabulary_token != Some(18) && (seed / 18) % 2 == 0)
+                        || (vocabulary_token != Some(18) && (seed / 18).is_multiple_of(2))
                     {
                         14
                     } else {
@@ -3652,8 +3702,9 @@ pub fn verify_foundation_replay_step(
             .homeostasis_words
             .clone(),
     )?;
-    let ema: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[0]).collect();
-    let metabolic: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[1]).collect();
+    let (homeostasis, _) = homeostasis.as_chunks::<2>();
+    let ema: Vec<f32> = homeostasis.iter().map(|row| row[0]).collect();
+    let metabolic: Vec<f32> = homeostasis.iter().map(|row| row[1]).collect();
     compare_replay_values(0, "activity EMA", &replay.final_activity_ema[0], &ema)?;
     compare_replay_values(
         0,
@@ -4785,9 +4836,11 @@ mod held_food_lesson_tests {
                 31,
                 FoundationTeacherLesson::EatHeldFood,
                 &mut false,
-                scenario.food,
-                scenario.hazard,
-                scenario.waypoint,
+                GroundedLessonTargets {
+                    food: scenario.food,
+                    hazard: scenario.hazard,
+                    waypoint: scenario.waypoint,
+                },
                 &mut navigation,
             )
             .unwrap();
