@@ -495,6 +495,10 @@ pub struct FoundationPilotReceipt {
     pub maximum_metabolic_error: f32,
     pub source_asset_digest: String,
     pub teacher_mode: bool,
+    /// Initial admitted sampler, not a claim that lifetime learning is disabled.
+    /// Missing in historical receipts; per-decision sampling is retained in the trace.
+    #[serde(default)]
+    pub initial_sampling: Option<GpuTrainingSamplingConfig>,
     pub consumed_events: u64,
     pub demonstration_replay_records: usize,
     pub food_position: Option<[f32; 2]>,
@@ -727,10 +731,53 @@ pub fn run_foundation_request_evaluation(
         Some(FoundationTeacherLesson::VocabularyReception),
         Some(asset),
         Some(request),
+        1.0,
     )
 }
 
-/// A frozen founder acts without a demonstrator in the same production world.
+/// Explicit evaluation-only controls. Ordinary in-world lifetime learning remains active.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FoundationEvaluationConfig {
+    pub food_position: Option<[f32; 2]>,
+    pub sampling_temperature: f32,
+}
+
+impl Default for FoundationEvaluationConfig {
+    fn default() -> Self {
+        Self {
+            food_position: None,
+            sampling_temperature: 1.0,
+        }
+    }
+}
+
+impl FoundationEvaluationConfig {
+    pub fn validate(self) -> Result<()> {
+        foundation_pilot_sampling(0, self.sampling_temperature).map(|_| ())
+    }
+}
+
+fn foundation_pilot_sampling(seed: u64, temperature: f32) -> Result<GpuTrainingSamplingConfig> {
+    // Match both the existing host floor and WGSL request-span ceiling; never clamp.
+    // The WGSL literal is slightly below f32::MAX, so host finiteness alone is insufficient.
+    if !temperature.is_finite() || !(1.0e-4..=3.402823e38_f32).contains(&temperature) {
+        return Err(
+            "evaluation sampling temperature must be finite within GPU bounds 0.0001..=3.402823e38"
+                .into(),
+        );
+    }
+    let sampling = GpuTrainingSamplingConfig {
+        seed: seed as u32,
+        counter: 0,
+        temperature,
+        demonstrator: None,
+    };
+    sampling.validate()?;
+    Ok(sampling)
+}
+
+/// A fixed founder asset acts without a demonstrator or offline optimizer updates.
+/// Normal in-world lifetime learning, biology, sleep and audited cognition remain active.
 pub fn run_foundation_evaluation_pilot(
     output: &Path,
     world_seed: u64,
@@ -740,15 +787,41 @@ pub fn run_foundation_evaluation_pilot(
     food_position: Option<[f32; 2]>,
     asset: FoundationWeightAsset,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(
+    run_foundation_evaluation_pilot_with_config(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        lesson,
+        FoundationEvaluationConfig {
+            food_position,
+            ..FoundationEvaluationConfig::default()
+        },
+        asset,
+    )
+}
+
+/// Opt-in evaluation temperature; the legacy wrapper keeps temperature 1.
+pub fn run_foundation_evaluation_pilot_with_config(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    lesson: FoundationTeacherLesson,
+    evaluation: FoundationEvaluationConfig,
+    asset: FoundationWeightAsset,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_with_request(
         output,
         world_seed,
         founder_seed_base,
         tick_count,
         false,
-        food_position,
+        evaluation.food_position,
         Some(lesson),
         Some(asset),
+        None,
+        evaluation.sampling_temperature,
     )
 }
 
@@ -1461,6 +1534,7 @@ fn run_foundation_training_pilot_inner(
         lesson,
         asset_override,
         None,
+        1.0,
     )
 }
 
@@ -1474,7 +1548,9 @@ fn run_foundation_training_pilot_with_request(
     lesson: Option<FoundationTeacherLesson>,
     asset_override: Option<FoundationWeightAsset>,
     request: Option<FoundationEvaluationRequest>,
+    sampling_temperature: f32,
 ) -> Result<FoundationPilotReceipt> {
+    let initial_sampling = foundation_pilot_sampling(seed, sampling_temperature)?;
     if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
@@ -1592,12 +1668,7 @@ fn run_foundation_training_pilot_with_request(
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         format!("n2048-training-pilot-{seed}"),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        GpuTrainingSamplingConfig {
-            seed: seed as u32,
-            counter: 0,
-            temperature: 1.0,
-            demonstrator: None,
-        },
+        initial_sampling,
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
     let teacher_previous = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -2094,6 +2165,7 @@ fn run_foundation_training_pilot_with_request(
             }),
             serde_json::to_vec_pretty(&serde_json::json!({
                 "lesson": scenario_lesson,
+                "initial_sampling": initial_sampling,
                 "consumed_events": consumed_events,
                 "initial_food_distance": initial_food_distance,
                 "final_food_distance": final_food_distance,
@@ -2304,6 +2376,7 @@ fn run_foundation_training_pilot_with_request(
             .map(|b| format!("{b:02x}"))
             .collect(),
         teacher_mode,
+        initial_sampling: Some(initial_sampling),
         consumed_events,
         demonstration_replay_records: if teacher_mode { steps.len() } else { 0 },
         food_position,
@@ -5410,5 +5483,121 @@ mod compact_replay_codec_tests {
         assert!(error
             .to_string()
             .contains("unsupported compact replay schema 1"));
+    }
+}
+
+#[cfg(test)]
+mod evaluation_sampling_tests {
+    use super::*;
+
+    #[test]
+    fn default_sampling_exactly_matches_legacy_admission() {
+        let seed = u32::MAX as u64 + 17;
+        let config = FoundationEvaluationConfig::default();
+        assert_eq!(config.food_position, None);
+        assert_eq!(config.sampling_temperature, 1.0);
+        let sampling = foundation_pilot_sampling(seed, config.sampling_temperature).unwrap();
+        assert_eq!(
+            sampling,
+            GpuTrainingSamplingConfig {
+                seed: seed as u32,
+                counter: 0,
+                temperature: 1.0,
+                demonstrator: None,
+            }
+        );
+    }
+
+    #[test]
+    fn explicit_sampling_changes_only_temperature() {
+        let legacy = foundation_pilot_sampling(53, 1.0).unwrap();
+        for temperature in [1.0, 32.0, 1.0e-4, 3.402823e38_f32] {
+            let actual = foundation_pilot_sampling(53, temperature).unwrap();
+            assert_eq!(
+                actual,
+                GpuTrainingSamplingConfig {
+                    temperature,
+                    ..legacy
+                }
+            );
+            actual.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn sampling_rejects_nonfinite_nonpositive_and_outside_gpu_bounds() {
+        for temperature in [
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            0.0,
+            -0.0,
+            -1.0,
+            f32::MIN_POSITIVE,
+            1.0e-5,
+            f32::MAX,
+            f32::from_bits(3.402823e38_f32.to_bits() + 1),
+        ] {
+            assert!(foundation_pilot_sampling(53, temperature).is_err());
+            assert!(FoundationEvaluationConfig {
+                sampling_temperature: temperature,
+                ..FoundationEvaluationConfig::default()
+            }
+            .validate()
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn invalid_api_temperature_fails_before_creating_output_or_admitting_gpu() {
+        let output = std::env::temp_dir().join(format!(
+            "alife-invalid-evaluation-temperature-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let asset = initial_n2048_care_asset(53).unwrap();
+        let error = run_foundation_evaluation_pilot_with_config(
+            &output,
+            53,
+            53,
+            16,
+            FoundationTeacherLesson::GrabFood,
+            FoundationEvaluationConfig {
+                sampling_temperature: f32::NAN,
+                ..FoundationEvaluationConfig::default()
+            },
+            asset,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("sampling temperature"));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn receipt_round_trip_records_initial_sampler_and_preserves_historical_unknown() {
+        let historical = serde_json::json!({
+            "seed": 53, "founder_seed_base": 53, "ticks": 16,
+            "collection_seconds": 0, "replay_seconds": 0,
+            "maximum_logit_error": 0, "maximum_activation_error": 0,
+            "maximum_activity_ema_error": 0, "maximum_metabolic_error": 0,
+            "source_asset_digest": "synthetic", "teacher_mode": false,
+            "consumed_events": 0, "demonstration_replay_records": 0,
+            "food_position": null, "initial_food_distance": null, "final_food_distance": null,
+            "lesson": "grab_food", "lesson_completed": false,
+        });
+        let mut receipt: FoundationPilotReceipt = serde_json::from_value(historical).unwrap();
+        assert!(receipt.initial_sampling.is_none());
+        let sampling = foundation_pilot_sampling(53, 32.0).unwrap();
+        receipt.initial_sampling = Some(sampling);
+        let encoded = serde_json::to_value(&receipt).unwrap();
+        assert_eq!(
+            encoded["initial_sampling"],
+            serde_json::to_value(sampling).unwrap()
+        );
+        let decoded: FoundationPilotReceipt = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.initial_sampling, Some(sampling));
     }
 }

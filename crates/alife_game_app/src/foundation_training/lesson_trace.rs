@@ -43,6 +43,7 @@ pub(super) fn serialize_step(
         "representative_mask": behavior.representative_mask,
         "motor_masks": behavior.motor_masks,
         "motor_indices": behavior.motor_indices,
+        "sampling": behavior.sampling,
         "candidates": frame.candidates().iter().enumerate().map(|(index, candidate)| serde_json::json!({
             "index": candidate.candidate_index,
             "action": candidate.action_id.raw(),
@@ -285,6 +286,26 @@ mod tests {
     }
 
     #[test]
+    fn sampling_provenance_copies_the_actual_decision_sampler() {
+        let (frame, mut behavior, decision, outcome) = fixture(0.0);
+        behavior.sampling = GpuTrainingSamplingConfig {
+            seed: 93,
+            counter: 17,
+            temperature: 32.0,
+            demonstrator: None,
+        };
+        let trace = serialize_step(&frame, &behavior, &decision, None, &outcome, None);
+        assert_eq!(trace["sampling"], json!(behavior.sampling));
+        assert_eq!(trace["sampling"]["seed"], json!(93));
+        assert_eq!(trace["sampling"]["counter"], json!(17));
+        assert_eq!(trace["sampling"]["temperature"], json!(32.0));
+        assert!(trace["sampling"]["demonstrator"].is_null());
+        let decoded: GpuTrainingSamplingConfig =
+            serde_json::from_value(trace["sampling"].clone()).unwrap();
+        assert_eq!(decoded, behavior.sampling);
+    }
+
+    #[test]
     fn receipt_identity_and_behavior_round_trip_without_reconstructing_outcome_tick() {
         let (frame, mut behavior, mut decision, mut outcome) = fixture(0.0);
         decision.sequence_id = ExperienceSequenceId(37);
@@ -506,8 +527,12 @@ mod tests {
             "frame_digest",
             "dispatch_generation",
             "behavior",
+            "sampling",
         ] {
-            object.remove(added);
+            assert!(
+                object.remove(added).is_some(),
+                "missing additive field {added}"
+            );
         }
         assert_eq!(
             trace,
