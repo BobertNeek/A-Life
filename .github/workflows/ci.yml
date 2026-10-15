@@ -54,6 +54,10 @@ jobs:
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Strict foundation-training Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
+      - name: Adaptive game exploration shader and host CPU contracts
+        run: cargo test --locked -p alife_gpu_backend --all-targets --features training-rollout
+      - name: Familiar-object unresolved-gap input chain CPU regression
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local
       - name: Foundation scenario and replay CPU tests
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
       - name: Objective continuation CPU tests

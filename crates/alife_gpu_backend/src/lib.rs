@@ -7,6 +7,7 @@ pub mod closed_loop_buffers;
 pub mod closed_loop_checkpoint;
 pub mod closed_loop_development;
 pub mod closed_loop_exact_capture;
+mod closed_loop_exploration;
 pub mod closed_loop_learning;
 pub mod closed_loop_memory;
 pub mod closed_loop_pipeline;
@@ -41,6 +42,9 @@ pub use closed_loop_buffers::*;
 pub use closed_loop_checkpoint::*;
 pub use closed_loop_development::*;
 pub use closed_loop_exact_capture::*;
+pub(crate) use closed_loop_exploration::{
+    game_candidate_exploration_identity, GAME_EXPLORATION_IDENTITY_WORDS,
+};
 pub use closed_loop_learning::*;
 pub use closed_loop_memory::*;
 pub use closed_loop_pipeline::*;
