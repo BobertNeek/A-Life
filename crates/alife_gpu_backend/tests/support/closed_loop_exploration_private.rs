@@ -560,3 +560,81 @@ fn actual_training_composer_bypasses_game_perturbations_before_exact_training_sa
     assert!(source.contains("selected_candidate = training_sample(header, brain, 0u);"));
     assert!(source.contains("motor_candidates[slot] = training_sample(header, brain, slot + 1u);"));
 }
+
+#[test]
+fn distinct_target_draw_collision_preserves_exact_index_ties_after_restore_and_reordering() {
+    // Distinct canonical identities can share the sampler's 23-bit uniform.
+    // Existing exact lowest-index tie semantics still apply in this case.
+    let original_frame = frame(9, 77);
+    let mut candidates = original_frame.candidates().to_vec();
+    candidates[1].action_id = candidates[0].action_id;
+    candidates[0].target = ActionTarget::new(Some(WorldEntityId(2988)), None);
+    candidates[1].target = ActionTarget::new(Some(WorldEntityId(4659)), None);
+    let original_frame = with_candidates(&original_frame, candidates);
+    let bytes = serde_json::to_vec(&original_frame).unwrap();
+    let restored: PerceptionFrame = serde_json::from_slice(&bytes).unwrap();
+    restored.validate().unwrap();
+    let mut reordered = restored.candidates().to_vec();
+    reordered.reverse();
+    for (index, candidate) in reordered.iter_mut().enumerate() {
+        candidate.candidate_index = index as u16;
+    }
+    let reordered_frame = with_candidates(&restored, reordered);
+    let original = batch(&[original_frame], &[0], 1, 64);
+    let restored = batch(&[restored], &[2], 57, 193);
+    let reordered = batch(&[reordered_frame], &[3], 101, 257);
+    let before = [
+        uploaded_candidate(&original, 0, 0),
+        uploaded_candidate(&original, 0, 1),
+    ];
+    let after = [
+        uploaded_candidate(&reordered, 0, 0),
+        uploaded_candidate(&reordered, 0, 1),
+    ];
+    let state = uploaded_identity(&original, 0);
+    let restored_state = uploaded_identity(&restored, 0);
+    let reordered_state = uploaded_identity(&reordered, 0);
+    let restored_candidates = [
+        uploaded_candidate(&restored, 0, 0),
+        uploaded_candidate(&restored, 0, 1),
+    ];
+    assert_ne!(before[0].identity, before[1].identity);
+    assert_ne!(
+        reference::identity_hash(state, before[0]),
+        reference::identity_hash(state, before[1])
+    );
+    assert_eq!(
+        reference::identity_hash(state, before[0]) >> 9,
+        reference::identity_hash(state, before[1]) >> 9
+    );
+    assert_eq!(
+        reference::score(state, before[0]).to_bits(),
+        reference::score(state, before[1]).to_bits()
+    );
+    assert_eq!(before[0].identity, after[1].identity);
+    assert_eq!(before[1].identity, after[0].identity);
+    for motor_slot in [None, Some(0)] {
+        assert_eq!(reference::select(state, &before, motor_slot), Some(0));
+        assert_eq!(
+            reference::select(restored_state, &restored_candidates, motor_slot),
+            Some(0)
+        );
+        assert_eq!(
+            reference::select(reordered_state, &after, motor_slot),
+            Some(0)
+        );
+    }
+    assert_ne!(before[0].identity, after[0].identity);
+    for (index, candidate) in before.iter().enumerate() {
+        let restored_candidate = uploaded_candidate(&restored, 0, index);
+        assert_eq!(candidate.identity, restored_candidate.identity);
+        assert_eq!(
+            reference::score(state, *candidate).to_bits(),
+            reference::score(restored_state, restored_candidate).to_bits()
+        );
+        assert_eq!(
+            reference::score(state, *candidate).to_bits(),
+            reference::score(reordered_state, after[1 - index]).to_bits()
+        );
+    }
+}

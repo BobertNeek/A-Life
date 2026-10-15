@@ -8634,6 +8634,118 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
+    fn factorized_held_food_eat_and_rest_share_one_biology_advance() {
+        let (mut world, agent, food, prepared) = prepared_world();
+        // Let ordinary development express recovery chemistry before comparing
+        // fatigue; a newborn's zero regulatory expression masks that response.
+        for _ in 0..600 {
+            world.try_advance_tick().unwrap();
+        }
+        hold_food_for_meal(&mut world, food);
+        let before = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        let outcome_tick = Tick::new(world.tick().raw() + 1);
+        let eat = prepared
+            .channels
+            .into_iter()
+            .find(|command| command.channel == MotorChannel::Manipulation)
+            .unwrap();
+        let rest = posture_bundle(ActionKind::Rest.canonical_id(), None)
+            .channels
+            .remove(0);
+        let bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(1).unwrap(),
+            world.tick(),
+            vec![rest, eat],
+        )
+        .unwrap();
+        let event = BodyEventDelta {
+            energy: 0.3,
+            nutrition: 0.6,
+            sleep_recovery: 1.0,
+            ..BodyEventDelta::zero()
+        };
+        let expected = before
+            .biochemistry()
+            .advance(outcome_tick, event, before.phenotype())
+            .unwrap();
+        let meal_without_rest = before
+            .biochemistry()
+            .advance(
+                outcome_tick,
+                BodyEventDelta {
+                    sleep_recovery: 0.0,
+                    ..event
+                },
+                before.phenotype(),
+            )
+            .unwrap();
+        let rest_without_meal = before
+            .biochemistry()
+            .advance(
+                outcome_tick,
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                before.phenotype(),
+            )
+            .unwrap();
+
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+        assert!(receipt.succeeded);
+        assert_eq!(receipt.outcome_tick, outcome_tick);
+        assert_eq!(receipt.channel_receipts.len(), 2);
+        assert_eq!(receipt.joint.channel_outcomes.len(), 2);
+        let meal = &receipt.channel_receipts[0];
+        assert_eq!(meal.command.channel, MotorChannel::Manipulation);
+        assert_eq!(meal.command.primitive, HeadlessActionIds::EAT);
+        assert_eq!(meal.physical.contact, PhysicalContactKind::Consumed);
+        assert_eq!(meal.physical.target_entity, Some(food));
+        let rest = &receipt.channel_receipts[1];
+        assert_eq!(rest.command.channel, MotorChannel::Posture);
+        assert_eq!(rest.command.primitive, ActionKind::Rest.canonical_id());
+        assert_eq!(rest.physical.contact, PhysicalContactKind::None);
+        assert!(world.entity(food).unwrap().is_consumed());
+        assert_eq!(receipt.body_event, event);
+        assert_eq!(receipt.biology_before, *before.biochemistry());
+        assert_eq!(receipt.biology_after, expected);
+        assert!(receipt.biology_after.body.sleeping);
+        assert!(
+            receipt.biology_after.homeostasis.drives.fatigue
+                < meal_without_rest.homeostasis.drives.fatigue
+        );
+        assert!(
+            receipt
+                .biology_after
+                .body
+                .organ(alife_core::OrganKind::Digestive)
+                .energy
+                > rest_without_meal
+                    .body
+                    .organ(alife_core::OrganKind::Digestive)
+                    .energy
+        );
+
+        // The enclosing world tick must not apply either channel a second time.
+        assert_eq!(
+            world
+                .try_advance_tick_with_body_events(&BTreeMap::new())
+                .unwrap(),
+            outcome_tick
+        );
+        assert_eq!(
+            *world
+                .organism_registry()
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry(),
+            expected
+        );
+    }
+
+    #[test]
     fn factorized_bundle_executes_as_one_joint_transaction_and_rolls_back() {
         let (mut world, agent, food, bundle) = prepared_world();
         hold_food_for_meal(&mut world, food);
