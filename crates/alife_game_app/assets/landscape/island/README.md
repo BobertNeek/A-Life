@@ -181,6 +181,55 @@ past the widest view. Overview shadows switch off above a 240 metre view.
 Normalized byte colors reduce file size without changing heights or normals.
 The island heightfield and placements remain authoritative.
 
+The 2026-10-15 placement corrections lower exactly five proven exposed floating
+rocks, keeping their XZ, scale, yaw and approved meshes:
+
+- `1319` BoulderC: Y `155.7075371101759` -> `154.78496851454122`, proxy `1310`
+- `1325` BoulderA: Y `65.20034210344221` -> `64.74313004876842`, proxy `1316`
+- `1364` BoulderA: Y `5.288538399551772` -> `5.163427675697716`, proxy `1348`
+- `1541` BoulderC: Y `85.85161233125542` -> `85.708212317397`, proxy `1489`
+- `1730` BoulderC: Y `137.25853498797284` -> `137.1313965994088`, proxy `1631`
+
+The original correction for 1319 is retained exactly. The analytic authoring
+height left these instances above the sampled near terrain. Exact triangle-overlap
+contact gives shallow support: 2–4.75 cm for 1319, 2–8.34 cm for 1325's visible
+L0/L1, and 2–3.55 cm for the other new rocks. Meshes, terrain samples, all other
+placements and all other collision proxies are unchanged. Only each matching
+proxy's vertical bounds move with its instance. Hidden geometric candidates
+1659/1620 and tiny-gap cases are deliberately unchanged.
+
+BoulderA 1325's approved L2 simplification has a different support footprint.
+Its unused L2 retains a 36.84 cm gap; forcing it down would overbury visible
+L0/L1 by 40–47 cm. Production never displays non-tree L2: solid props require
+view height <240 m and distance <210 m, while L2 requires height >350 m or
+distance >240 m. The actual unchanged cull/LOD policy is extracted into a pure
+helper and locked by a renderer boundary regression. No quality setting changes
+these prop thresholds. This correction does not claim that 1325 L2 is grounded.
+
+`scripts/island_placement_corrections.py` supplies the same guarded corrections
+to the base authoring recipe. To reapply them to the existing source without a
+full rebuild, use source-matched Blender 5.2.1 LTS:
+`blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/repair_island_boulder_placement.py`
+then run `python scripts/register_approved_art.py` and
+`python -m unittest discover -s scripts -p test_island_boulder_placement.py`.
+The repair saves and reloads the native source, comparing every object transform,
+mesh topology/paint/UV and packed image, apart from the reviewed locations. The
+fixed consolidated profile includes the source, placement and proxy updates.
+The delivered native file uses lossless Zstandard level 19 compression to fit
+repository upload tooling. Its decompressed edited Blender 5.2.1 stream is
+unchanged by that packaging (SHA256
+`7bb87ce5c78592911b9123ef8e81fe307da37c3130a37f8a75201995d900c28d`)
+and reloads normally in Blender. Ordinary authoring and the idempotent
+corrections need only Blender itself. These CPU checks do not establish
+in-game visual acceptance or GPU performance.
+
+Changing proxies changes the baked terrain binding. New games and their saves
+use the corrected placements. Older saves retain their own exact terrain and
+creature state, but the existing renderer selects generic heightfield art for
+that older binding instead of current baked island props. Tests cover both
+original-main and one-rock-fix saved terrain. This correction does not migrate
+old saves or change training checkpoints.
+
 Rebuild from the repository root, using the explicit Blender 5.2.1 executable:
 
 1. `blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_island_assets.py -- --no-review`

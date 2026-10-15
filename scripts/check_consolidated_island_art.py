@@ -15,10 +15,11 @@ from pathlib import Path
 import check_composed_island_graphics as historical
 import check_conifer_leader as conifer
 from check_finished_island_assets import SOURCE, check as check_finished
+from check_island_boulder_placement import check as check_boulder_placement
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = Path('scripts/consolidated-island-art-profile.json')
-PROFILE_SHA256 = '3ab1ebac4a36d34a6efd9762469721b6c5991514fe0a9681d376abfd3370a38e'
+PROFILE_SHA256 = '2c8e26550d5a49a5bf4c962c005e2451b92a8687e84aea75cfb829421c993500'
 
 
 def sha(raw):
@@ -64,16 +65,20 @@ def validate_manifest(root, profile, lineage):
                 'config_path': 'scripts/build_finished_island_assets.py',
                 'date': '2026-10-09', 'seed': 'saved-finished-island-refinements/' + asset['name'],
                 'tool': 'Blender-4.3.2'})
+    placement = profile['boulder_placement_correction']
+    old_entries[placement['props_path']].update(
+        digest=placement['digest'], size_bytes=placement['bytes'])
     actual = json.loads((root / historical.MANIFEST).read_text())
     entries = historical.entries_by_path(actual)
-    assert actual == expected, 'Manifest differs from exact Conifer base plus six reviewed records'
+    assert actual == expected, 'Manifest differs from reviewed geometry and five placement corrections'
     for name, entry in entries.items():
         reject_symlinks(root, name)
         raw = (root / name).read_bytes()
         assert len(raw) == entry['size_bytes'], ('Manifest size mismatch', name)
         assert historical.digest_payload(name, raw) == entry['digest'], ('Manifest digest mismatch', name)
     return {'manifest_entries_valid': 48, 'six_refinement_records': 6,
-            'other_complete_registrations_retained': 42, 'conifer_registration_retained': True}
+            'placement_manifest_records_corrected': 1, 'other_complete_registrations_retained': 41,
+            'conifer_registration_retained': True}
 
 
 def check(root=ROOT, history_root=None):
@@ -93,13 +98,18 @@ def check(root=ROOT, history_root=None):
     lineage = json.loads((root / SOURCE / 'lineage.json').read_text())
     manifest = validate_manifest(root, profile, lineage)
     six = check_finished(root)
+    boulder = check_boulder_placement(root)
+    correction = profile['boulder_placement_correction']
+    assert correction['placement_indices'] == [row['placement_index'] for row in boulder['placements']]
+    assert correction['proxy_indices'] == [row['proxy_index'] for row in boulder['placements']]
     shrubs = historical.check_shrub_structures(root,
         lambda path: historical.git_bytes(history_root, historical.BASE, path))
     fern = historical.check_fern(root / historical.HERE / 'fern-readability/Fern.baseline.glb', root / historical.HERE / 'Fern.glb')
     sapling = historical.check_sapling(root / historical.HERE / 'sapling-color/Sapling.baseline.glb', root / historical.HERE / 'Sapling.glb')
     leader = conifer.check_asset(root / historical.HERE / 'conifer-leader/Conifer.baseline.glb', root / historical.HERE / 'Conifer.glb')
-    return dict(manifest, result='PASS', profile='pr24-conifer-six-finished-refinements-v1',
+    return dict(manifest, result='PASS', profile='pr24-conifer-six-finished-refinements-five-rock-placements-v3',
         reviewed_art_blobs_valid=blobs, six_finished_assets=six,
+        boulder_placement=boulder,
         shrubs=shrubs, fern=fern, sapling=sapling, conifer=leader,
         historical_profile_sources_retained=True, game_rendering_proof=False,
         physical_gpu_proof=False, full_workspace_qualification=False)

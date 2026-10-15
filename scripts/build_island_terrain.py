@@ -14,6 +14,7 @@ from mathutils import Vector, noise
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from island_art_common import ROOT, REVIEW, material, mesh, setup_scene, camera, render, export, reference
+from island_placement_corrections import corrected_height
 
 OUT=ROOT/'crates/alife_game_app/assets/landscape/island'
 NX,NY=320,384
@@ -114,6 +115,7 @@ def build():
     def place(kind,x,y,scale):
         if math.hypot(x-80,y+250)<18:return
         h=height(x,y);h=h*factor if h>0 else h
+        h=corrected_height(len(placements),kind,x,-y,h)
         ob=library[kind].copy();ob.data=library[kind].data;props_collection.objects.link(ob)
         ob.name='Island_'+kind+'_'+str(len(placements));ob.location=(x,y,h)
         ob.scale=(scale,)*3;ob.rotation_euler.z=rng.random()*math.tau
