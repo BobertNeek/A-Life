@@ -8,25 +8,31 @@ fn authoritative_world_with_energy(energy: Option<f32>) -> HeadlessWorld {
     let id = OrganismId(1);
     let mut world = HeadlessScenarioBuilder::new(21)
         .agent("agent", id, Vec3f::ZERO)
+        .agent("other", OrganismId(2), Vec3f::new(3.0, 0.0, 0.0))
+        .food("food", Vec3f::new(0.0, 0.0, 0.5), 0.8)
         .build()
         .unwrap();
-    let entity = world.entity_id("agent").unwrap();
-    let genome = CreatureGenome::early_mammal_founder(
-        21,
-        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
-    )
-    .unwrap();
-    let phenotype = genome.express().unwrap();
-    let mut chemistry =
-        alife_core::BiochemistryState::new_with_age(&phenotype, Tick::ZERO, Tick::ZERO).unwrap();
-    if let Some(energy) = energy {
-        chemistry.body.set_energy(energy).unwrap();
-    }
-    world
-        .register_organism_record(
-            WorldOrganismRecord::new(id, entity, genome, phenotype, chemistry, Tick::ZERO).unwrap(),
+    for (label, id) in [("agent", id), ("other", OrganismId(2))] {
+        let entity = world.entity_id(label).unwrap();
+        let genome = CreatureGenome::early_mammal_founder(
+            21,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
         )
         .unwrap();
+        let phenotype = genome.express().unwrap();
+        let mut chemistry =
+            alife_core::BiochemistryState::new_with_age(&phenotype, Tick::ZERO, Tick::ZERO)
+                .unwrap();
+        if let Some(energy) = energy {
+            chemistry.body.set_energy(energy).unwrap();
+        }
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(id, entity, genome, phenotype, chemistry, Tick::ZERO)
+                    .unwrap(),
+            )
+            .unwrap();
+    }
     world
 }
 fn row() -> WorldOrganismPresentationRow {
@@ -48,7 +54,7 @@ fn six_quantities_are_independent_actual_physiology_not_generic_wellbeing() {
     h.hormones.dopamine = 0.88;
     h.hormones.oxytocin = 0.77;
     row.biochemistry.body.energy = 0.22;
-    let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row));
+    let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
     assert_eq!(
         readout.values,
         [
@@ -109,7 +115,10 @@ fn unknown_row_and_every_identity_lifecycle_mismatch_fail_closed() {
     let row = row();
     let stable = row.world_entity_id;
     let organism = row.organism_id;
-    assert_eq!(Readout::from_row(stable, organism, None).values, [None; 6]);
+    assert_eq!(
+        Readout::from_row(stable, organism, None, []).values,
+        [None; 6]
+    );
     let mut mutations = Vec::new();
     let mut changed = row.clone();
     changed.world_entity_id = WorldEntityId(stable.raw() + 1);
@@ -134,30 +143,32 @@ fn unknown_row_and_every_identity_lifecycle_mismatch_fail_closed() {
         death_tick: Tick(1),
     };
     mutations.push(changed);
+    let food_world = authoritative_world();
+    let mut food = food_world
+        .entity(food_world.entity_id("food").unwrap())
+        .unwrap()
+        .clone();
+    food.carried_by = Some(organism);
+    assert!(Readout::from_row(stable, organism, Some(&row), [&food]).holding_food);
     for changed in mutations {
-        assert_eq!(
-            Readout::from_row(stable, organism, Some(&changed)).values,
-            [None; 6]
+        let readout = Readout::from_row(stable, organism, Some(&changed), [&food]);
+        assert_eq!(readout.values, [None; 6]);
+        assert!(
+            !readout.holding_food,
+            "mismatched or dead selection cannot claim possession"
         );
     }
 }
-#[test]
-fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_removal() {
-    let organism_world = authoritative_world();
-    let row = organism_world.presentation_snapshot().organisms.remove(0);
-    let stable = row.world_entity_id;
-    let mut world = World::new();
-    world.init_resource::<BevyEntityMap>();
-    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+fn bind_creature(world: &mut World, row: &WorldOrganismPresentationRow) -> Entity {
     let entity = world
         .spawn((
             ProductionCreatureAssemblyRoot {
-                stable_id: stable,
+                stable_id: row.world_entity_id,
                 organism_id: row.organism_id,
                 display_only: true,
             },
             Fvr04ProductionCreatureVisualMarker {
-                stable_id: stable,
+                stable_id: row.world_entity_id,
                 organism_id: row.organism_id,
                 tile: VoxelTileCoord { x: 0, z: 0 },
                 expression: CreatureExpressionState::Neutral,
@@ -176,8 +187,19 @@ fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_remov
         .id();
     world
         .resource_mut::<BevyEntityMap>()
-        .bind(entity, stable)
+        .bind(entity, row.world_entity_id)
         .unwrap();
+    entity
+}
+#[test]
+fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_removal() {
+    let organism_world = authoritative_world();
+    let row = organism_world.presentation_snapshot().organisms.remove(0);
+    let stable = row.world_entity_id;
+    let mut world = World::new();
+    world.init_resource::<BevyEntityMap>();
+    assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+    let entity = bind_creature(&mut world, &row);
     assert_eq!(selected_readout(&world, stable).values, [None; 6]);
     world.insert_resource(
         LiveBrainPresentationFrameResource::from_authoritative_world(&organism_world).unwrap(),
@@ -243,4 +265,129 @@ fn embedded_icons_decode_as_distinct_nonempty_rgba_images() {
         assert!(icon.pixels().any(|p| p[3] == 0));
         assert!(hashes.insert(blake3::hash(bytes).to_hex().to_string()));
     }
+}
+
+#[test]
+fn food_badge_requires_unconsumed_food_owned_by_the_exact_valid_selected_organism() {
+    let row = row();
+    let food_world = authoritative_world();
+    let food = food_world
+        .entity(food_world.entity_id("food").unwrap())
+        .unwrap();
+    for (kind, carried_by, consumed, expected) in [
+        (WorldObjectKind::Food, Some(row.organism_id), false, true),
+        (WorldObjectKind::Food, None, false, false),
+        (WorldObjectKind::Food, Some(OrganismId(2)), false, false),
+        (WorldObjectKind::Food, Some(row.organism_id), true, false),
+        (WorldObjectKind::Ball, Some(row.organism_id), false, false),
+    ] {
+        let mut object = food.clone();
+        object.kind = kind;
+        object.carried_by = carried_by;
+        object.consumed = consumed;
+        // Every fixture is nearby; location never establishes possession.
+        assert_eq!(
+            Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), [&object])
+                .holding_food,
+            expected,
+            "{kind:?}, owner={carried_by:?}, consumed={consumed}"
+        );
+        assert!(
+            !Readout::from_row(row.world_entity_id, row.organism_id, None, [&object]).holding_food
+        );
+        assert!(
+            !Readout::from_row(row.world_entity_id, OrganismId(2), Some(&row), [&object])
+                .holding_food
+        );
+    }
+    assert!(!Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []).holding_food);
+}
+
+#[test]
+fn food_badge_rebinds_on_selection_frame_identity_and_load_changes() {
+    let mut canonical = authoritative_world();
+    let stable = canonical.entity_id("agent").unwrap();
+    let food = canonical.entity_id("food").unwrap();
+    let grab = alife_core::ActionCommand::structured(
+        OrganismId(1),
+        alife_world::HeadlessActionIds::GRAB,
+        alife_core::ActionKind::Hold,
+        alife_core::ActionTarget::new(Some(food), None),
+        alife_core::Intensity::new(1.0).unwrap(),
+        alife_core::DurationTicks::new(1),
+        alife_core::Confidence::new(0.9).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    assert!(canonical.apply_command(&grab).unwrap().execution.succeeded);
+    assert_eq!(
+        canonical.entity(food).unwrap().carried_by,
+        Some(OrganismId(1))
+    );
+    let rows = canonical.presentation_snapshot().organisms;
+    let row = &rows[0];
+    let other = &rows[1];
+    let mut world = World::new();
+    world.init_resource::<BevyEntityMap>();
+    let entity = bind_creature(&mut world, row);
+    bind_creature(&mut world, other);
+    world.insert_resource(
+        LiveBrainPresentationFrameResource::from_authoritative_world(&canonical).unwrap(),
+    );
+    let held = selected_readout(&world, stable);
+    assert!(held.holding_food);
+    assert_eq!(
+        selected_readout(&world, stable),
+        held,
+        "paused frames retain measured ownership"
+    );
+    let other_readout = selected_readout(&world, other.world_entity_id);
+    assert!(
+        other_readout.values.iter().all(Option::is_some),
+        "second selection is a valid live creature"
+    );
+    assert!(
+        !other_readout.holding_food,
+        "a different selected creature cannot inherit possession"
+    );
+    assert!(!selected_readout(&world, WorldEntityId(stable.raw() + 100)).holding_food);
+    assert!(
+        selected_readout(&world, stable).holding_food,
+        "reselection reads the owner again"
+    );
+    world
+        .get_mut::<ProductionCreatureAssemblyRoot>(entity)
+        .unwrap()
+        .organism_id = OrganismId(2);
+    assert!(!selected_readout(&world, stable).holding_food);
+    world
+        .get_mut::<ProductionCreatureAssemblyRoot>(entity)
+        .unwrap()
+        .organism_id = row.organism_id;
+    assert!(selected_readout(&world, stable).holding_food);
+    world
+        .resource_mut::<LiveBrainPresentationFrameResource>()
+        .reseed_from_loaded_world(&authoritative_world())
+        .unwrap();
+    assert!(
+        !selected_readout(&world, stable).holding_food,
+        "load cannot retain prior possession"
+    );
+    world
+        .resource_mut::<LiveBrainPresentationFrameResource>()
+        .reseed_from_loaded_world(&canonical)
+        .unwrap();
+    assert!(selected_readout(&world, stable).holding_food);
+    world.remove_resource::<LiveBrainPresentationFrameResource>();
+    assert!(!selected_readout(&world, stable).holding_food);
+    world.insert_resource(
+        LiveBrainPresentationFrameResource::from_authoritative_world(&canonical).unwrap(),
+    );
+    world
+        .entity_mut(entity)
+        .remove::<Fvr04ProductionCreatureVisualMarker>();
+    assert!(!selected_readout(&world, stable).holding_food);
 }

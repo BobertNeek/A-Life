@@ -66,7 +66,13 @@ Missing identity/frame/row or invalid values show a question mark; a known zero
 has a real empty track. Launch/save expression defaults are not evidence. The
 HUD does not extrapolate between ticks, during pause, or after a simulation stop.
 The reticle and full numeric stable ID identify selection without an invented
-portrait. The count chip shows rendered creature count and running/paused/fast
+portrait. A fruit-in-palm badge in that identity header appears only when the
+current frame contains unconsumed Food carried by that exact living selected
+organism. Missing or mismatched identity/frame/row, a nearby fruit, a different
+owner, a carried non-food object, or consumed food cannot show the badge. It is
+a read-only possession cue, not evidence of eating or successful care. Selection
+changes and loads read the current frame again, without retaining the old badge.
+The count chip shows rendered creature count and running/paused/fast
 playback icons. F3 hides these player readouts while preserving the existing
 textual inspector, animation/response details, and debug rails. The HUD wraps
 at narrow widths, and uses shorter cards below 300px viewport height. All HUD
