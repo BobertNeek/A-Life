@@ -295,7 +295,26 @@ target/debug/train_n2048_care.exe --inspect-cycle target/founder-training/cycle-
 
 The cycle collects ordinary GPU decisions, streams Zstd-compressed binary replay records with a 4 GiB disk ceiling and 8 GiB process-memory check, predicts frozen values, calculates GAE across natural sleep gaps using actual world time, applies PPO in 256-tick waking windows with up to 128 burn-in ticks, exports a canonical N2048 asset, and verifies its admission into a fresh cohort. Structural synapses remain frozen replay context while inherited weights train. The first waking decision after each sleep must pass exact GPU production/replay parity. The sealed experience patch retains its existing JSON wire inside each binary record. The second command restores the exported actor, Adam state, and GPU value head, and increments the policy version. `--seed N` may change the world seed on resume while preserving the original inherited founder seed and graph; `cycle.json` records both. `--inspect-cycle` reads and checks sealed replay records, including finalized records from an interrupted collection. Both training commands fail rather than overwrite an output directory. `cycle.json` and its actor/value checkpoints are integration evidence, not a full campaign checkpoint or a promoted founder. The cycle accepts at most 36,000 waking decisions. A production delayed-food run has now closed biological death as a terminal PPO trajectory with zero value bootstrap, exported a trained asset, and admitted its next cohort. A delayed-food invocation still exits as a failed behavior gate unless the organism survives and eats after food returns.
 
-For a held-out check of a frozen checkpoint, use `--evaluate OUTPUT ASSET LESSON TICKS WORLD_SEED FOUNDER_SEED`. It performs ordinary production collection and replay verification without an optimizer update. Use seeds outside the campaign and demonstration bands. Reserve the long delayed-food gate for post-training acceptance.
+For a held-out check of a fixed founder checkpoint, use `--evaluate OUTPUT ASSET LESSON TICKS WORLD_SEED FOUNDER_SEED`. It performs ordinary production collection and replay verification without an offline optimizer update. Normal lifetime plasticity, biology, sleep and audited cognition remain active; “frozen” refers to the input founder and offline training state. Use seeds outside the campaign and demonstration bands. Reserve the long delayed-food gate for post-training acceptance.
+
+Evaluation defaults to sampling temperature 1. An explicit evaluation-only
+`--evaluation-sampling-temperature 32` opts into a different sampling temperature
+without changing training settings or automatic campaign assessments. The value
+must be finite within 0.0001..=3.402823e38, preserving the existing GPU sampler's
+positive numerical floor and WGSL request-span ceiling; invalid values are rejected before creating evaluation output or
+admitting a GPU. Legacy optional food X/Z coordinates precede flags. Controlled
+`--request-token` comparisons reject this option and retain temperature 1.
+`--sampling-temperature` remains a compatible resume-training control and is not
+accepted by evaluation.
+
+New `pilot.json` and lesson trace/diagnostic outputs record `initial_sampling`
+(the effective temperature, world-seed-to-u32 sampling seed, initial counter 0 and
+no initial demonstrator). Each trace step also copies its actual receipt's
+`sampling`, including the decision counter and demonstrator. Historical pilot
+receipts without the new field deserialize as unknown, not as inferred evidence.
+The ordinary prior priming, logged provider-failure continuation, acquisition
+criterion and replay verification are unchanged. A local CPU check does not
+establish Grab competence, temperature-32 GPU behavior, throughput or promotion.
 
 `--food-after-world-tick N` in cycle mode temporarily moves the existing food resource to a distant legal world position, then returns it at world tick `N`. `scenario.json` records both positions, and `cycle.json` records the availability tick, first meal, and energy. It changes no physiology or policy. `--teacher-pilot OUTPUT [TICKS] --seed WORLD_SEED --founder-seed-base GENOME_SEED --lesson feeding|hazard_avoidance|obstacle_navigation|recovery` produces source-bound compact demonstration replay in the same format as the cycle. The optional `--food-position X Z` applies to feeding only; the second coordinate is horizontal Z, not elevation. `--cycle` and `--resume-cycle` also accept `--lesson` to place the same scenery around a teacher-free policy; a delayed-food gate cannot be combined with a lesson. Each teacher lesson must complete its measured world outcome before replay is accepted. Successful lessons write `lesson-trace.json`; failed lessons write `lesson-diagnostic.json`, both with every chosen action, sensed object slot, physical contact, and measured physiology.
 

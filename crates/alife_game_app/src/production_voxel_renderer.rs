@@ -1845,6 +1845,18 @@ fn apply_production_runtime_load(world: &mut World) {
         return;
     }
 
+    let available = menu::load_application_available(world);
+    let consent = world
+        .get_resource_mut::<menu::MenuState>()
+        .is_some_and(|mut menu| menu.begin_load_application(available));
+    if !consent {
+        report_production_runtime_load_failure(
+            world,
+            "Load cancelled or unavailable; current world left unchanged".into(),
+        );
+        return;
+    }
+
     let result = (|| -> Result<(), GameAppShellError> {
         let current_ux = world
             .get_resource::<Fvr05ProductionUxStateResource>()
@@ -1983,6 +1995,9 @@ fn apply_production_runtime_load(world: &mut World) {
         Ok(())
     })();
 
+    if let Some(mut menu) = world.get_resource_mut::<menu::MenuState>() {
+        menu.finish_load();
+    }
     if let Err(error) = result {
         report_production_runtime_load_failure(world, error.to_string());
     }

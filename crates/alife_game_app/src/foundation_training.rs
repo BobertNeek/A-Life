@@ -276,10 +276,11 @@ fn foundation_replay_sequence_with_upload(
             .homeostasis_words
             .clone(),
     )?;
+    let (homeostasis, _) = homeostasis.as_chunks::<2>();
     let initial = TrainingInitialState {
         activations: snapshot_activation(&first.before)?,
-        activity_ema: homeostasis.chunks_exact(2).map(|r| r[0]).collect(),
-        metabolic_load: homeostasis.chunks_exact(2).map(|r| r[1]).collect(),
+        activity_ema: homeostasis.iter().map(|r| r[0]).collect(),
+        metabolic_load: homeostasis.iter().map(|r| r[1]).collect(),
         dendrites: first.before.v11.dendritic_branches.clone(),
     };
     let mut ticks = Vec::with_capacity(steps.len());
@@ -495,6 +496,10 @@ pub struct FoundationPilotReceipt {
     pub maximum_metabolic_error: f32,
     pub source_asset_digest: String,
     pub teacher_mode: bool,
+    /// Initial admitted sampler, not a claim that lifetime learning is disabled.
+    /// Missing in historical receipts; per-decision sampling is retained in the trace.
+    #[serde(default)]
+    pub initial_sampling: Option<GpuTrainingSamplingConfig>,
     pub consumed_events: u64,
     pub demonstration_replay_records: usize,
     pub food_position: Option<[f32; 2]>,
@@ -605,7 +610,18 @@ pub fn run_foundation_training_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, false, None, None, None)
+    run_foundation_training_pilot_inner(
+        output,
+        seed,
+        seed,
+        tick_count,
+        FoundationPilotOptions {
+            teacher_mode: false,
+            food_position: None,
+            lesson: None,
+            asset_override: None,
+        },
+    )
 }
 
 /// Diagnostic of the existing legal teacher path against actual ingestion.
@@ -614,7 +630,18 @@ pub fn run_foundation_teacher_pilot(
     seed: u64,
     tick_count: usize,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(output, seed, seed, tick_count, true, None, None, None)
+    run_foundation_training_pilot_inner(
+        output,
+        seed,
+        seed,
+        tick_count,
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position: None,
+            lesson: None,
+            asset_override: None,
+        },
+    )
 }
 
 pub fn run_foundation_teacher_pilot_with_scenario(
@@ -629,10 +656,12 @@ pub fn run_foundation_teacher_pilot_with_scenario(
         world_seed,
         founder_seed_base,
         tick_count,
-        true,
-        food_position,
-        None,
-        None,
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position,
+            lesson: None,
+            asset_override: None,
+        },
     )
 }
 
@@ -649,10 +678,12 @@ pub fn run_foundation_teacher_pilot_with_lesson(
         world_seed,
         founder_seed_base,
         tick_count,
-        true,
-        food_position,
-        Some(lesson),
-        None,
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position,
+            lesson: Some(lesson),
+            asset_override: None,
+        },
     )
 }
 
@@ -684,10 +715,12 @@ pub fn run_adapted_foundation_teacher_pilot(
         seed,
         receipt.founder_seed_base,
         ticks,
-        true,
-        None,
-        Some(lesson),
-        Some(asset),
+        FoundationPilotOptions {
+            teacher_mode: true,
+            food_position: None,
+            lesson: Some(lesson),
+            asset_override: Some(asset),
+        },
     )
 }
 
@@ -722,15 +755,60 @@ pub fn run_foundation_request_evaluation(
         world_seed,
         founder_seed_base,
         tick_count,
-        false,
-        None,
-        Some(FoundationTeacherLesson::VocabularyReception),
-        Some(asset),
+        FoundationPilotOptions {
+            teacher_mode: false,
+            food_position: None,
+            lesson: Some(FoundationTeacherLesson::VocabularyReception),
+            asset_override: Some(asset),
+        },
         Some(request),
+        1.0,
     )
 }
 
-/// A frozen founder acts without a demonstrator in the same production world.
+/// Explicit evaluation-only controls. Ordinary in-world lifetime learning remains active.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FoundationEvaluationConfig {
+    pub food_position: Option<[f32; 2]>,
+    pub sampling_temperature: f32,
+}
+
+impl Default for FoundationEvaluationConfig {
+    fn default() -> Self {
+        Self {
+            food_position: None,
+            sampling_temperature: 1.0,
+        }
+    }
+}
+
+impl FoundationEvaluationConfig {
+    pub fn validate(self) -> Result<()> {
+        foundation_pilot_sampling(0, self.sampling_temperature).map(|_| ())
+    }
+}
+
+fn foundation_pilot_sampling(seed: u64, temperature: f32) -> Result<GpuTrainingSamplingConfig> {
+    // Match both the existing host floor and WGSL request-span ceiling; never clamp.
+    // The WGSL literal is slightly below f32::MAX, so host finiteness alone is insufficient.
+    if !temperature.is_finite() || !(1.0e-4..=3.402823e38_f32).contains(&temperature) {
+        return Err(
+            "evaluation sampling temperature must be finite within GPU bounds 0.0001..=3.402823e38"
+                .into(),
+        );
+    }
+    let sampling = GpuTrainingSamplingConfig {
+        seed: seed as u32,
+        counter: 0,
+        temperature,
+        demonstrator: None,
+    };
+    sampling.validate()?;
+    Ok(sampling)
+}
+
+/// A fixed founder asset acts without a demonstrator or offline optimizer updates.
+/// Normal in-world lifetime learning, biology, sleep and audited cognition remain active.
 pub fn run_foundation_evaluation_pilot(
     output: &Path,
     world_seed: u64,
@@ -740,15 +818,43 @@ pub fn run_foundation_evaluation_pilot(
     food_position: Option<[f32; 2]>,
     asset: FoundationWeightAsset,
 ) -> Result<FoundationPilotReceipt> {
-    run_foundation_training_pilot_inner(
+    run_foundation_evaluation_pilot_with_config(
         output,
         world_seed,
         founder_seed_base,
         tick_count,
-        false,
-        food_position,
-        Some(lesson),
-        Some(asset),
+        lesson,
+        FoundationEvaluationConfig {
+            food_position,
+            ..FoundationEvaluationConfig::default()
+        },
+        asset,
+    )
+}
+
+/// Opt-in evaluation temperature; the legacy wrapper keeps temperature 1.
+pub fn run_foundation_evaluation_pilot_with_config(
+    output: &Path,
+    world_seed: u64,
+    founder_seed_base: u64,
+    tick_count: usize,
+    lesson: FoundationTeacherLesson,
+    evaluation: FoundationEvaluationConfig,
+    asset: FoundationWeightAsset,
+) -> Result<FoundationPilotReceipt> {
+    run_foundation_training_pilot_with_request(
+        output,
+        world_seed,
+        founder_seed_base,
+        tick_count,
+        FoundationPilotOptions {
+            teacher_mode: false,
+            food_position: evaluation.food_position,
+            lesson: Some(lesson),
+            asset_override: Some(asset),
+        },
+        None,
+        evaluation.sampling_temperature,
     )
 }
 
@@ -819,7 +925,7 @@ impl GroundedNavigationTeacher {
         if self.remembered_food.is_none() {
             let id = match self.search_phase % 7 {
                 0 | 1 => Id::LOOK_LEFT,
-                2 | 3 | 4 => Id::LOOK_RIGHT,
+                2..=4 => Id::LOOK_RIGHT,
                 5 => Id::LOOK_CENTER,
                 _ => Id::TURN_LEFT,
             };
@@ -876,16 +982,25 @@ impl GroundedNavigationTeacher {
     }
 }
 
+struct GroundedLessonTargets {
+    food: alife_core::WorldEntityId,
+    hazard: alife_core::WorldEntityId,
+    waypoint: alife_core::WorldEntityId,
+}
+
 fn grounded_lesson_teacher(
     frame: &alife_core::PerceptionFrame,
     enabled_channels: u32,
     lesson: FoundationTeacherLesson,
     waypoint_passed: &mut bool,
-    food: alife_core::WorldEntityId,
-    hazard: alife_core::WorldEntityId,
-    waypoint: alife_core::WorldEntityId,
+    targets: GroundedLessonTargets,
     navigation: &mut GroundedNavigationTeacher,
 ) -> std::result::Result<alife_gpu_backend::GpuTrainingDemonstratorAction, ScaffoldContractError> {
+    let GroundedLessonTargets {
+        food,
+        hazard,
+        waypoint,
+    } = targets;
     use alife_core::CandidateActionFamily as Family;
     let held_targets = navigation.held_targets.lock().unwrap().clone();
     if lesson == FoundationTeacherLesson::GrabFood {
@@ -1441,26 +1556,29 @@ pub(crate) struct DemonstrationSpeechLabels {
     pub targets: Vec<Option<alife_training::ReplaySpeechTarget>>,
 }
 
+// Private launch controls shared by the public pilot wrappers.
+struct FoundationPilotOptions {
+    teacher_mode: bool,
+    food_position: Option<[f32; 2]>,
+    lesson: Option<FoundationTeacherLesson>,
+    asset_override: Option<FoundationWeightAsset>,
+}
+
 fn run_foundation_training_pilot_inner(
     output: &Path,
     seed: u64,
     founder_seed_base: u64,
     tick_count: usize,
-    teacher_mode: bool,
-    food_position: Option<[f32; 2]>,
-    lesson: Option<FoundationTeacherLesson>,
-    asset_override: Option<FoundationWeightAsset>,
+    options: FoundationPilotOptions,
 ) -> Result<FoundationPilotReceipt> {
     run_foundation_training_pilot_with_request(
         output,
         seed,
         founder_seed_base,
         tick_count,
-        teacher_mode,
-        food_position,
-        lesson,
-        asset_override,
+        options,
         None,
+        1.0,
     )
 }
 
@@ -1469,12 +1587,17 @@ fn run_foundation_training_pilot_with_request(
     seed: u64,
     founder_seed_base: u64,
     tick_count: usize,
-    teacher_mode: bool,
-    food_position: Option<[f32; 2]>,
-    lesson: Option<FoundationTeacherLesson>,
-    asset_override: Option<FoundationWeightAsset>,
+    options: FoundationPilotOptions,
     request: Option<FoundationEvaluationRequest>,
+    sampling_temperature: f32,
 ) -> Result<FoundationPilotReceipt> {
+    let FoundationPilotOptions {
+        teacher_mode,
+        food_position,
+        lesson,
+        asset_override,
+    } = options;
+    let initial_sampling = foundation_pilot_sampling(seed, sampling_temperature)?;
     if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
@@ -1592,12 +1715,7 @@ fn run_foundation_training_pilot_with_request(
         alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
         format!("n2048-training-pilot-{seed}"),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        GpuTrainingSamplingConfig {
-            seed: seed as u32,
-            counter: 0,
-            temperature: 1.0,
-            demonstrator: None,
-        },
+        initial_sampling,
     )
     .map_err(|error| format!("pilot runtime admission: {error}"))?;
     let teacher_previous = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -1621,9 +1739,11 @@ fn run_foundation_training_pilot_with_request(
                 channels,
                 lesson,
                 &mut waypoint_passed,
-                food,
-                hazard,
-                waypoint,
+                GroundedLessonTargets {
+                    food,
+                    hazard,
+                    waypoint,
+                },
                 &mut navigation,
             )
         })?;
@@ -2094,6 +2214,7 @@ fn run_foundation_training_pilot_with_request(
             }),
             serde_json::to_vec_pretty(&serde_json::json!({
                 "lesson": scenario_lesson,
+                "initial_sampling": initial_sampling,
                 "consumed_events": consumed_events,
                 "initial_food_distance": initial_food_distance,
                 "final_food_distance": final_food_distance,
@@ -2272,8 +2393,9 @@ fn run_foundation_training_pilot_with_request(
                 .homeostasis_words
                 .clone(),
         )?;
-        let ema: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[0]).collect();
-        let metabolic: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[1]).collect();
+        let (homeostasis, _) = homeostasis.as_chunks::<2>();
+        let ema: Vec<f32> = homeostasis.iter().map(|row| row[0]).collect();
+        let metabolic: Vec<f32> = homeostasis.iter().map(|row| row[1]).collect();
         maximum_activity_ema_error = maximum_activity_ema_error.max(compare_replay_values(
             i,
             "activity EMA",
@@ -2304,6 +2426,7 @@ fn run_foundation_training_pilot_with_request(
             .map(|b| format!("{b:02x}"))
             .collect(),
         teacher_mode,
+        initial_sampling: Some(initial_sampling),
         consumed_events,
         demonstration_replay_records: if teacher_mode { steps.len() } else { 0 },
         food_position,
@@ -2629,8 +2752,7 @@ pub(crate) fn close_foundation_navigation_gate(
                         .tick()
                         .raw()
                         .saturating_sub(scenario.start_tick)
-                        % 24
-                        == 0
+                        .is_multiple_of(24)
                     && (!matches!(token, 8 | 11)
                         || scenario
                             .vocabulary_target
@@ -2707,10 +2829,11 @@ pub(crate) fn expose_foundation_teacher_cue(
         .entity(scenario.food)
         .ok_or("teacher cue food missing")?;
     let position = food.position;
-    let tokens: &[u16] = if scenario.held_food_setup.is_some() && food.carried_by != Some(subject) {
-        &[1] // Name the released object; do not request the held-food action.
-    } else if scenario.grab_food_setup.is_some() && food.carried_by == Some(subject) {
-        &[1] // Name the acquired object; do not repeat the satisfied Get request.
+    let tokens: &[u16] = if (scenario.held_food_setup.is_some() && food.carried_by != Some(subject))
+        || (scenario.grab_food_setup.is_some() && food.carried_by == Some(subject))
+    {
+        // Name released or acquired food without repeating the satisfied action request.
+        &[1]
     } else {
         &scenario.teacher_cue_tokens
     };
@@ -3198,7 +3321,7 @@ pub(crate) fn configure_foundation_scenario(
             // `get` must select the movable example. Noun lessons alternate
             // physical toy uses across seeds rather than equating toy with a ball.
             let movable = matches!(vocabulary_token, Some(9 | 14))
-                || (vocabulary_token != Some(18) && (seed / 18) % 2 == 0);
+                || (vocabulary_token != Some(18) && (seed / 18).is_multiple_of(2));
             let toy = world.spawn_toy(
                 "vocabulary-toy",
                 alife_core::Vec3f::new(origin.x + 1.5, origin.y, origin.z + 2.0),
@@ -3299,7 +3422,7 @@ pub(crate) fn configure_foundation_scenario(
                 1 => 15 + ((seed / 12) % 3) as u16,
                 2 => {
                     if matches!(vocabulary_token, Some(9 | 14))
-                        || (vocabulary_token != Some(18) && (seed / 18) % 2 == 0)
+                        || (vocabulary_token != Some(18) && (seed / 18).is_multiple_of(2))
                     {
                         14
                     } else {
@@ -3579,8 +3702,9 @@ pub fn verify_foundation_replay_step(
             .homeostasis_words
             .clone(),
     )?;
-    let ema: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[0]).collect();
-    let metabolic: Vec<f32> = homeostasis.chunks_exact(2).map(|row| row[1]).collect();
+    let (homeostasis, _) = homeostasis.as_chunks::<2>();
+    let ema: Vec<f32> = homeostasis.iter().map(|row| row[0]).collect();
+    let metabolic: Vec<f32> = homeostasis.iter().map(|row| row[1]).collect();
     compare_replay_values(0, "activity EMA", &replay.final_activity_ema[0], &ema)?;
     compare_replay_values(
         0,
@@ -4712,9 +4836,11 @@ mod held_food_lesson_tests {
                 31,
                 FoundationTeacherLesson::EatHeldFood,
                 &mut false,
-                scenario.food,
-                scenario.hazard,
-                scenario.waypoint,
+                GroundedLessonTargets {
+                    food: scenario.food,
+                    hazard: scenario.hazard,
+                    waypoint: scenario.waypoint,
+                },
                 &mut navigation,
             )
             .unwrap();
@@ -5410,5 +5536,121 @@ mod compact_replay_codec_tests {
         assert!(error
             .to_string()
             .contains("unsupported compact replay schema 1"));
+    }
+}
+
+#[cfg(test)]
+mod evaluation_sampling_tests {
+    use super::*;
+
+    #[test]
+    fn default_sampling_exactly_matches_legacy_admission() {
+        let seed = u32::MAX as u64 + 17;
+        let config = FoundationEvaluationConfig::default();
+        assert_eq!(config.food_position, None);
+        assert_eq!(config.sampling_temperature, 1.0);
+        let sampling = foundation_pilot_sampling(seed, config.sampling_temperature).unwrap();
+        assert_eq!(
+            sampling,
+            GpuTrainingSamplingConfig {
+                seed: seed as u32,
+                counter: 0,
+                temperature: 1.0,
+                demonstrator: None,
+            }
+        );
+    }
+
+    #[test]
+    fn explicit_sampling_changes_only_temperature() {
+        let legacy = foundation_pilot_sampling(53, 1.0).unwrap();
+        for temperature in [1.0, 32.0, 1.0e-4, 3.402823e38_f32] {
+            let actual = foundation_pilot_sampling(53, temperature).unwrap();
+            assert_eq!(
+                actual,
+                GpuTrainingSamplingConfig {
+                    temperature,
+                    ..legacy
+                }
+            );
+            actual.validate().unwrap();
+        }
+    }
+
+    #[test]
+    fn sampling_rejects_nonfinite_nonpositive_and_outside_gpu_bounds() {
+        for temperature in [
+            f32::NAN,
+            f32::INFINITY,
+            f32::NEG_INFINITY,
+            0.0,
+            -0.0,
+            -1.0,
+            f32::MIN_POSITIVE,
+            1.0e-5,
+            f32::MAX,
+            f32::from_bits(3.402823e38_f32.to_bits() + 1),
+        ] {
+            assert!(foundation_pilot_sampling(53, temperature).is_err());
+            assert!(FoundationEvaluationConfig {
+                sampling_temperature: temperature,
+                ..FoundationEvaluationConfig::default()
+            }
+            .validate()
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn invalid_api_temperature_fails_before_creating_output_or_admitting_gpu() {
+        let output = std::env::temp_dir().join(format!(
+            "alife-invalid-evaluation-temperature-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let asset = initial_n2048_care_asset(53).unwrap();
+        let error = run_foundation_evaluation_pilot_with_config(
+            &output,
+            53,
+            53,
+            16,
+            FoundationTeacherLesson::GrabFood,
+            FoundationEvaluationConfig {
+                sampling_temperature: f32::NAN,
+                ..FoundationEvaluationConfig::default()
+            },
+            asset,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("sampling temperature"));
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn receipt_round_trip_records_initial_sampler_and_preserves_historical_unknown() {
+        let historical = serde_json::json!({
+            "seed": 53, "founder_seed_base": 53, "ticks": 16,
+            "collection_seconds": 0, "replay_seconds": 0,
+            "maximum_logit_error": 0, "maximum_activation_error": 0,
+            "maximum_activity_ema_error": 0, "maximum_metabolic_error": 0,
+            "source_asset_digest": "synthetic", "teacher_mode": false,
+            "consumed_events": 0, "demonstration_replay_records": 0,
+            "food_position": null, "initial_food_distance": null, "final_food_distance": null,
+            "lesson": "grab_food", "lesson_completed": false,
+        });
+        let mut receipt: FoundationPilotReceipt = serde_json::from_value(historical).unwrap();
+        assert!(receipt.initial_sampling.is_none());
+        let sampling = foundation_pilot_sampling(53, 32.0).unwrap();
+        receipt.initial_sampling = Some(sampling);
+        let encoded = serde_json::to_value(&receipt).unwrap();
+        assert_eq!(
+            encoded["initial_sampling"],
+            serde_json::to_value(sampling).unwrap()
+        );
+        let decoded: FoundationPilotReceipt = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.initial_sampling, Some(sampling));
     }
 }

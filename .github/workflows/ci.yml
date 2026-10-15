@@ -48,16 +48,26 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - name: Check training CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Strict foundation-training Clippy
+        run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
+      - name: Foundation scenario and replay CPU tests
+        run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
       - name: Objective continuation CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
+      - name: Initial actor checkpoint CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::initial_actor_checkpoint
       - name: Warmup lesson corpus CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_warmup::tests
       - name: Acquisition rehearsal CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
       - name: Archived checkpoint inspection CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_archived_success_replay::tests
+      - name: Read-only inspection CLI CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --bin inspect_archived_success
 
   training-output-preservation:
     name: Training output preservation

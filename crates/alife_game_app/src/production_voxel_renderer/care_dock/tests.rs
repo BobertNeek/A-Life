@@ -1517,7 +1517,7 @@ fn cpu_focus_fixture_stack(world: &mut World) {
         world.entity_mut(entity).insert(inherited);
     }
     world.insert_resource(bevy::ui::UiStack {
-        partition: vec![0..nodes.len()],
+        partition: std::iter::once(0..nodes.len()).collect(),
         uinodes: nodes,
     });
 }

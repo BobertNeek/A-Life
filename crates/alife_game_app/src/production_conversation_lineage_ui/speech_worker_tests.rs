@@ -75,7 +75,7 @@ fn synthetic_context(
         runtime_identity: SpeechRuntimeIdentity {
             authority: crate::gpu_live_runtime::LiveRuntimeSaveAuthorityView {
                 save_id: save_id.to_string(),
-                deterministic_seed: 202_610_13,
+                deterministic_seed: 20_261_013,
                 sensor_profile: SensorProfile::PrivilegedAffordanceV1,
                 organism_ids: vec![OrganismId(1), OrganismId(2), OrganismId(3)],
             },
@@ -152,7 +152,7 @@ fn submitted_text(text: &str) -> String {
 }
 
 fn world_fixture() -> HeadlessWorld {
-    HeadlessScenarioBuilder::new(202_610_13)
+    HeadlessScenarioBuilder::new(20_261_013)
         .agent("near", OrganismId(1), Vec3f::new(1.5, 0.5, 0.0))
         .agent("bystander", OrganismId(2), Vec3f::new(2.5, 0.5, 0.0))
         .agent("far", OrganismId(3), Vec3f::new(20.5, 0.5, 0.0))
