@@ -439,12 +439,25 @@ pub(super) fn constrain_camera(
     };
     for (mut camera, mut projection) in &mut cameras {
         let height = view_height(&projection);
-        if let Projection::Orthographic(p) = &mut *projection {
-            p.near = 0.1;
-            p.far = 10000.0;
+        if matches!(
+            &*projection,
+            Projection::Orthographic(p) if p.near != 0.1 || p.far != 10000.0
+        ) {
+            if let Projection::Orthographic(p) = &mut *projection {
+                p.near = 0.1;
+                p.far = 10000.0;
+            }
         }
         let surface = active.0.surface();
-        constrain_to_surface(&mut camera, height, surface);
+        // Keep the original clamp math on a copy, so equal results do not dirty
+        // the ECS transform. Bit equality also preserves signed-zero and NaN outputs.
+        let mut constrained = *camera;
+        constrain_to_surface(&mut constrained, height, surface);
+        if constrained.translation.to_array().map(f32::to_bits)
+            != camera.translation.to_array().map(f32::to_bits)
+        {
+            camera.translation = constrained.translation;
+        }
     }
 }
 
@@ -682,3 +695,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "island_camera_tests.rs"]
+mod camera_tests;
