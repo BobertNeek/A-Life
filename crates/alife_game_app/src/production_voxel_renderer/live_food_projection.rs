@@ -103,36 +103,58 @@ pub(super) fn sync_care_objects(
     }
 }
 
+#[cfg(test)]
+#[derive(Resource, Default)]
+pub(super) struct CarrierOffsetScanCounts {
+    builds: usize,
+    visits: usize,
+}
+
 /// Follow the displayed carrier between world ticks without changing physical placement.
 /// Always start from the snapshot, so offsets cannot accumulate or survive release.
 pub(super) fn align_carried_care_objects(
     frame: Option<Res<LiveBrainPresentationFrameResource>>,
     roots: Query<(&ProductionCreatureAssemblyRoot, &Transform), Without<LiveCareObject>>,
     mut objects: Query<(&LiveCareObject, &mut Transform), Without<ProductionCreatureAssemblyRoot>>,
+    #[cfg(test)] mut scan_counts: Option<ResMut<CarrierOffsetScanCounts>>,
 ) {
     let Some(frame) = frame else {
         return;
     };
-    let carrier_offsets: BTreeMap<_, _> = roots
-        .iter()
-        .filter_map(|(root, transform)| {
-            let carrier = frame.current.object(root.stable_id)?;
-            (carrier.kind == WorldObjectKind::Agent
-                && carrier.organism_id == Some(root.organism_id))
-            .then_some((
-                root.organism_id.raw(),
-                transform.translation - world_position_for_render(carrier.position, false),
-            ))
-        })
-        .collect();
+    // Rebuild from displayed roots only if this invocation needs a carrier.
+    let mut carrier_offsets: Option<BTreeMap<_, _>> = None;
     for (marker, mut transform) in &mut objects {
         let Some(object) = frame.current.object(marker.0) else {
             continue;
         };
         let offset = object
             .carried_by
-            .and_then(|carrier| carrier_offsets.get(&carrier.raw()))
-            .copied()
+            .and_then(|carrier| {
+                let offsets = carrier_offsets.get_or_insert_with(|| {
+                    #[cfg(test)]
+                    if let Some(counts) = scan_counts.as_deref_mut() {
+                        counts.builds += 1;
+                    }
+                    roots
+                        .iter()
+                        .filter_map(|(root, transform)| {
+                            #[cfg(test)]
+                            if let Some(counts) = scan_counts.as_deref_mut() {
+                                counts.visits += 1;
+                            }
+                            let carrier = frame.current.object(root.stable_id)?;
+                            (carrier.kind == WorldObjectKind::Agent
+                                && carrier.organism_id == Some(root.organism_id))
+                            .then_some((
+                                root.organism_id.raw(),
+                                transform.translation
+                                    - world_position_for_render(carrier.position, false),
+                            ))
+                        })
+                        .collect()
+                });
+                offsets.get(&carrier.raw()).copied()
+            })
             .unwrap_or(Vec3::ZERO);
         // Hearthling heading follows world yaw directly; retain the world's grip
         // offset and existing object height, correcting only the smoothed X/Z.
@@ -454,6 +476,47 @@ mod tests {
         }
     }
 
+    // Frozen from main 73f8ecf03: keep independent of the lazy implementation.
+    fn align_carried_care_objects_frozen_baseline(
+        frame: Option<Res<LiveBrainPresentationFrameResource>>,
+        roots: Query<(&ProductionCreatureAssemblyRoot, &Transform), Without<LiveCareObject>>,
+        mut objects: Query<
+            (&LiveCareObject, &mut Transform),
+            Without<ProductionCreatureAssemblyRoot>,
+        >,
+    ) {
+        let Some(frame) = frame else {
+            return;
+        };
+        let carrier_offsets: BTreeMap<_, _> = roots
+            .iter()
+            .filter_map(|(root, transform)| {
+                let carrier = frame.current.object(root.stable_id)?;
+                (carrier.kind == WorldObjectKind::Agent
+                    && carrier.organism_id == Some(root.organism_id))
+                .then_some((
+                    root.organism_id.raw(),
+                    transform.translation - world_position_for_render(carrier.position, false),
+                ))
+            })
+            .collect();
+        for (marker, mut transform) in &mut objects {
+            let Some(object) = frame.current.object(marker.0) else {
+                continue;
+            };
+            let offset = object
+                .carried_by
+                .and_then(|carrier| carrier_offsets.get(&carrier.raw()))
+                .copied()
+                .unwrap_or(Vec3::ZERO);
+            // Hearthling heading follows world yaw directly; retain the world's grip
+            // offset and existing object height, correcting only the smoothed X/Z.
+            let position = world_position_for_render(object.position, false) + offset;
+            transform.translation.x = position.x;
+            transform.translation.z = position.z;
+        }
+    }
+
     #[derive(Resource, Default)]
     struct DisplayedCarrierPositions(BTreeMap<u64, Vec3>);
 
@@ -553,6 +616,304 @@ mod tests {
             .resource_mut::<LiveBrainPresentationFrameResource>()
             .current =
             LiveBrainPresentationFrame::try_new(Vec::new(), tick, objects.to_vec()).unwrap();
+    }
+
+    fn alignment_objects() -> Vec<alife_world::WorldObject> {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .agent("carrier", OrganismId(11), Vec3f::new(4.0, 2.0, 6.0))
+            .agent("other", OrganismId(22), Vec3f::new(-8.0, 2.0, -9.0))
+            .agent("duplicate", OrganismId(33), Vec3f::new(7.0, 2.0, 8.0))
+            .food("held", Vec3f::new(4.5, 2.0, 6.0), 0.25)
+            .food("other-held", Vec3f::new(-7.5, 2.0, -9.0), 0.25)
+            .food("loose", Vec3f::new(10.0, 2.0, 10.0), 0.25)
+            .food("missing-carrier", Vec3f::new(12.0, 2.0, 13.0), 0.25)
+            .build()
+            .unwrap();
+        let mut objects = world.object_snapshots();
+        objects[2].organism_id = Some(OrganismId(11));
+        objects[3].carried_by = Some(OrganismId(11));
+        objects[4].carried_by = Some(OrganismId(22));
+        objects[6].carried_by = Some(OrganismId(99));
+        objects
+    }
+
+    #[derive(Component)]
+    struct AlternateCarrierRoot;
+
+    fn alignment_only_fixture(
+        frozen: bool,
+        objects: &[alife_world::WorldObject],
+        reverse_care_order: bool,
+    ) -> (App, Vec<Entity>) {
+        let frame =
+            LiveBrainPresentationFrame::try_new(Vec::new(), Tick(17), objects.to_vec()).unwrap();
+        let mut app = App::new();
+        app.insert_resource(LiveBrainPresentationFrameResource {
+            previous: frame.clone(),
+            current: frame,
+        })
+        .init_resource::<CarrierOffsetScanCounts>()
+        .init_resource::<BevyEntityMap>();
+        if frozen {
+            app.add_systems(Update, align_carried_care_objects_frozen_baseline);
+        } else {
+            app.add_systems(Update, align_carried_care_objects);
+        }
+        let specifications = [
+            (objects[0].id, 11, Vec3::new(3.0, 99.0, 5.0)),
+            (objects[1].id, 22, Vec3::new(90.0, 88.0, 90.0)),
+            // Same stable ID, then a different stable ID for the same organism.
+            (objects[0].id, 11, Vec3::new(30.0, 77.0, 31.0)),
+            (objects[2].id, 11, Vec3::new(40.0, 66.0, 41.0)),
+            (objects[1].id, 11, Vec3::new(50.0, 55.0, 51.0)),
+            (WorldEntityId(999), 11, Vec3::new(60.0, 44.0, 61.0)),
+            (objects[3].id, 11, Vec3::new(70.0, 33.0, 71.0)),
+        ];
+        let roots = specifications
+            .into_iter()
+            .enumerate()
+            .map(|(index, (stable_id, organism, translation))| {
+                let mut entity = app.world_mut().spawn((
+                    ProductionCreatureAssemblyRoot {
+                        stable_id,
+                        organism_id: OrganismId(organism),
+                        display_only: true,
+                    },
+                    Transform::from_translation(translation),
+                ));
+                // Duplicate winners must follow the frozen query across archetypes.
+                if index == 2 {
+                    entity.insert(Name::new("duplicate-stable-id"));
+                } else if index == 3 {
+                    entity.insert(AlternateCarrierRoot);
+                }
+                entity.id()
+            })
+            .collect();
+        let mut care_objects: Vec<_> = objects
+            .iter()
+            .filter(|object| object.kind != WorldObjectKind::Agent)
+            .collect();
+        if reverse_care_order {
+            care_objects.reverse();
+        }
+        for object in care_objects {
+            app.world_mut().spawn((
+                LiveCareObject(object.id),
+                Transform {
+                    translation: Vec3::new(-100.0, 2.30, -200.0),
+                    rotation: Quat::from_rotation_y(0.7),
+                    scale: Vec3::new(1.0, 2.0, 3.0),
+                },
+            ));
+        }
+        // An absent snapshot object must remain untouched and cannot trigger a scan.
+        app.world_mut().spawn((
+            LiveCareObject(WorldEntityId(998)),
+            Transform::from_xyz(8.0, 9.0, 10.0),
+        ));
+        (app, roots)
+    }
+
+    fn assert_alignment_parity(apps: &mut [App; 2], builds: usize, visits: usize) {
+        *apps[1]
+            .world_mut()
+            .resource_mut::<CarrierOffsetScanCounts>() = CarrierOffsetScanCounts::default();
+        let mut projected = Vec::new();
+        for app in &mut *apps {
+            let frame = app
+                .world()
+                .get_resource::<LiveBrainPresentationFrameResource>()
+                .cloned();
+            app.update();
+            let mut query = app.world_mut().query::<(&LiveCareObject, &Transform)>();
+            let mut transforms: Vec<_> = query
+                .iter(app.world())
+                .map(|(marker, transform)| (marker.0.raw(), *transform))
+                .collect();
+            transforms.sort_by_key(|(id, _)| *id);
+            projected.push(transforms);
+            assert_eq!(
+                app.world()
+                    .get_resource::<LiveBrainPresentationFrameResource>(),
+                frame.as_ref(),
+            );
+        }
+        assert_eq!(projected[0], projected[1]);
+        // The candidate is the second app; counters are invocation-local observations.
+        let counts = apps[1].world().resource::<CarrierOffsetScanCounts>();
+        assert_eq!((counts.builds, counts.visits), (builds, visits));
+    }
+
+    #[test]
+    fn carrier_offsets_skip_root_scans_for_idle_absent_and_loose_care_objects() {
+        for case in 0..4 {
+            let mut objects = alignment_objects();
+            for object in &mut objects {
+                object.carried_by = None;
+            }
+            if case == 1 {
+                for index in 0..128 {
+                    let mut loose = objects[5].clone();
+                    loose.id = WorldEntityId(1000 + index);
+                    objects.push(loose);
+                }
+            }
+            let (baseline, baseline_roots) = alignment_only_fixture(true, &objects, false);
+            let (candidate, candidate_roots) = alignment_only_fixture(false, &objects, false);
+            let mut apps = [baseline, candidate];
+            if case == 0 || case == 2 {
+                for app in &mut apps {
+                    let mut query = app.world_mut().query::<(Entity, &LiveCareObject)>();
+                    let entities: Vec<_> = query
+                        .iter(app.world())
+                        .filter_map(|(entity, marker)| {
+                            (case == 0 || marker.0 != WorldEntityId(998)).then_some(entity)
+                        })
+                        .collect();
+                    for entity in entities {
+                        app.world_mut().despawn(entity);
+                    }
+                }
+            }
+            if case == 3 {
+                for (app, roots) in apps.iter_mut().zip([baseline_roots, candidate_roots]) {
+                    for root in roots {
+                        app.world_mut().despawn(root);
+                    }
+                }
+            }
+            for _ in 0..2 {
+                assert_alignment_parity(&mut apps, 0, 0);
+            }
+        }
+    }
+
+    #[test]
+    fn carrier_offsets_match_frozen_duplicate_winners_with_one_scan_for_multiple_carriers() {
+        let objects = alignment_objects();
+        for reverse in [false, true] {
+            let (baseline, baseline_roots) = alignment_only_fixture(true, &objects, reverse);
+            let (candidate, candidate_roots) = alignment_only_fixture(false, &objects, reverse);
+            let mut apps = [baseline, candidate];
+            assert_alignment_parity(&mut apps, 1, 7);
+            let winner = care_position(&mut apps[0], objects[3].id);
+            // Bind a different valid root than the actual frozen winner. Other valid
+            // roots remain deliberately unbound; binding order must not choose the pose.
+            let bound_index = [0, 2, 3]
+                .into_iter()
+                .find(|&index| {
+                    let root = apps[0]
+                        .world()
+                        .get::<ProductionCreatureAssemblyRoot>(baseline_roots[index])
+                        .unwrap();
+                    let position = apps[0]
+                        .world()
+                        .get::<Transform>(baseline_roots[index])
+                        .unwrap()
+                        .translation;
+                    let carrier = objects
+                        .iter()
+                        .find(|object| object.id == root.stable_id)
+                        .unwrap();
+                    let projected = world_position_for_render(objects[3].position, false)
+                        + position
+                        - world_position_for_render(carrier.position, false);
+                    (projected.x, projected.z) != (winner.x, winner.z)
+                })
+                .unwrap();
+            for (app, roots) in apps.iter_mut().zip([baseline_roots, candidate_roots]) {
+                let stable_id = app
+                    .world()
+                    .get::<ProductionCreatureAssemblyRoot>(roots[bound_index])
+                    .unwrap()
+                    .stable_id;
+                let mut map = app.world_mut().resource_mut::<BevyEntityMap>();
+                map.bind(roots[0], stable_id).unwrap();
+                map.bind(roots[bound_index], stable_id).unwrap();
+            }
+            assert_alignment_parity(&mut apps, 1, 7);
+            assert_eq!(care_position(&mut apps[1], objects[3].id), winner);
+            assert_eq!(
+                care_position(&mut apps[1], objects[4].id),
+                Vec3::new(90.5, 2.30, 90.0)
+            );
+            assert_eq!(
+                care_position(&mut apps[1], objects[6].id),
+                Vec3::new(12.0, 2.30, 13.0)
+            );
+        }
+    }
+
+    #[test]
+    fn carrier_offsets_rebuild_for_replaced_stale_and_restored_roots_without_frame_changes() {
+        let mut objects = alignment_objects();
+        let (baseline, baseline_roots) = alignment_only_fixture(true, &objects, false);
+        let (candidate, candidate_roots) = alignment_only_fixture(false, &objects, false);
+        let mut apps = [baseline, candidate];
+        assert_alignment_parity(&mut apps, 1, 7);
+        for (app, roots) in apps.iter_mut().zip([&baseline_roots, &candidate_roots]) {
+            // Remove all valid roots for organism 11, leaving missing/mismatched roots.
+            for index in [0, 2, 3] {
+                app.world_mut().despawn(roots[index]);
+            }
+            app.world_mut()
+                .resource_mut::<BevyEntityMap>()
+                .bind(roots[0], objects[0].id)
+                .unwrap();
+        }
+        assert_alignment_parity(&mut apps, 1, 4);
+        assert_eq!(
+            care_position(&mut apps[1], objects[3].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+        for app in &mut apps {
+            app.world_mut().spawn((
+                ProductionCreatureAssemblyRoot {
+                    stable_id: objects[0].id,
+                    organism_id: OrganismId(11),
+                    display_only: true,
+                },
+                Transform::from_xyz(123.0, 77.0, 125.0),
+            ));
+        }
+        assert_alignment_parity(&mut apps, 1, 5);
+        assert_eq!(
+            care_position(&mut apps[1], objects[3].id),
+            Vec3::new(123.5, 2.30, 125.0)
+        );
+        let frames: Vec<_> = apps
+            .iter_mut()
+            .map(|app| {
+                app.world_mut()
+                    .remove_resource::<LiveBrainPresentationFrameResource>()
+                    .unwrap()
+            })
+            .collect();
+        assert_alignment_parity(&mut apps, 0, 0);
+        for (app, frame) in apps.iter_mut().zip(frames) {
+            app.insert_resource(frame);
+        }
+        assert_alignment_parity(&mut apps, 1, 5);
+        objects.remove(0);
+        for app in &mut apps {
+            replace_objects(app, &objects);
+        }
+        assert_alignment_parity(&mut apps, 1, 5);
+        assert_eq!(
+            care_position(&mut apps[1], objects[2].id),
+            Vec3::new(4.5, 2.30, 6.0)
+        );
+        for app in &mut apps {
+            let mut query = app
+                .world_mut()
+                .query_filtered::<Entity, With<ProductionCreatureAssemblyRoot>>();
+            let roots: Vec<_> = query.iter(app.world()).collect();
+            for root in roots {
+                app.world_mut().despawn(root);
+            }
+        }
+        assert_alignment_parity(&mut apps, 1, 0);
     }
 
     #[test]
