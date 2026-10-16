@@ -8,10 +8,10 @@ use crate::{
     CandidateMemoryQueryV2, CanonicalDigestBuilder, CognitiveContextFrame, Confidence, DriveDelta,
     EpisodicDecisionKeyV2, EpisodicRetrievalContextV1, ExperiencePatch, ExperienceSequenceId,
     MemoryId, MemoryQueryEncoderV2, NormalizedScalar, OrganismId, PerceptionBaseDigest,
-    PerceptionContextDigest, PerceptionFrame, PerceptionFrameDigest, PerceptionFrameDraft,
-    PhysicalContactKind, PreActionSnapshot, ScaffoldContractError, SignedValence, Tick, Validate,
-    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES, MEMORY_LATENT_V1_COUNT, MEMORY_TARGET_RANGE,
-    MEMORY_VALUE_V1_COUNT,
+    PerceptionContextBlock, PerceptionContextDigest, PerceptionFrame, PerceptionFrameDigest,
+    PerceptionFrameDraft, PhysicalContactKind, PreActionSnapshot, ScaffoldContractError,
+    SignedValence, Tick, Validate, CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
+    MEMORY_LATENT_V1_COUNT, MEMORY_TARGET_RANGE, MEMORY_VALUE_V1_COUNT,
 };
 
 pub const MEMORY_FEATURE_VECTOR_MAX_LEN: usize = 64;
@@ -147,6 +147,10 @@ impl MemoryRecallReceipt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreparedMemoryRecall {
     context: EpisodicRetrievalContextV1,
+    // The episodic rows are private and immutable after either constructor.
+    // Keep their exact encoding within this one preparation, then move it into
+    // the finalized frame. Cognitive context is a separate, replaceable field.
+    encoded_context: PerceptionContextBlock,
     candidate_queries: Vec<CandidateMemoryQueryV2>,
     base_frame_digest: PerceptionBaseDigest,
     receipt: MemoryRecallReceipt,
@@ -176,7 +180,8 @@ impl PreparedMemoryRecall {
         draft: PerceptionFrameDraft,
     ) -> Result<(PerceptionFrame, FinalizedMemoryRecall), ScaffoldContractError> {
         self.validate_for_draft(&draft)?;
-        let context_block = self.context.to_perception_context_block()?;
+        self.context.validate_contract()?;
+        let context_block = self.encoded_context;
         if context_block.canonical_digest() != self.receipt.context_digest {
             return Err(ScaffoldContractError::InvalidMemoryQuery);
         }
@@ -311,10 +316,8 @@ impl PreparedMemoryRecall {
     ) -> Result<Self, ScaffoldContractError> {
         cognitive_context.validate_contract()?;
         self.cognitive_context = Some(cognitive_context);
-        self.receipt.context_digest = self
-            .context
-            .to_perception_context_block()?
-            .canonical_digest();
+        self.context.validate_contract()?;
+        self.receipt.context_digest = self.encoded_context.canonical_digest();
         self.receipt.validate_contract()?;
         Ok(self)
     }
@@ -1105,7 +1108,8 @@ impl MemoryBank {
         }
 
         let context = EpisodicRetrievalContextV1::new(draft.tick(), profile, candidate_contexts)?;
-        let context_digest = context.to_perception_context_block()?.canonical_digest();
+        let encoded_context = context.to_perception_context_block()?;
+        let context_digest = encoded_context.canonical_digest();
         let receipt = MemoryRecallReceipt {
             runtime_approximate: false,
             schema_version: MEMORY_RECALL_SCHEMA_VERSION,
@@ -1125,6 +1129,7 @@ impl MemoryBank {
         receipt.validate_contract()?;
         let prepared = PreparedMemoryRecall {
             context,
+            encoded_context,
             candidate_queries,
             base_frame_digest: draft.base_digest(),
             receipt,
@@ -2231,3 +2236,6 @@ fn weighted_drive_delta(current: DriveDelta, next: DriveDelta, weight: f32) -> D
         ],
     }
 }
+
+#[cfg(test)]
+mod encoded_context_tests;

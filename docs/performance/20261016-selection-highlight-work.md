@@ -54,7 +54,7 @@ changed material instances. No GPU-byte or timing improvement is claimed here.
 
 Two independent source reviews found no correctness blocker. Formatting,
 whitespace, static core-boundary and documentation checks are recorded with the
-qualification result. The dedicated `Selection highlight frontend CPU regression`
+qualification result. The shared `Island output-change frontend CPU regression`
 job executes the new frozen-baseline parity/change-detection tests and neighboring
 pointer tests with `production-voxel-frontend`, without launching a renderer or GPU.
 
@@ -65,6 +65,12 @@ October 13 core artifact because its dep-info pointed to a different checkout.
 The fresh attempt recompiles local crates into a separate target; only immutable
 third-party libraries are reused, with a compiler guard rejecting dependency
 rebuilds. Hosted exact-head execution is required before merge.
+
+Publication resumed against main `73f8ecf03a4bbd90018c0fae7c732c6ec488e1d9`
+(tree `d5507cba2f7222217560d7250c8b6a7b5a9d3eda`). The reviewed Rust
+files are unchanged. The integration retains the existing Island and camera CPU
+suites and appends the highlight suite to their shared frontend job, reusing the
+same compiled test executable instead of adding another large compile.
 
 The fixtures cover 3,716 unrelated materials, unchanged selection, switching and
 deselection, late descendants, reparenting, replacement roots/despawns, missing

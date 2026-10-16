@@ -46,6 +46,58 @@ pub(super) struct TerrainSun {
     enabled: bool,
     cascades: usize,
 }
+
+#[derive(Clone, Copy, PartialEq)]
+struct ShadowCascadeInputs {
+    count: usize,
+    near: f32,
+    far: f32,
+}
+
+struct CachedShadowConfig {
+    inputs: ShadowCascadeInputs,
+    config: bevy::light::CascadeShadowConfig,
+}
+
+// Cache only the desired configuration. Each actual component is still checked
+// every eligible update, including newly spawned or externally edited lights.
+#[derive(Default)]
+pub(super) struct ShadowConfigCache {
+    current: Option<CachedShadowConfig>,
+}
+
+impl ShadowConfigCache {
+    fn desired(&mut self, inputs: ShadowCascadeInputs) -> &bevy::light::CascadeShadowConfig {
+        if self.current.as_ref().is_none_or(|c| c.inputs != inputs) {
+            self.current = Some(CachedShadowConfig {
+                inputs,
+                config: bevy::light::CascadeShadowConfigBuilder {
+                    num_cascades: inputs.count,
+                    minimum_distance: inputs.near,
+                    maximum_distance: inputs.far,
+                    first_cascade_far_bound: inputs.near + (inputs.far - inputs.near) * 0.55,
+                    overlap_proportion: 0.18,
+                }
+                .build(),
+            });
+        }
+        &self
+            .current
+            .as_ref()
+            .expect("desired cascade config")
+            .config
+    }
+}
+
+fn cascade_configs_equal(
+    actual: &bevy::light::CascadeShadowConfig,
+    desired: &bevy::light::CascadeShadowConfig,
+) -> bool {
+    actual.minimum_distance == desired.minimum_distance
+        && actual.overlap_proportion == desired.overlap_proportion
+        && actual.bounds == desired.bounds
+}
+
 #[derive(serde::Deserialize)]
 struct Prop {
     kind: String,
@@ -216,6 +268,7 @@ pub(super) fn update(
         &mut bevy::light::CascadeShadowConfig,
         &TerrainSun,
     )>,
+    mut shadow_configs: Local<ShadowConfigCache>,
 ) {
     let Some(mut assets) = assets else {
         return;
@@ -324,19 +377,25 @@ pub(super) fn update(
     let focus = focus_on_surface(camera, &assets.surface);
     let height = view_height(projection);
     for (mut light, mut cascades, sun) in &mut suns {
-        light.shadows_enabled = sun.enabled && height < 240.0;
-        if light.shadows_enabled {
+        let shadows_enabled = sun.enabled && height < 240.0;
+        if light.shadows_enabled != shadows_enabled {
+            light.shadows_enabled = shadows_enabled;
+        }
+        if shadows_enabled {
             let distance = camera.translation.distance(focus);
             let near = (distance - height * 0.5 - 90.0).max(0.1);
             let far = distance + height * 0.5 + 130.0;
-            *cascades = bevy::light::CascadeShadowConfigBuilder {
-                num_cascades: sun.cascades,
-                minimum_distance: near,
-                maximum_distance: far,
-                first_cascade_far_bound: near + (far - near) * 0.55,
-                overlap_proportion: 0.18,
+            let desired = shadow_configs.desired(ShadowCascadeInputs {
+                count: sun.cascades,
+                near,
+                far,
+            });
+            if !cascade_configs_equal(&cascades, desired) {
+                let actual = &mut *cascades;
+                actual.bounds.clone_from(&desired.bounds);
+                actual.minimum_distance = desired.minimum_distance;
+                actual.overlap_proportion = desired.overlap_proportion;
             }
-            .build();
         }
     }
     for (mut mesh, mut lod) in &mut chunks {
@@ -360,13 +419,17 @@ pub(super) fn update(
     for (mut mesh, mut visibility, mut prop) in &mut props {
         let distance = Vec2::new(prop.position.x - focus.x, prop.position.z - focus.z).length();
         let (next_visibility, target) = prop_view_state(prop.tree, prop.distance, distance, height);
-        *visibility = next_visibility;
+        visibility.set_if_neq(next_visibility);
         if target != prop.current {
             mesh.0 = prop.meshes[target].clone();
             prop.current = target;
         }
     }
 }
+
+#[cfg(test)]
+#[path = "island_update_tests.rs"]
+mod update_tests;
 pub(super) fn constrain_camera(
     active: Option<Res<creature_grounding::SelectedTerrain>>,
     mut cameras: Query<(&mut Transform, &mut Projection), With<Fvr03ProductionVoxelCamera>>,
@@ -376,12 +439,25 @@ pub(super) fn constrain_camera(
     };
     for (mut camera, mut projection) in &mut cameras {
         let height = view_height(&projection);
-        if let Projection::Orthographic(p) = &mut *projection {
-            p.near = 0.1;
-            p.far = 10000.0;
+        if matches!(
+            &*projection,
+            Projection::Orthographic(p) if p.near != 0.1 || p.far != 10000.0
+        ) {
+            if let Projection::Orthographic(p) = &mut *projection {
+                p.near = 0.1;
+                p.far = 10000.0;
+            }
         }
         let surface = active.0.surface();
-        constrain_to_surface(&mut camera, height, surface);
+        // Keep the original clamp math on a copy, so equal results do not dirty
+        // the ECS transform. Bit equality also preserves signed-zero and NaN outputs.
+        let mut constrained = *camera;
+        constrain_to_surface(&mut constrained, height, surface);
+        if constrained.translation.to_array().map(f32::to_bits)
+            != camera.translation.to_array().map(f32::to_bits)
+        {
+            camera.translation = constrained.translation;
+        }
     }
 }
 
@@ -619,3 +695,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "island_camera_tests.rs"]
+mod camera_tests;
