@@ -6,6 +6,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import stat
 import subprocess
 import tempfile
 import unittest
@@ -38,6 +39,18 @@ class GrabNightTests(unittest.TestCase):
         self.source = self.root / "source"
         self.source.mkdir()
         self.write_cycle(self.source, 602, 1844, 1204)
+        self.history = self.root / "seed-history.json"
+        self.write_history(self.source)
+
+    def write_history(self, source, extra=None):
+        history = {"schema": 1, "kind": "grab-food-seed-history", "complete": True,
+                   "source_sha256": {name: night.sha256(source / name)
+                                     for name in night.seed_reservations.SOURCE_FILES},
+                   "training_seed_ranges": [[night.read_json(source / "cycle.json")["seed"]] * 2],
+                   "assessment_seeds": [], "evidence": "complete synthetic test allocation history"}
+        history.update(extra or {})
+        self.history.write_text(json.dumps(history))
+        return history
 
     def write_cycle(self, directory, policy, actor_age, value_age, extra=None):
         directory.mkdir(exist_ok=True)
@@ -191,6 +204,7 @@ class GrabNightTests(unittest.TestCase):
         binary.write_bytes(b"not an executable; never launch")
         output = self.root / "run-output"
         argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
+                "--seed-history", str(self.history),
                 "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat(), "--run"]
         with patch.object(night.subprocess, "Popen") as spawn, contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as failure:
@@ -201,6 +215,7 @@ class GrabNightTests(unittest.TestCase):
 
     def test_unsupported_sampling_temperature_fails_before_output_or_spawn(self):
         argv = ["--binary", "not-executable", "--source", str(self.source),
+                "--seed-history", str(self.history),
                 "--output", str(self.root / "temperature-output"), "--cutoff",
                 (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat(),
                 "--sampling-temperature", "nan", "--run"]
@@ -262,6 +277,7 @@ class GrabNightTests(unittest.TestCase):
                         ["--max-stalled-batches", "65"]):
             output = self.root / "invalid-recipe-output"
             argv = ["--binary", "not-executable", "--source", str(self.source), "--output", str(output),
+                    "--seed-history", str(self.history),
                     "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat(), *options]
             with patch.object(night.subprocess, "Popen") as spawn, contextlib.redirect_stderr(io.StringIO()):
                 with self.assertRaises(SystemExit):
@@ -271,7 +287,8 @@ class GrabNightTests(unittest.TestCase):
 
     def fixture_run(self, failures=None, fail_episode=None, final_grab_seconds=0, final_remaining_seconds=None,
                     invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False,
-                    retention_meals=None, retention_changes=None, recipe_options=(), command_seconds=None):
+                    retention_meals=None, retention_changes=None, recipe_options=(), command_seconds=None,
+                    pre_run=None):
         """Exercise real orchestration/validators with a nonexecuting child stub."""
         self.run_index = getattr(self, "run_index", 0) + 1
         output = self.root / "target/founder-training" / f"run-{self.run_index}"
@@ -282,6 +299,7 @@ class GrabNightTests(unittest.TestCase):
         monotonic_clock = [0.]
         cutoff = now + dt.timedelta(hours=1)
         argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
+                "--seed-history", str(self.history), "--seed", str(202610061277 + self.run_index * 1000),
                 "--cutoff", cutoff.isoformat(), "--target-episodes", "1" if fail_episode is None else "2",
                 "--batch-episodes", "2", "--assessment-seconds", "10", "--idle-seconds", "0",
                 "--sampling-temperature-floor", "1", *recipe_options]
@@ -291,6 +309,8 @@ class GrabNightTests(unittest.TestCase):
         state_path = output / "night.json"
         state = night.read_json(state_path)
         checkpoint_hashes = state["input_sha256"].copy()
+        if pre_run is not None:
+            pre_run(args, state)
         attempts = []
         launched = []
         active_command = [None]
@@ -304,6 +324,11 @@ class GrabNightTests(unittest.TestCase):
 
         def fake_child(command, log, deadline, guard, environment):
             name = log.name
+            ledger = night.read_json(output.parent / night.seed_reservations.LEDGER_NAME)
+            self.assertEqual(state["seed_reservation"]["status"], "reserved")
+            self.assertTrue(any(row["output"] == str(output) and
+                                row["training_seed_range"] == state["training_seed_range"]
+                                for row in ledger["allocations"]))
             active_command[0] = name
             attempts.append((name, command, deadline, clock[0]))
             if name == stop_before:
@@ -332,9 +357,11 @@ class GrabNightTests(unittest.TestCase):
                 if index == fail_episode:
                     raise night.CommandTimeoutError("fixture interrupted partial collection")
                 previous = Path(command[2])
+                prior_receipt = night.read_json(previous / "cycle.json")
                 (directory / "initial.alife-foundation").write_bytes(
                     (previous / "trained.alife-foundation").read_bytes())
-                self.write_cycle(directory, 603 + index, 1845 + index, 1205 + index, {
+                self.write_cycle(directory, prior_receipt["policy_version"] + 1,
+                    prior_receipt["actor_optimizer_step"] + 1, prior_receipt["value_optimizer_step"] + 1, {
                     "seed": int(command[6]), "lesson": "grab_food",
                     "grab_food_setup": {**setup(), "realized_body_yaw": index * .1},
                     "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1],
@@ -428,6 +455,109 @@ class GrabNightTests(unittest.TestCase):
         self.assertTrue(all(attempt[1][3] == str(accepted / "trained.alife-foundation")
                             for attempt in finals))
         return state, finals, launched
+
+    def test_seed_reservation_survives_interrupted_first_dispatch_without_acceptance(self):
+        original_hashes = night.source_info(self.source)[1]
+        state, finals, launched = self.fixture_run(fail_episode=0)
+        self.assertEqual(state["distinct_completed_episodes"], 0)
+        self.assertEqual(state["trained_decision_rows"], 0)
+        self.assertEqual(state["episodes"], [])
+        self.assertEqual(state["latest_checkpoint"], str(self.source))
+        self.assertTrue(state["partial_episode"].endswith("episode-00000"))
+        self.assertFalse((Path(state["partial_episode"]) / "cycle.json").exists())
+        self.assertEqual(original_hashes, night.source_info(self.source)[1])
+        self.assertEqual(finals, [])
+        self.assertIn("episode-00000", launched)
+        output = self.root / "new-continuation"
+        argv = ["--binary", str(self.root / "nonexecutable-trainer"), "--source", str(self.source),
+                "--seed-history", str(self.history), "--output", str(output),
+                "--seed", str(state["training_seed_range"][0]), "--target-episodes", "1", "--cutoff", state["cutoff_utc"]]
+        # Use the same owner namespace; a fresh output must not replay partial seeds.
+        argv[argv.index(str(output))] = str(Path(state["seed_reservation"]["ledger_path"]).parent / "new-continuation")
+        output = Path(argv[argv.index("--output") + 1])
+        with patch.object(night.subprocess, "Popen") as spawn, contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                night.main(argv)
+            spawn.assert_not_called()
+        self.assertFalse(output.exists())
+
+    def test_normal_sealed_continuation_preserves_optimizer_chain_and_cumulative_ledger(self):
+        first, _, _ = self.fixture_run()
+        old_source = self.source
+        self.source = Path(first["latest_checkpoint"])
+        hashes = night.source_info(self.source)[1]
+        self.write_history(self.source, {"training_seed_ranges": [[202610061275, 202610061275],
+                                                                  first["training_seed_range"]],
+                                         "assessment_seeds": [first["assessment_seed"]]})
+        second, _, _ = self.fixture_run()
+        self.assertEqual(hashes, night.source_info(self.source)[1])
+        receipt = night.read_json(Path(second["latest_checkpoint"]) / "cycle.json")
+        self.assertEqual((receipt["policy_version"], receipt["actor_optimizer_step"], receipt["value_optimizer_step"]),
+                         (604, 1846, 1206))
+        self.assertEqual(second["distinct_completed_episodes"], 1)
+        ledger = night.read_json(second["seed_reservation"]["ledger_path"])
+        self.assertEqual(len(ledger["allocations"]), 2)
+        self.assertEqual(ledger["allocations"][0]["training_seed_range"], first["training_seed_range"])
+        self.assertTrue(old_source.exists())
+
+    def test_history_change_after_plan_blocks_all_children(self):
+        def change_history(args, state):
+            self.history.write_text(self.history.read_text() + "\n")
+
+        state, finals, launched = self.fixture_run(pre_run=change_history)
+        self.assertEqual(state["status"], "failed")
+        self.assertIn("history changed", state["error"])
+        self.assertEqual(launched, [])
+        self.assertEqual(finals, [])
+        self.assertFalse(Path(state["seed_reservation"]["ledger_path"]).exists())
+
+    def test_reservation_commit_failure_blocks_every_child_and_retains_checkpoint(self):
+        with patch.object(night.seed_reservations, "commit", side_effect=OSError("fixture seed ledger disk fault")):
+            state, finals, launched = self.fixture_run()
+        self.assertEqual(state["status"], "failed")
+        self.assertIn("seed ledger disk fault", state["error"])
+        self.assertEqual(state["seed_reservation"]["status"], "pending")
+        self.assertEqual(state["latest_checkpoint"], str(self.source))
+        self.assertEqual(state["distinct_completed_episodes"], 0)
+        self.assertEqual(launched, [])
+        self.assertEqual(finals, [])
+
+    def test_plan_never_changes_existing_ledger_or_acquires_owner_lock(self):
+        state, _, _ = self.fixture_run()
+        ledger = Path(state["seed_reservation"]["ledger_path"])
+        before = ledger.read_bytes()
+        output = ledger.parent / "second-plan"
+        argv = ["--binary", str(self.root / "nonexecutable-trainer"), "--source", str(self.source),
+                "--seed-history", str(self.history), "--output", str(output), "--target-episodes", "2",
+                "--sampling-temperature-floor", "1",
+                "--seed", str(state["training_seed_range"][1] + 1), "--cutoff", state["cutoff_utc"]]
+        with patch.object(night.subprocess, "Popen") as spawn, patch.object(night.os, "open") as acquire, patch("builtins.print"):
+            self.assertEqual(night.main(argv), 0)
+            spawn.assert_not_called(); acquire.assert_not_called()
+        self.assertEqual(ledger.read_bytes(), before)
+        self.assertEqual(night.read_json(output / "night.json")["seed_reservation"]["status"], "planned")
+        args = night.arguments().parse_args(argv)
+        lock = output.parent / ".eat-held-food-owner.lock"
+        lock.write_text("synthetic existing owner; must not change")
+        planned = night.read_json(output / "night.json")
+        with patch.object(night, "run_child") as child:
+            night.run_night(args, planned, output / "night.json", planned["input_sha256"])
+            child.assert_not_called()
+        self.assertEqual(lock.read_text(), "synthetic existing owner; must not change")
+        self.assertEqual(ledger.read_bytes(), before)
+
+    def test_missing_history_flag_or_file_blocks_before_output_or_spawn(self):
+        binary = self.root / "nonexecutable-trainer"
+        binary.write_bytes(b"synthetic; never execute")
+        for history_args in ([], ["--seed-history", str(self.root / "missing-history.json")]):
+            output = self.root / "missing-history-output"
+            argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
+                    "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat(), *history_args]
+            with patch.object(night.subprocess, "Popen") as spawn, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit):
+                    night.main(argv)
+                spawn.assert_not_called()
+            self.assertFalse(output.exists())
 
     def test_recipe_capacity_amortizes_both_probe_maxima_without_episode_credit(self):
         durations = {"frozen-before": 6, "eating-retention-before": 7,
@@ -837,8 +967,10 @@ class GrabNightTests(unittest.TestCase):
         real_close, real_unlink = night.os.close, night.Path.unlink
 
         def fail_close(descriptor):
+            owner_file = stat.S_ISREG(night.os.fstat(descriptor).st_mode)
             real_close(descriptor)
-            raise OSError("fixture owner close failed")
+            if owner_file:
+                raise OSError("fixture owner close failed")
 
         def fail_unlink(path, *args, **kwargs):
             if path.name == ".eat-held-food-owner.lock":

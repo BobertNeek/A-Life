@@ -278,6 +278,95 @@ Do not invoke the worker directly or add that retired pack to the production man
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
 
+### Grab-night seed reservations
+
+Every `scripts/run_grab_food_night.py` plan and run now requires
+`--seed-history PATH`. This is a deliberately fail-closed CLI change. Supply a
+separate, complete operator-reconciled allocation manifest for the exact selected
+sealed source, not just its accepted episode list. The runner does not discover
+unknown custom-launcher history or choose a next seed. An illustrative manifest
+shape follows; the placeholders are not runnable evidence:
+
+```json
+{
+  "schema": 1,
+  "kind": "grab-food-seed-history",
+  "complete": true,
+  "source_sha256": {
+    "cycle.json": "<actual lowercase SHA-256>",
+    "trained.alife-foundation": "<actual lowercase SHA-256>",
+    "actor-checkpoint.json": "<actual lowercase SHA-256>",
+    "value-checkpoint.json": "<actual lowercase SHA-256>"
+  },
+  "training_seed_ranges": [["<first reserved seed>", "<last reserved seed>"]],
+  "assessment_seeds": ["<each historical assessment seed>"],
+  "evidence": "<original allocation/command/receipt identities and completeness basis>"
+}
+```
+
+Replace seed placeholders with JSON integers. Ranges are inclusive and may be
+singletons. Include the source's own training seed, all accepted/dispatched/
+failed/partial/uncertain attempts, and every assessment seed. If reliable original
+artifacts bound possible dispatches to an allocation interval, reserve that entire
+interval, including unused seeds. A `complete: true` assertion is the operator's
+claim, not independently verified completeness. Missing custom-driver evidence
+must not be replaced by an empty history or seeds inferred from policy/Adam age,
+accepted counts or episode directory numbers. In particular, this mechanism does
+not establish the October 16 custom run's next seed or authorize restarting it.
+
+The updated launcher also retains a cumulative lane ledger at
+`target/founder-training/.grab-food-seed-reservations.json`. Under the existing
+shared `.eat-held-food-owner.lock`, it re-reads history and ledger, verifies the
+history's exact-byte hash still matches preflight, and reserves the entire new
+training interval before any child, including startup assessments. It rejects
+overlap with prior training intervals or any historical/current assessment seed.
+It also rejects an assessment seed previously reserved for training; repeated use
+of a prior assessment seed is allowed. A surviving allocation receipt remains an
+exclusion even if omitted from the ledger's interval summary.
+
+Plans only validate and write their ordinary plan receipt. They do not lock or
+reserve, so a plan is not a promise that its range will remain available. Launch
+rechecks under the owner lock. Ledger writes flush the file, atomically replace
+the lane-local file and flush the parent directory on POSIX. Windows flushes the
+file and uses atomic replacement, without a parent-directory flush. Host fixtures
+do not prove Windows or hardware power-loss durability. Persistence failure stops
+all children, even if a reservation may already have survived. `night.json` marks
+reservation status `planned`, `pending`, or `reserved`; pending/absent/stale run
+receipts are not proof that an allocation was unused. Reservations are never
+released after interruption, validation failure or zero accepted training rows.
+
+This protects sibling invocations of this updated Grab launcher in the same
+retained lane. Other/custom/Eat launchers do not update this ledger. Moving or
+copying the lane without its ledger, missing/damaged ledger files, out-of-band
+writers, or incomplete operator history require reconciliation from original
+evidence before continuing. Never clear another owner's lock to bypass admission.
+History files and acquired checkpoint packages are read-only inputs. Checkpoint
+admission, optimizer continuation, accepted counters, partial-cycle exclusion,
+qualification, recipe, cutoffs and promotion rules are unchanged.
+
+Input documents are capped at 64 MiB; lists and per-run allocations are bounded
+by 100,000 entries/episodes, with strict uint64 seed checks (booleans/floats are
+invalid). Cumulative ledgers may require reconciliation when these bounds are
+reached. The launcher's existing stricter upper seed-range bound remains intact.
+
+Affected callers must provide the new flag. The expired October 7 owner wrapper
+still emits the old CLI and is intentionally not upgraded: it cannot invoke the
+updated launcher, and its own provider preflight may occur before that rejection.
+Do not use it as a migration path or synthesize history inside it. Its focused
+unit tests do not establish live wrapper compatibility. The current host fixtures
+provide explicit synthetic complete histories and disjoint ranges.
+
+Run the standard-library regression suites without a native build or training:
+
+```sh
+python -m unittest discover -s scripts -p 'test_grab_food*.py'
+```
+
+These fixtures cover interrupted/unsealed reservations, stale-history replay,
+normal acquired-state continuation, malformed/missing history and ledger,
+allocation/assessment bounds, unchanged plans, lock contention, and persistence
+failures. They establish host admission behavior, not a recovered production run.
+
 ### Grab-night throughput estimate
 
 The host runner amortizes the maximum observed Grab assessment duration over
