@@ -254,7 +254,8 @@ impl MemoryBank {
             })
             .transpose()?;
         let context = EpisodicRetrievalContextV1::new(draft.tick(), profile, contexts)?;
-        let context_digest = context.to_perception_context_block()?.canonical_digest();
+        let encoded_context = context.to_perception_context_block()?;
+        let context_digest = encoded_context.canonical_digest();
         let receipt = MemoryRecallReceipt {
             runtime_approximate: true,
             schema_version: MEMORY_RECALL_SCHEMA_VERSION,
@@ -280,6 +281,7 @@ impl MemoryBank {
         Ok((
             PreparedMemoryRecall {
                 context,
+                encoded_context,
                 candidate_queries: queries,
                 base_frame_digest: draft.base_digest(),
                 receipt,
