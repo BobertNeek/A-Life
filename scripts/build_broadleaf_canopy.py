@@ -6,6 +6,7 @@ The original GLB is retained beside the override for review and regression QA.
 """
 import argparse
 import hashlib
+import json
 import math
 import random
 import sys
@@ -189,6 +190,21 @@ def main():
         ob.hide_render = False
         print(ob.name, count, 'triangles', flush=True)
     export(levels, OUTPUT, export_animations=False, export_cameras=False, export_lights=False)
+    # A full base-library rebuild reinstalls the old Broadleaf counts. Reapply
+    # only this override's metadata along with its GLB, keeping every other
+    # species and the base-library provenance intact.
+    specification = HERE / 'asset-specification.json'
+    data = json.loads(specification.read_text())
+    counts = [sum(len(p.vertices) - 2 for p in ob.data.polygons) for ob in levels]
+    dimensions = [round(max(v.co[k] for v in levels[0].data.vertices) -
+                        min(v.co[k] for v in levels[0].data.vertices), 6) for k in range(3)]
+    dimensions = [int(v) if v.is_integer() else v for v in dimensions]
+    data['assets']['Broadleaf'].update(
+        width_depth_height_m=dimensions,
+        near_triangles=counts[0], far_triangles=counts[1], overview_triangles=counts[2],
+        editable_override='broadleaf-canopy.blend', export_recipe='scripts/build_broadleaf_canopy.py',
+        override_blender='4.3.2')
+    specification.write_text(json.dumps(data, indent=2) + '\n')
 
 
 if __name__ == '__main__':
