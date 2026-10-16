@@ -796,22 +796,22 @@
     {
       "asset_id": "approved-island-broadleaf",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:06fbc9b126f20395",
+      "digest": "fnv1a64:29f5a46e37ea807d",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_assets.py",
-        "date": "2026-09-30",
-        "seed": "approved-island-blueprints",
-        "tool": "Blender-5.2.1-LTS"
+        "config_path": "scripts/build_broadleaf_canopy.py",
+        "date": "2026-10-16",
+        "seed": "broadleaf-canopy-20261016",
+        "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
       "license_ref": "LICENSE",
       "local_path": "crates/alife_game_app/assets/landscape/island/Broadleaf.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 184640,
+      "size_bytes": 183108,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },

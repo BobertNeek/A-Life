@@ -7,6 +7,24 @@ on:
     branches: ["main"]
 
 jobs:
+  broadleaf-canopy:
+    name: Broadleaf canopy CPU regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit complete art successor profile and shipping contracts
+        run: |
+          python scripts/check_broadleaf_canopy.py
+          python scripts/check_island_art.py
+      - name: Check Broadleaf positive and negative regressions
+        run: python -m unittest discover -s scripts -p 'test_broadleaf_canopy.py' -v
+
   island-boulder-placement:
     name: Island boulder placement CPU regression
     runs-on: ubuntu-latest
