@@ -195,7 +195,10 @@ impl Fixture {
 
 #[test]
 fn batch_projection_matches_checked_baseline_for_all_promoted_classes() {
-    eprintln!("batch projection debug_assertions={}", cfg!(debug_assertions));
+    eprintln!(
+        "batch projection debug_assertions={}",
+        cfg!(debug_assertions)
+    );
     let mut digests = Vec::new();
     for capacity in [
         BrainCapacityClass::n512(),
