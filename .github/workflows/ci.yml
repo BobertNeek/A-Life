@@ -7,6 +7,27 @@ on:
     branches: ["main"]
 
 jobs:
+  selection-highlight-cpu:
+    name: Selection highlight frontend CPU regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_MIN_STACK: '33554432'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux controller build dependency
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: Run highlight parity and neighboring pointer CPU tests
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::god_hand:: -- --test-threads=1 --color=never'
+
   broadleaf-canopy:
     name: Broadleaf canopy CPU regression
     runs-on: ubuntu-latest
