@@ -1165,6 +1165,87 @@ mod tests {
     use crate::{BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, Tick};
 
     #[test]
+    fn deserialization_rejects_reordered_route_receipts() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(47_502, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let mut wire = serde_json::to_value(&phenotype).unwrap();
+        wire["budgets"]["routes"].as_array_mut().unwrap().swap(0, 1);
+        assert!(serde_json::from_value::<BrainPhenotype>(wire).is_err());
+    }
+
+    #[test]
+    fn deserialization_rejects_rehashed_globally_balanced_forged_route_counts() {
+        for capacity in [
+            BrainCapacityClass::n512(),
+            BrainCapacityClass::n1024(),
+            BrainCapacityClass::n2048(),
+        ] {
+            let genome = BrainGenome::scaffold(47_501, capacity.id());
+            let development =
+                DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+            let mut phenotype = PhenotypeCompiler::compile(
+                &genome,
+                &capacity,
+                &development,
+                SensorProfile::GroundedObjectSlotsV1,
+            )
+            .unwrap();
+            let wire = serde_json::to_value(&phenotype).unwrap();
+            assert_eq!(
+                serde_json::from_value::<BrainPhenotype>(wire).unwrap(),
+                phenotype
+            );
+            let recurrent_routes = phenotype
+                .budgets
+                .routes
+                .iter()
+                .enumerate()
+                .filter(|(_, route)| route.recurrent_synapses > 1)
+                .map(|(index, _)| index)
+                .take(2)
+                .collect::<Vec<_>>();
+            assert_eq!(recurrent_routes.len(), 2);
+            let original_global = phenotype.budgets.global;
+            // Transfer one claimed synapse between routes, keeping all global
+            // totals, payload totals, canonical route IDs and ceilings valid.
+            let added = &mut phenotype.budgets.routes[recurrent_routes[0]];
+            added.recurrent_synapses += 1;
+            added.immutable_payload_words += 1;
+            added.synapse_ceiling += 1;
+            added.payload_word_ceiling += 1;
+            let removed = &mut phenotype.budgets.routes[recurrent_routes[1]];
+            removed.recurrent_synapses -= 1;
+            removed.immutable_payload_words -= 1;
+            removed.synapse_ceiling -= 1;
+            removed.payload_word_ceiling -= 1;
+            phenotype.budgets.validate_against(&capacity).unwrap();
+            assert_eq!(phenotype.budgets.global, original_global);
+            // A stale hash cannot explain this rejection: the forged payload
+            // carries its own correct canonical hash and valid budget totals.
+            phenotype.phenotype_hash = phenotype.recompute_phenotype_hash().unwrap();
+            assert_eq!(
+                phenotype.phenotype_hash,
+                phenotype.recompute_phenotype_hash().unwrap()
+            );
+            assert_eq!(
+                phenotype.validate_against(&capacity),
+                Err(ScaffoldContractError::PhenotypeCompile)
+            );
+            let forged_wire = serde_json::to_value(&phenotype).unwrap();
+            assert!(serde_json::from_value::<BrainPhenotype>(forged_wire).is_err());
+        }
+    }
+
+    #[test]
     fn self_consistently_rehashed_noncanonical_route_is_rejected() {
         let capacity = BrainCapacityClass::n512();
         let genome = BrainGenome::scaffold(0xF067_E001, capacity.id());
