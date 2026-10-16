@@ -163,6 +163,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 
 `check.ps1 --quick` runs only Git whitespace, static dependency/source boundaries, and documentation assertions. The default full check adds formatting, workspace check, workspace tests, and Clippy.
 
+For read-only serial-cycle timing analysis, use
+`python scripts/summarize_stage_timing.py <receipt-or-directory> --format json`.
+The [stage timing summary guide](performance/20261016-stage-timing-summary.md)
+describes its schema-1 recorder prerequisite and interpretation limits. Run
+`python -m unittest discover -s scripts -p 'test_summarize_stage_timing.py' -v`
+for its synthetic stdlib-only regressions; CI runs them in the existing receipt
+diagnostics job without requiring the recorder's Rust changes.
+
 Use a focused `cargo test -p <crate> <filter>` when a Rust behavior changes. Do not launch a second Cargo build while another shared-target build is active.
 
 Source-bound historical evidence tests require complete Git history. CI uses
