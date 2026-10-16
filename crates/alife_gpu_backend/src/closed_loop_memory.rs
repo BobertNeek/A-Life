@@ -66,7 +66,48 @@ pub struct GpuMemoryContextUpload {
     offset_domain: GpuMemoryOffsetDomain,
 }
 
+/// An owned local upload checked against its immutable frame and live slot.
+/// Immutable access prevents edits between validation and consuming rebasing.
+pub(crate) struct ValidatedLocalMemoryUpload(GpuMemoryContextUpload);
+
+impl std::ops::Deref for ValidatedLocalMemoryUpload {
+    type Target = GpuMemoryContextUpload;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl ValidatedLocalMemoryUpload {
+    pub(crate) fn rebase_for_batch(
+        mut self,
+        perception_binding: GpuPerceptionFrameBinding,
+        memory_context_offset: u32,
+        candidate_offset: u32,
+        decoder_learning_input_offset: u32,
+        neural_receptor_effects_offset: u32,
+    ) -> Result<(GpuMemoryContextUpload, GpuMemoryContextDispatchReceipt), GpuClosedLoopError> {
+        let receipt = self.0.rebase_validated_for_batch(
+            perception_binding,
+            memory_context_offset,
+            candidate_offset,
+            decoder_learning_input_offset,
+            neural_receptor_effects_offset,
+        )?;
+        Ok((self.0, receipt))
+    }
+}
+
 impl GpuMemoryContextUpload {
+    pub(crate) fn validate_local_for_batch(
+        self,
+        frame: &PerceptionFrame,
+        slot: &GpuBrainSlot,
+    ) -> Result<ValidatedLocalMemoryUpload, GpuClosedLoopError> {
+        self.validate_for_frame_and_slot(frame, slot)?;
+        Ok(ValidatedLocalMemoryUpload(self))
+    }
+
     pub fn bind_neural_receptor_effects(
         mut self,
         effects: NeuralReceptorEffects,
@@ -197,21 +238,14 @@ impl GpuMemoryContextUpload {
         Ok(())
     }
 
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "batch rebasing validates frame and slot identity plus four distinct shader ABI offsets"
-    )]
-    pub(crate) fn rebase_for_batch(
+    fn rebase_validated_for_batch(
         &mut self,
-        frame: &PerceptionFrame,
-        slot: &GpuBrainSlot,
         perception_binding: GpuPerceptionFrameBinding,
         memory_context_offset: u32,
         candidate_offset: u32,
         decoder_learning_input_offset: u32,
         neural_receptor_effects_offset: u32,
     ) -> Result<GpuMemoryContextDispatchReceipt, GpuClosedLoopError> {
-        self.validate_for_frame_and_slot(frame, slot)?;
         if perception_binding.slot != self.perception_binding.slot
             || perception_binding.slot_generation != self.perception_binding.slot_generation
             || perception_binding.tick != self.perception_binding.tick
