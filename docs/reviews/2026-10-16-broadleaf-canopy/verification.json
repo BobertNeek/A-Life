@@ -92,7 +92,7 @@
   },
   "other_checks": {
     "general_island_shipping": "PASS",
-    "focused_tests": "PASS (8 tests)",
+    "focused_tests": "PASS (9 tests, including clean interpreter without third-party site packages)",
     "docs": "PASS (77/77)",
     "whitespace": "PASS",
     "rust_workspace": "not run; no Rust changes",

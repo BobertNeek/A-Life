@@ -13,8 +13,6 @@ import json
 import math
 from pathlib import Path
 
-import check_consolidated_island_art as predecessor
-import check_composed_island_graphics as historical
 from check_island_art import Glb
 from check_island_canopies import points, silhouette
 
@@ -22,10 +20,14 @@ ROOT = Path(__file__).resolve().parents[1]
 HERE = Path('crates/alife_game_app/assets/landscape/island')
 RUNTIME = (HERE / 'Broadleaf.glb').as_posix()
 PROFILE = Path('scripts/broadleaf-canopy-profile.json')
-PROFILE_SHA256 = 'b445338758339243337b0933e0e96f553733390fd23ba91d71820cfcbdc4078e'
+PROFILE_SHA256 = '197dc3e07f342c76ee46d53d540af6b753baef0f94e9d7f74cd5546a2ddf4c8c'
+PREDECESSOR_PROFILE = Path('scripts/consolidated-island-art-profile.json')
+PREDECESSOR_SHA256 = '2c8e26550d5a49a5bf4c962c005e2451b92a8687e84aea75cfb829421c993500'
+MANIFEST = Path('crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json')
+ART_ROOTS = ('crates/alife_game_app/assets', 'crates/alife_world/assets')
 ALLOWED_PREDECESSOR_CHANGES = {
     RUNTIME, (HERE / 'README.md').as_posix(),
-    (HERE / 'asset-specification.json').as_posix(), historical.MANIFEST.as_posix(),
+    (HERE / 'asset-specification.json').as_posix(), MANIFEST.as_posix(),
 }
 
 
@@ -33,10 +35,42 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
+def digest_payload(name, raw):
+    if name.endswith('.json'):
+        raw = raw.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+    value = 0xcbf29ce484222325
+    for byte in raw:
+        value = ((value ^ byte) * 0x100000001b3) & 0xffffffffffffffff
+    return f'fnv1a64:{value:016x}'
+
+
+def validate_files(root, expected):
+    # Read the predecessor's fixed data, not its NumPy-dependent geometry
+    # execution module. This bounded successor audit needs only the stdlib.
+    actual = set()
+    for directory in ART_ROOTS:
+        for path in (root / directory).rglob('*'):
+            assert not path.is_symlink(), ('Art symlink forbidden', path)
+            if path.is_file():
+                actual.add(path.relative_to(root).as_posix())
+    records = {r['path']: r for r in expected}
+    assert actual == set(records), 'Broadleaf art path set changed'
+    for name, record in records.items():
+        assert not Path(name).is_absolute() and '..' not in Path(name).parts
+        path = root
+        for part in Path(name).parts:
+            path /= part
+            assert not path.is_symlink(), ('Art symlink forbidden', name)
+        raw = path.read_bytes()
+        assert len(raw) == record['bytes'] and sha(raw) == record['sha256'], ('Art bytes changed', name)
+        assert bool(path.stat().st_mode & 0o111) == record['executable'], ('Art mode changed', name)
+
+
 def expected_manifest(profile, old_profile, root):
     expected = copy.deepcopy(old_profile['base_manifest'])
-    entries = historical.entries_by_path(expected)
-    lineage = json.loads((root / predecessor.SOURCE / 'lineage.json').read_text())
+    entries = {e['local_path']: e for e in expected['entries']}
+    assert len(entries) == len(expected['entries'])
+    lineage = json.loads((root / HERE / 'finished-island-refinements/lineage.json').read_text())
     for asset in lineage['assets']:
         entries[asset['runtime_path']].update(
             digest=asset['runtime']['fnv1a64'], size_bytes=asset['runtime']['bytes'],
@@ -118,8 +152,8 @@ def check(root=ROOT):
     raw = (root / PROFILE).read_bytes()
     assert sha(raw) == PROFILE_SHA256, 'Fixed Broadleaf profile changed'
     profile = json.loads(raw)
-    old_raw = (root / predecessor.PROFILE).read_bytes()
-    assert sha(old_raw) == predecessor.PROFILE_SHA256 == profile['predecessor_profile_sha256']
+    old_raw = (root / PREDECESSOR_PROFILE).read_bytes()
+    assert sha(old_raw) == PREDECESSOR_SHA256 == profile['predecessor_profile_sha256']
     old_profile = json.loads(old_raw)
     for path, digest in old_profile['checker_and_recipe_sources'].items():
         assert sha((root / path).read_bytes()) == digest, ('Historical checker or recipe changed', path)
@@ -130,16 +164,16 @@ def check(root=ROOT):
         assert new_files[path] == old_files[path], ('Unrelated art profile changed', path)
     for path in profile['sources']:
         assert sha((root / path).read_bytes()) == profile['sources'][path], ('Source changed', path)
-    predecessor.validate_files(root, profile['expected_art_files'])
+    validate_files(root, profile['expected_art_files'])
     baseline = root / HERE / 'broadleaf-canopy/Broadleaf.baseline.glb'
     assert sha(baseline.read_bytes()) == old_files[RUNTIME]['sha256'], 'Original Broadleaf not retained'
     expected = expected_manifest(profile, old_profile, root)
-    actual = json.loads((root / historical.MANIFEST).read_text())
+    actual = json.loads((root / MANIFEST).read_text())
     assert actual == expected, 'Unreviewed manifest changes'
     for entry in actual['entries']:
         payload = (root / entry['local_path']).read_bytes()
         assert len(payload) == entry['size_bytes']
-        assert historical.digest_payload(entry['local_path'], payload) == entry['digest']
+        assert digest_payload(entry['local_path'], payload) == entry['digest']
     result = geometry(root / RUNTIME)
     assert result['triangles'] == profile['triangles']
     return dict(result, result='PASS', profile='island-broadleaf-canopy-20261016',

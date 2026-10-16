@@ -3,6 +3,8 @@ import copy
 import json
 import math
 import struct
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -42,6 +44,12 @@ class BroadleafCanopyTests(unittest.TestCase):
         self.assertEqual(result['triangles'], [4462, 916, 86])
         self.assertEqual(result['other_manifest_records_retained'], 47)
         self.assertFalse(result['game_rendering_proof'])
+
+    def test_audit_needs_no_third_party_site_packages(self):
+        result = subprocess.run([sys.executable, '-S', str(check.ROOT / 'scripts/check_broadleaf_canopy.py')],
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['result'], 'PASS')
 
     def test_rejects_extra_texture(self):
         self.rejects(self.mutated(lambda doc: doc.update(textures=[{'source': 0}])))
