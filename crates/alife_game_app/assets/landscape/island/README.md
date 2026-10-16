@@ -1,5 +1,44 @@
 # Approved island asset pack
 
+## Broadleaf canopy override, 2026-10-16
+
+The Broadleaf candidate is owned by the separate editable Blender 4.3.2 source
+`broadleaf-canopy.blend`. Use this source instead of the older Broadleaf meshes
+in `island-assets.blend` and `island-terrain.blend`. The original sources remain
+byte-retained, and `broadleaf-canopy/Broadleaf.baseline.glb` retains the exact
+pre-pass runtime asset. This is a deliberate geometry replacement, not a
+color-only correction or an architecture/gameplay change.
+
+The new form has eight unequal scalloped leaf fans, visible forked boughs,
+buttressed roots and open crown gaps. The near LOD has folded opaque leaves;
+middle uses stable scalloped envelopes, and overview uses bounded crown hulls.
+All LODs remain ground-centred, with applied identity transforms, named
+`Broadleaf_L0/L1/L2` meshes and one primitive using the unchanged shared painted
+material. Near/middle/overview counts are 4,462 / 916 / 86 triangles, below the
+old 4,820 / 1,038 / 88 ceilings. Runtime dimensions remain 6 x 5.5 x 8 metres.
+Placements, collision, terrain, Highlands art and creature state are unchanged.
+
+Normal export reloads the editable source without repeating the authoring pass:
+
+```sh
+blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_broadleaf_canopy.py
+python scripts/register_approved_art.py
+python scripts/check_broadleaf_canopy.py --output target/artifacts/broadleaf-canopy/check.json
+```
+
+Use Blender 4.3.2 for this override. The explicit `-- --author` option creates
+the reviewed deterministic replacement from the recipe; it does not operate on
+the original multi-asset sources. Export Broadleaf after the other existing
+overrides whenever rebuilding the base library, before refreshing registrations.
+The new fixed successor checker audits the complete art/world file set and all
+48 registrations. Historical consolidated/conifer profiles remain unchanged and
+continue to certify only their pinned earlier snapshots.
+
+See [the source-bound review](../../../../../docs/reviews/2026-10-16-broadleaf-canopy.md)
+for matched CPU-rendered close, reverse, grove and LOD evidence, cost deltas and
+limits. These previews do not establish live-game transition quality, gameplay
+acceptance, physical GPU timing or an FPS improvement.
+
 Blender 5.2.1 LTS sources use metres, Z-up, and ground-centred prop origins.
 `island-assets.blend` contains 13 reusable assets, three mesh LODs, dimension
 guides, and the approved image blueprints. `island-terrain.blend` contains the
