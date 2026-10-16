@@ -1,0 +1,96 @@
+SCHEDULE class=1 index=0 microsteps=3 enabled=[0, 1, 2, 3, 4, 5]
+SCHEDULE class=1 index=1 microsteps=2 enabled=[0, 1, 2, 3, 4, 5]
+SCHEDULE class=1 index=2 microsteps=2 enabled=[0, 1, 2, 3, 4]
+SCHEDULE class=1 index=3 microsteps=2 enabled=[0, 1, 2, 3, 4]
+META class=1 neurons=512 synapses=1634 projections=6 ticks=20 debug_assertions=false span_visits_per_organism_sample=209250 receipt_reads_per_organism_sample=645
+SAMPLE class=1 population=1 sample=0 baseline_first=true baseline_ns=82913 receipts_ns=6008 exact_work_rows=60
+SAMPLE class=1 population=1 sample=1 baseline_first=false baseline_ns=83254 receipts_ns=6310 exact_work_rows=60
+SAMPLE class=1 population=1 sample=2 baseline_first=true baseline_ns=130424 receipts_ns=7572 exact_work_rows=60
+SAMPLE class=1 population=1 sample=3 baseline_first=false baseline_ns=84426 receipts_ns=6149 exact_work_rows=60
+SAMPLE class=1 population=1 sample=4 baseline_first=true baseline_ns=94070 receipts_ns=6240 exact_work_rows=60
+SAMPLE class=1 population=1 sample=5 baseline_first=false baseline_ns=83224 receipts_ns=6109 exact_work_rows=60
+SAMPLE class=1 population=1 sample=6 baseline_first=true baseline_ns=83204 receipts_ns=6139 exact_work_rows=60
+SAMPLE class=1 population=1 sample=7 baseline_first=false baseline_ns=83234 receipts_ns=6099 exact_work_rows=60
+SAMPLE class=1 population=1 sample=8 baseline_first=true baseline_ns=83304 receipts_ns=5979 exact_work_rows=60
+SAMPLE class=1 population=10 sample=0 baseline_first=true baseline_ns=908524 receipts_ns=59088 exact_work_rows=600
+SAMPLE class=1 population=10 sample=1 baseline_first=false baseline_ns=1071396 receipts_ns=57926 exact_work_rows=600
+SAMPLE class=1 population=10 sample=2 baseline_first=true baseline_ns=866601 receipts_ns=56945 exact_work_rows=600
+SAMPLE class=1 population=10 sample=3 baseline_first=false baseline_ns=845389 receipts_ns=55713 exact_work_rows=600
+SAMPLE class=1 population=10 sample=4 baseline_first=true baseline_ns=869676 receipts_ns=83284 exact_work_rows=600
+SAMPLE class=1 population=10 sample=5 baseline_first=false baseline_ns=917196 receipts_ns=124365 exact_work_rows=600
+SAMPLE class=1 population=10 sample=6 baseline_first=true baseline_ns=829075 receipts_ns=57275 exact_work_rows=600
+SAMPLE class=1 population=10 sample=7 baseline_first=false baseline_ns=829806 receipts_ns=73660 exact_work_rows=600
+SAMPLE class=1 population=10 sample=8 baseline_first=true baseline_ns=906119 receipts_ns=57185 exact_work_rows=600
+SAMPLE class=1 population=50 sample=0 baseline_first=true baseline_ns=4450850 receipts_ns=314399 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=1 baseline_first=false baseline_ns=4663708 receipts_ns=310493 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=2 baseline_first=true baseline_ns=4670006 receipts_ns=312415 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=3 baseline_first=false baseline_ns=4566483 receipts_ns=335991 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=4 baseline_first=true baseline_ns=4905368 receipts_ns=371824 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=5 baseline_first=false baseline_ns=4953440 receipts_ns=298054 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=6 baseline_first=true baseline_ns=4537419 receipts_ns=331975 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=7 baseline_first=false baseline_ns=4613823 receipts_ns=291695 exact_work_rows=3000
+SAMPLE class=1 population=50 sample=8 baseline_first=true baseline_ns=4534144 receipts_ns=356451 exact_work_rows=3000
+SCHEDULE class=2 index=0 microsteps=3 enabled=[0, 1, 2, 3, 4, 5]
+SCHEDULE class=2 index=1 microsteps=2 enabled=[0, 1, 2, 3, 4, 5]
+SCHEDULE class=2 index=2 microsteps=2 enabled=[0, 1, 2, 3, 4]
+SCHEDULE class=2 index=3 microsteps=2 enabled=[0, 1, 2, 3, 4]
+META class=2 neurons=1024 synapses=3062 projections=6 ticks=20 debug_assertions=false span_visits_per_organism_sample=397110 receipt_reads_per_organism_sample=645
+SAMPLE class=2 population=1 sample=0 baseline_first=true baseline_ns=209522 receipts_ns=6230 exact_work_rows=60
+SAMPLE class=2 population=1 sample=1 baseline_first=false baseline_ns=151145 receipts_ns=6169 exact_work_rows=60
+SAMPLE class=2 population=1 sample=2 baseline_first=true baseline_ns=150815 receipts_ns=6409 exact_work_rows=60
+SAMPLE class=2 population=1 sample=3 baseline_first=false baseline_ns=152697 receipts_ns=5939 exact_work_rows=60
+SAMPLE class=2 population=1 sample=4 baseline_first=true baseline_ns=150634 receipts_ns=6880 exact_work_rows=60
+SAMPLE class=2 population=1 sample=5 baseline_first=false baseline_ns=151986 receipts_ns=5929 exact_work_rows=60
+SAMPLE class=2 population=1 sample=6 baseline_first=true baseline_ns=167459 receipts_ns=5969 exact_work_rows=60
+SAMPLE class=2 population=1 sample=7 baseline_first=false baseline_ns=150754 receipts_ns=5819 exact_work_rows=60
+SAMPLE class=2 population=1 sample=8 baseline_first=true baseline_ns=150765 receipts_ns=5979 exact_work_rows=60
+SAMPLE class=2 population=10 sample=0 baseline_first=true baseline_ns=1701605 receipts_ns=57696 exact_work_rows=600
+SAMPLE class=2 population=10 sample=1 baseline_first=false baseline_ns=1631120 receipts_ns=59529 exact_work_rows=600
+SAMPLE class=2 population=10 sample=2 baseline_first=true baseline_ns=1563609 receipts_ns=56904 exact_work_rows=600
+SAMPLE class=2 population=10 sample=3 baseline_first=false baseline_ns=1587865 receipts_ns=55552 exact_work_rows=600
+SAMPLE class=2 population=10 sample=4 baseline_first=true baseline_ns=1564421 receipts_ns=58157 exact_work_rows=600
+SAMPLE class=2 population=10 sample=5 baseline_first=false baseline_ns=1566553 receipts_ns=57555 exact_work_rows=600
+SAMPLE class=2 population=10 sample=6 baseline_first=true baseline_ns=1587425 receipts_ns=57185 exact_work_rows=600
+SAMPLE class=2 population=10 sample=7 baseline_first=false baseline_ns=1790056 receipts_ns=57716 exact_work_rows=600
+SAMPLE class=2 population=10 sample=8 baseline_first=true baseline_ns=1601346 receipts_ns=57265 exact_work_rows=600
+SAMPLE class=2 population=50 sample=0 baseline_first=true baseline_ns=16194305 receipts_ns=340648 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=1 baseline_first=false baseline_ns=16316106 receipts_ns=321859 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=2 baseline_first=true baseline_ns=16160624 receipts_ns=361819 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=3 baseline_first=false baseline_ns=16366862 receipts_ns=292195 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=4 baseline_first=true baseline_ns=16707855 receipts_ns=373597 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=5 baseline_first=false baseline_ns=8797766 receipts_ns=294388 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=6 baseline_first=true baseline_ns=8978615 receipts_ns=324433 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=7 baseline_first=false baseline_ns=8483628 receipts_ns=438654 exact_work_rows=3000
+SAMPLE class=2 population=50 sample=8 baseline_first=true baseline_ns=8388196 receipts_ns=326556 exact_work_rows=3000
+SCHEDULE class=3 index=0 microsteps=3 enabled=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+SCHEDULE class=3 index=1 microsteps=2 enabled=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+SCHEDULE class=3 index=2 microsteps=2 enabled=[0, 1, 2, 3, 4, 5, 6, 15]
+SCHEDULE class=3 index=3 microsteps=2 enabled=[0, 1, 2, 3, 4, 5, 6, 15]
+META class=3 neurons=2048 synapses=32768 projections=17 ticks=20 debug_assertions=false span_visits_per_organism_sample=2603520 receipt_reads_per_organism_sample=1170
+SAMPLE class=3 population=1 sample=0 baseline_first=true baseline_ns=1119838 receipts_ns=18718 exact_work_rows=60
+SAMPLE class=3 population=1 sample=1 baseline_first=false baseline_ns=1076864 receipts_ns=17837 exact_work_rows=60
+SAMPLE class=3 population=1 sample=2 baseline_first=true baseline_ns=1060500 receipts_ns=19549 exact_work_rows=60
+SAMPLE class=3 population=1 sample=3 baseline_first=false baseline_ns=1044035 receipts_ns=17967 exact_work_rows=60
+SAMPLE class=3 population=1 sample=4 baseline_first=true baseline_ns=1039718 receipts_ns=18507 exact_work_rows=60
+SAMPLE class=3 population=1 sample=5 baseline_first=false baseline_ns=1039248 receipts_ns=18057 exact_work_rows=60
+SAMPLE class=3 population=1 sample=6 baseline_first=true baseline_ns=1109613 receipts_ns=19439 exact_work_rows=60
+SAMPLE class=3 population=1 sample=7 baseline_first=false baseline_ns=1038547 receipts_ns=17937 exact_work_rows=60
+SAMPLE class=3 population=1 sample=8 baseline_first=true baseline_ns=1038097 receipts_ns=18538 exact_work_rows=60
+SAMPLE class=3 population=10 sample=0 baseline_first=true baseline_ns=10970313 receipts_ns=178606 exact_work_rows=600
+SAMPLE class=3 population=10 sample=1 baseline_first=false baseline_ns=10692879 receipts_ns=193348 exact_work_rows=600
+SAMPLE class=3 population=10 sample=2 baseline_first=true baseline_ns=11383749 receipts_ns=180309 exact_work_rows=600
+SAMPLE class=3 population=10 sample=3 baseline_first=false baseline_ns=11307354 receipts_ns=198746 exact_work_rows=600
+SAMPLE class=3 population=10 sample=4 baseline_first=true baseline_ns=10601492 receipts_ns=177604 exact_work_rows=600
+SAMPLE class=3 population=10 sample=5 baseline_first=false baseline_ns=10562194 receipts_ns=191956 exact_work_rows=600
+SAMPLE class=3 population=10 sample=6 baseline_first=true baseline_ns=10543527 receipts_ns=176713 exact_work_rows=600
+SAMPLE class=3 population=10 sample=7 baseline_first=false baseline_ns=10597097 receipts_ns=178727 exact_work_rows=600
+SAMPLE class=3 population=10 sample=8 baseline_first=true baseline_ns=10993096 receipts_ns=178887 exact_work_rows=600
+SAMPLE class=3 population=50 sample=0 baseline_first=true baseline_ns=85345719 receipts_ns=888794 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=1 baseline_first=false baseline_ns=78209678 receipts_ns=899070 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=2 baseline_first=true baseline_ns=80585528 receipts_ns=930817 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=3 baseline_first=false baseline_ns=81065242 receipts_ns=918999 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=4 baseline_first=true baseline_ns=74540643 receipts_ns=918198 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=5 baseline_first=false baseline_ns=80227634 receipts_ns=931347 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=6 baseline_first=true baseline_ns=75036842 receipts_ns=924227 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=7 baseline_first=false baseline_ns=80920026 receipts_ns=900652 exact_work_rows=3000
+SAMPLE class=3 population=50 sample=8 baseline_first=true baseline_ns=77759538 receipts_ns=1047080 exact_work_rows=3000
