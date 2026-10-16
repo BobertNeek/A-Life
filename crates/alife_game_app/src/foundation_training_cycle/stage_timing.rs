@@ -362,10 +362,10 @@ mod tests {
         std::fs::create_dir(directory.0.join("stage-timing.json")).unwrap();
         let success: Result<u8, Box<dyn std::error::Error>> = Ok(9);
         timing.finish(success.as_ref().err().map(|error| error.as_ref()));
-        assert_eq!(success.unwrap(), 9);
+        assert!(matches!(success, Ok(9)));
         let failure: Result<(), Box<dyn std::error::Error>> = Err("original failure".into());
         timing.finish(failure.as_ref().err().map(|error| error.as_ref()));
-        assert_eq!(failure.unwrap_err().to_string(), "original failure");
+        assert!(matches!(failure, Err(error) if error.to_string() == "original failure"));
     }
 
     #[test]
