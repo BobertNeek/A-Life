@@ -43,10 +43,10 @@ jobs:
           python-version: '3.12'
       - name: Audit complete art successor profile and shipping contracts
         run: |
-          python scripts/check_broadleaf_canopy.py
+          python -S scripts/check_fern_fronds.py
           python scripts/check_island_art.py
-      - name: Check Broadleaf positive and negative regressions
-        run: python -m unittest discover -s scripts -p 'test_broadleaf_canopy.py' -v
+      - name: Check Fern and retained Broadleaf regressions
+        run: python -m unittest discover -s scripts -p 'test_fern_fronds.py' -v
 
   island-boulder-placement:
     name: Island boulder placement CPU regression

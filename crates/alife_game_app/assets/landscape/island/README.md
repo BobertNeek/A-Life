@@ -1,5 +1,41 @@
 # Approved island asset pack
 
+## Connected Fern fronds override, 2026-10-16
+
+Fern is now owned by `fern-connected-fronds.blend` (Blender 4.3.2). This
+geometry replacement supersedes the older color-only `fern-readability.blend`
+for new exports; the old source, baseline and historical color-only checker
+remain byte-retained. `fern-connected-fronds/Fern.baseline.glb` retains the exact
+pre-pass runtime asset. Seven continuous tapered ribs join the existing folded
+leaf fans, fixing the original floating leaflet islands. All LODs retain all
+seven original frond directions. Middle/overview simplify leaflet folds and
+rung density while keeping the outer tips.
+
+Near/middle/overview budgets improve from 784/352/156 to 700/294/154 triangles
+and 1,568/1,056/468 to 952/441/231 exported vertices. Every LOD AABB, pivot,
+identity transform, node/mesh name and shared material is retained exactly.
+Runtime size is 55,168 bytes, down from 97,100. No new texture, shader, material
+slot, placement, collision or runtime code is added. Geometry counts do not
+establish an FPS improvement.
+
+Normal source reload/export, after all older overrides, is:
+
+```sh
+blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/build_fern_fronds.py
+python scripts/register_approved_art.py
+python -S scripts/check_fern_fronds.py
+```
+
+The optional `-- --author` rebuilds only from the exact pinned pre-pass baseline;
+normal export loads current native edits and does not reapply the sculpt.
+`check_fern_fronds_native.py` checks rooted native topology with Blender 4.3.2.
+The fixed Fern successor checks the complete current art/world file set and all
+48 registrations while retaining the historical profiles. The earlier full-art
+checkers certify their pinned earlier snapshots and intentionally reject this
+later Fern geometry. See the source-bound [Fern review](../../../../../docs/reviews/2026-10-16-connected-fern-fronds.md)
+for matched close, reverse, LOD and authored Island patch evidence. These are CPU
+Blender previews, not live-game capture or physical GPU/performance acceptance.
+
 ## Broadleaf canopy override, 2026-10-16
 
 The Broadleaf candidate is owned by the separate editable Blender 4.3.2 source
@@ -195,7 +231,7 @@ fixed profile; the present checks deliberately reject changed delivered bytes.
 
 After any full base-library rebuild, re-export the shrub, Fern, Sapling,
 Conifer and six-finished-asset overrides before refreshing registrations.
-For the complete current art tree and all 48 manifest records, run
+For its pinned earlier art tree and all 48 manifest records, run
 `python scripts/check_consolidated_island_art.py --output target/artifacts/consolidated-island-art/check.json`.
 This fixed successor profile preserves the approved Conifer record, checks the
 six explicit manifest deltas and audits every art/world file. The historical
