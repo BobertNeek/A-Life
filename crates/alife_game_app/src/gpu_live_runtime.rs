@@ -32,6 +32,8 @@ mod nociception_food_tests;
 mod persistence_response_comparison;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod recovery_sleep_tests;
+#[cfg(test)]
+mod resident_sync_tests;
 mod semantic_prior;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
@@ -583,12 +585,18 @@ fn synchronize_resident_from_record(
     record: &WorldOrganismRecord,
     world_tick: Tick,
 ) -> Result<(), ScaffoldContractError> {
-    let admission = record.authoritative_admission_at(world_tick)?;
-    if resident.genome != admission.phenotype.brain_genome {
+    // Keep the admission snapshot's validation/error order, but borrow its
+    // immutable source data: this path only synchronizes two current views.
+    record.validate_contract()?;
+    if !record.lifecycle().is_alive() || record.biochemistry().tick != world_tick {
+        return Err(ScaffoldContractError::NonMonotonicTick);
+    }
+    let age = record.age_at(world_tick)?;
+    if resident.genome != record.phenotype().brain_genome {
         return Err(ScaffoldContractError::BrainOwnershipMismatch);
     }
-    resident.homeostasis = admission.biochemistry.homeostasis;
-    resident.development = admission.phenotype.development_state_at(admission.age)?;
+    resident.homeostasis = record.biochemistry().homeostasis;
+    resident.development = record.phenotype().development_state_at(age)?;
     Ok(())
 }
 
@@ -597,20 +605,15 @@ fn synchronize_residents_from_world(
     residents: &mut BTreeMap<u64, ResidentCognition>,
     world_tick: Tick,
 ) -> Result<(), ScaffoldContractError> {
-    let organism_ids = residents.keys().copied().collect::<Vec<_>>();
-    for raw in organism_ids {
+    for (&raw, resident) in residents.iter_mut() {
         let record = world
             .organism_registry()
             .get(OrganismId(raw))
-            .cloned()
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         if !record.lifecycle().is_alive() {
             continue;
         }
-        let resident = residents
-            .get_mut(&raw)
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        synchronize_resident_from_record(resident, &record, world_tick)?;
+        synchronize_resident_from_record(resident, record, world_tick)?;
     }
     Ok(())
 }
