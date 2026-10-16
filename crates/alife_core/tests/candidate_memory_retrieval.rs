@@ -2470,3 +2470,76 @@ fn runtime_recall_keeps_untracked_object_expectancies_separate() {
             .unwrap();
     }
 }
+
+#[test]
+fn retained_context_encoding_preserves_populated_audited_and_cached_runtime_frames() {
+    for populated in [false, true] {
+        let mut bank = empty_bank();
+        if populated {
+            bank.observe_sealed_patch(&poisoned_cyan_ingest_patch())
+                .unwrap();
+        }
+        let bank_before = serde_json::to_value(&bank).unwrap();
+        let draft = cyan_amber_family_draft();
+        let (cold, cache) = bank
+            .recall_frame_runtime(&draft, &Default::default(), true)
+            .unwrap();
+        let (cached, refreshed) = bank
+            .recall_frame_runtime(&draft, &cache.unwrap(), false)
+            .unwrap();
+        assert!(refreshed.is_none());
+        for recall in [bank.recall_frame(&draft).unwrap(), cold, cached] {
+            let expected_context = recall.context().clone();
+            let expected_receipt = recall.receipt().clone();
+            let expected_frame = draft
+                .clone()
+                .finalize(expected_context.to_perception_context_block().unwrap())
+                .unwrap();
+            let mut recall = recall;
+            let mut last_cognitive = None;
+            for sequence_id in [101, 102] {
+                let mut cognitive = alife_core::CognitiveContextFrame::empty(
+                    ORGANISM,
+                    ExperienceSequenceId(sequence_id),
+                    TICK,
+                )
+                .unwrap();
+                if let Some(memory_id) = expected_context.candidates[0].best_family_source {
+                    cognitive
+                        .memory
+                        .expectancies
+                        .push(alife_core::CognitiveMemoryExpectancy {
+                            memory_id,
+                            expected_valence: SignedValence::new(-0.25).unwrap(),
+                            confidence: NormalizedScalar::new(0.75).unwrap(),
+                        });
+                }
+                recall = recall.with_cognitive_context(cognitive.clone()).unwrap();
+                assert_eq!(recall.context(), &expected_context);
+                assert_eq!(recall.receipt(), &expected_receipt);
+                last_cognitive = Some(cognitive);
+            }
+            let (frame, finalized) = recall.finalize(draft.clone()).unwrap();
+            assert_eq!(frame, expected_frame);
+            assert_eq!(
+                serde_json::to_value(&frame).unwrap(),
+                serde_json::to_value(&expected_frame).unwrap()
+            );
+            assert_eq!(finalized.context(), &expected_context);
+            assert_eq!(finalized.receipt(), &expected_receipt);
+            assert_eq!(finalized.cognitive_context(), last_cognitive.as_ref());
+            finalized.validate_for_frame(&frame).unwrap();
+            for (key, candidate) in finalized.candidate_keys().iter().zip(frame.candidates()) {
+                key.query()
+                    .validate_against_frame(&frame, candidate)
+                    .unwrap();
+                assert_eq!(
+                    key.retrieval_context_digest(),
+                    frame.context().canonical_digest()
+                );
+                assert_eq!(key.final_frame_digest(), frame.frame_digest());
+            }
+        }
+        assert_eq!(serde_json::to_value(&bank).unwrap(), bank_before);
+    }
+}

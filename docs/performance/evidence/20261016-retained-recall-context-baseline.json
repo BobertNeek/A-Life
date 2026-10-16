@@ -1,0 +1,755 @@
+{
+  "main_commit": "d460ac63552efad2abfb02518242d0247d224a91",
+  "checks": [
+    {
+      "path": "Cargo.lock",
+      "main_git_blob": "8c6c96b40360fffe30022cd5a2f9c514c5060104",
+      "local_git_blob": "8c6c96b40360fffe30022cd5a2f9c514c5060104"
+    },
+    {
+      "path": "Cargo.toml",
+      "main_git_blob": "44366e4aefbaa4eb2e4fdd83f188b408ee9d57ec",
+      "local_git_blob": "44366e4aefbaa4eb2e4fdd83f188b408ee9d57ec"
+    },
+    {
+      "path": "crates/alife_core/AGENTS.md",
+      "main_git_blob": "df010d7843c7c3033d2bd9312e99a387125b3eb3",
+      "local_git_blob": "df010d7843c7c3033d2bd9312e99a387125b3eb3"
+    },
+    {
+      "path": "crates/alife_core/Cargo.toml",
+      "main_git_blob": "83019ebf491658fe6fb6cbe96465f8a6d9c3cf9f",
+      "local_git_blob": "83019ebf491658fe6fb6cbe96465f8a6d9c3cf9f"
+    },
+    {
+      "path": "crates/alife_core/README.md",
+      "main_git_blob": "058c0b0647354032956fe4f7366511b922d71393",
+      "local_git_blob": "058c0b0647354032956fe4f7366511b922d71393"
+    },
+    {
+      "path": "crates/alife_core/examples/export_n2048_foundations.rs",
+      "main_git_blob": "9ba87234ae35aa5ffa9aa231e0730ca51f8e873f",
+      "local_git_blob": "9ba87234ae35aa5ffa9aa231e0730ca51f8e873f"
+    },
+    {
+      "path": "crates/alife_core/examples/export_n512_foundations.rs",
+      "main_git_blob": "7d7fb276bb2b08bf782b9b40f503632957f9381e",
+      "local_git_blob": "7d7fb276bb2b08bf782b9b40f503632957f9381e"
+    },
+    {
+      "path": "crates/alife_core/src/action.rs",
+      "main_git_blob": "79935462bb4485a6aad3dbc9a0850ea6c16d3f06",
+      "local_git_blob": "79935462bb4485a6aad3dbc9a0850ea6c16d3f06"
+    },
+    {
+      "path": "crates/alife_core/src/action_abi.rs",
+      "main_git_blob": "05d5d661c42f2dfdf382caba712c93b8bd09cda4",
+      "local_git_blob": "05d5d661c42f2dfdf382caba712c93b8bd09cda4"
+    },
+    {
+      "path": "crates/alife_core/src/activity.rs",
+      "main_git_blob": "d2196fcbb54bd7e229f008307691bbee7ebcd497",
+      "local_git_blob": "d2196fcbb54bd7e229f008307691bbee7ebcd497"
+    },
+    {
+      "path": "crates/alife_core/src/adapter.rs",
+      "main_git_blob": "3d19548e03d2c4b95901481c4b6291a91789e4c8",
+      "local_git_blob": "3d19548e03d2c4b95901481c4b6291a91789e4c8"
+    },
+    {
+      "path": "crates/alife_core/src/archive.rs",
+      "main_git_blob": "87c7d2aaa581868f7b6697f07e739d81ae65d7c9",
+      "local_git_blob": "87c7d2aaa581868f7b6697f07e739d81ae65d7c9"
+    },
+    {
+      "path": "crates/alife_core/src/attention.rs",
+      "main_git_blob": "3160a555c1aefd6ca880c94d27e67c803fb85d4e",
+      "local_git_blob": "3160a555c1aefd6ca880c94d27e67c803fb85d4e"
+    },
+    {
+      "path": "crates/alife_core/src/biochemical_graph.rs",
+      "main_git_blob": "b022c28ad3c9e040b3c9d03c7dbb7572b4adc15c",
+      "local_git_blob": "b022c28ad3c9e040b3c9d03c7dbb7572b4adc15c"
+    },
+    {
+      "path": "crates/alife_core/src/biochemistry.rs",
+      "main_git_blob": "ee6547580cd5ba776dec68d75d261359878d8c72",
+      "local_git_blob": "ee6547580cd5ba776dec68d75d261359878d8c72"
+    },
+    {
+      "path": "crates/alife_core/src/blake3_digest.rs",
+      "main_git_blob": "49517de198eaa7a74cf60a784540d958d7c613a2",
+      "local_git_blob": "49517de198eaa7a74cf60a784540d958d7c613a2"
+    },
+    {
+      "path": "crates/alife_core/src/brain_class.rs",
+      "main_git_blob": "97633b80b6c4d1524e01fb5302779ec01d5ae1cb",
+      "local_git_blob": "97633b80b6c4d1524e01fb5302779ec01d5ae1cb"
+    },
+    {
+      "path": "crates/alife_core/src/canonical_digest.rs",
+      "main_git_blob": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8",
+      "local_git_blob": "6a794212cb68b0b640f4164b5dcb5ab5bcf5cdc8"
+    },
+    {
+      "path": "crates/alife_core/src/checkpoint.rs",
+      "main_git_blob": "63a1dddd3f453ae408b5ed86e676bd78cc408cea",
+      "local_git_blob": "63a1dddd3f453ae408b5ed86e676bd78cc408cea"
+    },
+    {
+      "path": "crates/alife_core/src/chemistry.rs",
+      "main_git_blob": "68eddae8a494e977e36147d4f6ce2f4a2bbdcd3b",
+      "local_git_blob": "68eddae8a494e977e36147d4f6ce2f4a2bbdcd3b"
+    },
+    {
+      "path": "crates/alife_core/src/cognitive_context.rs",
+      "main_git_blob": "794c3e707e6dc1c6110df68a62b4d92eb6dfbd71",
+      "local_git_blob": "794c3e707e6dc1c6110df68a62b4d92eb6dfbd71"
+    },
+    {
+      "path": "crates/alife_core/src/cognitive_work.rs",
+      "main_git_blob": "a6dbca6395a87b14d66f3be7d38c158b3440c78e",
+      "local_git_blob": "a6dbca6395a87b14d66f3be7d38c158b3440c78e"
+    },
+    {
+      "path": "crates/alife_core/src/dendritic.rs",
+      "main_git_blob": "f1eb64123e89066ab63be7716d7bffb1fde6f1e5",
+      "local_git_blob": "f1eb64123e89066ab63be7716d7bffb1fde6f1e5"
+    },
+    {
+      "path": "crates/alife_core/src/diagnostics.rs",
+      "main_git_blob": "ce174455b1071c67e3e16f155ad6b21f65b6a94e",
+      "local_git_blob": "ce174455b1071c67e3e16f155ad6b21f65b6a94e"
+    },
+    {
+      "path": "crates/alife_core/src/embodiment.rs",
+      "main_git_blob": "7b70f7bebda7ec44ea32fac8e6e5dff954c0e597",
+      "local_git_blob": "7b70f7bebda7ec44ea32fac8e6e5dff954c0e597"
+    },
+    {
+      "path": "crates/alife_core/src/era1_evaluation.rs",
+      "main_git_blob": "9a2587a2d0ba84547cf48495ec5a071afb062b9a",
+      "local_git_blob": "9a2587a2d0ba84547cf48495ec5a071afb062b9a"
+    },
+    {
+      "path": "crates/alife_core/src/error.rs",
+      "main_git_blob": "07776e611e033efcb019123f877a2e164b617cf9",
+      "local_git_blob": "07776e611e033efcb019123f877a2e164b617cf9"
+    },
+    {
+      "path": "crates/alife_core/src/evaluation.rs",
+      "main_git_blob": "59c76e3a556b6a79392977a5a69f04161a22daaa",
+      "local_git_blob": "59c76e3a556b6a79392977a5a69f04161a22daaa"
+    },
+    {
+      "path": "crates/alife_core/src/evidence_digest.rs",
+      "main_git_blob": "ac85a618585646a26caff404aaaab8389215b19b",
+      "local_git_blob": "ac85a618585646a26caff404aaaab8389215b19b"
+    },
+    {
+      "path": "crates/alife_core/src/evolutionary_genetics.rs",
+      "main_git_blob": "ead6b2c0cbaa3a5091cd103b8f548584385a2e98",
+      "local_git_blob": "ead6b2c0cbaa3a5091cd103b8f548584385a2e98"
+    },
+    {
+      "path": "crates/alife_core/src/experience.rs",
+      "main_git_blob": "294947c0acc8ebf7e2b726f1a5e140b31ef307c0",
+      "local_git_blob": "294947c0acc8ebf7e2b726f1a5e140b31ef307c0"
+    },
+    {
+      "path": "crates/alife_core/src/factorized_selection.rs",
+      "main_git_blob": "7c8725e44fccaadc396dafbef3cef01d435a9bf3",
+      "local_git_blob": "7c8725e44fccaadc396dafbef3cef01d435a9bf3"
+    },
+    {
+      "path": "crates/alife_core/src/foundation.rs",
+      "main_git_blob": "9de6eb11f8f26195f1f08a230fd362d9f3e03ede",
+      "local_git_blob": "9de6eb11f8f26195f1f08a230fd362d9f3e03ede"
+    },
+    {
+      "path": "crates/alife_core/src/genome.rs",
+      "main_git_blob": "5062ee8b926abb24ae794de8d4fe7f7f38330418",
+      "local_git_blob": "5062ee8b926abb24ae794de8d4fe7f7f38330418"
+    },
+    {
+      "path": "crates/alife_core/src/grounding.rs",
+      "main_git_blob": "2f730c7b29ce5f1c5a2e4fdfd41812aab95053cc",
+      "local_git_blob": "2f730c7b29ce5f1c5a2e4fdfd41812aab95053cc"
+    },
+    {
+      "path": "crates/alife_core/src/ids.rs",
+      "main_git_blob": "fece318f047b120f50457d8d0843e052408ab903",
+      "local_git_blob": "fece318f047b120f50457d8d0843e052408ab903"
+    },
+    {
+      "path": "crates/alife_core/src/language.rs",
+      "main_git_blob": "1a29b6335763695e9357e7d12791b5741c287eb5",
+      "local_git_blob": "1a29b6335763695e9357e7d12791b5741c287eb5"
+    },
+    {
+      "path": "crates/alife_core/src/learning.rs",
+      "main_git_blob": "ed443347e79492c77e76e43a69b06b5edd567545",
+      "local_git_blob": "ed443347e79492c77e76e43a69b06b5edd567545"
+    },
+    {
+      "path": "crates/alife_core/src/legacy_nano512_compatibility.rs",
+      "main_git_blob": "4509c07550baead38f592cea9b754715d67a6eb7",
+      "local_git_blob": "4509c07550baead38f592cea9b754715d67a6eb7"
+    },
+    {
+      "path": "crates/alife_core/src/lib.rs",
+      "main_git_blob": "4eb92c4aba730f55db56acd3c17d3494f4a310eb",
+      "local_git_blob": "4eb92c4aba730f55db56acd3c17d3494f4a310eb"
+    },
+    {
+      "path": "crates/alife_core/src/lineage.rs",
+      "main_git_blob": "76447315ec18cc6b5137d66a17a3ea0aa03c48ca",
+      "local_git_blob": "76447315ec18cc6b5137d66a17a3ea0aa03c48ca"
+    },
+    {
+      "path": "crates/alife_core/src/lobe.rs",
+      "main_git_blob": "fc9b15ca1336682f3c524e0fc5d2060faa980267",
+      "local_git_blob": "fc9b15ca1336682f3c524e0fc5d2060faa980267"
+    },
+    {
+      "path": "crates/alife_core/src/math.rs",
+      "main_git_blob": "0810e4952896abbb59e012eea21387608e3fceeb",
+      "local_git_blob": "0810e4952896abbb59e012eea21387608e3fceeb"
+    },
+    {
+      "path": "crates/alife_core/src/memory.rs",
+      "main_git_blob": "9e74589175db0b3f1e8969a2705515749c87f861",
+      "local_git_blob": "9e74589175db0b3f1e8969a2705515749c87f861"
+    },
+    {
+      "path": "crates/alife_core/src/memory/candidate_index.rs",
+      "main_git_blob": "8d0e205dfeb884ad566aa3fe84786943ea7b99f5",
+      "local_git_blob": "8d0e205dfeb884ad566aa3fe84786943ea7b99f5"
+    },
+    {
+      "path": "crates/alife_core/src/memory/candidate_recall.rs",
+      "main_git_blob": "01d3f97ab57ee2b05d1813f414b47dfce5ab3ae7",
+      "local_git_blob": "01d3f97ab57ee2b05d1813f414b47dfce5ab3ae7"
+    },
+    {
+      "path": "crates/alife_core/src/memory/runtime.rs",
+      "main_git_blob": "a7ee4f57033c2874edac623471f8d0e32c1fb99e",
+      "local_git_blob": "a7ee4f57033c2874edac623471f8d0e32c1fb99e"
+    },
+    {
+      "path": "crates/alife_core/src/memory/sidecar.rs",
+      "main_git_blob": "7ac5960c9176e4f231a3f47156bb6899b11765e9",
+      "local_git_blob": "7ac5960c9176e4f231a3f47156bb6899b11765e9"
+    },
+    {
+      "path": "crates/alife_core/src/memory_query.rs",
+      "main_git_blob": "04c65791c8faabed1a40bf82e5a767edadfe4996",
+      "local_git_blob": "04c65791c8faabed1a40bf82e5a767edadfe4996"
+    },
+    {
+      "path": "crates/alife_core/src/migration_v2.rs",
+      "main_git_blob": "d3237dbfdadec63b1ffae471bd705b904550aa7c",
+      "local_git_blob": "d3237dbfdadec63b1ffae471bd705b904550aa7c"
+    },
+    {
+      "path": "crates/alife_core/src/motor.rs",
+      "main_git_blob": "ef6731584656d25b0356c62cbb61f3dd80208f43",
+      "local_git_blob": "ef6731584656d25b0356c62cbb61f3dd80208f43"
+    },
+    {
+      "path": "crates/alife_core/src/nano512_readout_candidate.rs",
+      "main_git_blob": "f5a1c3f221320fd37e66f33f8eca7b39759edc21",
+      "local_git_blob": "f5a1c3f221320fd37e66f33f8eca7b39759edc21"
+    },
+    {
+      "path": "crates/alife_core/src/neural.rs",
+      "main_git_blob": "b5e5943ccac5d51b534d68327f719168539505b1",
+      "local_git_blob": "b5e5943ccac5d51b534d68327f719168539505b1"
+    },
+    {
+      "path": "crates/alife_core/src/neural_receptors.rs",
+      "main_git_blob": "633225748c1574334066d5317325aad5ca9f9925",
+      "local_git_blob": "633225748c1574334066d5317325aad5ca9f9925"
+    },
+    {
+      "path": "crates/alife_core/src/newphenotype/cognitive_channel.rs",
+      "main_git_blob": "5c84d5cef9cc8cffa0d7ca7adf6c65b8c8060c02",
+      "local_git_blob": "5c84d5cef9cc8cffa0d7ca7adf6c65b8c8060c02"
+    },
+    {
+      "path": "crates/alife_core/src/packed_log.rs",
+      "main_git_blob": "82947cc1075810746fee8ea5ba7d4d566a2dbce9",
+      "local_git_blob": "82947cc1075810746fee8ea5ba7d4d566a2dbce9"
+    },
+    {
+      "path": "crates/alife_core/src/perception.rs",
+      "main_git_blob": "e591a68ff03398e1158aee01b4d56245156a9550",
+      "local_git_blob": "e591a68ff03398e1158aee01b4d56245156a9550"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype.rs",
+      "main_git_blob": "d4e9d1c852bdfb73884381c6b55233aa9d623e73",
+      "local_git_blob": "d4e9d1c852bdfb73884381c6b55233aa9d623e73"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/abi_validation.rs",
+      "main_git_blob": "4c4b87df91b9dfd858a35aa53d4f1edaf38c3cd5",
+      "local_git_blob": "4c4b87df91b9dfd858a35aa53d4f1edaf38c3cd5"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/budgets.rs",
+      "main_git_blob": "e12f34e62d4655f2b73b99c4312cd0299893e1ee",
+      "local_git_blob": "e12f34e62d4655f2b73b99c4312cd0299893e1ee"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/capacity.rs",
+      "main_git_blob": "6e4fd1b5104a7e9bfc8a6c950efc036a5a91a536",
+      "local_git_blob": "6e4fd1b5104a7e9bfc8a6c950efc036a5a91a536"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/compiled.rs",
+      "main_git_blob": "25504a6e6ac336f07b800485d8fd43af9d791706",
+      "local_git_blob": "25504a6e6ac336f07b800485d8fd43af9d791706"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/compiler.rs",
+      "main_git_blob": "d29c33368836cffe51eb1ae5d7c978f2f3d7a23d",
+      "local_git_blob": "d29c33368836cffe51eb1ae5d7c978f2f3d7a23d"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/construction.rs",
+      "main_git_blob": "ccd23896f76a3512f0421adf6295841beb093917",
+      "local_git_blob": "ccd23896f76a3512f0421adf6295841beb093917"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/decoder.rs",
+      "main_git_blob": "b5ab93192f96ff0558716f17006b248c866f56d4",
+      "local_git_blob": "b5ab93192f96ff0558716f17006b248c866f56d4"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/encoder.rs",
+      "main_git_blob": "0b97486a77677d9f6755be8cd441b5d1e7ec4435",
+      "local_git_blob": "0b97486a77677d9f6755be8cd441b5d1e7ec4435"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/inputs.rs",
+      "main_git_blob": "e098599209d12c32bb8e03a5a8e75425fa3674d4",
+      "local_git_blob": "e098599209d12c32bb8e03a5a8e75425fa3674d4"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/io_compile.rs",
+      "main_git_blob": "994f3c6187c8a8fc9d170510fabf09c5a21635f7",
+      "local_git_blob": "994f3c6187c8a8fc9d170510fabf09c5a21635f7"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/layout_compile.rs",
+      "main_git_blob": "a553ba6263dc45271f1e57231699b66c2159257a",
+      "local_git_blob": "a553ba6263dc45271f1e57231699b66c2159257a"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/learning.rs",
+      "main_git_blob": "949458d681f0624eae72010b808780854d16a2fa",
+      "local_git_blob": "949458d681f0624eae72010b808780854d16a2fa"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/memory_channel.rs",
+      "main_git_blob": "f3a05c7f225f75cd370563833f36e7b048d5e304",
+      "local_git_blob": "f3a05c7f225f75cd370563833f36e7b048d5e304"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/migration.rs",
+      "main_git_blob": "4183c59776eba159113c17563f1eb7ce3a9a113d",
+      "local_git_blob": "4183c59776eba159113c17563f1eb7ce3a9a113d"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/n512_founder_projection.rs",
+      "main_git_blob": "2a3555f03a5cf7d56d9a1b1d3fb285b03a8263e8",
+      "local_git_blob": "2a3555f03a5cf7d56d9a1b1d3fb285b03a8263e8"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/persistent_address.rs",
+      "main_git_blob": "a09d1d2ea2b168d14ba35987e097e4c479636d0a",
+      "local_git_blob": "a09d1d2ea2b168d14ba35987e097e4c479636d0a"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/record.rs",
+      "main_git_blob": "eda0e0861217f5194a07882455faade559789f2c",
+      "local_git_blob": "eda0e0861217f5194a07882455faade559789f2c"
+    },
+    {
+      "path": "crates/alife_core/src/phenotype/topology_compile.rs",
+      "main_git_blob": "e0d92c1917f36af7c1687d9977f148929864b900",
+      "local_git_blob": "e0d92c1917f36af7c1687d9977f148929864b900"
+    },
+    {
+      "path": "crates/alife_core/src/predictive.rs",
+      "main_git_blob": "a5953f50044512c49a05fb97c0b96a746619c7ec",
+      "local_git_blob": "a5953f50044512c49a05fb97c0b96a746619c7ec"
+    },
+    {
+      "path": "crates/alife_core/src/reference_brain.rs",
+      "main_git_blob": "869ef2ec7f7463661fa80363302aa81d5b77e092",
+      "local_git_blob": "869ef2ec7f7463661fa80363302aa81d5b77e092"
+    },
+    {
+      "path": "crates/alife_core/src/routing.rs",
+      "main_git_blob": "281afbeae5d0e627a3021b8df8ff94549e7eaec0",
+      "local_git_blob": "281afbeae5d0e627a3021b8df8ff94549e7eaec0"
+    },
+    {
+      "path": "crates/alife_core/src/sensory_abi.rs",
+      "main_git_blob": "7c995775003b7a530fb5d858da95797731645fbf",
+      "local_git_blob": "7c995775003b7a530fb5d858da95797731645fbf"
+    },
+    {
+      "path": "crates/alife_core/src/sleep.rs",
+      "main_git_blob": "657d52f7f98cec5ea6cae14b62cce4574bd8ef79",
+      "local_git_blob": "657d52f7f98cec5ea6cae14b62cce4574bd8ef79"
+    },
+    {
+      "path": "crates/alife_core/src/sleep/gpu_contracts.rs",
+      "main_git_blob": "06c628badc143a92f91b0cc306cd34f25cd8a596",
+      "local_git_blob": "06c628badc143a92f91b0cc306cd34f25cd8a596"
+    },
+    {
+      "path": "crates/alife_core/src/sleep/replay.rs",
+      "main_git_blob": "46c6cff940215dba2d3c6433e9fbd461d578f20a",
+      "local_git_blob": "46c6cff940215dba2d3c6433e9fbd461d578f20a"
+    },
+    {
+      "path": "crates/alife_core/src/structural_plasticity.rs",
+      "main_git_blob": "67c3eca263d05c2dcb81106478f7799057e2810d",
+      "local_git_blob": "67c3eca263d05c2dcb81106478f7799057e2810d"
+    },
+    {
+      "path": "crates/alife_core/src/topology.rs",
+      "main_git_blob": "c5db7b0d1f17a3112ebcf0da669bde9697cf37dd",
+      "local_git_blob": "c5db7b0d1f17a3112ebcf0da669bde9697cf37dd"
+    },
+    {
+      "path": "crates/alife_core/src/traits.rs",
+      "main_git_blob": "1a6fc4d718526b2eece352ab32ab5b89cff04685",
+      "local_git_blob": "1a6fc4d718526b2eece352ab32ab5b89cff04685"
+    },
+    {
+      "path": "crates/alife_core/src/units.rs",
+      "main_git_blob": "aa0a91db83061ba319236d3aaa09ce91f983f116",
+      "local_git_blob": "aa0a91db83061ba319236d3aaa09ce91f983f116"
+    },
+    {
+      "path": "crates/alife_core/src/validation.rs",
+      "main_git_blob": "04d460b0afb89e1d927b490348668ae1c56c56a0",
+      "local_git_blob": "04d460b0afb89e1d927b490348668ae1c56c56a0"
+    },
+    {
+      "path": "crates/alife_core/src/version.rs",
+      "main_git_blob": "8bb91107be692ab1f087e967ed67597567fee317",
+      "local_git_blob": "8bb91107be692ab1f087e967ed67597567fee317"
+    },
+    {
+      "path": "crates/alife_core/tests/abi_validation_errors.rs",
+      "main_git_blob": "36623381c1b44bcd6872f690bf7e341ec74dba15",
+      "local_git_blob": "36623381c1b44bcd6872f690bf7e341ec74dba15"
+    },
+    {
+      "path": "crates/alife_core/tests/action_arbitration.rs",
+      "main_git_blob": "a9b2d28179d1fcf5b8f783b1575ff6552eeb3758",
+      "local_git_blob": "a9b2d28179d1fcf5b8f783b1575ff6552eeb3758"
+    },
+    {
+      "path": "crates/alife_core/tests/biochemical_graph_v2.rs",
+      "main_git_blob": "f389e4d39a451e984d5fa3b32ce67cde2ecfdce8",
+      "local_git_blob": "f389e4d39a451e984d5fa3b32ce67cde2ecfdce8"
+    },
+    {
+      "path": "crates/alife_core/tests/biochemical_material_baselines.rs",
+      "main_git_blob": "44f7130f8cdf67324f39d1adb461affddd038894",
+      "local_git_blob": "44f7130f8cdf67324f39d1adb461affddd038894"
+    },
+    {
+      "path": "crates/alife_core/tests/biochemical_reaction_conservation.rs",
+      "main_git_blob": "7ba8d4f81281c45a261193f932491644eb60bcbc",
+      "local_git_blob": "7ba8d4f81281c45a261193f932491644eb60bcbc"
+    },
+    {
+      "path": "crates/alife_core/tests/biochemical_valuation.rs",
+      "main_git_blob": "0723ef0b90142e065616d70dd00fddd46494830b",
+      "local_git_blob": "0723ef0b90142e065616d70dd00fddd46494830b"
+    },
+    {
+      "path": "crates/alife_core/tests/biochemistry_development.rs",
+      "main_git_blob": "a98954397b21d18750d9f704eb1aad226c615154",
+      "local_git_blob": "a98954397b21d18750d9f704eb1aad226c615154"
+    },
+    {
+      "path": "crates/alife_core/tests/brain_topology.rs",
+      "main_git_blob": "4756857317ece1925afecabf24784f5a28c2a600",
+      "local_git_blob": "4756857317ece1925afecabf24784f5a28c2a600"
+    },
+    {
+      "path": "crates/alife_core/tests/candidate_memory_queries.rs",
+      "main_git_blob": "a12b0022bb22c37b0a553e5f18c7bca1c5c3311b",
+      "local_git_blob": "a12b0022bb22c37b0a553e5f18c7bca1c5c3311b"
+    },
+    {
+      "path": "crates/alife_core/tests/candidate_memory_retrieval.rs",
+      "main_git_blob": "faac2f4af2322f3950fddd3e749b9f92e910fe27",
+      "local_git_blob": "faac2f4af2322f3950fddd3e749b9f92e910fe27"
+    },
+    {
+      "path": "crates/alife_core/tests/candidate_memory_retrieval/social_recognition.rs",
+      "main_git_blob": "58d9450aab4c02a50e108297f5158e2d9437c202",
+      "local_git_blob": "58d9450aab4c02a50e108297f5158e2d9437c202"
+    },
+    {
+      "path": "crates/alife_core/tests/canonical_digest.rs",
+      "main_git_blob": "aa63cb8ff20548f8794aecb1f216729a3226cee0",
+      "local_git_blob": "aa63cb8ff20548f8794aecb1f216729a3226cee0"
+    },
+    {
+      "path": "crates/alife_core/tests/checkpoint_modes.rs",
+      "main_git_blob": "1af9d58a23fd5df3ea8067f62419d07414bd5194",
+      "local_git_blob": "1af9d58a23fd5df3ea8067f62419d07414bd5194"
+    },
+    {
+      "path": "crates/alife_core/tests/chemistry_homeostasis.rs",
+      "main_git_blob": "2e15db5233c804afae8b982b54b00eaf8d40c2d4",
+      "local_git_blob": "2e15db5233c804afae8b982b54b00eaf8d40c2d4"
+    },
+    {
+      "path": "crates/alife_core/tests/cpu_reference_brain_tick.rs",
+      "main_git_blob": "9d5665c891889773f96c833c655d3c06786d58ee",
+      "local_git_blob": "9d5665c891889773f96c833c655d3c06786d58ee"
+    },
+    {
+      "path": "crates/alife_core/tests/decoder_lifetime_rate_policy.rs",
+      "main_git_blob": "ef4434653e32f921b1f24be02774e7fdd22e750d",
+      "local_git_blob": "ef4434653e32f921b1f24be02774e7fdd22e750d"
+    },
+    {
+      "path": "crates/alife_core/tests/era1_evaluation.rs",
+      "main_git_blob": "091a4aac662edc76431dfc50300b18541f79cfd1",
+      "local_git_blob": "091a4aac662edc76431dfc50300b18541f79cfd1"
+    },
+    {
+      "path": "crates/alife_core/tests/evolutionary_genetics.rs",
+      "main_git_blob": "d6d7a0993ebe8762e52062ca5b35d5b091217fd1",
+      "local_git_blob": "d6d7a0993ebe8762e52062ca5b35d5b091217fd1"
+    },
+    {
+      "path": "crates/alife_core/tests/experience_neural_decision.rs",
+      "main_git_blob": "f3f251adce98f6fbd1d80865c95e59bba02f81f3",
+      "local_git_blob": "f3f251adce98f6fbd1d80865c95e59bba02f81f3"
+    },
+    {
+      "path": "crates/alife_core/tests/experience_three_phase.rs",
+      "main_git_blob": "26b0c11a6a5231db838433210fce5339ba3ca798",
+      "local_git_blob": "26b0c11a6a5231db838433210fce5339ba3ca798"
+    },
+    {
+      "path": "crates/alife_core/tests/genetic_cognitive_ownership_v2.rs",
+      "main_git_blob": "9a0c6854b0440c237bfc51d63049dd7e4d925e32",
+      "local_git_blob": "9a0c6854b0440c237bfc51d63049dd7e4d925e32"
+    },
+    {
+      "path": "crates/alife_core/tests/genome_weight_split.rs",
+      "main_git_blob": "78862a697497302eaaa27a8b5bb3b60d6f0516a4",
+      "local_git_blob": "78862a697497302eaaa27a8b5bb3b60d6f0516a4"
+    },
+    {
+      "path": "crates/alife_core/tests/gpu_benchmark_protocol.rs",
+      "main_git_blob": "e3e50021cdab617f4b4c0131a38af287ee1b7324",
+      "local_git_blob": "e3e50021cdab617f4b4c0131a38af287ee1b7324"
+    },
+    {
+      "path": "crates/alife_core/tests/gpu_sleep_contracts.rs",
+      "main_git_blob": "94f42450ed9a6075699fd97303dde99da7526ffe",
+      "local_git_blob": "94f42450ed9a6075699fd97303dde99da7526ffe"
+    },
+    {
+      "path": "crates/alife_core/tests/grounded_language_contracts.rs",
+      "main_git_blob": "8438f1bf6030d4318571f0ffeabb8357083239d8",
+      "local_git_blob": "8438f1bf6030d4318571f0ffeabb8357083239d8"
+    },
+    {
+      "path": "crates/alife_core/tests/id_math_units.rs",
+      "main_git_blob": "d1b7cbe2b9a7f919ef36b81abc2fb2c13fe37c0c",
+      "local_git_blob": "d1b7cbe2b9a7f919ef36b81abc2fb2c13fe37c0c"
+    },
+    {
+      "path": "crates/alife_core/tests/joint_action_selection.rs",
+      "main_git_blob": "c98386bf0c34b96cd57abf2626bba433b89e09b4",
+      "local_git_blob": "c98386bf0c34b96cd57abf2626bba433b89e09b4"
+    },
+    {
+      "path": "crates/alife_core/tests/life_evaluation.rs",
+      "main_git_blob": "575a97938c2a65ffa649a731e665a90fba412117",
+      "local_git_blob": "575a97938c2a65ffa649a731e665a90fba412117"
+    },
+    {
+      "path": "crates/alife_core/tests/measured_physiology_v2.rs",
+      "main_git_blob": "f16b81e162cb440f23a1c4c4eaef20acd86c91f0",
+      "local_git_blob": "f16b81e162cb440f23a1c4c4eaef20acd86c91f0"
+    },
+    {
+      "path": "crates/alife_core/tests/n2048_foundation_abi.rs",
+      "main_git_blob": "3dd68189a0205cc884333d72d82dae788615e287",
+      "local_git_blob": "3dd68189a0205cc884333d72d82dae788615e287"
+    },
+    {
+      "path": "crates/alife_core/tests/n4096_research_growth.rs",
+      "main_git_blob": "50671da3fa091a48c542638efdd739f976c02481",
+      "local_git_blob": "50671da3fa091a48c542638efdd739f976c02481"
+    },
+    {
+      "path": "crates/alife_core/tests/n512_action_credit_candidate.rs",
+      "main_git_blob": "873916991af04a857a3725e034afd95d8f3bcf4d",
+      "local_git_blob": "873916991af04a857a3725e034afd95d8f3bcf4d"
+    },
+    {
+      "path": "crates/alife_core/tests/n512_candidate_genome.rs",
+      "main_git_blob": "ef78eddad2c0fed8e94a23b398ca315021376b4f",
+      "local_git_blob": "ef78eddad2c0fed8e94a23b398ca315021376b4f"
+    },
+    {
+      "path": "crates/alife_core/tests/n512_curated_founder_compatibility.rs",
+      "main_git_blob": "b614a9391bd17cf6c735c3e54c91dd2d99965b9a",
+      "local_git_blob": "b614a9391bd17cf6c735c3e54c91dd2d99965b9a"
+    },
+    {
+      "path": "crates/alife_core/tests/n512_foundation_abi.rs",
+      "main_git_blob": "b77dfd5b79b0eda4f3e113b8bd57c92b19bbbc67",
+      "local_git_blob": "b77dfd5b79b0eda4f3e113b8bd57c92b19bbbc67"
+    },
+    {
+      "path": "crates/alife_core/tests/n512_legacy_compatibility_abi.rs",
+      "main_git_blob": "4c01f1cda785bcf19704f9303597d9463cb11aae",
+      "local_git_blob": "4c01f1cda785bcf19704f9303597d9463cb11aae"
+    },
+    {
+      "path": "crates/alife_core/tests/n512_readout_candidate.rs",
+      "main_git_blob": "ec44c3fdb4d9723394d51bbad9bd9407b15538b2",
+      "local_git_blob": "ec44c3fdb4d9723394d51bbad9bd9407b15538b2"
+    },
+    {
+      "path": "crates/alife_core/tests/neural_projection_cpu.rs",
+      "main_git_blob": "4e05fbec2f5a37f3664741f6a69413681c175a8a",
+      "local_git_blob": "4e05fbec2f5a37f3664741f6a69413681c175a8a"
+    },
+    {
+      "path": "crates/alife_core/tests/newborn_nociception.rs",
+      "main_git_blob": "9ccbf17d4ddff220f76c9895711125dbdfd6de9c",
+      "local_git_blob": "9ccbf17d4ddff220f76c9895711125dbdfd6de9c"
+    },
+    {
+      "path": "crates/alife_core/tests/packed_experience_logging.rs",
+      "main_git_blob": "ee0073155fb9d61bb037bc7105adb7b0d46c820a",
+      "local_git_blob": "ee0073155fb9d61bb037bc7105adb7b0d46c820a"
+    },
+    {
+      "path": "crates/alife_core/tests/perception_candidates.rs",
+      "main_git_blob": "14d9276b475a6054ccb7958719f0b9b0dc486420",
+      "local_git_blob": "14d9276b475a6054ccb7958719f0b9b0dc486420"
+    },
+    {
+      "path": "crates/alife_core/tests/perception_digest_golden.rs",
+      "main_git_blob": "c4fd749a189859b2a2dcaebb77a7c24b1b71b5df",
+      "local_git_blob": "c4fd749a189859b2a2dcaebb77a7c24b1b71b5df"
+    },
+    {
+      "path": "crates/alife_core/tests/phenotype_compiler.rs",
+      "main_git_blob": "d9a4200698b90c170c3cd268ab90784483e7c5d6",
+      "local_git_blob": "d9a4200698b90c170c3cd268ab90784483e7c5d6"
+    },
+    {
+      "path": "crates/alife_core/tests/phenotype_compiler/capacity.rs",
+      "main_git_blob": "41f973eebd201b1386b434822210cb128842d37a",
+      "local_git_blob": "41f973eebd201b1386b434822210cb128842d37a"
+    },
+    {
+      "path": "crates/alife_core/tests/phenotype_compiler/causal_routing.rs",
+      "main_git_blob": "2fdc8679124ea66792167230893061c3173991d9",
+      "local_git_blob": "2fdc8679124ea66792167230893061c3173991d9"
+    },
+    {
+      "path": "crates/alife_core/tests/phenotype_compiler/learning.rs",
+      "main_git_blob": "cd0ae4c6f2e5cf81e760f3e9108001add2d08f47",
+      "local_git_blob": "cd0ae4c6f2e5cf81e760f3e9108001add2d08f47"
+    },
+    {
+      "path": "crates/alife_core/tests/phenotype_compiler/plans_persistence.rs",
+      "main_git_blob": "f1e25a443bdeb99ffb3ae538a23bcd643792dcd7",
+      "local_git_blob": "f1e25a443bdeb99ffb3ae538a23bcd643792dcd7"
+    },
+    {
+      "path": "crates/alife_core/tests/phenotype_input_identity.rs",
+      "main_git_blob": "c5f672959585e815761dcc235a0d0e12d102eab2",
+      "local_git_blob": "c5f672959585e815761dcc235a0d0e12d102eab2"
+    },
+    {
+      "path": "crates/alife_core/tests/prediction_residual_pulse.rs",
+      "main_git_blob": "07bdebd48ba98dae58071fd014dfb84e9bb4c9b0",
+      "local_git_blob": "07bdebd48ba98dae58071fd014dfb84e9bb4c9b0"
+    },
+    {
+      "path": "crates/alife_core/tests/predictive_learning.rs",
+      "main_git_blob": "9dd362a6867e28efeb0e0d23dc1ca16b465908e6",
+      "local_git_blob": "9dd362a6867e28efeb0e0d23dc1ca16b465908e6"
+    },
+    {
+      "path": "crates/alife_core/tests/production_brain_budgets.rs",
+      "main_git_blob": "e301dffd1863f8384681eb8dd666ba9a75475c02",
+      "local_git_blob": "e301dffd1863f8384681eb8dd666ba9a75475c02"
+    },
+    {
+      "path": "crates/alife_core/tests/scaffold_invariants.rs",
+      "main_git_blob": "46c3d64349c1df08527af9f88a48e5614704761a",
+      "local_git_blob": "46c3d64349c1df08527af9f88a48e5614704761a"
+    },
+    {
+      "path": "crates/alife_core/tests/sensory_abi_contexts.rs",
+      "main_git_blob": "cd1db30848800189ecb7ea99ea2cd32740e29b93",
+      "local_git_blob": "cd1db30848800189ecb7ea99ea2cd32740e29b93"
+    },
+    {
+      "path": "crates/alife_core/tests/sensory_profiles.rs",
+      "main_git_blob": "1e1daf950c8f9e00386ccb1dac3686d8fe1fb613",
+      "local_git_blob": "1e1daf950c8f9e00386ccb1dac3686d8fe1fb613"
+    },
+    {
+      "path": "crates/alife_core/tests/sleep_consolidation.rs",
+      "main_git_blob": "45cf98cb54be5104b37cb5472baae2fef7b25c5f",
+      "local_git_blob": "45cf98cb54be5104b37cb5472baae2fef7b25c5f"
+    },
+    {
+      "path": "crates/alife_core/tests/three_factor_learning.rs",
+      "main_git_blob": "06205ec66b6eabf26101931ab5e20f66f0c3b23a",
+      "local_git_blob": "06205ec66b6eabf26101931ab5e20f66f0c3b23a"
+    },
+    {
+      "path": "crates/alife_core/tests/topological_map.rs",
+      "main_git_blob": "a4ad480541a11e0b2a5986ca1e91d711524ef0ff",
+      "local_git_blob": "a4ad480541a11e0b2a5986ca1e91d711524ef0ff"
+    },
+    {
+      "path": "crates/alife_core/tests/topology_sidecar_degradation.rs",
+      "main_git_blob": "a793ddf257fbbc52cdfce03d99bf3e5661c6f85f",
+      "local_git_blob": "a793ddf257fbbc52cdfce03d99bf3e5661c6f85f"
+    },
+    {
+      "path": "crates/alife_core/tests/v11_cognitive_contracts.rs",
+      "main_git_blob": "63a9d318ff887818d5075b3b59b73239f865d8d6",
+      "local_git_blob": "63a9d318ff887818d5075b3b59b73239f865d8d6"
+    },
+    {
+      "path": "crates/alife_core/tests/v2_architecture_completion.rs",
+      "main_git_blob": "9ef2ae35f29bbaed1873f4b76cedfa8af1f9fd1c",
+      "local_git_blob": "9ef2ae35f29bbaed1873f4b76cedfa8af1f9fd1c"
+    },
+    {
+      "path": "crates/alife_core/tests/v2_schema_migrations.rs",
+      "main_git_blob": "e383d6e36f828827717ad6d4699feafcdd0cc8b4",
+      "local_git_blob": "e383d6e36f828827717ad6d4699feafcdd0cc8b4"
+    }
+  ]
+}
