@@ -13,10 +13,10 @@ use alife_core::{
     DendriticBranch, DendriticBranchSet, DendriticInputRef, DurationTicks, ExperienceSequenceId,
     HysteresisState, Intensity, JointMotorCondition, MemoryBankConfig, MemorySidecarState,
     MotorChannel, MotorChannelFactor, MotorCommandBundle, NormalizedScalar, OrganismId,
-    PredictionTargetReceipt, SemanticStateVector, SensorProfile, SensorProfileIdentity,
-    SensoryAbiVersion, SleepState, SleepTrigger, StableFocusIdentity, StructuralPlasticityConfig,
-    StructuralPlasticityState, TopologicalMapConfig, TopologySidecar, Validate, Vec3f,
-    SLEEP_CONSOLIDATION_SCHEMA_VERSION,
+    PeripheralSummary, PredictionTargetReceipt, SalienceComponents, SemanticStateVector,
+    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SleepState, SleepTrigger,
+    StableFocusIdentity, StructuralPlasticityConfig, StructuralPlasticityState, Tick,
+    TopologicalMapConfig, TopologySidecar, Validate, Vec3f, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
 };
 use alife_game_app::{
     merge_gpu_checkpoint_manifest_entries, GpuBrainCheckpointWrite, GpuCheckpointAssetStore,
@@ -348,25 +348,90 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
         Some(action)
     );
 
-    let control_attention = select_focal_targets(
+    let incumbent = StableFocusIdentity::Organism(OrganismId(19));
+    let challenger = StableFocusIdentity::Organism(OrganismId(20));
+    let summary = |identity, drive| PeripheralSummary {
+        identity,
+        salience: SalienceComponents {
+            drive: NormalizedScalar::new(drive).expect("bounded salience"),
+            ..SalienceComponents::default()
+        },
+        confidence: Confidence::new(1.0).unwrap(),
+    };
+    let policy = AttentionSelectionPolicy {
+        focal_capacity: 1,
+        requested_focal_count: 1,
+        ..AttentionSelectionPolicy::default()
+    };
+    // A close challenger would win from default state, so the first step must
+    // actually consume the restored incumbent and its retained-tick count.
+    // Later current observations must still permit a decisive switch and
+    // remove identities that are no longer present.
+    let cases = [
+        (
+            vec![summary(incumbent, 0.5), summary(challenger, 0.6)],
+            Some(incumbent),
+            4,
+        ),
+        (
+            vec![summary(incumbent, 0.5), summary(challenger, 0.9)],
+            Some(challenger),
+            1,
+        ),
+        (vec![summary(incumbent, 0.1)], Some(incumbent), 1),
+        (vec![], None, 0),
+    ];
+    let reset_attention = select_focal_targets(
         organism_id,
-        sequence_id,
-        checkpoint_tick,
-        &[],
-        checkpoint.cognitive_context.attention.hysteresis,
-        AttentionSelectionPolicy::default(),
+        ExperienceSequenceId(sequence_id.raw() + 1),
+        Tick::new(checkpoint_tick.raw() + 1),
+        &cases[0].0,
+        HysteresisState::default(),
+        policy,
     )
-    .expect("unsaved control attention");
-    let restored_attention = select_focal_targets(
-        organism_id,
-        sequence_id,
-        checkpoint_tick,
-        &[],
-        restored.attention().hysteresis,
-        AttentionSelectionPolicy::default(),
-    )
-    .expect("restored attention");
-    assert_eq!(restored_attention, control_attention);
+    .expect("reset-state negative control");
+    assert_eq!(reset_attention.focal_targets, vec![challenger]);
+
+    let mut control_hysteresis = checkpoint.attention().hysteresis;
+    let mut restored_hysteresis = restored.attention().hysteresis;
+    for (step, (summaries, expected_identity, expected_ticks)) in cases.iter().enumerate() {
+        let next_sequence = ExperienceSequenceId(sequence_id.raw() + step as u64 + 1);
+        let next_tick = Tick::new(checkpoint_tick.raw() + step as u64 + 1);
+        let control_attention = select_focal_targets(
+            organism_id,
+            next_sequence,
+            next_tick,
+            summaries,
+            control_hysteresis,
+            policy,
+        )
+        .expect("unsaved control attention");
+        let restored_attention = select_focal_targets(
+            organism_id,
+            next_sequence,
+            next_tick,
+            summaries,
+            restored_hysteresis,
+            policy,
+        )
+        .expect("restored attention");
+        assert_eq!(restored_attention, control_attention, "resume step {step}");
+        assert_eq!(
+            restored_attention.focal_targets,
+            expected_identity.iter().copied().collect::<Vec<_>>(),
+            "resume step {step}"
+        );
+        assert_eq!(
+            restored_attention.hysteresis.previous_identity,
+            *expected_identity
+        );
+        assert_eq!(
+            restored_attention.hysteresis.retained_ticks,
+            *expected_ticks
+        );
+        control_hysteresis = control_attention.hysteresis;
+        restored_hysteresis = restored_attention.hysteresis;
+    }
 
     fs::remove_dir_all(asset_root).expect("remove test asset root");
 }
