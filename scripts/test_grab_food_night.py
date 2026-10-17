@@ -8,7 +8,9 @@ import json
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -97,6 +99,182 @@ class GrabNightTests(unittest.TestCase):
         (self.source / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 0}))
         with self.assertRaisesRegex(ValueError, "checkpoint age"):
             night.source_info(self.source)
+
+    def corrected_source(self):
+        inspector = self.root / "cpu-inspector.exe"
+        inspector.write_bytes(b"mocked; never execute")
+        (self.source / "critic-correction.json").write_text("{}")
+        (self.source / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 6204}))
+        inspection = {"expected_policy_version": 602, "policy_version": 602,
+                      "founder_seed_base": 539363617, "actor_optimizer_step": 1844,
+                      "value_optimizer_step": 6204, "neural_execution": False,
+                      "weights_modified": False,
+                      "file_digests": [{"file_name": name, "sha256": night.sha256(self.source / name)}
+                                       for name in night.seed_reservations.SOURCE_FILES]}
+        return inspector, inspection
+
+    def test_correction_requires_explicit_native_admission(self):
+        self.corrected_source()
+        with patch.object(night.inspector_io, "run_inspector") as run:
+            with self.assertRaisesRegex(ValueError, "explicit native"):
+                night.source_info(self.source)
+            run.assert_not_called()
+
+    def test_correction_uses_native_actual_age_without_rewriting_ppo_receipt(self):
+        inspector, inspection = self.corrected_source()
+        before = (self.source / "cycle.json").read_bytes()
+        with patch.object(night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")) as run:
+            founder, hashes = night.source_info(self.source, checkpoint_inspector=inspector)
+        self.assertEqual(founder, 539363617)
+        self.assertEqual(len(hashes), 4)
+        self.assertEqual((self.source / "cycle.json").read_bytes(), before)
+        self.assertIn("--validate-checkpoint", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["timeout"], 90)
+
+    def test_correction_rejects_bad_native_result_or_unbound_age(self):
+        inspector, inspection = self.corrected_source()
+        for change in ({"neural_execution": True}, {"weights_modified": True},
+                       {"value_optimizer_step": 1204}, {"actor_optimizer_step": 0},
+                       {"policy_version": 603}, {"file_digests": []}):
+            with self.subTest(change=change), patch.object(
+                    night.inspector_io, "run_inspector", return_value=subprocess.CompletedProcess(
+                        [], 0, json.dumps({**inspection, **change}).encode(), b"")):
+                with self.assertRaises(ValueError):
+                    night.source_info(self.source, checkpoint_inspector=inspector)
+        with patch.object(night.inspector_io, "run_inspector", side_effect=subprocess.CalledProcessError(1, "mock")):
+            with self.assertRaisesRegex(ValueError, "admission failed"):
+                night.source_info(self.source, checkpoint_inspector=inspector)
+
+    def test_first_ppo_cycle_counts_updates_from_admitted_correction_age(self):
+        directory, receipt = self.write_grab_credit_cycle((0,))
+        inspector, inspection = self.corrected_source()
+        receipt["value_optimizer_step"] = 6205
+        (directory / "cycle.json").write_text(json.dumps(receipt))
+        (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 6205}))
+        with contextlib.redirect_stderr(io.StringIO()), patch.object(
+                night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")):
+            accepted, _, _ = night.validate_cycle(
+                directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
+        self.assertEqual(accepted["value_optimizer_updates"], 1)
+        self.assertEqual(night.read_json(self.source / "cycle.json")["value_optimizer_step"], 1204)
+        receipt["value_optimizer_step"] = 1205
+        (directory / "cycle.json").write_text(json.dumps(receipt))
+        (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 1205}))
+        with contextlib.redirect_stderr(io.StringIO()), patch.object(
+                night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")):
+            with self.assertRaisesRegex(ValueError, "lost its optimizer age"):
+                night.validate_cycle(directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
+
+    def test_correction_cli_plan_pins_inspector_without_crediting_repair_as_ppo(self):
+        inspector, inspection = self.corrected_source()
+        self.write_history(self.source)
+        binary = self.root / "trainer"
+        binary.write_bytes(b"never execute")
+        output = self.root / "corrected-plan"
+        argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
+                "--seed-history", str(self.history), "--checkpoint-inspector", str(inspector),
+                "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat()]
+        with patch.object(night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")) as run, \
+             patch.object(night.subprocess, "Popen") as spawn, patch("builtins.print"):
+            self.assertEqual(night.main(argv), 0)
+        self.assertEqual(run.call_args.args[0][0], str(inspector))
+        spawn.assert_not_called()
+        state = night.read_json(output / "night.json")
+        self.assertEqual(state["checkpoint_inspector"], str(inspector))
+        self.assertEqual(state["input_sha256"][str(inspector)], night.sha256(inspector))
+        self.assertEqual(state["source_critic_only_updates"], 5000)
+        self.assertEqual(state["value_optimizer_updates"], 0)
+        self.assertEqual(state["distinct_completed_episodes"], 0)
+
+    def test_correction_cli_resumes_first_cycle_with_native_actual_age(self):
+        inspector, inspection = self.corrected_source()
+        self.write_history(self.source)
+        state, _, _ = self.fixture_run(
+            recipe_options=("--checkpoint-inspector", str(inspector)), checkpoint_inspection=inspection)
+        self.assertEqual(state["status"], "completed", state["error"])
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+        self.assertEqual(state["source_critic_only_updates"], 5000)
+        self.assertEqual(state["value_optimizer_updates"], 1)
+        self.assertEqual(night.read_json(Path(state["latest_checkpoint"]) / "value-checkpoint.json")["optimizer_step"], 6205)
+
+    def test_correction_cli_keeps_inspector_pin_after_preserving_first_seal(self):
+        inspector, inspection = self.corrected_source()
+        self.write_history(self.source)
+        state, finals, launched = self.fixture_run(
+            recipe_options=("--checkpoint-inspector", str(inspector)), checkpoint_inspection=inspection,
+            inspector_fault=True)
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+        self.assertEqual(state["value_optimizer_updates"], 1)
+        self.assertIn("source/checkpoint/binary changed", state["error"])
+        self.assertEqual(launched, ["frozen-before", "eating-retention-before", "episode-00000"])
+        self.assertEqual(finals, [])
+
+    def real_correction_inspector(self, code, timeout=5):
+        """Exercise the production bounded runner with a real CPU-only Python child."""
+        inspector, inspection = self.corrected_source()
+        if callable(code):
+            code = code(inspection)
+        original_run = night.inspector_io.run_inspector
+        original_spawn = subprocess.Popen
+        children = []
+        self.inspector_result = None
+        before = {p.name: p.read_bytes() for p in self.source.iterdir() if p.is_file()}
+
+        def spawn(*args, **kwargs):
+            child = original_spawn(*args, **kwargs)
+            children.append(child)
+            return child
+
+        def run(argv, **kwargs):
+            self.assertEqual(argv[0], str(inspector))
+            self.assertEqual(kwargs["timeout"], 90)
+            self.inspector_result = original_run([sys.executable, "-c", code], timeout=timeout)
+            return self.inspector_result
+
+        try:
+            with patch.object(night.inspector_io, "run_inspector", side_effect=run), \
+                 patch.object(subprocess, "Popen", side_effect=spawn):
+                return night.source_info(self.source, checkpoint_inspector=inspector)
+        finally:
+            self.assertEqual(len(children), 1)
+            self.assertIsNotNone(children[0].poll())
+            self.assertTrue(children[0].stdout.closed)
+            self.assertTrue(children[0].stderr.closed)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in self.source.iterdir() if p.is_file()})
+
+    def test_correction_inspector_real_valid_json_preserves_source(self):
+        founder, _ = self.real_correction_inspector(
+            lambda inspection: "import sys;sys.stdout.write(" + repr(json.dumps(inspection)) + ")")
+        self.assertEqual(founder, 539363617)
+
+    def test_correction_inspector_real_noisy_streams_are_capped_and_reaped(self):
+        for stream in (1, 2):
+            with self.subTest(stream=stream):
+                began = time.monotonic()
+                with self.assertRaisesRegex(ValueError, "native critic correction admission failed"):
+                    self.real_correction_inspector(
+                        f"import os,time;os.write({stream},b'x'*66560);time.sleep(30)")
+                self.assertLess(time.monotonic() - began, 5)
+                result = self.inspector_result
+                self.assertGreater(len(result.stdout if stream == 1 else result.stderr), night.inspector_io.OUTPUT_LIMIT)
+                self.assertLessEqual(len(result.stdout), night.inspector_io.OUTPUT_LIMIT + 1)
+                self.assertLessEqual(len(result.stderr), night.inspector_io.OUTPUT_LIMIT + 1)
+
+    def test_correction_inspector_real_timeout_reaps_child_and_closes_pipes(self):
+        began = time.monotonic()
+        with self.assertRaisesRegex(ValueError, "native critic correction admission failed") as caught:
+            self.real_correction_inspector("import time;print('ready',flush=True);time.sleep(30)", timeout=.25)
+        self.assertIsInstance(caught.exception.__cause__, subprocess.TimeoutExpired)
+        self.assertLess(time.monotonic() - began, 3)
+
+    def test_correction_inspector_real_nonzero_exit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "native critic correction admission failed") as caught:
+            self.real_correction_inspector("raise SystemExit(17)")
+        self.assertIsInstance(caught.exception.__cause__, subprocess.CalledProcessError)
 
     def test_acquisition_requires_exact_target_touch_and_ownership(self):
         for mutation in ({"owner_before": 1}, {"owner_after": 2}, {"consumed_after": True},
@@ -288,7 +466,7 @@ class GrabNightTests(unittest.TestCase):
     def fixture_run(self, failures=None, fail_episode=None, final_grab_seconds=0, final_remaining_seconds=None,
                     invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False,
                     retention_meals=None, retention_changes=None, recipe_options=(), command_seconds=None,
-                    pre_run=None):
+                    pre_run=None, checkpoint_inspection=None, inspector_fault=False):
         """Exercise real orchestration/validators with a nonexecuting child stub."""
         self.run_index = getattr(self, "run_index", 0) + 1
         output = self.root / "target/founder-training" / f"run-{self.run_index}"
@@ -304,7 +482,14 @@ class GrabNightTests(unittest.TestCase):
                 "--batch-episodes", "2", "--assessment-seconds", "10", "--idle-seconds", "0",
                 "--sampling-temperature-floor", "1", *recipe_options]
         args = night.arguments().parse_args(argv)
-        with patch("builtins.print"):
+        inspection_output = json.dumps(checkpoint_inspection) if checkpoint_inspection is not None else ""
+
+        def fake_inspection_or_git(command, *args, **kwargs):
+            return subprocess.CompletedProcess(command, 0,
+                stdout=inspection_output.encode() if "--validate-checkpoint" in command else "", stderr=b"")
+
+        with patch("builtins.print"), patch.object(
+                night.inspector_io, "run_inspector", side_effect=fake_inspection_or_git):
             self.assertEqual(night.main(argv), 0)
         state_path = output / "night.json"
         state = night.read_json(state_path)
@@ -361,7 +546,8 @@ class GrabNightTests(unittest.TestCase):
                 (directory / "initial.alife-foundation").write_bytes(
                     (previous / "trained.alife-foundation").read_bytes())
                 self.write_cycle(directory, prior_receipt["policy_version"] + 1,
-                    prior_receipt["actor_optimizer_step"] + 1, prior_receipt["value_optimizer_step"] + 1, {
+                    prior_receipt["actor_optimizer_step"] + 1,
+                    night.read_json(previous / "value-checkpoint.json")["optimizer_step"] + 1, {
                     "seed": int(command[6]), "lesson": "grab_food",
                     "grab_food_setup": {**setup(), "realized_body_yaw": index * .1},
                     "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1],
@@ -416,6 +602,10 @@ class GrabNightTests(unittest.TestCase):
                 raise lane_fault
 
         def fake_sha256(path):
+            if (inspector_fault and active_command[0] == "episode-00000" and
+                    Path(path).name == "cpu-inspector.exe" and not fault_observed[0]):
+                fault_observed[0] = True
+                return "fixture mismatched inspector digest"
             if (source_fault and active_command[0] == "frozen-after-00000" and
                     Path(path).name == "trained.alife-foundation"):
                 return "fixture mismatched checkpoint digest"
@@ -436,7 +626,8 @@ class GrabNightTests(unittest.TestCase):
                  free=resources["disk_free_bytes"])), \
              patch.object(night, "assert_lane_idle", side_effect=fake_lane), \
              patch.object(night, "sha256", side_effect=fake_sha256), \
-             patch.object(night.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="")), \
+             patch.object(night.subprocess, "run", side_effect=fake_inspection_or_git), \
+             patch.object(night.inspector_io, "run_inspector", side_effect=fake_inspection_or_git), \
              patch.object(night.subprocess, "check_output", return_value="fixture-source-sha\n"), \
              patch.object(night.subprocess, "Popen") as spawn, \
              patch("builtins.print"), contextlib.redirect_stderr(io.StringIO()):

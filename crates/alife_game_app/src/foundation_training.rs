@@ -115,7 +115,7 @@ fn activation_range(snapshot: &GpuTrainingStateSnapshot) -> Result<Range<u32>> {
     }
 }
 
-fn snapshot_activation(snapshot: &GpuTrainingStateSnapshot) -> Result<Vec<f32>> {
+pub(crate) fn snapshot_activation(snapshot: &GpuTrainingStateSnapshot) -> Result<Vec<f32>> {
     snapshot_values(snapshot, activation_range(snapshot)?)
 }
 

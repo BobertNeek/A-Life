@@ -164,8 +164,12 @@ pub fn inspect_foundation_checkpoint(
     let actor: FoundationTrainerCheckpoint = serde_json::from_slice(&actor_bytes)?;
     let value_bytes = read_checkpoint_file(source_cycle, "value-checkpoint.json")?;
     let value: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(&value_bytes)?;
-    crate::foundation_training_cycle::validate_cycle_optimizer_handoff(
-        &cycle, &asset, &actor, &value,
+    crate::foundation_critic_correction::validate_cycle_optimizer_handoff_at(
+        source_cycle,
+        &cycle,
+        &asset,
+        &actor,
+        &value,
     )?;
     let current = compile_source(asset, cycle.seed, cycle.founder_seed_base)?;
     actor.validate_for(&current, asset_digest)?;
@@ -368,7 +372,11 @@ struct PreparedExample {
     weight: f32,
 }
 
-fn compile_source(asset: FoundationWeightAsset, seed: u64, founder: u64) -> Result<BrainPhenotype> {
+pub(crate) fn compile_source(
+    asset: FoundationWeightAsset,
+    seed: u64,
+    founder: u64,
+) -> Result<BrainPhenotype> {
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = founder;
@@ -657,7 +665,7 @@ pub(crate) fn rehearse_archived_successes(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     fn selected_source_fixture() -> (
@@ -774,7 +782,7 @@ mod tests {
         "value-checkpoint.json",
     ];
 
-    fn checkpoint_fixture(policy: u64) -> PathBuf {
+    pub(crate) fn checkpoint_fixture(policy: u64) -> PathBuf {
         let (directory, _, _) = selected_source_fixture();
         for (name, field) in [
             ("cycle.json", "policy_version"),

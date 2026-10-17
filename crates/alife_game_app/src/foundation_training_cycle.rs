@@ -321,7 +321,9 @@ fn load_cycle_continuation(
     }
     let actor = serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
     let value = serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
-    validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value)?;
+    crate::foundation_critic_correction::validate_cycle_optimizer_handoff_at(
+        previous, &receipt, &asset, &actor, &value,
+    )?;
     Ok(SealedCycleContinuation {
         asset,
         policy_version: receipt
@@ -1262,6 +1264,23 @@ fn prepare_terrain_founder_refresh(
 #[cfg(test)]
 mod founder_refresh_tests {
     use super::*;
+
+    #[test]
+    fn critic_correction_continuation_preserves_policy_actor_and_actual_critic_age() {
+        let fixture = crate::foundation_critic_correction::tests::fixture();
+        let restored = load_cycle_continuation(&fixture.target, None).unwrap();
+        assert_eq!(restored.policy_version, 5125);
+        assert_eq!(restored.actor.optimizer_step, 1);
+        assert_eq!(restored.value.optimizer_step, 6);
+        assert_eq!(restored.value.last_updated_policy_version, Some(5124));
+        assert_eq!(
+            restored.actor,
+            serde_json::from_slice::<alife_training::FoundationTrainerCheckpoint>(
+                &std::fs::read(fixture.source.join("actor-checkpoint.json")).unwrap()
+            )
+            .unwrap()
+        );
+    }
 
     #[test]
     fn current_credit_transition_preserves_all_other_lanes_and_learning_parameters() {
@@ -2398,7 +2417,62 @@ fn run_foundation_training_cycle_from_with_temperature(
         rehearsal_epochs,
         archived_replay,
         &timing,
+        false,
     );
+    let result = result.and_then(|outcome| match outcome {
+        FoundationCycleOutcome::Trained(receipt) => Ok(*receipt),
+        FoundationCycleOutcome::CriticCapture(_) => {
+            Err("unexpected critic capture in training".into())
+        }
+    });
+    timing.finish(result.as_ref().err().map(|error| error.as_ref()));
+    result
+}
+
+enum FoundationCycleOutcome {
+    Trained(Box<FoundationCycleReceipt>),
+    CriticCapture(serde_json::Value),
+}
+
+/// Capture an independently seeded trajectory under the exact sealed actor.
+/// This uses ordinary production biology and lifetime learning, then stops
+/// before PPO. Its receipt is deliberately not a sealed training cycle.
+pub fn capture_foundation_critic_trajectory(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    decisions: usize,
+    sampling_temperature: f32,
+) -> Result<serde_json::Value> {
+    if !(16..=2048).contains(&decisions) || !previous.join("cycle.json").is_file() {
+        return Err("critic capture needs a sealed checkpoint and 16..=2048 decisions".into());
+    }
+    let timing = CycleStageTiming::from_environment(|| {
+        serde_json::json!({
+            "purpose": "critic_capture_only", "seed": seed, "requested_decisions": decisions,
+            "sampling_temperature": sampling_temperature,
+        })
+    });
+    let result = run_foundation_training_cycle_profiled(
+        output,
+        seed,
+        decisions,
+        Some(previous),
+        None,
+        Some(FoundationTeacherLesson::GrabFood),
+        None,
+        sampling_temperature,
+        0,
+        None,
+        &timing,
+        true,
+    )
+    .and_then(|outcome| match outcome {
+        FoundationCycleOutcome::CriticCapture(receipt) => Ok(receipt),
+        FoundationCycleOutcome::Trained(_) => {
+            Err("critic capture unexpectedly trained actor".into())
+        }
+    });
     timing.finish(result.as_ref().err().map(|error| error.as_ref()));
     result
 }
@@ -2416,7 +2490,8 @@ fn run_foundation_training_cycle_profiled(
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
     timing: &CycleStageTiming,
-) -> Result<FoundationCycleReceipt> {
+    capture_only: bool,
+) -> Result<FoundationCycleOutcome> {
     let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
     if rehearsal_epochs != 0 || archived_replay.is_some() {
@@ -2564,6 +2639,7 @@ fn run_foundation_training_cycle_profiled(
                 rehearsal_epochs,
                 archived_replay,
                 timing,
+                if capture_only { previous } else { None },
             )
         },
         |error| {
@@ -2625,7 +2701,9 @@ fn run_foundation_training_cycle_in_owned_output(
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
     timing: &CycleStageTiming,
-) -> Result<FoundationCycleReceipt> {
+    capture_source: Option<&Path>,
+) -> Result<FoundationCycleOutcome> {
+    let capture_only = capture_source.is_some();
     let AdmittedCycleState {
         asset,
         policy_version,
@@ -2958,6 +3036,7 @@ fn run_foundation_training_cycle_in_owned_output(
     )?;
     std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
+    let mut critic_capture_features = capture_only.then(|| Vec::with_capacity(training_ticks + 1));
     let speech_label = |frame: &alife_core::PerceptionFrame,
                         previous: Option<&alife_core::ExperiencePatch>| {
         crate::foundation_training::grounded_speech_label(
@@ -2973,6 +3052,11 @@ fn run_foundation_training_cycle_in_owned_output(
     let append_started = Instant::now();
     speech_targets.push(speech_label(&first[0].frame, None));
     let mut last_speech_patch = first[0].patch.clone();
+    if let Some(features) = &mut critic_capture_features {
+        features.push(crate::foundation_training::snapshot_activation(
+            &first[0].after_inference,
+        )?);
+    }
     references.push(writer.append(&first.remove(0))?);
     replay_append_seconds += append_started.elapsed().as_secs_f64();
     let mut gap = false;
@@ -3173,6 +3257,11 @@ fn run_foundation_training_cycle_in_owned_output(
         let append_started = Instant::now();
         speech_targets.push(speech_label(&captured[0].frame, Some(&last_speech_patch)));
         last_speech_patch = captured[0].patch.clone();
+        if let Some(features) = &mut critic_capture_features {
+            features.push(crate::foundation_training::snapshot_activation(
+                &captured[0].after_inference,
+            )?);
+        }
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
         if terminal_biology.is_some() {
@@ -3412,6 +3501,103 @@ fn run_foundation_training_cycle_in_owned_output(
                 PpoBoundary::Continuing
             },
         });
+    }
+    if capture_only {
+        use sha2::{Digest, Sha256};
+        let features = critic_capture_features.ok_or("missing critic capture features")?;
+        if features.len() != references.len()
+            || features.iter().any(|row| {
+                row.len() != phenotype.neuron_count() as usize
+                    || row.iter().any(|value| !value.is_finite())
+            })
+            || serde_json::to_vec(&trainer.checkpoint()?)? != initial_checkpoint
+        {
+            return Err("critic capture changed actor or has malformed GPU features".into());
+        }
+        let previous = capture_source.ok_or("critic capture missing sealed source")?;
+        let saved_value: alife_training::PpoValueHeadCheckpoint =
+            serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
+        if value.checkpoint(trainer.session())? != saved_value {
+            return Err("critic capture changed value/Adam state".into());
+        }
+        let feature_bytes: Vec<u8> = features
+            .iter()
+            .flatten()
+            .flat_map(|value| value.to_le_bytes())
+            .collect();
+        std::fs::write(output.join("critic-features.f32le"), &feature_bytes)?;
+        let mut source_files = serde_json::Map::new();
+        for name in [
+            "cycle.json",
+            "trained.alife-foundation",
+            "actor-checkpoint.json",
+            "value-checkpoint.json",
+        ] {
+            let bytes = std::fs::read(previous.join(name))?;
+            source_files.insert(
+                name.into(),
+                serde_json::json!(format!("{:x}", Sha256::digest(&bytes))),
+            );
+        }
+        for name in ["actor-checkpoint.json", "value-checkpoint.json"] {
+            std::fs::copy(previous.join(name), output.join(name))?;
+        }
+        let rows: Vec<_> = transitions.iter().enumerate().map(|(i, transition)| {
+            let terminal = transition.boundary == PpoBoundary::Terminated;
+            let gamma = if terminal { 0.0 } else {
+                (-std::f64::consts::LN_2 * f64::from(transition.elapsed_seconds)
+                    / f64::from(ppo_config.discount_half_life_seconds)).exp()
+            };
+            serde_json::json!({
+                "row": i, "current": i, "next": if terminal { i } else { i+1 },
+                "decision_tick": references[i].tick,
+                "next_decision_tick": references.get(i+1).map(|reference| reference.tick),
+                "reward": transition.reward, "elapsed_seconds": transition.elapsed_seconds,
+                "gamma": gamma, "discount": gamma, "boundary": if terminal { "Terminated" } else if i+1 == train_rows { "Truncated" } else { "Continuing" },
+                "current_value": transition.old_value, "next_value": transition.next_value,
+            })
+        }).collect();
+        let receipt = serde_json::json!({
+            "schema": 1, "purpose": "critic_capture_only", "sealed_training_cycle": false,
+            "seed": seed, "policy_version": policy_version,
+            "collection_policy_version": policy_version,
+            "actor_policy": saved_value.last_updated_policy_version,
+            "source_actor_policy_version": saved_value.last_updated_policy_version,
+            "source": source,
+            "source_checkpoint": previous, "source_file_sha256": source_files,
+            "founder_seed_base": founder_seed_base, "sampling_temperature": sampling_temperature,
+            "biological_objective_version": BIOLOGICAL_OBJECTIVE_VERSION,
+            "actor_optimizer_step": actor_optimizer_step_before,
+            "value_optimizer_step": value_optimizer_step_before,
+            "actor_optimizer_updates": 0, "value_optimizer_updates": 0,
+            "actor_and_Adam_unchanged": true, "critic_and_Adam_unchanged": true,
+            "normal_production_biology_and_lifetime_learning": true,
+            "age_death_policy_matches_existing_training": true,
+            "requested_decisions": training_ticks, "transition_count": train_rows,
+            "captured_feature_rows": features.len(), "feature_states": features.len(), "feature_count": phenotype.neuron_count(),
+            "feature_file": "critic-features.f32le", "features_file": "critic-features.f32le", "features_encoding": "row_major_f32_little_endian",
+            "features_sha256": format!("{:x}", Sha256::digest(&feature_bytes)),
+            "features_authority": "production_GPU_after_inference_active_activation_bank",
+            "discount_half_life_seconds": ppo_config.discount_half_life_seconds,
+            "gae_half_life_seconds": ppo_config.gae_half_life_seconds,
+            "terminal_death_tick": terminal_death_tick, "world_ticks_elapsed": world_ticks_elapsed,
+            "collection_seconds": collection_seconds, "initial_energy": initial_energy,
+            "minimum_energy": minimum_energy, "final_energy": final_energy,
+            "sleep_gap_reward_total": sleep_gap_reward_total,
+            "curriculum_reward_rows": curriculum_reward_rows, "grab_food_acquisitions": grab_food_acquisitions,
+            "rows": rows, "transitions": rows,
+            "truncation_semantics": "actual_next_state_continuation; only_confirmed_death_zeroes_bootstrap",
+        });
+        std::fs::write(
+            output.join("critic-capture.json"),
+            serde_json::to_vec_pretty(&receipt)?,
+        )?;
+        std::fs::write(
+            output.join("phase.txt"),
+            "critic-capture-complete-no-optimizer-update",
+        )?;
+        targets_stage.finish();
+        return Ok(FoundationCycleOutcome::CriticCapture(receipt));
     }
     let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
     let ppo_rollout_diagnostics_sha256 = ppo_diagnostics::write_if_enabled(
@@ -3681,5 +3867,5 @@ fn run_foundation_training_cycle_in_owned_output(
         serde_json::to_vec_pretty(&receipt)?,
     )?;
     receipt_stage.finish();
-    Ok(receipt)
+    Ok(FoundationCycleOutcome::Trained(Box::new(receipt)))
 }

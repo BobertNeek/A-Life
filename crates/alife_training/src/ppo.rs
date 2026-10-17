@@ -6,6 +6,9 @@ use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 
 use crate::{AdamWConfig, TrainingError};
 
+mod critic_calibration;
+pub use critic_calibration::*;
+
 pub const PPO_MAX_CANDIDATES: usize = 32;
 pub const PPO_MOTOR_SLOTS: usize = 6;
 pub const PPO_ROW_WORDS: usize = 64;

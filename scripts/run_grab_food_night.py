@@ -22,6 +22,7 @@ import sys
 import time
 
 import grab_food_seed_reservations as seed_reservations
+import summarize_ppo_diagnostics as inspector_io
 
 UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
@@ -60,7 +61,49 @@ def cutoff_time(text):
     return value.astimezone(UTC)
 
 
-def source_info(source):
+def inspect_critic_correction(source, receipt, checkpoint_inspector):
+    """Delegate correction admission to the explicit CPU-only native validator.
+
+    A correction preserves the historical PPO receipt, so its actual critic age
+    must come from the admitted checkpoint rather than that old receipt.
+    """
+    if checkpoint_inspector is None or not Path(checkpoint_inspector).is_file():
+        raise ValueError("critic correction requires an explicit native checkpoint inspector")
+    sidecar = source / "critic-correction.json"
+    sidecar_hash = sha256(sidecar)
+    try:
+        result = inspector_io.run_inspector(
+            [str(checkpoint_inspector), "--validate-checkpoint", str(source),
+             "--expected-policy", str(receipt["policy_version"])],
+            timeout=90)
+        if len(result.stdout) > inspector_io.OUTPUT_LIMIT or len(result.stderr) > inspector_io.OUTPUT_LIMIT:
+            raise ValueError("native critic correction inspector output exceeds byte limit")
+        result.check_returncode()
+        inspection = inspector_io.decode_json(result.stdout, "native critic correction inspector output")
+    except (subprocess.SubprocessError, OSError, ValueError) as error:
+        raise ValueError("native critic correction admission failed") from error
+    if (inspection.get("neural_execution") is not False or
+            inspection.get("weights_modified") is not False or
+            inspection.get("expected_policy_version") != receipt["policy_version"] or
+            inspection.get("policy_version") != receipt["policy_version"] or
+            inspection.get("founder_seed_base") != receipt["founder_seed_base"] or
+            inspection.get("actor_optimizer_step") != receipt["actor_optimizer_step"]):
+        raise ValueError("native critic correction inspection disagrees with sealed source")
+    digests = {item["file_name"]: item["sha256"] for item in inspection.get("file_digests", [])}
+    for name in ("cycle.json", "trained.alife-foundation", "actor-checkpoint.json", "value-checkpoint.json"):
+        if digests.get(name) != sha256(source / name):
+            raise ValueError("native critic correction inspection has mismatched file digests")
+    if sha256(sidecar) != sidecar_hash:
+        raise ValueError("critic correction changed during native admission")
+    for head in ("actor", "value"):
+        age = inspection.get(f"{head}_optimizer_step")
+        if (not isinstance(age, int) or isinstance(age, bool) or age < 0 or
+                age != read_json(source / f"{head}-checkpoint.json").get("optimizer_step")):
+            raise ValueError("native critic correction inspection has mismatched checkpoint age")
+    return inspection
+
+
+def source_info(source, *, checkpoint_inspector=None):
     seals = [name for name in ("cycle.json", "warmup.json", "adaptation.json") if (source / name).is_file()]
     if seals != ["cycle.json"]:
         raise ValueError("Grab continuation requires an existing sealed actor/value cycle; adaptations and warm-ups are ineligible")
@@ -71,9 +114,12 @@ def source_info(source):
     founder = receipt.get("founder_seed_base")
     if not isinstance(founder, int) or not 1 <= founder <= MAX_SEED:
         raise ValueError("source has no valid founder seed")
+    ages = receipt
+    if (source / "critic-correction.json").is_file():
+        ages = inspect_critic_correction(source, receipt, checkpoint_inspector)
     for head in ("actor", "value"):
         checkpoint = read_json(source / f"{head}-checkpoint.json")
-        if checkpoint.get("optimizer_step") != receipt.get(f"{head}_optimizer_step"):
+        if checkpoint.get("optimizer_step") != ages.get(f"{head}_optimizer_step"):
             raise ValueError(f"{head} checkpoint age disagrees with its sealed cycle")
     files = [source / name for name in ("cycle.json", "trained.alife-foundation",
         "actor-checkpoint.json", "value-checkpoint.json")]
@@ -343,7 +389,7 @@ def validate_probe(directory):
             "semantic_prior_diagnostics": receipt["semantic_prior_diagnostics"]}
 
 
-def validate_cycle(directory, previous, seed):
+def validate_cycle(directory, previous, seed, *, checkpoint_inspector=None):
     receipt = read_json(directory / "cycle.json")
     setup = assert_setup(receipt)
     receipt["semantic_prior_diagnostics"] = assert_prior(receipt, receipt["captured_replay_rows"])
@@ -375,15 +421,18 @@ def validate_cycle(directory, previous, seed):
     if not math.isclose(receipt.get("curriculum_reward_total", float("nan")),
             sum(reward["curriculum_reward"] for reward in rewards), abs_tol=1e-6):
         raise ValueError("Grab curriculum total disagrees with its loss rows")
-    _, files = source_info(directory)
+    _, files = source_info(directory, checkpoint_inspector=checkpoint_inspector)
     if sha256(previous / "trained.alife-foundation") != sha256(directory / "initial.alife-foundation"):
         raise ValueError("cycle did not start from the exact preceding exported asset")
     if (previous / "cycle.json").is_file():
         old = read_json(previous / "cycle.json")
         if receipt.get("objective_state_reset") or receipt["policy_version"] != old["policy_version"] + 1:
             raise ValueError("continuation reset its objective or lost policy age")
+        ages = old
+        if (previous / "critic-correction.json").is_file():
+            ages = inspect_critic_correction(previous, old, checkpoint_inspector)
         for head in ("actor", "value"):
-            if receipt[f"{head}_optimizer_step"] - old[f"{head}_optimizer_step"] != receipt[f"{head}_optimizer_updates"]:
+            if receipt[f"{head}_optimizer_step"] - ages[f"{head}_optimizer_step"] != receipt[f"{head}_optimizer_updates"]:
                 raise ValueError("continuation lost its optimizer age")
     for head in ("actor", "value"):
         if receipt.get(f"{head}_optimizer_updates", 0) < 1:
@@ -527,6 +576,8 @@ def cooled_temperature(current, floor, grab, eating, baseline_meals):
 def arguments():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
+    parser.add_argument("--checkpoint-inspector", type=Path,
+                        help="explicit CPU-only inspect_archived_success binary required for critic corrections")
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cutoff", type=cutoff_time, required=True)
@@ -585,7 +636,17 @@ def main(argv=None):
         if args.cutoff - dt.datetime.now(UTC) > dt.timedelta(hours=24):
             raise ValueError("morning cutoff must be within the next 24 hours")
         args.binary = args.binary.resolve(strict=True); args.source = args.source.resolve(strict=True)
-        founder, input_hashes = source_info(args.source)
+        inspector_hash = None
+        if args.checkpoint_inspector is not None:
+            args.checkpoint_inspector = args.checkpoint_inspector.resolve(strict=True)
+            if not args.checkpoint_inspector.is_file():
+                raise ValueError("checkpoint inspector must be a regular file")
+            inspector_hash = sha256(args.checkpoint_inspector)
+        founder, input_hashes = source_info(args.source, checkpoint_inspector=args.checkpoint_inspector)
+        if inspector_hash is not None:
+            if sha256(args.checkpoint_inspector) != inspector_hash:
+                raise ValueError("checkpoint inspector changed during source admission")
+            input_hashes[str(args.checkpoint_inspector)] = inspector_hash
         if (args.source / "cycle.json").is_file():
             source_cycle = read_json(args.source / "cycle.json")
             source_seed = source_cycle.get("seed")
@@ -595,6 +656,12 @@ def main(argv=None):
                     source_cycle.get("lesson") in ("eat_held_food", "grab_food") and args.seed <= source_seed):
                 raise ValueError("training seed range repeats the source episode; select a fresh range")
         input_hashes[str(args.binary)] = sha256(args.binary)
+        source_critic_only_updates = 0
+        correction = args.source / "critic-correction.json"
+        if correction.is_file():
+            input_hashes[str(correction)] = sha256(correction)
+            source_critic_only_updates = (read_json(args.source / "value-checkpoint.json")["optimizer_step"] -
+                                         source_cycle["value_optimizer_step"])
         args.output = args.output.resolve()
         args.seed_history = args.seed_history.resolve(strict=True)
         source_hashes = {name: input_hashes[str(args.source / name)] for name in seed_reservations.SOURCE_FILES}
@@ -614,7 +681,7 @@ def main(argv=None):
                     not qualification.get("focused_native_tests_passed") or
                     not qualification.get("focused_host_tests_passed")):
                 raise ValueError("new Grab/Eat source and binary are not CPU-qualified")
-        # Do not acquire the owner lock or start any executable in plan mode.
+        # Plan mode permits the explicit read-only inspector, never training or an owner lock.
         args.output.mkdir(parents=True, exist_ok=False)
         state = {"schema": 1, "status": "planned", "lesson": "grab_food", "promoted": False,
                  "target_distinct_episodes": args.target_episodes, "batch_episodes": args.batch_episodes,
@@ -627,6 +694,8 @@ def main(argv=None):
                  "startup_cap_seconds": args.startup_seconds,
                  "cutoff_utc": args.cutoff.isoformat(), "input_sha256": input_hashes,
                  "source": str(args.source), "latest_checkpoint": str(args.source),
+                  "checkpoint_inspector": str(args.checkpoint_inspector) if args.checkpoint_inspector else None,
+                  "source_critic_only_updates": source_critic_only_updates,
                  "founder_seed_base": founder, "assessment_seed": args.assessment_seed,
                  "training_seed_range": [args.seed, args.seed + args.target_episodes - 1],
                  "distinct_completed_episodes": 0, "captured_decision_rows": 0, "trained_decision_rows": 0,
@@ -666,6 +735,9 @@ def run_night(args, state, state_path, input_hashes):
     environment = prior_environment()
     samples = []; setup_keys = set(); previous = args.source
     checkpoint_hashes = input_hashes.copy()
+    immutable_binary_hashes = {str(args.binary): input_hashes[str(args.binary)]}
+    if args.checkpoint_inspector is not None:
+        immutable_binary_hashes[str(args.checkpoint_inspector)] = input_hashes[str(args.checkpoint_inspector)]
     collection_cutoff = args.cutoff - dt.timedelta(minutes=args.final_reserve_minutes)
     startup_cutoff = min(collection_cutoff, dt.datetime.now(UTC) + dt.timedelta(seconds=args.startup_seconds))
     assessment_costs = []
@@ -837,7 +909,8 @@ def run_night(args, state, state_path, input_hashes):
             invoke(cycle_argv,
                    f"episode-{index:05d}", args.command_seconds,
                    startup_cutoff if index == 0 else collection_cutoff)
-            receipt, setup, hashes = validate_cycle(directory, previous, seed)
+            receipt, setup, hashes = validate_cycle(
+                directory, previous, seed, checkpoint_inspector=args.checkpoint_inspector)
             if receipt.get("sampling_temperature", 1.0) != temperature:
                 raise ValueError("collected sampling/PPO temperature differs from the requested recipe")
             offline_epochs = validate_rehearsal(receipt, args.acquisition_rehearsal_epochs)
@@ -849,7 +922,7 @@ def run_night(args, state, state_path, input_hashes):
             size = sum(path.stat().st_size for path in directory.rglob("*") if path.is_file())
             samples.append({"seconds": seconds, "bytes": size})
             previous = directory
-            checkpoint_hashes = {str(args.binary): input_hashes[str(args.binary)], **hashes}
+            checkpoint_hashes = {**immutable_binary_hashes, **hashes}
             state["latest_checkpoint"] = str(directory); state["partial_episode"] = None
             state["distinct_completed_episodes"] += 1
             state["offline_rehearsal_epochs_completed"] += offline_epochs

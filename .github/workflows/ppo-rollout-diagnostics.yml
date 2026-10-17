@@ -8,6 +8,11 @@ on:
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
+      - "crates/alife_game_app/src/foundation_critic_correction.rs"
+      - "crates/alife_game_app/src/foundation_critic_correction/**"
+      - "crates/alife_game_app/src/critic_qualification.rs"
+      - "crates/alife_training/src/ppo/critic_calibration.rs"
+      - "crates/alife_training/shaders/critic_residual.wgsl"
       - "scripts/*ppo_diagnostics.py"
       - "Cargo.toml"
       - "crates/alife_game_app/Cargo.toml"
@@ -19,6 +24,11 @@ on:
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
+      - "crates/alife_game_app/src/foundation_critic_correction.rs"
+      - "crates/alife_game_app/src/foundation_critic_correction/**"
+      - "crates/alife_game_app/src/critic_qualification.rs"
+      - "crates/alife_training/src/ppo/critic_calibration.rs"
+      - "crates/alife_training/shaders/critic_residual.wgsl"
       - "scripts/*ppo_diagnostics.py"
       - "Cargo.toml"
       - "crates/alife_game_app/Cargo.toml"
@@ -53,3 +63,9 @@ jobs:
         run: python -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
       - name: Native checkpoint admission rejects truncated, swapped and stale artifacts
         run: cargo test --locked -p alife_game_app --features foundation-training --lib checkpoint_only_ -- --test-threads=1
+      - name: Preserved critic correction admission CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_critic_correction::tests -- --test-threads=1
+      - name: Critic residual WGSL parse and validation
+        run: cargo test --locked -p alife_training --lib ppo::critic_calibration::tests::residual_shader_parses_and_validates
+      - name: Critic GPU fixture rejects nonfinite observations and expectations
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib critic_qualification::fixture_tests -- --test-threads=1
