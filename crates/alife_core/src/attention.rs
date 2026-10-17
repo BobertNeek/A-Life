@@ -469,10 +469,10 @@ pub fn select_focal_targets(
                 .iter()
                 .find_map(|(index, score)| (*index != previous_index).then_some(*score))
                 .is_some_and(|score| score > previous_score + policy.switch_cost.raw());
-            if selected.contains(&previous_index)
-                && !challenger_exceeds_switch_cost
-                && requested > 0
-            {
+            // The incumbent can fall just outside raw top-k after a small
+            // salience change. Keep it until a challenger pays the switch cost,
+            // including when only one focal slot is available.
+            if !challenger_exceeds_switch_cost && requested > 0 {
                 selected.retain(|index| *index != previous_index);
                 retained_previous = true;
                 selected.insert(0, previous_index);

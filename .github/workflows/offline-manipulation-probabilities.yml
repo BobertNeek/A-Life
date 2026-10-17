@@ -1,0 +1,41 @@
+name: Offline Manipulation probabilities
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/offline-manipulation-probabilities.yml"
+      - "scripts/*audit_manipulation_probabilities.py"
+      - "fixtures/manipulation_probabilities.synthetic.json"
+      - "docs/training/offline-manipulation-probabilities.md"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/offline-manipulation-probabilities.yml"
+      - "scripts/*audit_manipulation_probabilities.py"
+      - "fixtures/manipulation_probabilities.synthetic.json"
+      - "docs/training/offline-manipulation-probabilities.md"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-contracts:
+    name: Synthetic probability contracts (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Synthetic arithmetic and strict input/output contracts
+        run: python -S -m unittest discover -s scripts -p 'test_audit_manipulation_probabilities.py' -v
+      - name: Synthetic CLI smoke (no native replay or GPU execution)
+        run: python -S scripts/audit_manipulation_probabilities.py fixtures/manipulation_probabilities.synthetic.json --output "${RUNNER_TEMP}/manipulation-probabilities.synthetic-report.json"
