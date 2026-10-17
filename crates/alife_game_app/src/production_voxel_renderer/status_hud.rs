@@ -1,6 +1,7 @@
-//! Read-only, wordless selected-creature physiology and playback readout.
+//! Read-only, wordless selected-creature physiology, possession and playback readout.
 //! Icon meters show measured quantities, not six interchangeable needs or health scores.
 use super::*;
+use alife_world::WorldObject;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
@@ -77,12 +78,14 @@ fn normalized(value: f32) -> Option<f32> {
 struct Readout {
     stable_id: u64,
     values: [Option<f32>; 6],
+    holding_food: bool,
 }
 impl Readout {
-    fn from_row(
+    fn from_row<'a>(
         stable_id: WorldEntityId,
         organism_id: OrganismId,
         row: Option<&WorldOrganismPresentationRow>,
+        objects: impl IntoIterator<Item = &'a WorldObject>,
     ) -> Self {
         let row = row.filter(|row| {
             row.world_entity_id == stable_id
@@ -95,6 +98,13 @@ impl Readout {
         Self {
             stable_id: stable_id.raw(),
             values: QUANTITIES.map(|quantity| row.and_then(|row| quantity.value(row))),
+            // Possession is physical ownership, never a nearby fruit or a motor intention.
+            holding_food: row.is_some()
+                && objects.into_iter().any(|object| {
+                    object.kind == WorldObjectKind::Food
+                        && !object.consumed
+                        && object.carried_by == Some(organism_id)
+                }),
         }
     }
 }
@@ -102,6 +112,8 @@ impl Readout {
 struct HudRoot;
 #[derive(Component)]
 struct Identity;
+#[derive(Component)]
+struct HeldFood;
 #[derive(Component)]
 struct QuantityGrid;
 #[derive(Component)]
@@ -123,7 +135,11 @@ struct Icons(BTreeMap<&'static str, Handle<Image>>);
 const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
-const EMBEDDED: [(&str, &[u8]); 12] = [
+const EMBEDDED: [(&str, &[u8]); 13] = [
+    (
+        "holding_food",
+        include_bytes!("../../../../assets/ui/status_hud/holding_food.png"),
+    ),
     (
         "hunger",
         include_bytes!("../../../../assets/ui/status_hud/hunger.png"),
@@ -308,6 +324,12 @@ pub(super) fn spawn(world: &mut World) {
         Identity,
         ChildOf(identity),
     ));
+    let held_food = icon(world, identity, image("holding_food"), 22.0);
+    world.entity_mut(held_food).insert((
+        Name::new("Selected creature holds unconsumed food"),
+        HeldFood,
+        Visibility::Hidden,
+    ));
     let grid = world
         .spawn((
             QuantityGrid,
@@ -447,6 +469,16 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
         }
     }
     let values = readout.map_or([None; 6], |r| r.values);
+    for mut visibility in world
+        .query_filtered::<&mut Visibility, With<HeldFood>>()
+        .iter_mut(world)
+    {
+        *visibility = if readout.is_some_and(|readout| readout.holding_food) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
     let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
     for (fill, mut node, mut color) in world
         .query::<(&MeterFill, &mut Node, &mut BackgroundColor)>()
@@ -518,15 +550,22 @@ fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
                 && root.organism_id == visual.organism_id)
                 .then_some(root.organism_id)
         });
-    let row = world
-        .get_resource::<LiveBrainPresentationFrameResource>()
-        .and_then(|frame| frame.current.organism(stable_id));
+    let frame = world.get_resource::<LiveBrainPresentationFrameResource>();
+    let row = frame.and_then(|frame| frame.current.organism(stable_id));
     identity.map_or(
         Readout {
             stable_id: stable_id.raw(),
             values: [None; 6],
+            holding_food: false,
         },
-        |organism_id| Readout::from_row(stable_id, organism_id, row),
+        |organism_id| {
+            Readout::from_row(
+                stable_id,
+                organism_id,
+                row,
+                frame.into_iter().flat_map(|frame| frame.current.objects()),
+            )
+        },
     )
 }
 fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {

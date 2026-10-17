@@ -66,7 +66,13 @@ Missing identity/frame/row or invalid values show a question mark; a known zero
 has a real empty track. Launch/save expression defaults are not evidence. The
 HUD does not extrapolate between ticks, during pause, or after a simulation stop.
 The reticle and full numeric stable ID identify selection without an invented
-portrait. The count chip shows rendered creature count and running/paused/fast
+portrait. A fruit-in-palm badge in that identity header appears only when the
+current frame contains unconsumed Food carried by that exact living selected
+organism. Missing or mismatched identity/frame/row, a nearby fruit, a different
+owner, a carried non-food object, or consumed food cannot show the badge. It is
+a read-only possession cue, not evidence of eating or successful care. Selection
+changes and loads read the current frame again, without retaining the old badge.
+The count chip shows rendered creature count and running/paused/fast
 playback icons. F3 hides these player readouts while preserving the existing
 textual inspector, animation/response details, and debug rails. The HUD wraps
 at narrow widths, and uses shorter cards below 300px viewport height. All HUD
@@ -74,6 +80,15 @@ nodes ignore picking and pass UI focus. The existing menu's modal/entry source
 layers (100/90) remain above the HUD (30); CPU tests guard those layers and
 non-interactive components, without proving combined live input dispatch.
 CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240.
+The feature-gated shared frontend CPU regression CI job runs the exact HUD
+suite below after its island/camera checks, reusing the same compiled test binary
+with a single build job and debug symbols disabled. It does not enable
+`gpu-tests`, create a window, or execute a GPU simulation:
+
+```sh
+cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::status_hud:: -- --test-threads=1 --color=never
+```
+
 The ordinary player hint strip is replaced by a five-control wordless care dock:
 food placement (apple over ground), gentle touch (open palm), physical toy offer
 (striped ball), praise offer (thumb), and speech entry (bubble). These real 48px
@@ -162,6 +177,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 ```
 
 `check.ps1 --quick` runs only Git whitespace, static dependency/source boundaries, and documentation assertions. The default full check adds formatting, workspace check, workspace tests, and Clippy.
+
+For read-only serial-cycle timing analysis, use
+`python scripts/summarize_stage_timing.py <receipt-or-directory> --format json`.
+The [stage timing summary guide](performance/20261016-stage-timing-summary.md)
+describes its schema-1 recorder prerequisite and interpretation limits. Run
+`python -m unittest discover -s scripts -p 'test_summarize_stage_timing.py' -v`
+for its synthetic stdlib-only regressions; CI runs them in the existing receipt
+diagnostics job without requiring the recorder's Rust changes.
 
 Use a focused `cargo test -p <crate> <filter>` when a Rust behavior changes. Do not launch a second Cargo build while another shared-target build is active.
 
@@ -277,6 +300,27 @@ Do not invoke the worker directly or add that retired pack to the production man
 
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
+
+### Food assessment reporting
+
+GrabFood and EatHeldFood pilot/lesson JSON reports include an optional
+`food_outcome` with exact admitted learner/target IDs and separate observed event
+counts for explicit Grab acquisition, ordinary acquisition, consumption, and
+nourished meals. Eat can acquire an unheld target on one tick and consume it on a
+later tick while explicit Grab and Grab lesson completion remain zero/false.
+These counters are output-only: curriculum credit, legality, reward, stopping,
+training, and checkpoint behavior are unchanged. A successful Grab probe ends at
+its existing acquisition boundary, so zero meals means none observed in that
+probe window. Historical pilot receipts without this field decode as unknown.
+
+Per-step food traces retain exact target ownership and consumed state before and
+after the tick; a missing object snapshot is null, distinct from a present unheld
+object. Held-before requires that exact unconsumed target's admitted learner
+owner, never global grip or contact alone. Food evidence must match the sealed
+learner row, ticks, frame digest, and dispatch. Consumption uses the selected
+exact-target Eat manipulation outcome even if another channel is blocked;
+nourishment also requires prior possession and measured body benefit without
+fresh harm. No new GPU readback or CPU neural fallback is used.
 
 ### Grab-night throughput estimate
 

@@ -1,0 +1,1996 @@
+{
+  "rustc": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "profile": "core opt-level=2, debug assertions off, codegen-units=256; shared test-built third-party dependencies",
+  "commands": [
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--crate-name",
+      "alife_core",
+      "--crate-type",
+      "lib",
+      "--emit=dep-info,link",
+      "-C",
+      "metadata=recall_encoding_baseline",
+      "-C",
+      "extra-filename=-recall_encoding_baseline",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "debug-assertions=off",
+      "-C",
+      "strip=debuginfo",
+      "-L",
+      "dependency=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-7f701832ad8f98e9/out",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-a6dc99ae0dd140a4/out",
+      "--extern",
+      "bitflags=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libbitflags-2c9c4fc026e3da0e.rlib",
+      "--extern",
+      "blake3=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libblake3-ba0c08ee883dc547.rlib",
+      "--extern",
+      "bytemuck=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libbytemuck-0f1077a0d9d20934.rlib",
+      "--extern",
+      "serde=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libserde-0d7bc8468c3df8fc.rlib",
+      "--extern",
+      "smallvec=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libsmallvec-f1a5195a7f51f74a.rlib",
+      "--extern",
+      "thiserror=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libthiserror-34dfe69abef90ac0.rlib",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/baseline/crates/alife_core/src/lib.rs",
+      "--out-dir",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/baseline-rlib"
+    ],
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--crate-name",
+      "alife_core",
+      "--crate-type",
+      "lib",
+      "--emit=dep-info,link",
+      "-C",
+      "metadata=recall_encoding_retained",
+      "-C",
+      "extra-filename=-recall_encoding_retained",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "debug-assertions=off",
+      "-C",
+      "strip=debuginfo",
+      "-L",
+      "dependency=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-7f701832ad8f98e9/out",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-a6dc99ae0dd140a4/out",
+      "--extern",
+      "bitflags=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libbitflags-2c9c4fc026e3da0e.rlib",
+      "--extern",
+      "blake3=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libblake3-ba0c08ee883dc547.rlib",
+      "--extern",
+      "bytemuck=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libbytemuck-0f1077a0d9d20934.rlib",
+      "--extern",
+      "serde=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libserde-0d7bc8468c3df8fc.rlib",
+      "--extern",
+      "smallvec=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libsmallvec-f1a5195a7f51f74a.rlib",
+      "--extern",
+      "thiserror=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps/libthiserror-34dfe69abef90ac0.rlib",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/repository/crates/alife_core/src/lib.rs",
+      "--out-dir",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/retained-rlib"
+    ],
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "debug-assertions=off",
+      "-C",
+      "strip=debuginfo",
+      "-L",
+      "dependency=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-7f701832ad8f98e9/out",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-a6dc99ae0dd140a4/out",
+      "--extern",
+      "alife_core=/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/baseline-rlib/libalife_core-recall_encoding_baseline.rlib",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/repository/docs/performance/evidence/20261016-retained-recall-context-bench.rs",
+      "-o",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-baseline"
+    ],
+    [
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-baseline",
+      "baseline"
+    ],
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "debug-assertions=off",
+      "-C",
+      "strip=debuginfo",
+      "-L",
+      "dependency=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-7f701832ad8f98e9/out",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-a6dc99ae0dd140a4/out",
+      "--extern",
+      "alife_core=/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/retained-rlib/libalife_core-recall_encoding_retained.rlib",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/repository/docs/performance/evidence/20261016-retained-recall-context-bench.rs",
+      "-o",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-retained"
+    ],
+    [
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-retained",
+      "retained"
+    ],
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--version"
+    ],
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "debug-assertions=off",
+      "-C",
+      "strip=debuginfo",
+      "-L",
+      "dependency=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-7f701832ad8f98e9/out",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-a6dc99ae0dd140a4/out",
+      "--extern",
+      "alife_core=/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/baseline-rlib/libalife_core-recall_encoding_baseline.rlib",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/repository/docs/performance/evidence/20261016-retained-recall-context-bench.rs",
+      "-o",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-baseline"
+    ],
+    [
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-baseline",
+      "baseline"
+    ],
+    [
+      "/workspace/shared/alife-rust-tooling-recovery-20261013/toolchain/bin/rustc",
+      "--edition=2021",
+      "-C",
+      "opt-level=2",
+      "-C",
+      "codegen-units=256",
+      "-C",
+      "debug-assertions=off",
+      "-C",
+      "strip=debuginfo",
+      "-L",
+      "dependency=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/deps",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-7f701832ad8f98e9/out",
+      "-L",
+      "native=/workspace/shared/alife-recall-encoding-reuse-20261016/target/debug/build/blake3-a6dc99ae0dd140a4/out",
+      "--extern",
+      "alife_core=/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/retained-rlib/libalife_core-recall_encoding_retained.rlib",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/repository/docs/performance/evidence/20261016-retained-recall-context-bench.rs",
+      "-o",
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-retained"
+    ],
+    [
+      "/workspace/shared/alife-recall-encoding-reuse-20261016/allocation/recall-context-retained",
+      "retained"
+    ]
+  ],
+  "measure": "one recall -> cognitive attachment -> finalization, 16 repetitions with identical counts; prepared clone measured separately",
+  "excluded": "input/cache setup, input cloning, result validation, digest proof collection, destruction",
+  "source_sha256": {
+    "baseline": {
+      "crates/alife_core/src/action.rs": "75193c7611d85979b270b539469b1cc29a121ba125a673018e7603596f41d3e0",
+      "crates/alife_core/src/action_abi.rs": "82a9a95d25657abaaea35f7c245b9e0b49e2494bd6f200bea114b5b77d44ae78",
+      "crates/alife_core/src/activity.rs": "fafbc1cac849c9d02317f3116730cdae96566d3cbb9166d095674484ddb289cd",
+      "crates/alife_core/src/adapter.rs": "423dc7e6625ab004942356a15057178b2c13477ba923f3fe7cd3a0ff1ff3d3fe",
+      "crates/alife_core/src/archive.rs": "b6954242f6cd3b3849cc61ccaafe87da5b5bbfa2e4620c66a31cbbba69f2090e",
+      "crates/alife_core/src/attention.rs": "42e7db1f37e5433fd9333fdf71e023a686e6e09872db1864201e9eed2cc75ff9",
+      "crates/alife_core/src/biochemical_graph.rs": "3a6739914b419bbe7ef1e60c852bd6eeba06afd53e1ebc2c50de2f88123b4d61",
+      "crates/alife_core/src/biochemistry.rs": "f51976033bf29cfc26696e4d5aeb0516fd8c3000f67797bd0788598f66a716e2",
+      "crates/alife_core/src/blake3_digest.rs": "c2a6789541f08b74cb917ba1074be42e49c1098d80b5d138baf6754ce0fe6706",
+      "crates/alife_core/src/brain_class.rs": "9a6186721912438999b14ab120c090d76dd637811452ea3b05c28136f55a8914",
+      "crates/alife_core/src/canonical_digest.rs": "49a1e0e55e242714839b418f62ed5c94fb3a26b91bc9e67ac0ea8f3244d4764a",
+      "crates/alife_core/src/checkpoint.rs": "c32c86e91a3bb316e3075ef2d75fba6cd0fb48f764df283067329302ac6c4918",
+      "crates/alife_core/src/chemistry.rs": "bd6746a0103b59ef2897376393a9da3e90cfd3f19b33db9f5e84c37925587520",
+      "crates/alife_core/src/cognitive_context.rs": "32c37b45edf24e3c63084c45152303a5df5b2d349844d331d8379a61189143bc",
+      "crates/alife_core/src/cognitive_work.rs": "b98f2e37de3944b3bfd512221d70d4a66d36ec12d6fd72edd84b9f7910c24a0c",
+      "crates/alife_core/src/dendritic.rs": "c42659018a80a0b4d419152f6f50b8fdd0cf808824eb5f4f2d5ea44430f808f5",
+      "crates/alife_core/src/diagnostics.rs": "17825d0bf8e639640e24cb4344f9685547e16aaacb66156e46f585f455cffe41",
+      "crates/alife_core/src/embodiment.rs": "bd3813304515532df44909e722e232f43a5d638fed25664b621b523493347603",
+      "crates/alife_core/src/era1_evaluation.rs": "a47e3a56442ac91c3bc7115281342d2a4dc661c7133f0d4df812c17e298af0dc",
+      "crates/alife_core/src/error.rs": "fdb4689fb11b346e3999d3c8f6ffdae59579a4b504de746c2ec232044dec5029",
+      "crates/alife_core/src/evaluation.rs": "50e2cd61622c5e3c25c5a382d85cb30bd292ebfd60ea5066bb3d71b69824c761",
+      "crates/alife_core/src/evidence_digest.rs": "ad6e8e6bc34e7ba2d64135d24b3417b4b2b96819e0327c997fd77ef4e17ab4b0",
+      "crates/alife_core/src/evolutionary_genetics.rs": "9002f8cdc414f6464028b46195d71e784b17237eb99225557f985fe8a87f87aa",
+      "crates/alife_core/src/experience.rs": "33a17aa3de44a638488768eb7c34ccca38fb7bfa2fc5832d243e2faa916f7362",
+      "crates/alife_core/src/factorized_selection.rs": "f81e20fb3ebdf55d33f51d95ac53df55f6d3b7f764434ad6e91d012e7797bb2a",
+      "crates/alife_core/src/foundation.rs": "eac5c34a5e91f0f063cc6721527d4bfe7ef72f62bc5d494af3627b9503181b5e",
+      "crates/alife_core/src/genome.rs": "9e0e59f934f7c4dd278d4cfedd62489dd9e398c0c50e1389686cd3b5638b7f54",
+      "crates/alife_core/src/grounding.rs": "6463df352598bfad3e94d2926293e756c40f485c6fbf99ba13078dd3cb0d8506",
+      "crates/alife_core/src/ids.rs": "a8a1e3673868c1d2395f664d27cb960ffa4de0ec36189132687b22dea38feaef",
+      "crates/alife_core/src/language.rs": "a2f39fc7cdc67978a049c8367a1b20d77a968cf819b2e89c49a9df7b80f8aa76",
+      "crates/alife_core/src/learning.rs": "735764adced2f63db46f7c10bdae192611eb75ec7445acf4cf758510bf6e2dfc",
+      "crates/alife_core/src/legacy_nano512_compatibility.rs": "8129d62188f6c3dd6e822e1df41048c50eb682307036b1e6c142b064426bde13",
+      "crates/alife_core/src/lib.rs": "fd615f689284a1bedecef4543de723cb9152b50751dfe07aa7a45dd0c20baa5d",
+      "crates/alife_core/src/lineage.rs": "0528d7de7b754f1666f121e2f582b8e99e4b6b986a099a4b87c7bcb6f5e7547f",
+      "crates/alife_core/src/lobe.rs": "5e494e9c8c612b850c32f6a915215e55beb7d117cb660995f3d7d88d3cb83cc5",
+      "crates/alife_core/src/math.rs": "51ea4ca8fec37d816925ce87c2b23d2dab45b0c82031f025e59ed4b0a499a3fd",
+      "crates/alife_core/src/memory/candidate_index.rs": "ef6d16c587185e5f623329faa834f2dc60fcba560bcfd110b83f7045b9706ef3",
+      "crates/alife_core/src/memory/candidate_recall.rs": "bb1e27abf139d9c79d0103fd176bb18b66ab3b150169d7d06e91ab7a4527b8f3",
+      "crates/alife_core/src/memory/runtime.rs": "7c8ec8c3e9556d5acd22634940c6590c8860589954648e268eb5b636320b5cd2",
+      "crates/alife_core/src/memory/sidecar.rs": "c0c8d3401d57d24b47847c86bbefb1325a82e33bd5c0e7ae9f5311f8551142c5",
+      "crates/alife_core/src/memory.rs": "bea8ccf7d085efedefcdfbd74df30dfaba7f2a603911739f9ec99e5f4b32b14e",
+      "crates/alife_core/src/memory_query.rs": "f8c64076eb2c65679441aafc7fbe401398afc7febdbe6e945f6ff9f1e210f868",
+      "crates/alife_core/src/migration_v2.rs": "bf1b146ee3a4303f27d5c39d02e00255f1fae56e0cc3e216b39668f86ea3dc61",
+      "crates/alife_core/src/motor.rs": "cf3a203f350bd1e4a4c66c2f3f82b7592df50e8dc8f29e0dbd6d698a3ce1a481",
+      "crates/alife_core/src/nano512_readout_candidate.rs": "6d0d9a34661b37c8092955617d4075c6a58082ff51cc571c4f1f710a94b6fd0e",
+      "crates/alife_core/src/neural.rs": "9d3f6d539b8e3a2975b57f80cea5ad1d3a8f52bda759c949644a9d33456399b2",
+      "crates/alife_core/src/neural_receptors.rs": "be8f5615a4fd48ec334fa5e0d6c5eddf1a455b17ec0a9327053a3a36431f649d",
+      "crates/alife_core/src/newphenotype/cognitive_channel.rs": "3cb0c3fe36793059f207f097a6f7ae95321a9b45190e6ff84195779428a7ece0",
+      "crates/alife_core/src/packed_log.rs": "2d1c9af6f96143f0effeb2c223f5e0c1e2b6c7f51512416d6842be467e225461",
+      "crates/alife_core/src/perception.rs": "9b78f38dfe3cf92273a3154b1ea00d518e19aa891787914001c61d671edb4bb9",
+      "crates/alife_core/src/phenotype/abi_validation.rs": "50735b6401d441f722775c3669a0b49a516ca23373cc8222448e73fbfb1e6a33",
+      "crates/alife_core/src/phenotype/budgets.rs": "a4b34e30d422ae9dfeb8a44d08bd5f57b3da4ab7ad0a560dec9d8ab90066ffd6",
+      "crates/alife_core/src/phenotype/capacity.rs": "0ffc536f40ed152ede2ad575dd907aa7e8c8989c012d891ecfc17953bc846dff",
+      "crates/alife_core/src/phenotype/compiled.rs": "6e14776ab609fb4e1ff0cff0b5e3cf8974e23d5051e5eb3b295d3c86f7f03453",
+      "crates/alife_core/src/phenotype/compiler.rs": "c085eb4303b2f209f0b882a6bab632f12fba2ea37f7db41d2523404a8f24d681",
+      "crates/alife_core/src/phenotype/construction.rs": "de7c0eb93f602e3a0abda0c804e69425e34525d82bac8c6c7573a7e40c28ffea",
+      "crates/alife_core/src/phenotype/decoder.rs": "29a9155fd7085fccd05a7ca6395bd6c19b70aba944470750aa6ba6d4ebe0dff8",
+      "crates/alife_core/src/phenotype/encoder.rs": "bbde72cb3825e3058c557961d9cde84ef0381637e2888f479c360e597a5d75ef",
+      "crates/alife_core/src/phenotype/inputs.rs": "535eadad055a831f7720538c525423d3683a626d6760ef3fc2357b6b59e53b13",
+      "crates/alife_core/src/phenotype/io_compile.rs": "25c8718b2158a665d11fa440af5b86ec79db2e2fd5e13530f19bfa8e1c4e067a",
+      "crates/alife_core/src/phenotype/layout_compile.rs": "2499d13e052013ddfa0c1a79c1ea94de84a7f16c804150376383077996033e36",
+      "crates/alife_core/src/phenotype/learning.rs": "5aa1247e0a76e188d10af5560b77b084326185dee07b88e82913054889c6b2bb",
+      "crates/alife_core/src/phenotype/memory_channel.rs": "4113c3abc12d23b83fa7ec01a3920806e2a413c311a26be620b66b7e2fcca24f",
+      "crates/alife_core/src/phenotype/migration.rs": "2b960552d0ee95b349dd6b37a205ff339be93315925659f3af363535caaa8e24",
+      "crates/alife_core/src/phenotype/n512_founder_projection.rs": "93f24356615a2bd7001b82f6f268325e7ae69ca00a71855e6eb9407f26fdc1b0",
+      "crates/alife_core/src/phenotype/persistent_address.rs": "87b09c6398744ac3cb942184ae13df6c54072575f78902e9b07d395c6403b5dc",
+      "crates/alife_core/src/phenotype/record.rs": "636e28f475dd3f5657b8a09a009a0c03687b482bafd9e23da9e35f4ec9046df7",
+      "crates/alife_core/src/phenotype/topology_compile.rs": "33aba7d23a9ef199a53812f4fc94e939b4018fe6d55a8923a0d404d3725ef537",
+      "crates/alife_core/src/phenotype.rs": "c54349345400972a2173e9ea1e8fb7dc93ce0fb49586a6c8c17f6c5563b349d8",
+      "crates/alife_core/src/predictive.rs": "57d6422eb26d28f5a6748f239edd292ec877a9df7488a7729fcd4dcc6867e3e9",
+      "crates/alife_core/src/reference_brain.rs": "ec7dbde116a01d989156d588df4a722f3dfd9d42a3db81180c2c9d40fd4c7142",
+      "crates/alife_core/src/routing.rs": "0f5875d10eed261f789e03bd57d40a45eaf781f14daa24245b570e9b3e7c8aa2",
+      "crates/alife_core/src/sensory_abi.rs": "51ca3974eb027e426a7c719804351934ccf42df5c803cf620fc69b0202b5d94f",
+      "crates/alife_core/src/sleep/gpu_contracts.rs": "809fb1c6f91bce9016668d437531d2e64bca6f4cbfbc268c5af56e4126f6f82f",
+      "crates/alife_core/src/sleep/replay.rs": "edcc650d502bd48c1f1a59fda9281da9e9fa3ac8db8126713332b99e0b74e860",
+      "crates/alife_core/src/sleep.rs": "27136f9f37baff35a3180cadebebf1493bf666cdd9d480524e768cdcbaec45bb",
+      "crates/alife_core/src/structural_plasticity.rs": "0b147b49248ecf3b6fc07af45098435212dd95d332db781aff2adeebef6cb28e",
+      "crates/alife_core/src/topology.rs": "b3dfb71e9ed51fe7cdd3e0dffa8795d1e3e13d27c71c11fbc9f335fe3a37541f",
+      "crates/alife_core/src/traits.rs": "80eb6cabe0287e6ab1c71b0fbba6559d0350e8b8aed7bd8a471aa400e28f3003",
+      "crates/alife_core/src/units.rs": "e01f427af3bed2f2a2401a9e5962dfa6deb4ef3efc1add03d223073f7060da67",
+      "crates/alife_core/src/validation.rs": "014bcbcc8428b9d12ceb246ea35cbeabdb79e1fe9063efdcccccf128c6a1c51f",
+      "crates/alife_core/src/version.rs": "d074920d37733c5ba91f12e037634ede5579b5b54a8d5504eccb670923291cfe"
+    },
+    "retained": {
+      "crates/alife_core/src/action.rs": "75193c7611d85979b270b539469b1cc29a121ba125a673018e7603596f41d3e0",
+      "crates/alife_core/src/action_abi.rs": "82a9a95d25657abaaea35f7c245b9e0b49e2494bd6f200bea114b5b77d44ae78",
+      "crates/alife_core/src/activity.rs": "fafbc1cac849c9d02317f3116730cdae96566d3cbb9166d095674484ddb289cd",
+      "crates/alife_core/src/adapter.rs": "423dc7e6625ab004942356a15057178b2c13477ba923f3fe7cd3a0ff1ff3d3fe",
+      "crates/alife_core/src/archive.rs": "b6954242f6cd3b3849cc61ccaafe87da5b5bbfa2e4620c66a31cbbba69f2090e",
+      "crates/alife_core/src/attention.rs": "42e7db1f37e5433fd9333fdf71e023a686e6e09872db1864201e9eed2cc75ff9",
+      "crates/alife_core/src/biochemical_graph.rs": "3a6739914b419bbe7ef1e60c852bd6eeba06afd53e1ebc2c50de2f88123b4d61",
+      "crates/alife_core/src/biochemistry.rs": "f51976033bf29cfc26696e4d5aeb0516fd8c3000f67797bd0788598f66a716e2",
+      "crates/alife_core/src/blake3_digest.rs": "c2a6789541f08b74cb917ba1074be42e49c1098d80b5d138baf6754ce0fe6706",
+      "crates/alife_core/src/brain_class.rs": "9a6186721912438999b14ab120c090d76dd637811452ea3b05c28136f55a8914",
+      "crates/alife_core/src/canonical_digest.rs": "49a1e0e55e242714839b418f62ed5c94fb3a26b91bc9e67ac0ea8f3244d4764a",
+      "crates/alife_core/src/checkpoint.rs": "c32c86e91a3bb316e3075ef2d75fba6cd0fb48f764df283067329302ac6c4918",
+      "crates/alife_core/src/chemistry.rs": "bd6746a0103b59ef2897376393a9da3e90cfd3f19b33db9f5e84c37925587520",
+      "crates/alife_core/src/cognitive_context.rs": "32c37b45edf24e3c63084c45152303a5df5b2d349844d331d8379a61189143bc",
+      "crates/alife_core/src/cognitive_work.rs": "b98f2e37de3944b3bfd512221d70d4a66d36ec12d6fd72edd84b9f7910c24a0c",
+      "crates/alife_core/src/dendritic.rs": "c42659018a80a0b4d419152f6f50b8fdd0cf808824eb5f4f2d5ea44430f808f5",
+      "crates/alife_core/src/diagnostics.rs": "17825d0bf8e639640e24cb4344f9685547e16aaacb66156e46f585f455cffe41",
+      "crates/alife_core/src/embodiment.rs": "bd3813304515532df44909e722e232f43a5d638fed25664b621b523493347603",
+      "crates/alife_core/src/era1_evaluation.rs": "a47e3a56442ac91c3bc7115281342d2a4dc661c7133f0d4df812c17e298af0dc",
+      "crates/alife_core/src/error.rs": "fdb4689fb11b346e3999d3c8f6ffdae59579a4b504de746c2ec232044dec5029",
+      "crates/alife_core/src/evaluation.rs": "50e2cd61622c5e3c25c5a382d85cb30bd292ebfd60ea5066bb3d71b69824c761",
+      "crates/alife_core/src/evidence_digest.rs": "ad6e8e6bc34e7ba2d64135d24b3417b4b2b96819e0327c997fd77ef4e17ab4b0",
+      "crates/alife_core/src/evolutionary_genetics.rs": "9002f8cdc414f6464028b46195d71e784b17237eb99225557f985fe8a87f87aa",
+      "crates/alife_core/src/experience.rs": "33a17aa3de44a638488768eb7c34ccca38fb7bfa2fc5832d243e2faa916f7362",
+      "crates/alife_core/src/factorized_selection.rs": "f81e20fb3ebdf55d33f51d95ac53df55f6d3b7f764434ad6e91d012e7797bb2a",
+      "crates/alife_core/src/foundation.rs": "eac5c34a5e91f0f063cc6721527d4bfe7ef72f62bc5d494af3627b9503181b5e",
+      "crates/alife_core/src/genome.rs": "9e0e59f934f7c4dd278d4cfedd62489dd9e398c0c50e1389686cd3b5638b7f54",
+      "crates/alife_core/src/grounding.rs": "6463df352598bfad3e94d2926293e756c40f485c6fbf99ba13078dd3cb0d8506",
+      "crates/alife_core/src/ids.rs": "a8a1e3673868c1d2395f664d27cb960ffa4de0ec36189132687b22dea38feaef",
+      "crates/alife_core/src/language.rs": "a2f39fc7cdc67978a049c8367a1b20d77a968cf819b2e89c49a9df7b80f8aa76",
+      "crates/alife_core/src/learning.rs": "735764adced2f63db46f7c10bdae192611eb75ec7445acf4cf758510bf6e2dfc",
+      "crates/alife_core/src/legacy_nano512_compatibility.rs": "8129d62188f6c3dd6e822e1df41048c50eb682307036b1e6c142b064426bde13",
+      "crates/alife_core/src/lib.rs": "fd615f689284a1bedecef4543de723cb9152b50751dfe07aa7a45dd0c20baa5d",
+      "crates/alife_core/src/lineage.rs": "0528d7de7b754f1666f121e2f582b8e99e4b6b986a099a4b87c7bcb6f5e7547f",
+      "crates/alife_core/src/lobe.rs": "5e494e9c8c612b850c32f6a915215e55beb7d117cb660995f3d7d88d3cb83cc5",
+      "crates/alife_core/src/math.rs": "51ea4ca8fec37d816925ce87c2b23d2dab45b0c82031f025e59ed4b0a499a3fd",
+      "crates/alife_core/src/memory/candidate_index.rs": "ef6d16c587185e5f623329faa834f2dc60fcba560bcfd110b83f7045b9706ef3",
+      "crates/alife_core/src/memory/candidate_recall.rs": "bb1e27abf139d9c79d0103fd176bb18b66ab3b150169d7d06e91ab7a4527b8f3",
+      "crates/alife_core/src/memory/encoded_context_tests.rs": "8565df9bceeb13469762c140ae25466555742d4b4e025790728eee653341b20c",
+      "crates/alife_core/src/memory/runtime.rs": "44122502f96e50bf1c2416d8b15f92365de4fa16dd4dd395bae02d675aecabcb",
+      "crates/alife_core/src/memory/sidecar.rs": "c0c8d3401d57d24b47847c86bbefb1325a82e33bd5c0e7ae9f5311f8551142c5",
+      "crates/alife_core/src/memory.rs": "8a0f515c5000d49560bdc989a8da6e2157f49f84ca87a40e4446f7ab7e37653f",
+      "crates/alife_core/src/memory_query.rs": "f8c64076eb2c65679441aafc7fbe401398afc7febdbe6e945f6ff9f1e210f868",
+      "crates/alife_core/src/migration_v2.rs": "bf1b146ee3a4303f27d5c39d02e00255f1fae56e0cc3e216b39668f86ea3dc61",
+      "crates/alife_core/src/motor.rs": "cf3a203f350bd1e4a4c66c2f3f82b7592df50e8dc8f29e0dbd6d698a3ce1a481",
+      "crates/alife_core/src/nano512_readout_candidate.rs": "6d0d9a34661b37c8092955617d4075c6a58082ff51cc571c4f1f710a94b6fd0e",
+      "crates/alife_core/src/neural.rs": "9d3f6d539b8e3a2975b57f80cea5ad1d3a8f52bda759c949644a9d33456399b2",
+      "crates/alife_core/src/neural_receptors.rs": "be8f5615a4fd48ec334fa5e0d6c5eddf1a455b17ec0a9327053a3a36431f649d",
+      "crates/alife_core/src/newphenotype/cognitive_channel.rs": "3cb0c3fe36793059f207f097a6f7ae95321a9b45190e6ff84195779428a7ece0",
+      "crates/alife_core/src/packed_log.rs": "2d1c9af6f96143f0effeb2c223f5e0c1e2b6c7f51512416d6842be467e225461",
+      "crates/alife_core/src/perception.rs": "9b78f38dfe3cf92273a3154b1ea00d518e19aa891787914001c61d671edb4bb9",
+      "crates/alife_core/src/phenotype/abi_validation.rs": "50735b6401d441f722775c3669a0b49a516ca23373cc8222448e73fbfb1e6a33",
+      "crates/alife_core/src/phenotype/budgets.rs": "a4b34e30d422ae9dfeb8a44d08bd5f57b3da4ab7ad0a560dec9d8ab90066ffd6",
+      "crates/alife_core/src/phenotype/capacity.rs": "0ffc536f40ed152ede2ad575dd907aa7e8c8989c012d891ecfc17953bc846dff",
+      "crates/alife_core/src/phenotype/compiled.rs": "6e14776ab609fb4e1ff0cff0b5e3cf8974e23d5051e5eb3b295d3c86f7f03453",
+      "crates/alife_core/src/phenotype/compiler.rs": "c085eb4303b2f209f0b882a6bab632f12fba2ea37f7db41d2523404a8f24d681",
+      "crates/alife_core/src/phenotype/construction.rs": "de7c0eb93f602e3a0abda0c804e69425e34525d82bac8c6c7573a7e40c28ffea",
+      "crates/alife_core/src/phenotype/decoder.rs": "29a9155fd7085fccd05a7ca6395bd6c19b70aba944470750aa6ba6d4ebe0dff8",
+      "crates/alife_core/src/phenotype/encoder.rs": "bbde72cb3825e3058c557961d9cde84ef0381637e2888f479c360e597a5d75ef",
+      "crates/alife_core/src/phenotype/inputs.rs": "535eadad055a831f7720538c525423d3683a626d6760ef3fc2357b6b59e53b13",
+      "crates/alife_core/src/phenotype/io_compile.rs": "25c8718b2158a665d11fa440af5b86ec79db2e2fd5e13530f19bfa8e1c4e067a",
+      "crates/alife_core/src/phenotype/layout_compile.rs": "2499d13e052013ddfa0c1a79c1ea94de84a7f16c804150376383077996033e36",
+      "crates/alife_core/src/phenotype/learning.rs": "5aa1247e0a76e188d10af5560b77b084326185dee07b88e82913054889c6b2bb",
+      "crates/alife_core/src/phenotype/memory_channel.rs": "4113c3abc12d23b83fa7ec01a3920806e2a413c311a26be620b66b7e2fcca24f",
+      "crates/alife_core/src/phenotype/migration.rs": "2b960552d0ee95b349dd6b37a205ff339be93315925659f3af363535caaa8e24",
+      "crates/alife_core/src/phenotype/n512_founder_projection.rs": "93f24356615a2bd7001b82f6f268325e7ae69ca00a71855e6eb9407f26fdc1b0",
+      "crates/alife_core/src/phenotype/persistent_address.rs": "87b09c6398744ac3cb942184ae13df6c54072575f78902e9b07d395c6403b5dc",
+      "crates/alife_core/src/phenotype/record.rs": "636e28f475dd3f5657b8a09a009a0c03687b482bafd9e23da9e35f4ec9046df7",
+      "crates/alife_core/src/phenotype/topology_compile.rs": "33aba7d23a9ef199a53812f4fc94e939b4018fe6d55a8923a0d404d3725ef537",
+      "crates/alife_core/src/phenotype.rs": "c54349345400972a2173e9ea1e8fb7dc93ce0fb49586a6c8c17f6c5563b349d8",
+      "crates/alife_core/src/predictive.rs": "57d6422eb26d28f5a6748f239edd292ec877a9df7488a7729fcd4dcc6867e3e9",
+      "crates/alife_core/src/reference_brain.rs": "ec7dbde116a01d989156d588df4a722f3dfd9d42a3db81180c2c9d40fd4c7142",
+      "crates/alife_core/src/routing.rs": "0f5875d10eed261f789e03bd57d40a45eaf781f14daa24245b570e9b3e7c8aa2",
+      "crates/alife_core/src/sensory_abi.rs": "51ca3974eb027e426a7c719804351934ccf42df5c803cf620fc69b0202b5d94f",
+      "crates/alife_core/src/sleep/gpu_contracts.rs": "809fb1c6f91bce9016668d437531d2e64bca6f4cbfbc268c5af56e4126f6f82f",
+      "crates/alife_core/src/sleep/replay.rs": "edcc650d502bd48c1f1a59fda9281da9e9fa3ac8db8126713332b99e0b74e860",
+      "crates/alife_core/src/sleep.rs": "27136f9f37baff35a3180cadebebf1493bf666cdd9d480524e768cdcbaec45bb",
+      "crates/alife_core/src/structural_plasticity.rs": "0b147b49248ecf3b6fc07af45098435212dd95d332db781aff2adeebef6cb28e",
+      "crates/alife_core/src/topology.rs": "b3dfb71e9ed51fe7cdd3e0dffa8795d1e3e13d27c71c11fbc9f335fe3a37541f",
+      "crates/alife_core/src/traits.rs": "80eb6cabe0287e6ab1c71b0fbba6559d0350e8b8aed7bd8a471aa400e28f3003",
+      "crates/alife_core/src/units.rs": "e01f427af3bed2f2a2401a9e5962dfa6deb4ef3efc1add03d223073f7060da67",
+      "crates/alife_core/src/validation.rs": "014bcbcc8428b9d12ceb246ea35cbeabdb79e1fe9063efdcccccf128c6a1c51f",
+      "crates/alife_core/src/version.rs": "d074920d37733c5ba91f12e037634ede5579b5b54a8d5504eccb670923291cfe"
+    }
+  },
+  "records": {
+    "baseline": [
+      {
+        "variant": "baseline",
+        "mode": "audited",
+        "candidates": 1,
+        "alloc_realloc_calls": 116,
+        "requested_bytes": 20561,
+        "frame_digest": [
+          15085734623421045814,
+          6635170734787772012,
+          866241415722862128,
+          10062475662591849601
+        ],
+        "candidate_key_digests": [
+          [
+            4517868740950481928,
+            12217183798043620935,
+            17187219977336230952,
+            18239740292401534845
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "runtime_cold",
+        "candidates": 1,
+        "alloc_realloc_calls": 75,
+        "requested_bytes": 13006,
+        "frame_digest": [
+          15085734623421045814,
+          6635170734787772012,
+          866241415722862128,
+          10062475662591849601
+        ],
+        "candidate_key_digests": [
+          [
+            4517868740950481928,
+            12217183798043620935,
+            17187219977336230952,
+            18239740292401534845
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "runtime_cached",
+        "candidates": 1,
+        "alloc_realloc_calls": 69,
+        "requested_bytes": 12238,
+        "frame_digest": [
+          15085734623421045814,
+          6635170734787772012,
+          866241415722862128,
+          10062475662591849601
+        ],
+        "candidate_key_digests": [
+          [
+            4517868740950481928,
+            12217183798043620935,
+            17187219977336230952,
+            18239740292401534845
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "clone_runtime_prepared",
+        "candidates": 1,
+        "alloc_realloc_calls": 2,
+        "requested_bytes": 608
+      },
+      {
+        "variant": "baseline",
+        "mode": "audited",
+        "candidates": 3,
+        "alloc_realloc_calls": 216,
+        "requested_bytes": 59515,
+        "frame_digest": [
+          4724826483044238555,
+          57559865371427656,
+          6640084921188677557,
+          1992540433058707713
+        ],
+        "candidate_key_digests": [
+          [
+            3809637009520729547,
+            9076578159401075415,
+            8348949976181033604,
+            12644900172977420598
+          ],
+          [
+            4912391414395415645,
+            2547054809251572897,
+            8922571459025832985,
+            59003111447972238
+          ],
+          [
+            9052514897089444742,
+            6777014415699922502,
+            470154851080643779,
+            4311237750087579601
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "runtime_cold",
+        "candidates": 3,
+        "alloc_realloc_calls": 149,
+        "requested_bytes": 32528,
+        "frame_digest": [
+          4724826483044238555,
+          57559865371427656,
+          6640084921188677557,
+          1992540433058707713
+        ],
+        "candidate_key_digests": [
+          [
+            3809637009520729547,
+            9076578159401075415,
+            8348949976181033604,
+            12644900172977420598
+          ],
+          [
+            4912391414395415645,
+            2547054809251572897,
+            8922571459025832985,
+            59003111447972238
+          ],
+          [
+            9052514897089444742,
+            6777014415699922502,
+            470154851080643779,
+            4311237750087579601
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "runtime_cached",
+        "candidates": 3,
+        "alloc_realloc_calls": 135,
+        "requested_bytes": 30480,
+        "frame_digest": [
+          4724826483044238555,
+          57559865371427656,
+          6640084921188677557,
+          1992540433058707713
+        ],
+        "candidate_key_digests": [
+          [
+            3809637009520729547,
+            9076578159401075415,
+            8348949976181033604,
+            12644900172977420598
+          ],
+          [
+            4912391414395415645,
+            2547054809251572897,
+            8922571459025832985,
+            59003111447972238
+          ],
+          [
+            9052514897089444742,
+            6777014415699922502,
+            470154851080643779,
+            4311237750087579601
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "clone_runtime_prepared",
+        "candidates": 3,
+        "alloc_realloc_calls": 2,
+        "requested_bytes": 1824
+      },
+      {
+        "variant": "baseline",
+        "mode": "audited",
+        "candidates": 32,
+        "alloc_realloc_calls": 1461,
+        "requested_bytes": 437296,
+        "frame_digest": [
+          14833776090713389383,
+          2126526731085282102,
+          12852477322027886856,
+          4181203741293718161
+        ],
+        "candidate_key_digests": [
+          [
+            7398317302588830236,
+            17746492918099697794,
+            16754848010082080081,
+            6786638876065734386
+          ],
+          [
+            10088021016931181263,
+            8427257662532529147,
+            8552216929232512564,
+            838286107909589880
+          ],
+          [
+            9859973647778755904,
+            17243703926349368539,
+            9929281155288597846,
+            5083632370015883464
+          ],
+          [
+            14978867317404829166,
+            3522651201626981468,
+            5290600737347223023,
+            5250107196994148249
+          ],
+          [
+            6868588404641033503,
+            5541241406977535618,
+            5476654297519017195,
+            15586343772153558986
+          ],
+          [
+            11481226819620354113,
+            2176033079466426421,
+            11648601315807995296,
+            3973134821969003304
+          ],
+          [
+            17105029892618567663,
+            4418306364496908042,
+            7941431206517573119,
+            6218927031629683303
+          ],
+          [
+            3889723868423455722,
+            5125403465366090889,
+            3679328658898174268,
+            2515781118135433779
+          ],
+          [
+            12296618458823131927,
+            15412213739210189244,
+            5500733617690760638,
+            8642636975999400502
+          ],
+          [
+            11313309633136527594,
+            16162480792595201603,
+            15244236142238934587,
+            840181108218964851
+          ],
+          [
+            16333956195829713981,
+            5581179439895374215,
+            12741198830820216742,
+            16401917306207906477
+          ],
+          [
+            8411442298849830230,
+            10586567131039283472,
+            17334307663421577826,
+            18435007477759912342
+          ],
+          [
+            4954487836587997887,
+            13297584992420864924,
+            8997871089446365258,
+            4136935316482424793
+          ],
+          [
+            8706282524656992091,
+            16310013587365212084,
+            11515386329119638279,
+            7877760370445502978
+          ],
+          [
+            5067767678024246263,
+            15081160917296774615,
+            13798665063336619906,
+            15335722185268640132
+          ],
+          [
+            17511591785819180880,
+            1952830177122419314,
+            15717625958696897459,
+            6251812041548905636
+          ],
+          [
+            10919761890965927629,
+            14790815782250745253,
+            6696199738053535026,
+            7753979259190518014
+          ],
+          [
+            11357167659960299779,
+            14180837429970697597,
+            3894112855381819000,
+            11817461209243579332
+          ],
+          [
+            16786604296334962666,
+            1912389033061779884,
+            7185471616435881397,
+            11574022331486653376
+          ],
+          [
+            9018595226095542109,
+            7020209674006220340,
+            4784304733017740571,
+            5713930932250291423
+          ],
+          [
+            4422684842001418361,
+            16713666213071020647,
+            11305648620511105962,
+            10542947188108463417
+          ],
+          [
+            2399995783279239084,
+            10564170436104073980,
+            9025319800303170454,
+            5791513318768237862
+          ],
+          [
+            1808247344953944584,
+            8996971889331167468,
+            18178905637757706005,
+            557087721271381235
+          ],
+          [
+            8077097146993265198,
+            3883101554456718977,
+            487121360156355664,
+            10126058945579604079
+          ],
+          [
+            9639344559139417919,
+            9339248522308843540,
+            4070753851686626212,
+            8410700595138466326
+          ],
+          [
+            15217393973705610823,
+            12118390666601897333,
+            17923957288788990312,
+            16286731094631679022
+          ],
+          [
+            17376858820459104488,
+            9226466872800318055,
+            13324023874219599946,
+            4909780963317134249
+          ],
+          [
+            9203395914237029878,
+            10722510883014984442,
+            3052168002634613149,
+            13322763830055782502
+          ],
+          [
+            17019767440986931013,
+            1156977697441385858,
+            11841191473850946910,
+            17604715311204015077
+          ],
+          [
+            6731032503283646151,
+            12793889040591553677,
+            6680671191359438714,
+            13583340614379554576
+          ],
+          [
+            17347719180531485543,
+            5143772811964594791,
+            7108242576834085758,
+            4182974157679207560
+          ],
+          [
+            2734347279456336312,
+            7669123995429517401,
+            1878176250639906038,
+            16112925265616485642
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "runtime_cold",
+        "candidates": 32,
+        "alloc_realloc_calls": 1100,
+        "requested_bytes": 315357,
+        "frame_digest": [
+          14833776090713389383,
+          2126526731085282102,
+          12852477322027886856,
+          4181203741293718161
+        ],
+        "candidate_key_digests": [
+          [
+            7398317302588830236,
+            17746492918099697794,
+            16754848010082080081,
+            6786638876065734386
+          ],
+          [
+            10088021016931181263,
+            8427257662532529147,
+            8552216929232512564,
+            838286107909589880
+          ],
+          [
+            9859973647778755904,
+            17243703926349368539,
+            9929281155288597846,
+            5083632370015883464
+          ],
+          [
+            14978867317404829166,
+            3522651201626981468,
+            5290600737347223023,
+            5250107196994148249
+          ],
+          [
+            6868588404641033503,
+            5541241406977535618,
+            5476654297519017195,
+            15586343772153558986
+          ],
+          [
+            11481226819620354113,
+            2176033079466426421,
+            11648601315807995296,
+            3973134821969003304
+          ],
+          [
+            17105029892618567663,
+            4418306364496908042,
+            7941431206517573119,
+            6218927031629683303
+          ],
+          [
+            3889723868423455722,
+            5125403465366090889,
+            3679328658898174268,
+            2515781118135433779
+          ],
+          [
+            12296618458823131927,
+            15412213739210189244,
+            5500733617690760638,
+            8642636975999400502
+          ],
+          [
+            11313309633136527594,
+            16162480792595201603,
+            15244236142238934587,
+            840181108218964851
+          ],
+          [
+            16333956195829713981,
+            5581179439895374215,
+            12741198830820216742,
+            16401917306207906477
+          ],
+          [
+            8411442298849830230,
+            10586567131039283472,
+            17334307663421577826,
+            18435007477759912342
+          ],
+          [
+            4954487836587997887,
+            13297584992420864924,
+            8997871089446365258,
+            4136935316482424793
+          ],
+          [
+            8706282524656992091,
+            16310013587365212084,
+            11515386329119638279,
+            7877760370445502978
+          ],
+          [
+            5067767678024246263,
+            15081160917296774615,
+            13798665063336619906,
+            15335722185268640132
+          ],
+          [
+            17511591785819180880,
+            1952830177122419314,
+            15717625958696897459,
+            6251812041548905636
+          ],
+          [
+            10919761890965927629,
+            14790815782250745253,
+            6696199738053535026,
+            7753979259190518014
+          ],
+          [
+            11357167659960299779,
+            14180837429970697597,
+            3894112855381819000,
+            11817461209243579332
+          ],
+          [
+            16786604296334962666,
+            1912389033061779884,
+            7185471616435881397,
+            11574022331486653376
+          ],
+          [
+            9018595226095542109,
+            7020209674006220340,
+            4784304733017740571,
+            5713930932250291423
+          ],
+          [
+            4422684842001418361,
+            16713666213071020647,
+            11305648620511105962,
+            10542947188108463417
+          ],
+          [
+            2399995783279239084,
+            10564170436104073980,
+            9025319800303170454,
+            5791513318768237862
+          ],
+          [
+            1808247344953944584,
+            8996971889331167468,
+            18178905637757706005,
+            557087721271381235
+          ],
+          [
+            8077097146993265198,
+            3883101554456718977,
+            487121360156355664,
+            10126058945579604079
+          ],
+          [
+            9639344559139417919,
+            9339248522308843540,
+            4070753851686626212,
+            8410700595138466326
+          ],
+          [
+            15217393973705610823,
+            12118390666601897333,
+            17923957288788990312,
+            16286731094631679022
+          ],
+          [
+            17376858820459104488,
+            9226466872800318055,
+            13324023874219599946,
+            4909780963317134249
+          ],
+          [
+            9203395914237029878,
+            10722510883014984442,
+            3052168002634613149,
+            13322763830055782502
+          ],
+          [
+            17019767440986931013,
+            1156977697441385858,
+            11841191473850946910,
+            17604715311204015077
+          ],
+          [
+            6731032503283646151,
+            12793889040591553677,
+            6680671191359438714,
+            13583340614379554576
+          ],
+          [
+            17347719180531485543,
+            5143772811964594791,
+            7108242576834085758,
+            4182974157679207560
+          ],
+          [
+            2734347279456336312,
+            7669123995429517401,
+            1878176250639906038,
+            16112925265616485642
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "runtime_cached",
+        "candidates": 32,
+        "alloc_realloc_calls": 967,
+        "requested_bytes": 292957,
+        "frame_digest": [
+          14833776090713389383,
+          2126526731085282102,
+          12852477322027886856,
+          4181203741293718161
+        ],
+        "candidate_key_digests": [
+          [
+            7398317302588830236,
+            17746492918099697794,
+            16754848010082080081,
+            6786638876065734386
+          ],
+          [
+            10088021016931181263,
+            8427257662532529147,
+            8552216929232512564,
+            838286107909589880
+          ],
+          [
+            9859973647778755904,
+            17243703926349368539,
+            9929281155288597846,
+            5083632370015883464
+          ],
+          [
+            14978867317404829166,
+            3522651201626981468,
+            5290600737347223023,
+            5250107196994148249
+          ],
+          [
+            6868588404641033503,
+            5541241406977535618,
+            5476654297519017195,
+            15586343772153558986
+          ],
+          [
+            11481226819620354113,
+            2176033079466426421,
+            11648601315807995296,
+            3973134821969003304
+          ],
+          [
+            17105029892618567663,
+            4418306364496908042,
+            7941431206517573119,
+            6218927031629683303
+          ],
+          [
+            3889723868423455722,
+            5125403465366090889,
+            3679328658898174268,
+            2515781118135433779
+          ],
+          [
+            12296618458823131927,
+            15412213739210189244,
+            5500733617690760638,
+            8642636975999400502
+          ],
+          [
+            11313309633136527594,
+            16162480792595201603,
+            15244236142238934587,
+            840181108218964851
+          ],
+          [
+            16333956195829713981,
+            5581179439895374215,
+            12741198830820216742,
+            16401917306207906477
+          ],
+          [
+            8411442298849830230,
+            10586567131039283472,
+            17334307663421577826,
+            18435007477759912342
+          ],
+          [
+            4954487836587997887,
+            13297584992420864924,
+            8997871089446365258,
+            4136935316482424793
+          ],
+          [
+            8706282524656992091,
+            16310013587365212084,
+            11515386329119638279,
+            7877760370445502978
+          ],
+          [
+            5067767678024246263,
+            15081160917296774615,
+            13798665063336619906,
+            15335722185268640132
+          ],
+          [
+            17511591785819180880,
+            1952830177122419314,
+            15717625958696897459,
+            6251812041548905636
+          ],
+          [
+            10919761890965927629,
+            14790815782250745253,
+            6696199738053535026,
+            7753979259190518014
+          ],
+          [
+            11357167659960299779,
+            14180837429970697597,
+            3894112855381819000,
+            11817461209243579332
+          ],
+          [
+            16786604296334962666,
+            1912389033061779884,
+            7185471616435881397,
+            11574022331486653376
+          ],
+          [
+            9018595226095542109,
+            7020209674006220340,
+            4784304733017740571,
+            5713930932250291423
+          ],
+          [
+            4422684842001418361,
+            16713666213071020647,
+            11305648620511105962,
+            10542947188108463417
+          ],
+          [
+            2399995783279239084,
+            10564170436104073980,
+            9025319800303170454,
+            5791513318768237862
+          ],
+          [
+            1808247344953944584,
+            8996971889331167468,
+            18178905637757706005,
+            557087721271381235
+          ],
+          [
+            8077097146993265198,
+            3883101554456718977,
+            487121360156355664,
+            10126058945579604079
+          ],
+          [
+            9639344559139417919,
+            9339248522308843540,
+            4070753851686626212,
+            8410700595138466326
+          ],
+          [
+            15217393973705610823,
+            12118390666601897333,
+            17923957288788990312,
+            16286731094631679022
+          ],
+          [
+            17376858820459104488,
+            9226466872800318055,
+            13324023874219599946,
+            4909780963317134249
+          ],
+          [
+            9203395914237029878,
+            10722510883014984442,
+            3052168002634613149,
+            13322763830055782502
+          ],
+          [
+            17019767440986931013,
+            1156977697441385858,
+            11841191473850946910,
+            17604715311204015077
+          ],
+          [
+            6731032503283646151,
+            12793889040591553677,
+            6680671191359438714,
+            13583340614379554576
+          ],
+          [
+            17347719180531485543,
+            5143772811964594791,
+            7108242576834085758,
+            4182974157679207560
+          ],
+          [
+            2734347279456336312,
+            7669123995429517401,
+            1878176250639906038,
+            16112925265616485642
+          ]
+        ]
+      },
+      {
+        "variant": "baseline",
+        "mode": "clone_runtime_prepared",
+        "candidates": 32,
+        "alloc_realloc_calls": 2,
+        "requested_bytes": 19456
+      }
+    ],
+    "retained": [
+      {
+        "variant": "retained",
+        "mode": "audited",
+        "candidates": 1,
+        "alloc_realloc_calls": 104,
+        "requested_bytes": 19881,
+        "frame_digest": [
+          15085734623421045814,
+          6635170734787772012,
+          866241415722862128,
+          10062475662591849601
+        ],
+        "candidate_key_digests": [
+          [
+            4517868740950481928,
+            12217183798043620935,
+            17187219977336230952,
+            18239740292401534845
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "runtime_cold",
+        "candidates": 1,
+        "alloc_realloc_calls": 63,
+        "requested_bytes": 12326,
+        "frame_digest": [
+          15085734623421045814,
+          6635170734787772012,
+          866241415722862128,
+          10062475662591849601
+        ],
+        "candidate_key_digests": [
+          [
+            4517868740950481928,
+            12217183798043620935,
+            17187219977336230952,
+            18239740292401534845
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "runtime_cached",
+        "candidates": 1,
+        "alloc_realloc_calls": 57,
+        "requested_bytes": 11558,
+        "frame_digest": [
+          15085734623421045814,
+          6635170734787772012,
+          866241415722862128,
+          10062475662591849601
+        ],
+        "candidate_key_digests": [
+          [
+            4517868740950481928,
+            12217183798043620935,
+            17187219977336230952,
+            18239740292401534845
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "clone_runtime_prepared",
+        "candidates": 1,
+        "alloc_realloc_calls": 3,
+        "requested_bytes": 672
+      },
+      {
+        "variant": "retained",
+        "mode": "audited",
+        "candidates": 3,
+        "alloc_realloc_calls": 200,
+        "requested_bytes": 56851,
+        "frame_digest": [
+          4724826483044238555,
+          57559865371427656,
+          6640084921188677557,
+          1992540433058707713
+        ],
+        "candidate_key_digests": [
+          [
+            3809637009520729547,
+            9076578159401075415,
+            8348949976181033604,
+            12644900172977420598
+          ],
+          [
+            4912391414395415645,
+            2547054809251572897,
+            8922571459025832985,
+            59003111447972238
+          ],
+          [
+            9052514897089444742,
+            6777014415699922502,
+            470154851080643779,
+            4311237750087579601
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "runtime_cold",
+        "candidates": 3,
+        "alloc_realloc_calls": 133,
+        "requested_bytes": 29864,
+        "frame_digest": [
+          4724826483044238555,
+          57559865371427656,
+          6640084921188677557,
+          1992540433058707713
+        ],
+        "candidate_key_digests": [
+          [
+            3809637009520729547,
+            9076578159401075415,
+            8348949976181033604,
+            12644900172977420598
+          ],
+          [
+            4912391414395415645,
+            2547054809251572897,
+            8922571459025832985,
+            59003111447972238
+          ],
+          [
+            9052514897089444742,
+            6777014415699922502,
+            470154851080643779,
+            4311237750087579601
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "runtime_cached",
+        "candidates": 3,
+        "alloc_realloc_calls": 119,
+        "requested_bytes": 27816,
+        "frame_digest": [
+          4724826483044238555,
+          57559865371427656,
+          6640084921188677557,
+          1992540433058707713
+        ],
+        "candidate_key_digests": [
+          [
+            3809637009520729547,
+            9076578159401075415,
+            8348949976181033604,
+            12644900172977420598
+          ],
+          [
+            4912391414395415645,
+            2547054809251572897,
+            8922571459025832985,
+            59003111447972238
+          ],
+          [
+            9052514897089444742,
+            6777014415699922502,
+            470154851080643779,
+            4311237750087579601
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "clone_runtime_prepared",
+        "candidates": 3,
+        "alloc_realloc_calls": 3,
+        "requested_bytes": 2016
+      },
+      {
+        "variant": "retained",
+        "mode": "audited",
+        "candidates": 32,
+        "alloc_realloc_calls": 1439,
+        "requested_bytes": 414792,
+        "frame_digest": [
+          14833776090713389383,
+          2126526731085282102,
+          12852477322027886856,
+          4181203741293718161
+        ],
+        "candidate_key_digests": [
+          [
+            7398317302588830236,
+            17746492918099697794,
+            16754848010082080081,
+            6786638876065734386
+          ],
+          [
+            10088021016931181263,
+            8427257662532529147,
+            8552216929232512564,
+            838286107909589880
+          ],
+          [
+            9859973647778755904,
+            17243703926349368539,
+            9929281155288597846,
+            5083632370015883464
+          ],
+          [
+            14978867317404829166,
+            3522651201626981468,
+            5290600737347223023,
+            5250107196994148249
+          ],
+          [
+            6868588404641033503,
+            5541241406977535618,
+            5476654297519017195,
+            15586343772153558986
+          ],
+          [
+            11481226819620354113,
+            2176033079466426421,
+            11648601315807995296,
+            3973134821969003304
+          ],
+          [
+            17105029892618567663,
+            4418306364496908042,
+            7941431206517573119,
+            6218927031629683303
+          ],
+          [
+            3889723868423455722,
+            5125403465366090889,
+            3679328658898174268,
+            2515781118135433779
+          ],
+          [
+            12296618458823131927,
+            15412213739210189244,
+            5500733617690760638,
+            8642636975999400502
+          ],
+          [
+            11313309633136527594,
+            16162480792595201603,
+            15244236142238934587,
+            840181108218964851
+          ],
+          [
+            16333956195829713981,
+            5581179439895374215,
+            12741198830820216742,
+            16401917306207906477
+          ],
+          [
+            8411442298849830230,
+            10586567131039283472,
+            17334307663421577826,
+            18435007477759912342
+          ],
+          [
+            4954487836587997887,
+            13297584992420864924,
+            8997871089446365258,
+            4136935316482424793
+          ],
+          [
+            8706282524656992091,
+            16310013587365212084,
+            11515386329119638279,
+            7877760370445502978
+          ],
+          [
+            5067767678024246263,
+            15081160917296774615,
+            13798665063336619906,
+            15335722185268640132
+          ],
+          [
+            17511591785819180880,
+            1952830177122419314,
+            15717625958696897459,
+            6251812041548905636
+          ],
+          [
+            10919761890965927629,
+            14790815782250745253,
+            6696199738053535026,
+            7753979259190518014
+          ],
+          [
+            11357167659960299779,
+            14180837429970697597,
+            3894112855381819000,
+            11817461209243579332
+          ],
+          [
+            16786604296334962666,
+            1912389033061779884,
+            7185471616435881397,
+            11574022331486653376
+          ],
+          [
+            9018595226095542109,
+            7020209674006220340,
+            4784304733017740571,
+            5713930932250291423
+          ],
+          [
+            4422684842001418361,
+            16713666213071020647,
+            11305648620511105962,
+            10542947188108463417
+          ],
+          [
+            2399995783279239084,
+            10564170436104073980,
+            9025319800303170454,
+            5791513318768237862
+          ],
+          [
+            1808247344953944584,
+            8996971889331167468,
+            18178905637757706005,
+            557087721271381235
+          ],
+          [
+            8077097146993265198,
+            3883101554456718977,
+            487121360156355664,
+            10126058945579604079
+          ],
+          [
+            9639344559139417919,
+            9339248522308843540,
+            4070753851686626212,
+            8410700595138466326
+          ],
+          [
+            15217393973705610823,
+            12118390666601897333,
+            17923957288788990312,
+            16286731094631679022
+          ],
+          [
+            17376858820459104488,
+            9226466872800318055,
+            13324023874219599946,
+            4909780963317134249
+          ],
+          [
+            9203395914237029878,
+            10722510883014984442,
+            3052168002634613149,
+            13322763830055782502
+          ],
+          [
+            17019767440986931013,
+            1156977697441385858,
+            11841191473850946910,
+            17604715311204015077
+          ],
+          [
+            6731032503283646151,
+            12793889040591553677,
+            6680671191359438714,
+            13583340614379554576
+          ],
+          [
+            17347719180531485543,
+            5143772811964594791,
+            7108242576834085758,
+            4182974157679207560
+          ],
+          [
+            2734347279456336312,
+            7669123995429517401,
+            1878176250639906038,
+            16112925265616485642
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "runtime_cold",
+        "candidates": 32,
+        "alloc_realloc_calls": 1078,
+        "requested_bytes": 292853,
+        "frame_digest": [
+          14833776090713389383,
+          2126526731085282102,
+          12852477322027886856,
+          4181203741293718161
+        ],
+        "candidate_key_digests": [
+          [
+            7398317302588830236,
+            17746492918099697794,
+            16754848010082080081,
+            6786638876065734386
+          ],
+          [
+            10088021016931181263,
+            8427257662532529147,
+            8552216929232512564,
+            838286107909589880
+          ],
+          [
+            9859973647778755904,
+            17243703926349368539,
+            9929281155288597846,
+            5083632370015883464
+          ],
+          [
+            14978867317404829166,
+            3522651201626981468,
+            5290600737347223023,
+            5250107196994148249
+          ],
+          [
+            6868588404641033503,
+            5541241406977535618,
+            5476654297519017195,
+            15586343772153558986
+          ],
+          [
+            11481226819620354113,
+            2176033079466426421,
+            11648601315807995296,
+            3973134821969003304
+          ],
+          [
+            17105029892618567663,
+            4418306364496908042,
+            7941431206517573119,
+            6218927031629683303
+          ],
+          [
+            3889723868423455722,
+            5125403465366090889,
+            3679328658898174268,
+            2515781118135433779
+          ],
+          [
+            12296618458823131927,
+            15412213739210189244,
+            5500733617690760638,
+            8642636975999400502
+          ],
+          [
+            11313309633136527594,
+            16162480792595201603,
+            15244236142238934587,
+            840181108218964851
+          ],
+          [
+            16333956195829713981,
+            5581179439895374215,
+            12741198830820216742,
+            16401917306207906477
+          ],
+          [
+            8411442298849830230,
+            10586567131039283472,
+            17334307663421577826,
+            18435007477759912342
+          ],
+          [
+            4954487836587997887,
+            13297584992420864924,
+            8997871089446365258,
+            4136935316482424793
+          ],
+          [
+            8706282524656992091,
+            16310013587365212084,
+            11515386329119638279,
+            7877760370445502978
+          ],
+          [
+            5067767678024246263,
+            15081160917296774615,
+            13798665063336619906,
+            15335722185268640132
+          ],
+          [
+            17511591785819180880,
+            1952830177122419314,
+            15717625958696897459,
+            6251812041548905636
+          ],
+          [
+            10919761890965927629,
+            14790815782250745253,
+            6696199738053535026,
+            7753979259190518014
+          ],
+          [
+            11357167659960299779,
+            14180837429970697597,
+            3894112855381819000,
+            11817461209243579332
+          ],
+          [
+            16786604296334962666,
+            1912389033061779884,
+            7185471616435881397,
+            11574022331486653376
+          ],
+          [
+            9018595226095542109,
+            7020209674006220340,
+            4784304733017740571,
+            5713930932250291423
+          ],
+          [
+            4422684842001418361,
+            16713666213071020647,
+            11305648620511105962,
+            10542947188108463417
+          ],
+          [
+            2399995783279239084,
+            10564170436104073980,
+            9025319800303170454,
+            5791513318768237862
+          ],
+          [
+            1808247344953944584,
+            8996971889331167468,
+            18178905637757706005,
+            557087721271381235
+          ],
+          [
+            8077097146993265198,
+            3883101554456718977,
+            487121360156355664,
+            10126058945579604079
+          ],
+          [
+            9639344559139417919,
+            9339248522308843540,
+            4070753851686626212,
+            8410700595138466326
+          ],
+          [
+            15217393973705610823,
+            12118390666601897333,
+            17923957288788990312,
+            16286731094631679022
+          ],
+          [
+            17376858820459104488,
+            9226466872800318055,
+            13324023874219599946,
+            4909780963317134249
+          ],
+          [
+            9203395914237029878,
+            10722510883014984442,
+            3052168002634613149,
+            13322763830055782502
+          ],
+          [
+            17019767440986931013,
+            1156977697441385858,
+            11841191473850946910,
+            17604715311204015077
+          ],
+          [
+            6731032503283646151,
+            12793889040591553677,
+            6680671191359438714,
+            13583340614379554576
+          ],
+          [
+            17347719180531485543,
+            5143772811964594791,
+            7108242576834085758,
+            4182974157679207560
+          ],
+          [
+            2734347279456336312,
+            7669123995429517401,
+            1878176250639906038,
+            16112925265616485642
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "runtime_cached",
+        "candidates": 32,
+        "alloc_realloc_calls": 945,
+        "requested_bytes": 270453,
+        "frame_digest": [
+          14833776090713389383,
+          2126526731085282102,
+          12852477322027886856,
+          4181203741293718161
+        ],
+        "candidate_key_digests": [
+          [
+            7398317302588830236,
+            17746492918099697794,
+            16754848010082080081,
+            6786638876065734386
+          ],
+          [
+            10088021016931181263,
+            8427257662532529147,
+            8552216929232512564,
+            838286107909589880
+          ],
+          [
+            9859973647778755904,
+            17243703926349368539,
+            9929281155288597846,
+            5083632370015883464
+          ],
+          [
+            14978867317404829166,
+            3522651201626981468,
+            5290600737347223023,
+            5250107196994148249
+          ],
+          [
+            6868588404641033503,
+            5541241406977535618,
+            5476654297519017195,
+            15586343772153558986
+          ],
+          [
+            11481226819620354113,
+            2176033079466426421,
+            11648601315807995296,
+            3973134821969003304
+          ],
+          [
+            17105029892618567663,
+            4418306364496908042,
+            7941431206517573119,
+            6218927031629683303
+          ],
+          [
+            3889723868423455722,
+            5125403465366090889,
+            3679328658898174268,
+            2515781118135433779
+          ],
+          [
+            12296618458823131927,
+            15412213739210189244,
+            5500733617690760638,
+            8642636975999400502
+          ],
+          [
+            11313309633136527594,
+            16162480792595201603,
+            15244236142238934587,
+            840181108218964851
+          ],
+          [
+            16333956195829713981,
+            5581179439895374215,
+            12741198830820216742,
+            16401917306207906477
+          ],
+          [
+            8411442298849830230,
+            10586567131039283472,
+            17334307663421577826,
+            18435007477759912342
+          ],
+          [
+            4954487836587997887,
+            13297584992420864924,
+            8997871089446365258,
+            4136935316482424793
+          ],
+          [
+            8706282524656992091,
+            16310013587365212084,
+            11515386329119638279,
+            7877760370445502978
+          ],
+          [
+            5067767678024246263,
+            15081160917296774615,
+            13798665063336619906,
+            15335722185268640132
+          ],
+          [
+            17511591785819180880,
+            1952830177122419314,
+            15717625958696897459,
+            6251812041548905636
+          ],
+          [
+            10919761890965927629,
+            14790815782250745253,
+            6696199738053535026,
+            7753979259190518014
+          ],
+          [
+            11357167659960299779,
+            14180837429970697597,
+            3894112855381819000,
+            11817461209243579332
+          ],
+          [
+            16786604296334962666,
+            1912389033061779884,
+            7185471616435881397,
+            11574022331486653376
+          ],
+          [
+            9018595226095542109,
+            7020209674006220340,
+            4784304733017740571,
+            5713930932250291423
+          ],
+          [
+            4422684842001418361,
+            16713666213071020647,
+            11305648620511105962,
+            10542947188108463417
+          ],
+          [
+            2399995783279239084,
+            10564170436104073980,
+            9025319800303170454,
+            5791513318768237862
+          ],
+          [
+            1808247344953944584,
+            8996971889331167468,
+            18178905637757706005,
+            557087721271381235
+          ],
+          [
+            8077097146993265198,
+            3883101554456718977,
+            487121360156355664,
+            10126058945579604079
+          ],
+          [
+            9639344559139417919,
+            9339248522308843540,
+            4070753851686626212,
+            8410700595138466326
+          ],
+          [
+            15217393973705610823,
+            12118390666601897333,
+            17923957288788990312,
+            16286731094631679022
+          ],
+          [
+            17376858820459104488,
+            9226466872800318055,
+            13324023874219599946,
+            4909780963317134249
+          ],
+          [
+            9203395914237029878,
+            10722510883014984442,
+            3052168002634613149,
+            13322763830055782502
+          ],
+          [
+            17019767440986931013,
+            1156977697441385858,
+            11841191473850946910,
+            17604715311204015077
+          ],
+          [
+            6731032503283646151,
+            12793889040591553677,
+            6680671191359438714,
+            13583340614379554576
+          ],
+          [
+            17347719180531485543,
+            5143772811964594791,
+            7108242576834085758,
+            4182974157679207560
+          ],
+          [
+            2734347279456336312,
+            7669123995429517401,
+            1878176250639906038,
+            16112925265616485642
+          ]
+        ]
+      },
+      {
+        "variant": "retained",
+        "mode": "clone_runtime_prepared",
+        "candidates": 32,
+        "alloc_realloc_calls": 3,
+        "requested_bytes": 21504
+      }
+    ]
+  },
+  "probe_sha256": "5bdd30dcf30d3f0542a3fc59e82aba31a4f3af44be80443a673a9077639d8349",
+  "runner_sha256": "62edda3f5f6a063a3b24e6dfba280a8ccfc9f32d086af305d4310eb0b1030035",
+  "library_sha256": {
+    "baseline": "f6d93d60e334348fa94435a05ac8909cd63c0fb3a7da24674c6d4a5803ed0913",
+    "retained": "766d96f5571988d804b3cc4948d2d23ea7cacf57a6f2cbf0bbbe97b097cdab7a"
+  },
+  "probe_note": "Probe was recompiled against the same unchanged core libraries to publish and cross-check candidate-key digests as well as frame digests."
+}

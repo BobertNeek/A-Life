@@ -1,6 +1,10 @@
 //! Exact activity-cost, deterministic-throttle, and replay contracts.
 
 mod support;
+#[path = "closed_loop_activity/work_receipt_tests.rs"]
+mod work_receipt_tests;
+#[path = "closed_loop_activity/work_scan_reference.rs"]
+mod work_scan_reference;
 
 use alife_core::{
     BrainActivityPolicyV1, BrainCapacityClass, BrainDispatchIdentity, BrainWorkCounters,
