@@ -153,6 +153,8 @@ pub use foundation_archived_success_replay::{
     FoundationCheckpointFileDigest, FoundationCheckpointInspection,
 };
 #[cfg(feature = "foundation-training")]
+mod foundation_critic_correction;
+#[cfg(feature = "foundation-training")]
 mod foundation_grab_food;
 #[cfg(feature = "foundation-training")]
 mod foundation_training;
@@ -171,6 +173,10 @@ mod new_game_lifecycle;
 pub use foundation_training::*;
 #[cfg(feature = "foundation-training")]
 pub use foundation_training_cycle::*;
+#[cfg(feature = "foundation-training")]
+mod critic_qualification;
+#[cfg(feature = "foundation-training")]
+pub use critic_qualification::{evaluate_critic_capture, run_critic_qualification};
 #[cfg(feature = "foundation-training")]
 pub use foundation_training_warmup::*;
 pub use new_game_lifecycle::*;

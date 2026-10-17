@@ -98,6 +98,70 @@ class GrabNightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "checkpoint age"):
             night.source_info(self.source)
 
+    def corrected_source(self):
+        inspector = self.root / "cpu-inspector.exe"
+        inspector.write_bytes(b"mocked; never execute")
+        (self.source / "critic-correction.json").write_text("{}")
+        (self.source / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 6204}))
+        inspection = {"expected_policy_version": 602, "policy_version": 602,
+                      "founder_seed_base": 539363617, "actor_optimizer_step": 1844,
+                      "value_optimizer_step": 6204, "neural_execution": False,
+                      "weights_modified": False,
+                      "file_digests": [{"file_name": name, "sha256": night.sha256(self.source / name)}
+                                       for name in night.seed_reservations.SOURCE_FILES]}
+        return inspector, inspection
+
+    def test_correction_requires_explicit_native_admission(self):
+        self.corrected_source()
+        with patch.object(night.subprocess, "run") as run:
+            with self.assertRaisesRegex(ValueError, "explicit native"):
+                night.source_info(self.source)
+            run.assert_not_called()
+
+    def test_correction_uses_native_actual_age_without_rewriting_ppo_receipt(self):
+        inspector, inspection = self.corrected_source()
+        before = (self.source / "cycle.json").read_bytes()
+        with patch.object(night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))) as run:
+            founder, hashes = night.source_info(self.source, checkpoint_inspector=inspector)
+        self.assertEqual(founder, 539363617)
+        self.assertEqual(len(hashes), 4)
+        self.assertEqual((self.source / "cycle.json").read_bytes(), before)
+        self.assertIn("--validate-checkpoint", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["timeout"], 90)
+
+    def test_correction_rejects_bad_native_result_or_unbound_age(self):
+        inspector, inspection = self.corrected_source()
+        for change in ({"neural_execution": True}, {"weights_modified": True},
+                       {"value_optimizer_step": 1204}, {"actor_optimizer_step": 0},
+                       {"policy_version": 603}, {"file_digests": []}):
+            with self.subTest(change=change), patch.object(
+                    night.subprocess, "run", return_value=Mock(stdout=json.dumps({**inspection, **change}))):
+                with self.assertRaises(ValueError):
+                    night.source_info(self.source, checkpoint_inspector=inspector)
+        with patch.object(night.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "mock")):
+            with self.assertRaisesRegex(ValueError, "admission failed"):
+                night.source_info(self.source, checkpoint_inspector=inspector)
+
+    def test_first_ppo_cycle_counts_updates_from_admitted_correction_age(self):
+        directory, receipt = self.write_grab_credit_cycle((0,))
+        inspector, inspection = self.corrected_source()
+        receipt["value_optimizer_step"] = 6205
+        (directory / "cycle.json").write_text(json.dumps(receipt))
+        (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 6205}))
+        with contextlib.redirect_stderr(io.StringIO()), patch.object(
+                night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))):
+            accepted, _, _ = night.validate_cycle(
+                directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
+        self.assertEqual(accepted["value_optimizer_updates"], 1)
+        self.assertEqual(night.read_json(self.source / "cycle.json")["value_optimizer_step"], 1204)
+        receipt["value_optimizer_step"] = 1205
+        (directory / "cycle.json").write_text(json.dumps(receipt))
+        (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 1205}))
+        with contextlib.redirect_stderr(io.StringIO()), patch.object(
+                night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))):
+            with self.assertRaisesRegex(ValueError, "lost its optimizer age"):
+                night.validate_cycle(directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
+
     def test_acquisition_requires_exact_target_touch_and_ownership(self):
         for mutation in ({"owner_before": 1}, {"owner_after": 2}, {"consumed_after": True},
                          {"target": 4}, {"physical": {"contact": "Consumed", "target_entity": 3}},

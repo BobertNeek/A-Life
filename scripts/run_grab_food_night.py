@@ -60,7 +60,47 @@ def cutoff_time(text):
     return value.astimezone(UTC)
 
 
-def source_info(source):
+def inspect_critic_correction(source, receipt, checkpoint_inspector):
+    """Delegate correction admission to the explicit CPU-only native validator.
+
+    A correction preserves the historical PPO receipt, so its actual critic age
+    must come from the admitted checkpoint rather than that old receipt.
+    """
+    if checkpoint_inspector is None or not Path(checkpoint_inspector).is_file():
+        raise ValueError("critic correction requires an explicit native checkpoint inspector")
+    sidecar = source / "critic-correction.json"
+    sidecar_hash = sha256(sidecar)
+    try:
+        result = subprocess.run(
+            [str(checkpoint_inspector), "--validate-checkpoint", str(source),
+             "--expected-policy", str(receipt["policy_version"])],
+            check=True, capture_output=True, text=True, timeout=90,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        inspection = json.loads(result.stdout)
+    except (subprocess.SubprocessError, OSError, ValueError) as error:
+        raise ValueError("native critic correction admission failed") from error
+    if (inspection.get("neural_execution") is not False or
+            inspection.get("weights_modified") is not False or
+            inspection.get("expected_policy_version") != receipt["policy_version"] or
+            inspection.get("policy_version") != receipt["policy_version"] or
+            inspection.get("founder_seed_base") != receipt["founder_seed_base"] or
+            inspection.get("actor_optimizer_step") != receipt["actor_optimizer_step"]):
+        raise ValueError("native critic correction inspection disagrees with sealed source")
+    digests = {item["file_name"]: item["sha256"] for item in inspection.get("file_digests", [])}
+    for name in ("cycle.json", "trained.alife-foundation", "actor-checkpoint.json", "value-checkpoint.json"):
+        if digests.get(name) != sha256(source / name):
+            raise ValueError("native critic correction inspection has mismatched file digests")
+    if sha256(sidecar) != sidecar_hash:
+        raise ValueError("critic correction changed during native admission")
+    for head in ("actor", "value"):
+        age = inspection.get(f"{head}_optimizer_step")
+        if (not isinstance(age, int) or isinstance(age, bool) or age < 0 or
+                age != read_json(source / f"{head}-checkpoint.json").get("optimizer_step")):
+            raise ValueError("native critic correction inspection has mismatched checkpoint age")
+    return inspection
+
+
+def source_info(source, *, checkpoint_inspector=None):
     seals = [name for name in ("cycle.json", "warmup.json", "adaptation.json") if (source / name).is_file()]
     if seals != ["cycle.json"]:
         raise ValueError("Grab continuation requires an existing sealed actor/value cycle; adaptations and warm-ups are ineligible")
@@ -71,9 +111,12 @@ def source_info(source):
     founder = receipt.get("founder_seed_base")
     if not isinstance(founder, int) or not 1 <= founder <= MAX_SEED:
         raise ValueError("source has no valid founder seed")
+    ages = receipt
+    if (source / "critic-correction.json").is_file():
+        ages = inspect_critic_correction(source, receipt, checkpoint_inspector)
     for head in ("actor", "value"):
         checkpoint = read_json(source / f"{head}-checkpoint.json")
-        if checkpoint.get("optimizer_step") != receipt.get(f"{head}_optimizer_step"):
+        if checkpoint.get("optimizer_step") != ages.get(f"{head}_optimizer_step"):
             raise ValueError(f"{head} checkpoint age disagrees with its sealed cycle")
     files = [source / name for name in ("cycle.json", "trained.alife-foundation",
         "actor-checkpoint.json", "value-checkpoint.json")]
@@ -343,7 +386,7 @@ def validate_probe(directory):
             "semantic_prior_diagnostics": receipt["semantic_prior_diagnostics"]}
 
 
-def validate_cycle(directory, previous, seed):
+def validate_cycle(directory, previous, seed, *, checkpoint_inspector=None):
     receipt = read_json(directory / "cycle.json")
     setup = assert_setup(receipt)
     receipt["semantic_prior_diagnostics"] = assert_prior(receipt, receipt["captured_replay_rows"])
@@ -375,15 +418,18 @@ def validate_cycle(directory, previous, seed):
     if not math.isclose(receipt.get("curriculum_reward_total", float("nan")),
             sum(reward["curriculum_reward"] for reward in rewards), abs_tol=1e-6):
         raise ValueError("Grab curriculum total disagrees with its loss rows")
-    _, files = source_info(directory)
+    _, files = source_info(directory, checkpoint_inspector=checkpoint_inspector)
     if sha256(previous / "trained.alife-foundation") != sha256(directory / "initial.alife-foundation"):
         raise ValueError("cycle did not start from the exact preceding exported asset")
     if (previous / "cycle.json").is_file():
         old = read_json(previous / "cycle.json")
         if receipt.get("objective_state_reset") or receipt["policy_version"] != old["policy_version"] + 1:
             raise ValueError("continuation reset its objective or lost policy age")
+        ages = old
+        if (previous / "critic-correction.json").is_file():
+            ages = inspect_critic_correction(previous, old, checkpoint_inspector)
         for head in ("actor", "value"):
-            if receipt[f"{head}_optimizer_step"] - old[f"{head}_optimizer_step"] != receipt[f"{head}_optimizer_updates"]:
+            if receipt[f"{head}_optimizer_step"] - ages[f"{head}_optimizer_step"] != receipt[f"{head}_optimizer_updates"]:
                 raise ValueError("continuation lost its optimizer age")
     for head in ("actor", "value"):
         if receipt.get(f"{head}_optimizer_updates", 0) < 1:

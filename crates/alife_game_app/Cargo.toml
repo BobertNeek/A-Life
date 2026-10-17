@@ -15,6 +15,11 @@ name = "inspect_archived_success"
 path = "src/bin/inspect_archived_success.rs"
 required-features = ["foundation-training"]
 
+[[bin]]
+name = "qualify_critic_residual"
+path = "src/bin/qualify_critic_residual.rs"
+required-features = ["foundation-training"]
+
 [[example]]
 name = "inspect_saved_policy"
 required-features = ["foundation-training"]
