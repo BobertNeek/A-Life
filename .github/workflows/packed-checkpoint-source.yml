@@ -1,0 +1,42 @@
+name: Packed checkpoint source validation
+
+on:
+  push:
+    branches: ["main", "codex/**"]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/packed-checkpoint-source.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/packed-checkpoint-source.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  adapter-test-source:
+    name: Packed checkpoint adapter-test source
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Compile real-adapter regression without GPU execution
+        run: cargo test --locked -p alife_training --features gpu-tests --lib --no-run
+      - name: Strict GPU-feature training-test source Clippy
+        run: cargo clippy --locked -p alife_training --features gpu-tests --lib --tests -- -D warnings
