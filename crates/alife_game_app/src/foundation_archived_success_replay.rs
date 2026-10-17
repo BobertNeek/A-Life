@@ -17,6 +17,7 @@ use alife_training::{
     train_recurrent_imitation, FoundationTrainer, FoundationTrainerCheckpoint, ImitationExample,
     ImitationTarget, ImitationTrainingWindow, PpoTrainingState,
 };
+use sha2::{Digest, Sha256};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const MAX_EXAMPLES: usize = 128;
@@ -103,6 +104,8 @@ pub struct FoundationCheckpointFileDigest {
     pub file_name: &'static str,
     pub encoded_bytes: usize,
     pub digest: Blake3Digest,
+    /// Portable binding for report consumers using the standard SHA-256 API.
+    pub sha256: String,
 }
 
 fn read_checkpoint_file(directory: &Path, file_name: &str) -> Result<Vec<u8>> {
@@ -182,6 +185,7 @@ pub fn inspect_foundation_checkpoint(
         file_name,
         encoded_bytes: bytes.len(),
         digest: Blake3Digest::from_bytes(*blake3::hash(&bytes).as_bytes()),
+        sha256: format!("{:x}", Sha256::digest(&bytes)),
     })
     .collect();
     Ok(FoundationCheckpointInspection {
@@ -827,7 +831,30 @@ mod tests {
             assert_eq!(actual.file_name, name);
             assert_eq!(actual.encoded_bytes, bytes.len());
             assert_eq!(actual.digest.bytes(), blake3::hash(bytes).as_bytes());
+            assert_eq!(actual.sha256, format!("{:x}", Sha256::digest(bytes)));
         }
+    }
+
+    #[test]
+    fn checkpoint_only_preserves_optional_diagnostic_binding_without_requiring_sidecar() {
+        let directory = checkpoint_fixture(3238);
+        let path = directory.join("cycle.json");
+        let mut cycle: FoundationCycleReceipt =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert!(cycle.ppo_rollout_diagnostics_sha256.is_none());
+        assert!(serde_json::to_value(&cycle)
+            .unwrap()
+            .get("ppo_rollout_diagnostics_sha256")
+            .is_none());
+        let digest = "01".repeat(32);
+        cycle.ppo_rollout_diagnostics_sha256 = Some(digest.clone());
+        let encoded = serde_json::to_vec(&cycle).unwrap();
+        let decoded: FoundationCycleReceipt = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded.ppo_rollout_diagnostics_sha256, Some(digest));
+        std::fs::write(path, encoded).unwrap();
+        // Derived diagnostics must not become a prerequisite for resuming learning.
+        assert!(!directory.join("ppo-rollout-diagnostics.json").exists());
+        assert!(inspect_foundation_checkpoint(&directory, 3238).is_ok());
     }
 
     #[test]
@@ -913,6 +940,42 @@ mod tests {
             );
             std::fs::write(path, original).unwrap();
         }
+    }
+
+    #[test]
+    fn checkpoint_only_rejects_truncated_swapped_and_stale_optimizer_artifacts() {
+        let directory = checkpoint_fixture(3238);
+        let originals = checkpoint_bytes(&directory);
+        for (name, bytes) in &originals {
+            for end in [0, bytes.len() / 2] {
+                std::fs::write(directory.join(name), &bytes[..end]).unwrap();
+                assert!(!checkpoint_error_without_mutation(&directory, 3238).is_empty());
+                std::fs::write(directory.join(name), bytes).unwrap();
+            }
+        }
+        for (left, right) in [
+            ("actor-checkpoint.json", "value-checkpoint.json"),
+            ("trained.alife-foundation", "actor-checkpoint.json"),
+        ] {
+            let left_bytes = &originals.iter().find(|(name, _)| name == left).unwrap().1;
+            let right_bytes = &originals.iter().find(|(name, _)| name == right).unwrap().1;
+            std::fs::write(directory.join(left), right_bytes).unwrap();
+            std::fs::write(directory.join(right), left_bytes).unwrap();
+            assert!(!checkpoint_error_without_mutation(&directory, 3238).is_empty());
+            std::fs::write(directory.join(left), left_bytes).unwrap();
+            std::fs::write(directory.join(right), right_bytes).unwrap();
+        }
+        for name in ["actor-checkpoint.json", "value-checkpoint.json"] {
+            let bytes = &originals.iter().find(|(file, _)| file == name).unwrap().1;
+            let mut stale: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            stale["optimizer_step"] = serde_json::json!(0);
+            std::fs::write(directory.join(name), serde_json::to_vec(&stale).unwrap()).unwrap();
+            assert!(checkpoint_error_without_mutation(&directory, 3238)
+                .contains("does not match exported actor"));
+            std::fs::write(directory.join(name), bytes).unwrap();
+        }
+        assert!(inspect_foundation_checkpoint(&directory, 3238).is_ok());
+        assert_eq!(checkpoint_bytes(&directory), originals);
     }
 
     #[test]

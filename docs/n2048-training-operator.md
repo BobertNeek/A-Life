@@ -295,6 +295,38 @@ target/debug/train_n2048_care.exe --inspect-cycle target/founder-training/cycle-
 
 The cycle collects ordinary GPU decisions, streams Zstd-compressed binary replay records with a 4 GiB disk ceiling and 8 GiB process-memory check, predicts frozen values, calculates GAE across natural sleep gaps using actual world time, applies PPO in 256-tick waking windows with up to 128 burn-in ticks, exports a canonical N2048 asset, and verifies its admission into a fresh cohort. Structural synapses remain frozen replay context while inherited weights train. The first waking decision after each sleep must pass exact GPU production/replay parity. The sealed experience patch retains its existing JSON wire inside each binary record. The second command restores the exported actor, Adam state, and GPU value head, and increments the policy version. `--seed N` may change the world seed on resume while preserving the original inherited founder seed and graph; `cycle.json` records both. `--inspect-cycle` reads and checks sealed replay records, including finalized records from an interrupted collection. Both training commands fail rather than overwrite an output directory. `cycle.json` and its actor/value checkpoints are integration evidence, not a full campaign checkpoint or a promoted founder. The cycle accepts at most 36,000 waking decisions. A production delayed-food run has now closed biological death as a terminal PPO trajectory with zero value bootstrap, exported a trained asset, and admitted its next cohort. A delayed-food invocation still exits as a failed behavior gate unless the organism survives and eats after food returns.
 
+Set `ALIFE_PPO_DIAGNOSTICS=1` to write `ppo-rollout-diagnostics.json` once per
+cycle before optimizer updates. The default path performs no diagnostic writes.
+The opt-in view records the first 64 trainable rows, marks omitted rows with
+`rows_truncated`, and records `total_rows` and `emitted_rows`. It copies the
+prepared batch's source, policy and trajectory, sampling temperature,
+discount/GAE half-lives, bootstrap value/tick, reward, frozen old/next value,
+elapsed time, gamma, lambda, termination/truncation boundary, advantage and
+return. Full-rollout advantages are preserved even when output is capped;
+targets are not recalculated or used to change training.
+The subsequently sealed `cycle.json` binds the exact sidecar bytes through
+`ppo_rollout_diagnostics_sha256`; an edited or copied unbound sidecar cannot
+contribute committed rows.
+
+An interrupted attempt can leave the prepared sidecar. Use
+`python scripts/summarize_ppo_diagnostics.py --inspector PATH_TO_INSPECT_ARCHIVED_SUCCESS CYCLE_DIRECTORY`
+to report only matching sealed cycles with admitted actor/value checkpoints.
+On Windows, use Python 3.12 or newer.
+Use `inspect_archived_success` from a qualified build containing these diagnostics;
+the reporter invokes its read-only `--validate-checkpoint` path to decode the
+asset and both checkpoints and validate the same optimizer handoff as continuation.
+This performs CPU metadata checks without neural execution or GPU allocation.
+The inspector returns SHA-256 digests of the exact checkpoint bytes it validated.
+The reporter compares those digests and the receipt-bound sidecar hash with its
+bounded input snapshot and fails closed on a mismatch or changed input.
+Missing or
+unsealed attempts never contribute committed-learning rows; capped rows remain
+unknown. A positive reward does not establish a positive advantage. Older cycles
+have no sidecar: compact replay and value-head coefficients alone do not contain
+the per-row predictions needed to reconstruct their actual advantages. This
+bounded view supports `AOA-OBS-002` and `AOA-OBS-004` without becoming a second
+training authority.
+
 For a held-out check of a fixed founder checkpoint, use `--evaluate OUTPUT ASSET LESSON TICKS WORLD_SEED FOUNDER_SEED`. It performs ordinary production collection and replay verification without an offline optimizer update. Normal lifetime plasticity, biology, sleep and audited cognition remain active; “frozen” refers to the input founder and offline training state. Use seeds outside the campaign and demonstration bands. Reserve the long delayed-food gate for post-training acceptance.
 
 Evaluation defaults to sampling temperature 1. An explicit evaluation-only
