@@ -1,6 +1,9 @@
 # Packed actor checkpoint readback
 
-Date: 2026-10-17. Integration base: main `28770f3b7f2692be02c0aa686c554309bc4703b9`.
+Date: 2026-10-17. Initial integration base: main `28770f3b7f2692be02c0aa686c554309bc4703b9`.
+The published branch also composes main `4d5b04b89b2261d57c566ff74ec67ee8ff8a4f2a`
+after the coastal asset/checker publication, preserving its shipping profiles and
+existing CI plant checks. Those changes do not alter the trainer.
 
 ## Scope and evidence status
 

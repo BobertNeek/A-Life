@@ -1,0 +1,7 @@
+{
+  "result": "PASS",
+  "fern_worker_tracked_files_verified_unchanged": 1334,
+  "shrub_package_changed_files_verified_unchanged": 21,
+  "source_worker_trees_modified_by_reconciliation": false,
+  "fern_expected_tree": "bf21f5ac227dc2da5485b1a8142f3c92d091065e"
+}

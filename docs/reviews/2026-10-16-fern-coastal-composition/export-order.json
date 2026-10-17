@@ -1,0 +1,54 @@
+{
+  "result": "PASS",
+  "blender": "Blender 4.3.2",
+  "steps": [
+    {
+      "step": "01-historical-fern",
+      "exit_code": 0
+    },
+    {
+      "step": "02-historical-shrubs",
+      "exit_code": 0
+    },
+    {
+      "step": "03-current-fern",
+      "exit_code": 0
+    },
+    {
+      "step": "04-current-coastal",
+      "exit_code": 0
+    },
+    {
+      "step": "05-register",
+      "exit_code": 0
+    },
+    {
+      "step": "06-reverse-current-coastal",
+      "exit_code": 0
+    },
+    {
+      "step": "07-reverse-current-fern",
+      "exit_code": 0
+    },
+    {
+      "step": "08-register",
+      "exit_code": 0
+    }
+  ],
+  "combined_profile_sha256": "6bc1ed02fc8805bd8613717267c50b0a784b031b8fcefa485200d1506c15cb52",
+  "historical_exporters_overwrite_current_assets": true,
+  "current_exporters_restore_both_approved_assets": true,
+  "current_exporter_orders_byte_identical": true,
+  "native_sources_and_unrelated_art_byte_retained": true,
+  "audited_art_files_after_each_order": [
+    140,
+    140
+  ],
+  "runtime_sha256": {
+    "crates/alife_game_app/assets/landscape/island/CoastalShrub.glb": "7a2636250308b67ba4794914b8edc0b1738646233a249c78a5f42573944f2a18",
+    "crates/alife_game_app/assets/landscape/island/Fern.glb": "00adc40d44b34bb99e81407efb3944ab53c1c48a2851c883df6ca784d4e57aa3"
+  },
+  "rendered": false,
+  "physical_gpu": false,
+  "remote_writes": false
+}

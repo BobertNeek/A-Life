@@ -1,0 +1,146 @@
+{
+  "result": "PASS",
+  "blender": "4.3.2",
+  "native_sha256": "65a83ed2922ad989fe9e4a67b1d6adcac7cc373bc72477e4ef584a4d64a6198d",
+  "runtime_sha256": "7a2636250308b67ba4794914b8edc0b1738646233a249c78a5f42573944f2a18",
+  "native_lods": [
+    {
+      "name": "CoastalShrub_L0",
+      "vertices": 600,
+      "triangles": 672,
+      "bounds_xyz": [
+        [
+          -0.6499999761581421,
+          -0.550000011920929,
+          0.0
+        ],
+        [
+          0.6499999761581421,
+          0.550000011920929,
+          0.8999999761581421
+        ]
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "material_names": [
+        "Island shared painted surface"
+      ],
+      "color_attribute": "ArtColor",
+      "wood_signature": "1130413c8699f9b7ec45128d15097d887d18653db853a5b0a7f151372974aa85",
+      "mesh_signature": "37d146482632ef353edec73932e0974d86d3d8ff769746b4bed94ef504c2eb34",
+      "wood_components": 12,
+      "leaf_components": 60,
+      "folded_blade_roots_checked": 60,
+      "leaf_root_attachment_max_error_m": 0.0,
+      "zero_area_faces": 0
+    },
+    {
+      "name": "CoastalShrub_L1",
+      "vertices": 276,
+      "triangles": 204,
+      "bounds_xyz": [
+        [
+          -0.6506667733192444,
+          -0.5472694635391235,
+          0.005285041872411966
+        ],
+        [
+          0.6478750705718994,
+          0.5428792834281921,
+          0.8999263644218445
+        ]
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "material_names": [
+        "Island shared painted surface"
+      ],
+      "color_attribute": "ArtColor",
+      "wood_signature": "90f0313f2e766ca4598a98902f08b4489aa73db3fe89bb7cc03b5b2ce7027f37",
+      "mesh_signature": "87d98823527a9334fa029a5e311f2645037d32d8a0690549ea13b6c9a539b3ad",
+      "wood_components": 12,
+      "leaf_components": 48,
+      "folded_blade_roots_checked": 48,
+      "leaf_root_attachment_max_error_m": 0.0,
+      "zero_area_faces": 0
+    },
+    {
+      "name": "CoastalShrub_L2",
+      "vertices": 163,
+      "triangles": 218,
+      "bounds_xyz": [
+        [
+          -0.6506667733192444,
+          -0.5487335324287415,
+          0.005285041872411966
+        ],
+        [
+          0.6394782662391663,
+          0.5430516004562378,
+          0.8983665108680725
+        ]
+      ],
+      "location": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "material_names": [
+        "Island shared painted surface"
+      ],
+      "color_attribute": "ArtColor",
+      "wood_signature": "6995ff0e65e5cae02035a11808958effb0be177472613c50d8298b65129d483c",
+      "mesh_signature": "eef36a7692a817ab7253f09af2e69be2348df764ebc9c5eed7bae4594330ff57",
+      "wood_components": 12,
+      "leaf_components": 12,
+      "folded_blade_roots_checked": 0,
+      "leaf_root_attachment_max_error_m": null,
+      "zero_area_faces": 0
+    }
+  ],
+  "stems_corner_positions_and_colors_retained": true,
+  "all_108_blade_roots_at_original_attachments": true,
+  "blades_topologically_welded_to_stems": false,
+  "native_and_runtime_L2_retained": true,
+  "BerryBush_native_and_runtime_retained": true,
+  "source_reload_export_byte_identical": true,
+  "source_files_unchanged": true,
+  "live_game": false,
+  "physical_gpu": false
+}
