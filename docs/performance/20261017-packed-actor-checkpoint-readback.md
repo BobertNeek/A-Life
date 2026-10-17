@@ -82,8 +82,9 @@ buffers, wrong lengths, nonfinite rejection, and independent successive results.
 Focused helper Clippy with warnings denied passes.
 
 The real-adapter test is enabled with `gpu-tests` but must be run explicitly
-on an intended adapter. CI adds no-run compilation and strict Clippy for that
-test source to the existing training-continuity job. Ordinary workspace CPU
+on an intended adapter. A separate hardware-free CI workflow adds no-run compilation and strict Clippy
+for that test source. It preserves the existing CI file, whose exact bytes are
+pinned by the coastal art profile. Ordinary workspace CPU
 tests execute the helper regressions without enabling GPU execution.
 
 Independent source review found no static correctness blocker and mechanically
