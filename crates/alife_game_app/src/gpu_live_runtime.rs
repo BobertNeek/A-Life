@@ -24,6 +24,7 @@ mod founder_consequence_tests;
 mod journal_capacity_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod journal_worker_poll_tests;
+mod neural_receptor_cache;
 #[cfg(test)]
 mod newborn_admission_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
@@ -49,6 +50,8 @@ pub use semantic_prior::SemanticPriorMetrics;
 use durability_hold::{
     brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,
 };
+use neural_receptor_cache::ResidentNeuralReceptors;
+
 use exact_population_checkpoint::{
     ExactCheckpointRequestDispositionV1, ExactPopulationCheckpointCoordinatorV1,
     ExactPopulationCheckpointStageV1, ManualCheckpointRequestV1,
@@ -64,10 +67,10 @@ use std::{
 
 use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, LineageLibraryConfig};
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
-#[cfg(test)]
-use alife_core::finalized_memory_attention_evidence;
 use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
+#[cfg(test)]
+use alife_core::{finalized_memory_attention_evidence, NeuralReceptorPhenotype};
 use alife_core::{
     select_focal_targets, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
     ArchiveRetirementReceipt, AttentionFrame, AttentionSelectionPolicy, BiochemistryState,
@@ -84,15 +87,15 @@ use alife_core::{
     MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
     MemoryUpdateReceipt, MotorChannel, MotorCommandBundle, N512FounderFoundationProjection,
     NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
-    NeuralReceptorEffects, NeuralReceptorFrame, NeuralReceptorPhenotype, NormalizedScalar,
-    OrganismId, PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft,
-    PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
-    PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SemanticStateVector,
-    SensorProfile, SensorProfileIdentity, SensoryAbiVersion, SignedValence,
-    SleepConsolidationConfig, SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick,
-    TopologicalMapConfig, TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind,
-    Validate, Vec3f, WorldEntityId, LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS,
-    MAX_ACTIVE_GAPS, MAX_CONTEXT_MEMORY_EXPECTANCIES,
+    NeuralReceptorEffects, NeuralReceptorFrame, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
+    PreparedMemoryRecall, ScaffoldContractError, SemanticStateVector, SensorProfile,
+    SensorProfileIdentity, SensoryAbiVersion, SignedValence, SleepConsolidationConfig,
+    SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick, TopologicalMapConfig,
+    TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind, Validate, Vec3f,
+    WorldEntityId, LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
+    MAX_CONTEXT_MEMORY_EXPECTANCIES,
 };
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
@@ -153,6 +156,9 @@ struct ResidentCognition {
     #[serde(skip)]
     approximate_cache: std::sync::Arc<approximate_cognition::ApproximateCognitionCache>,
     phenotype: alife_core::BrainPhenotype,
+    // Derived from this immutable phenotype at admission/restore, never saved.
+    #[serde(skip)]
+    neural_receptors: ResidentNeuralReceptors,
     compiler_inputs: PhenotypeCompilerInputs,
     legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     genome: BrainGenome,
@@ -761,7 +767,9 @@ impl ResidentAuthorityPlan {
     fn into_fresh_resident(self) -> Result<ResidentCognition, ScaffoldContractError> {
         let sleep_config = sleep_consolidation_config_for(&self.phenotype)?;
         let predictor = predictor_for_phenotype(&self.phenotype)?;
+        let neural_receptors = ResidentNeuralReceptors::compile(&self.phenotype)?;
         Ok(ResidentCognition {
+            neural_receptors,
             phenotype: self.phenotype,
             compiler_inputs: self.compiler_inputs,
             legacy_nano512_compatibility_receipt: self.legacy_nano512_compatibility_receipt,
@@ -5604,6 +5612,9 @@ impl GpuLiveBrainRuntime {
                 });
             }
             let resident = ResidentCognition {
+                neural_receptors: ResidentNeuralReceptors::compile(&phenotype).map_err(
+                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
+                )?,
                 phenotype: phenotype.clone(),
                 genome: entry.projection.source_brain_genome().clone(),
                 development: entry.projection.runtime_development_state().clone(),
@@ -6665,6 +6676,7 @@ impl GpuLiveBrainRuntime {
                         None
                     };
                     let resident = ResidentCognition {
+                        neural_receptors: ResidentNeuralReceptors::compile(&authority.phenotype)?,
                         approximate_cache: Default::default(),
                         phenotype: authority.phenotype.clone(),
                         genome: authority.genome.clone(),
@@ -12166,6 +12178,7 @@ mod tests {
                 (
                     raw,
                     ResidentCognition {
+                        neural_receptors: ResidentNeuralReceptors::compile(&phenotype).unwrap(),
                         phenotype,
                         compiler_inputs,
                         legacy_nano512_compatibility_receipt: Some(receipt),
@@ -13980,6 +13993,7 @@ mod tests {
         let residents = BTreeMap::from([(
             organism_id.raw(),
             ResidentCognition {
+                neural_receptors: ResidentNeuralReceptors::compile(&phenotype).unwrap(),
                 phenotype: phenotype.clone(),
                 compiler_inputs,
                 legacy_nano512_compatibility_receipt: None,

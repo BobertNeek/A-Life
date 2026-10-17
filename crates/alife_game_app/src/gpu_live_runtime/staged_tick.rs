@@ -563,9 +563,9 @@ impl GpuLiveBrainRuntime {
                 if neural_receptors.source_tick != tick_before {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence);
                 }
-                let receptor_phenotype = NeuralReceptorPhenotype::compile(&resident.phenotype)?;
-                let receptor_effects =
-                    NeuralReceptorEffects::from_frame(&neural_receptors, &receptor_phenotype)?;
+                let receptor_effects = resident
+                    .neural_receptors
+                    .effects_for(&resident.phenotype, &neural_receptors)?;
                 preparation_stage = "grounded draft";
                 let draft = self.world.perception_frame_draft_indexed(
                     OrganismId(raw),
