@@ -121,11 +121,14 @@ fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_js
             return Err("gradient evaluation changed critic/Adam".into());
         }
         let config = AdamWConfig::default();
+        // The middle case remains unclipped, so omitting the loss coefficient
+        // cannot accidentally pass through scale-invariant norm clipping.
+        let coefficient = if discount == 0.5 { 0.01 } else { 0.5 };
         let mut updated = probe;
-        updated.step_with_coefficient(session, config, 0.5)?;
+        updated.step_with_coefficient(session, config, coefficient)?;
         let actual = updated.checkpoint(session)?;
         let mut expected_state = checkpoint.parameters.clone();
-        let scaled = expected.map(|g| g * 0.5);
+        let scaled = expected.map(|g| g * coefficient);
         let norm = scaled.iter().map(|g| g * g).sum::<f32>().sqrt();
         let clip = (config.gradient_clip / norm.max(1e-20)).min(1.0);
         for p in 0..3 {

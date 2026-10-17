@@ -1,6 +1,6 @@
 import copy
 import unittest
-from qualify_continued_critic import check_slices
+from qualify_continued_critic import check_slices, validate_admission
 
 
 class SeparateSliceGates(unittest.TestCase):
@@ -23,6 +23,18 @@ class SeparateSliceGates(unittest.TestCase):
 
     def test_all_slices_inside_predeclared_limits_pass(self):
         check_slices(self.fixture(),self.fixture())
+
+    def test_admission_must_be_read_only_and_bound_to_all_checkpoint_counters(self):
+        cycle=dict(policy_version=7,actor_optimizer_step=12,value_optimizer_step=5012)
+        valid=dict(cycle,neural_execution=False,weights_modified=False)
+        validate_admission(valid,cycle)
+        for key in ["policy_version","actor_optimizer_step","value_optimizer_step"]:
+            changed=dict(valid);changed[key]+=1
+            with self.assertRaises(ValueError):validate_admission(changed,cycle)
+        for key in ["neural_execution","weights_modified"]:
+            for bad in [True,None]:
+                changed=dict(valid);changed[key]=bad
+                with self.assertRaises(ValueError):validate_admission(changed,cycle)
 
 
 if __name__=="__main__":unittest.main()

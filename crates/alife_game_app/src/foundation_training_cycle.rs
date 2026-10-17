@@ -3044,6 +3044,8 @@ fn run_foundation_training_cycle_in_owned_output(
     )?;
     std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
+    budget
+        .check_additional((training_ticks as u64 + 1) * u64::from(phenotype.neuron_count()) * 4)?;
     let mut critic_capture_features = Vec::with_capacity(training_ticks + 1);
     let speech_label = |frame: &alife_core::PerceptionFrame,
                         previous: Option<&alife_core::ExperiencePatch>| {

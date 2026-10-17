@@ -45,6 +45,13 @@ def check_slices(before, after):
             raise ValueError(f"{label} has out-of-support predictions")
 
 
+def validate_admission(admitted, cycle):
+    if admitted.get("neural_execution") is not False or admitted.get("weights_modified") is not False or (
+        admitted["policy_version"], admitted["actor_optimizer_step"], admitted["value_optimizer_step"]
+    ) != (cycle["policy_version"], cycle["actor_optimizer_step"], cycle["value_optimizer_step"]):
+        raise ValueError("Native checkpoint admission differs from the sealed cycle")
+
+
 def workers():
     names = ["train_n2048_care.exe", "qualify_critic_residual.exe", "critic_gpu_regression.exe"]
     if os.name != "nt":
@@ -89,8 +96,11 @@ def main():
     parser.add_argument("--acceptance-seeds", type=int, nargs=2, required=True)
     parser.add_argument("--reserve-disk", type=Path, default=Path("D:/"))
     parser.add_argument("--old-trainer", type=Path)
+    parser.add_argument("--old-source-repository", type=Path)
     parser.add_argument("--protected-checkpoint", type=Path, action="append", default=[])
     args = parser.parse_args()
+    if args.old_trainer and not args.old_source_repository:
+        parser.error("The legacy control needs its original source checkout for truthful revision receipts")
     deadline = dt.datetime.fromisoformat(args.deadline_utc)
     if deadline.tzinfo is None or not 1 <= args.cycles <= 128:
         parser.error("Require an aware deadline and 1..128 disposable cycles")
@@ -169,11 +179,16 @@ def main():
             baseline = args.output/f"fresh-baseline-{seed}.json"
             call(baseline.stem,[args.evaluator,"--evaluate-capture",capture,source/"value-checkpoint.json",source/"value-checkpoint.json",baseline])
             contexts.append((seed,capture,read(baseline)))
-        legacy_actor=None
+        legacy_actor_sha=None
         if args.old_trainer:
             legacy=args.output/"legacy-control-cycle1"
-            call(legacy.name,[args.old_trainer,"--resume-cycle",source,legacy,"16","--seed",str(args.first_seed),"--lesson","grab_food","--sampling-temperature","32"])
-            legacy_actor=read(legacy/"actor-checkpoint.json")
+            current_directory=Path.cwd()
+            try:
+                os.chdir(args.old_source_repository)
+                call(legacy.name,[args.old_trainer,"--resume-cycle",source,legacy,"16","--seed",str(args.first_seed),"--lesson","grab_food","--sampling-temperature","32"])
+            finally:
+                os.chdir(current_directory)
+            legacy_actor_sha=sha(legacy/"actor-checkpoint.json")
         latest = source
         for number in range(1,args.cycles+1):
             if remaining()<180: raise TimeoutError("No further disposable cycle fits the native cleanup reserve")
@@ -181,8 +196,8 @@ def main():
             seed = args.first_seed+number-1
             call(target.name,[args.trainer,"--resume-cycle",latest,target,"16","--seed",str(seed),"--lesson","grab_food","--sampling-temperature","32"])
             c = read(target/"cycle.json"); value = read(target/"value-checkpoint.json")
-            if number==1 and legacy_actor is not None:
-                if read(target/"actor-checkpoint.json")!=legacy_actor:
+            if number==1 and legacy_actor_sha is not None:
+                if sha(target/"actor-checkpoint.json")!=legacy_actor_sha:
                     raise ValueError("Matched old/new actor weights or full Adam differ")
                 outcome["matched_legacy_actor_checkpoint_exact"]=True
             if (c["policy_version"],c["actor_optimizer_step"],c["value_optimizer_step"]) != (
@@ -194,10 +209,7 @@ def main():
                 raise ValueError("Residual update evidence differs")
             admission=call("admit-"+str(number),[args.inspector,"--validate-checkpoint",target,"--expected-policy",str(c["policy_version"])],gpu=False)
             admitted=decode_json(admission.stdout,"checkpoint admission")
-            if admitted.get("neural_execution") or admitted.get("weights_modified") or (
-                admitted["policy_version"],admitted["actor_optimizer_step"],admitted["value_optimizer_step"]
-            )!=(c["policy_version"],c["actor_optimizer_step"],c["value_optimizer_step"]):
-                raise ValueError("Native checkpoint admission differs from the sealed cycle")
+            validate_admission(admitted,c)
             latest=target
             outcome.update(accepted_cycles=number,latest_checkpoint=str(latest),policy=c["policy_version"],actor_age=c["actor_optimizer_step"],critic_age=value["optimizer_step"])
             write(args.output/"PROGRESS.json",outcome)

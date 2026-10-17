@@ -176,7 +176,7 @@ mod tests {
     fn residual_boundaries_keep_real_next_and_elapsed_discount() {
         for boundary in [PpoBoundary::Continuing, PpoBoundary::Truncated] {
             let t = transition(boundary, 60.0);
-            let rows = residual_rows(&[t.clone()], 2, 60.0).unwrap();
+            let rows = residual_rows(std::slice::from_ref(&t), 2, 60.0).unwrap();
             assert_eq!(
                 (rows[0].current, rows[0].next, rows[0].discount),
                 (0, 1, 0.5)
