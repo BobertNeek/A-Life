@@ -209,8 +209,10 @@ fn batch_projection_matches_checked_baseline_for_all_promoted_classes() {
         for with_memory in [false, true] {
             let batch = fixture.build(with_memory).unwrap();
             // This covers every GPU word and host binding, not just selected
-            // offsets. Baselines were captured with the original full checks
-            // on main 69f00c05ec6774c3655ae87c5d4baa5df3861929.
+            // offsets. Baselines use the original full validation and rebasing
+            // from 69f00c05 with the adaptive-exploration identity layout on
+            // main 73f8ecf0. The integration receipt records exact reference
+            // source hashes; these differ from the pre-exploration layout.
             digests.push(
                 blake3::hash(format!("{batch:?}").as_bytes())
                     .to_hex()
@@ -221,12 +223,12 @@ fn batch_projection_matches_checked_baseline_for_all_promoted_classes() {
     assert_eq!(
         digests,
         [
-            "10b9a14f3948013905023884e3a5d6f4a67757996603e5d173a9ede583ae4896",
-            "0bb9bd483b0c70d3d38c7905b802b4f0ae0e3fae5017264bd90fc319d710db69",
-            "93a476623ae92a2dd4819147a25ec78a3fe9d7a353fb56e70063183c7a183d62",
-            "69f6e079ce9da85783d143dece5d20deef2ee758535138e44452145af28c5953",
-            "750327964e007fe06646e10df61763f18b6a565e7dd1f5e1bfd213981f3861fa",
-            "ac9502c10648a77eeca6c74548056b0e26f4a931fe45733f662fb46fe4aef5da",
+            "b9d796ff3ad357c5d7bb219132a63b2e222d8883b910972373058d4000e1d52d",
+            "910bbc42a1b2ab6701e42edcf751840007255ccc119a224ba6ecb18100496d29",
+            "d3a2412d589d335b5d05fd335c81ca008dc864dc6722776ab40185e3f6242486",
+            "797e584245d1e7e5b462235d6ea2b17b6e6a57382effc0e1511991091f631c8c",
+            "9fe75c9d74be8128f87b17495a03749cecccdf7100aa7e4a04bc899fb0642e3f",
+            "5761a87e20046d5a091833ab2e2eb01e63106e03a1aafe1212091b0685d7416f",
         ]
     );
 }
@@ -303,4 +305,126 @@ fn batch_projection_preserves_memory_error_priority_over_payload_capacity() {
         fixture.build_with_capacity(true, 37).unwrap_err(),
         GpuClosedLoopError::MalformedUpload,
     );
+}
+
+#[test]
+fn batch_projection_keeps_exploration_memory_cognitive_and_receptor_payloads_adjacent() {
+    for capacity in [
+        BrainCapacityClass::n512(),
+        BrainCapacityClass::n1024(),
+        BrainCapacityClass::n2048(),
+    ] {
+        let fixture = Fixture::new(capacity);
+        let batch = fixture.build(true).unwrap();
+        for row in 0..fixture.frames.len() {
+            let count = fixture.frames[row].candidates().len();
+            let identity_start = batch.learning_headers[row].outcome_offset as usize
+                + crate::GPU_PENDING_ELIGIBILITY_WORDS;
+            let memory_start = identity_start + count * crate::GAME_EXPLORATION_IDENTITY_WORDS;
+            for (index, candidate) in fixture.frames[row].candidates().iter().enumerate() {
+                let start = identity_start + index * crate::GAME_EXPLORATION_IDENTITY_WORDS;
+                assert_eq!(
+                    &batch.frame_payload_words
+                        [start..start + crate::GAME_EXPLORATION_IDENTITY_WORDS],
+                    &crate::game_candidate_exploration_identity(candidate).unwrap(),
+                );
+            }
+            let header_start = row * GPU_ACTIVE_DISPATCH_ROW_WORDS
+                + GPU_PERCEPTION_DISPATCH_ROW_WORDS
+                + GPU_LEARNING_HEADER_WORDS;
+            let header = GpuMemoryContextHeader::from_words(
+                &batch.dispatch_header_words
+                    [header_start..header_start + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS],
+            )
+            .unwrap();
+            assert_eq!(header.memory_context_offset as usize, memory_start);
+            let mut cursor = memory_start;
+            for record in &fixture.memories[row].records {
+                let end = cursor + crate::GPU_CANDIDATE_MEMORY_RECORD_WORDS;
+                assert_eq!(&batch.frame_payload_words[cursor..end], record.words());
+                cursor = end;
+            }
+            for record in &fixture.memories[row].cognitive_records {
+                let end = cursor + crate::GPU_COGNITIVE_PROJECTION_RECORD_WORDS;
+                assert_eq!(&batch.frame_payload_words[cursor..end], record.words());
+                cursor = end;
+            }
+            assert_eq!(header.neural_receptor_effects_offset as usize, cursor);
+            let receptor = GpuNeuralReceptorEffectsRecord::try_from_effects(
+                fixture.memories[row].neural_receptor_effects.unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                &batch.frame_payload_words
+                    [cursor..cursor + crate::GPU_NEURAL_RECEPTOR_EFFECTS_WORDS],
+                receptor.words(),
+            );
+        }
+    }
+}
+
+#[test]
+fn local_memory_validation_preserves_compound_malformed_error_priority() {
+    let fixture = Fixture::new(BrainCapacityClass::n512());
+    let valid = &fixture.memories[0];
+    let frame = &fixture.frames[0];
+    let slot = &fixture.slots[0];
+    let late_failures: [fn(&mut GpuMemoryContextUpload); 4] = [
+        |memory| memory.records[1].target_latent[0] = f32::NAN,
+        |memory| memory.records[1].candidate_index += 1,
+        |memory| memory.cognitive_records[1].values[0] = f32::INFINITY,
+        |memory| memory.cognitive_records[1].candidate_index += 1,
+    ];
+    for mutate in late_failures {
+        let mut memory = valid.clone();
+        // A mismatch in the first row must not hide a later record error.
+        memory.records[0].family_value[0] = 0.5;
+        mutate(&mut memory);
+        assert_eq!(
+            memory.validate_for_frame_and_slot(frame, slot),
+            Err(GpuClosedLoopError::NonFinitePayload),
+        );
+        // Header and identity rejection remains ahead of all row checks.
+        memory.header.slot_generation += 1;
+        assert_eq!(
+            memory.validate_for_frame_and_slot(frame, slot),
+            Err(GpuClosedLoopError::MalformedUpload),
+        );
+    }
+}
+
+#[test]
+fn local_memory_validation_checks_every_context_lane_with_signed_zero_equality() {
+    let fixture = Fixture::new(BrainCapacityClass::n512());
+    let valid = &fixture.memories[0];
+    let frame = &fixture.frames[0];
+    let slot = &fixture.slots[0];
+    for row in 0..valid.records.len() {
+        for lane in 0..16 {
+            let mut memory = valid.clone();
+            let record = &mut memory.records[row];
+            match lane {
+                0..=7 => record.target_latent[lane] = 0.5,
+                8..=11 => record.family_value[lane - 8] = 0.5,
+                12 => record.target_confidence = 0.5,
+                13 => record.family_confidence = 0.5,
+                14 => record.source_counts_packed = 1,
+                15 => record.source_counts_packed = 1 << 16,
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                memory.validate_for_frame_and_slot(frame, slot),
+                Err(GpuClosedLoopError::MalformedUpload),
+                "row {row}, lane {lane}",
+            );
+        }
+    }
+    let mut memory = valid.clone();
+    for record in &mut memory.records {
+        record.target_latent.fill(-0.0);
+        record.family_value.fill(-0.0);
+        record.target_confidence = -0.0;
+        record.family_confidence = -0.0;
+    }
+    memory.validate_for_frame_and_slot(frame, slot).unwrap();
 }

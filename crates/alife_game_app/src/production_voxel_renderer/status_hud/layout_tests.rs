@@ -131,6 +131,18 @@ fn image_name(world: &World, entity: Entity) -> Option<&'static str> {
 
 fn assert_readout_components(world: &mut World, readout: Option<&Readout>) {
     let values = readout.map_or([None; 6], |readout| readout.values);
+    let badge = world
+        .query_filtered::<&Visibility, With<HeldFood>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(
+        *badge,
+        if readout.is_some_and(|readout| readout.holding_food) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        }
+    );
     let value = |quantity| values[QUANTITIES.iter().position(|q| *q == quantity).unwrap()];
     assert_eq!(world.query::<&MeterFill>().iter(world).count(), 6);
     assert_eq!(world.query::<&MeterTrack>().iter(world).count(), 6);
@@ -446,6 +458,7 @@ fn export_nodes(world: &mut World) -> Vec<Value> {
             else if world.get::<Unknown>(entity).is_some() { "unknown_marker" }
             else if world.get::<Warning>(entity).is_some() { "warning_badge" }
             else if world.get::<Identity>(entity).is_some() { "stable_identity_text" }
+            else if world.get::<HeldFood>(entity).is_some() { "held_food_badge" }
             else if world.get::<Count>(entity).is_some() { "rendered_count_text" }
             else if world.get::<Playback>(entity).is_some() { "playback_icon" }
             else if world.get::<ImageNode>(entity).is_some() { "icon" }
@@ -507,6 +520,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "normal_mixed_values",
             Some(Readout {
+                holding_food: false,
                 stable_id: 42,
                 values: normal,
             }),
@@ -515,6 +529,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "high_burdens_low_reserves",
             Some(Readout {
+                holding_food: false,
                 stable_id: 42,
                 values: [
                     Some(1.0),
@@ -530,6 +545,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "all_unknown",
             Some(Readout {
+                holding_food: false,
                 stable_id: 42,
                 values: [None; 6],
             }),
@@ -538,6 +554,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "valid_zero",
             Some(Readout {
+                holding_food: false,
                 stable_id: 42,
                 values: [Some(0.0); 6],
             }),
@@ -546,6 +563,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "high_signals",
             Some(Readout {
+                holding_food: false,
                 stable_id: 42,
                 values: [
                     Some(0.40),
@@ -561,6 +579,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "partial_unknown",
             Some(Readout {
+                holding_food: false,
                 stable_id: 42,
                 values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12)],
             }),
@@ -569,6 +588,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "largest_stable_id",
             Some(Readout {
+                holding_food: true,
                 stable_id: u64::MAX,
                 values: normal,
             }),
@@ -577,6 +597,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "debug_hidden",
             Some(Readout {
+                holding_food: true,
                 stable_id: 42,
                 values: normal,
             }),
@@ -640,6 +661,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                 json!({"case": name, "viewport": [size.x, size.y], "debug": debug,
                 "stable_id": readout.as_ref().map(|r| r.stable_id.to_string()),
                 "input_values": readout.as_ref().map(|r| r.values),
+                "holding_food": readout.as_ref().is_some_and(|r| r.holding_food),
                 "nodes": export_nodes(app.world_mut())}),
             );
         }
@@ -660,6 +682,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
     spawn(&mut world);
     for values in [[None; 6], [Some(0.0); 6], [Some(1.0); 6], [None; 6]] {
         let readout = Readout {
+            holding_food: false,
             stable_id: u64::MAX,
             values,
         };
@@ -667,6 +690,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
         assert_readout_components(&mut world, Some(&readout));
     }
     let readout = Readout {
+        holding_food: false,
         stable_id: u64::MAX,
         values: [Some(0.5); 6],
     };
@@ -766,6 +790,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
     spawn(&mut world);
     care_dock::spawn(&mut world);
     let readout = Readout {
+        holding_food: false,
         stable_id: 42,
         values: [Some(0.5); 6],
     };
@@ -806,6 +831,7 @@ fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
         ))
         .id();
     let readout = Readout {
+        holding_food: false,
         stable_id: 42,
         values: [Some(0.5); 6],
     };
@@ -817,4 +843,46 @@ fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
         .unwrap();
     assert!(!visible_in_hierarchy(&world, panel));
     assert_eq!(world.get::<Visibility>(strip), Some(&Visibility::Inherited));
+}
+
+#[test]
+fn food_badge_clears_and_restores_without_resizing_the_header_or_intercepting_input() {
+    let mut app = layout_app(Vec2::new(320.0, 480.0));
+    let badge = app
+        .world_mut()
+        .query_filtered::<Entity, With<HeldFood>>()
+        .single(app.world())
+        .unwrap();
+    let header = app.world().get::<ChildOf>(badge).unwrap().parent();
+    let readout = Readout {
+        stable_id: u64::MAX,
+        values: [Some(0.5); 6],
+        holding_food: true,
+    };
+    let mut original_box = None;
+    for (holding_food, selected, debug, expected_visible) in [
+        (true, true, false, true),
+        (false, true, false, false),
+        (true, true, false, true),
+        (true, false, false, false),
+        (true, true, true, false),
+        (true, true, false, true),
+    ] {
+        let next = Readout {
+            holding_food,
+            ..readout.clone()
+        };
+        set_readout(app.world_mut(), selected.then_some(&next), debug);
+        app.update();
+        app.update();
+        assert_eq!(visible_in_hierarchy(app.world(), badge), expected_visible);
+        let bounds = Box2::of(app.world(), header);
+        assert!(bounds.contains(Box2::of(app.world(), badge)));
+        if let Some((min, max)) = original_box {
+            assert_eq!((bounds.min, bounds.max), (min, max));
+        } else {
+            original_box = Some((bounds.min, bounds.max));
+        }
+        assert_layout(app.world_mut(), Vec2::new(320.0, 480.0));
+    }
 }

@@ -334,6 +334,12 @@ pub(crate) fn shader_source(source: &str) -> String {
     let mut source = source.replace("fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {",
         "fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {\n  if ((header.reserved & 0x80000000u) != 0u) {\n    let offset = header.reserved & 0x7fffffffu;\n    let count = arrayLength(&frame_payload_words);\n    if (offset >= count || count - offset < 11u || header.candidate_count > 32u) { return false; }\n    let temperature = bitcast<f32>(frame_payload_words[offset + 2u]);\n    return temperature >= 0.0001 && temperature <= 3.402823e38 && frame_payload_words[offset + 3u] <= 1u;\n  }");
     if source.contains("fn select_candidate(") {
+        // Explicit training requests retain their exact caller-temperature
+        // sampler and PPO likelihoods. Game perturbations are never evaluated.
+        let game_hook = "fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  // The feature-composed training shader replaces this single checked hook.\n  return true;\n}";
+        assert_eq!(source.matches(game_hook).count(), 1);
+        source = source.replace(game_hook,
+            "fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  return (header.reserved & 0x80000000u) == 0u;\n}");
         assert_eq!(
             source
                 .matches("  let base = brain.selection_offset;")
@@ -385,6 +391,15 @@ mod tests {
             .validate(&module)
             .unwrap();
         }
+        let composed = shader_source(crate::CLOSED_LOOP_DECODE_WGSL);
+        assert!(composed.contains("return (header.reserved & 0x80000000u) == 0u;"));
+        // The game's bounded noise never changes training logits or its
+        // fixed-temperature sampler/probability code.
+        assert!(composed.contains("selected_candidate = training_sample(header, brain, 0u);"));
+        assert!(composed
+            .contains("motor_candidates[slot] = training_sample(header, brain, slot + 1u);"));
+        assert!(!include_str!("../shaders/training_rollout.wgsl")
+            .contains("game_candidate_arbitration_score"));
         assert!(GpuTrainingSamplingConfig {
             seed: 1,
             counter: 0,

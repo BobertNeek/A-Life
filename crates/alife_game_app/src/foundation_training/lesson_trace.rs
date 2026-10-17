@@ -266,6 +266,107 @@ mod tests {
         (frame, behavior, decision, outcome)
     }
 
+    #[test]
+    fn food_outcome_trace_admission_binds_learner_ticks_digest_and_dispatch() {
+        use super::super::food_outcome::{FoodOutcomeObservation, FoodOwnershipSnapshot};
+        // Existing synthetic serialization fixture tests receipt binding only,
+        // not GPU action selection or on-policy acquisition.
+        let (frame, behavior, decision, outcome) = fixture(1.0);
+        let class = alife_core::BrainClassSpec::for_tier(alife_core::BrainScaleTier::Standard2048);
+        let genome = alife_core::BrainGenome::scaffold(42, class.id);
+        let pre_action = alife_core::PreActionSnapshot::from_neural_frame(
+            decision.sequence_id,
+            class.id,
+            decision.neural_evidence().unwrap().phenotype_hash,
+            genome.id,
+            genome.schema_version,
+            alife_core::DevelopmentState::new(
+                genome.id,
+                frame.tick(),
+                NormalizedScalar::new(0.5).unwrap(),
+            ),
+            frame.clone(),
+        )
+        .unwrap();
+        let patch = alife_core::ExperiencePatchBuilder::new(decision.sequence_id)
+            .record_pre_action(pre_action)
+            .unwrap()
+            .record_decision(decision)
+            .unwrap()
+            .record_outcome(outcome)
+            .unwrap()
+            .seal()
+            .unwrap();
+        let observation = FoodOutcomeObservation {
+            organism: frame.organism_id(),
+            target: TARGET,
+            decision_tick: frame.tick(),
+            outcome_tick: patch.outcome().outcome_tick,
+            before: Some(FoodOwnershipSnapshot {
+                owner: None,
+                consumed: false,
+            }),
+            after: Some(FoodOwnershipSnapshot {
+                owner: Some(frame.organism_id()),
+                consumed: false,
+            }),
+        };
+        assert!(observation.matches_row(&frame, &behavior, &patch));
+        let mut trace = serialize_step(
+            &frame,
+            &behavior,
+            patch.decision(),
+            patch.selected_bundle(),
+            patch.outcome(),
+            observation.held_before(),
+        );
+        let original = trace.clone();
+        observation.decorate_trace(&mut trace);
+        assert_eq!(trace["lesson_target_held_before_decision"], false);
+        assert_eq!(
+            trace["lesson_target_ownership_before_decision"]["owner"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            trace["lesson_target_ownership_after_outcome"]["owner"],
+            frame.organism_id().raw()
+        );
+        for field in [
+            "selected_commands",
+            "sequence_id",
+            "decision_tick",
+            "outcome_tick",
+            "sampling",
+            "chosen_action",
+            "chosen_target",
+        ] {
+            assert_eq!(trace[field], original[field]);
+        }
+        for variant in 0..4 {
+            let mut wrong = behavior.clone();
+            match variant {
+                0 => wrong.organism_id += 1,
+                1 => wrong.tick += 1,
+                2 => wrong.frame_digest.0[0] ^= 1,
+                _ => wrong.dispatch_generation += 1,
+            }
+            assert!(!observation.matches_row(&frame, &wrong, &patch));
+            let admitted = Some(observation)
+                .filter(|observation| observation.matches_row(&frame, &wrong, &patch));
+            assert!(admitted.is_none());
+        }
+        assert!(!FoodOutcomeObservation {
+            organism: OrganismId(99),
+            ..observation
+        }
+        .matches_row(&frame, &behavior, &patch));
+        assert!(!FoodOutcomeObservation {
+            decision_tick: Tick(99),
+            ..observation
+        }
+        .matches_row(&frame, &behavior, &patch));
+    }
+
     fn command(channel: MotorChannel, target: Option<ActionTarget>) -> ChannelCommand {
         ChannelCommand::new(
             channel,

@@ -2208,6 +2208,11 @@ impl GpuFixedClassArenaPlan {
             )
             .and_then(|value| value.checked_add(u64::from(candidates) * 4))
             .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS as u64))
+            .and_then(|value| {
+                value.checked_add(
+                    u64::from(candidates) * crate::GAME_EXPLORATION_IDENTITY_WORDS as u64,
+                )
+            })
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let active_frame_payload_words = checked_mul_bytes(
             slot_count,
@@ -2399,6 +2404,9 @@ impl GpuFixedClassArenaPlan {
             )
             .and_then(|value| value.checked_add(candidates * 4))
             .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS as u64))
+            .and_then(|value| {
+                value.checked_add(candidates * crate::GAME_EXPLORATION_IDENTITY_WORDS as u64)
+            })
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let staging_bytes = staging_words
             .checked_mul(4)
