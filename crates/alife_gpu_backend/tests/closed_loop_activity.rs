@@ -417,32 +417,40 @@ fn activity_contract_is_validated_once_per_dispatch_row_before_neuron_work() {
     );
     assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
 
-    let recurrent_entry = CLOSED_LOOP_RECURRENT_WGSL
-        .split_once("fn recurrent_microstep")
-        .expect("recurrent shader exposes its compute entry")
-        .1;
-    assert!(!recurrent_entry.contains("validate_activity_header(activity, header)"));
-    assert!(recurrent_entry.contains("activity_contract_prevalidated(header)"));
-
-    let fast_guard = CLOSED_LOOP_RECURRENT_WGSL
-        .split_once("fn activity_contract_prevalidated")
-        .expect("shared activity validation exposes the hot-path guard")
-        .1
-        .split_once("\n}\n")
-        .expect("hot-path guard is bounded")
-        .0;
-    assert!(fast_guard.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
-    for repeated_check in [
-        "schema_version",
-        "class_id",
-        "slot_generation",
-        "neuron_count",
-        "microstep_count",
+    let lf = CLOSED_LOOP_RECURRENT_WGSL.replace("\r\n", "\n");
+    for source in [
+        lf.clone(),
+        lf.replace('\n', "\r\n"),
+        lf.replacen('\n', "\r\n", 1),
     ] {
-        assert!(
-            !fast_guard.contains(repeated_check),
-            "the per-invocation guard repeated {repeated_check} instead of consuming the row prepass"
-        );
+        let source = source.replace("\r\n", "\n");
+        let recurrent_entry = source
+            .split_once("fn recurrent_microstep")
+            .expect("recurrent shader exposes its compute entry")
+            .1;
+        assert!(!recurrent_entry.contains("validate_activity_header(activity, header)"));
+        assert!(recurrent_entry.contains("activity_contract_prevalidated(header)"));
+
+        let fast_guard = source
+            .split_once("fn activity_contract_prevalidated")
+            .expect("shared activity validation exposes the hot-path guard")
+            .1
+            .split_once("\n}\n")
+            .expect("hot-path guard is bounded")
+            .0;
+        assert!(fast_guard.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
+        for repeated_check in [
+            "schema_version",
+            "class_id",
+            "slot_generation",
+            "neuron_count",
+            "microstep_count",
+        ] {
+            assert!(
+                !fast_guard.contains(repeated_check),
+                "the per-invocation guard repeated {repeated_check} instead of consuming the row prepass"
+            );
+        }
     }
 }
 
