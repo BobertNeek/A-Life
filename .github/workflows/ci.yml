@@ -29,6 +29,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island::update_tests:: -- --test-threads=1 --color=never'
       - name: Run camera clamp and change-tick CPU tests
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island::camera_tests:: -- --test-threads=1 --color=never'
+      - name: Run selection highlight parity and neighboring pointer CPU tests
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::god_hand:: -- --test-threads=1 --color=never'
 
   broadleaf-canopy:
     name: Broadleaf canopy CPU regression
