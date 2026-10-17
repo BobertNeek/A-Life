@@ -29,6 +29,10 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island::update_tests:: -- --test-threads=1 --color=never'
       - name: Run camera clamp and change-tick CPU tests
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::island::camera_tests:: -- --test-threads=1 --color=never'
+      - name: Run selection highlight parity and neighboring pointer CPU tests
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::god_hand:: -- --test-threads=1 --color=never'
+      - name: Run live food projection and carried-object CPU tests
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::live_food_projection::tests:: -- --test-threads=1 --color=never'
 
   broadleaf-canopy:
     name: Broadleaf canopy CPU regression
@@ -43,10 +47,10 @@ jobs:
           python-version: '3.12'
       - name: Audit complete art successor profile and shipping contracts
         run: |
-          python scripts/check_broadleaf_canopy.py
+          python -S scripts/check_fern_fronds.py
           python scripts/check_island_art.py
-      - name: Check Broadleaf positive and negative regressions
-        run: python -m unittest discover -s scripts -p 'test_broadleaf_canopy.py' -v
+      - name: Check Fern and retained Broadleaf regressions
+        run: python -m unittest discover -s scripts -p 'test_fern_fronds.py' -v
 
   island-boulder-placement:
     name: Island boulder placement CPU regression
