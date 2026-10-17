@@ -20,6 +20,9 @@ use crate::{
     GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 
+mod stage_timing;
+use stage_timing::CycleStageTiming;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const BIOLOGICAL_OBJECTIVE_VERSION: u16 = 2;
 fn legacy_objective_version() -> u16 {
@@ -2361,6 +2364,56 @@ fn run_foundation_training_cycle_from_with_temperature(
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
 ) -> Result<FoundationCycleReceipt> {
+    let timing = CycleStageTiming::from_environment(|| {
+        serde_json::json!({
+            "source_head_declared": std::env::var("ALIFE_PHASE31_SOURCE_HEAD").ok(),
+            "binary_sha256_declared": std::env::var("ALIFE_FOUNDATION_PROFILE_BINARY_SHA256").ok(),
+            "executable": std::env::current_exe().ok().map(|path| path.to_string_lossy().into_owned()),
+            "package_version": env!("CARGO_PKG_VERSION"),
+            "debug_assertions": cfg!(debug_assertions),
+            "target_os": std::env::consts::OS,
+            "target_arch": std::env::consts::ARCH,
+            "seed": seed,
+            "requested_decisions": training_ticks,
+            "sampling_temperature": sampling_temperature,
+            "lesson": lesson,
+            "continuation_requested": previous.is_some(),
+            "rehearsal_epochs": rehearsal_epochs,
+            "archived_replay_epochs": archived_replay.map(|(_, epochs)| epochs),
+        })
+    });
+    let result = run_foundation_training_cycle_profiled(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        food_available_world_tick,
+        lesson,
+        preserve_objective_from,
+        sampling_temperature,
+        rehearsal_epochs,
+        archived_replay,
+        &timing,
+    );
+    timing.finish(result.as_ref().err().map(|error| error.as_ref()));
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_foundation_training_cycle_profiled(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
+    sampling_temperature: f32,
+    rehearsal_epochs: u32,
+    archived_replay: Option<(&Path, u32)>,
+    timing: &CycleStageTiming,
+) -> Result<FoundationCycleReceipt> {
+    let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
     if rehearsal_epochs != 0 || archived_replay.is_some() {
         if rehearsal_epochs != 0 {
@@ -2491,9 +2544,11 @@ fn run_foundation_training_cycle_from_with_temperature(
         objective_state_reset,
         objective_transition_from,
     };
+    admission_stage.finish();
     crate::foundation_training_output::in_new_directory(
         output,
         || {
+            timing.own_output(output);
             run_foundation_training_cycle_in_owned_output(
                 output,
                 seed,
@@ -2504,6 +2559,7 @@ fn run_foundation_training_cycle_from_with_temperature(
                 sampling_temperature,
                 rehearsal_epochs,
                 archived_replay,
+                timing,
             )
         },
         |error| {
@@ -2564,6 +2620,7 @@ fn run_foundation_training_cycle_in_owned_output(
     sampling_temperature: f32,
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
+    timing: &CycleStageTiming,
 ) -> Result<FoundationCycleReceipt> {
     let AdmittedCycleState {
         asset,
@@ -2580,6 +2637,7 @@ fn run_foundation_training_cycle_in_owned_output(
     )?;
     std::fs::write(output.join("phase.txt"), "source-written")?;
 
+    let world_stage = timing.stage("world_lesson_setup");
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = founder_seed_base;
@@ -2616,6 +2674,8 @@ fn run_foundation_training_cycle_in_owned_output(
         creature.mind.tick = biochemistry.tick;
         creature.mind.homeostasis = biochemistry.homeostasis;
     }
+    world_stage.finish();
+    let backend_stage = timing.stage("backend_runtime_setup");
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
@@ -2628,6 +2688,7 @@ fn run_foundation_training_cycle_in_owned_output(
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
         cycle_sampling_config(seed, policy_version, sampling_temperature)?,
     )?;
+    backend_stage.finish();
     let delayed_food = if food_available_world_tick.is_some() {
         let food_id = runtime
             .world()
@@ -2686,6 +2747,7 @@ fn run_foundation_training_cycle_in_owned_output(
     )?;
     // Sleep transitions use the same durable neural authority as an ordinary
     // New Game. Without an exact base, the sleep journal has no publisher.
+    let durable_stage = timing.stage("initial_durable_boundary");
     let asset_root = output.join("world-assets");
     std::fs::create_dir(&asset_root)?;
     let save_path = output.join("world.json");
@@ -2707,7 +2769,8 @@ fn run_foundation_training_cycle_in_owned_output(
         return Err("cycle exact checkpoint changed during publication".into());
     }
     runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
-    if std::env::var_os("ALIFE_FOUNDATION_PROFILE").is_some() {
+    durable_stage.finish();
+    if timing.enabled() {
         runtime.set_performance_measurement_enabled(true);
     }
     std::fs::write(output.join("phase.txt"), "runtime-admitted")?;
@@ -2767,6 +2830,8 @@ fn run_foundation_training_cycle_in_owned_output(
     let mut first_consumed_elapsed_seconds = None;
     let mut food_hidden = delayed_food.is_some();
 
+    let collection_stage = timing.stage("collection");
+    let first_stage = timing.stage("first_priming_tick_capture");
     let started = Instant::now();
     let mut production_tick_seconds = 0.0_f64;
     let mut replay_append_seconds = 0.0_f64;
@@ -2844,6 +2909,8 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     std::fs::write(output.join("phase.txt"), "first-capture")?;
     crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
+    first_stage.finish();
+    let trainer_stage = timing.stage("trainer_construction_restore");
     let phenotype = first[0].before.phenotype.as_ref().clone();
     let mask = if let Some(checkpoint) = &restored_actor {
         checkpoint.stage_mask.clone()
@@ -2867,9 +2934,13 @@ fn run_foundation_training_cycle_in_owned_output(
     if let Some(checkpoint) = &restored_actor {
         trainer.restore_checkpoint(checkpoint)?;
     }
+    trainer_stage.finish();
+    let initial_actor_stage = timing.stage("initial_actor_checkpoint_capture");
     let initial_checkpoint = initial_actor_checkpoint_bytes(restored_actor.as_ref(), || {
         Ok(serde_json::to_vec(&trainer.checkpoint()?)?)
     })?;
+    initial_actor_stage.finish();
+    let remaining_collection_stage = timing.stage("remaining_collection");
     let actor_optimizer_step_before = trainer.optimizer_step();
     let source = foundation_replay_source(&phenotype, &asset, policy_version, &initial_checkpoint)?;
     let budget = FoundationReplayBudget::default();
@@ -3106,12 +3177,30 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     let collection_seconds = started.elapsed().as_secs_f64();
+    remaining_collection_stage.finish();
+    collection_stage.finish();
     let train_rows = references.len() - usize::from(terminal_biology.is_none());
     let (bootstrap_replay_rows, trained_held_food_consumption_events) =
         cycle_replay_dose(references.len(), train_rows, &held_food_meal_rows)?;
     if train_rows == 0 {
         return Err("cycle has no complete training transition".into());
     }
+    timing.annotate(|| {
+        serde_json::json!({
+            "actual_decisions": train_rows,
+            "captured_replay_rows": references.len(),
+            "terminal_death_tick": terminal_death_tick,
+            "replay_segment_count": 1 + references.windows(2)
+                .filter(|rows| rows[0].segment != rows[1].segment).count(),
+            "uncaptured_world_ticks_between_rows": references.windows(2)
+                .map(|rows| rows[1].tick.saturating_sub(rows[0].tick).saturating_sub(1))
+                .sum::<u64>(),
+            "legacy_collection_counters_nested_do_not_sum_with_collection": {
+                "production_tick_seconds": production_tick_seconds,
+                "replay_append_seconds": replay_append_seconds,
+            },
+        })
+    });
     let delayed_food_gate_passed = food_available_world_tick.is_some_and(|available| {
         terminal_biology.is_none()
             && !food_hidden
@@ -3141,6 +3230,7 @@ fn run_foundation_training_cycle_in_owned_output(
         output.join("replay-manifest.json"),
         serde_json::to_vec(&references)?,
     )?;
+    let targets_stage = timing.stage("old_value_and_rollout_target_preparation");
     let value_optimizer_step_before = restored_value
         .as_ref()
         .map_or(0, |checkpoint| checkpoint.optimizer_step);
@@ -3320,6 +3410,9 @@ fn run_foundation_training_cycle_in_owned_output(
         });
     }
     let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
+    targets_stage.finish();
+    let update_stage = timing.stage("update");
+    let ppo_stage = timing.stage("ppo");
     let started = Instant::now();
     let mut spans = Vec::new();
     let mut segment_start = 0;
@@ -3368,12 +3461,14 @@ fn run_foundation_training_cycle_in_owned_output(
         ppo_config,
         policy_version,
     )?;
+    ppo_stage.finish();
     let acquisition_rehearsal = if rehearsal_epochs != 0 {
+        let rehearsal_stage = timing.stage("acquisition_rehearsal");
         std::fs::write(output.join("phase.txt"), "acquisition-rehearsal")?;
         let event = grab_food_acquisitions.iter().find(|event| {
             event.row < train_rows && grab_reward_gate.reward(event.row, train_rows) > 0.0
         });
-        Some(
+        let receipt = Some(
             crate::foundation_acquisition_rehearsal::rehearse_acquisition(
                 &mut trainer,
                 &mut value,
@@ -3388,13 +3483,16 @@ fn run_foundation_training_cycle_in_owned_output(
                     budget,
                 },
             )?,
-        )
+        );
+        rehearsal_stage.finish();
+        receipt
     } else {
         None
     };
     let archived_success_replay = if let Some((manifest, epochs)) = archived_replay {
+        let archived_stage = timing.stage("archived_success_replay");
         std::fs::write(output.join("phase.txt"), "archived-success-replay")?;
-        Some(
+        let receipt = Some(
             crate::foundation_archived_success_replay::rehearse_archived_successes(
                 &mut trainer,
                 &mut value,
@@ -3404,16 +3502,20 @@ fn run_foundation_training_cycle_in_owned_output(
                 &phenotype,
                 policy_version,
             )?,
-        )
+        );
+        archived_stage.finish();
+        receipt
     } else {
         None
     };
     let final_actor_optimizer_step = trainer.optimizer_step();
     std::fs::write(output.join("phase.txt"), "update-complete")?;
     let update_seconds = started.elapsed().as_secs_f64();
+    update_stage.finish();
     if update.actor_optimizer_step == 0 || update.value_optimizer_step == 0 {
         return Err("cycle completed without an actor and value update".into());
     }
+    let export_stage = timing.stage("export_write_redecode");
     let completed_stage_count =
         u16::try_from(policy_version.checked_add(1).ok_or("stage overflow")?)?;
     let trained =
@@ -3435,6 +3537,8 @@ fn run_foundation_training_cycle_in_owned_output(
     if admitted_asset.digest() != trained.digest() {
         return Err("exported asset digest changed on disk".into());
     }
+    export_stage.finish();
+    let next_stage = timing.stage("next_cohort_construction_decision");
     let mut next_game =
         alife_world::create_canonical_new_game_with_n2048_candidate(&next_config, &admitted_asset)?;
     crate::foundation_training::ground_foundation_training_world(&mut next_game.world)?;
@@ -3457,19 +3561,26 @@ fn run_foundation_training_cycle_in_owned_output(
     if !next_cohort_tick_captured {
         return Err("trained asset next cohort did not produce a decision".into());
     }
+    next_stage.finish();
+    let rebind_stage = timing.stage("trainer_rebind");
     trainer.rebind_for_next_cohort(
         next_steps[0].before.phenotype.as_ref().clone(),
         admitted_asset,
     )?;
+    rebind_stage.finish();
     let next_cohort_optimizer_rebound = true;
+    let actor_stage = timing.stage("final_actor_capture_write");
     std::fs::write(
         output.join("actor-checkpoint.json"),
         serde_json::to_vec(&trainer.checkpoint()?)?,
     )?;
+    actor_stage.finish();
+    let value_stage = timing.stage("final_value_capture_write");
     std::fs::write(
         output.join("value-checkpoint.json"),
         serde_json::to_vec(&value.checkpoint(trainer.session())?)?,
     )?;
+    value_stage.finish();
     std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
     let receipt = FoundationCycleReceipt {
         biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
@@ -3542,9 +3653,11 @@ fn run_foundation_training_cycle_in_owned_output(
         next_cohort_tick_captured,
         next_cohort_optimizer_rebound,
     };
+    let receipt_stage = timing.stage("final_receipt_write");
     std::fs::write(
         output.join("cycle.json"),
         serde_json::to_vec_pretty(&receipt)?,
     )?;
+    receipt_stage.finish();
     Ok(receipt)
 }
