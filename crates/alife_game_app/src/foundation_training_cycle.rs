@@ -2420,7 +2420,7 @@ fn run_foundation_training_cycle_from_with_temperature(
         false,
     );
     let result = result.and_then(|outcome| match outcome {
-        FoundationCycleOutcome::Trained(receipt) => Ok(receipt),
+        FoundationCycleOutcome::Trained(receipt) => Ok(*receipt),
         FoundationCycleOutcome::CriticCapture(_) => {
             Err("unexpected critic capture in training".into())
         }
@@ -2430,7 +2430,7 @@ fn run_foundation_training_cycle_from_with_temperature(
 }
 
 enum FoundationCycleOutcome {
-    Trained(FoundationCycleReceipt),
+    Trained(Box<FoundationCycleReceipt>),
     CriticCapture(serde_json::Value),
 }
 
@@ -3867,5 +3867,5 @@ fn run_foundation_training_cycle_in_owned_output(
         serde_json::to_vec_pretty(&receipt)?,
     )?;
     receipt_stage.finish();
-    Ok(FoundationCycleOutcome::Trained(receipt))
+    Ok(FoundationCycleOutcome::Trained(Box::new(receipt)))
 }

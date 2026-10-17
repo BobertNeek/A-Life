@@ -162,6 +162,50 @@ class GrabNightTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "lost its optimizer age"):
                 night.validate_cycle(directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
 
+    def test_correction_cli_plan_pins_inspector_without_crediting_repair_as_ppo(self):
+        inspector, inspection = self.corrected_source()
+        self.write_history(self.source)
+        binary = self.root / "trainer"
+        binary.write_bytes(b"never execute")
+        output = self.root / "corrected-plan"
+        argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
+                "--seed-history", str(self.history), "--checkpoint-inspector", str(inspector),
+                "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat()]
+        with patch.object(night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))) as run, \
+             patch.object(night.subprocess, "Popen") as spawn, patch("builtins.print"):
+            self.assertEqual(night.main(argv), 0)
+        self.assertEqual(run.call_args.args[0][0], str(inspector))
+        spawn.assert_not_called()
+        state = night.read_json(output / "night.json")
+        self.assertEqual(state["checkpoint_inspector"], str(inspector))
+        self.assertEqual(state["input_sha256"][str(inspector)], night.sha256(inspector))
+        self.assertEqual(state["source_critic_only_updates"], 5000)
+        self.assertEqual(state["value_optimizer_updates"], 0)
+        self.assertEqual(state["distinct_completed_episodes"], 0)
+
+    def test_correction_cli_resumes_first_cycle_with_native_actual_age(self):
+        inspector, inspection = self.corrected_source()
+        self.write_history(self.source)
+        state, _, _ = self.fixture_run(
+            recipe_options=("--checkpoint-inspector", str(inspector)), checkpoint_inspection=inspection)
+        self.assertEqual(state["status"], "completed", state["error"])
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+        self.assertEqual(state["source_critic_only_updates"], 5000)
+        self.assertEqual(state["value_optimizer_updates"], 1)
+        self.assertEqual(night.read_json(Path(state["latest_checkpoint"]) / "value-checkpoint.json")["optimizer_step"], 6205)
+
+    def test_correction_cli_keeps_inspector_pin_after_preserving_first_seal(self):
+        inspector, inspection = self.corrected_source()
+        self.write_history(self.source)
+        state, finals, launched = self.fixture_run(
+            recipe_options=("--checkpoint-inspector", str(inspector)), checkpoint_inspection=inspection,
+            inspector_fault=True)
+        self.assertEqual(state["distinct_completed_episodes"], 1)
+        self.assertEqual(state["value_optimizer_updates"], 1)
+        self.assertIn("source/checkpoint/binary changed", state["error"])
+        self.assertEqual(launched, ["frozen-before", "eating-retention-before", "episode-00000"])
+        self.assertEqual(finals, [])
+
     def test_acquisition_requires_exact_target_touch_and_ownership(self):
         for mutation in ({"owner_before": 1}, {"owner_after": 2}, {"consumed_after": True},
                          {"target": 4}, {"physical": {"contact": "Consumed", "target_entity": 3}},
@@ -352,7 +396,7 @@ class GrabNightTests(unittest.TestCase):
     def fixture_run(self, failures=None, fail_episode=None, final_grab_seconds=0, final_remaining_seconds=None,
                     invalid_receipts=(), resource_fault=None, stop_before=None, lane_fault=None, source_fault=False,
                     retention_meals=None, retention_changes=None, recipe_options=(), command_seconds=None,
-                    pre_run=None):
+                    pre_run=None, checkpoint_inspection=None, inspector_fault=False):
         """Exercise real orchestration/validators with a nonexecuting child stub."""
         self.run_index = getattr(self, "run_index", 0) + 1
         output = self.root / "target/founder-training" / f"run-{self.run_index}"
@@ -368,7 +412,14 @@ class GrabNightTests(unittest.TestCase):
                 "--batch-episodes", "2", "--assessment-seconds", "10", "--idle-seconds", "0",
                 "--sampling-temperature-floor", "1", *recipe_options]
         args = night.arguments().parse_args(argv)
-        with patch("builtins.print"):
+        inspection_output = json.dumps(checkpoint_inspection) if checkpoint_inspection is not None else ""
+
+        def fake_inspection_or_git(command, *args, **kwargs):
+            return subprocess.CompletedProcess(command, 0,
+                stdout=inspection_output if "--validate-checkpoint" in command else "")
+
+        with patch("builtins.print"), patch.object(
+                night.subprocess, "run", side_effect=fake_inspection_or_git):
             self.assertEqual(night.main(argv), 0)
         state_path = output / "night.json"
         state = night.read_json(state_path)
@@ -425,7 +476,8 @@ class GrabNightTests(unittest.TestCase):
                 (directory / "initial.alife-foundation").write_bytes(
                     (previous / "trained.alife-foundation").read_bytes())
                 self.write_cycle(directory, prior_receipt["policy_version"] + 1,
-                    prior_receipt["actor_optimizer_step"] + 1, prior_receipt["value_optimizer_step"] + 1, {
+                    prior_receipt["actor_optimizer_step"] + 1,
+                    night.read_json(previous / "value-checkpoint.json")["optimizer_step"] + 1, {
                     "seed": int(command[6]), "lesson": "grab_food",
                     "grab_food_setup": {**setup(), "realized_body_yaw": index * .1},
                     "teacher_cue_frames": 1, "teacher_cue_tokens": [9, 1],
@@ -480,6 +532,10 @@ class GrabNightTests(unittest.TestCase):
                 raise lane_fault
 
         def fake_sha256(path):
+            if (inspector_fault and active_command[0] == "episode-00000" and
+                    Path(path).name == "cpu-inspector.exe" and not fault_observed[0]):
+                fault_observed[0] = True
+                return "fixture mismatched inspector digest"
             if (source_fault and active_command[0] == "frozen-after-00000" and
                     Path(path).name == "trained.alife-foundation"):
                 return "fixture mismatched checkpoint digest"
@@ -500,7 +556,7 @@ class GrabNightTests(unittest.TestCase):
                  free=resources["disk_free_bytes"])), \
              patch.object(night, "assert_lane_idle", side_effect=fake_lane), \
              patch.object(night, "sha256", side_effect=fake_sha256), \
-             patch.object(night.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, stdout="")), \
+             patch.object(night.subprocess, "run", side_effect=fake_inspection_or_git), \
              patch.object(night.subprocess, "check_output", return_value="fixture-source-sha\n"), \
              patch.object(night.subprocess, "Popen") as spawn, \
              patch("builtins.print"), contextlib.redirect_stderr(io.StringIO()):

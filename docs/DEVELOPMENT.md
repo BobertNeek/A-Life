@@ -367,6 +367,14 @@ It also rejects an assessment seed previously reserved for training; repeated us
 of a prior assessment seed is allowed. A surviving allocation receipt remains an
 exclusion even if omitted from the ledger's interval summary.
 
+Critic-corrected sources additionally require `--checkpoint-inspector PATH`, an
+explicit CPU-only `inspect_archived_success` binary. Planning runs its read-only
+checkpoint validation; no training or neural execution is requested. The runner
+pins the inspector's bytes for every subsequent dispatch, including after the
+first accepted seal. `source_critic_only_updates` records the admitted critic
+offset separately from `value_optimizer_updates`, which counts only new PPO
+work. See [critic correction admission](performance/20261017-critic-correction-admission.md).
+
 Plans only validate and write their ordinary plan receipt. They do not lock or
 reserve, so a plan is not a promise that its range will remain available. Launch
 rechecks under the owner lock. Ledger writes flush the file, atomically replace

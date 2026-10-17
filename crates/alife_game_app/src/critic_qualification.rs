@@ -400,8 +400,10 @@ pub fn run_critic_qualification(manifest_path: &Path, output: &Path) -> Result<s
         );
     }
     let before = metrics(&before_values, fit_count);
-    let mut config = AdamWConfig::default();
-    config.learning_rate = manifest.learning_rate;
+    let config = AdamWConfig {
+        learning_rate: manifest.learning_rate,
+        ..AdamWConfig::default()
+    };
     let mut curve = vec![serde_json::json!({"critic_updates":0,"metrics":before})];
     for step in 1..=manifest.steps {
         experiment.step(&session, config)?;
