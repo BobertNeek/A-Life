@@ -1,0 +1,126 @@
+{
+  "result": "PASS",
+  "profile": "island-fern-coastal-preview-rotation-20261016",
+  "main_integration_profile": "scripts/fern-coastal-main-integration-profile.json",
+  "main_integration_sha256": "33cc8eebb9b3bd3e6152e5a37becf7ecd350dc520bbf6946068cf923375b05e6",
+  "fern_lods": [
+    {
+      "lod": 0,
+      "baseline_triangles": 784,
+      "triangles": 700,
+      "baseline_vertices": 1568,
+      "vertices": 952,
+      "bound_change_m": 0.0
+    },
+    {
+      "lod": 1,
+      "baseline_triangles": 352,
+      "triangles": 294,
+      "baseline_vertices": 1056,
+      "vertices": 441,
+      "bound_change_m": 0.0
+    },
+    {
+      "lod": 2,
+      "baseline_triangles": 156,
+      "triangles": 154,
+      "baseline_vertices": 468,
+      "vertices": 231,
+      "bound_change_m": 0.0
+    }
+  ],
+  "coastal_lods": [
+    {
+      "lod": 0,
+      "baseline_triangles": 1152,
+      "triangles": 672,
+      "baseline_vertices": 624,
+      "vertices": 600,
+      "bounds_min_max_xyz_m": [
+        [
+          -0.6499999761581421,
+          0.0,
+          -0.550000011920929
+        ],
+        [
+          0.6499999761581421,
+          0.8999999761581421,
+          0.550000011920929
+        ]
+      ],
+      "bound_change_m": 0
+    },
+    {
+      "lod": 1,
+      "baseline_triangles": 506,
+      "triangles": 204,
+      "baseline_vertices": 307,
+      "vertices": 276,
+      "bounds_min_max_xyz_m": [
+        [
+          -0.6506667733192444,
+          0.005285041872411966,
+          -0.5428792834281921
+        ],
+        [
+          0.6478750705718994,
+          0.8999263644218445,
+          0.5472694635391235
+        ]
+      ],
+      "bound_change_m": 0
+    },
+    {
+      "lod": 2,
+      "baseline_triangles": 218,
+      "triangles": 218,
+      "baseline_vertices": 163,
+      "vertices": 163,
+      "bounds_min_max_xyz_m": [
+        [
+          -0.6506667733192444,
+          0.005285041872411966,
+          -0.5430516004562378
+        ],
+        [
+          0.6394782662391663,
+          0.8983665108680725,
+          0.5487335324287415
+        ]
+      ],
+      "bound_change_m": 0
+    }
+  ],
+  "art_blobs_audited": 140,
+  "manifest_entries_valid": 48,
+  "other_manifest_records_retained": 46,
+  "exact_approved_native_and_runtime_bytes_retained": true,
+  "both_prior_runtime_snapshots_retained": true,
+  "coastal_shrub_placements": 170,
+  "coastal_l2_attributes_and_indices_retained": true,
+  "all_other_art_and_world_bytes_retained": true,
+  "historical_profiles_retained": true,
+  "unchanged_historical_source_files_retained": true,
+  "historical_renderer_source_pins_explicitly_superseded": true,
+  "historical_combined_profile_retained": true,
+  "renderer_corrections": {
+    "scripts/render_coastal_leaf_sprays.py": {
+      "historical_sha256": "995802c09efb276e0295aba76810abeecd5026fb1108a642f71a26f2f6d9d1ed",
+      "corrected_sha256": "c4b5edb65856ce7a34d526958ff8f8c353e048ab6760160b5a2ac405f5e2b91a"
+    },
+    "scripts/render_fern_fronds_patch.py": {
+      "historical_sha256": "fd28e3174657d56595b67c935e6e654034a73e7ea8e5c39ab3dd01e3bed6ad26",
+      "corrected_sha256": "bd533a774db83863e42bd65c8f0d635a1cbd8a717419034b24b0b62fb905d466"
+    }
+  },
+  "combined_visual_composition_review": false,
+  "retained_source_files_audited": 57,
+  "retained_broadleaf_triangles": [
+    4462,
+    916,
+    86
+  ],
+  "game_rendering_proof": false,
+  "physical_gpu_proof": false,
+  "whole_workspace_acceptance": false
+}
