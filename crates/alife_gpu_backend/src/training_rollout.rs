@@ -322,8 +322,17 @@ pub(crate) fn build_receipt(
     })
 }
 
+const GAME_EXPLORATION_HOOK: &str = "fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  // The feature-composed training shader replaces this single checked hook.\n  return true;\n}";
+
 /// Production source strings stay byte-for-byte unchanged without this feature.
 pub(crate) fn shader_source(source: &str) -> String {
+    compose_training_source(source, include_str!("../shaders/training_rollout.wgsl"))
+}
+
+fn compose_training_source(source: &str, sampler: &str) -> String {
+    // Hook matching, module creation, and bundle identities use the same bytes
+    // even when a Windows checkout or supplied sampler has CRLF line endings.
+    let source = source.replace("\r\n", "\n");
     assert_eq!(
         source
             .matches("fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {")
@@ -336,9 +345,8 @@ pub(crate) fn shader_source(source: &str) -> String {
     if source.contains("fn select_candidate(") {
         // Explicit training requests retain their exact caller-temperature
         // sampler and PPO likelihoods. Game perturbations are never evaluated.
-        let game_hook = "fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  // The feature-composed training shader replaces this single checked hook.\n  return true;\n}";
-        assert_eq!(source.matches(game_hook).count(), 1);
-        source = source.replace(game_hook,
+        assert_eq!(source.matches(GAME_EXPLORATION_HOOK).count(), 1);
+        source = source.replace(GAME_EXPLORATION_HOOK,
             "fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {\n  return (header.reserved & 0x80000000u) == 0u;\n}");
         assert_eq!(
             source
@@ -358,7 +366,7 @@ pub(crate) fn shader_source(source: &str) -> String {
         );
         source = source.replace("  let base = brain.selection_offset;", "  if ((header.reserved & 0x80000000u) != 0u) {\n    selected_candidate = training_sample(header, brain, 0u);\n    found = selected_candidate < header.candidate_count;\n    if (found) {\n      selected_logit = load_state_f32(brain.candidate_logit_offset + selected_candidate);\n      selected_confidence = load_candidate(header.candidate_offset + selected_candidate * 8u).confidence_q16;\n    }\n  }\n  let base = brain.selection_offset;");
         source = source.replace("  let selection = load_speech_selection(brain.selection_offset);", "  if ((header.reserved & 0x80000000u) != 0u) {\n    for (var slot=0u; slot<6u; slot++) {\n      motor_candidates[slot] = training_sample(header, brain, slot + 1u);\n      motor_found[slot] = motor_candidates[slot] < header.candidate_count;\n    }\n  }\n  let selection = load_speech_selection(brain.selection_offset);");
-        source.push_str(include_str!("../shaders/training_rollout.wgsl"));
+        source.push_str(&sampler.replace("\r\n", "\n"));
     }
     source
 }
@@ -367,10 +375,8 @@ pub(crate) fn shader_source(source: &str) -> String {
 mod tests {
     use super::*;
 
-    #[test]
-    fn training_policy_shader_and_probability_contract() {
-        // Validate the actual feature-composed modules, not a disconnected sampler.
-        for source in [
+    fn shader_sources() -> [&'static str; 9] {
+        [
             crate::CLOSED_LOOP_ENCODE_WGSL,
             crate::CLOSED_LOOP_RECURRENT_WGSL,
             crate::CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
@@ -380,7 +386,68 @@ mod tests {
             crate::CLOSED_LOOP_PLASTICITY_WGSL,
             crate::CLOSED_LOOP_CONSOLIDATE_WGSL,
             crate::CLOSED_LOOP_REPLAY_LEARNING_WGSL,
+        ]
+    }
+
+    fn line_ending_variants(source: &str) -> [String; 3] {
+        let lf = source.replace("\r\n", "\n");
+        let crlf = lf.replace('\n', "\r\n");
+        let mixed = lf
+            .split_inclusive('\n')
+            .enumerate()
+            .map(|(index, line)| {
+                if index % 2 == 0 {
+                    line.replace('\n', "\r\n")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect();
+        [lf, crlf, mixed]
+    }
+
+    #[test]
+    fn training_shader_composition_has_canonical_line_endings() {
+        let sampler = include_str!("../shaders/training_rollout.wgsl").replace("\r\n", "\n");
+        for source in shader_sources() {
+            let expected = compose_training_source(&source.replace("\r\n", "\n"), &sampler);
+            assert_eq!(shader_source(source), expected);
+            assert!(!expected.contains('\r'));
+            for base_variant in line_ending_variants(source) {
+                for sampler_variant in line_ending_variants(&sampler) {
+                    assert_eq!(
+                        compose_training_source(&base_variant, &sampler_variant),
+                        expected
+                    );
+                }
+            }
+            if source.contains("fn select_candidate(") {
+                assert_eq!(expected.matches("fn game_exploration_enabled(").count(), 1);
+                assert_eq!(expected.matches("fn training_sample(").count(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn training_shader_composition_rejects_missing_or_duplicate_hooks() {
+        let decoder = crate::CLOSED_LOOP_DECODE_WGSL.replace("\r\n", "\n");
+        let common = "fn sparse_selector_request_spans_valid(header:GpuPerceptionHeader) -> bool {";
+        for invalid in [
+            decoder.replacen(common, "fn missing_common_hook() -> bool {", 1),
+            format!("{decoder}\n{common}"),
+            decoder.replacen("fn game_exploration_enabled", "fn missing_game_hook", 1),
+            format!("{decoder}\n{GAME_EXPLORATION_HOOK}"),
         ] {
+            for variant in line_ending_variants(&invalid) {
+                assert!(std::panic::catch_unwind(|| shader_source(&variant)).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn training_policy_shader_and_probability_contract() {
+        // Validate the actual feature-composed modules, not a disconnected sampler.
+        for source in shader_sources() {
             let source = shader_source(source);
             let module = naga::front::wgsl::parse_str(&source)
                 .unwrap_or_else(|error| panic!("{}", error.emit_to_string(&source)));
