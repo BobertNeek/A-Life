@@ -214,6 +214,24 @@ half-life is 60 simulated seconds and GAE trace half-life 10 seconds, converted
 using actual dt. Normalize advantages over valid samples only. These defaults
 are hypotheses; behavior, not reward or loss alone, determines acceptance.
 
+**Implementation status — 17 October 2026:** The paragraph above records the
+21 September design intent. At main `35d41061`, actor PPO uses **raw,
+unnormalized GAE**, and its detached linear critic regresses against
+`old_value + GAE`; the proposed valid-sample advantage normalization is not
+implemented. See the source-bound [GAE calculation and batch slicing](https://github.com/BobertNeek/A-Life/blob/35d41061aaff40ed8e2ba537c810b89ce8e239f5/crates/alife_training/src/ppo.rs#L295-L364),
+[unchanged advantage/return upload](https://github.com/BobertNeek/A-Life/blob/35d41061aaff40ed8e2ba537c810b89ce8e239f5/crates/alife_training/src/ppo.rs#L616-L624),
+and [linear head, PPO objective, and detached gradients](https://github.com/BobertNeek/A-Life/blob/35d41061aaff40ed8e2ba537c810b89ce8e239f5/crates/alife_training/shaders/foundation_ppo.wgsl#L62-L185).
+
+- The separately merged [offline critic repair](performance/20261017-critic-repair-qualification.md)
+  ([PR #83](https://github.com/BobertNeek/A-Life/pull/83)) fits the full sampled
+  one-step Bellman residual on frozen actual GPU features and admits an explicit
+  critic-only checkpoint derivative. It leaves ordinary PPO unchanged; its
+  bounded qualification does not establish indefinite continuation stability.
+- [PR #84](https://github.com/BobertNeek/A-Life/pull/84), head `a80b2684`, proposes
+  the full sampled residual for continued critic updates while retaining GAE
+  actor credit. It remains draft and unmerged on this date, with native GPU and
+  coupled-continuation qualification pending. It is not the main implementation.
+
 Use teachers to demonstrate generic skills, not hidden food identities or future
 outcomes. Vary visual identity and consequences; teach sampling and revising
 preferences from experienced outcomes. Teacher labels remain separate from the
