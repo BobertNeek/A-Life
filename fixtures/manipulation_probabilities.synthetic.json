@@ -1,0 +1,243 @@
+{
+  "schema": "alife-manipulation-probability-input-v1",
+  "policy_source_commit": "1bf0ac6b4d877fdb5cb632b7440e359ba8f0d26a",
+  "metadata": {
+    "purpose": "Synthetic math contracts only; no PC/native replay data was read",
+    "native_replay_parser": false
+  },
+  "temperatures": [
+    {
+      "label": "sampling-tau-1",
+      "value": 1
+    },
+    {
+      "label": "counterfactual-tau-0.5",
+      "value": 0.5
+    },
+    {
+      "label": "counterfactual-tau-2",
+      "value": 2
+    }
+  ],
+  "rows": [
+    {
+      "row_id": "synthetic-uniform-enabled",
+      "evidence_kind": "synthetic",
+      "behavior": "OnPolicy",
+      "sampling_temperature": 1.0,
+      "enabled_channels": 63,
+      "logits": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "candidate_kinds": [
+        "Interact",
+        "Interact",
+        "Idle",
+        "Move"
+      ],
+      "candidate_labels": [
+        "Grab toy",
+        "Eat held food",
+        "Idle",
+        "Move"
+      ],
+      "representative_mask": 15,
+      "motor_masks": [
+        8,
+        0,
+        3,
+        0,
+        0,
+        0
+      ],
+      "forced_motor_slots": [
+        2,
+        2,
+        4,
+        0
+      ],
+      "queries": [
+        {
+          "label": "Grab",
+          "candidate_indices": [
+            0
+          ]
+        },
+        {
+          "label": "Eat",
+          "candidate_indices": [
+            1
+          ]
+        }
+      ],
+      "selection": {
+        "representative_index": 2,
+        "motor_indices": [
+          3,
+          null,
+          0,
+          null,
+          2,
+          null
+        ]
+      }
+    },
+    {
+      "row_id": "synthetic-manipulation-disabled",
+      "evidence_kind": "synthetic",
+      "behavior": "OnPolicy",
+      "sampling_temperature": 1.0,
+      "enabled_channels": 1,
+      "logits": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "candidate_kinds": [
+        "Interact",
+        "Interact",
+        "Idle",
+        "Move"
+      ],
+      "candidate_labels": [
+        "candidate-0",
+        "candidate-1",
+        "candidate-2",
+        "candidate-3"
+      ],
+      "representative_mask": 15,
+      "motor_masks": [
+        8,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "forced_motor_slots": [
+        2,
+        2,
+        4,
+        0
+      ],
+      "queries": [
+        {
+          "label": "Grab",
+          "candidate_indices": [
+            0
+          ]
+        },
+        {
+          "label": "Eat",
+          "candidate_indices": [
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "row_id": "synthetic-temperature-gap",
+      "evidence_kind": "synthetic",
+      "behavior": "OnPolicy",
+      "sampling_temperature": 1.0,
+      "enabled_channels": 63,
+      "logits": [
+        -1,
+        1,
+        0
+      ],
+      "candidate_kinds": [
+        "Interact",
+        "Write",
+        "Idle"
+      ],
+      "candidate_labels": [
+        "Grab target",
+        "Write",
+        "Idle"
+      ],
+      "representative_mask": 7,
+      "motor_masks": [
+        0,
+        0,
+        3,
+        0,
+        0,
+        0
+      ],
+      "forced_motor_slots": [
+        2,
+        2,
+        4
+      ],
+      "queries": [
+        {
+          "label": "Grab",
+          "candidate_indices": [
+            0
+          ]
+        },
+        {
+          "label": "Eat unavailable",
+          "candidate_indices": []
+        }
+      ]
+    },
+    {
+      "row_id": "synthetic-invalid-eat",
+      "evidence_kind": "synthetic",
+      "behavior": "OnPolicy",
+      "sampling_temperature": 1.0,
+      "enabled_channels": 63,
+      "logits": [
+        0,
+        {
+          "f32_bits": "0x7fc00001"
+        },
+        0
+      ],
+      "candidate_kinds": [
+        "Interact",
+        "Interact",
+        "Idle"
+      ],
+      "candidate_labels": [
+        "Grab",
+        "Eat masked",
+        "Idle"
+      ],
+      "representative_mask": 5,
+      "motor_masks": [
+        0,
+        0,
+        1,
+        0,
+        0,
+        0
+      ],
+      "forced_motor_slots": [
+        2,
+        2,
+        4
+      ],
+      "queries": [
+        {
+          "label": "Grab",
+          "candidate_indices": [
+            0
+          ]
+        },
+        {
+          "label": "Eat",
+          "candidate_indices": [
+            1
+          ]
+        }
+      ]
+    }
+  ]
+}
