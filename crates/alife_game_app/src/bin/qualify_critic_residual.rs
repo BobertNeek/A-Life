@@ -10,12 +10,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         return Ok(());
     }
-    if args.first().is_some_and(|v| v == "--capture") {
+    if args
+        .first()
+        .is_some_and(|v| v == "--capture" || v == "--capture-summary")
+    {
+        let summary = args[0] == "--capture-summary";
         if args.len() != 6 {
             return Err("usage: qualify_critic_residual --capture CHECKPOINT OUTPUT SEED DECISIONS TEMPERATURE".into());
         }
         let previous = std::path::PathBuf::from(&args[1]);
         let output = std::path::PathBuf::from(&args[2]);
+        let receipt_path = output.join("critic-capture.json");
         let seed = args[3].to_string_lossy().parse()?;
         let decisions = args[4].to_string_lossy().parse()?;
         let temperature = args[5].to_string_lossy().parse()?;
@@ -34,7 +39,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?
             .join()
             .map_err(|_| "critic capture worker panicked")??;
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        if summary {
+            println!(
+                "{}",
+                serde_json::json!({"receipt":receipt_path,"seed":result["seed"],
+                "transition_count":result["transition_count"],"actor_policy":result["actor_policy"],
+                "features_sha256":result["features_sha256"]})
+            );
+        } else {
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
         return Ok(());
     }
     if args.first().is_some_and(|v| v == "--evaluate-capture") {

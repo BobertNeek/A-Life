@@ -175,7 +175,7 @@ def main():
         contexts = []
         for seed in args.fresh_context_seeds:
             capture = args.output/f"fresh-context-{seed}"
-            call(capture.name,[args.evaluator,"--capture",source,capture,str(seed),"128","32"])
+            call(capture.name,[args.evaluator,"--capture-summary",source,capture,str(seed),"128","32"])
             baseline = args.output/f"fresh-baseline-{seed}.json"
             call(baseline.stem,[args.evaluator,"--evaluate-capture",capture,source/"value-checkpoint.json",source/"value-checkpoint.json",baseline])
             contexts.append((seed,capture,read(baseline)))
@@ -232,7 +232,7 @@ def main():
         acceptance=[]
         for seed in args.acceptance_seeds:
             capture=args.output/f"acceptance-context-{seed}"
-            call(capture.name,[args.evaluator,"--capture",source,capture,str(seed),"128","32"])
+            call(capture.name,[args.evaluator,"--capture-summary",source,capture,str(seed),"128","32"])
             baseline=args.output/f"acceptance-baseline-{seed}.json"
             call(baseline.stem,[args.evaluator,"--evaluate-capture",capture,source/"value-checkpoint.json",source/"value-checkpoint.json",baseline])
             report=args.output/f"acceptance-final-{seed}.json"
@@ -241,7 +241,7 @@ def main():
             if observed["feature_sha256"]!=initial["feature_sha256"]:raise ValueError("Acceptance context differs")
             check_slices(initial["after"],observed["after"])
             current_capture=args.output/f"current-actor-context-{seed}"
-            call(current_capture.name,[args.evaluator,"--capture",latest,current_capture,str(seed),"128","32"])
+            call(current_capture.name,[args.evaluator,"--capture-summary",latest,current_capture,str(seed),"128","32"])
             current_report=args.output/f"current-actor-{seed}.json"
             call(current_report.stem,[args.evaluator,"--evaluate-capture",current_capture,latest/"value-checkpoint.json",latest/"value-checkpoint.json",current_report])
             current=read(current_report)
