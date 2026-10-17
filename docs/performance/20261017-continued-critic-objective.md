@@ -56,6 +56,12 @@ acceptance seeds. Each initial 16, whole 128 and last 16 MSE must separately rem
 at or below `max(4*baseline,1.0)`, with finite in-support predictions. A whole-window
 average cannot hide an initial transient. An optional old-binary control verifies
 that one matched cycle produces the same actor checkpoint and full Adam state.
+Both baseline and candidate metrics must contain exactly 16/128/16 real rows for
+the initial, whole and final slices. If real death shortens a requested
+128-transition context, its terminal evidence is preserved and qualification is
+held as insufficient for that comparison; rows are never padded or forced past
+death. A host-only command/receipt regression covers this hold, matched probe
+caps and fixed contexts, and separate disposable cycle accounting.
 Final acceptance also captures fresh current-actor trajectories; those are
 generalization evidence, not a causal partition of representation changes.
 
@@ -72,3 +78,4 @@ This training-only change preserves ordinary causal organism interfaces and
 teacher separation (AOA-INV-009, AOA-FOUND-002, AOA-FOUND-006). Whole-seed validation
 and fresh acceptance address AOA-FOUND-004. No founder capability or promotion is
 claimed; trainer-removed competence evidence remains required by AOA-FOUND-007.
+
