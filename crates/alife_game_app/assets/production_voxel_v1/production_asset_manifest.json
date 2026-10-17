@@ -884,14 +884,14 @@
     {
       "asset_id": "approved-island-fern",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:20f764baefaa9f92",
+      "digest": "fnv1a64:96df1a849c4aaa10",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_fern_readability.py",
-        "date": "2026-10-09",
-        "seed": "fern-readability-color-v1/from-ec5bb040",
+        "config_path": "scripts/build_fern_fronds.py",
+        "date": "2026-10-16",
+        "seed": "connected-fern-fronds-20261016",
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
@@ -899,7 +899,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/Fern.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 97100,
+      "size_bytes": 55168,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },

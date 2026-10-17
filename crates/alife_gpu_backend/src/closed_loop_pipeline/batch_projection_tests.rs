@@ -304,3 +304,69 @@ fn batch_projection_preserves_memory_error_priority_over_payload_capacity() {
         GpuClosedLoopError::MalformedUpload,
     );
 }
+
+#[test]
+fn local_memory_validation_preserves_compound_malformed_error_priority() {
+    let fixture = Fixture::new(BrainCapacityClass::n512());
+    let valid = &fixture.memories[0];
+    let frame = &fixture.frames[0];
+    let slot = &fixture.slots[0];
+    let late_failures: [fn(&mut GpuMemoryContextUpload); 4] = [
+        |memory| memory.records[1].target_latent[0] = f32::NAN,
+        |memory| memory.records[1].candidate_index += 1,
+        |memory| memory.cognitive_records[1].values[0] = f32::INFINITY,
+        |memory| memory.cognitive_records[1].candidate_index += 1,
+    ];
+    for mutate in late_failures {
+        let mut memory = valid.clone();
+        // A mismatch in the first row must not hide a later record error.
+        memory.records[0].family_value[0] = 0.5;
+        mutate(&mut memory);
+        assert_eq!(
+            memory.validate_for_frame_and_slot(frame, slot),
+            Err(GpuClosedLoopError::NonFinitePayload),
+        );
+        // Header and identity rejection remains ahead of all row checks.
+        memory.header.slot_generation += 1;
+        assert_eq!(
+            memory.validate_for_frame_and_slot(frame, slot),
+            Err(GpuClosedLoopError::MalformedUpload),
+        );
+    }
+}
+
+#[test]
+fn local_memory_validation_checks_every_context_lane_with_signed_zero_equality() {
+    let fixture = Fixture::new(BrainCapacityClass::n512());
+    let valid = &fixture.memories[0];
+    let frame = &fixture.frames[0];
+    let slot = &fixture.slots[0];
+    for row in 0..valid.records.len() {
+        for lane in 0..16 {
+            let mut memory = valid.clone();
+            let record = &mut memory.records[row];
+            match lane {
+                0..=7 => record.target_latent[lane] = 0.5,
+                8..=11 => record.family_value[lane - 8] = 0.5,
+                12 => record.target_confidence = 0.5,
+                13 => record.family_confidence = 0.5,
+                14 => record.source_counts_packed = 1,
+                15 => record.source_counts_packed = 1 << 16,
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                memory.validate_for_frame_and_slot(frame, slot),
+                Err(GpuClosedLoopError::MalformedUpload),
+                "row {row}, lane {lane}",
+            );
+        }
+    }
+    let mut memory = valid.clone();
+    for record in &mut memory.records {
+        record.target_latent.fill(-0.0);
+        record.family_value.fill(-0.0);
+        record.target_confidence = -0.0;
+        record.family_confidence = -0.0;
+    }
+    memory.validate_for_frame_and_slot(frame, slot).unwrap();
+}

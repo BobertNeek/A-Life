@@ -278,6 +278,27 @@ Do not invoke the worker directly or add that retired pack to the production man
 Optional systems must remain optional. A typed GPU unavailability result is a
 failure state, not permission to substitute a reference brain.
 
+### Food assessment reporting
+
+GrabFood and EatHeldFood pilot/lesson JSON reports include an optional
+`food_outcome` with exact admitted learner/target IDs and separate observed event
+counts for explicit Grab acquisition, ordinary acquisition, consumption, and
+nourished meals. Eat can acquire an unheld target on one tick and consume it on a
+later tick while explicit Grab and Grab lesson completion remain zero/false.
+These counters are output-only: curriculum credit, legality, reward, stopping,
+training, and checkpoint behavior are unchanged. A successful Grab probe ends at
+its existing acquisition boundary, so zero meals means none observed in that
+probe window. Historical pilot receipts without this field decode as unknown.
+
+Per-step food traces retain exact target ownership and consumed state before and
+after the tick; a missing object snapshot is null, distinct from a present unheld
+object. Held-before requires that exact unconsumed target's admitted learner
+owner, never global grip or contact alone. Food evidence must match the sealed
+learner row, ticks, frame digest, and dispatch. Consumption uses the selected
+exact-target Eat manipulation outcome even if another channel is blocked;
+nourishment also requires prior possession and measured body benefit without
+fresh harm. No new GPU readback or CPU neural fallback is used.
+
 ### Grab-night throughput estimate
 
 The host runner amortizes the maximum observed Grab assessment duration over

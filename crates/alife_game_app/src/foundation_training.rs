@@ -21,7 +21,9 @@ use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub(crate) mod diagnostics;
+mod food_outcome;
 mod lesson_trace;
+pub use food_outcome::FoundationFoodOutcome;
 mod maze;
 pub use diagnostics::{FoundationLessonBudget, FoundationSpeechBehaviorDiagnostics};
 
@@ -534,6 +536,9 @@ pub struct FoundationPilotReceipt {
     pub grab_food_setup: Option<crate::FoundationGrabFoodSetup>,
     #[serde(default)]
     pub grab_food_acquisitions: Vec<crate::FoundationGrabAcquisition>,
+    /// Output-only exact-target observations, separate from explicit Grab credit.
+    #[serde(default)]
+    pub food_outcome: Option<FoundationFoodOutcome>,
     #[serde(default)]
     pub held_food_consumption_events: usize,
     /// Assessment-only possession snapshots taken before each learner tick.
@@ -1767,6 +1772,23 @@ fn run_foundation_training_pilot_with_request(
     let mut steps = Vec::with_capacity(tick_count);
     let mut held_food_possession_frames = Vec::new();
     let mut grab_food_acquisitions = Vec::new();
+    let food_subject = scenario
+        .grab_food_setup
+        .as_ref()
+        .map(|setup| (setup.organism, setup.target))
+        .or_else(|| {
+            scenario
+                .held_food_setup
+                .as_ref()
+                .map(|setup| (setup.organism, setup.target))
+        });
+    let mut food_outcome =
+        food_subject.map(|(organism, target)| FoundationFoodOutcome::new(organism, target));
+    let mut food_observations = Vec::with_capacity(if food_subject.is_some() {
+        tick_count
+    } else {
+        0
+    });
     let mut held_food_terminal_biology = None;
     let mut correct_utterances = 0;
     let mut unprompted_correct_utterances = 0;
@@ -1804,9 +1826,28 @@ fn run_foundation_training_pilot_with_request(
         let grab_before = scenario.grab_food_setup.as_ref().and_then(|setup| {
             crate::foundation_grab_food::food_ownership(runtime.world(), setup.target)
         });
+        let food_before = food_subject.map(|(_, target)| {
+            (
+                runtime.world().tick(),
+                food_outcome::ownership(runtime.world(), target),
+            )
+        });
         runtime
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
+        let food_observation =
+            food_subject
+                .zip(food_before)
+                .map(|((organism, target), (decision_tick, before))| {
+                    food_outcome::FoodOutcomeObservation {
+                        organism,
+                        target,
+                        decision_tick,
+                        outcome_tick: runtime.world().tick(),
+                        before,
+                        after: food_outcome::ownership(runtime.world(), target),
+                    }
+                });
         if let Some(terminal) = scenario
             .held_food_setup
             .as_ref()
@@ -1827,6 +1868,14 @@ fn run_foundation_training_pilot_with_request(
                 collected.len()
             )
             .into());
+        }
+        if let Some(observation) = food_observation {
+            if observation.matches_step(&collected[0]) {
+                if let Some(summary) = food_outcome.as_mut() {
+                    summary.observe(observation, &collected[0].patch);
+                }
+            }
+            food_observations.push(observation);
         }
         if let Some(setup) = scenario.grab_food_setup.as_ref() {
             if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
@@ -2189,21 +2238,30 @@ fn run_foundation_training_pilot_with_request(
                 && steps.iter().all(|step| !teacher_step_blocked(step))
         }
     });
+    if let Some(summary) = food_outcome.as_mut() {
+        summary.explicit_grab_acquisition_events = grab_food_acquisitions.len();
+    }
     if scenario_lesson.is_some() {
         let trace = steps
             .iter()
-            .map(|step| {
-                lesson_trace::serialize_step(
+            .enumerate()
+            .map(|(row, step)| {
+                let observation = food_observations
+                    .get(row)
+                    .copied()
+                    .filter(|observation| observation.matches_step(step));
+                let mut trace = lesson_trace::serialize_step(
                     &step.frame,
                     &step.behavior,
                     step.patch.decision(),
                     step.patch.selected_bundle(),
                     step.patch.outcome(),
-                    scenario
-                        .held_food_setup
-                        .as_ref()
-                        .map(|_| held_food_possession_frames.contains(&step.frame.tick().raw())),
-                )
+                    observation.and_then(|observation| observation.held_before()),
+                );
+                if let Some(observation) = observation {
+                    observation.decorate_trace(&mut trace);
+                }
+                trace
             })
             .collect::<Vec<_>>();
         std::fs::write(
@@ -2214,6 +2272,8 @@ fn run_foundation_training_pilot_with_request(
             }),
             serde_json::to_vec_pretty(&serde_json::json!({
                 "lesson": scenario_lesson,
+                "lesson_completed": lesson_completed,
+                "food_outcome": food_outcome,
                 "initial_sampling": initial_sampling,
                 "consumed_events": consumed_events,
                 "initial_food_distance": initial_food_distance,
@@ -2446,6 +2506,7 @@ fn run_foundation_training_pilot_with_request(
         held_food_setup: scenario.held_food_setup.clone(),
         grab_food_setup: scenario.grab_food_setup.clone(),
         grab_food_acquisitions,
+        food_outcome,
         held_food_consumption_events,
         held_food_possession_frames,
         held_food_terminal_death_tick,
@@ -4374,7 +4435,7 @@ mod held_food_lesson_tests {
         PostActionOutcome, SignedValence, Vec3f,
     };
 
-    fn unconfigured(seed: u64) -> alife_world::HeadlessWorld {
+    pub(super) fn unconfigured(seed: u64) -> alife_world::HeadlessWorld {
         let asset = initial_n2048_care_asset(seed).unwrap();
         let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
         config.brain_class = BrainScaleTier::Standard2048;
@@ -4644,7 +4705,7 @@ mod held_food_lesson_tests {
         }
     }
 
-    fn frame(world: &mut alife_world::HeadlessWorld) -> alife_core::PerceptionFrame {
+    pub(super) fn frame(world: &mut alife_world::HeadlessWorld) -> alife_core::PerceptionFrame {
         let subject = world.organism_entity_ids()[0].0;
         let homeostasis = world
             .organism_registry()
@@ -4662,7 +4723,7 @@ mod held_food_lesson_tests {
             .unwrap()
     }
 
-    fn eat_outcome(
+    pub(super) fn eat_outcome(
         world: &mut alife_world::HeadlessWorld,
         target: alife_core::WorldEntityId,
     ) -> (alife_core::ActionCommand, PostActionOutcome) {
@@ -4696,7 +4757,7 @@ mod held_food_lesson_tests {
         (command, outcome)
     }
 
-    fn eating_narration_patch(
+    pub(super) fn eating_narration_patch(
         frame: alife_core::PerceptionFrame,
         target: alife_core::WorldEntityId,
         outcome: PostActionOutcome,
