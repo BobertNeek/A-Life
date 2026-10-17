@@ -88,6 +88,8 @@ jobs:
         run: python -m unittest discover -s scripts -p 'test_audit_prior_receipts.py' -v
       - name: Serial-cycle stage timing summary CPU tests
         run: python -m unittest discover -s scripts -p 'test_summarize_stage_timing.py' -v
+      - name: Committed PPO diagnostic summary CPU tests
+        run: python -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
       - name: Existing night-runner CPU tests
         run: python -m unittest discover -s scripts -p 'test*food_night.py' -v
       - name: Grab seed reservation CPU tests
@@ -116,6 +118,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
       - name: Objective continuation CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
+      - name: Optional bounded PPO target diagnostics CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::ppo_diagnostics::tests
       - name: Initial actor checkpoint CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::initial_actor_checkpoint
       - name: Warmup lesson corpus CPU tests

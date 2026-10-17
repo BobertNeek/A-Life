@@ -20,6 +20,7 @@ use crate::{
     GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 
+mod ppo_diagnostics;
 mod stage_timing;
 use stage_timing::CycleStageTiming;
 
@@ -3410,6 +3411,23 @@ fn run_foundation_training_cycle_in_owned_output(
         });
     }
     let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
+    ppo_diagnostics::write_if_enabled(
+        std::env::var_os("ALIFE_PPO_DIAGNOSTICS").as_deref() == Some(std::ffi::OsStr::new("1")),
+        output,
+        &batch,
+        ppo_config,
+        &references,
+        || {
+            serde_json::json!({
+                "source": source,
+                "seed": seed,
+                "value_optimizer_step_before": value_optimizer_step_before,
+                "terminal_death_tick": terminal_death_tick,
+                "bootstrap_decision_tick": references.get(train_rows).map(|row| row.tick),
+                "bootstrap_value": values.get(train_rows),
+            })
+        },
+    )?;
     targets_stage.finish();
     let update_stage = timing.stage("update");
     let ppo_stage = timing.stage("ppo");
