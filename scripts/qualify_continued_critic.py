@@ -193,7 +193,11 @@ def main():
             if c["critic_residual_update_sha256"]!=sha(target/"critic-residual-update.json"):
                 raise ValueError("Residual update evidence differs")
             admission=call("admit-"+str(number),[args.inspector,"--validate-checkpoint",target,"--expected-policy",str(c["policy_version"])],gpu=False)
-            decode_json(admission.stdout)
+            admitted=decode_json(admission.stdout,"checkpoint admission")
+            if admitted.get("neural_execution") or admitted.get("weights_modified") or (
+                admitted["policy_version"],admitted["actor_optimizer_step"],admitted["value_optimizer_step"]
+            )!=(c["policy_version"],c["actor_optimizer_step"],c["value_optimizer_step"]):
+                raise ValueError("Native checkpoint admission differs from the sealed cycle")
             latest=target
             outcome.update(accepted_cycles=number,latest_checkpoint=str(latest),policy=c["policy_version"],actor_age=c["actor_optimizer_step"],critic_age=value["optimizer_step"])
             write(args.output/"PROGRESS.json",outcome)
