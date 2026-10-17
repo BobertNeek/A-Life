@@ -916,6 +916,42 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_only_rejects_truncated_swapped_and_stale_optimizer_artifacts() {
+        let directory = checkpoint_fixture(3238);
+        let originals = checkpoint_bytes(&directory);
+        for (name, bytes) in &originals {
+            for end in [0, bytes.len() / 2] {
+                std::fs::write(directory.join(name), &bytes[..end]).unwrap();
+                assert!(!checkpoint_error_without_mutation(&directory, 3238).is_empty());
+                std::fs::write(directory.join(name), bytes).unwrap();
+            }
+        }
+        for (left, right) in [
+            ("actor-checkpoint.json", "value-checkpoint.json"),
+            ("trained.alife-foundation", "actor-checkpoint.json"),
+        ] {
+            let left_bytes = &originals.iter().find(|(name, _)| name == left).unwrap().1;
+            let right_bytes = &originals.iter().find(|(name, _)| name == right).unwrap().1;
+            std::fs::write(directory.join(left), right_bytes).unwrap();
+            std::fs::write(directory.join(right), left_bytes).unwrap();
+            assert!(!checkpoint_error_without_mutation(&directory, 3238).is_empty());
+            std::fs::write(directory.join(left), left_bytes).unwrap();
+            std::fs::write(directory.join(right), right_bytes).unwrap();
+        }
+        for name in ["actor-checkpoint.json", "value-checkpoint.json"] {
+            let bytes = &originals.iter().find(|(file, _)| file == name).unwrap().1;
+            let mut stale: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            stale["optimizer_step"] = serde_json::json!(0);
+            std::fs::write(directory.join(name), serde_json::to_vec(&stale).unwrap()).unwrap();
+            assert!(checkpoint_error_without_mutation(&directory, 3238)
+                .contains("does not match exported actor"));
+            std::fs::write(directory.join(name), bytes).unwrap();
+        }
+        assert!(inspect_foundation_checkpoint(&directory, 3238).is_ok());
+        assert_eq!(checkpoint_bytes(&directory), originals);
+    }
+
+    #[test]
     fn checkpoint_only_reports_each_missing_file_without_rewriting_remaining_inputs() {
         let directory = checkpoint_fixture(3238);
         for file in CHECKPOINT_FILES {

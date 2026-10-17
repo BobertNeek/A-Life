@@ -7,6 +7,7 @@ on:
       - ".github/workflows/ppo-rollout-diagnostics.yml"
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
+      - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
       - "scripts/*ppo_diagnostics.py"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -16,6 +17,7 @@ on:
       - ".github/workflows/ppo-rollout-diagnostics.yml"
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
+      - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
       - "scripts/*ppo_diagnostics.py"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -47,3 +49,5 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::ppo_diagnostics::tests -- --test-threads=1
       - name: Sealing, exact signed targets and copied diagnostic reporting
         run: python -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
+      - name: Native checkpoint admission rejects truncated, swapped and stale artifacts
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib checkpoint_only_ -- --test-threads=1

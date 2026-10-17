@@ -9,11 +9,13 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).with_name("summarize_ppo_diagnostics.py")
 SPEC = importlib.util.spec_from_file_location("ppo_summary", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+REAL_RUN = subprocess.run
 
 
 class PpoDiagnosticSummaryTests(unittest.TestCase):
@@ -24,7 +26,17 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
         self.directory.mkdir()
         self.cycle = {"policy_version": 42, "seed": 7, "trained_replay_rows": 1,
                       "old_asset_digest": "01" * 32, "next_cohort_tick_captured": True,
-                      "next_cohort_optimizer_rebound": True}
+                      "next_cohort_optimizer_rebound": True, "new_asset_digest": "03" * 32,
+                      "founder_seed_base": 99, "actor_optimizer_step": 12, "value_optimizer_step": 18}
+        self.inspector = self.directory.parent / "inspect_archived_success.exe"
+        self.inspector.write_bytes(b"mocked, never executed")
+        self.inspection = {"expected_policy_version": 42, "policy_version": 42,
+                           "founder_seed_base": 99, "foundation_digest": [3] * 32,
+                           "actor_optimizer_step": 12, "value_optimizer_step": 18,
+                           "neural_execution": False, "weights_modified": False}
+        patcher = mock.patch.object(MODULE.subprocess, "run", side_effect=self.inspect)
+        self.runner = patcher.start()
+        self.addCleanup(patcher.stop)
         self.diagnostic = {
             "schema_version": 1, "phase": "prepared_before_optimizer_update",
             "training_commit_requires_cycle_receipt": True, "policy_version": 42, "seed": 7,
@@ -48,31 +60,42 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
             (self.directory / name).write_text(json.dumps(value), encoding="utf-8")
 
     def report(self):
-        return MODULE.summarize([self.directory])
+        return MODULE.summarize([self.directory], self.inspector)
+
+    def inspect(self, argv, **kwargs):
+        self.assertEqual(argv[1:], ["--validate-checkpoint", argv[2], "--expected-policy", "42"])
+        self.assertEqual(kwargs["timeout"], MODULE.INSPECTOR_TIMEOUT)
+        self.assertFalse(kwargs["check"])
+        directory = Path(argv[2])
+        if any((directory / name).read_bytes() != b"fixture" for name in MODULE.ARTIFACTS):
+            return subprocess.CompletedProcess(argv, 1, b"", b"native handoff rejected")
+        return subprocess.CompletedProcess(argv, 0, json.dumps(self.inspection).encode(), b"")
 
     def test_sealed_exact_targets_preserve_negative_advantage_despite_positive_reward(self):
         before = {path.name: path.read_bytes() for path in self.directory.iterdir()}
-        report = MODULE.summarize([self.directory, self.directory])
+        report = MODULE.summarize([self.directory, self.directory], self.inspector)
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["committed_diagnostic_cycles"], 1)
         self.assertEqual(report["emitted_rows"], 1)
         self.assertEqual(report["reward_sum"], 0.25)
         self.assertEqual(report["advantage_sum"], -1.25)
         self.assertEqual(report["positive_reward_negative_advantage_rows"], 1)
+        self.assertEqual(self.runner.call_count, 1)
         self.assertEqual(before, {path.name: path.read_bytes() for path in self.directory.iterdir()})
 
     def test_prepared_attempt_without_cycle_is_excluded(self):
         (self.directory / "cycle.json").unlink()
-        report = self.report()
+        report = MODULE.summarize([self.directory])
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["committed_diagnostic_cycles"], 0)
         self.assertEqual(report["emitted_rows"], 0)
         self.assertEqual(report["excluded_unsealed"], [str(self.directory)])
+        self.runner.assert_not_called()
 
     def test_copied_diagnostics_count_once_and_conflicting_copy_is_an_error(self):
         copied = self.directory.parent / "copied"
         shutil.copytree(self.directory, copied)
-        report = MODULE.summarize([self.directory, copied])
+        report = MODULE.summarize([self.directory, copied], self.inspector)
         self.assertEqual(report["errors"], [])
         self.assertEqual(report["committed_diagnostic_cycles"], 1)
         self.assertEqual(report["advantage_sum"], -1.25)
@@ -81,7 +104,7 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
         self.assertEqual({alias["directory"], alias["same_as"]}, {str(self.directory), str(copied)})
         self.diagnostic["rows"][0]["advantage"] = -2.0
         self.save()
-        report = MODULE.summarize([self.directory, copied])
+        report = MODULE.summarize([self.directory, copied], self.inspector)
         self.assertEqual(len(report["errors"]), 1)
         self.assertIn("conflicting diagnostics", report["errors"][0]["error"])
         self.assertEqual(report["committed_diagnostic_cycles"], 1)
@@ -118,9 +141,10 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
 
     def test_old_sealed_cycle_without_sidecar_is_missing_not_zero_advantage(self):
         (self.directory / MODULE.SIDECAR).unlink()
-        report = self.report()
+        report = MODULE.summarize([self.directory])
         self.assertEqual(report["missing_diagnostics"], [str(self.directory)])
         self.assertEqual(report["committed_diagnostic_cycles"], 0)
+        self.runner.assert_not_called()
 
     def test_identity_and_row_count_mismatches_are_errors(self):
         original = copy.deepcopy(self.diagnostic)
@@ -188,10 +212,83 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
     def test_cli_errors_have_nonzero_exit_and_json_output(self):
         self.diagnostic["rows"][0]["advantage"] = float("inf")
         self.save()
-        result = subprocess.run([sys.executable, str(SCRIPT), str(self.directory)],
-                                capture_output=True, text=True, check=False)
+        result = REAL_RUN([sys.executable, str(SCRIPT), str(self.directory)],
+                          capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(len(json.loads(result.stdout)["errors"]), 1)
+
+    def test_missing_inspector_is_required_only_for_potentially_committed_diagnostics(self):
+        for inspector in (None, self.inspector.with_name("missing")):
+            report = MODULE.summarize([self.directory], inspector)
+            self.assertEqual(report["emitted_rows"], 0)
+            self.assertIn("--inspector", report["errors"][0]["error"])
+        self.runner.assert_not_called()
+
+    def test_inspector_timeout_failure_and_malformed_output_fail_closed(self):
+        outcomes = [subprocess.TimeoutExpired("inspector", 30), OSError("cannot execute"),
+                    subprocess.CompletedProcess([], 1, b"{}", b"failed"),
+                    subprocess.CompletedProcess([], 0, b"not json", b""),
+                    subprocess.CompletedProcess([], 0, b"{}", b""),
+                    subprocess.CompletedProcess([], 0, b" " * 65537, b"")]
+        for outcome in outcomes:
+            with self.subTest(outcome=outcome):
+                self.runner.side_effect = (outcome if isinstance(outcome, Exception) else
+                                           lambda *args, result=outcome, **kwargs: result)
+                report = self.report()
+                self.assertEqual(len(report["errors"]), 1)
+                self.assertEqual(report["emitted_rows"], 0)
+
+    def test_inspector_receipt_must_match_sealed_cycle_and_read_only_contract(self):
+        original = copy.deepcopy(self.inspection)
+        for key, invalid in (("expected_policy_version", 43), ("policy_version", 43),
+                             ("founder_seed_base", 100), ("actor_optimizer_step", 13),
+                             ("value_optimizer_step", 19), ("foundation_digest", [4] * 32),
+                             ("neural_execution", True), ("weights_modified", True)):
+            with self.subTest(key=key):
+                self.inspection = dict(original, **{key: invalid})
+                report = self.report()
+                self.assertEqual(len(report["errors"]), 1)
+                self.assertEqual(report["emitted_rows"], 0)
+
+    def test_stale_truncated_or_swapped_artifact_requires_native_rejection(self):
+        for name, content in zip(MODULE.ARTIFACTS, (b"stale actor", b"", b"swapped asset")):
+            with self.subTest(name=name):
+                path = self.directory / name
+                path.write_bytes(content)
+                self.runner.reset_mock()
+                report = self.report()
+                self.runner.assert_called_once()
+                self.assertIn("inspector failed", report["errors"][0]["error"])
+                self.assertEqual(report["emitted_rows"], 0)
+                path.write_bytes(b"fixture")
+
+    def test_mutation_of_any_bound_input_during_native_call_is_rejected(self):
+        for name in MODULE.FILE_LIMITS:
+            with self.subTest(name=name):
+                path, previous = self.directory / name, (self.directory / name).read_bytes()
+                def mutate(argv, **kwargs):
+                    result = self.inspect(argv, **kwargs)
+                    path.write_bytes(previous + b" ")
+                    return result
+                self.runner.side_effect = mutate
+                report = self.report()
+                self.assertIn("changed during inspection", report["errors"][0]["error"])
+                self.assertEqual(report["emitted_rows"], 0)
+                path.write_bytes(previous)
+
+    def test_cycle_parsed_bytes_and_artifact_limits_are_checked_before_native_call(self):
+        original_snapshot = MODULE.snapshot
+        def mutate(directory):
+            path = directory / "cycle.json"
+            path.write_bytes(path.read_bytes() + b" ")
+            return original_snapshot(directory)
+        with mock.patch.object(MODULE, "snapshot", side_effect=mutate):
+            report = self.report()
+        self.assertIn("changed after JSON parsing", report["errors"][0]["error"])
+        with mock.patch.dict(MODULE.FILE_LIMITS, {MODULE.ARTIFACTS[0]: 1}):
+            report = self.report()
+        self.assertIn("oversized", report["errors"][0]["error"])
+        self.runner.assert_not_called()
 
 
 if __name__ == "__main__":

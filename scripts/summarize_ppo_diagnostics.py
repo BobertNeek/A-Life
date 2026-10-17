@@ -5,11 +5,16 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import subprocess
 import sys
 
 SIDECAR = "ppo-rollout-diagnostics.json"
 MAX_BYTES = 1024 * 1024
 ARTIFACTS = ("actor-checkpoint.json", "value-checkpoint.json", "trained.alife-foundation")
+FILE_LIMITS = {"cycle.json": 16 * MAX_BYTES, SIDECAR: MAX_BYTES,
+               ARTIFACTS[0]: 16 * MAX_BYTES, ARTIFACTS[1]: MAX_BYTES,
+               ARTIFACTS[2]: 32 * MAX_BYTES}
+INSPECTOR_TIMEOUT = 30
 
 
 def require(condition, message):
@@ -40,14 +45,65 @@ def _pairs(pairs):
     return result
 
 
+def decode_json(data, label):
+    value = json.loads(data, object_pairs_hook=_pairs, parse_float=_float,
+                       parse_constant=lambda text: require(False, f"nonfinite JSON: {text}"))
+    require(type(value) is dict, f"{label} must be an object")
+    return value
+
+
 def load_json(path, limit=MAX_BYTES):
     with path.open("rb") as stream:
         data = stream.read(limit + 1)
     require(len(data) <= limit, f"{path.name} exceeds byte limit")
-    value = json.loads(data, object_pairs_hook=_pairs, parse_float=_float,
-                       parse_constant=lambda text: require(False, f"nonfinite JSON: {text}"))
-    require(type(value) is dict, f"{path.name} must be an object")
-    return value
+    return decode_json(data, path.name), hashlib.sha256(data).hexdigest()
+
+
+def snapshot(directory):
+    result = {}
+    for name, limit in FILE_LIMITS.items():
+        path = directory / name
+        require(path.is_file() and path.stat().st_size <= limit, f"invalid or oversized {name}")
+        size, digest = 0, hashlib.sha256()
+        with path.open("rb") as stream:
+            while chunk := stream.read(65536):
+                size += len(chunk)
+                require(size <= limit, f"{name} exceeds byte limit")
+                digest.update(chunk)
+        result[name] = digest.hexdigest()
+    return result
+
+
+def validate_checkpoint(directory, cycle, inspector, cycle_digest, diagnostic_digest):
+    require(inspector is not None and Path(inspector).is_file(),
+            "--inspector PATH is required for a potentially committed diagnostic cycle")
+    before = snapshot(directory)
+    require(before["cycle.json"] == cycle_digest and before[SIDECAR] == diagnostic_digest,
+            "cycle or diagnostic changed after JSON parsing")
+    try:
+        result = subprocess.run([str(Path(inspector).resolve()), "--validate-checkpoint",
+                                 str(directory), "--expected-policy", str(cycle["policy_version"])],
+                                capture_output=True, timeout=INSPECTOR_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired as error:
+        raise ValueError("checkpoint inspector timed out") from error
+    require(snapshot(directory) == before, "checkpoint files changed during inspection")
+    require(len(result.stdout) <= 65536 and len(result.stderr) <= 65536,
+            "checkpoint inspector output exceeds byte limit")
+    require(result.returncode == 0, f"checkpoint inspector failed (exit {result.returncode})")
+    inspection = decode_json(result.stdout, "checkpoint inspector output")
+    for key in ("expected_policy_version", "policy_version", "founder_seed_base",
+                "actor_optimizer_step", "value_optimizer_step"):
+        integer(inspection.get(key), f"inspector {key}")
+        expected = cycle.get("policy_version" if key == "expected_policy_version" else key)
+        integer(expected, f"cycle {key}")
+        require(inspection[key] == expected, f"checkpoint inspector {key} mismatch")
+    digest = inspection.get("foundation_digest")
+    require(type(digest) is list and len(digest) == 32, "invalid inspector foundation_digest")
+    for byte in digest:
+        integer(byte, "inspector foundation_digest", 255)
+    require(bytes(digest).hex() == cycle.get("new_asset_digest"), "inspector foundation digest mismatch")
+    require(inspection.get("neural_execution") is False and inspection.get("weights_modified") is False,
+            "checkpoint inspector must confirm no neural execution or weight modification")
 
 
 def validate(diagnostic, cycle):
@@ -126,7 +182,7 @@ def validate(diagnostic, cycle):
     return rows
 
 
-def summarize(directories):
+def summarize(directories, inspector=None):
     report = {"schema_version": 1, "committed_diagnostic_cycles": 0, "emitted_rows": 0,
               "total_rows_in_diagnostic_cycles": 0, "omitted_rows_unknown": 0,
               "truncated_diagnostic_cycles": 0, "reward_sum": 0.0, "advantage_sum": 0.0,
@@ -138,9 +194,11 @@ def summarize(directories):
         try:
             require(directory.is_dir(), "input must be a cycle/attempt directory")
             cycle_path = directory / "cycle.json"
-            cycle = load_json(cycle_path, 16 * MAX_BYTES) if cycle_path.is_file() else None
+            cycle, cycle_digest = (load_json(cycle_path, FILE_LIMITS["cycle.json"])
+                                   if cycle_path.is_file() else (None, None))
             diagnostic_path = directory / SIDECAR
-            diagnostic = load_json(diagnostic_path) if diagnostic_path.is_file() else None
+            diagnostic, diagnostic_digest = (load_json(diagnostic_path)
+                                             if diagnostic_path.is_file() else (None, None))
             rows = validate(diagnostic, cycle) if diagnostic is not None else None
             sealed = (cycle is not None and cycle.get("next_cohort_tick_captured") is True
                       and cycle.get("next_cohort_optimizer_rebound") is True
@@ -151,6 +209,7 @@ def summarize(directories):
             if diagnostic is None:
                 report["missing_diagnostics"].append(str(directory))
                 continue
+            validate_checkpoint(directory, cycle, inspector, cycle_digest, diagnostic_digest)
             source = diagnostic["source"]
             identity = (diagnostic["policy_version"], diagnostic["seed"],
                         tuple(source["foundation_asset_digest"]), tuple(source["actor_checkpoint_digest"]))
@@ -172,7 +231,7 @@ def summarize(directories):
             report["negative_advantage_rows"] += sum(row["advantage"] < 0 for row in rows)
             report["positive_reward_negative_advantage_rows"] += sum(
                 row["reward"] > 0 and row["advantage"] < 0 for row in rows)
-        except (OSError, ValueError, TypeError, RecursionError) as error:
+        except (OSError, ValueError, TypeError, RecursionError, subprocess.SubprocessError) as error:
             report["errors"].append({"directory": str(directory), "error": str(error)})
     return report
 
@@ -181,10 +240,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directories", nargs="+", type=Path,
                         help="Explicit cycle/attempt directories; no recursive scan or writes")
+    parser.add_argument("--inspector", type=Path,
+                        help="Required native inspect_archived_success binary for committed diagnostics")
     args = parser.parse_args()
     if len(args.directories) > 4096:
         parser.error("at most 4096 directories per report")
-    report = summarize(args.directories)
+    report = summarize(args.directories, args.inspector)
     print(json.dumps(report, indent=2, allow_nan=False))
     return int(bool(report["errors"]))
 

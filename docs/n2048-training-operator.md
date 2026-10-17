@@ -306,8 +306,14 @@ return. Full-rollout advantages are preserved even when output is capped;
 targets are not recalculated or used to change training.
 
 An interrupted attempt can leave the prepared sidecar. Use
-`python scripts/summarize_ppo_diagnostics.py CYCLE_DIRECTORY` to report only
-matching sealed cycles with admitted actor/value checkpoints. Missing or
+`python scripts/summarize_ppo_diagnostics.py --inspector PATH_TO_INSPECT_ARCHIVED_SUCCESS CYCLE_DIRECTORY`
+to report only matching sealed cycles with admitted actor/value checkpoints.
+Use the existing `inspect_archived_success` executable from a qualified build;
+the reporter invokes its read-only `--validate-checkpoint` path to decode the
+asset and both checkpoints and validate the same optimizer handoff as continuation.
+This performs CPU metadata checks without neural execution or GPU allocation.
+The reporter fails closed if admission fails or input files change during inspection.
+Missing or
 unsealed attempts never contribute committed-learning rows; capped rows remain
 unknown. A positive reward does not establish a positive advantage. Older cycles
 have no sidecar: compact replay and value-head coefficients alone do not contain
