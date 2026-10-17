@@ -231,6 +231,9 @@ pub struct FoundationCycleReceipt {
     pub completed_epochs: u32,
     pub next_cohort_tick_captured: bool,
     pub next_cohort_optimizer_rebound: bool,
+    /// Digest of the exact opt-in prepared target sidecar, sealed with this update.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ppo_rollout_diagnostics_sha256: Option<String>,
 }
 
 fn digest(asset: &FoundationWeightAsset) -> String {
@@ -3411,7 +3414,7 @@ fn run_foundation_training_cycle_in_owned_output(
         });
     }
     let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
-    ppo_diagnostics::write_if_enabled(
+    let ppo_rollout_diagnostics_sha256 = ppo_diagnostics::write_if_enabled(
         std::env::var_os("ALIFE_PPO_DIAGNOSTICS").as_deref() == Some(std::ffi::OsStr::new("1")),
         output,
         &batch,
@@ -3670,6 +3673,7 @@ fn run_foundation_training_cycle_in_owned_output(
         completed_epochs: update.completed_epochs,
         next_cohort_tick_captured,
         next_cohort_optimizer_rebound,
+        ppo_rollout_diagnostics_sha256,
     };
     let receipt_stage = timing.stage("final_receipt_write");
     std::fs::write(

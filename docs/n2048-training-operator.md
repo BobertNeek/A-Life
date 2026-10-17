@@ -304,15 +304,20 @@ discount/GAE half-lives, bootstrap value/tick, reward, frozen old/next value,
 elapsed time, gamma, lambda, termination/truncation boundary, advantage and
 return. Full-rollout advantages are preserved even when output is capped;
 targets are not recalculated or used to change training.
+The subsequently sealed `cycle.json` binds the exact sidecar bytes through
+`ppo_rollout_diagnostics_sha256`; an edited or copied unbound sidecar cannot
+contribute committed rows.
 
 An interrupted attempt can leave the prepared sidecar. Use
 `python scripts/summarize_ppo_diagnostics.py --inspector PATH_TO_INSPECT_ARCHIVED_SUCCESS CYCLE_DIRECTORY`
 to report only matching sealed cycles with admitted actor/value checkpoints.
-Use the existing `inspect_archived_success` executable from a qualified build;
+Use `inspect_archived_success` from a qualified build containing these diagnostics;
 the reporter invokes its read-only `--validate-checkpoint` path to decode the
 asset and both checkpoints and validate the same optimizer handoff as continuation.
 This performs CPU metadata checks without neural execution or GPU allocation.
-The reporter fails closed if admission fails or input files change during inspection.
+The inspector returns SHA-256 digests of the exact checkpoint bytes it validated.
+The reporter compares those digests and the receipt-bound sidecar hash with its
+bounded input snapshot and fails closed on a mismatch or changed input.
 Missing or
 unsealed attempts never contribute committed-learning rows; capped rows remain
 unknown. A positive reward does not establish a positive advantage. Older cycles

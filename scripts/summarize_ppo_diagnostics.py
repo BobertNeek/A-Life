@@ -70,15 +70,17 @@ def snapshot(directory):
                 size += len(chunk)
                 require(size <= limit, f"{name} exceeds byte limit")
                 digest.update(chunk)
-        result[name] = digest.hexdigest()
+        result[name] = (size, digest.hexdigest())
     return result
 
 
 def validate_checkpoint(directory, cycle, inspector, cycle_digest, diagnostic_digest):
+    require(cycle.get("ppo_rollout_diagnostics_sha256") == diagnostic_digest,
+            "sealed cycle diagnostic SHA256 mismatch or missing binding")
     require(inspector is not None and Path(inspector).is_file(),
             "--inspector PATH is required for a potentially committed diagnostic cycle")
     before = snapshot(directory)
-    require(before["cycle.json"] == cycle_digest and before[SIDECAR] == diagnostic_digest,
+    require(before["cycle.json"][1] == cycle_digest and before[SIDECAR][1] == diagnostic_digest,
             "cycle or diagnostic changed after JSON parsing")
     try:
         result = subprocess.run([str(Path(inspector).resolve()), "--validate-checkpoint",
@@ -91,6 +93,20 @@ def validate_checkpoint(directory, cycle, inspector, cycle_digest, diagnostic_di
             "checkpoint inspector output exceeds byte limit")
     require(result.returncode == 0, f"checkpoint inspector failed (exit {result.returncode})")
     inspection = decode_json(result.stdout, "checkpoint inspector output")
+    files = inspection.get("file_digests")
+    expected_files = {"cycle.json", *ARTIFACTS}
+    require(type(files) is list and len(files) == len(expected_files),
+            "inspector must bind exactly four checkpoint files")
+    checked = set()
+    for entry in files:
+        require(type(entry) is dict, "invalid inspector file digest entry")
+        name = entry.get("file_name")
+        require(type(name) is str and name in expected_files and name not in checked,
+                "inspector file digest names are missing, duplicated or unexpected")
+        checked.add(name)
+        integer(entry.get("encoded_bytes"), "inspector encoded_bytes")
+        require((entry["encoded_bytes"], entry.get("sha256")) == before[name],
+                f"inspector file digest mismatch: {name}")
     for key in ("expected_policy_version", "policy_version", "founder_seed_base",
                 "actor_optimizer_step", "value_optimizer_step"):
         integer(inspection.get(key), f"inspector {key}")

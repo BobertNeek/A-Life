@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CPU-only acceptance and provenance checks for saved PPO target reports."""
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -56,6 +57,8 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
         self.save()
 
     def save(self):
+        diagnostic_bytes = json.dumps(self.diagnostic).encode()
+        self.cycle["ppo_rollout_diagnostics_sha256"] = hashlib.sha256(diagnostic_bytes).hexdigest()
         for name, value in (("cycle.json", self.cycle), (MODULE.SIDECAR, self.diagnostic)):
             (self.directory / name).write_text(json.dumps(value), encoding="utf-8")
 
@@ -69,7 +72,14 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
         directory = Path(argv[2])
         if any((directory / name).read_bytes() != b"fixture" for name in MODULE.ARTIFACTS):
             return subprocess.CompletedProcess(argv, 1, b"", b"native handoff rejected")
-        return subprocess.CompletedProcess(argv, 0, json.dumps(self.inspection).encode(), b"")
+        inspection = dict(self.inspection)
+        inspection.setdefault("file_digests", self.file_digests(directory))
+        return subprocess.CompletedProcess(argv, 0, json.dumps(inspection).encode(), b"")
+
+    def file_digests(self, directory):
+        return [{"file_name": name, "encoded_bytes": len((directory / name).read_bytes()),
+                 "sha256": hashlib.sha256((directory / name).read_bytes()).hexdigest()}
+                for name in ("cycle.json", *MODULE.ARTIFACTS)]
 
     def test_sealed_exact_targets_preserve_negative_advantage_despite_positive_reward(self):
         before = {path.name: path.read_bytes() for path in self.directory.iterdir()}
@@ -289,6 +299,64 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
             report = self.report()
         self.assertIn("oversized", report["errors"][0]["error"])
         self.runner.assert_not_called()
+
+    def test_edited_or_copied_schema_valid_sidecar_is_not_bound_to_sealed_cycle(self):
+        original = copy.deepcopy(self.diagnostic)
+        for kind in ("edited", "copied"):
+            with self.subTest(kind=kind):
+                changed = copy.deepcopy(original)
+                if kind == "edited":
+                    changed["rows"][0]["advantage"] = -0.75
+                else:
+                    changed["source"]["source_revision"] = "b" * 40
+                MODULE.validate(changed, self.cycle)
+                (self.directory / MODULE.SIDECAR).write_text(json.dumps(changed), encoding="utf-8")
+                report = self.report()
+                self.assertIn("diagnostic SHA256", report["errors"][0]["error"])
+                self.assertEqual(report["emitted_rows"], 0)
+        self.runner.assert_not_called()
+
+    def test_missing_sidecar_binding_or_legacy_native_sha_is_rejected(self):
+        self.cycle.pop("ppo_rollout_diagnostics_sha256")
+        (self.directory / "cycle.json").write_text(json.dumps(self.cycle), encoding="utf-8")
+        self.assertIn("missing binding", self.report()["errors"][0]["error"])
+        self.save()
+        files = self.file_digests(self.directory)
+        for entry in files:
+            entry.pop("sha256")
+        self.inspection["file_digests"] = files
+        report = self.report()
+        self.assertEqual(report["emitted_rows"], 0)
+        self.assertIn("file digest mismatch", report["errors"][0]["error"])
+
+    def test_transient_restored_cycle_bytes_cannot_satisfy_native_binding(self):
+        path = self.directory / "cycle.json"
+        original = path.read_bytes()
+        def transient_swap(argv, **kwargs):
+            path.write_bytes(original + b" ")
+            result = self.inspect(argv, **kwargs)
+            path.write_bytes(original)
+            return result
+        self.runner.side_effect = transient_swap
+        report = self.report()
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(report["emitted_rows"], 0)
+        self.assertIn("file digest mismatch: cycle.json", report["errors"][0]["error"])
+
+    def test_native_file_digest_entries_are_complete_unique_and_exact(self):
+        files = self.file_digests(self.directory)
+        invalid_lists = [None, files[:-1], files + [files[0]], [files[0]] * 4]
+        for field, value in (("file_name", "extra.json"), ("encoded_bytes", 0),
+                             ("encoded_bytes", True), ("sha256", "ff" * 32)):
+            changed = copy.deepcopy(files)
+            changed[0][field] = value
+            invalid_lists.append(changed)
+        for entries in invalid_lists:
+            with self.subTest(entries=entries):
+                self.inspection["file_digests"] = entries
+                report = self.report()
+                self.assertEqual(len(report["errors"]), 1)
+                self.assertEqual(report["emitted_rows"], 0)
 
 
 if __name__ == "__main__":

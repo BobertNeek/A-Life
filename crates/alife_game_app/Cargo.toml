@@ -39,6 +39,7 @@ bevy_hanabi = { version = "=0.18.0", default-features = false, optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
 serde_json.workspace = true
+sha2 = { version = "=0.10.9", optional = true }
 thiserror.workspace = true
 zstd.workspace = true
 wgpu = { version = "=27.0.1", optional = true }
@@ -78,7 +79,7 @@ bevy-app = [
     "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
-foundation-training = ["gpu-runtime", "dep:alife_training", "alife_runtime/training-rollout"]
+foundation-training = ["gpu-runtime", "dep:alife_training", "alife_runtime/training-rollout", "dep:sha2"]
 gpu-tests = [
     "gpu-runtime",
     "dep:alife_training",

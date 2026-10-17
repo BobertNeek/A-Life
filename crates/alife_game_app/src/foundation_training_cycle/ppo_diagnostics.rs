@@ -3,6 +3,7 @@ use std::path::Path;
 
 use alife_training::{PpoBatch, PpoBoundary, PpoConfig};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 use crate::FoundationReplayRecordRef;
 
@@ -15,9 +16,9 @@ pub(super) fn write_if_enabled(
     config: PpoConfig,
     references: &[FoundationReplayRecordRef],
     context: impl FnOnce() -> Value,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
     if !enabled {
-        return Ok(());
+        return Ok(None);
     }
     if references.len() < batch.len() {
         return Err("PPO diagnostic replay rows are incomplete".into());
@@ -69,11 +70,10 @@ pub(super) fn write_if_enabled(
     diagnostic["rows"] = json!(rows);
     // One bounded write per rollout, after target preparation and before updates.
     // A prepared sidecar alone is never proof of committed optimizer updates.
-    std::fs::write(
-        output.join("ppo-rollout-diagnostics.json"),
-        serde_json::to_vec_pretty(&diagnostic)?,
-    )?;
-    Ok(())
+    let bytes = serde_json::to_vec_pretty(&diagnostic)?;
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    std::fs::write(output.join("ppo-rollout-diagnostics.json"), bytes)?;
+    Ok(Some(digest))
 }
 
 #[cfg(test)]
@@ -156,10 +156,11 @@ mod tests {
     fn disabled_diagnostic_has_no_io_or_context_evaluation() {
         let (batch, _) = fixture(1);
         let output = Output::new();
-        write_if_enabled(false, &output.0, &batch, PpoConfig::default(), &[], || {
+        let digest = write_if_enabled(false, &output.0, &batch, PpoConfig::default(), &[], || {
             panic!("disabled context evaluated")
         })
         .unwrap();
+        assert_eq!(digest, None);
         assert_eq!(fs::read_dir(&output.0).unwrap().count(), 0);
     }
 
@@ -186,7 +187,7 @@ mod tests {
         batch = PpoBatch::from_rollout(7, transitions, PpoConfig::default()).unwrap();
         let before = batch.clone();
         let output = Output::new();
-        write_if_enabled(
+        let digest = write_if_enabled(
             true,
             &output.0,
             &batch,
@@ -195,6 +196,8 @@ mod tests {
             || json!({"seed":17}),
         )
         .unwrap();
+        let saved_bytes = fs::read(output.0.join("ppo-rollout-diagnostics.json")).unwrap();
+        assert_eq!(digest, Some(format!("{:x}", Sha256::digest(&saved_bytes))));
         let diagnostic = output.read();
         assert_eq!(batch, before);
         assert_eq!(diagnostic["phase"], "prepared_before_optimizer_update");
@@ -228,7 +231,7 @@ mod tests {
         let (batch, references) = fixture(MAX_ROWS + 1);
         let before = batch.clone();
         let output = Output::new();
-        write_if_enabled(
+        let digest = write_if_enabled(
             true,
             &output.0,
             &batch,
@@ -237,6 +240,7 @@ mod tests {
             || json!({}),
         )
         .unwrap();
+        assert!(digest.is_some());
         let diagnostic = output.read();
         assert_eq!(batch, before);
         assert_eq!(diagnostic["total_rows"], MAX_ROWS + 1);

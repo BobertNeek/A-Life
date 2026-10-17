@@ -10,6 +10,7 @@ on:
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
       - "scripts/*ppo_diagnostics.py"
       - "Cargo.toml"
+      - "crates/alife_game_app/Cargo.toml"
       - "Cargo.lock"
   push:
     branches: ["main"]
@@ -20,6 +21,7 @@ on:
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
       - "scripts/*ppo_diagnostics.py"
       - "Cargo.toml"
+      - "crates/alife_game_app/Cargo.toml"
       - "Cargo.lock"
 
 permissions:
