@@ -840,14 +840,14 @@
     {
       "asset_id": "approved-island-coastalshrub",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:f1e4b6c326ae6d8f",
+      "digest": "fnv1a64:c84dae5c1b4a0ad3",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
-        "config_path": "scripts/build_island_biological_shrubs.py",
-        "date": "2026-10-09",
-        "seed": "biological-island-shrubs-v1/from-9a4e3b3d",
+        "config_path": "scripts/build_coastal_leaf_sprays.py",
+        "date": "2026-10-16",
+        "seed": "coastal-leaf-sprays-20261016",
         "tool": "Blender-4.3.2"
       },
       "license": "A-Life-Generated-Source",
@@ -855,7 +855,7 @@
       "local_path": "crates/alife_game_app/assets/landscape/island/CoastalShrub.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 44788,
+      "size_bytes": 38552,
       "source": "generated:approved-blender-model",
       "usage_category": "environment-dressing"
     },

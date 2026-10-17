@@ -49,10 +49,13 @@ jobs:
           python-version: '3.12'
       - name: Audit complete art successor profile and shipping contracts
         run: |
-          python -S scripts/check_fern_fronds.py
+          python -S scripts/check_fern_coastal_composition.py
           python scripts/check_island_art.py
-      - name: Check Fern and retained Broadleaf regressions
-        run: python -m unittest discover -s scripts -p 'test_fern_fronds.py' -v
+      - name: Check Fern, CoastalShrub and retained Broadleaf regressions
+        run: |
+          python -S -m unittest discover -s scripts -p 'test_fern_coastal_composition.py' -v
+          python -S -m unittest discover -s scripts -p 'test_authored_preview_rotation.py' -v
+          python -S -m unittest discover -s scripts -p 'test_fern_coastal_main_integration.py' -v
 
   island-boulder-placement:
     name: Island boulder placement CPU regression

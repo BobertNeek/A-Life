@@ -51,9 +51,12 @@
         1.1,
         0.9
       ],
-      "near_triangles": 1152,
-      "far_triangles": 506,
-      "overview_triangles": 218
+      "near_triangles": 672,
+      "far_triangles": 204,
+      "overview_triangles": 218,
+      "editable_override": "CoastalShrub.leaf-sprays.blend",
+      "export_recipe": "scripts/build_coastal_leaf_sprays.py",
+      "override_blender": "4.3.2"
     },
     "Grass": {
       "width_depth_height_m": [

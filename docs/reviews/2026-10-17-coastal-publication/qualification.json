@@ -1,0 +1,30 @@
+{
+  "result": "PASS_LOCAL_ASSET_QUALIFICATION",
+  "base_commit": "28770f3b7f2692be02c0aa686c554309bc4703b9",
+  "base_tree": "fd4eb4767f16245ce8781813a1c2945703f25f12",
+  "stdlib_tests": {
+    "combined": 74,
+    "authored_rotation": 4,
+    "main_integration": 3,
+    "boulder_placement": 6
+  },
+  "docs_assertions": {
+    "passed": 77,
+    "total": 77
+  },
+  "native_audit": "Blender4.3.2 source reload and exact runtime export; all108 blade roots retained; BerryBush/L2 retained",
+  "export_orders": "historical overrides then current exporters, both current exporter orders byte-identical",
+  "rotation_matrix_cases": 24,
+  "historical_negative_controls": 24,
+  "runtime_sha256": "7a2636250308b67ba4794914b8edc0b1738646233a249c78a5f42573944f2a18",
+  "native_sha256": "65a83ed2922ad989fe9e4a67b1d6adcac7cc373bc72477e4ef584a4d64a6198d",
+  "proof_limits": {
+    "new_render": false,
+    "corrected_combined_visual_composition": false,
+    "live_game": false,
+    "dynamic_lod_transition": false,
+    "physical_gpu_fps": false,
+    "whole_workspace_build": false,
+    "remote_exact_head_ci": "await publication"
+  }
+}

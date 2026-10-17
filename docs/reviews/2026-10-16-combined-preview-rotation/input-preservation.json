@@ -1,0 +1,21 @@
+{
+  "result": "PASS",
+  "input_combined_tree": "d73077af17f96a73576abc64cc92ea2fa2947506",
+  "original_combined_tracked_files_verified_unchanged": 1361,
+  "corrected_copy_changed_existing_paths": [
+    ".github/workflows/ci.yml",
+    "scripts/check_fern_coastal_composition.py",
+    "scripts/render_coastal_leaf_sprays.py",
+    "scripts/render_fern_fronds_patch.py"
+  ],
+  "all_other_original_tracked_files_byte_retained": 1357,
+  "art_and_world_files_byte_retained": 140,
+  "asset_native_or_placement_changes": false,
+  "historical_profiles_byte_retained": {
+    "scripts/fern-fronds-profile.json": "e998c16ef677eb28a97f0c2d17127e76be8739e47963f566372fa35527e2b3da",
+    "scripts/coastal-leaf-sprays-profile.json": "e0ce66630f6de0e2247c0238652baa0f195e1ecb78c7dfea38f99f462e6ad74c",
+    "scripts/fern-coastal-composition-profile.json": "6bc1ed02fc8805bd8613717267c50b0a784b031b8fcefa485200d1506c15cb52"
+  },
+  "historical_review_and_receipts_byte_retained": true,
+  "original_source_package_modified": false
+}

@@ -1,0 +1,31 @@
+{
+  "result": "PASS_LOCAL_ONLY",
+  "combined_art_audit": 0,
+  "existing_combined_stdlib_tests": {
+    "exit_code": 0,
+    "tests": 74,
+    "skipped": 0
+  },
+  "rotation_stdlib_tests": {
+    "exit_code": 0,
+    "tests": 4,
+    "skipped": 0
+  },
+  "blender_cpu_rotation": {
+    "exit_code": 0,
+    "checks": 24,
+    "historical_negative_controls": 24,
+    "rendered": false
+  },
+  "island_art": 0,
+  "boulder_regression_tests": {
+    "exit_code": 0,
+    "tests": 6
+  },
+  "docs_check": {
+    "exit_code": 0,
+    "assertions": "77/77"
+  },
+  "native_or_export_order_rerun": false,
+  "remote_exact_head_ci_run": false
+}

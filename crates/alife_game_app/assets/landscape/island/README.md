@@ -23,18 +23,96 @@ Normal source reload/export, after all older overrides, is:
 ```sh
 blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/build_fern_fronds.py
 python scripts/register_approved_art.py
-python -S scripts/check_fern_fronds.py
+python -S scripts/check_fern_coastal_composition.py
 ```
 
 The optional `-- --author` rebuilds only from the exact pinned pre-pass baseline;
 normal export loads current native edits and does not reapply the sculpt.
 `check_fern_fronds_native.py` checks rooted native topology with Blender 4.3.2.
-The fixed Fern successor checks the complete current art/world file set and all
-48 registrations while retaining the historical profiles. The earlier full-art
+The fixed Fern successor certifies the independent Fern-only art snapshot.
+Use the combined successor below for the current composed tree. Earlier full-art
 checkers certify their pinned earlier snapshots and intentionally reject this
 later Fern geometry. See the source-bound [Fern review](../../../../../docs/reviews/2026-10-16-connected-fern-fronds.md)
 for matched close, reverse, LOD and authored Island patch evidence. These are CPU
 Blender previews, not live-game capture or physical GPU/performance acceptance.
+
+## CoastalShrub folded-leaf sprays override, 2026-10-16
+
+CoastalShrub is now owned by `CoastalShrub.leaf-sprays.blend` (Blender 4.3.2).
+Its L0/L1 replace twelve smooth oval crown pads with compact pointed sprays of
+five/four folded blades per crown. The original radial stems, all branch
+attachments, sea-glass palette, wind-swept envelope and exact per-LOD bounds
+remain. The separate opaque blades meet the stems geometrically; they are open,
+double-sided surfaces, not welded or watertight. L2 stays completely unchanged.
+
+Near/middle/overview counts are 672/204/218 triangles and 600/276/163 exported
+vertices, previously 1,152/506/218 and 624/307/163. Runtime GLB size falls from
+44,788 to 38,552 bytes (13.92%). The intentionally retained L2 costs more than
+new L1 and retains the previous oval silhouette. Current runtime culls every
+CoastalShrub L2 selection, so this small pass targets the visible L0/L1. No
+LOD thresholds or other runtime code, placements, collision, shader, texture,
+material slot or draw primitive changes. Lower counts do not establish FPS gains.
+
+Normal source reload/export, after every older override export, is:
+
+```sh
+blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_coastal_leaf_sprays.py
+python scripts/register_approved_art.py
+python -S scripts/check_fern_coastal_composition.py
+python -S -m unittest discover -s scripts -p 'test_fern_coastal_composition.py' -v
+```
+
+The exporter writes only `CoastalShrub.glb`; it never exports BerryBush. The
+historical `island-biological-shrubs.blend` remains byte-identical and continues
+to own BerryBush. Its two-species exporter can overwrite CoastalShrub, so always
+run the new CoastalShrub exporter afterward, including after a base-library
+rebuild. `coastal-leaf-sprays/CoastalShrub.baseline.glb` retains the exact prior
+runtime. Optional `-- --author` reconstructs the new source from the exact
+historical native source; normal export does not repeat authoring or resave it.
+Use `-- --output-dir <directory>` for a side-effect-limited export elsewhere.
+
+The optional `check_coastal_leaf_sprays_native.py` runs in Blender 4.3.2 and
+checks native stems, all 108 roots, untouched L2 and BerryBush, then verifies exact
+source reload/export without resaving either source. The independent CoastalShrub
+successor certifies its shrub-only snapshot.
+The combined successor below audits both upgrades together. Historical full-art
+profiles and checkers remain unchanged and certify their earlier snapshots.
+
+See the source-bound [CoastalShrub review](../../../../../docs/reviews/2026-10-16-coastal-leaf-sprays.md)
+for matched close, reverse, LOD and real-placement CPU Blender evidence. The
+angular, airy foliage is clearest close up; at 18 m the gain is mainly edge and
+shadow breakup. Live L0/L1 switching, gameplay appearance and physical GPU/FPS
+acceptance remain unverified. This is art implementation evidence, not a change
+to organism architecture or training behavior.
+
+## Combined Fern and CoastalShrub source order, 2026-10-16
+
+This local composition preserves both upgrades, both new native sources and
+exact prior runtimes. The full-art gate is now
+`scripts/check_fern_coastal_composition.py`, with the union of Fern,
+CoastalShrub and retained Broadleaf regression cases in
+`scripts/test_fern_coastal_composition.py`. It checks the exact union art/world
+inventory and all 48 registrations, allowing only the two approved runtime
+registration deltas. The two independent full-art profiles are historical,
+unchanged snapshots; they intentionally reject this later combined tree.
+
+After rebuilding any base library or historical override, apply the current
+Fern and CoastalShrub overrides last, then refresh registrations:
+
+```sh
+blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/build_fern_fronds.py
+blender --background --threads 2 --factory-startup --python-exit-code 1 --python scripts/build_coastal_leaf_sprays.py
+python -S scripts/register_approved_art.py
+python -S scripts/check_fern_coastal_composition.py
+python -S -m unittest discover -s scripts -p 'test_fern_coastal_composition.py' -v
+python -S scripts/check_island_art.py
+```
+
+The two current exporters target different species and may run in either order.
+The historical two-species shrub exporter must run before CoastalShrub's new
+exporter; the old color-only Fern exporter must run before connected Fern's new
+exporter. Historical sources remain byte-retained. Offline CPU evidence remains
+source-bound, with no live-game, physical GPU, FPS or training acceptance claim.
 
 ## Broadleaf canopy override, 2026-10-16
 
@@ -59,16 +137,16 @@ Normal export reloads the editable source without repeating the authoring pass:
 ```sh
 blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_broadleaf_canopy.py
 python scripts/register_approved_art.py
-python scripts/check_broadleaf_canopy.py --output target/artifacts/broadleaf-canopy/check.json
+python -S scripts/check_fern_coastal_composition.py
 ```
 
 Use Blender 4.3.2 for this override. The explicit `-- --author` option creates
 the reviewed deterministic replacement from the recipe; it does not operate on
 the original multi-asset sources. Export Broadleaf after the other existing
 overrides whenever rebuilding the base library, before refreshing registrations.
-The new fixed successor checker audits the complete art/world file set and all
-48 registrations. Historical consolidated/conifer profiles remain unchanged and
-continue to certify only their pinned earlier snapshots.
+The fixed Broadleaf successor certifies its earlier Broadleaf-only snapshot.
+The combined checker above is the current full-art gate; it also retains the
+Broadleaf geometry contracts. Historical profiles remain byte-retained.
 
 See [the source-bound review](../../../../../docs/reviews/2026-10-16-broadleaf-canopy.md)
 for matched CPU-rendered close, reverse, grove and LOD evidence, cost deltas and
@@ -86,13 +164,15 @@ The 2026-10-09 BerryBush and CoastalShrub overrides are owned by
 committed runtime GLBs before the pass. It contains six editable LOD meshes,
 ground-centred origins, and the shared `ArtColor` surface. The original Blender
 5.2 library, its embedded references, terrain source and all other props remain
-byte-retained. For these two species, use the override source rather than the
-older copies in `island-assets.blend` or the terrain authoring scene.
+byte-retained. For BerryBush, use this override rather than the older copies in
+`island-assets.blend` or the terrain authoring scene. The new CoastalShrub source
+and exporter above take precedence over its historical CoastalShrub meshes.
 
 After editing the override, run
 `blender --background --factory-startup --python-exit-code 1 --python scripts/build_island_biological_shrubs.py`
 and then `python scripts/register_approved_art.py`. Run this export after a full
-base-library rebuild as well. The optional `--author-from` bootstrap accepts
+base-library rebuild as well, then reapply `build_coastal_leaf_sprays.py` last.
+The optional `--author-from` bootstrap accepts
 only the exact pre-pass `9a4e3b3d` GLBs, preventing repeated sculpt application.
 The normal command exports the current native edits, preserving both bounds and
 triangle ceilings. `scripts/check_island_biological_shrubs.py` checks those
@@ -107,8 +187,8 @@ for isolated CPU-rendered before/after evidence; game-rendering acceptance is un
 
 The 2026-10-09 Fern color-only override is owned by
 `fern-readability.blend` (Blender 4.3.2), reconstructed from the exact committed
-`ec5bb040` runtime GLB. Use this editable override for Fern rather than its older
-copies in `island-assets.blend` or the terrain authoring scene. The original
+`ec5bb040` runtime GLB. This is now a historical source; the connected-frond
+source above owns current Fern geometry. The original
 Blender 5.2 sources remain byte-retained; this does not claim Blender 5.2 source
 compatibility. Geometry, normals, topology, bounds, pivots, material parameters,
 three LODs (784 / 352 / 156 triangles) and the 97,100-byte runtime size are retained.
@@ -119,8 +199,9 @@ After editing this override, use the explicit Blender 4.3.2 executable:
 `blender --background --threads 4 --factory-startup --python-exit-code 1 --python scripts/build_fern_readability.py`
 then `python scripts/register_approved_art.py` and
 `python scripts/check_fern_readability.py`. Run this override export after a
-full base-library rebuild as well. The shipped source reload/re-export is
-byte-identical to the candidate. The guarded adapter transfers only colors into
+full base-library rebuild when reproducing that historical snapshot. For the
+current tree, reapply `build_fern_fronds.py` afterward and use the combined gate.
+The historical source reload/re-export is byte-identical to its reviewed candidate. The guarded adapter transfers only colors into
 `fern-readability/Fern.baseline.glb`, the exact pre-pass source-layout baseline;
 it rejects changed positions, triangle order or ambiguous color seams. Blender
 4.3's intermediate export can round split normals and duplicate near-LOD
@@ -230,7 +311,8 @@ six delivered runtime GLBs byte-for-byte. Source edits require a reviewed new
 fixed profile; the present checks deliberately reject changed delivered bytes.
 
 After any full base-library rebuild, re-export the shrub, Fern, Sapling,
-Conifer and six-finished-asset overrides before refreshing registrations.
+Conifer and six-finished-asset overrides, then the two current plant overrides
+listed above before refreshing registrations.
 For its pinned earlier art tree and all 48 manifest records, run
 `python scripts/check_consolidated_island_art.py --output target/artifacts/consolidated-island-art/check.json`.
 This fixed successor profile preserves the approved Conifer record, checks the

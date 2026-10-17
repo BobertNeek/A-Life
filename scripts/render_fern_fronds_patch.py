@@ -47,7 +47,7 @@ else:
    obs=load((HERE/'Fern.glb' if a.candidate else HERE/'fern-connected-fronds/Fern.baseline.glb') if kind=='Fern' else HERE/(kind+'.glb'))
    for o in obs:o.hide_render=True
    libraries[kind]=next(o for o in obs if o.name.rsplit('.',1)[0]==kind+'_L0')
-  o=libraries[kind].copy();s.collection.objects.link(o);o.hide_render=False;o.location=(x,-z,ground_height(x,z) if kind in cover else y);o.rotation_euler=(0,0,p['yaw']);o.scale=(p['scale'],)*3
+  o=libraries[kind].copy();s.collection.objects.link(o);o.hide_render=False;o.location=(x,-z,ground_height(x,z) if kind in cover else y);o.rotation_mode='XYZ';o.rotation_euler=(0,0,p['yaw']);o.scale=(p['scale'],)*3
   records.append({'index':i,**p})
  cam=camera('Authored ground cover patch',focus+Vector((10,-16,16)),focus+Vector((0,0,.4)),24 if not a.close else 12)
  render(cam,OUT/('candidate' if a.candidate else 'baseline')/('authored-patch'+('-close' if a.close else '')+'.png'),(1200,900))
