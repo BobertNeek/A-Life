@@ -692,6 +692,7 @@ pub struct GpuActiveBatchUpload {
     learning_headers: Vec<GpuLearningHeader>,
     activity_headers: Vec<GpuActivityDispatchHeader>,
     pending_templates: Vec<GpuPendingEligibilityRecord>,
+    candidate_exploration_identities: Vec<Vec<[u32; crate::GAME_EXPLORATION_IDENTITY_WORDS]>>,
     dispatch_header_words: Vec<u32>,
     frame_payload_words: Vec<u32>,
     bucket_ownership_token: u64,
@@ -797,6 +798,7 @@ impl GpuActiveBatchUpload {
         let mut learning_headers = Vec::with_capacity(entries.len());
         let mut activity_headers = Vec::with_capacity(entries.len());
         let mut pending_templates = Vec::with_capacity(entries.len());
+        let mut candidate_exploration_identities = Vec::with_capacity(entries.len());
         let mut memory_context_bindings = Vec::with_capacity(entries.len());
         let mut seen_slots = BTreeSet::new();
         let class_id = entries[0].slot.record().class_id;
@@ -830,11 +832,19 @@ impl GpuActiveBatchUpload {
             let payload_base = u32::try_from(frame_payload_words.len())
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
             upload.rebase(row_base_u32, payload_base)?;
+            // This upload was just encoded from the immutable frame and rebased
+            // with checked offsets. Rebuilding it for an exact self-comparison
+            // is a development diagnostic, not another production preflight.
+            #[cfg(debug_assertions)]
             upload.validate_against(entry.frame, entry.slot)?;
-            let mut memory_upload = entry.memory_upload.cloned();
-            if let Some(memory) = &memory_upload {
-                memory.validate_for_frame_and_slot(entry.frame, entry.slot)?;
-            }
+            // Keep caller-input rejection at its original boundary (before
+            // payload capacity errors). Ownership prevents edits before the
+            // checked local upload is consumed by rebasing below.
+            let memory_upload = entry
+                .memory_upload
+                .cloned()
+                .map(|memory| memory.validate_local_for_batch(entry.frame, entry.slot))
+                .transpose()?;
 
             let candidate_words = upload
                 .candidates
@@ -888,11 +898,17 @@ impl GpuActiveBatchUpload {
                 })
                 .transpose()?
                 .unwrap_or(0);
+            let exploration_identity_words = upload
+                .candidates
+                .len()
+                .checked_mul(crate::GAME_EXPLORATION_IDENTITY_WORDS)
+                .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
             let payload_end = frame_payload_words
                 .len()
                 .checked_add(upload.frame_payload_words.len())
                 .and_then(|value| value.checked_add(candidate_digest_words))
                 .and_then(|value| value.checked_add(crate::GPU_PENDING_ELIGIBILITY_WORDS))
+                .and_then(|value| value.checked_add(exploration_identity_words))
                 .and_then(|value| value.checked_add(memory_record_words))
                 .and_then(|value| value.checked_add(cognitive_record_words))
                 .and_then(|value| value.checked_add(neural_receptor_effects_words))
@@ -962,7 +978,20 @@ impl GpuActiveBatchUpload {
             )
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
             frame_payload_words.extend_from_slice(pending_template.words());
-            let memory_binding = if let Some(memory) = &mut memory_upload {
+            // Stable primitive/target identity is unscored metadata. It is
+            // independent of candidate enumeration, observation slots and GPU packing.
+            let identities = entry
+                .frame
+                .candidates()
+                .iter()
+                .map(crate::game_candidate_exploration_identity)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
+            for identity in &identities {
+                frame_payload_words.extend_from_slice(identity);
+            }
+            candidate_exploration_identities.push(identities);
+            let (memory_upload, memory_binding) = if let Some(memory) = memory_upload {
                 let memory_context_offset = u32::try_from(frame_payload_words.len())
                     .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
                 let cognitive_projection_offset = memory_context_offset
@@ -977,9 +1006,7 @@ impl GpuActiveBatchUpload {
                             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
                     )
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-                let receipt = memory.rebase_for_batch(
-                    entry.frame,
-                    entry.slot,
+                let (memory, receipt) = memory.rebase_for_batch(
                     upload.frame_binding,
                     memory_context_offset,
                     upload.header.candidate_offset,
@@ -998,9 +1025,9 @@ impl GpuActiveBatchUpload {
                         .ok_or(GpuClosedLoopError::MalformedUpload)?,
                 )?;
                 frame_payload_words.extend_from_slice(receptor_record.words());
-                Some(receipt)
+                (Some(memory), Some(receipt))
             } else {
-                None
+                (None, None)
             };
             if frame_payload_words.len() != payload_end {
                 return Err(GpuClosedLoopError::MalformedUpload);
@@ -1125,6 +1152,7 @@ impl GpuActiveBatchUpload {
             learning_headers,
             activity_headers,
             pending_templates,
+            candidate_exploration_identities,
             dispatch_header_words,
             frame_payload_words,
             bucket_ownership_token,
@@ -4506,6 +4534,7 @@ fn validate_dispatch(
         || batch.learning_headers.len() != batch.headers.len()
         || batch.activity_headers.len() != batch.headers.len()
         || batch.pending_templates.len() != batch.headers.len()
+        || batch.candidate_exploration_identities.len() != batch.headers.len()
         || batch.selection_offsets.len() != batch.headers.len()
         || batch.speech_payload_offsets.len() != batch.headers.len()
         || batch.selector_diagnostic_offsets.len() != batch.headers.len()
@@ -4801,6 +4830,25 @@ fn validate_dispatch(
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
+        let identities = &batch.candidate_exploration_identities[row];
+        let identity_end = pending_end
+            .checked_add(
+                candidate_count
+                    .checked_mul(crate::GAME_EXPLORATION_IDENTITY_WORDS)
+                    .ok_or(GpuClosedLoopError::ArithmeticOverflow)?,
+            )
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if identities.len() != candidate_count || identity_end > batch.frame_payload_words.len() {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        for (index, identity) in identities.iter().enumerate() {
+            let start = pending_end + index * crate::GAME_EXPLORATION_IDENTITY_WORDS;
+            if batch.frame_payload_words[start..start + crate::GAME_EXPLORATION_IDENTITY_WORDS]
+                != *identity
+            {
+                return Err(GpuClosedLoopError::MalformedUpload);
+            }
+        }
     }
     Ok(())
 }
@@ -4913,6 +4961,14 @@ fn create_compute_pipeline(
         cache: None,
     })
 }
+
+#[cfg(test)]
+#[path = "closed_loop_pipeline/batch_projection_tests.rs"]
+mod batch_projection_tests;
+
+#[cfg(test)]
+#[path = "../tests/support/closed_loop_exploration_private.rs"]
+mod exploration_private_tests;
 
 #[cfg(test)]
 mod lifecycle_tests {
@@ -5118,6 +5174,7 @@ mod lifecycle_tests {
             learning_headers: Vec::new(),
             activity_headers: Vec::new(),
             pending_templates: Vec::new(),
+            candidate_exploration_identities: Vec::new(),
             dispatch_header_words: header.words().to_vec(),
             frame_payload_words: Vec::new(),
             bucket_ownership_token: 1,

@@ -8,9 +8,12 @@
         5.5,
         8
       ],
-      "near_triangles": 4820,
-      "far_triangles": 1038,
-      "overview_triangles": 88
+      "near_triangles": 4462,
+      "far_triangles": 916,
+      "overview_triangles": 86,
+      "editable_override": "broadleaf-canopy.blend",
+      "export_recipe": "scripts/build_broadleaf_canopy.py",
+      "override_blender": "4.3.2"
     },
     "Conifer": {
       "width_depth_height_m": [
@@ -68,9 +71,12 @@
         0.9,
         0.75
       ],
-      "near_triangles": 784,
-      "far_triangles": 352,
-      "overview_triangles": 156
+      "near_triangles": 700,
+      "far_triangles": 294,
+      "overview_triangles": 154,
+      "editable_override": "fern-connected-fronds.blend",
+      "export_recipe": "scripts/build_fern_fronds.py",
+      "override_blender": "4.3.2"
     },
     "Flowers": {
       "width_depth_height_m": [

@@ -945,6 +945,7 @@ impl GpuClosedLoopBackend {
                         ordered_selector_diagnostics[*original_index] =
                             Some(build_selector_diagnostic(
                                 input.frame,
+                                input.memory_upload,
                                 &resident.phenotype,
                                 &resident.brain_slot,
                                 resident.active_weight_bank,

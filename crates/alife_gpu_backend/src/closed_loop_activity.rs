@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use alife_core::{
-    BrainExecutionBudget, BrainPhenotype, BrainWorkCounters, CompiledSynapseKind,
-    NeuralThrottleDecision, ScaffoldContractError, UpdateCadence,
+    BrainExecutionBudget, BrainPhenotype, BrainWorkCounters, NeuralThrottleDecision,
+    ScaffoldContractError, UpdateCadence,
 };
 use bytemuck::{Pod, Zeroable};
 
@@ -213,19 +213,14 @@ pub fn derive_executed_work(
             tile_visits = tile_visits
                 .checked_add(u64::from(projection.active_tile_count()))
                 .ok_or(ScaffoldContractError::BrainActivityPolicyMismatch)?;
-            let (start, len) = projection.synapse_range();
-            let end = start
-                .checked_add(len)
-                .ok_or(ScaffoldContractError::BrainActivityPolicyMismatch)?;
-            let recurrent_count = phenotype.synapses()[start as usize..end as usize]
-                .iter()
-                .filter(|synapse| matches!(synapse.kind(), CompiledSynapseKind::Recurrent))
-                .count();
+            // BrainPhenotype construction and deserialization independently
+            // recount every route and validate its canonical index against this
+            // immutable receipt. Reuse that count instead of walking the same
+            // synapse span again for each microstep and accounting call site.
+            let recurrent_count = phenotype.budgets().routes[usize::from(projection.route_index())]
+                .recurrent_synapses;
             synapse_ops = synapse_ops
-                .checked_add(
-                    u64::try_from(recurrent_count)
-                        .map_err(|_| ScaffoldContractError::BrainActivityPolicyMismatch)?,
-                )
+                .checked_add(u64::from(recurrent_count))
                 .ok_or(ScaffoldContractError::BrainActivityPolicyMismatch)?;
         }
     }

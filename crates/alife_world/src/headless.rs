@@ -7603,8 +7603,144 @@ fn sight_sphere_hit(
     if discriminant < 0.0 {
         return None;
     }
-    let hit = (-projection - discriminant.sqrt()).max(0.0);
+    let root = discriminant.sqrt();
+    // Both intersections behind the origin miss the forward ray. Keep a
+    // zero-distance hit when the eye is inside or on the sphere.
+    if -projection + root < 0.0 {
+        return None;
+    }
+    let hit = (-projection - root).max(0.0);
     (hit <= max_range).then_some(hit)
+}
+
+#[cfg(test)]
+mod sight_ray_direction_tests {
+    use super::*;
+
+    fn hit(center: Vec3f, radius: f32, max_range: f32) -> Option<f32> {
+        sight_sphere_hit(
+            Vec3f::ZERO,
+            Vec3f::new(1.0, 0.0, 0.0),
+            center,
+            radius,
+            max_range,
+        )
+    }
+
+    #[test]
+    fn spheres_fully_behind_the_ray_do_not_hit() {
+        assert_eq!(hit(Vec3f::new(-100.0, 0.0, 0.0), 1.0, 10.0), None);
+        assert_eq!(hit(Vec3f::new(-2.0, 0.0, 0.0), 1.0, 10.0), None);
+        // Even a tangent on the supporting line is behind the ray.
+        assert_eq!(hit(Vec3f::new(-2.0, 1.0, 0.0), 1.0, 10.0), None);
+    }
+
+    #[test]
+    fn inside_and_surface_contact_keep_zero_distance_hits() {
+        for center in [
+            Vec3f::ZERO,
+            Vec3f::new(-0.5, 0.0, 0.0),
+            Vec3f::new(0.5, 0.0, 0.0),
+            Vec3f::new(-1.0, 0.0, 0.0),
+            Vec3f::new(1.0, 0.0, 0.0),
+            Vec3f::new(0.0, 1.0, 0.0),
+        ] {
+            assert_eq!(hit(center, 1.0, 0.0), Some(0.0), "{center:?}");
+        }
+    }
+
+    #[test]
+    fn forward_entry_tangency_miss_and_range_boundaries_are_preserved() {
+        let forward = Vec3f::new(5.0, 0.0, 0.0);
+        assert_eq!(hit(forward, 1.0, 10.0), Some(4.0));
+        assert_eq!(hit(forward, 1.0, 4.0), Some(4.0));
+        assert_eq!(
+            hit(forward, 1.0, f32::from_bits(4.0_f32.to_bits() - 1)),
+            None
+        );
+        assert_eq!(hit(Vec3f::new(5.0, 1.0, 0.0), 1.0, 5.0), Some(5.0));
+        assert_eq!(hit(Vec3f::new(5.0, 1.0, 0.0), 1.0, 4.0), None);
+        assert_eq!(hit(Vec3f::new(5.0, 2.0, 0.0), 1.0, 10.0), None);
+    }
+
+    #[test]
+    fn rear_opaque_sphere_does_not_hide_front_food_in_actual_perception() {
+        let organism = OrganismId(1);
+        let mut world = HeadlessScenarioBuilder::new(60_016)
+            .agent("observer", organism, Vec3f::ZERO)
+            .food("food", Vec3f::new(4.0, 0.0, 0.0), 0.6)
+            // Center is (-4, 1.625, 0), opposite the eye-to-food ray.
+            .obstacle("rear", Vec3f::new(-4.0, 1.25, 0.0), 0.75)
+            .build()
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        let rear = world.entity_id("rear").unwrap();
+        for opacity in [0.0, 1.0] {
+            world.editor_set_optical_opacity(rear, opacity).unwrap();
+            let index = world.build_perception_batch_index().unwrap();
+            for indexed in [false, true] {
+                let tick = world.tick();
+                let draft = if indexed {
+                    world.perception_frame_draft_indexed(
+                        organism,
+                        tick,
+                        SensorProfile::GroundedTerrainVisionV1,
+                        HomeostaticSnapshot::baseline(tick),
+                        &index,
+                    )
+                } else {
+                    world.perception_frame_draft(
+                        organism,
+                        tick,
+                        SensorProfile::GroundedTerrainVisionV1,
+                        HomeostaticSnapshot::baseline(tick),
+                    )
+                }
+                .unwrap();
+                assert!(
+                    draft.candidates().iter().any(|candidate| {
+                        candidate.action_id == HeadlessActionIds::APPROACH
+                            && candidate.target.entity == Some(food)
+                    }),
+                    "front food disappeared: opacity={opacity}, indexed={indexed}"
+                );
+                assert_eq!(draft.grounded_object_slots().len(), 1);
+            }
+        }
+    }
+
+    #[test]
+    fn rear_opaque_sphere_does_not_zero_actual_terrain_vision_fan() {
+        let mut world = HeadlessScenarioBuilder::new(60_017)
+            .agent("observer", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let fraction = 8.0 / (SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT - 1) as f32;
+        let yaw = (2.0 * fraction - 1.0) * VISION_HALF_ANGLE;
+        let direction = normalize(Vec3f::new(yaw.cos(), VISION_RAY_PITCH, yaw.sin()));
+        let center = subtract(
+            Vec3f::new(0.0, VISION_EYE_HEIGHT, 0.0),
+            scale(direction, 4.0),
+        );
+        let rear = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "rear".into(),
+                kind: WorldObjectKind::Obstacle,
+                organism_id: None,
+                position: Vec3f::new(center.x, center.y - 0.375, center.z),
+                nutrition: 0.0,
+                hazard_pain: 0.0,
+                radius: 0.75,
+                token_id: None,
+            })
+            .unwrap();
+        world.editor_set_optical_opacity(rear, 0.0).unwrap();
+        let clear = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        assert!(clear.iter().all(|range| *range > 0.0));
+        world.editor_set_optical_opacity(rear, 1.0).unwrap();
+        let opaque = world.terrain_vision_fan(world.agent_for(OrganismId(1)).unwrap());
+        assert_eq!(opaque.map(f32::to_bits), clear.map(f32::to_bits));
+    }
 }
 
 fn sight_box_hit(origin: Vec3f, direction: Vec3f, bounds: [f32; 6], max_range: f32) -> Option<f32> {
@@ -8630,6 +8766,118 @@ mod task_6_factorized_motor_tests {
             Err(HeadlessMotorTransactionError::UnsupportedChannel(
                 MotorChannel::Posture,
             ))
+        );
+    }
+
+    #[test]
+    fn factorized_held_food_eat_and_rest_share_one_biology_advance() {
+        let (mut world, agent, food, prepared) = prepared_world();
+        // Let ordinary development express recovery chemistry before comparing
+        // fatigue; a newborn's zero regulatory expression masks that response.
+        for _ in 0..600 {
+            world.try_advance_tick().unwrap();
+        }
+        hold_food_for_meal(&mut world, food);
+        let before = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
+        let outcome_tick = Tick::new(world.tick().raw() + 1);
+        let eat = prepared
+            .channels
+            .into_iter()
+            .find(|command| command.channel == MotorChannel::Manipulation)
+            .unwrap();
+        let rest = posture_bundle(ActionKind::Rest.canonical_id(), None)
+            .channels
+            .remove(0);
+        let bundle = MotorCommandBundle::new(
+            ORGANISM_ID,
+            alife_core::ExperienceSequenceId::new(1).unwrap(),
+            world.tick(),
+            vec![rest, eat],
+        )
+        .unwrap();
+        let event = BodyEventDelta {
+            energy: 0.3,
+            nutrition: 0.6,
+            sleep_recovery: 1.0,
+            ..BodyEventDelta::zero()
+        };
+        let expected = before
+            .biochemistry()
+            .advance(outcome_tick, event, before.phenotype())
+            .unwrap();
+        let meal_without_rest = before
+            .biochemistry()
+            .advance(
+                outcome_tick,
+                BodyEventDelta {
+                    sleep_recovery: 0.0,
+                    ..event
+                },
+                before.phenotype(),
+            )
+            .unwrap();
+        let rest_without_meal = before
+            .biochemistry()
+            .advance(
+                outcome_tick,
+                BodyEventDelta {
+                    sleep_recovery: 1.0,
+                    ..BodyEventDelta::zero()
+                },
+                before.phenotype(),
+            )
+            .unwrap();
+
+        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
+
+        assert!(receipt.succeeded);
+        assert_eq!(receipt.outcome_tick, outcome_tick);
+        assert_eq!(receipt.channel_receipts.len(), 2);
+        assert_eq!(receipt.joint.channel_outcomes.len(), 2);
+        let meal = &receipt.channel_receipts[0];
+        assert_eq!(meal.command.channel, MotorChannel::Manipulation);
+        assert_eq!(meal.command.primitive, HeadlessActionIds::EAT);
+        assert_eq!(meal.physical.contact, PhysicalContactKind::Consumed);
+        assert_eq!(meal.physical.target_entity, Some(food));
+        let rest = &receipt.channel_receipts[1];
+        assert_eq!(rest.command.channel, MotorChannel::Posture);
+        assert_eq!(rest.command.primitive, ActionKind::Rest.canonical_id());
+        assert_eq!(rest.physical.contact, PhysicalContactKind::None);
+        assert!(world.entity(food).unwrap().is_consumed());
+        assert_eq!(receipt.body_event, event);
+        assert_eq!(receipt.biology_before, *before.biochemistry());
+        assert_eq!(receipt.biology_after, expected);
+        assert!(receipt.biology_after.body.sleeping);
+        assert!(
+            receipt.biology_after.homeostasis.drives.fatigue
+                < meal_without_rest.homeostasis.drives.fatigue
+        );
+        assert!(
+            receipt
+                .biology_after
+                .body
+                .organ(alife_core::OrganKind::Digestive)
+                .energy
+                > rest_without_meal
+                    .body
+                    .organ(alife_core::OrganKind::Digestive)
+                    .energy
+        );
+
+        // The enclosing world tick must not apply either channel a second time.
+        assert_eq!(
+            world
+                .try_advance_tick_with_body_events(&BTreeMap::new())
+                .unwrap(),
+            outcome_tick
+        );
+        assert_eq!(
+            *world
+                .organism_registry()
+                .get(ORGANISM_ID)
+                .unwrap()
+                .biochemistry(),
+            expected
         );
     }
 

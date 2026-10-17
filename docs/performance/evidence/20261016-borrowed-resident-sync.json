@@ -1,0 +1,600 @@
+{
+  "schema": "alife.cpu-component.borrowed-resident-sync.v1",
+  "date": "2026-10-16",
+  "base_commit": "69f00c05ec6774c3655ae87c5d4baa5df3861929",
+  "source_sha256": {
+    "crates/alife_game_app/src/gpu_live_runtime.rs": "6477af2d0219f1c2e5de8c75fb5e61fd0b7873a6b5a64fe6c2ac6b35d10a340b",
+    "crates/alife_game_app/src/gpu_live_runtime/resident_sync_tests.rs": "8e06374b6751902de1e7bf88510970276a8101b736848aa1f1ea42a29c6ff8d7",
+    "docs/performance/evidence/20261016-resident-sync-probe-build.py": "366bc003b6c69a007463463f90360046639809ac8bd5e890b76369d404a6d7c7"
+  },
+  "unchanged_core_world_source_from_base": true,
+  "core_source_tree_git_sha": "bbf03b904dd56ff324441f1593d2798ac3e944f6",
+  "world_source_tree_git_sha": "d5b7e185e95adde01f95ac4a11da6b587f9e4d79",
+  "probe_build": {
+    "source_sha256": "9398e0cfb42b5f053895dc3b7716a212771c2f69ba31f1ce4afe2dce9dcd9d5c",
+    "executable_sha256": "b14f26e4e75ec80af49785cbd52ce4e9394b71928ede190fe51b856cc9be6a7c",
+    "app_sha256": "6477af2d0219f1c2e5de8c75fb5e61fd0b7873a6b5a64fe6c2ac6b35d10a340b",
+    "frozen_helpers_sha256": "ed9bc1542308438ee8e465c95ef991affa2d5d3746061649771e0d5cea5b3e5f",
+    "linked_libraries": {
+      "alife_core": {
+        "path": "/workspace/shared/alife-runtime-preparation-20261016/release-target/release/deps/libalife_core-187645d24ee31147.rlib",
+        "sha256": "aca7f10b6b5661c6ba20aa2557af2fc1f4cb15e28ed0a2fd4d04bce5621c6dc0"
+      },
+      "alife_world": {
+        "path": "/workspace/shared/alife-runtime-preparation-20261016/release-target/release/libalife_world.rlib",
+        "sha256": "4a403465c9f3b929255464595e3c4bd71f557b2f48c631c0348a08bdf3c342db"
+      }
+    },
+    "command": [
+      "rustc",
+      "--edition=2021",
+      "-O",
+      "/workspace/shared/alife-borrowed-resident-sync-20261016/resident-sync-probe.rs",
+      "-L",
+      "dependency=/workspace/shared/alife-runtime-preparation-20261016/release-target/release/deps",
+      "-o",
+      "/workspace/shared/alife-borrowed-resident-sync-20261016/resident-sync-probe",
+      "--extern",
+      "alife_core=/workspace/shared/alife-runtime-preparation-20261016/release-target/release/deps/libalife_core-187645d24ee31147.rlib",
+      "--extern",
+      "alife_world=/workspace/shared/alife-runtime-preparation-20261016/release-target/release/libalife_world.rlib"
+    ]
+  },
+  "linked_artifact_profiles": {
+    "alife_core": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": false
+    },
+    "alife_world": {
+      "opt_level": "3",
+      "debuginfo": 0,
+      "debug_assertions": false,
+      "overflow_checks": false,
+      "test": false
+    }
+  },
+  "app_test_executable_sha256": "d1fed5894e7e3c2f0a7b8ba8026a69a6755116cc4c3fbe6f81f94840ef0a017e",
+  "environment": {
+    "os": "Linux 6.18.44 x86_64",
+    "processor": "AMD EPYC 9V74 80-Core Processor",
+    "available_affinity": "0-8",
+    "timing_affinity": "CPU 0",
+    "rustc": "1.99.0 (b940084d7 2026-09-28)",
+    "concurrency": "Known local builds and tests completed before accepted timing; other host tenants uncontrolled"
+  },
+  "fixture": {
+    "brain_class": "N2048",
+    "profile": "GroundedObjectSlotsV1",
+    "foundation_weights": 32768,
+    "population": [
+      8,
+      50
+    ],
+    "genetic_records": [
+      "builtin genetic record without an embedded weight asset",
+      "explicit inherited N2048 foundation asset in each genome"
+    ],
+    "validation": "Warm process-local immutable proofs in both modes; dynamic guards execute on every helper invocation",
+    "resident": "Minimal owner containing exactly genome, homeostasis, development; actual complete app residents are covered by the app tests",
+    "sync_calls": "Direct resident synchronization followed by population synchronization, matching two ordinary tick passes; world remains fixed at tick zero",
+    "timing": "20 repeats per sample, 2 warmup pairs, 9 alternating old/new samples for each of four fixtures; setup and initial resident clones outside timer; final results compared outside timer",
+    "allocator": "System allocator wrapped with allocation/reallocation counters. Counting enabled only for separate allocation passes; counting branch remains present during timing"
+  },
+  "scope": "Only the two resident synchronization helpers, their actual core/world validation calls, and removed ownership copies; excludes biology advancement, other tick preparation, staged-authority clones, sleep record mutation, GPU, persistence, training and rendering",
+  "allocations": [
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "old": true,
+      "calls": 1201,
+      "requested_bytes": 413044
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "old": false,
+      "calls": 464,
+      "requested_bytes": 276180
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "old": true,
+      "calls": 7501,
+      "requested_bytes": 2581550
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "old": false,
+      "calls": 2900,
+      "requested_bytes": 1726150
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "old": true,
+      "calls": 1225,
+      "requested_bytes": 3558772
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "old": false,
+      "calls": 464,
+      "requested_bytes": 276180
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "old": true,
+      "calls": 7651,
+      "requested_bytes": 22242350
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "old": false,
+      "calls": 2900,
+      "requested_bytes": 1726150
+    }
+  ],
+  "timing_summary": [
+    {
+      "population": 8,
+      "explicit_inherited_asset": false,
+      "samples": 9,
+      "old_median_ns_20_repeats": 4609131,
+      "new_median_ns_20_repeats": 3991002,
+      "old_median_ms_two_sync_passes": 0.23045654999999998,
+      "new_median_ms_two_sync_passes": 0.1995501,
+      "relative_reduction_percent": 13.410966188637294
+    },
+    {
+      "population": 50,
+      "explicit_inherited_asset": false,
+      "samples": 9,
+      "old_median_ns_20_repeats": 28840872,
+      "new_median_ns_20_repeats": 25211347,
+      "old_median_ms_two_sync_passes": 1.4420436,
+      "new_median_ms_two_sync_passes": 1.26056735,
+      "relative_reduction_percent": 12.584657634484838
+    },
+    {
+      "population": 8,
+      "explicit_inherited_asset": true,
+      "samples": 9,
+      "old_median_ns_20_repeats": 6104865,
+      "new_median_ns_20_repeats": 3953717,
+      "old_median_ms_two_sync_passes": 0.30524325,
+      "new_median_ms_two_sync_passes": 0.19768585,
+      "relative_reduction_percent": 35.23661866396718
+    },
+    {
+      "population": 50,
+      "explicit_inherited_asset": true,
+      "samples": 9,
+      "old_median_ns_20_repeats": 39587508,
+      "new_median_ns_20_repeats": 25557558,
+      "old_median_ms_two_sync_passes": 1.9793754,
+      "new_median_ms_two_sync_passes": 1.2778779,
+      "relative_reduction_percent": 35.44034648505786
+    }
+  ],
+  "raw_timing_samples": [
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 0,
+      "old_first": true,
+      "old_ns": 4698744,
+      "new_ns": 3991002,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 1,
+      "old_first": false,
+      "old_ns": 4609131,
+      "new_ns": 3992725,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 2,
+      "old_first": true,
+      "old_ns": 4734327,
+      "new_ns": 4206513,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 3,
+      "old_first": false,
+      "old_ns": 4641329,
+      "new_ns": 4226092,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 4,
+      "old_first": true,
+      "old_ns": 4933253,
+      "new_ns": 3973256,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 5,
+      "old_first": false,
+      "old_ns": 4513890,
+      "new_ns": 3978384,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 6,
+      "old_first": true,
+      "old_ns": 4504486,
+      "new_ns": 3964423,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 7,
+      "old_first": false,
+      "old_ns": 4551296,
+      "new_ns": 4132684,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 8,
+      "sample": 8,
+      "old_first": true,
+      "old_ns": 4507942,
+      "new_ns": 3943272,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 0,
+      "old_first": true,
+      "old_ns": 28572213,
+      "new_ns": 24542272,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 1,
+      "old_first": false,
+      "old_ns": 28656043,
+      "new_ns": 24952111,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 2,
+      "old_first": true,
+      "old_ns": 29127889,
+      "new_ns": 24449305,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 3,
+      "old_first": false,
+      "old_ns": 28840872,
+      "new_ns": 25211347,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 4,
+      "old_first": true,
+      "old_ns": 30133063,
+      "new_ns": 24844221,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 5,
+      "old_first": false,
+      "old_ns": 29176802,
+      "new_ns": 27184480,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 6,
+      "old_first": true,
+      "old_ns": 28723006,
+      "new_ns": 25592944,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 7,
+      "old_first": false,
+      "old_ns": 28386557,
+      "new_ns": 25616008,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": false,
+      "population": 50,
+      "sample": 8,
+      "old_first": true,
+      "old_ns": 28959538,
+      "new_ns": 26909572,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 0,
+      "old_first": true,
+      "old_ns": 5995573,
+      "new_ns": 3953717,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 1,
+      "old_first": false,
+      "old_ns": 6231212,
+      "new_ns": 3982551,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 2,
+      "old_first": true,
+      "old_ns": 6372152,
+      "new_ns": 3968930,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 3,
+      "old_first": false,
+      "old_ns": 6343629,
+      "new_ns": 3956912,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 4,
+      "old_first": true,
+      "old_ns": 6104865,
+      "new_ns": 3933878,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 5,
+      "old_first": false,
+      "old_ns": 6118304,
+      "new_ns": 3939646,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 6,
+      "old_first": true,
+      "old_ns": 5990635,
+      "new_ns": 3924694,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 7,
+      "old_first": false,
+      "old_ns": 5999679,
+      "new_ns": 3937583,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 8,
+      "sample": 8,
+      "old_first": true,
+      "old_ns": 6003664,
+      "new_ns": 3992686,
+      "repeats": 20,
+      "exact_residents": 8
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 0,
+      "old_first": true,
+      "old_ns": 39166792,
+      "new_ns": 25327756,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 1,
+      "old_first": false,
+      "old_ns": 39094104,
+      "new_ns": 26503264,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 2,
+      "old_first": true,
+      "old_ns": 39903507,
+      "new_ns": 25299765,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 3,
+      "old_first": false,
+      "old_ns": 38757804,
+      "new_ns": 25557558,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 4,
+      "old_first": true,
+      "old_ns": 38238532,
+      "new_ns": 26442784,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 5,
+      "old_first": false,
+      "old_ns": 39680105,
+      "new_ns": 25906236,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 6,
+      "old_first": true,
+      "old_ns": 40145227,
+      "new_ns": 26141426,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 7,
+      "old_first": false,
+      "old_ns": 39587508,
+      "new_ns": 25405442,
+      "repeats": 20,
+      "exact_residents": 50
+    },
+    {
+      "inherited_asset": true,
+      "population": 50,
+      "sample": 8,
+      "old_first": true,
+      "old_ns": 46940549,
+      "new_ns": 25239847,
+      "repeats": 20,
+      "exact_residents": 50
+    }
+  ],
+  "timed_final_resident_records_compared": 1044,
+  "comparison_scope": "Final three-field resident maps after each 20-repeat timing block compare with exact typed equality; every intermediate invocation is not separately observed. Canonical world signature remains unchanged",
+  "checks": {
+    "focused_sync_tests": {
+      "passed": 7,
+      "failed": 0,
+      "ignored": 0
+    },
+    "existing_cpu_preparation_tests": {
+      "passed": 19,
+      "failed": 0,
+      "ignored": 3
+    },
+    "existing_newborn_admission_tests": {
+      "passed": 2,
+      "failed": 0
+    },
+    "clippy": "passed --locked --offline -p alife_game_app --features gpu-runtime --lib --tests --no-deps -- -D warnings",
+    "cargo_fmt": "passed",
+    "git_diff_check": "passed",
+    "core_boundaries": "passed including Cargo dependency tree",
+    "documentation_assertions": "77/77 passed",
+    "app_test_profile": "One job; affected heavy crates opt-level 0, 256 codegen units, symbols/incremental off; debug assertions enabled"
+  },
+  "commands": {
+    "tests": "source /workspace/shared/alife-cpu-regression-integration-20261015/provenance/qualification-env.sh; adaptive_cargo test --locked --offline -p alife_game_app --features gpu-runtime --lib gpu_live_runtime::resident_sync_tests:: -- --nocapture --test-threads=1",
+    "probe_build": "python docs/performance/evidence/20261016-resident-sync-probe-build.py ../release-world.jsonl ../resident-sync-probe",
+    "allocation_only": "ALIFE_SYNC_ALLOCATION_ONLY=1 ../resident-sync-probe",
+    "accepted_timing": "taskset -c 0 ../resident-sync-probe"
+  },
+  "evidence_limits": [
+    "Requested allocation bytes are traffic, not retained RAM/RSS",
+    "Fixed-world, minimal-resident component timing is not whole preparation or end-to-end frame time",
+    "No GPU, gameplay, training, Windows or fresh-process GPU save/load validation executed",
+    "Process-local cold-record validation and rejection are tested separately from warm steady-state timing"
+  ],
+  "log_sha256": {
+    "tests.log": "0b8b98bc9fc4efc0e522a889a44e117da3e4cfef2f4a3e8367bbe91276ac5532",
+    "preparation-tests.log": "38fe337f6a0113f77d511cb0344e24357365a1de0e762049731870871eda3773",
+    "admission-tests.log": "d67feb97139fad67279c708253422dbba3a521682d1839653eb5797b7a6ef300",
+    "clippy.log": "c3acd9794e2273e771f10cea3d7071017ec536dbd1eebd3577ebcebc6c4808cf",
+    "fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "boundaries.log": "b6554fa6b151aea699671a9b5cad329ec249203f6fa858015600843929aff070",
+    "docs.log": "6b52febcfc5f42aa1917fc1c9ede094625c522d266e4e96ef8f411c5710d8c58",
+    "probe-build.json": "bce766ae110478148c1971fd17c377277cfa36f67c756a67336495e61e2bc475",
+    "probe-build.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "probe-allocations.txt": "ca37e3c5d8dd73666c2c165402e06db9b43831030dcc8df3fedd820a01faa8fb",
+    "probe-raw.txt": "1a8190e39a19293bcd9924fe4bfbc441d543d3b967b7b0b5c279453b7299dd9c",
+    "release-world.jsonl": "fd4a17bd4b76d3efc129f14def8b130cc2adad55e2f7c7964c7aeec744ae8f94",
+    "release-world.log": "b73ff2646d49b2c223ed8172786c37d86fa20b056baf899614ce8babcd3b57e4"
+  }
+}

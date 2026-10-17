@@ -1,0 +1,102 @@
+{
+  "triangles": [
+    4462,
+    916,
+    86
+  ],
+  "materials": 1,
+  "primitives_per_lod": 1,
+  "textures": 0,
+  "runtime_bounds_xyz_m": [
+    6,
+    8,
+    5.5
+  ],
+  "silhouette_views": [
+    {
+      "yaw_degrees": 0,
+      "comparisons": [
+        {
+          "lod": 1,
+          "near_silhouette_coverage": 0.9408976860886534,
+          "intersection_over_union": 0.8886255924170616
+        },
+        {
+          "lod": 2,
+          "near_silhouette_coverage": 0.8809590186785615,
+          "intersection_over_union": 0.8201401505320529
+        }
+      ]
+    },
+    {
+      "yaw_degrees": 45,
+      "comparisons": [
+        {
+          "lod": 1,
+          "near_silhouette_coverage": 0.8983774551665243,
+          "intersection_over_union": 0.8180404354587869
+        },
+        {
+          "lod": 2,
+          "near_silhouette_coverage": 0.9288357529177341,
+          "intersection_over_union": 0.8315494393476045
+        }
+      ]
+    },
+    {
+      "yaw_degrees": 90,
+      "comparisons": [
+        {
+          "lod": 1,
+          "near_silhouette_coverage": 0.9014631233203941,
+          "intersection_over_union": 0.8109051839914048
+        },
+        {
+          "lod": 2,
+          "near_silhouette_coverage": 0.9510301582561959,
+          "intersection_over_union": 0.8350812794965915
+        }
+      ]
+    },
+    {
+      "yaw_degrees": 135,
+      "comparisons": [
+        {
+          "lod": 1,
+          "near_silhouette_coverage": 0.8679417122040073,
+          "intersection_over_union": 0.7815746309458721
+        },
+        {
+          "lod": 2,
+          "near_silhouette_coverage": 0.914996964177292,
+          "intersection_over_union": 0.773018722749423
+        }
+      ]
+    }
+  ],
+  "result": "PASS",
+  "profile": "island-broadleaf-canopy-20261016",
+  "art_blobs_audited": 136,
+  "other_manifest_records_retained": 47,
+  "all_other_art_and_world_bytes_retained": true,
+  "historical_profiles_retained": true,
+  "game_rendering_proof": false,
+  "physical_gpu_proof": false,
+  "shipping_glb_sha256": "52c4805ce9afd6ab1ffe699539e7ac9138d7b8bfaf1eaee39c1458309a8bb768",
+  "editable_source_sha256": "0a9a6c94fa92a2a5468b02e7cde8d284c70d2527623fcf5a820ac94ea0640b4f",
+  "source_reload_reexport": {
+    "result": "PASS",
+    "blender": "4.3.2",
+    "byte_identical": true,
+    "before_and_after_shipping_sha256": "52c4805ce9afd6ab1ffe699539e7ac9138d7b8bfaf1eaee39c1458309a8bb768"
+  },
+  "other_checks": {
+    "general_island_shipping": "PASS",
+    "focused_tests": "PASS (9 tests, including clean interpreter without third-party site packages)",
+    "docs": "PASS (77/77)",
+    "whitespace": "PASS",
+    "rust_workspace": "not run; no Rust changes",
+    "live_game": "not run",
+    "physical_gpu_performance": "not run"
+  }
+}
