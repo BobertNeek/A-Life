@@ -189,9 +189,27 @@ def main():
             finally:
                 os.chdir(current_directory)
             legacy_actor_sha=sha(legacy/"actor-checkpoint.json")
+        def milestone(checkpoint,number):
+            observations=[]
+            for context_seed,capture,baseline in contexts:
+                report=args.output/f"context-{context_seed}-cycle-{number:03d}.json"
+                call(report.stem,[args.evaluator,"--evaluate-capture",capture,source/"value-checkpoint.json",checkpoint/"value-checkpoint.json",report])
+                observed=read(report)
+                if (observed["feature_sha256"],observed["capture_sha256"]) != (baseline["feature_sha256"],baseline["capture_sha256"]):
+                    raise ValueError("Fixed context differs")
+                check_slices(baseline["after"],observed["after"])
+                observations.append(dict(seed=context_seed,metrics=observed["after"]))
+            probes=probe(checkpoint,number)
+            if probes["eat_held_food"]["pilot"].get("consumed_events",0)<baseline_eating:
+                raise ValueError("Matched Eating retention regressed")
+            outcome["milestones"].append(dict(cycle=number,contexts=observations,probes=probes))
+            write(args.output/"PROGRESS.json",outcome)
+            print(json.dumps(dict(cycle=number,status="slice_and_retention_gates_passed")),flush=True)
         latest = source
         for number in range(1,args.cycles+1):
-            if remaining()<180: raise TimeoutError("No further disposable cycle fits the native cleanup reserve")
+            if remaining()<300:
+                outcome["collection_stopped_for_final_validation_reserve"]=True
+                break
             target = args.output/"episodes"/f"cycle-{number:03d}"
             seed = args.first_seed+number-1
             call(target.name,[args.trainer,"--resume-cycle",latest,target,"16","--seed",str(seed),"--lesson","grab_food","--sampling-temperature","32"])
@@ -214,21 +232,10 @@ def main():
             outcome.update(accepted_cycles=number,latest_checkpoint=str(latest),policy=c["policy_version"],actor_age=c["actor_optimizer_step"],critic_age=value["optimizer_step"])
             write(args.output/"PROGRESS.json",outcome)
             if number in stages:
-                observations=[]
-                for context_seed,capture,baseline in contexts:
-                    report=args.output/f"context-{context_seed}-cycle-{number:03d}.json"
-                    call(report.stem,[args.evaluator,"--evaluate-capture",capture,source/"value-checkpoint.json",latest/"value-checkpoint.json",report])
-                    observed=read(report)
-                    if (observed["feature_sha256"],observed["capture_sha256"]) != (baseline["feature_sha256"],baseline["capture_sha256"]):
-                        raise ValueError("Fixed context differs")
-                    check_slices(baseline["after"],observed["after"])
-                    observations.append(dict(seed=context_seed,metrics=observed["after"]))
-                probes=probe(latest,number)
-                if probes["eat_held_food"]["pilot"].get("consumed_events",0)<baseline_eating:
-                    raise ValueError("Matched Eating retention regressed")
-                outcome["milestones"].append(dict(cycle=number,contexts=observations,probes=probes))
-                write(args.output/"PROGRESS.json",outcome)
-                print(json.dumps(dict(cycle=number,status="slice_and_retention_gates_passed")),flush=True)
+                milestone(latest,number)
+        if not outcome["accepted_cycles"]:raise TimeoutError("No disposable cycle fit before the final validation reserve")
+        if not outcome["milestones"] or outcome["milestones"][-1]["cycle"]!=outcome["accepted_cycles"]:
+            milestone(latest,outcome["accepted_cycles"])
         acceptance=[]
         for seed in args.acceptance_seeds:
             capture=args.output/f"acceptance-context-{seed}"
@@ -250,7 +257,7 @@ def main():
                 current_actor_rollout=current["after"],current_actor_policy=current["actor_policy"],
                 context_limit="Current actor/world trajectories may differ; this is generalization evidence, not a causal actor-representation partition."))
         outcome["untouched_acceptance"]=acceptance
-        outcome["status"]=("bounded_clone_qualification_complete_not_production_adopted" if args.cycles==128
+        outcome["status"]=("bounded_clone_qualification_complete_not_production_adopted" if outcome["accepted_cycles"]==128
                            else "short_clone_evidence_complete_extended_qualification_pending")
     except BaseException as error:
         outcome.update(status="qualification_held",error=str(error))
