@@ -1,0 +1,49 @@
+name: PPO rollout diagnostics
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/ppo-rollout-diagnostics.yml"
+      - "crates/alife_game_app/src/foundation_training_cycle.rs"
+      - "crates/alife_game_app/src/foundation_training_cycle/**"
+      - "scripts/*ppo_diagnostics.py"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/ppo-rollout-diagnostics.yml"
+      - "crates/alife_game_app/src/foundation_training_cycle.rs"
+      - "crates/alife_game_app/src/foundation_training_cycle/**"
+      - "scripts/*ppo_diagnostics.py"
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+jobs:
+  prepared-targets:
+    name: Optional PPO targets and committed reporting CPU regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepared values, advantages, disabled I/O and row cap
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::ppo_diagnostics::tests -- --test-threads=1
+      - name: Sealing, exact signed targets and copied diagnostic reporting
+        run: python -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
