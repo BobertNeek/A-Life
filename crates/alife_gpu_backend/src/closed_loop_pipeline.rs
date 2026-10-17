@@ -830,11 +830,19 @@ impl GpuActiveBatchUpload {
             let payload_base = u32::try_from(frame_payload_words.len())
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
             upload.rebase(row_base_u32, payload_base)?;
+            // This upload was just encoded from the immutable frame and rebased
+            // with checked offsets. Rebuilding it for an exact self-comparison
+            // is a development diagnostic, not another production preflight.
+            #[cfg(debug_assertions)]
             upload.validate_against(entry.frame, entry.slot)?;
-            let mut memory_upload = entry.memory_upload.cloned();
-            if let Some(memory) = &memory_upload {
-                memory.validate_for_frame_and_slot(entry.frame, entry.slot)?;
-            }
+            // Keep caller-input rejection at its original boundary (before
+            // payload capacity errors). Ownership prevents edits before the
+            // checked local upload is consumed by rebasing below.
+            let memory_upload = entry
+                .memory_upload
+                .cloned()
+                .map(|memory| memory.validate_local_for_batch(entry.frame, entry.slot))
+                .transpose()?;
 
             let candidate_words = upload
                 .candidates
@@ -962,7 +970,7 @@ impl GpuActiveBatchUpload {
             )
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
             frame_payload_words.extend_from_slice(pending_template.words());
-            let memory_binding = if let Some(memory) = &mut memory_upload {
+            let (memory_upload, memory_binding) = if let Some(memory) = memory_upload {
                 let memory_context_offset = u32::try_from(frame_payload_words.len())
                     .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
                 let cognitive_projection_offset = memory_context_offset
@@ -977,9 +985,7 @@ impl GpuActiveBatchUpload {
                             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?,
                     )
                     .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
-                let receipt = memory.rebase_for_batch(
-                    entry.frame,
-                    entry.slot,
+                let (memory, receipt) = memory.rebase_for_batch(
                     upload.frame_binding,
                     memory_context_offset,
                     upload.header.candidate_offset,
@@ -998,9 +1004,9 @@ impl GpuActiveBatchUpload {
                         .ok_or(GpuClosedLoopError::MalformedUpload)?,
                 )?;
                 frame_payload_words.extend_from_slice(receptor_record.words());
-                Some(receipt)
+                (Some(memory), Some(receipt))
             } else {
-                None
+                (None, None)
             };
             if frame_payload_words.len() != payload_end {
                 return Err(GpuClosedLoopError::MalformedUpload);
@@ -4913,6 +4919,10 @@ fn create_compute_pipeline(
         cache: None,
     })
 }
+
+#[cfg(test)]
+#[path = "closed_loop_pipeline/batch_projection_tests.rs"]
+mod batch_projection_tests;
 
 #[cfg(test)]
 mod lifecycle_tests {
