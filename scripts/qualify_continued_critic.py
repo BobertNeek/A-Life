@@ -35,7 +35,13 @@ def write(path, value):
 
 def check_slices(before, after):
     """Separate gates prevent a short transient disappearing in a long mean."""
-    for label in ["early16", "whole_trajectory", "last16"]:
+    for label, rows in [("early16", 16), ("whole_trajectory", 128), ("last16", 16)]:
+        # Real death may end a requested 128-row capture early. Preserve its terminal
+        # evidence, but do not count overlapping short slices as whole-128 proof.
+        for context, metrics in [("baseline", before), ("candidate", after)]:
+            if metrics[label].get("rows") != rows:
+                raise ValueError(f"{context} {label} has {metrics[label].get('rows')} real transitions; "
+                                 f"{rows} required for the predeclared comparison")
         initial = before[label]["residual_mse"]
         observed = after[label]["residual_mse"]
         limit = max(4 * initial, 1.0)
@@ -273,3 +279,4 @@ def main():
 
 if __name__=="__main__":
     main()
+
