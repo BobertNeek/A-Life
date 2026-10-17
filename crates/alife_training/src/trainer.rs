@@ -1,5 +1,11 @@
 //! Offline-only production-graph WGSL trainer implementation.
 
+mod checkpoint_readback;
+
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "trainer/packed_checkpoint_gpu_tests.rs"]
+mod packed_checkpoint_gpu_tests;
+
 use std::{num::NonZeroU64, sync::mpsc};
 
 use alife_core::{
@@ -1438,7 +1444,7 @@ impl FoundationTrainer {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
         let n = self.phenotype.synapses().len();
-        let moments = self.read_float_buffer(&self.gpu._optimizer, 0, n * 2)?;
+        let state = self.read_checkpoint_state(n)?;
         Ok(crate::FoundationTrainerCheckpoint {
             schema_version: 2,
             phenotype_hash: self.phenotype.phenotype_hash(),
@@ -1446,11 +1452,68 @@ impl FoundationTrainer {
             optimizer_step: self.optimizer_step,
             config: self.config,
             stage_mask: self.stage_mask.clone(),
-            weights: self.read_weights()?,
-            first_moment: moments[..n].to_vec(),
-            second_moment: moments[n..].to_vec(),
-            update_ages: self.read_word_buffer(&self.gpu._optimizer, n as u64 * 8, n)?,
+            weights: state.weights,
+            first_moment: state.first_moment,
+            second_moment: state.second_moment,
+            update_ages: state.update_ages,
         })
+    }
+
+    fn read_checkpoint_state(
+        &self,
+        count: usize,
+    ) -> Result<checkpoint_readback::CheckpointReadback, TrainingError> {
+        let (device, queue) = self.session.backend().offline_training_device_queue()?;
+        let layout = checkpoint_readback::CheckpointReadbackLayout::new(
+            count,
+            device.limits().max_buffer_size,
+        )?;
+        layout.validate_source_sizes(self.gpu.weights.size(), self.gpu._optimizer.size())?;
+        // Capture this boundary's actual device buffers in one submission. No
+        // bytes are retained across training, replay shape changes, or rebind.
+        let staging = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("foundation-trainer-checkpoint-readback"),
+            size: layout.total_bytes,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("foundation-trainer-checkpoint-export"),
+        });
+        encoder.copy_buffer_to_buffer(&self.gpu.weights, 0, &staging, 0, layout.lane_bytes);
+        encoder.copy_buffer_to_buffer(
+            &self.gpu._optimizer,
+            0,
+            &staging,
+            layout.lane_bytes,
+            layout.optimizer_bytes,
+        );
+        let command_buffer = encoder.finish();
+        let (sender, receiver) = mpsc::channel();
+        command_buffer.map_buffer_on_submit(
+            &staging,
+            wgpu::MapMode::Read,
+            0..layout.total_bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        let submission = queue.submit(Some(command_buffer));
+        if device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err()
+            || receiver.recv().ok().and_then(Result::ok).is_none()
+        {
+            return Err(TrainingError::GpuSubmission);
+        }
+        let mapped = staging.slice(..layout.total_bytes).get_mapped_range();
+        let state = layout.decode(&mapped);
+        drop(mapped);
+        staging.unmap();
+        state
     }
 
     pub fn restore_checkpoint(

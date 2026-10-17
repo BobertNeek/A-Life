@@ -105,6 +105,10 @@ jobs:
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Strict foundation-training Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
+      - name: Compile packed checkpoint real-adapter regression without GPU execution
+        run: cargo test --locked -p alife_training --features gpu-tests --lib --no-run
+      - name: Strict packed checkpoint adapter-test source Clippy
+        run: cargo clippy --locked -p alife_training --features gpu-tests --lib --tests -- -D warnings
       - name: Adaptive game exploration shader and host CPU contracts
         run: cargo test --locked -p alife_gpu_backend --all-targets --features training-rollout
       - name: Familiar-object unresolved-gap input chain CPU regression
