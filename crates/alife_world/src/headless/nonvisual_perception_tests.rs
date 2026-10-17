@@ -595,7 +595,11 @@ fn indexed_nonvisual_cell_occupancy_falls_back_at_ceil_sixteenth() {
             for number in 0..near_count {
                 // With split cells, each is individually below budget and only
                 // the cumulative raw-ID count can trigger the fallback.
-                let x = if split_cells && number % 2 == 0 { -0.2 } else { 0.2 };
+                let x = if split_cells && number % 2 == 0 {
+                    -0.2
+                } else {
+                    0.2
+                };
                 insert_food(
                     &mut world,
                     &format!("near-budget-{number}"),
@@ -668,7 +672,14 @@ fn indexed_nonvisual_duplicate_membership_can_only_choose_an_earlier_full_scan()
             assert!(candidates.is_none());
         }
         let (_, canonical, indexed) = assert_packet_matches(&world);
-        assert_eq!(indexed, if local_carried_count == 7 { 7 } else { canonical });
+        assert_eq!(
+            indexed,
+            if local_carried_count == 7 {
+                7
+            } else {
+                canonical
+            }
+        );
     }
 }
 
@@ -767,7 +778,11 @@ fn live_read_assert_packet_matches(
     let indexed = indexed.unwrap();
     assert_eq!(
         indexed.sensory().channels.as_flat_array().map(f32::to_bits),
-        canonical.sensory().channels.as_flat_array().map(f32::to_bits),
+        canonical
+            .sensory()
+            .channels
+            .as_flat_array()
+            .map(f32::to_bits),
     );
     assert_eq!(indexed, canonical, "complete draft with reused index");
     assert_eq!(
@@ -797,7 +812,9 @@ fn indexed_nonvisual_reused_index_reads_current_observer_sensor_gains() {
             Ok(())
         })
         .unwrap();
-    world.queue_player_care(OBSERVER, Vec3f::ZERO, false).unwrap();
+    world
+        .queue_player_care(OBSERVER, Vec3f::ZERO, false)
+        .unwrap();
     world.ingestion_observations.insert(
         OBSERVER.raw(),
         IngestionObservation {
@@ -863,8 +880,12 @@ fn indexed_nonvisual_reused_index_reads_current_player_care() {
     assert_eq!(before.sensory().channels.tactile_contact[0], 0.0);
     assert_eq!(before.sensory().channels.auditory_acoustic[1], 0.0);
     let source_objects_before = world.object_snapshots();
-    world.queue_player_care(OBSERVER, Vec3f::ZERO, false).unwrap();
-    world.queue_player_care(OBSERVER, Vec3f::ZERO, true).unwrap();
+    world
+        .queue_player_care(OBSERVER, Vec3f::ZERO, false)
+        .unwrap();
+    world
+        .queue_player_care(OBSERVER, Vec3f::ZERO, true)
+        .unwrap();
     assert_eq!(world.object_snapshots(), source_objects_before);
     let after = live_read_assert_packet_matches(&world, &index);
     assert_eq!(after.sensory().channels.tactile_contact[0], 0.25);
@@ -889,7 +910,10 @@ fn indexed_nonvisual_reused_index_reads_current_ingestion_sample_and_removal() {
         );
         let draft = live_read_assert_packet_matches(&world, &index);
         assert_eq!(draft.sensory().channels.tactile_contact[5], taste.max(0.0));
-        assert_eq!(draft.sensory().channels.tactile_contact[6], (-taste).max(0.0));
+        assert_eq!(
+            draft.sensory().channels.tactile_contact[6],
+            (-taste).max(0.0)
+        );
     }
     world.ingestion_observations.remove(&OBSERVER.raw());
     let removed = live_read_assert_packet_matches(&world, &index);
@@ -913,7 +937,10 @@ fn indexed_nonvisual_reused_index_observes_lifecycle_ingestion_pruning() {
     let before = live_read_assert_packet_matches(&world, &index);
     assert_eq!(before.sensory().channels.tactile_contact[5], 0.5);
     let source_objects_before = world.object_snapshots();
-    world.organism_registry.mark_dead(OBSERVER, world.tick()).unwrap();
+    world
+        .organism_registry
+        .mark_dead(OBSERVER, world.tick())
+        .unwrap();
     // The sensor also independently filters a dead observer's sample.
     let filtered = live_read_assert_packet_matches(&world, &index);
     assert_eq!(filtered.sensory().channels.tactile_contact[5], 0.0);
@@ -929,14 +956,18 @@ fn indexed_nonvisual_reused_index_observes_lifecycle_ingestion_pruning() {
 #[test]
 fn indexed_nonvisual_reused_index_reads_selected_source_payload_and_consumption() {
     let (mut world, source) = live_read_world();
-    world.editor_move_object(source, Vec3f::new(-0.4, 0.0, 0.0)).unwrap();
+    world
+        .editor_move_object(source, Vec3f::new(-0.4, 0.0, 0.0))
+        .unwrap();
     let index = world.build_perception_batch_index().unwrap();
     live_read_assert_sparse(&world, &index);
     let before = live_read_assert_packet_matches(&world, &index);
     let mut properties = world.entity(source).unwrap().grounded_physical;
     properties.chemical = [0.3, -0.05, 0.0];
     properties.surface_temperature = 0.625;
-    world.set_grounded_physical_properties(source, properties).unwrap();
+    world
+        .set_grounded_physical_properties(source, properties)
+        .unwrap();
     let changed = live_read_assert_packet_matches(&world, &index);
     assert_ne!(
         changed.sensory().channels.smell_chemistry,
@@ -967,7 +998,9 @@ fn indexed_nonvisual_reused_index_reads_current_observer_pose_and_yaw() {
     let before = live_read_assert_packet_matches(&world, &index);
     assert_eq!(before.sensory().channels.smell_chemistry, [0.0; 8]);
     let observer = world.agent_entity_id(OBSERVER).unwrap();
-    world.editor_move_object(observer, Vec3f::new(99.0, 0.0, 0.0)).unwrap();
+    world
+        .editor_move_object(observer, Vec3f::new(99.0, 0.0, 0.0))
+        .unwrap();
     world.objects.get_mut(&observer.raw()).unwrap().head_yaw = 1.0;
     live_read_assert_sparse(&world, &index);
     let after = live_read_assert_packet_matches(&world, &index);
@@ -1008,8 +1041,18 @@ fn indexed_nonvisual_unsupported_same_tick_source_reuse_requires_rebuild() {
         live_read_assert_sparse(&world, &index);
         let (canonical, stale) = live_read_capture_pair(&world, &index);
         assert_ne!(
-            canonical.unwrap().sensory().channels.as_flat_array().map(f32::to_bits),
-            stale.unwrap().sensory().channels.as_flat_array().map(f32::to_bits),
+            canonical
+                .unwrap()
+                .sensory()
+                .channels
+                .as_flat_array()
+                .map(f32::to_bits),
+            stale
+                .unwrap()
+                .sensory()
+                .channels
+                .as_flat_array()
+                .map(f32::to_bits),
             "unsupported stale source metadata: {mutation}",
         );
         let rebuilt = world.build_perception_batch_index().unwrap();
@@ -1026,11 +1069,19 @@ fn indexed_nonvisual_unsupported_nonfinite_transition_requires_rebuild() {
         let target = world.entity_id("remote-0").unwrap();
         let index = world.build_perception_batch_index().unwrap();
         live_read_assert_sparse(&world, &index);
-        world.objects.get_mut(&target.raw()).unwrap().grounded_physical.chemical[0] = chemical;
+        world
+            .objects
+            .get_mut(&target.raw())
+            .unwrap()
+            .grounded_physical
+            .chemical[0] = chemical;
         world.validate_perception_batch_index(&index).unwrap();
         let (canonical, stale) = live_read_capture_pair(&world, &index);
         let canonical_error = canonical.unwrap_err();
-        assert!(stale.is_ok(), "old metadata cannot see a remote invalid transition");
+        assert!(
+            stale.is_ok(),
+            "old metadata cannot see a remote invalid transition"
+        );
         let rebuilt = world.build_perception_batch_index().unwrap();
         assert!(rebuilt.nonvisual_requires_full_scan);
         let (canonical, indexed) = live_read_capture_pair(&world, &rebuilt);

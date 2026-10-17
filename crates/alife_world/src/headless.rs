@@ -5834,7 +5834,8 @@ impl HeadlessWorld {
         index: &HeadlessPerceptionBatchIndex,
     ) -> Result<Option<Vec<&'a WorldObject>>, ScaffoldContractError> {
         self.validate_perception_batch_index(index)?;
-        if index.object_count <= NONVISUAL_SMALL_WORLD_OBJECTS || index.nonvisual_requires_full_scan {
+        if index.object_count <= NONVISUAL_SMALL_WORLD_OBJECTS || index.nonvisual_requires_full_scan
+        {
             return Ok(None);
         }
         let yaw = observer.body_yaw + observer.head_yaw;
