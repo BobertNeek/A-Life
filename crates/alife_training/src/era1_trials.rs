@@ -1862,7 +1862,6 @@ mod selector_diagnostic_receipt_tests {
     use alife_gpu_backend::{
         GpuSelectorBindingIdentity, GpuSelectorCandidateDiagnostic, GpuSelectorCandidateValidity,
         GpuSelectorExplorationMode, GpuSelectorPolicyIdentity, GpuSelectorSynapseContribution,
-        GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
     };
 
     fn candidate(
@@ -1929,11 +1928,12 @@ mod selector_diagnostic_receipt_tests {
             source_tree: source_tree.to_owned(),
             requested_candidate_indices: vec![0, 2],
             dispatch: GpuSelectorDiagnosticReceipt {
-                schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+                schema_version: GpuSelectorPolicyIdentity::PRODUCTION_V1.schema_version,
                 frame_digest: PerceptionFrameDigest([1, 2, 3, 4]),
                 phenotype_hash: PhenotypeHash([5, 6, 7, 8]),
                 dispatch_generation: 9,
                 policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+                adaptive_exploration: None,
                 requested_candidate_indices: vec![0, 2],
                 candidates: vec![
                     candidate(0, 4, 0.5, 0.75, true),

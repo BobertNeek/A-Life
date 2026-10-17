@@ -1,0 +1,6 @@
+{"rows":0,"comparisons":100,"legacy_alloc_realloc_calls":0,"legacy_requested_bytes":0,"current_alloc_realloc_calls":0,"current_requested_bytes":0}
+{"rows":1,"comparisons":100,"legacy_alloc_realloc_calls":100,"legacy_requested_bytes":6400,"current_alloc_realloc_calls":0,"current_requested_bytes":0}
+{"rows":2,"comparisons":100,"legacy_alloc_realloc_calls":100,"legacy_requested_bytes":12800,"current_alloc_realloc_calls":0,"current_requested_bytes":0}
+{"rows":32,"comparisons":100,"legacy_alloc_realloc_calls":100,"legacy_requested_bytes":204800,"current_alloc_realloc_calls":0,"current_requested_bytes":0}
+{"rows":256,"comparisons":100,"legacy_alloc_realloc_calls":100,"legacy_requested_bytes":1638400,"current_alloc_realloc_calls":0,"current_requested_bytes":0}
+{"rows":1024,"comparisons":100,"legacy_alloc_realloc_calls":100,"legacy_requested_bytes":6553600,"current_alloc_realloc_calls":0,"current_requested_bytes":0}

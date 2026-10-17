@@ -360,9 +360,12 @@ pub(super) fn highlight(
     )>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut markers: Query<&mut Visibility, With<Fvr03ProductionVoxelSelectionMarker>>,
+    tinted: Query<Entity, With<SelectedTint>>,
 ) {
     for mut v in &mut markers {
-        *v = Visibility::Hidden;
+        if *v != Visibility::Hidden {
+            *v = Visibility::Hidden;
+        }
     }
     let selected = selection.selected.and_then(|s| s.stable_id);
     let target = roots
@@ -375,30 +378,47 @@ pub(super) fn highlight(
                 .find(|(_, o)| Some(o.0) == selected)
                 .map(|(e, _)| e)
         });
-    let descendants: Vec<_> = target
+    // Resolve the current hierarchy every frame so late glTF meshes, reparenting
+    // and replacement roots need no separate invalidation cache. Unrelated
+    // terrain and prop materials are never visited by this presentation pass.
+    let descendants: BTreeSet<_> = target
         .into_iter()
         .flat_map(|root| std::iter::once(root).chain(children.iter_descendants(root)))
         .collect();
-    for (entity, mut handle, tint) in &mut meshes {
-        if descendants.contains(&entity) {
-            if let Some(tint) = tint {
-                handle.0 = tint.highlighted.clone();
-            } else if let Some(source) = materials.get(&handle.0) {
-                let mut highlighted = source.clone();
-                highlighted.emissive = bevy::color::LinearRgba::rgb(0.12, 0.095, 0.025);
-                let highlighted = materials.add(highlighted);
-                let original = handle.0.clone();
-                handle.0 = highlighted.clone();
-                commands.entity(entity).insert(SelectedTint {
-                    original,
-                    highlighted,
-                });
+    for entity in &tinted {
+        if !descendants.contains(&entity) {
+            if let Ok((_, mut handle, Some(tint))) = meshes.get_mut(entity) {
+                if handle.0 != tint.original {
+                    handle.0 = tint.original.clone();
+                }
             }
-        } else if let Some(tint) = tint {
-            handle.0 = tint.original.clone();
+        }
+    }
+    for entity in descendants {
+        let Ok((_, mut handle, tint)) = meshes.get_mut(entity) else {
+            continue;
+        };
+        if let Some(tint) = tint {
+            if handle.0 != tint.highlighted {
+                handle.0 = tint.highlighted.clone();
+            }
+        } else if let Some(source) = materials.get(&handle.0) {
+            let mut highlighted = source.clone();
+            highlighted.emissive = bevy::color::LinearRgba::rgb(0.12, 0.095, 0.025);
+            let highlighted = materials.add(highlighted);
+            let original = handle.0.clone();
+            handle.0 = highlighted.clone();
+            commands.entity(entity).insert(SelectedTint {
+                original,
+                highlighted,
+            });
         }
     }
 }
+
+#[cfg(test)]
+#[path = "god_hand_highlight_tests.rs"]
+mod highlight_tests;
 
 /// Cancel a pointer gesture before the menu owns input. Carrying remains a world API.
 pub(super) fn cancel_for_menu(world: &mut World) {

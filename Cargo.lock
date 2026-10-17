@@ -179,6 +179,7 @@ dependencies = [
  "naga 29.0.3",
  "pollster",
  "serde",
+ "serde_json",
  "wgpu 29.0.3",
 ]
 

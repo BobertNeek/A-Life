@@ -204,7 +204,6 @@ impl GpuMemoryContextUpload {
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
-        let mut reencoded = Vec::with_capacity(self.records.len() * 16);
         for (index, row) in self.records.iter().enumerate() {
             if row.candidate_index
                 != u32::try_from(index).map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?
@@ -217,12 +216,6 @@ impl GpuMemoryContextUpload {
             {
                 return Err(GpuClosedLoopError::NonFinitePayload);
             }
-            reencoded.extend_from_slice(&row.target_latent);
-            reencoded.extend_from_slice(&row.family_value);
-            reencoded.push(row.target_confidence);
-            reencoded.push(row.family_confidence);
-            reencoded.push((row.source_counts_packed & 0xffff) as f32);
-            reencoded.push((row.source_counts_packed >> 16) as f32);
         }
         for (index, row) in self.cognitive_records.iter().enumerate() {
             if row.candidate_index
@@ -232,7 +225,9 @@ impl GpuMemoryContextUpload {
                 return Err(GpuClosedLoopError::NonFinitePayload);
             }
         }
-        if reencoded != frame.context().values() {
+        // Finish every record check before comparing context, preserving the
+        // error priority for malformed caller-owned uploads.
+        if !memory_records_match_context(&self.records, frame.context().values()) {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         Ok(())
@@ -386,16 +381,7 @@ impl GpuMemoryContextUpload {
                     })
                     .collect()
             });
-        let mut reencoded = Vec::with_capacity(records.len() * 16);
-        for row in &records {
-            reencoded.extend_from_slice(&row.target_latent);
-            reencoded.extend_from_slice(&row.family_value);
-            reencoded.push(row.target_confidence);
-            reencoded.push(row.family_confidence);
-            reencoded.push((row.source_counts_packed & 0xffff) as f32);
-            reencoded.push((row.source_counts_packed >> 16) as f32);
-        }
-        if reencoded != frame.context().values() {
+        if !memory_records_match_context(&records, frame.context().values()) {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         let tick = frame.tick().raw();
@@ -428,6 +414,27 @@ impl GpuMemoryContextUpload {
             offset_domain: GpuMemoryOffsetDomain::Local,
         })
     }
+}
+
+// Compare the exact encoded lane sequence without temporary heap storage.
+// Iterator equality checks both length and ordinary f32 equality, so signed
+// zero retains the same semantics as the former Vec-to-slice comparison.
+fn memory_records_match_context(records: &[GpuCandidateMemoryRecord], context: &[f32]) -> bool {
+    records
+        .iter()
+        .flat_map(|row| {
+            row.target_latent
+                .iter()
+                .chain(row.family_value.iter())
+                .copied()
+                .chain([
+                    row.target_confidence,
+                    row.family_confidence,
+                    (row.source_counts_packed & 0xffff) as f32,
+                    (row.source_counts_packed >> 16) as f32,
+                ])
+        })
+        .eq(context.iter().copied())
 }
 
 /// One finalized candidate-local retrieval row. It contains no raw entity ID.
@@ -623,3 +630,7 @@ impl TryFrom<&MemoryChannelPlan> for GpuMemoryChannelPlan {
         })
     }
 }
+
+#[cfg(test)]
+#[path = "closed_loop_memory/tests.rs"]
+mod tests;

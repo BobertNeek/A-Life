@@ -35,10 +35,23 @@ is introduced.
 ## Verification
 
 The CPU-only `closed_loop_pipeline::batch_projection_tests` exercise the actual
-production preflight. Six full-batch golden identities were captured with the
-original checks on `69f00c05ec6774c3655ae87c5d4baa5df3861929`. They cover N512,
+production preflight. The original six full-batch golden identities were captured
+with the full checks on `69f00c05ec6774c3655ae87c5d4baa5df3861929`.
+Adaptive exploration intentionally adds logical identity words to each row, so
+its combined layout requires distinct golden identities. For integration on
+`73f8ecf03a4bbd90018c0fae7c732c6ec488e1d9`, those identities were independently
+recaptured after restoring that original full memory-validation/rebasing path
+while retaining the exact new exploration layout. Reference source SHA256:
+
+- `closed_loop_pipeline.rs`: `f12a6bc2c10630e0c68e325a6e1413116cf0b1c46e2b48b4f2ca4d6bb28a2c33`
+- `closed_loop_memory.rs`: `25b0db72d7477f763e47146263a287ef85fbe5df36b2ccf90b13aa19e1d333d5`
+
+The optimized combined path matches all six new identities. They cover N512,
 N1024 and N2048, two rows, both activation sides and optional memory payloads.
 The complete batch data, including GPU words and host bindings, must match.
+An additional regression independently checks exact logical identity words and
+memory, cognitive and receptor record adjacency for every memory row, so the
+full-check comparison alone cannot bless an identical layout error in both paths.
 
 Additional checks reject nine malformed caller-owned memory cases without
 mutating the input, preserve invalid-memory-before-capacity error priority, and
