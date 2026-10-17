@@ -5838,6 +5838,20 @@ impl HeadlessWorld {
         {
             return Ok(None);
         }
+        let candidate_limit = index
+            .object_count
+            .div_ceil(NONVISUAL_CANDIDATE_DENSITY_DIVISOR);
+        // The observer cell is inside any successful query bounds: the
+        // bounds include its center with at least HEADLESS_CONTACT_RADIUS.
+        // A dense own cell therefore proves the unchanged occupancy fallback
+        // before trigonometry, bounds construction, or empty-cell probes.
+        if index
+            .cells
+            .get(&perception_cell(observer.position))
+            .is_some_and(|cell| cell.len() >= candidate_limit)
+        {
+            return Ok(None);
+        }
         let yaw = observer.body_yaw + observer.head_yaw;
         let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
         let samples = [
@@ -5856,9 +5870,6 @@ impl HeadlessWorld {
         if cell_count > MAX_NONVISUAL_QUERY_CELLS || cell_count > index.object_count as u64 {
             return Ok(None);
         }
-        let candidate_limit = index
-            .object_count
-            .div_ceil(NONVISUAL_CANDIDATE_DENSITY_DIVISOR);
         let mut ids = Vec::new();
         for x in minimum.0..=maximum.0 {
             for y in minimum.1..=maximum.1 {

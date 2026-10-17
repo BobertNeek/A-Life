@@ -1,5 +1,114 @@
 # Rebuilt nonvisual density fallback, 2026-10-17
 
+## Early own-cell shortcut: current draft update
+
+**Keep draft. Full-world production CPU performance and live RTX qualification
+remain Unknown.** The following source update extends exact predecessor
+`1c17e964db9ac8f8146eb5c8ebd3542a065448ea`; earlier sections below describe the
+initial rebuilt candidate and must not be mistaken for current-head execution.
+
+The only production delta moves the unchanged ceil(object_count / 16) budget
+calculation before query geometry and probes the observer's cell after the
+existing snapshot validation, <=16-object and full-scan guards. If raw own-cell
+occupancy reaches that budget, return the same complete canonical fallback
+before trigonometry, bounds construction and empty-cell traversal. The later
+occupancy checks, builder, T16 threshold, divisor, source metadata, canonical
+arithmetic, carried union and live observer biology remain unchanged.
+
+Safety relies on the observer cell lying in every successful query cube. The
+cube includes the observer-center contact support with radius at least 0.75.
+Cell conversion scales by the exact power of two 1/8; bounds use outward f64
+arithmetic. The contact margin also covers subnormal rounding toward signed
+zero, and saturating i32 conversion is monotone. Invalid geometry or checked
+volume overflow already selects fallback. Thus a dense own cell would force
+the same fallback when reached by the unchanged scan; no IDs are resolved
+before occupancy has been checked.
+
+All 26 existing tests are retained byte-for-byte. Three permanent regressions
+add own-cell containment over boundary float neighbors, all axes, signed zero,
+subnormals, saturated coordinates, extreme yaw/radius and invalid yaw; exact
+128/129-object raw budgets including a consumed/carried member with complete
+packet parity and below-budget ordered IDs; and seed/tick/count validation
+precedence over a dense own-cell return. The module now contains 29 tests.
+Recovered rustfmt 1.10.0-stable (Rust 1.99.0) passes the touched Rust files with
+the repository's edition 2021. Full local builds were not attempted; these new
+regressions await exact-head hosted execution at publication.
+
+### Private scalar-kernel evidence and limits
+
+Before publication, the independently reviewed production shortcut passed all
+114 retained/adapted private fixtures with sensory float-bit parity, exact
+pre-shortcut/shortcut indexed-versus-fallback routes and sorted/deduplicated
+IDs, deterministic inputs and complete owned-wrapper input equality. A further
+1,980 geometry-edge attempts plus dense-route, consumed/carried/nonfinite,
+oversized and stale-index checks passed. This private harness is narrower than
+the permanent native module and does not establish full-world packet parity.
+
+The focused follow-on directly measured Build, Query and Total on 38 worlds in
+two balanced passes: 18 paired rounds per pass, all six three-variant orders
+repeated three times, reversed traversal in pass two and all 12,312 raw samples
+retained. Repetitions match across variants per case/phase/pass. Total includes
+index construction/destruction and all fixture observers; component medians
+are not added to synthesize it. The table gives pooled paired CPU ratios with
+exploratory within-run 95% bootstrap intervals; lower is faster.
+
+| Private kernel case | Shortcut / predecessor | Shortcut / canonical |
+|---|---:|---:|
+| Dense N32, B8, Total | 0.845x [0.826, 0.864] | 1.015x [0.996, 1.042] |
+| Dense N33, B8, Total | 0.860x [0.848, 0.870] | 1.001x [0.986, 1.038] |
+| Sparse N32, B8, Total | 1.022x [1.014, 1.045] | 0.819x [0.795, 0.827] |
+| Sparse N65, B1, Total | 1.034x [1.003, 1.073] | 0.855x [0.836, 0.895] |
+| Sparse N129, B8, Query | 1.023x [1.013, 1.030] | 0.231x [0.230, 0.233] |
+
+Nine Total groups have wholly improving shortcut/predecessor intervals in both
+passes; none has wholly worsening intervals in both passes. This is not a
+regression-free claim: sparse queries pay an extra lookup and the sparse costs
+above remain. Against canonical, 21/38 Total point estimates exceed 1.0 and
+8/38 pooled intervals are wholly above 1.0. The prior corrected 51-world
+predecessor regression ledger remains independent evidence; this focused
+follow-on does not supersede it or establish real workload weights.
+
+These are source-extracted scalar kernels with actual cached
+alife_world-0db698a3966a60de and alife_core-baf717949ada6a22 types, using opt-level
+1, debug assertions and Rust 1.99.0. They exclude complete packet/candidate
+assembly, optical rays, neural/cognition/biology execution, full-world state,
+GPU, rendering, training and the supported production protocol. No population
+or biology was reduced between variants. Cached artifacts and the opt1 harness
+are not exact-head release artifacts. Canonical initializes three inert added
+fields, a small disclosed candidate-favoring baseline bias. Shared-host
+frequency/contention is uncontrolled; median CPU MAD is 2.58%, maximum 17.22%.
+Intervals do not correct for multiple comparisons or serial correlation. No
+game FPS, RTX or universal speedup conclusion follows.
+
+Source-bound retained evidence SHA-256 identities:
+
+- Production shortcut headless.rs:
+  `2b17d137bb2e25ca204eb1b2c326c094628608dfdbfd8ebdc443a07bd78d2824`
+- Private kernel source:
+  `b54f90c5f8aab8014ca22bb17e15fae37b46cdd8e050c12841ac9270af82dba9`
+- Private qualification receipt:
+  `66b8ae1ffa780fb5d9249fbb4a344434a4b3357a5e98dedafe213bcc986c6c2f`
+- Raw timing pass 1:
+  `e8aa9cbece6ff2713a1fb1b852d843d7ef48920f8f9bdfe05d5c3e57ef49d5b7`
+- Raw timing pass 2:
+  `186a1b98ecad4e19badde90ff0094a15eb349da5d28cc0db3cedb445cd21abe0`
+
+### Hosted qualification boundary
+
+The predecessor `1c17e964db9ac8f8146eb5c8ebd3542a065448ea` passed all 20
+existing CPU checks, including both workspace-validation events. Its completed
+logs explicitly show the original 26 nonvisual tests plus 41 other relevant
+world/carry/terrain tests passing. Workspace format, check, default tests,
+warnings-denied Clippy, benchmark smoke, core boundaries and docs checks passed.
+Those results qualify the predecessor's CPU contracts only. The new 29-test
+module and this shortcut require fresh existing hosted CI on the new exact
+head; no workflow is changed here. CPU benchmark smoke is not production
+dense/sparse timing. Adoption still requires full native production timings,
+workload weighting and separate live RTX qualification. No mark-ready, merge,
+PC, training or GPU run is authorized by this update.
+
+## Initial rebuilt source and publication history
+
 ## Draft status and exact provenance
 
 **Unqualified draft candidate. Production performance is Unknown. Keep this PR

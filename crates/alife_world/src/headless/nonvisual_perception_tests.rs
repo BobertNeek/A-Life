@@ -1089,3 +1089,126 @@ fn indexed_nonvisual_unsupported_nonfinite_transition_requires_rebuild() {
         assert_eq!(indexed.unwrap_err(), canonical_error);
     }
 }
+
+#[test]
+fn indexed_nonvisual_own_cell_is_inside_successful_bounds_at_geometry_edges() {
+    // The early occupancy shortcut relies on this containment, including
+    // subnormal rounding and saturating float-to-cell conversions.
+    for coordinate in [
+        -16.0_f32,
+        -8.0,
+        -0.0,
+        0.0,
+        f32::from_bits(1),
+        -f32::from_bits(1),
+        8.0,
+        16.0,
+        -1.0e10,
+        1.0e10,
+        -f32::MAX,
+        f32::MAX,
+    ] {
+        for coordinate in [coordinate.next_down(), coordinate, coordinate.next_up()] {
+            if !coordinate.is_finite() {
+                continue;
+            }
+            for position in [
+                Vec3f::new(coordinate, 0.0, 0.0),
+                Vec3f::new(0.0, coordinate, 0.0),
+                Vec3f::new(0.0, 0.0, coordinate),
+            ] {
+                for yaw in [0.0_f32, -2.7, 1.0e20, f32::MAX, f32::NAN] {
+                    let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
+                    let samples = [add(position, lateral), subtract(position, lateral)];
+                    for radius in [HEADLESS_CONTACT_RADIUS, 8.0, 1_024.0, f32::MAX] {
+                        if let Some(bounds) = nonvisual_cell_bounds(position, samples, radius) {
+                            let cell = perception_cell(position);
+                            assert!((bounds.minimum.0..=bounds.maximum.0).contains(&cell.0));
+                            assert!((bounds.minimum.1..=bounds.maximum.1).contains(&cell.1));
+                            assert!((bounds.minimum.2..=bounds.maximum.2).contains(&cell.2));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn indexed_nonvisual_own_cell_raw_budget_keeps_consumed_members_and_packet_parity() {
+    for object_count in [128_usize, 129] {
+        let limit = object_count.div_ceil(NONVISUAL_CANDIDATE_DENSITY_DIVISOR);
+        let mut world = sparse_world(Vec3f::ZERO, object_count - limit);
+        let mut last = None;
+        for number in 1..limit {
+            last = Some(insert_food(
+                &mut world,
+                &format!("own-budget-{number}"),
+                Vec3f::new(0.2, 0.0, 0.1),
+                [0.01, -0.02],
+            ));
+        }
+        let last = last.unwrap();
+        let consumed = world.objects.get_mut(&last.raw()).unwrap();
+        consumed.consumed = true;
+        consumed.carried_by = Some(OBSERVER);
+        let index = world.build_perception_batch_index().unwrap();
+        let observer = world.agent_for(OBSERVER).unwrap();
+        assert_eq!(index.object_count, object_count);
+        assert!(!index.nonvisual_requires_full_scan);
+        assert_eq!(
+            index.cells[&perception_cell(observer.position)].len(),
+            limit
+        );
+        assert!(world
+            .indexed_nonvisual_objects(observer, &index)
+            .unwrap()
+            .is_none());
+        let (_, canonical, indexed) = assert_packet_matches(&world);
+        assert_eq!(indexed, canonical);
+
+        // Rebuild after moving the consumed member: below the same raw budget,
+        // the sparse path remains available and returns canonical ID order.
+        world.objects.get_mut(&last.raw()).unwrap().position = Vec3f::new(20_000.0, 0.0, 0.0);
+        let index = world.build_perception_batch_index().unwrap();
+        let candidates = world
+            .indexed_nonvisual_objects(world.agent_for(OBSERVER).unwrap(), &index)
+            .unwrap()
+            .unwrap();
+        assert_eq!(candidates.len(), limit - 1);
+        assert!(candidates
+            .windows(2)
+            .all(|pair| pair[0].id.raw() < pair[1].id.raw()));
+        let (_, canonical, indexed) = assert_packet_matches(&world);
+        assert!(indexed < canonical);
+        assert_eq!(indexed, limit - 2);
+    }
+}
+
+#[test]
+fn indexed_nonvisual_dense_own_cell_never_bypasses_snapshot_validation() {
+    let mut world = sparse_world(Vec3f::ZERO, 31);
+    for object in world.objects.values_mut() {
+        object.position = Vec3f::ZERO;
+    }
+    let index = world.build_perception_batch_index().unwrap();
+    let observer = world.agent_for(OBSERVER).unwrap();
+    assert!(world
+        .indexed_nonvisual_objects(observer, &index)
+        .unwrap()
+        .is_none());
+    for mutation in 0..3 {
+        let mut stale = index.clone();
+        match mutation {
+            0 => stale.world_seed ^= 1,
+            1 => stale.world_tick = Tick(stale.world_tick.0 + 1),
+            _ => stale.object_count += 1,
+        }
+        assert_eq!(
+            world
+                .indexed_nonvisual_objects(observer, &stale)
+                .unwrap_err(),
+            ScaffoldContractError::InvalidPerceptionFrame,
+        );
+    }
+}
