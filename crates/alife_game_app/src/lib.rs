@@ -176,7 +176,9 @@ pub use foundation_training_cycle::*;
 #[cfg(feature = "foundation-training")]
 mod critic_qualification;
 #[cfg(feature = "foundation-training")]
-pub use critic_qualification::{evaluate_critic_capture, run_critic_qualification};
+pub use critic_qualification::{
+    evaluate_critic_capture, run_critic_gradient_regression, run_critic_qualification,
+};
 #[cfg(feature = "foundation-training")]
 pub use foundation_training_warmup::*;
 pub use new_game_lifecycle::*;
