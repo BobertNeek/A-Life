@@ -59,6 +59,25 @@ fn metrics(values: &[[f32; 4]], fit: usize) -> serde_json::Value {
     serde_json::json!({"fit":metric_slice(&values[..fit]),"heldout":metric_slice(&values[fit..])})
 }
 
+fn finite_fixture_close(
+    actual: &[f32],
+    expected: &[f32],
+    tolerance: f32,
+    label: &str,
+) -> Result<()> {
+    if actual.len() != expected.len()
+        || !tolerance.is_finite()
+        || tolerance < 0.0
+        || actual
+            .iter()
+            .zip(expected)
+            .any(|(a, b)| !a.is_finite() || !b.is_finite() || (a - b).abs() > tolerance)
+    {
+        return Err(format!("{label}: nonfinite or mismatched fixture values").into());
+    }
+    Ok(())
+}
+
 fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_json::Value> {
     // Analytic scalar fixture, developer test only, never a live neural shadow.
     let checkpoint = PpoValueHeadCheckpoint {
@@ -84,18 +103,21 @@ fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_js
             e * (1.0 - discount),
         ];
         let actual = probe.gradient_snapshot(session)?;
-        for (a, b) in actual.iter().zip(expected) {
-            if (a - b).abs() > 0.0001 {
-                return Err("GPU full-residual gradient fixture mismatch".into());
-            }
-        }
-        if (v[0][0] - 3.0).abs() > 0.0001
-            || (v[0][1] - 12.0).abs() > 0.0001
-            || (v[0][2] - e).abs() > 0.0001
-        {
-            return Err("GPU residual forward fixture mismatch".into());
-        }
-        if probe.checkpoint(session)? != checkpoint {
+        finite_fixture_close(&actual, &expected, 0.0001, "GPU full-residual gradient")?;
+        finite_fixture_close(
+            &v[0],
+            &[3.0, 12.0, e, discount],
+            0.0001,
+            "GPU residual forward",
+        )?;
+        let restored = probe.checkpoint(session)?;
+        finite_fixture_close(
+            &restored.parameters,
+            &checkpoint.parameters,
+            0.0,
+            "GPU weights and Adam",
+        )?;
+        if restored != checkpoint {
             return Err("gradient evaluation changed critic/Adam".into());
         }
     }
@@ -456,4 +478,30 @@ pub fn run_critic_qualification(manifest_path: &Path, output: &Path) -> Result<s
     Ok(
         serde_json::json!({"report":output.join("QUALIFICATION.json"),"live_qualified":false,"before":report["before"],"after":report["after"],"wall_seconds":report["wall_seconds"]}),
     )
+}
+
+#[cfg(test)]
+mod fixture_tests {
+    use super::finite_fixture_close;
+
+    #[test]
+    fn rejects_nonfinite_observed_or_expected_gradients_and_weights() {
+        for label in ["gradient", "weights and Adam"] {
+            for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                assert!(finite_fixture_close(&[invalid], &[1.0], 0.0001, label).is_err());
+                assert!(finite_fixture_close(&[1.0], &[invalid], 0.0001, label).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn checks_finite_tolerance_and_complete_dimensions() {
+        assert!(finite_fixture_close(&[1.0, 2.0], &[1.00001, 2.0], 0.0001, "fixture").is_ok());
+        assert!(finite_fixture_close(&[1.0], &[1.0], 0.0, "fixture").is_ok());
+        assert!(finite_fixture_close(&[1.0], &[1.1], 0.0001, "fixture").is_err());
+        assert!(finite_fixture_close(&[1.0, 2.0], &[1.0], 0.0001, "fixture").is_err());
+        for invalid in [f32::NAN, f32::INFINITY, -1.0] {
+            assert!(finite_fixture_close(&[1.0], &[1.0], invalid, "fixture").is_err());
+        }
+    }
 }

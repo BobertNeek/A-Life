@@ -22,6 +22,7 @@ import sys
 import time
 
 import grab_food_seed_reservations as seed_reservations
+import summarize_ppo_diagnostics as inspector_io
 
 UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
@@ -71,12 +72,14 @@ def inspect_critic_correction(source, receipt, checkpoint_inspector):
     sidecar = source / "critic-correction.json"
     sidecar_hash = sha256(sidecar)
     try:
-        result = subprocess.run(
+        result = inspector_io.run_inspector(
             [str(checkpoint_inspector), "--validate-checkpoint", str(source),
              "--expected-policy", str(receipt["policy_version"])],
-            check=True, capture_output=True, text=True, timeout=90,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-        inspection = json.loads(result.stdout)
+            timeout=90)
+        if len(result.stdout) > inspector_io.OUTPUT_LIMIT or len(result.stderr) > inspector_io.OUTPUT_LIMIT:
+            raise ValueError("native critic correction inspector output exceeds byte limit")
+        result.check_returncode()
+        inspection = inspector_io.decode_json(result.stdout, "native critic correction inspector output")
     except (subprocess.SubprocessError, OSError, ValueError) as error:
         raise ValueError("native critic correction admission failed") from error
     if (inspection.get("neural_execution") is not False or

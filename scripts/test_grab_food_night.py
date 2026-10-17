@@ -8,7 +8,9 @@ import json
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -113,7 +115,7 @@ class GrabNightTests(unittest.TestCase):
 
     def test_correction_requires_explicit_native_admission(self):
         self.corrected_source()
-        with patch.object(night.subprocess, "run") as run:
+        with patch.object(night.inspector_io, "run_inspector") as run:
             with self.assertRaisesRegex(ValueError, "explicit native"):
                 night.source_info(self.source)
             run.assert_not_called()
@@ -121,7 +123,8 @@ class GrabNightTests(unittest.TestCase):
     def test_correction_uses_native_actual_age_without_rewriting_ppo_receipt(self):
         inspector, inspection = self.corrected_source()
         before = (self.source / "cycle.json").read_bytes()
-        with patch.object(night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))) as run:
+        with patch.object(night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")) as run:
             founder, hashes = night.source_info(self.source, checkpoint_inspector=inspector)
         self.assertEqual(founder, 539363617)
         self.assertEqual(len(hashes), 4)
@@ -135,10 +138,11 @@ class GrabNightTests(unittest.TestCase):
                        {"value_optimizer_step": 1204}, {"actor_optimizer_step": 0},
                        {"policy_version": 603}, {"file_digests": []}):
             with self.subTest(change=change), patch.object(
-                    night.subprocess, "run", return_value=Mock(stdout=json.dumps({**inspection, **change}))):
+                    night.inspector_io, "run_inspector", return_value=subprocess.CompletedProcess(
+                        [], 0, json.dumps({**inspection, **change}).encode(), b"")):
                 with self.assertRaises(ValueError):
                     night.source_info(self.source, checkpoint_inspector=inspector)
-        with patch.object(night.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "mock")):
+        with patch.object(night.inspector_io, "run_inspector", side_effect=subprocess.CalledProcessError(1, "mock")):
             with self.assertRaisesRegex(ValueError, "admission failed"):
                 night.source_info(self.source, checkpoint_inspector=inspector)
 
@@ -149,7 +153,8 @@ class GrabNightTests(unittest.TestCase):
         (directory / "cycle.json").write_text(json.dumps(receipt))
         (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 6205}))
         with contextlib.redirect_stderr(io.StringIO()), patch.object(
-                night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))):
+                night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")):
             accepted, _, _ = night.validate_cycle(
                 directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
         self.assertEqual(accepted["value_optimizer_updates"], 1)
@@ -158,7 +163,8 @@ class GrabNightTests(unittest.TestCase):
         (directory / "cycle.json").write_text(json.dumps(receipt))
         (directory / "value-checkpoint.json").write_text(json.dumps({"optimizer_step": 1205}))
         with contextlib.redirect_stderr(io.StringIO()), patch.object(
-                night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))):
+                night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")):
             with self.assertRaisesRegex(ValueError, "lost its optimizer age"):
                 night.validate_cycle(directory, self.source, receipt["seed"], checkpoint_inspector=inspector)
 
@@ -171,7 +177,8 @@ class GrabNightTests(unittest.TestCase):
         argv = ["--binary", str(binary), "--source", str(self.source), "--output", str(output),
                 "--seed-history", str(self.history), "--checkpoint-inspector", str(inspector),
                 "--cutoff", (dt.datetime.now(night.UTC) + dt.timedelta(hours=1)).isoformat()]
-        with patch.object(night.subprocess, "run", return_value=Mock(stdout=json.dumps(inspection))) as run, \
+        with patch.object(night.inspector_io, "run_inspector", return_value=
+                subprocess.CompletedProcess([], 0, json.dumps(inspection).encode(), b"")) as run, \
              patch.object(night.subprocess, "Popen") as spawn, patch("builtins.print"):
             self.assertEqual(night.main(argv), 0)
         self.assertEqual(run.call_args.args[0][0], str(inspector))
@@ -205,6 +212,69 @@ class GrabNightTests(unittest.TestCase):
         self.assertIn("source/checkpoint/binary changed", state["error"])
         self.assertEqual(launched, ["frozen-before", "eating-retention-before", "episode-00000"])
         self.assertEqual(finals, [])
+
+    def real_correction_inspector(self, code, timeout=5):
+        """Exercise the production bounded runner with a real CPU-only Python child."""
+        inspector, inspection = self.corrected_source()
+        if callable(code):
+            code = code(inspection)
+        original_run = night.inspector_io.run_inspector
+        original_spawn = subprocess.Popen
+        children = []
+        self.inspector_result = None
+        before = {p.name: p.read_bytes() for p in self.source.iterdir() if p.is_file()}
+
+        def spawn(*args, **kwargs):
+            child = original_spawn(*args, **kwargs)
+            children.append(child)
+            return child
+
+        def run(argv, **kwargs):
+            self.assertEqual(argv[0], str(inspector))
+            self.assertEqual(kwargs["timeout"], 90)
+            self.inspector_result = original_run([sys.executable, "-c", code], timeout=timeout)
+            return self.inspector_result
+
+        try:
+            with patch.object(night.inspector_io, "run_inspector", side_effect=run), \
+                 patch.object(subprocess, "Popen", side_effect=spawn):
+                return night.source_info(self.source, checkpoint_inspector=inspector)
+        finally:
+            self.assertEqual(len(children), 1)
+            self.assertIsNotNone(children[0].poll())
+            self.assertTrue(children[0].stdout.closed)
+            self.assertTrue(children[0].stderr.closed)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in self.source.iterdir() if p.is_file()})
+
+    def test_correction_inspector_real_valid_json_preserves_source(self):
+        founder, _ = self.real_correction_inspector(
+            lambda inspection: "import sys;sys.stdout.write(" + repr(json.dumps(inspection)) + ")")
+        self.assertEqual(founder, 539363617)
+
+    def test_correction_inspector_real_noisy_streams_are_capped_and_reaped(self):
+        for stream in (1, 2):
+            with self.subTest(stream=stream):
+                began = time.monotonic()
+                with self.assertRaisesRegex(ValueError, "native critic correction admission failed"):
+                    self.real_correction_inspector(
+                        f"import os,time;os.write({stream},b'x'*66560);time.sleep(30)")
+                self.assertLess(time.monotonic() - began, 5)
+                result = self.inspector_result
+                self.assertGreater(len(result.stdout if stream == 1 else result.stderr), night.inspector_io.OUTPUT_LIMIT)
+                self.assertLessEqual(len(result.stdout), night.inspector_io.OUTPUT_LIMIT + 1)
+                self.assertLessEqual(len(result.stderr), night.inspector_io.OUTPUT_LIMIT + 1)
+
+    def test_correction_inspector_real_timeout_reaps_child_and_closes_pipes(self):
+        began = time.monotonic()
+        with self.assertRaisesRegex(ValueError, "native critic correction admission failed") as caught:
+            self.real_correction_inspector("import time;print('ready',flush=True);time.sleep(30)", timeout=.25)
+        self.assertIsInstance(caught.exception.__cause__, subprocess.TimeoutExpired)
+        self.assertLess(time.monotonic() - began, 3)
+
+    def test_correction_inspector_real_nonzero_exit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "native critic correction admission failed") as caught:
+            self.real_correction_inspector("raise SystemExit(17)")
+        self.assertIsInstance(caught.exception.__cause__, subprocess.CalledProcessError)
 
     def test_acquisition_requires_exact_target_touch_and_ownership(self):
         for mutation in ({"owner_before": 1}, {"owner_after": 2}, {"consumed_after": True},
@@ -416,10 +486,10 @@ class GrabNightTests(unittest.TestCase):
 
         def fake_inspection_or_git(command, *args, **kwargs):
             return subprocess.CompletedProcess(command, 0,
-                stdout=inspection_output if "--validate-checkpoint" in command else "")
+                stdout=inspection_output.encode() if "--validate-checkpoint" in command else "", stderr=b"")
 
         with patch("builtins.print"), patch.object(
-                night.subprocess, "run", side_effect=fake_inspection_or_git):
+                night.inspector_io, "run_inspector", side_effect=fake_inspection_or_git):
             self.assertEqual(night.main(argv), 0)
         state_path = output / "night.json"
         state = night.read_json(state_path)
@@ -557,6 +627,7 @@ class GrabNightTests(unittest.TestCase):
              patch.object(night, "assert_lane_idle", side_effect=fake_lane), \
              patch.object(night, "sha256", side_effect=fake_sha256), \
              patch.object(night.subprocess, "run", side_effect=fake_inspection_or_git), \
+             patch.object(night.inspector_io, "run_inspector", side_effect=fake_inspection_or_git), \
              patch.object(night.subprocess, "check_output", return_value="fixture-source-sha\n"), \
              patch.object(night.subprocess, "Popen") as spawn, \
              patch("builtins.print"), contextlib.redirect_stderr(io.StringIO()):

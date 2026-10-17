@@ -67,3 +67,5 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_critic_correction::tests -- --test-threads=1
       - name: Critic residual WGSL parse and validation
         run: cargo test --locked -p alife_training --lib ppo::critic_calibration::tests::residual_shader_parses_and_validates
+      - name: Critic GPU fixture rejects nonfinite observations and expectations
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib critic_qualification::fixture_tests -- --test-threads=1

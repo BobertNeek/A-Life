@@ -19,6 +19,10 @@ bytes. Missing dependencies, unsafe relative file references, symlinks, extra or
 missing files, reset claims, nested correction sources and changed inputs fail
 explicitly. File count, depth, byte size and evidence count are bounded. Ordinary
 sealed checkpoints without the marker retain their existing admission contract.
+Traversal rejects duplicate normalized names and literal backslashes in file
+components, avoiding collisions between a Unix filename and a Windows separator.
+Archived-rehearsal entrypoints retain their ordinary strict handoff and currently
+reject corrected sources; this admission lane does not claim that support.
 
 This implements an explicit training-checkpoint migration receipt under
 AOA-PERSIST-002 and AOA-PERSIST-003, preserving the unmodified state and causal

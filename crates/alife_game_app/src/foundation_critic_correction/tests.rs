@@ -261,3 +261,37 @@ fn critic_correction_rejects_unsealed_original_even_with_consistent_hashes() {
     });
     rejected_unchanged(&f);
 }
+
+#[cfg(unix)]
+#[test]
+fn critic_correction_rejects_colliding_normalized_source_names() {
+    let f = fixture();
+    let bytes = std::fs::read(f.source.join("nested/preserved.bin")).unwrap();
+    std::fs::write(f.source.join(r"nested\preserved.bin"), &bytes).unwrap();
+    assert!(inspect_foundation_checkpoint(&f.target, 5124).is_err());
+    assert_eq!(
+        std::fs::read(f.source.join(r"nested\preserved.bin")).unwrap(),
+        bytes
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn critic_correction_rejects_colliding_normalized_target_names() {
+    let f = fixture();
+    let bytes = std::fs::read(f.target.join("nested/preserved.bin")).unwrap();
+    std::fs::write(f.target.join(r"nested\preserved.bin"), &bytes).unwrap();
+    assert!(inspect_foundation_checkpoint(&f.target, 5124).is_err());
+    assert_eq!(
+        std::fs::read(f.target.join(r"nested\preserved.bin")).unwrap(),
+        bytes
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn preservation_snapshot_rejects_literal_backslash_components() {
+    let f = fixture();
+    std::fs::write(f.source.join(r"other\unambiguous.bin"), b"preserved").unwrap();
+    assert!(snapshot(&f.source).is_err());
+}

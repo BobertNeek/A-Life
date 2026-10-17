@@ -82,6 +82,17 @@ offset. The already-qualified dated controller supplies its inspector explicitly
 Stable-Clippy follow-ups use fixed-width array chunks, box the internal cycle
 result receipt, and initialize the temporary Adam configuration directly. None
 changes the qualified live binary or asserts a new GPU qualification.
+The CLI reuses the existing bounded inspector runner: 64 KiB per output stream,
+a 90-second deadline, child reaping and pipe closure. Real CPU-only Python
+children exercise valid output, noisy stdout/stderr, timeout and nonzero exit.
+The GPU fixture now explicitly rejects nonfinite observed and expected
+gradients/weights; CPU tests cover NaN and both infinities. Portable admission
+also rejects ambiguous normalized file names, with Unix collision regressions.
+
+The residual experiment checks evaluated scalars every 50 updates and at its
+final checkpoint. Candidate serialization remains protected by checkpoint
+validation. This offline optimizer does not claim ordinary PPO's per-update
+preflight. Archived-rehearsal support for corrected sources is not included.
 
 The inherited production probe at cumulative cycle 2649 retained Eating (one
 meal) and recorded zero Grab acquisitions. This is fixed-seed retention evidence,
@@ -91,6 +102,8 @@ prepared scalar values, rewards, bootstrap identity and finiteness after each
 real seal, preserving accepted learning before a hold. It rejects predictions
 outside objective support `[-1731.7340972020208, 1731.9840972020208]`. Negative
 GAE is allowed; residual MSE is observational rather than an invented stop rule.
+That passive guard belongs to the dated local controller, not the general CLI
+or a newly shipped production training guard in this PR.
 
 Values drifted upward during the bounded pilot and continuation. This is not
 proof of absolute continuing-return calibration or indefinite PPO stability.

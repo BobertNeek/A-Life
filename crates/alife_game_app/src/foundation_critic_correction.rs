@@ -117,6 +117,13 @@ fn snapshot(root: &Path) -> Result<BTreeMap<String, String>> {
             if *entries > MAX_FILES * 2 {
                 return Err("correction file tree exceeds bounds".into());
             }
+            if entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| name.contains('\\'))
+            {
+                return Err("correction file tree contains a literal backslash name".into());
+            }
             let kind = entry.file_type()?;
             if kind.is_symlink() {
                 return Err("correction file tree contains a symlink".into());
@@ -137,7 +144,9 @@ fn snapshot(root: &Path) -> Result<BTreeMap<String, String>> {
                     .to_str()
                     .ok_or("non-UTF8 correction path")?
                     .replace('\\', "/");
-                map.insert(name, sha(&bytes));
+                if map.insert(name, sha(&bytes)).is_some() {
+                    return Err("duplicate normalized correction file reference".into());
+                }
             } else {
                 return Err("correction file tree contains a special file".into());
             }
