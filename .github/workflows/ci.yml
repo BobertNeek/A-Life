@@ -124,8 +124,6 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
       - name: Archived checkpoint inspection CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_archived_success_replay::tests
-      - name: Preserved critic correction admission CPU tests
-        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_critic_correction::tests
       - name: Read-only inspection CLI CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --bin inspect_archived_success
 

@@ -139,8 +139,11 @@ pub fn evaluate_critic_capture(
         return Err("heldout feature file identity invalid".into());
     }
     let floats = bytes
-        .chunks_exact(4)
-        .map(|r| f32::from_le_bytes(r.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .copied()
+        .map(f32::from_le_bytes)
         .collect::<Vec<_>>();
     let features = floats
         .chunks_exact(n)

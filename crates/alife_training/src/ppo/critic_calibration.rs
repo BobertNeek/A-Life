@@ -255,10 +255,7 @@ impl FrozenCriticResidualExperiment {
         if words.iter().any(|v| !v.is_finite()) {
             return Err(TrainingError::MalformedReadback);
         }
-        Ok(words
-            .chunks_exact(4)
-            .map(|r| [r[0], r[1], r[2], r[3]])
-            .collect())
+        Ok(words.as_chunks::<4>().0.to_vec())
     }
 
     pub fn gradient_snapshot(

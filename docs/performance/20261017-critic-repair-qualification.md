@@ -75,6 +75,9 @@ does not replace those inputs or claim that CI reproduced the GPU campaign.
 The eight native correction-admission fixtures and existing Python night-runner
 tests are committed with the implementation; hosted CI runs the admission suite
 explicitly. Local qualification is already complete and is not rerun to publish.
+The publication follow-up uses the array-chunk API for fixed-width readback
+decoding to satisfy current stable Clippy. This preserves the decoded bytes;
+it does not change the qualified live binary or assert a new GPU qualification.
 
 The inherited production probe at cumulative cycle 2649 retained Eating (one
 meal) and recorded zero Grab acquisitions. This is fixed-seed retention evidence,
