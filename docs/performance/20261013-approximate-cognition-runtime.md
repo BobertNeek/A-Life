@@ -129,3 +129,14 @@ observation, GPU execution and rendering. It cannot establish game FPS/TPS.
 Changed scenes can force more cold refreshes. These measurements include all
 three cache fixes and consolidated main. Earlier measurements remain in Git
 history and do not replace this final-source receipt.
+
+## Bounded game exploration
+
+The GPU selector can now modulate bounded candidate perturbations from the
+existing remembered focal-object novelty and curiosity cues. Candidate-local
+unresolved-gap warming additionally requires the existing 54-lane cognitive
+extension; standard 36-lane creatures receive no gap lane. No fresh recall is
+requested. See [the source-bound implementation note](20261015-adaptive-game-exploration.md)
+for provisional absolute bounds, stable logical counter identity, fixed-temperature
+training isolation, the 512-byte maximum transient identity upload, and the
+remaining GPU behavior/replay/performance acceptance gates.

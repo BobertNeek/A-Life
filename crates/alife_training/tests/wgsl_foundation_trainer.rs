@@ -231,6 +231,33 @@ fn n2048_exact_graph_adamw_step_changes_only_the_masked_weight_and_exports() {
         logits[alife_core::MAX_ACTION_CANDIDATES].to_bits()
     );
     assert_eq!(trainer.replay_rows().unwrap().len(), 1);
+    // The value pass includes the bootstrap row, PPO excludes it, and a
+    // waking-boundary probe uses one row. Force those reallocations repeatedly;
+    // kernels may be retained, but every fresh binding must see its own scratch
+    // and preserve all trained weights, Adam moments/ages and mask exactly.
+    let expected_checkpoint = serde_json::to_vec(&trainer.checkpoint().unwrap()).unwrap();
+    let expected_replay = trainer.evaluate_replay(&replay).unwrap();
+    for (ticks, burn_in) in [(1, 0), (17, 0), (16, 0), (2, 1), (1, 0), (2, 1)] {
+        let mut resized = replay.clone();
+        resized.ticks = vec![replay.ticks[0].clone(); ticks];
+        resized.burn_in_ticks = burn_in;
+        let observed = trainer.evaluate_replay(&resized).unwrap();
+        assert_eq!(observed.candidate_logits.len(), ticks);
+        for row in observed.candidate_logits {
+            assert_eq!(
+                row.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+                expected_replay.candidate_logits[0]
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            serde_json::to_vec(&trainer.checkpoint().unwrap()).unwrap(),
+            expected_checkpoint
+        );
+    }
+    assert_eq!(trainer.evaluate_replay(&replay).unwrap(), expected_replay);
     let mut wrong = replay.clone();
     wrong.ticks[0].effective_weight_offsets.pop();
     assert!(trainer.prepare_replay(&wrong).is_err());

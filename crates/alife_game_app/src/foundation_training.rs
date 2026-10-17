@@ -4298,6 +4298,29 @@ fn write_replay_record(
     result
 }
 
+// Authenticate the complete compressed encoding before parsing it. The caller's
+// existing 8x encoded-size plus record-limit budget includes this bounded buffer.
+// Reusing these exact bytes also prevents a hash/decode race across two file reads.
+fn read_verified_replay_bytes(
+    reader: impl std::io::Read,
+    encoded_bytes: u64,
+    digest: &[u8; 32],
+) -> Result<Vec<u8>> {
+    use std::io::Read;
+    if encoded_bytes == 0 || encoded_bytes > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES {
+        return Err(invalid().into());
+    }
+    let mut bytes = Vec::with_capacity(encoded_bytes as usize);
+    reader.take(encoded_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 != encoded_bytes {
+        return Err("replay file length mismatch".into());
+    }
+    if blake3::hash(&bytes).as_bytes() != digest {
+        return Err("replay file digest mismatch".into());
+    }
+    Ok(bytes)
+}
+
 /// Load one verified record without reading the entire life. BLAKE3 binds the
 /// exact encoded bytes and provenance; typed validation still runs after decode.
 pub fn load_foundation_replay_record(
@@ -4307,7 +4330,7 @@ pub fn load_foundation_replay_record(
     phenotype: &alife_core::BrainPhenotype,
     budget: FoundationReplayBudget,
 ) -> Result<FoundationReplayRecord> {
-    use std::io::{Read, Seek};
+    use std::io::Read;
     if reference.encoded_bytes == 0
         || reference.encoded_bytes > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES
     {
@@ -4322,24 +4345,12 @@ pub fn load_foundation_replay_record(
             .and_then(|n| n.checked_add(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES))
             .ok_or_else(invalid)?,
     )?;
-    let mut file = std::fs::File::open(directory.join(reference.file_name()))?;
+    let file = std::fs::File::open(directory.join(reference.file_name()))?;
     if file.metadata()?.len() != reference.encoded_bytes {
         return Err("replay file length mismatch".into());
     }
-    let mut hasher = blake3::Hasher::new();
-    let mut buffer = [0u8; 64 * 1024];
-    loop {
-        let n = file.read(&mut buffer)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buffer[..n]);
-    }
-    if hasher.finalize().as_bytes() != &reference.digest {
-        return Err("replay file digest mismatch".into());
-    }
-    file.rewind()?;
-    let decoder = zstd::stream::read::Decoder::new(std::io::BufReader::new(file))?;
+    let bytes = read_verified_replay_bytes(file, reference.encoded_bytes, &reference.digest)?;
+    let decoder = zstd::stream::read::Decoder::new(bytes.as_slice())?;
     let record: FoundationReplayRecord = bincode::serde::decode_from_std_read(
         &mut decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1),
         bincode::config::standard().with_limit::<268435456>(),
@@ -5715,3 +5726,7 @@ mod evaluation_sampling_tests {
         assert_eq!(decoded.initial_sampling, Some(sampling));
     }
 }
+
+#[cfg(test)]
+#[path = "foundation_training/replay_io_tests.rs"]
+mod replay_io_tests;

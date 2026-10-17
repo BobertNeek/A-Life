@@ -4,7 +4,12 @@
 //! owns the one authoritative device, fixed class arenas, generation-checked
 //! capabilities, bounded selection readback, and fail-stop transaction state.
 
+mod selector_exploration;
 mod tick;
+
+pub use selector_exploration::{
+    GpuSelectorAdaptiveExplorationDiagnostic, GpuSelectorExplorationCandidateIdentity,
+};
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::num::NonZeroU64;
@@ -667,7 +672,7 @@ pub struct GpuClosedLoopTick {
     pub training_rollout: Option<crate::GpuTrainingRolloutReceipt>,
 }
 
-pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 3;
+pub const GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION: u16 = 4;
 const GPU_SELECTOR_INVALID_LOGIT_BITS: u32 = 0x7fc0_0001;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -684,6 +689,7 @@ pub enum GpuSelectorTieBreak {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GpuSelectorExplorationMode {
     Disabled,
+    AdaptiveBoundedUniformV1,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -696,10 +702,17 @@ pub struct GpuSelectorPolicyIdentity {
 
 impl GpuSelectorPolicyIdentity {
     pub const PRODUCTION_V1: Self = Self {
-        schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        schema_version: 3,
         invalid_logit_bits: GPU_SELECTOR_INVALID_LOGIT_BITS,
         tie_break: GpuSelectorTieBreak::LowestCandidateIndex,
         exploration_mode: GpuSelectorExplorationMode::Disabled,
+    };
+
+    pub const PRODUCTION_ADAPTIVE_V1: Self = Self {
+        schema_version: GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION,
+        invalid_logit_bits: GPU_SELECTOR_INVALID_LOGIT_BITS,
+        tie_break: GpuSelectorTieBreak::LowestCandidateIndex,
+        exploration_mode: GpuSelectorExplorationMode::AdaptiveBoundedUniformV1,
     };
 }
 
@@ -760,6 +773,8 @@ pub struct GpuSelectorDiagnosticReceipt {
     pub phenotype_hash: PhenotypeHash,
     pub dispatch_generation: u64,
     pub policy: GpuSelectorPolicyIdentity,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adaptive_exploration: Option<GpuSelectorAdaptiveExplorationDiagnostic>,
     pub requested_candidate_indices: Vec<u16>,
     pub candidates: Vec<GpuSelectorCandidateDiagnostic>,
     pub argmax_candidate_index: u16,
@@ -2191,11 +2206,12 @@ struct SelectorDiagnosticErrorCapture {
 
 impl GpuSelectorDiagnosticReceipt {
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != GPU_SELECTOR_DIAGNOSTIC_SCHEMA_VERSION
+        if self.schema_version != self.policy.schema_version
             || self.frame_digest.0 == [0; 4]
             || self.phenotype_hash.0 == [0; 4]
             || self.dispatch_generation == 0
-            || self.policy != GpuSelectorPolicyIdentity::PRODUCTION_V1
+            || (self.policy != GpuSelectorPolicyIdentity::PRODUCTION_V1
+                && self.policy != GpuSelectorPolicyIdentity::PRODUCTION_ADAPTIVE_V1)
             || self.requested_candidate_indices.is_empty()
             || self
                 .requested_candidate_indices
@@ -2206,6 +2222,7 @@ impl GpuSelectorDiagnosticReceipt {
                 .iter()
                 .any(|index| usize::from(*index) >= self.candidates.len())
             || self.candidates.is_empty()
+            || self.candidates.len() > alife_core::MAX_ACTION_CANDIDATES
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
@@ -2332,10 +2349,10 @@ impl GpuSelectorDiagnosticReceipt {
         let (argmax_index, _) = argmax.ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
         if self.argmax_candidate_index != argmax_index
             || self.equal_max_candidate_indices != equal_max
-            || self.chosen_candidate_index != argmax_index
         {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
+        selector_exploration::validate_arbitration(self)?;
         Ok(())
     }
 }
@@ -2396,6 +2413,7 @@ fn selector_detail_f32(
 )]
 fn build_selector_diagnostic(
     frame: &PerceptionFrame,
+    memory_upload: Option<&GpuMemoryContextUpload>,
     phenotype: &BrainPhenotype,
     slot: &GpuBrainSlot,
     active_weight_bank: u8,
@@ -2646,7 +2664,12 @@ fn build_selector_diagnostic(
         frame_digest: frame.frame_digest(),
         phenotype_hash: phenotype.phenotype_hash(),
         dispatch_generation,
-        policy: GpuSelectorPolicyIdentity::PRODUCTION_V1,
+        policy: GpuSelectorPolicyIdentity::PRODUCTION_ADAPTIVE_V1,
+        adaptive_exploration: Some(GpuSelectorAdaptiveExplorationDiagnostic::from_frame(
+            frame,
+            memory_upload,
+            slot.decoder_input_stride(),
+        )?),
         requested_candidate_indices: capture.requested_candidate_indices.clone(),
         candidates,
         argmax_candidate_index,
@@ -4986,7 +5009,7 @@ impl GpuClosedLoopBackend {
         Ok(snapshot)
     }
 
-    /// Explicit training request; ordinary ticks always retain production argmax.
+    /// Explicit training request; ordinary ticks use bounded game exploration.
     #[cfg(feature = "training-rollout")]
     pub fn tick_memory_batch_training(
         &mut self,

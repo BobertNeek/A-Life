@@ -6,6 +6,8 @@
 
 #[cfg(all(test, feature = "gpu-tests"))]
 mod action_credit_food_tests;
+#[cfg(test)]
+mod adaptive_exploration_causality;
 mod approximate_cognition;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod checkpoint_manifest_pruning_tests;

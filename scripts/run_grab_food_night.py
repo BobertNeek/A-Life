@@ -21,6 +21,8 @@ import subprocess
 import sys
 import time
 
+import grab_food_seed_reservations as seed_reservations
+
 UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
 
@@ -529,6 +531,8 @@ def arguments():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cutoff", type=cutoff_time, required=True)
     parser.add_argument("--seed", type=int, default=202610061277)
+    parser.add_argument("--seed-history", type=Path, required=True,
+                        help="complete source-bound prior seed allocations; see docs/DEVELOPMENT.md")
     parser.add_argument("--assessment-seed", type=int, default=202610061201)
     parser.add_argument("--target-episodes", type=int, default=3000)
     parser.add_argument("--batch-episodes", type=int, default=16)
@@ -585,10 +589,18 @@ def main(argv=None):
         if (args.source / "cycle.json").is_file():
             source_cycle = read_json(args.source / "cycle.json")
             source_seed = source_cycle.get("seed")
+            if type(source_seed) is not int or not 1 <= source_seed <= MAX_SEED:
+                raise ValueError("sealed source requires a valid uint64 training seed")
             if source_seed is not None and (args.seed <= source_seed < args.seed + args.target_episodes or
                     source_cycle.get("lesson") in ("eat_held_food", "grab_food") and args.seed <= source_seed):
                 raise ValueError("training seed range repeats the source episode; select a fresh range")
         input_hashes[str(args.binary)] = sha256(args.binary)
+        args.output = args.output.resolve()
+        args.seed_history = args.seed_history.resolve(strict=True)
+        source_hashes = {name: input_hashes[str(args.source / name)] for name in seed_reservations.SOURCE_FILES}
+        _, history_digest = seed_reservations.prepare(args.seed_history,
+            args.output.parent / seed_reservations.LEDGER_NAME, source_hashes,
+            source_seed, args.seed, args.target_episodes, args.assessment_seed)
         if args.run:
             if args.qualification is None:
                 raise ValueError("run requires completed focused CPU qualification for this new Grab/Eat binary")
@@ -602,7 +614,6 @@ def main(argv=None):
                     not qualification.get("focused_native_tests_passed") or
                     not qualification.get("focused_host_tests_passed")):
                 raise ValueError("new Grab/Eat source and binary are not CPU-qualified")
-        args.output = args.output.resolve()
         # Do not acquire the owner lock or start any executable in plan mode.
         args.output.mkdir(parents=True, exist_ok=False)
         state = {"schema": 1, "status": "planned", "lesson": "grab_food", "promoted": False,
@@ -627,6 +638,9 @@ def main(argv=None):
                  "partial_episode": None, "error": None,
                  "resource_limits": {"min_disk_gib": args.min_disk_gib,
                                      "min_memory_gib": args.min_memory_gib, "idle_seconds": args.idle_seconds}}
+        state["seed_reservation"] = {"status": "planned", "history_path": str(args.seed_history),
+            "history_sha256": history_digest, "source_sha256": source_hashes,
+            "source_seed": source_seed, "ledger_path": str(args.output.parent / seed_reservations.LEDGER_NAME)}
         state["resource_limits"]["startup_grace_seconds"] = args.startup_grace_seconds
         state["first_episode_argv"] = [str(args.binary), "--resume-cycle", str(args.source),
             str(args.output / "episode-00000"), str(args.startup_decisions), "--seed", str(args.seed),
@@ -759,6 +773,22 @@ def run_night(args, state, state_path, input_hashes):
         if git.stdout.strip():
             raise ValueError("run requires clean reviewed repository source")
         state["git_head"] = subprocess.check_output(["git", "-c", f"safe.directory={repo.as_posix()}", "rev-parse", "HEAD"], text=True).strip()
+        reservation = state["seed_reservation"]
+        # Sibling runs share this fixed ledger and the existing owner lock.
+        # Re-read under that lock: a preflight plan cannot reserve or erase seeds.
+        prepared, history_digest = seed_reservations.prepare(args.seed_history,
+            args.output.parent / seed_reservations.LEDGER_NAME, reservation["source_sha256"],
+            reservation["source_seed"], args.seed, args.target_episodes, args.assessment_seed)
+        if history_digest != reservation["history_sha256"]:
+            raise RunnerSafetyError("seed history changed after preflight")
+        reservation["status"] = "pending"; publish()
+        seed_reservations.commit(args.output.parent / seed_reservations.LEDGER_NAME, prepared, {
+            "output": str(args.output), "training_seed_range": state["training_seed_range"],
+            "assessment_seed": args.assessment_seed, "source_sha256": reservation["source_sha256"],
+            "history_path": str(args.seed_history), "history_sha256": history_digest})
+        reservation["status"] = "reserved"
+        reservation["ledger_sha256"] = sha256(args.output.parent / seed_reservations.LEDGER_NAME)
+        publish()
         before = probe("frozen-before", previous, startup_cutoff)
         observed_frozen_grab = bool(before["grab_acquisitions"])
         eating_before = retention_probe("eating-retention-before", previous, startup_cutoff)

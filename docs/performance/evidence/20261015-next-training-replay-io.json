@@ -1,0 +1,174 @@
+{
+  "schema": 1,
+  "date_utc": "2026-10-15",
+  "baseline_revision": "69f00c05ec6774c3655ae87c5d4baa5df3861929",
+  "implementation_revision": "8d05c0f60cd3ba5dc67aa2e469af3ddfe2ae2f4b",
+  "implementation_commits": [
+    "8d05c0f60cd3ba5dc67aa2e469af3ddfe2ae2f4b",
+    "3474ccba7e5d1e72f4eca77931e36bc2fe81ab6c"
+  ],
+  "source_sha256": {
+    "crates/alife_game_app/src/foundation_training.rs": "cc0ee861415c2464c11e5215d81622f12949efef13ab4e3a2024095125fb09bb",
+    "crates/alife_game_app/src/foundation_training/replay_io_tests.rs": "251c8120ac5fc42417c971d34d2be57a9cae1f5a009ea761a7458eb7e1eb0cc0",
+    "crates/alife_training/src/trainer.rs": "5deacb48f39ffe9f50d47bea1ef964fc18f7bf961ee4c1394b81ec13bb9a7a97",
+    "crates/alife_training/tests/wgsl_foundation_trainer.rs": "58bbd916aec1c9f5923af948ce2ffd88d797ab8f7f76718ab1d7472a429f97aa"
+  },
+  "executable_sha256": "97aa1ffef31a9f45e4d2e88a0fd9ac8b601e23014d92c9eb8e21c9d84a6bc07b",
+  "preserved_artifact_directory": "/workspace/cloud-cpu-validation/next-run-serial-cuts-20261015",
+  "raw_output_sha256": "0e9e8976a9f061c2754c19c1b2db10d264d48ccbfcb414cb99964a909e8182b3",
+  "toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "host": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "cpu": "AMD EPYC 9V74 / KVM; 5 logical CPUs exposed",
+  "cgroup_cpu_max": "400000 100000",
+  "affinity_cpu": 0,
+  "app_profile": "test: opt-level=2, debug assertions on, debug symbols disabled; dependencies use repository test settings",
+  "concurrent_builds": false,
+  "fixture": "synthetic N2048-shaped TrainingSequence; 2048 neurons/32768 random effective offsets, signed zero; zstd level 3 + bincode; not a captured episode or full record validator",
+  "timed": "file open, metadata, full BLAKE3 authentication, zstd/bincode decode, allocation and destruction; same executable for both variants",
+  "command": "taskset -c 0 replay-io-cpu-tests --exact foundation_training::replay_io_tests::replay_verified_read_cpu_timing --ignored --nocapture --test-threads=1",
+  "samples": [
+    {
+      "sample": 0,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 503553280
+    },
+    {
+      "sample": 0,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 491304817
+    },
+    {
+      "sample": 1,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 492561238
+    },
+    {
+      "sample": 1,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 457746557
+    },
+    {
+      "sample": 2,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 478859500
+    },
+    {
+      "sample": 2,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 465961918
+    },
+    {
+      "sample": 3,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 495090113
+    },
+    {
+      "sample": 3,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 488018393
+    },
+    {
+      "sample": 4,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 479137207
+    },
+    {
+      "sample": 4,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 478977422
+    },
+    {
+      "sample": 5,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 514908465
+    },
+    {
+      "sample": 5,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 547118170
+    },
+    {
+      "sample": 6,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 518680660
+    },
+    {
+      "sample": 6,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 489753687
+    },
+    {
+      "sample": 7,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 509338736
+    },
+    {
+      "sample": 7,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 493699250
+    },
+    {
+      "sample": 8,
+      "variant": "main_hash_rewind_decode",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 512889238
+    },
+    {
+      "sample": 8,
+      "variant": "single_verified_read",
+      "iterations": 200,
+      "encoded_bytes": 120859,
+      "elapsed_ns": 465698346
+    }
+  ],
+  "summary": {
+    "main_hash_rewind_decode": {
+      "samples": 9,
+      "median_ns_per_200_loads": 493699250,
+      "min_ns_per_200_loads": 457746557,
+      "max_ns_per_200_loads": 547118170
+    },
+    "single_verified_read": {
+      "samples": 9,
+      "median_ns_per_200_loads": 491304817,
+      "min_ns_per_200_loads": 465698346,
+      "max_ns_per_200_loads": 514908465
+    }
+  },
+  "conclusion": "No material wall-time improvement established; medians differ about 0.5% with overlapping observed ranges. One verified acquisition reduces file traffic and prevents hash/decode image drift.",
+  "gpu_execution": false,
+  "production_access": false
+}

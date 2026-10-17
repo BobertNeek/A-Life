@@ -198,6 +198,114 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_f32(brain.candidate_logit_offset + candidate, logit);
 }
 
+// Game-only bounded exploration, not the fixed-temperature PPO sampler.
+// Provisional absolute logit units deliberately preserve strong preferences:
+// each perturbation is within [-1, 1], so a gap > 2 cannot be overturned.
+const GAME_EXPLORATION_MAX_SCALE:f32 = 0.5;
+const GAME_EXPLORATION_NOISE_LIMIT:f32 = 2.0;
+const GAME_EXPLORATION_CRITICAL_NEED:f32 = 0.65;
+const GAME_EXPLORATION_LEARNING_HEADER_OFFSET:u32 = 272u;
+const GAME_EXPLORATION_COGNITIVE_LANE_END:u32 = 54u;
+const GAME_EXPLORATION_GAP_LANE:u32 = 50u;
+
+struct GpuGameExplorationState {
+  organism_id:vec2<u32>, tick:vec2<u32>,
+  novelty:f32, curiosity:f32, urgency:f32,
+}
+
+fn game_exploration_enabled(header:GpuPerceptionHeader) -> bool {
+  // The feature-composed training shader replaces this single checked hook.
+  return true;
+}
+
+fn game_exploration_unit(value:f32) -> bool {
+  return finite_decode(value) && value >= 0.0 && value <= 1.0;
+}
+
+fn game_exploration_mix(input:u32) -> u32 {
+  var value = input;
+  value = (value ^ (value >> 16u)) * 0x7feb352du;
+  value = (value ^ (value >> 15u)) * 0x846ca68bu;
+  return value ^ (value >> 16u);
+}
+
+fn game_exploration_noise(state:GpuGameExplorationState, identity:vec4<u32>) -> f32 {
+  // Durable logical identity only. Slots, packed offsets, dispatch generation,
+  // request order, and retry count must never enter this counter-based draw.
+  var value = 0x6d2b79f5u;
+  value = game_exploration_mix(value ^ state.organism_id.x);
+  value = game_exploration_mix(value ^ state.organism_id.y);
+  value = game_exploration_mix(value ^ state.tick.x);
+  value = game_exploration_mix(value ^ state.tick.y);
+  value = game_exploration_mix(value ^ identity.x);
+  value = game_exploration_mix(value ^ identity.y);
+  value = game_exploration_mix(value ^ identity.z);
+  value = game_exploration_mix(value ^ identity.w);
+  // 23-bit midpoints are strictly inside (0,1), including in f32.
+  let uniform = (f32(value >> 9u) + 0.5) / 8388608.0;
+  return GAME_EXPLORATION_NOISE_LIMIT * (2.0 * uniform - 1.0);
+}
+
+fn game_exploration_state(header:GpuPerceptionHeader, row_base:u32) -> GpuGameExplorationState {
+  let learning = load_learning_header(row_base + GAME_EXPLORATION_LEARNING_HEADER_OFFSET);
+  // Host validates these exact pending-template bytes before dispatch. Reuse
+  // their durable organism identity; no new organism/RNG state or readback is added.
+  let pending = learning.outcome_offset;
+  let owner = vec2<u32>(frame_payload_words[pending + 12u], frame_payload_words[pending + 13u]);
+  let novelty = bitcast<f32>(frame_payload_words[header.sensory_offset + 41u]);
+  let hunger = bitcast<f32>(frame_payload_words[header.sensory_offset + 55u]);
+  let fatigue = bitcast<f32>(frame_payload_words[header.sensory_offset + 56u]);
+  let fear = bitcast<f32>(frame_payload_words[header.sensory_offset + 57u]);
+  let pain = bitcast<f32>(frame_payload_words[header.sensory_offset + 58u]);
+  let curiosity = bitcast<f32>(frame_payload_words[header.sensory_offset + 60u]);
+  let temperature_stress = bitcast<f32>(frame_payload_words[header.sensory_offset + 62u]);
+  let critical_need = clamp(
+    (max(hunger, max(fatigue, temperature_stress)) - GAME_EXPLORATION_CRITICAL_NEED)
+      / (1.0 - GAME_EXPLORATION_CRITICAL_NEED), 0.0, 1.0);
+  return GpuGameExplorationState(owner, vec2<u32>(header.tick_lo, header.tick_hi),
+    novelty, curiosity, max(max(fear, pain), critical_need));
+}
+
+fn game_exploration_state_valid(header:GpuPerceptionHeader, row_base:u32) -> bool {
+  let learning = load_learning_header(row_base + GAME_EXPLORATION_LEARNING_HEADER_OFFSET);
+  let count = arrayLength(&frame_payload_words);
+  if (!span_within(learning.outcome_offset, 36u + header.candidate_count * 4u, count)
+      || !span_within(header.sensory_offset, 77u, count)) { return false; }
+  let pending = learning.outcome_offset;
+  if (frame_payload_words[pending + 12u] == 0u && frame_payload_words[pending + 13u] == 0u) { return false; }
+  if (frame_payload_words[pending + 16u] != header.tick_lo
+      || frame_payload_words[pending + 17u] != header.tick_hi) { return false; }
+  let lanes = array<u32,7>(41u,55u,56u,57u,58u,60u,62u);
+  for (var index=0u; index<7u; index++) {
+    if (!game_exploration_unit(bitcast<f32>(frame_payload_words[header.sensory_offset + lanes[index]]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn game_candidate_exploration_scale(state:GpuGameExplorationState, stride:u32, candidate:GpuCandidateRecord) -> f32 {
+  var gap = 0.0;
+  if (stride >= GAME_EXPLORATION_COGNITIVE_LANE_END) {
+    gap = bitcast<f32>(frame_payload_words[candidate.feature_offset + GAME_EXPLORATION_GAP_LANE]);
+    if (!game_exploration_unit(gap)) { return bitcast<f32>(INVALID_LOGIT_BITS); }
+  }
+  // This is the existing candidate/target-bound unresolved gap. The adjacent
+  // legacy `prior_residual` lane is remembered outcome magnitude, not error.
+  let evidence = max(state.novelty, gap);
+  return GAME_EXPLORATION_MAX_SCALE * evidence * (0.6 + 0.4 * state.curiosity) * (1.0 - state.urgency);
+}
+
+fn game_candidate_arbitration_score(state:GpuGameExplorationState, stride:u32, identity_base:u32, candidate:GpuCandidateRecord, logit:f32) -> f32 {
+  let scale = game_candidate_exploration_scale(state, stride, candidate);
+  if (!finite_decode(scale)) { return bitcast<f32>(INVALID_LOGIT_BITS); }
+  if (scale == 0.0) { return logit; }
+  let base = identity_base + candidate.candidate_index * 4u;
+  let identity = vec4<u32>(frame_payload_words[base], frame_payload_words[base + 1u],
+    frame_payload_words[base + 2u], frame_payload_words[base + 3u]);
+  return logit + scale * game_exploration_noise(state, identity);
+}
+
 @compute @workgroup_size(1)
 fn select_candidate(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_perception_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS);
@@ -206,17 +314,37 @@ fn select_candidate(@builtin(global_invocation_id) gid:vec3<u32>) {
   var found = false;
   var selected_candidate = 0xffffffffu;
   var selected_logit = 0.0;
+  var selected_score = 0.0;
   var selected_confidence = 0u;
+  let exploratory = game_exploration_enabled(header);
+  var exploration:GpuGameExplorationState;
+  let stride = load_decoder_plan(brain.decoder_plan_offset).flattened_input_lane_count;
+  let identity_base = load_learning_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS
+    + GAME_EXPLORATION_LEARNING_HEADER_OFFSET).outcome_offset + 36u;
+  if (exploratory) {
+    if (!game_exploration_state_valid(header, gid.y * ACTIVE_DISPATCH_ROW_WORDS)) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + 2u], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    exploration = game_exploration_state(header, gid.y * ACTIVE_DISPATCH_ROW_WORDS);
+  }
   for (var candidate=0u; candidate<header.candidate_count; candidate++) {
     let bits = load_state_u32(brain.candidate_logit_offset + candidate);
     if (bits == INVALID_LOGIT_BITS) { continue; }
     let logit = bitcast<f32>(bits);
     if (!finite_decode(logit)) { continue; }
     let candidate_record = load_candidate(header.candidate_offset + candidate * 8u);
-    if (!found || logit > selected_logit || (logit == selected_logit && candidate < selected_candidate)) {
+    var score = logit;
+    if (exploratory) { score = game_candidate_arbitration_score(exploration, stride, identity_base, candidate_record, logit); }
+    if (!finite_decode(score)) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + 2u], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    if (!found || score > selected_score || (score == selected_score && candidate < selected_candidate)) {
       found = true;
       selected_candidate = candidate;
       selected_logit = logit;
+      selected_score = score;
       selected_confidence = candidate_record.confidence_q16;
     }
   }
@@ -287,6 +415,18 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
   motor_words[1] = 0u;
   let joint_mode = brain.reserved[0] != 0u;
   let enabled_channels = brain.reserved[0] & 255u;
+  let exploratory = game_exploration_enabled(header);
+  var exploration:GpuGameExplorationState;
+  let stride = load_decoder_plan(brain.decoder_plan_offset).flattened_input_lane_count;
+  let identity_base = load_learning_header(gid.y * ACTIVE_DISPATCH_ROW_WORDS
+    + GAME_EXPLORATION_LEARNING_HEADER_OFFSET).outcome_offset + 36u;
+  if (exploratory) {
+    if (!game_exploration_state_valid(header, gid.y * ACTIVE_DISPATCH_ROW_WORDS)) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + 2u], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
+    exploration = game_exploration_state(header, gid.y * ACTIVE_DISPATCH_ROW_WORDS);
+  }
   // One scan selects every factorized motor channel. The previous helper
   // rescanned the complete candidate list once for each of the six slots.
   for (var candidate = 0u; candidate < header.candidate_count; candidate++) {
@@ -298,12 +438,18 @@ fn decode_speech_payload(@builtin(global_invocation_id) gid:vec3<u32>) {
     if (bits == INVALID_LOGIT_BITS) { continue; }
     let logit = bitcast<f32>(bits);
     if (!finite_decode(logit)) { continue; }
+    var score = logit;
+    if (exploratory) { score = game_candidate_arbitration_score(exploration, stride, identity_base, record, logit); }
+    if (!finite_decode(score)) {
+      atomicOr(&mutable_state_words[brain.diagnostic_offset + 2u], CONTRACT_INVALID_DIAGNOSTIC_BIT);
+      return;
+    }
     if (!motor_found[slot]
-        || logit > motor_logits[slot]
-        || (logit == motor_logits[slot] && candidate < motor_candidates[slot])) {
+        || score > motor_logits[slot]
+        || (score == motor_logits[slot] && candidate < motor_candidates[slot])) {
       motor_found[slot] = true;
       motor_candidates[slot] = candidate;
-      motor_logits[slot] = logit;
+      motor_logits[slot] = score;
     }
   }
   let selection = load_speech_selection(brain.selection_offset);

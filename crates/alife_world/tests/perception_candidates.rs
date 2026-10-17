@@ -204,6 +204,7 @@ fn batch_perception_index_matches_canonical_privileged_and_grounded_frames() {
     for profile in [
         SensorProfile::PrivilegedAffordanceV1,
         SensorProfile::GroundedObjectSlotsV1,
+        SensorProfile::GroundedTerrainVisionV1,
     ] {
         for organism_id in [OrganismId(1), OrganismId(2), OrganismId(3)] {
             let mut canonical_world = world.clone();
