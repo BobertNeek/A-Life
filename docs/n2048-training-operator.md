@@ -311,6 +311,7 @@ contribute committed rows.
 An interrupted attempt can leave the prepared sidecar. Use
 `python scripts/summarize_ppo_diagnostics.py --inspector PATH_TO_INSPECT_ARCHIVED_SUCCESS CYCLE_DIRECTORY`
 to report only matching sealed cycles with admitted actor/value checkpoints.
+On Windows, use Python 3.12 or newer.
 Use `inspect_archived_success` from a qualified build containing these diagnostics;
 the reporter invokes its read-only `--validate-checkpoint` path to decode the
 asset and both checkpoints and validate the same optimizer handoff as continuation.

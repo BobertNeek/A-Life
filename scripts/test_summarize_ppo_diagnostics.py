@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -35,7 +37,7 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
                            "founder_seed_base": 99, "foundation_digest": [3] * 32,
                            "actor_optimizer_step": 12, "value_optimizer_step": 18,
                            "neural_execution": False, "weights_modified": False}
-        patcher = mock.patch.object(MODULE.subprocess, "run", side_effect=self.inspect)
+        patcher = mock.patch.object(MODULE, "run_inspector", side_effect=self.inspect)
         self.runner = patcher.start()
         self.addCleanup(patcher.stop)
         self.diagnostic = {
@@ -68,7 +70,6 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
     def inspect(self, argv, **kwargs):
         self.assertEqual(argv[1:], ["--validate-checkpoint", argv[2], "--expected-policy", "42"])
         self.assertEqual(kwargs["timeout"], MODULE.INSPECTOR_TIMEOUT)
-        self.assertFalse(kwargs["check"])
         directory = Path(argv[2])
         if any((directory / name).read_bytes() != b"fixture" for name in MODULE.ARTIFACTS):
             return subprocess.CompletedProcess(argv, 1, b"", b"native handoff rejected")
@@ -357,6 +358,72 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
                 report = self.report()
                 self.assertEqual(len(report["errors"]), 1)
                 self.assertEqual(report["emitted_rows"], 0)
+
+
+class BoundedInspectorRunnerTests(unittest.TestCase):
+    def run_child(self, code, timeout=5):
+        children, launch = [], subprocess.Popen
+        def record_child(*args, **kwargs):
+            self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+            child = launch(*args, **kwargs)
+            children.append(child)
+            return child
+        with mock.patch.object(MODULE.subprocess, "Popen", side_effect=record_child):
+            try:
+                return MODULE.run_inspector([sys.executable, "-c", code], timeout=timeout)
+            finally:
+                self.assertEqual(len(children), 1)
+                child = children[0]
+                self.assertIsNotNone(child.poll())
+                self.assertTrue(child.stdout.closed and child.stderr.closed)
+                self.assertFalse(any(thread.name.startswith(f"ppo-inspector-{child.pid}-")
+                                     for thread in threading.enumerate()))
+
+    def test_both_streams_at_cap_complete_without_deadlock(self):
+        result = self.run_child("import os; os.write(1,b'x'*65536); os.write(2,b'y'*65536)")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, b"x" * MODULE.OUTPUT_LIMIT)
+        self.assertEqual(result.stderr, b"y" * MODULE.OUTPUT_LIMIT)
+
+    def test_each_overflow_kills_child_promptly_and_keeps_only_one_extra_byte(self):
+        for stream in (1, 2):
+            with self.subTest(stream=stream):
+                started = time.monotonic()
+                result = self.run_child(
+                    f"import os,time; os.write({stream},b'x'*66560); time.sleep(30)", timeout=10)
+                self.assertLess(time.monotonic() - started, 5)
+                self.assertNotEqual(result.returncode, 0)
+                captured = result.stdout if stream == 1 else result.stderr
+                self.assertEqual(len(captured), MODULE.OUTPUT_LIMIT + 1)
+                self.assertLessEqual(len(result.stdout), MODULE.OUTPUT_LIMIT + 1)
+                self.assertLessEqual(len(result.stderr), MODULE.OUTPUT_LIMIT + 1)
+
+    def test_timeout_reaps_child_closes_pipes_and_joins_readers(self):
+        started = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired) as raised:
+            self.run_child("import time; print('ready',flush=True); time.sleep(30)", timeout=0.25)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertLessEqual(len(raised.exception.output), MODULE.OUTPUT_LIMIT + 1)
+        self.assertLessEqual(len(raised.exception.stderr), MODULE.OUTPUT_LIMIT + 1)
+
+    def test_exited_parent_with_inherited_open_pipes_still_obeys_deadline(self):
+        # Model an exited direct child whose descendant keeps both writers open.
+        child = mock.Mock(returncode=0)
+        child.poll.return_value = 0
+        child.wait.return_value = 0
+        child.stdout.read.return_value = None
+        child.stderr.read.return_value = None
+        started = time.monotonic()
+        with mock.patch.object(MODULE.subprocess, "Popen", return_value=child), \
+                mock.patch.object(MODULE.os, "set_blocking") as nonblocking:
+            with self.assertRaises(subprocess.TimeoutExpired):
+                MODULE.run_inspector(["exited-parent"], timeout=0.03)
+        self.assertLess(time.monotonic() - started, 1)
+        self.assertEqual(nonblocking.call_count, 2)
+        child.kill.assert_not_called()
+        child.wait.assert_called_once_with(timeout=1)
+        child.stdout.close.assert_called_once()
+        child.stderr.close.assert_called_once()
 
 
 if __name__ == "__main__":

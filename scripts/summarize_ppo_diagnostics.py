@@ -4,9 +4,11 @@ import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 SIDECAR = "ppo-rollout-diagnostics.json"
 MAX_BYTES = 1024 * 1024
@@ -15,6 +17,7 @@ FILE_LIMITS = {"cycle.json": 16 * MAX_BYTES, SIDECAR: MAX_BYTES,
                ARTIFACTS[0]: 16 * MAX_BYTES, ARTIFACTS[1]: MAX_BYTES,
                ARTIFACTS[2]: 32 * MAX_BYTES}
 INSPECTOR_TIMEOUT = 30
+OUTPUT_LIMIT = 65536
 
 
 def require(condition, message):
@@ -74,6 +77,60 @@ def snapshot(directory):
     return result
 
 
+def run_inspector(argv, timeout=INSPECTOR_TIMEOUT):
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, bufsize=0, creationflags=flags)
+    output = [bytearray(), bytearray()]
+    streams = {process.stdout: output[0], process.stderr: output[1]}
+    deadline, timed_out, overflow = time.monotonic() + timeout, False, False
+
+    def kill():
+        try:
+            process.kill()
+        except OSError:
+            pass  # A normal exit may already have ended this child.
+
+    try:
+        for stream in streams:
+            os.set_blocking(stream.fileno(), False)
+        while streams or process.poll() is None:
+            if time.monotonic() >= deadline:
+                timed_out = True
+                break
+            progress = False
+            for stream, destination in list(streams.items()):
+                chunk = stream.read(min(8192, OUTPUT_LIMIT + 1 - len(destination)))
+                if chunk is None:
+                    continue
+                progress = True
+                if chunk == b"":
+                    del streams[stream]
+                    continue
+                destination.extend(chunk)
+                if len(destination) > OUTPUT_LIMIT:
+                    overflow = True
+                    break
+            if overflow:
+                break
+            if not progress:
+                time.sleep(min(0.01, max(0.0, deadline - time.monotonic())))
+    finally:
+        try:
+            if process.poll() is None:
+                kill()
+            process.wait(timeout=1)
+        finally:
+            try:
+                process.stdout.close()
+            finally:
+                process.stderr.close()
+    stdout, stderr = map(bytes, output)
+    if timed_out:
+        raise subprocess.TimeoutExpired(argv, timeout, output=stdout, stderr=stderr)
+    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+
+
 def validate_checkpoint(directory, cycle, inspector, cycle_digest, diagnostic_digest):
     require(cycle.get("ppo_rollout_diagnostics_sha256") == diagnostic_digest,
             "sealed cycle diagnostic SHA256 mismatch or missing binding")
@@ -83,13 +140,13 @@ def validate_checkpoint(directory, cycle, inspector, cycle_digest, diagnostic_di
     require(before["cycle.json"][1] == cycle_digest and before[SIDECAR][1] == diagnostic_digest,
             "cycle or diagnostic changed after JSON parsing")
     try:
-        result = subprocess.run([str(Path(inspector).resolve()), "--validate-checkpoint",
-                                 str(directory), "--expected-policy", str(cycle["policy_version"])],
-                                capture_output=True, timeout=INSPECTOR_TIMEOUT, check=False)
+        result = run_inspector([str(Path(inspector).resolve()), "--validate-checkpoint",
+                                str(directory), "--expected-policy", str(cycle["policy_version"])],
+                               timeout=INSPECTOR_TIMEOUT)
     except subprocess.TimeoutExpired as error:
         raise ValueError("checkpoint inspector timed out") from error
     require(snapshot(directory) == before, "checkpoint files changed during inspection")
-    require(len(result.stdout) <= 65536 and len(result.stderr) <= 65536,
+    require(len(result.stdout) <= OUTPUT_LIMIT and len(result.stderr) <= OUTPUT_LIMIT,
             "checkpoint inspector output exceeds byte limit")
     require(result.returncode == 0, f"checkpoint inspector failed (exit {result.returncode})")
     inspection = decode_json(result.stdout, "checkpoint inspector output")
