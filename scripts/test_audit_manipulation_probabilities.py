@@ -90,7 +90,9 @@ class ProbabilityContracts(unittest.TestCase):
         self.assertEqual(value["forced_motor_slots"], [0, 1, 2, 2, 3, 4, 4, 4, 4, 4])
         self.assertEqual(value["motor_masks"], [1, 2, 12, 16, 224, 0])
         high = result(row(kinds=kinds, enabled=0x80000000))
-        self.assertEqual(high["manipulation_empty_probability"], .8)
+        # Python 3.12 improves sum() rounding; eight 0.1 weights need not be
+        # bit-identical to the decimal literal on every supported Python.
+        self.assertAlmostEqual(high["manipulation_empty_probability"], .8, delta=1e-15)
 
     def test_multiple_targets_are_explicit_group_sum(self):
         value = row(kinds=("Interact", "Interact", "Write", "Move"))
