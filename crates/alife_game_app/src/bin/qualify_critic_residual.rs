@@ -1,5 +1,15 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    if args.first().is_some_and(|v| v == "--gradient-regression") {
+        if args.len() != 1 {
+            return Err("usage: qualify_critic_residual --gradient-regression".into());
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&alife_game_app::run_critic_gradient_regression()?)?
+        );
+        return Ok(());
+    }
     if args.first().is_some_and(|v| v == "--capture") {
         if args.len() != 6 {
             return Err("usage: qualify_critic_residual --capture CHECKPOINT OUTPUT SEED DECISIONS TEMPERATURE".into());

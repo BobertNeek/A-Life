@@ -87,7 +87,7 @@ fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_js
         last_updated_policy_version: Some(5124),
     };
     let features = vec![vec![1., 2.], vec![4., -1.]];
-    for discount in [0.99942255_f32, 0.0] {
+    for discount in [0.99942255_f32, 0.5, 0.0] {
         let rows = vec![CriticResidualRow {
             current: 0,
             next: 1,
@@ -120,10 +120,75 @@ fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_js
         if restored != checkpoint {
             return Err("gradient evaluation changed critic/Adam".into());
         }
+        let config = AdamWConfig::default();
+        let mut updated = probe;
+        updated.step_with_coefficient(session, config, 0.5)?;
+        let actual = updated.checkpoint(session)?;
+        let mut expected_state = checkpoint.parameters.clone();
+        let scaled = expected.map(|g| g * 0.5);
+        let norm = scaled.iter().map(|g| g * g).sum::<f32>().sqrt();
+        let clip = (config.gradient_clip / norm.max(1e-20)).min(1.0);
+        for p in 0..3 {
+            let g = scaled[p] * clip;
+            let m = config.beta1 * checkpoint.parameters[3 + p] + (1.0 - config.beta1) * g;
+            let v = config.beta2 * checkpoint.parameters[6 + p] + (1.0 - config.beta2) * g * g;
+            expected_state[p] -= config.learning_rate
+                * (m / (1.0 - config.beta1.powi(8))
+                    / ((v / (1.0 - config.beta2.powi(8))).sqrt() + config.epsilon)
+                    + config.weight_decay * checkpoint.parameters[p]);
+            expected_state[3 + p] = m;
+            expected_state[6 + p] = v;
+        }
+        finite_fixture_close(
+            &actual.parameters,
+            &expected_state,
+            0.00003,
+            "continued residual AdamW weights/m/v",
+        )?;
+        if actual.optimizer_step != 8 {
+            return Err("residual Adam age did not advance once".into());
+        }
+    }
+    let overflow_features = vec![vec![f32::MAX, 2.0], vec![4.0, -1.0]];
+    let overflow_rows = [CriticResidualRow {
+        current: 0,
+        next: 1,
+        reward: 0.25,
+        discount: 0.99942255,
+    }];
+    let mut rejected = FrozenCriticResidualExperiment::new(
+        session,
+        &checkpoint,
+        &overflow_features,
+        &overflow_rows,
+        1,
+    )?;
+    if rejected.step(session, AdamWConfig::default()).is_ok()
+        || rejected.checkpoint(session)? != checkpoint
+    {
+        return Err("nonfinite residual update mutated weights, moments, or age".into());
+    }
+    // A bad prospective final coordinate must not leave earlier coordinates
+    // partially updated even when every input and the gradient are finite.
+    let mut late_bad = checkpoint.clone();
+    late_bad.parameters[5] = f32::MAX;
+    let mut rejected =
+        FrozenCriticResidualExperiment::new(session, &late_bad, &features, &overflow_rows, 1)?;
+    if rejected.step(session, AdamWConfig::default()).is_ok()
+        || rejected.checkpoint(session)? != late_bad
+    {
+        return Err("late-coordinate preflight rejection partially updated critic/Adam".into());
     }
     Ok(
-        serde_json::json!({"passed":true,"discounts":[0.99942255,0.0],"checked":"current and next predictions; full feature gradient; bias e*(1-gamma); terminal gamma0; no-update checkpoint exact"}),
+        serde_json::json!({"passed":true,"discounts":[0.99942255,0.5,0.0],"checked":"current and next predictions; full feature gradient; bias e*(1-gamma); coefficient before clipping; AdamW weights/m/v and age; terminal gamma0; no-update checkpoint exact; rejected nonfinite update preserves every parameter and age"}),
     )
+}
+
+/// Bounded developer regression; no founder, world, or campaign checkpoint.
+pub fn run_critic_gradient_regression() -> Result<serde_json::Value> {
+    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let session = GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Training);
+    gpu_gradient_regression(&session)
 }
 
 pub fn evaluate_critic_capture(
@@ -140,7 +205,11 @@ pub fn evaluate_critic_capture(
     if receipt["purpose"] != "critic_capture_only"
         || receipt["actor_optimizer_updates"] != 0
         || receipt["value_optimizer_updates"] != 0
-        || receipt["actor_policy"] != 5124
+        || receipt["actor_policy"]
+            .as_u64()
+            .is_none_or(|policy| policy == 0)
+        || receipt["actor_and_Adam_unchanged"] != true
+        || receipt["critic_and_Adam_unchanged"] != true
         || receipt["feature_file"] != "critic-features.f32le"
     {
         return Err("heldout capture identity invalid".into());
