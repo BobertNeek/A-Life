@@ -77,6 +77,12 @@ const VISION_HALF_ANGLE: f32 = 110.0_f32.to_radians();
 const VISION_EYE_HEIGHT: f32 = 1.0;
 const VISION_RAY_PITCH: f32 = -0.18;
 const MAX_VISIBLE_ENTITIES: usize = 16;
+// A pathological contact radius must never enumerate an unbounded empty cube.
+const MAX_NONVISUAL_QUERY_CELLS: u64 = 4_096;
+// Small batches retain the canonical scan without unused nonvisual metadata.
+const NONVISUAL_SMALL_WORLD_OBJECTS: usize = 16;
+// A conservative occupancy budget, pending production crossover measurement.
+const NONVISUAL_CANDIDATE_DENSITY_DIVISOR: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 pub const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
@@ -1367,8 +1373,8 @@ impl GroundedTeacherActor {
 }
 
 /// Opaque, immutable lookup built once for one same-snapshot perception batch.
-/// It contains world IDs only; semantic observations are still assembled by
-/// the canonical world sensing paths.
+/// It contains world IDs and conservative physical bounds; semantic
+/// observations are still assembled by the canonical world sensing paths.
 #[derive(Debug, Clone)]
 pub struct HeadlessPerceptionBatchIndex {
     world_seed: u64,
@@ -1376,6 +1382,9 @@ pub struct HeadlessPerceptionBatchIndex {
     object_count: usize,
     cells: BTreeMap<(i32, i32, i32), Vec<u64>>,
     organism_entities: BTreeMap<u64, u64>,
+    max_contact_radius: f32,
+    carried_entities: BTreeMap<u64, Vec<u64>>,
+    nonvisual_requires_full_scan: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -2582,12 +2591,31 @@ impl HeadlessWorld {
     ) -> Result<HeadlessPerceptionBatchIndex, ScaffoldContractError> {
         let mut cells = BTreeMap::<(i32, i32, i32), Vec<u64>>::new();
         let mut organism_entities = BTreeMap::new();
+        let mut max_contact_radius = HEADLESS_CONTACT_RADIUS;
+        let mut carried_entities = BTreeMap::<u64, Vec<u64>>::new();
+        let collect_nonvisual_metadata = self.objects.len() > NONVISUAL_SMALL_WORLD_OBJECTS;
+        let mut nonvisual_requires_full_scan = !collect_nonvisual_metadata;
         for object in self.objects.values() {
             object.position.validate()?;
             cells
                 .entry(perception_cell(object.position))
                 .or_default()
                 .push(object.id.raw());
+            if collect_nonvisual_metadata && !object.consumed {
+                max_contact_radius = max_contact_radius.max(object.radius);
+                // Even a remote nonfinite chemical can affect the canonical
+                // sum through NaN * 0 or infinity * 0. Preserve that behavior.
+                nonvisual_requires_full_scan |= !object.radius.is_finite()
+                    || object.grounded_physical.chemical[..2]
+                        .iter()
+                        .any(|value| !value.is_finite());
+                if let Some(owner) = object.carried_by {
+                    carried_entities
+                        .entry(owner.raw())
+                        .or_default()
+                        .push(object.id.raw());
+                }
+            }
             if let Some(organism_id) = object.organism_id {
                 if organism_entities
                     .insert(organism_id.raw(), object.id.raw())
@@ -2603,6 +2631,9 @@ impl HeadlessWorld {
             object_count: self.objects.len(),
             cells,
             organism_entities,
+            max_contact_radius,
+            carried_entities,
+            nonvisual_requires_full_scan,
         })
     }
 
@@ -3612,7 +3643,23 @@ impl HeadlessWorld {
                     let vision_gain =
                         embodiment.map_or(1.0, |body| body.sensor_gain(SensorCapability::Vision));
                     scale_sensory_group(&mut sensory.channels.visual_affordance, vision_gain);
-                    self.grounded_nonvisual_channels(observer, &mut sensory)?;
+                    if let Some(objects) = index
+                        .map(|index| self.indexed_nonvisual_objects(observer, index))
+                        .transpose()?
+                        .flatten()
+                    {
+                        self.grounded_nonvisual_channels_from_objects(
+                            observer,
+                            &mut sensory,
+                            objects.into_iter(),
+                        )?;
+                    } else {
+                        self.grounded_nonvisual_channels_from_objects(
+                            observer,
+                            &mut sensory,
+                            self.objects.values(),
+                        )?;
+                    }
                 }
                 let heard = self
                     .speech
@@ -3782,10 +3829,11 @@ impl HeadlessWorld {
 
     /// Two local samples of four physical odor bands. No source identity,
     /// object kind, exact bearing, or target is returned to cognition.
-    fn grounded_nonvisual_channels(
+    fn grounded_nonvisual_channels_from_objects<'a>(
         &self,
         observer: &WorldObject,
         sensory: &mut SensorySnapshot,
+        objects: impl Iterator<Item = &'a WorldObject>,
     ) -> Result<(), ScaffoldContractError> {
         let record = observer
             .organism_id
@@ -3805,11 +3853,9 @@ impl HeadlessWorld {
             add(observer.position, lateral),
             subtract(observer.position, lateral),
         ];
-        for object in self
-            .objects
-            .values()
-            .filter(|object| object.id != observer.id && !object.consumed)
-        {
+        for object in objects.filter(|object| object.id != observer.id && !object.consumed) {
+            #[cfg(test)]
+            nonvisual_perception_tests::record_object_evaluation();
             for (side, sample) in samples.iter().enumerate() {
                 let attenuation =
                     proximity_salience(distance(*sample, object.position), HEADLESS_VISION_RADIUS);
@@ -5780,6 +5826,78 @@ impl HeadlessWorld {
         Ok(nearby)
     }
 
+    /// Complete physical odor/contact candidates from this immutable batch.
+    /// None selects the canonical full scan when the query is unsafe or costly.
+    fn indexed_nonvisual_objects<'a>(
+        &'a self,
+        observer: &WorldObject,
+        index: &HeadlessPerceptionBatchIndex,
+    ) -> Result<Option<Vec<&'a WorldObject>>, ScaffoldContractError> {
+        self.validate_perception_batch_index(index)?;
+        if index.object_count <= NONVISUAL_SMALL_WORLD_OBJECTS || index.nonvisual_requires_full_scan {
+            return Ok(None);
+        }
+        let yaw = observer.body_yaw + observer.head_yaw;
+        let lateral = Vec3f::new(-yaw.sin() * 0.25, 0.0, yaw.cos() * 0.25);
+        let samples = [
+            add(observer.position, lateral),
+            subtract(observer.position, lateral),
+        ];
+        let Some(NonvisualCellBounds {
+            minimum,
+            maximum,
+            cell_count,
+        }) = nonvisual_cell_bounds(observer.position, samples, index.max_contact_radius)
+        else {
+            return Ok(None);
+        };
+        // Avoid probing more empty cells than the canonical scan has objects.
+        if cell_count > MAX_NONVISUAL_QUERY_CELLS || cell_count > index.object_count as u64 {
+            return Ok(None);
+        }
+        let candidate_limit = index
+            .object_count
+            .div_ceil(NONVISUAL_CANDIDATE_DENSITY_DIVISOR);
+        let mut ids = Vec::new();
+        for x in minimum.0..=maximum.0 {
+            for y in minimum.1..=maximum.1 {
+                for z in minimum.2..=maximum.2 {
+                    if let Some(cell) = index.cells.get(&(x, y, z)) {
+                        // Check occupancy before copying IDs, sorting, or resolving
+                        // objects. Self/consumed IDs conservatively count too.
+                        if cell.len() >= candidate_limit.saturating_sub(ids.len()) {
+                            return Ok(None);
+                        }
+                        ids.extend_from_slice(cell);
+                    }
+                }
+            }
+        }
+        // Restored carried poses need not be near their owner. Possession is
+        // physical contact even when no smell/radius bound reaches the center.
+        if let Some(carried) = observer
+            .organism_id
+            .and_then(|owner| index.carried_entities.get(&owner.raw()))
+        {
+            // Duplicate spatial/ownership IDs may select an earlier safe scan.
+            if carried.len() >= candidate_limit.saturating_sub(ids.len()) {
+                return Ok(None);
+            }
+            ids.extend_from_slice(carried);
+        }
+        // Match the canonical BTreeMap order before floating-point addition.
+        ids.sort_unstable();
+        ids.dedup();
+        ids.into_iter()
+            .map(|id| {
+                self.objects
+                    .get(&id)
+                    .ok_or(ScaffoldContractError::InvalidPerceptionFrame)
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(Some)
+    }
+
     fn visible_entities_from(&self, observer: &WorldObject) -> Vec<VisibleWorldEntity> {
         Self::visible_entities_from_objects(observer, self.objects.values())
     }
@@ -7639,6 +7757,56 @@ fn perception_cell(position: Vec3f) -> (i32, i32, i32) {
         (position.y * scale).floor() as i32,
         (position.z * scale).floor() as i32,
     )
+}
+
+struct NonvisualCellBounds {
+    minimum: (i32, i32, i32),
+    maximum: (i32, i32, i32),
+    cell_count: u64,
+}
+
+/// Union of touch support and both actual rounded lateral odor samples.
+/// Widen in f64 before flooring so f32 distance/subtraction rounding cannot
+/// drop a boundary contact. Eight f32 epsilons cover the three squared terms,
+/// their additions and sqrt. Effective support radii are at least 0.75, so
+/// squared-distance underflow cannot remove a boundary candidate.
+/// The odor cube reaches at least 8.25 from the observer at ordinary positions.
+fn nonvisual_cell_bounds(
+    observer: Vec3f,
+    samples: [Vec3f; 2],
+    contact_radius: f32,
+) -> Option<NonvisualCellBounds> {
+    let mut minimum = [i32::MAX; 3];
+    let mut maximum = [i32::MIN; 3];
+    for (center, radius) in [
+        (observer, contact_radius),
+        (samples[0], HEADLESS_VISION_RADIUS),
+        (samples[1], HEADLESS_VISION_RADIUS),
+    ] {
+        if !radius.is_finite() || radius < HEADLESS_CONTACT_RADIUS {
+            return None;
+        }
+        let radius = f64::from(radius) * (1.0 + 8.0 * f64::from(f32::EPSILON));
+        for (axis, coordinate) in [center.x, center.y, center.z].into_iter().enumerate() {
+            if !coordinate.is_finite() {
+                return None;
+            }
+            let coordinate = f64::from(coordinate);
+            let scale = f64::from(HEADLESS_VISION_RADIUS);
+            minimum[axis] = minimum[axis].min(((coordinate - radius) / scale).floor() as i32);
+            maximum[axis] = maximum[axis].max(((coordinate + radius) / scale).floor() as i32);
+        }
+    }
+    let mut cell_count = 1_u64;
+    for axis in 0..3 {
+        let width = (i64::from(maximum[axis]) - i64::from(minimum[axis]) + 1) as u64;
+        cell_count = cell_count.checked_mul(width)?;
+    }
+    Some(NonvisualCellBounds {
+        minimum: (minimum[0], minimum[1], minimum[2]),
+        maximum: (maximum[0], maximum[1], maximum[2]),
+        cell_count,
+    })
 }
 
 fn subtract(a: Vec3f, b: Vec3f) -> Vec3f {
@@ -11089,3 +11257,6 @@ mod eat_possession_tests {
         assert_eq!(stale.body_event.nutrition, 0.0);
     }
 }
+
+#[cfg(test)]
+mod nonvisual_perception_tests;
