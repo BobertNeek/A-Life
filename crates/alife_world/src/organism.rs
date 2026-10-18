@@ -1342,6 +1342,32 @@ impl WorldOrganismRegistry {
         &self,
         digest: &mut CanonicalDigestBuilder,
     ) -> Result<(), ScaffoldContractError> {
+        self.write_signature(digest, None)
+    }
+
+    pub(crate) fn write_policy_weight_comparison_signature(
+        &self,
+        digest: &mut CanonicalDigestBuilder,
+        subject: OrganismId,
+    ) -> Result<(), ScaffoldContractError> {
+        let asset = self
+            .get(subject)
+            .and_then(|record| record.genome.n2048_foundation_candidate.as_ref())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if asset.manifest().capacity_class_id() != alife_core::BrainCapacityClass::N2048_ID {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        // Validate the actual payload before projecting it. A projection is
+        // evidence only; never build or admit an invalid normalized asset.
+        asset.encode_canonical()?;
+        self.write_signature(digest, Some(subject))
+    }
+
+    fn write_signature(
+        &self,
+        digest: &mut CanonicalDigestBuilder,
+        policy_weight_subject: Option<OrganismId>,
+    ) -> Result<(), ScaffoldContractError> {
         self.validate_contract().map_err(|error| match error {
             OrganismRegistryError::InvalidRecord(error) => error,
             _ => ScaffoldContractError::InvalidId,
@@ -1355,8 +1381,32 @@ impl WorldOrganismRegistry {
         digest.write_u16(ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION);
         digest.write_sequence_len(records.len());
         for record in records {
-            let payload =
-                serde_json::to_vec(record).map_err(|_| ScaffoldContractError::InvalidId)?;
+            let payload = if policy_weight_subject == Some(record.organism_id()) {
+                let mut projected =
+                    serde_json::to_value(record).map_err(|_| ScaffoldContractError::InvalidId)?;
+                let asset = projected
+                    .pointer_mut("/genome/n2048_foundation_candidate")
+                    .and_then(serde_json::Value::as_object_mut)
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                // Exclude only parameters and their derived content digests.
+                // Every other manifest/provenance field, including count,
+                // remains bound; other organisms are never projected.
+                asset
+                    .remove("weights")
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                asset
+                    .remove("digest")
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                asset
+                    .get_mut("manifest")
+                    .and_then(|manifest| manifest.get_mut("weight_asset"))
+                    .and_then(serde_json::Value::as_object_mut)
+                    .and_then(|reference| reference.remove("digest"))
+                    .ok_or(ScaffoldContractError::InvalidId)?;
+                serde_json::to_vec(&projected).map_err(|_| ScaffoldContractError::InvalidId)?
+            } else {
+                serde_json::to_vec(record).map_err(|_| ScaffoldContractError::InvalidId)?
+            };
             digest.write_bytes(&payload);
         }
         Ok(())

@@ -1055,6 +1055,16 @@ pub struct HeadlessWorldSignatureDigest {
     pub words: [u64; 4],
 }
 
+/// Separate comparison domain: only this subject's N2048 parameter payload
+/// and its derived digests are excluded. This is not a canonical world ID.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeadlessPolicyWeightComparisonSignatureV1 {
+    pub schema_version: u16,
+    pub subject: OrganismId,
+    pub words: [u64; 4],
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HeadlessActionIds;
 
@@ -2448,8 +2458,47 @@ impl HeadlessWorld {
     pub fn canonical_signature_digest(
         &self,
     ) -> Result<HeadlessWorldSignatureDigest, ScaffoldContractError> {
-        let mut digest = CanonicalDigestBuilder::new(HEADLESS_WORLD_SIGNATURE_DOMAIN);
-        digest.write_u16(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION);
+        self.signature_digest(
+            HEADLESS_WORLD_SIGNATURE_DOMAIN,
+            HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
+            None,
+        )
+    }
+
+    pub fn policy_weight_comparison_signature_v1(
+        &self,
+        subject: OrganismId,
+    ) -> Result<HeadlessPolicyWeightComparisonSignatureV1, ScaffoldContractError> {
+        if !self
+            .organism_entity_ids()
+            .iter()
+            .any(|(id, _)| *id == subject)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let signature = self.signature_digest(
+            b"alife.world.subject-n2048-policy-weight-comparison.v1",
+            1,
+            Some(subject),
+        )?;
+        Ok(HeadlessPolicyWeightComparisonSignatureV1 {
+            schema_version: 1,
+            subject,
+            words: signature.words,
+        })
+    }
+
+    fn signature_digest(
+        &self,
+        domain: &[u8],
+        schema_version: u16,
+        policy_weight_subject: Option<OrganismId>,
+    ) -> Result<HeadlessWorldSignatureDigest, ScaffoldContractError> {
+        let mut digest = CanonicalDigestBuilder::new(domain);
+        digest.write_u16(schema_version);
+        if let Some(subject) = policy_weight_subject {
+            digest.write_u64(subject.raw());
+        }
         digest.write_u64(self.seed);
         digest.write_u64(self.tick.raw());
         digest.write_u64(self.next_entity_id);
@@ -2479,8 +2528,13 @@ impl HeadlessWorld {
         for object in self.objects.values() {
             write_world_object_signature(&mut digest, object)?;
         }
-        self.organism_registry
-            .write_canonical_signature(&mut digest)?;
+        if let Some(subject) = policy_weight_subject {
+            self.organism_registry
+                .write_policy_weight_comparison_signature(&mut digest, subject)?;
+        } else {
+            self.organism_registry
+                .write_canonical_signature(&mut digest)?;
+        }
         digest.write_bytes(
             &serde_json::to_vec(&self.ecology).map_err(|_| ScaffoldContractError::InvalidId)?,
         );
@@ -2530,7 +2584,7 @@ impl HeadlessWorld {
             digest.write_bytes(b"alife.world.disable-age-death.v1");
         }
         Ok(HeadlessWorldSignatureDigest {
-            schema_version: HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION,
+            schema_version,
             words: digest.finish256(),
         })
     }

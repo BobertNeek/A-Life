@@ -659,3 +659,26 @@ credit negative. Require matched disposable GPU evidence, genuinely varied
 held-out ordinary-temperature Grab possession outcomes, and retained Eating
 before proposing adoption. CPU arithmetic, compilation, and fitting loss alone
 do not establish competence. See the [bounded comparison contract](../specs/actor-advantage-centering-20261018/spec.md).
+
+### Policy-weight comparison identity
+
+New native probes record `initial_comparison_identity` before GPU runtime
+creation. Its separately versioned world signature excludes only the designated
+subject's N2048 weight vector and the two digests derived from that vector.
+The complete remaining manifest (including count, ABI, curriculum and promotion
+provenance), other organisms' policies, world state and physiology remain bound.
+The original canonical world signature is preserved for identity and audit.
+
+`scripts/compare_foundation_probes.py` compares new artifacts using predeclared
+control/candidate policy SHA-256 values and the executable SHA-256. It also
+requires matching initial sensory/physiology context, candidates/masks, physical
+setup, sampler and cue/teacher provenance. Candidate logits and later outcomes
+are outputs, not comparison inputs. Missing identities, malformed evidence and
+unsupported schemas fail explicitly; historical artifacts cannot fall back to a
+weaker context-only check. Run `python scripts/compare_foundation_probes.py --help`
+for the read-only CLI. An identity match is not an adoption or competence gate.
+
+The original 2026-10-18 actor-centering qualification and its **do-not-adopt**
+decision remain unchanged. Its full-world signature included the tested policy.
+This repair applies to future predeclared protocols; it does not reinterpret or
+rerun that experiment. See the [repair contract](../specs/policy-comparison-identity-20261018/spec.md).

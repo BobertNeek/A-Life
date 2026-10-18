@@ -5,6 +5,13 @@ on:
     branches: ["main"]
     paths:
       - ".github/workflows/ppo-rollout-diagnostics.yml"
+      - "crates/alife_world/src/headless.rs"
+      - "crates/alife_world/src/organism.rs"
+      - "crates/alife_world/tests/*signature.rs"
+      - "crates/alife_core/src/foundation.rs"
+      - "crates/alife_game_app/src/foundation_training.rs"
+      - "crates/alife_game_app/src/foundation_training/**"
+      - "scripts/*foundation_probes.py"
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
@@ -25,6 +32,13 @@ on:
     branches: ["main"]
     paths:
       - ".github/workflows/ppo-rollout-diagnostics.yml"
+      - "crates/alife_world/src/headless.rs"
+      - "crates/alife_world/src/organism.rs"
+      - "crates/alife_world/tests/*signature.rs"
+      - "crates/alife_core/src/foundation.rs"
+      - "crates/alife_game_app/src/foundation_training.rs"
+      - "crates/alife_game_app/src/foundation_training/**"
+      - "scripts/*foundation_probes.py"
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
@@ -65,6 +79,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Policy-only comparison and rejected context/provenance differences
+        run: python -m unittest discover -s scripts -p 'test_compare_foundation_probes.py' -v
+      - name: Canonical world identity and narrowly projected policy-weight identity
+        run: cargo test --locked -p alife_world --test headless_world_signature --test policy_weight_comparison_signature -- --test-threads=1
+      - name: Native comparison receipt binds policy and executable without GPU work
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::comparison_identity::tests -- --test-threads=1
       - name: Prepared values, advantages, disabled I/O and row cap
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::ppo_diagnostics::tests -- --test-threads=1
       - name: Actor-only centering preserves raw targets and full-batch windows
