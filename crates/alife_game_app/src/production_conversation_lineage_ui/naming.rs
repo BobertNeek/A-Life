@@ -5,7 +5,7 @@ use bevy::{
     a11y::ActionRequest,
     ecs::message::MessageCursor,
     prelude::{Entity, Interaction, MouseButton, World},
-    window::{Ime, PrimaryWindow},
+    window::{Ime, PrimaryWindow, WindowEvent},
 };
 
 #[derive(Debug, Clone)]
@@ -16,7 +16,7 @@ pub(super) struct Draft {
     runtime_identity: SpeechRuntimeIdentity,
     opening: Option<bool>, // true: F2; false: pointer/accessibility opening
     pub(super) preedit: String,
-    ime_activity: bool,
+    pending_input: Option<Vec<WindowEvent>>,
     pub(super) error: Option<&'static str>,
 }
 
@@ -24,7 +24,7 @@ pub(super) struct Draft {
 pub(super) struct OpenInput {
     reader: MessageCursor<ActionRequest>,
     pressed: bool,
-    ime_reader: MessageCursor<Ime>,
+    window_reader: MessageCursor<WindowEvent>,
     ime_window: Option<(Entity, bool)>,
 }
 
@@ -126,7 +126,7 @@ pub(super) fn collect_input(world: &mut World) {
         open_selected(world, keyboard);
     }
     sync_ime_window(world);
-    collect_ime(world);
+    collect_ordered_input(world);
 }
 
 fn open_selected(world: &mut World, keyboard: bool) {
@@ -169,7 +169,7 @@ fn open_selected(world: &mut World, keyboard: bool) {
         runtime_identity,
         opening: Some(keyboard),
         preedit: String::new(),
-        ime_activity: false,
+        pending_input: None,
         error: None,
     };
     open(
@@ -227,16 +227,33 @@ pub(super) fn sync_ime_window(world: &mut World) {
     }
 }
 
-fn collect_ime(world: &mut World) {
-    // Always advance this cursor, including while closed or behind another
-    // modal, so a later name entry cannot replay an old OS commit.
+fn collect_ordered_input(world: &mut World) {
+    // Winit publishes the same ordered batch to WindowEvent after forwarding
+    // per-type copies. Separate KeyboardInput/Ime readers lose cross-type order.
+    // Always drain while closed/blocked too, preventing a later draft replay.
     let messages = world.resource_scope(|world, mut input: bevy::prelude::Mut<OpenInput>| {
         world
-            .get_resource::<bevy::prelude::Messages<Ime>>()
-            .map(|messages| input.ime_reader.read(messages).cloned().collect::<Vec<_>>())
-            .unwrap_or_default()
+            .get_resource::<bevy::prelude::Messages<WindowEvent>>()
+            .map(|messages| {
+                input
+                    .window_reader
+                    .read(messages)
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
     });
-    let target = world
+    let blocked = world
+        .get_resource::<crate::production_voxel_renderer::menu::MenuState>()
+        .is_some_and(crate::production_voxel_renderer::menu::captures_input_state);
+    let keyboard_window = if !blocked {
+        world
+            .query_filtered::<(Entity, &bevy::prelude::Window), With<PrimaryWindow>>()
+            .iter(world)
+            .find_map(|(entity, window)| window.focused.then_some(entity))
+    } else {
+        None
+    };
+    let ime_window = world
         .resource::<OpenInput>()
         .ime_window
         .map(|(entity, _)| entity);
@@ -244,46 +261,50 @@ fn collect_ime(world: &mut World) {
     let Some(draft) = state.naming.as_mut() else {
         return;
     };
-    draft.ime_activity = !draft.preedit.is_empty();
-    if draft.opening.is_some() || target.is_none() {
-        return;
+    // Queue only: handle_input validates the bound runtime/target before replay.
+    // None retains raw-only fixtures; Some(empty) never replays typed copies.
+    draft.pending_input = messages.map(|messages| {
+        messages
+            .into_iter()
+            .filter(|message| match message {
+                WindowEvent::KeyboardInput(key) => Some(key.window) == keyboard_window,
+                WindowEvent::Ime(ime) => Some(ime_event_window(ime)) == ime_window,
+                _ => false,
+            })
+            .collect()
+    });
+}
+
+fn ime_event_window(ime: &Ime) -> Entity {
+    match ime {
+        Ime::Preedit { window, .. }
+        | Ime::Commit { window, .. }
+        | Ime::Enabled { window }
+        | Ime::Disabled { window } => *window,
     }
-    for message in messages {
-        let window = match &message {
-            Ime::Preedit { window, .. }
-            | Ime::Commit { window, .. }
-            | Ime::Enabled { window }
-            | Ime::Disabled { window } => *window,
-        };
-        if Some(window) != target {
-            continue;
+}
+
+fn apply_ime(state: &mut ProductionConversationLineageUiState, ime: Ime) {
+    match ime {
+        Ime::Preedit { value, .. } => {
+            state.naming.as_mut().unwrap().preedit = value
+                .chars()
+                .filter(|c| !c.is_control())
+                .take(MAX_TYPED_CHARS)
+                .collect();
         }
-        match message {
-            Ime::Preedit { value, .. } => {
-                let draft = state.naming.as_mut().unwrap();
-                draft.ime_activity = true;
-                draft.preedit = value
-                    .chars()
-                    .filter(|c| !c.is_control())
-                    .take(MAX_TYPED_CHARS)
-                    .collect();
-            }
-            Ime::Commit { value, .. } => {
-                let draft = state.naming.as_mut().unwrap();
-                draft.ime_activity = true;
-                draft.preedit.clear();
-                draft.error = None;
-                let remaining = MAX_TYPED_CHARS.saturating_sub(state.input.chars().count());
-                state
-                    .input
-                    .extend(value.chars().filter(|c| !c.is_control()).take(remaining));
-                state.input_help_open = false;
-            }
-            Ime::Disabled { .. } => {
-                state.naming.as_mut().unwrap().preedit.clear();
-            }
-            Ime::Enabled { .. } => {}
+        Ime::Commit { value, .. } => {
+            let draft = state.naming.as_mut().unwrap();
+            draft.preedit.clear();
+            draft.error = None;
+            let remaining = MAX_TYPED_CHARS.saturating_sub(state.input.chars().count());
+            state
+                .input
+                .extend(value.chars().filter(|c| !c.is_control()).take(remaining));
+            state.input_help_open = false;
         }
+        Ime::Disabled { .. } => state.naming.as_mut().unwrap().preedit.clear(),
+        Ime::Enabled { .. } => {}
     }
 }
 
@@ -375,7 +396,23 @@ fn edit<'a>(
         state.input_help_open = !state.input_help_open;
     }
     let opening = state.naming.as_mut().unwrap().opening.take();
-    let ime_activity = state.naming.as_ref().unwrap().ime_activity;
+    let events = state
+        .naming
+        .as_mut()
+        .unwrap()
+        .pending_input
+        .take()
+        .unwrap_or_else(|| messages.cloned().map(WindowEvent::KeyboardInput).collect());
+    // Only confirmation is frame-gated: Commit may precede the Enter that chose
+    // its candidate. Ordinary characters/backspace still replay in source order.
+    let ime_confirmation = !state.naming.as_ref().unwrap().preedit.is_empty()
+        || events.iter().any(|event| {
+            matches!(
+                event,
+                WindowEvent::Ime(Ime::Preedit { .. } | Ime::Commit { .. })
+            )
+        });
+
     let before = state.input.clone();
     let submit = if opening == Some(false) {
         false
@@ -384,7 +421,17 @@ fn edit<'a>(
         // never confirms in the frame it opens, even with two raw Enter events.
         let mut after_open = opening.is_none();
         let mut submit = false;
-        for message in messages {
+        for event in events {
+            let message = match event {
+                WindowEvent::Ime(ime) => {
+                    if after_open && opening.is_none() {
+                        apply_ime(state, ime);
+                    }
+                    continue;
+                }
+                WindowEvent::KeyboardInput(message) => message,
+                _ => continue,
+            };
             if message.state != ButtonState::Pressed {
                 continue;
             }
@@ -392,13 +439,14 @@ fn edit<'a>(
                 after_open = message.key_code == KeyCode::F2 && !message.repeat;
                 continue;
             }
-            // OS composition owns these keys. Its confirming Enter may arrive
-            // in the same frame as Commit, so that frame never saves a name.
-            if ime_activity {
+            // Winit owns composition text deduplication. Ignore raw editing
+            // only while preedit is active; preserve all ordinary post-commit
+            // edits, even when they share this update with the commit.
+            if !state.naming.as_ref().unwrap().preedit.is_empty() {
                 continue;
             }
             if message.key_code == KeyCode::Enter {
-                submit |= opening.is_none() && !message.repeat;
+                submit |= opening.is_none() && !ime_confirmation && !message.repeat;
                 if submit {
                     break;
                 }
@@ -417,7 +465,7 @@ fn edit<'a>(
         state.naming.as_mut().unwrap().error = None;
         state.input_help_open = false;
     }
-    opening.is_none() && !ime_activity && (submit || pointer == Some(composer::Control::Send))
+    opening.is_none() && !ime_confirmation && (submit || pointer == Some(composer::Control::Send))
 }
 
 fn complete(

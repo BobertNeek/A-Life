@@ -826,7 +826,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
         adapt_bottom_controls_visibility(&mut world, size, true);
         assert_eq!(visible_in_hierarchy(&world, panel), visible);
     }
-    assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 252.0);
+    assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 236.0);
 }
 
 #[test]

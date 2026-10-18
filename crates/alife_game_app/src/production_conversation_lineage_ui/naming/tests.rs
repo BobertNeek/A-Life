@@ -52,7 +52,7 @@ fn draft(world: &HeadlessWorld, opening: Option<bool>) -> Draft {
         },
         opening,
         preedit: String::new(),
-        ime_activity: false,
+        pending_input: None,
         error: None,
     }
 }
@@ -412,7 +412,9 @@ fn ime_app(initially_enabled: bool) -> (App, Entity) {
     app.insert_resource(state(&world(), None))
         .init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<ButtonInput<MouseButton>>()
-        .add_message::<Ime>();
+        .add_message::<Ime>()
+        .add_message::<KeyboardInput>()
+        .add_message::<WindowEvent>();
     composer::spawn(app.world_mut());
     let window = app
         .world_mut()
@@ -426,107 +428,218 @@ fn ime_app(initially_enabled: bool) -> (App, Entity) {
     (app, window)
 }
 
+// Match bevy_winit::forward_bevy_events: publish typed copies plus the same
+// source events in the combined stream. The latter is the naming authority.
+fn window_event(app: &mut App, event: impl Into<WindowEvent>) {
+    let event = event.into();
+    match &event {
+        WindowEvent::KeyboardInput(key) => {
+            app.world_mut().write_message(key.clone());
+        }
+        WindowEvent::Ime(ime) => {
+            app.world_mut().write_message(ime.clone());
+        }
+        _ => {}
+    }
+    app.world_mut().write_message(event);
+}
+fn window_key(window: Entity, code: KeyCode, text: Option<&str>) -> KeyboardInput {
+    KeyboardInput {
+        window,
+        ..key(code, text, false)
+    }
+}
+fn pending_edit(app: &mut App, pointer: Option<composer::Control>) -> bool {
+    let keys = app.world().resource::<ButtonInput<KeyCode>>().clone();
+    let mut raw_reader = MessageCursor::<KeyboardInput>::default();
+    let raw = raw_reader
+        .read(app.world().resource::<Messages<KeyboardInput>>())
+        .cloned()
+        .collect::<Vec<_>>();
+    edit(
+        &mut app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>(),
+        &keys,
+        raw.iter(),
+        pointer,
+    )
+}
+
 #[test]
 fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() {
-    let (mut app, window) = ime_app(false);
-    app.world_mut().write_message(Ime::Preedit {
-        window,
-        value: "ねこ".into(),
-        cursor: Some((6, 6)),
-    });
-    composer::collect_input(app.world_mut());
-    assert!(app.world().get::<Window>(window).unwrap().ime_enabled);
-    let keys = ButtonInput::default();
-    {
-        let mut state = app
-            .world_mut()
-            .resource_mut::<ProductionConversationLineageUiState>();
-        assert!(state.input.is_empty(), "preedit is not committed name data");
-        assert!(!edit(
-            &mut state,
-            &keys,
-            [key(KeyCode::Enter, None, false)].iter(),
-            None
-        ));
-        assert!(!edit(
-            &mut state,
-            &keys,
-            [].iter(),
-            Some(composer::Control::Send)
-        ));
-    }
-    composer::adapt(app.world_mut());
-    let text = app
-        .world_mut()
-        .query_filtered::<&Text, With<ProductionSpeechEntryPanel>>()
-        .single(app.world())
-        .unwrap();
-    assert_eq!(text.0, "ねこ|");
-    app.world_mut().write_message(Ime::Preedit {
-        window,
-        value: String::new(),
-        cursor: None,
-    });
-    app.world_mut().write_message(Ime::Commit {
-        window,
-        value: "猫 Élan".into(),
-    });
-    composer::collect_input(app.world_mut());
-    {
-        let mut state = app
-            .world_mut()
-            .resource_mut::<ProductionConversationLineageUiState>();
-        assert!(!edit(
-            &mut state,
-            &keys,
-            [
-                key(KeyCode::KeyC, Some("猫 Élan"), false),
-                key(KeyCode::Enter, None, false)
-            ]
-            .iter(),
-            None
-        ));
-        assert_eq!(
-            state.input, "猫 Élan",
-            "IME commit is inserted exactly once"
+    // Some backends deliver the candidate Enter before Commit; others after.
+    for enter_before_commit in [false, true] {
+        let (mut app, window) = ime_app(false);
+        window_event(
+            &mut app,
+            Ime::Preedit {
+                window,
+                value: "ねこ".into(),
+                cursor: Some((6, 6)),
+            },
         );
+        composer::collect_input(app.world_mut());
+        assert!(app.world().get::<Window>(window).unwrap().ime_enabled);
+        assert!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .naming
+                .as_ref()
+                .unwrap()
+                .preedit
+                .is_empty(),
+            "collector queues input until bound runtime/target validation"
+        );
+        assert!(!pending_edit(&mut app, Some(composer::Control::Send)));
+        composer::adapt(app.world_mut());
+        let text = app
+            .world_mut()
+            .query_filtered::<&Text, With<ProductionSpeechEntryPanel>>()
+            .single(app.world())
+            .unwrap();
+        assert_eq!(text.0, "ねこ|");
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        if enter_before_commit {
+            window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        }
+        window_event(
+            &mut app,
+            Ime::Preedit {
+                window,
+                value: String::new(),
+                cursor: None,
+            },
+        );
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "猫 Élan".into(),
+            },
+        );
+        if !enter_before_commit {
+            window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        }
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        let state = app
+            .world()
+            .resource::<ProductionConversationLineageUiState>();
+        assert_eq!(state.input, "猫 Élan");
         assert!(state.naming.as_ref().unwrap().preedit.is_empty());
         assert!(state.blocks_world_shortcuts());
+        composer::collect_input(app.world_mut());
+        assert!(
+            !pending_edit(&mut app, None),
+            "empty combined stream must not replay typed Enter copies"
+        );
+        window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        composer::collect_input(app.world_mut());
+        assert!(pending_edit(&mut app, None));
+        let mut canonical = world();
+        {
+            let mut state = app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>();
+            let result =
+                canonical.rename_agent(state.naming.as_ref().unwrap().stable_id, &state.input);
+            complete(&mut state, result);
+        }
+        composer::adapt(app.world_mut());
+        assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
+        assert_eq!(canonical.entity_id("猫 Élan"), Some(WorldEntityId(1)));
+        assert!(canonical.audible_utterances().is_empty());
     }
-    composer::collect_input(app.world_mut());
-    let mut canonical = world();
-    {
-        let mut state = app
-            .world_mut()
-            .resource_mut::<ProductionConversationLineageUiState>();
-        assert!(edit(
-            &mut state,
-            &keys,
-            [key(KeyCode::Enter, None, false)].iter(),
-            None
-        ));
-        let result = canonical.rename_agent(state.naming.as_ref().unwrap().stable_id, &state.input);
-        complete(&mut state, result);
-    }
-    composer::adapt(app.world_mut());
-    assert!(
-        !app.world().get::<Window>(window).unwrap().ime_enabled,
-        "closing restores the host setting in the same frame"
+}
+
+#[test]
+fn ordered_window_input_preserves_normal_typing_and_backspace_around_ime_commit() {
+    let (mut app, window) = ime_app(false);
+    app.world_mut()
+        .resource_mut::<ProductionConversationLineageUiState>()
+        .input = "prefix".into();
+    window_event(&mut app, window_key(window, KeyCode::KeyA, Some("a")));
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(&mut app, window_key(window, KeyCode::KeyB, Some("b")));
+    window_event(
+        &mut app,
+        Ime::Preedit {
+            window,
+            value: "ねこ".into(),
+            cursor: Some((6, 6)),
+        },
     );
-    assert_eq!(canonical.entity_id("猫 Élan"), Some(WorldEntityId(1)));
-    assert!(canonical.audible_utterances().is_empty());
+    window_event(
+        &mut app,
+        window_key(window, KeyCode::KeyX, Some("composition key")),
+    );
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(
+        &mut app,
+        Ime::Preedit {
+            window,
+            value: String::new(),
+            cursor: None,
+        },
+    );
+    window_event(
+        &mut app,
+        Ime::Commit {
+            window,
+            value: "猫".into(),
+        },
+    );
+    // This is a real subsequent raw character, even though it equals the commit.
+    // Deduplication belongs to Winit, never a comparison of text payloads here.
+    window_event(&mut app, window_key(window, KeyCode::KeyC, Some("猫")));
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(&mut app, window_key(window, KeyCode::KeyD, Some("d")));
+    window_event(&mut app, window_key(window, KeyCode::Enter, None));
+    composer::collect_input(app.world_mut());
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "prefix"
+    );
+    assert!(!pending_edit(&mut app, None));
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "prefixb猫d"
+    );
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(&mut app, window_key(window, KeyCode::KeyE, Some("e")));
+    window_event(&mut app, window_key(window, KeyCode::Enter, None));
+    composer::collect_input(app.world_mut());
+    assert!(pending_edit(&mut app, None));
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "prefixb猫e"
+    );
 }
 
 #[test]
 fn ime_cancel_focus_help_and_closed_events_restore_settings_without_replay() {
     for initially_enabled in [false, true] {
         let (mut app, window) = ime_app(initially_enabled);
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window: Entity::PLACEHOLDER,
+                value: "wrong window".into(),
+            },
+        );
         composer::collect_input(app.world_mut());
-        app.world_mut().write_message(Ime::Commit {
-            window: Entity::PLACEHOLDER,
-            value: "wrong window".into(),
-        });
-        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
         assert!(app
             .world()
             .resource::<ProductionConversationLineageUiState>()
@@ -540,55 +653,63 @@ fn ime_cancel_focus_help_and_closed_events_restore_settings_without_replay() {
             app.world().get::<Window>(window).unwrap().ime_enabled,
             initially_enabled
         );
-        app.world_mut().write_message(Ime::Commit {
-            window,
-            value: "help must drain".into(),
-        });
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "help must drain".into(),
+            },
+        );
         composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
         app.world_mut()
             .resource_mut::<ProductionConversationLineageUiState>()
             .input_help_open = false;
         composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
         assert!(app
             .world()
             .resource::<ProductionConversationLineageUiState>()
             .input
             .is_empty());
-        app.world_mut().write_message(Ime::Preedit {
-            window,
-            value: "cancel this".into(),
-            cursor: Some((0, 0)),
-        });
+        window_event(
+            &mut app,
+            Ime::Preedit {
+                window,
+                value: "cancel this".into(),
+                cursor: Some((0, 0)),
+            },
+        );
         composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::Escape);
         composer::collect_input(app.world_mut());
-        {
-            let mut state = app
-                .world_mut()
-                .resource_mut::<ProductionConversationLineageUiState>();
-            let mut keys = ButtonInput::default();
-            keys.press(KeyCode::Escape);
-            assert!(!edit(&mut state, &keys, [].iter(), None));
-            assert!(
-                state.blocks_world_shortcuts(),
-                "held dismissal remains captured"
-            );
-        }
+        assert!(!pending_edit(&mut app, None));
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .blocks_world_shortcuts());
         composer::adapt(app.world_mut());
         assert_eq!(
             app.world().get::<Window>(window).unwrap().ime_enabled,
             initially_enabled
         );
-        app.world_mut().write_message(Ime::Commit {
-            window,
-            value: "closed must drain".into(),
-        });
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "closed must drain".into(),
+            },
+        );
         composer::collect_input(app.world_mut());
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .release(KeyCode::Escape);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear();
         open(
             &mut app
                 .world_mut()
@@ -596,16 +717,20 @@ fn ime_cancel_focus_help_and_closed_events_restore_settings_without_replay() {
             draft(&world(), None),
         );
         composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
         assert!(app
             .world()
             .resource::<ProductionConversationLineageUiState>()
             .input
             .is_empty());
         app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
-        app.world_mut().write_message(Ime::Commit {
-            window,
-            value: "unfocused must drain".into(),
-        });
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "unfocused must drain".into(),
+            },
+        );
         composer::collect_input(app.world_mut());
         let state = app
             .world()
@@ -646,49 +771,59 @@ fn shared_composer_initializes_system_font_fallback_once() {
 
 #[test]
 fn ime_opening_frame_commits_are_drained_and_speech_drafts_are_untouched() {
-    let (mut app, window) = ime_app(false);
-    app.world_mut()
-        .resource_mut::<ProductionConversationLineageUiState>()
-        .naming
-        .as_mut()
-        .unwrap()
-        .opening = Some(false);
-    app.world_mut().write_message(Ime::Commit {
-        window,
-        value: "before opening boundary".into(),
-    });
-    composer::collect_input(app.world_mut());
-    {
-        let mut state = app
-            .world_mut()
-            .resource_mut::<ProductionConversationLineageUiState>();
-        assert!(!edit(&mut state, &ButtonInput::default(), [].iter(), None));
-        assert!(state.input.is_empty());
+    for opening in [true, false] {
+        let (mut app, window) = ime_app(false);
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .naming
+            .as_mut()
+            .unwrap()
+            .opening = Some(opening);
+        window_event(
+            &mut app,
+            window_key(window, KeyCode::KeyC, Some("before boundary")),
+        );
+        window_event(&mut app, window_key(window, KeyCode::F2, None));
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "opening commit must drain".into(),
+            },
+        );
+        window_event(&mut app, window_key(window, KeyCode::KeyD, Some("after")));
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, Some(composer::Control::Send)));
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            if opening { "after" } else { "" }
+        );
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        {
+            let mut state = app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>();
+            cancel(&mut state);
+            state.input_open = true;
+            state.input = "ordinary speech".into();
+        }
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "must not enter speech".into(),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            "ordinary speech"
+        );
+        assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
     }
-    composer::collect_input(app.world_mut());
-    assert!(app
-        .world()
-        .resource::<ProductionConversationLineageUiState>()
-        .input
-        .is_empty());
-    {
-        let mut state = app
-            .world_mut()
-            .resource_mut::<ProductionConversationLineageUiState>();
-        cancel(&mut state);
-        state.input_open = true;
-        state.input = "ordinary speech".into();
-    }
-    app.world_mut().write_message(Ime::Commit {
-        window,
-        value: "must not enter speech".into(),
-    });
-    composer::collect_input(app.world_mut());
-    assert_eq!(
-        app.world()
-            .resource::<ProductionConversationLineageUiState>()
-            .input,
-        "ordinary speech"
-    );
-    assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
 }
