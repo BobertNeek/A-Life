@@ -696,7 +696,7 @@ fn apply_layout(world: &mut World, size: Vec2) {
         .query_filtered::<&mut Node, With<QuantityIcon>>()
         .iter_mut(world)
     {
-        let size = Val::Px(if short { 28.0 } else { 32.0 });
+        let size = Val::Px(if short { 24.0 } else { 32.0 });
         node.width = size;
         node.height = size;
     }

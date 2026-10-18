@@ -409,7 +409,7 @@ fn rename_round_trip_preserves_identity_and_acquired_world_state() {
         .iter_mut()
         .find(|object| object["id"] == serde_json::json!(id.raw()))
         .unwrap();
-    object["label"] = serde_json::json!("Pip");
+    object["label"] = serde_json::json!("猫 Élan");
 
     // Dead registered agents remain unavailable, with no partial name update.
     let dead = world.entity_id("agent-a").unwrap();
@@ -422,7 +422,7 @@ fn rename_round_trip_preserves_identity_and_acquired_world_state() {
     assert_eq!(world.entity_id("agent-a"), Some(dead));
     assert_eq!(world.entity_id("Late Pip"), None);
 
-    world.rename_agent(id, "  Pip  ").unwrap();
+    world.rename_agent(id, "  猫 Élan  ").unwrap();
     portable.replace_headless_world_snapshot(&world).unwrap();
     // Only the label may change across the complete save, including acquired
     // biology, speech, learning summaries, and content-addressed lifetime state.
@@ -441,7 +441,7 @@ fn rename_round_trip_preserves_identity_and_acquired_world_state() {
         lifetime
     );
     let mut restored = loaded.restore_headless_world().unwrap();
-    assert_eq!(restored.entity_id("Pip"), Some(id));
+    assert_eq!(restored.entity_id("猫 Élan"), Some(id));
     assert_eq!(restored.entity_id("agent-b"), None);
     assert_eq!(
         restored.entity(id).unwrap().organism_id,
