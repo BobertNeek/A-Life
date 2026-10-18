@@ -261,13 +261,13 @@ fn live_and_restored_records_keep_saved_individuals_when_order_changes() {
                 .appearance
                 .with_body_phenotype(&organism.phenotype().body),
         );
-        fingerprints.insert(record.visual.stable_id, record.visual.appearance);
+        fingerprints.insert(record.visual.stable_id.raw(), record.visual.appearance);
     }
     let mut restored: PortableSaveFile = serde_json::from_slice(&saved_bytes).unwrap();
     restored.creatures.reverse();
     for record in records(&restored) {
         assert_eq!(
-            fingerprints[&record.visual.stable_id],
+            fingerprints[&record.visual.stable_id.raw()],
             record.visual.appearance
         );
     }
