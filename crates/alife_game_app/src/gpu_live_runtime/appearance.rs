@@ -20,6 +20,10 @@ pub(super) struct CreatureAppearanceCache {
 }
 
 impl CreatureAppearanceCache {
+    pub(super) fn len(&self) -> usize {
+        self.entries.len()
+    }
+
     /// Install externally validated save values exactly. A matching identity may
     /// replace cosmetics generated before the raw runtime restore was seeded.
     pub(super) fn seed_saved(

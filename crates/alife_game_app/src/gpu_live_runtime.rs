@@ -7344,7 +7344,11 @@ impl GpuLiveBrainRuntime {
         self.last_sealed_patches
             .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         let resident_set_after = self.handles.keys().copied().collect::<BTreeSet<_>>();
-        self.appearances.retain_organisms(&resident_set_after);
+        // Every resident was admitted above. Retirements can precede this call,
+        // so compare cache size rather than only the before/after resident sets.
+        if self.appearances.len() != resident_set_after.len() {
+            self.appearances.retain_organisms(&resident_set_after);
+        }
         self.sleep_journal_capacity.admit_population(population)?;
         if resident_set_after != resident_set_before {
             if let Err(error) = self.request_exact_population_checkpoint() {

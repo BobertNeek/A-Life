@@ -24,7 +24,9 @@ canonical body retains ownership of those two traits. All other saved cosmetic
 genes pass through unchanged. Entries bind organism and genome IDs;
 live projection also checks the frame's world-entity binding. Retired parents
 remain available through newborn inheritance, then the cache is pruned to the
-resident set. Curated cohort replacement stages its appearance cache before GPU
+resident set when its count exceeds the residents already admitted to it.
+Steady-state reconciliation does not scan the cosmetic cache. Curated cohort
+replacement stages its appearance cache before GPU
 submission and publishes it only with committed resident maps.
 
 Cosmetic parents are still identified by the genome IDs already carried by the
