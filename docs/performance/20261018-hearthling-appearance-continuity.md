@@ -61,10 +61,13 @@ GPU learned-state persistence.
 
 ## Validation and limits
 
-The first seven CPU cache tests passed. Formatting, whitespace, static core
-boundaries, all 77 documentation assertions, and the shipping GLB check passed.
-The PR records subsequent focused cache, real-natural-birth production-save,
-learning-summary file, renderer, and CI results at their exact revisions.
+All ten CPU appearance tests passed, including eight cache tests, the real
+natural-birth checkpoint/production-save reopen regression, and the existing
+saved-gene population test. Formatting, whitespace, static core boundaries, all
+77 documentation assertions, and the shipping GLB check passed. A dedicated
+Hearthling workflow runs focused renderer and appearance tests; pinned art
+source receipts remain unchanged. The PR records frontend and hosted CI results
+at their exact revisions.
 The learning-summary sentinel check is CPU data-preservation evidence; it does
 not exercise a real GPU learned-weight checkpoint.
 

@@ -1,0 +1,37 @@
+name: Hearthling appearance continuity
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - '.github/workflows/hearthling-appearance.yml'
+      - 'crates/alife_game_app/src/gpu_live_runtime.rs'
+      - 'crates/alife_game_app/src/gpu_live_runtime/**'
+      - 'crates/alife_game_app/src/production_voxel_renderer.rs'
+      - 'crates/alife_game_app/src/production_voxel_renderer/hearthling*'
+      - 'crates/alife_game_app/src/production_voxel_renderer/live_creature_projection.rs'
+      - 'crates/alife_game_app/assets/creatures/hearthling/**'
+
+jobs:
+  appearance-cpu:
+    name: Hearthling appearance CPU regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '1'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_MIN_STACK: '33554432'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux controller build dependency
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: Check shared material and live/restored projection contracts
+        run: cargo test --locked -p alife_game_app --features production-voxel-frontend --lib hearthling -- --test-threads=1 --color=never
+      - name: Check cached inheritance, identity, real files and natural newborn saves
+        run: cargo test --locked -p alife_game_app --features production-voxel-frontend --lib appearance -- --test-threads=1 --color=never
