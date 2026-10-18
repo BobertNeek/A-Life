@@ -97,6 +97,7 @@ fn bubble_transform(
 
 #[allow(
     clippy::too_many_arguments,
+    clippy::type_complexity,
     reason = "Bevy injects independent ECS parameters."
 )]
 pub(super) fn sync(

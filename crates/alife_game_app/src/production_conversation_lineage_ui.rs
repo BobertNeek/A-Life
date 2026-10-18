@@ -55,6 +55,7 @@ use crate::{
 };
 
 pub(crate) mod composer;
+mod naming;
 
 const MAX_TYPED_CHARS: usize = 512;
 const MAX_COHORT_SIZE: usize = 16;
@@ -811,9 +812,12 @@ enum PlayerSpeechCompletionOrigin {
 #[derive(Debug, Clone, Resource)]
 pub struct ProductionConversationLineageUiState {
     input_open: bool,
+    naming: Option<naming::Draft>,
+    name_pointer_capture: bool,
     input_capture_held: bool,
     input_help_open: bool,
     input_cue: SpeechInputCue,
+    input_error: Option<&'static str>,
     input: String,
     address_selected: bool,
     muted: bool,
@@ -848,9 +852,12 @@ impl ProductionConversationLineageUiState {
         let lineage_root = default_lineage_root();
         Self {
             input_open: false,
+            naming: None,
+            name_pointer_capture: false,
             input_capture_held: false,
             input_help_open: false,
             input_cue: SpeechInputCue::None,
+            input_error: None,
             input: String::new(),
             address_selected: false,
             muted: false,
@@ -882,6 +889,10 @@ impl ProductionConversationLineageUiState {
     }
 
     pub const fn blocks_world_shortcuts(&self) -> bool {
+        self.captures_menu_input() || self.name_pointer_capture
+    }
+
+    pub(crate) const fn captures_menu_input(&self) -> bool {
         self.input_open || self.lineage_open || self.input_capture_held
     }
 
@@ -891,7 +902,9 @@ impl ProductionConversationLineageUiState {
 
     /// Shared mouse/Enter opening path; address mode and speech routing stay unchanged.
     pub(crate) fn open_player_speech_input(&mut self) {
+        self.naming = None;
         self.input_cue = SpeechInputCue::None;
+        self.input_error = None;
         self.input_open = true;
         self.input_help_open = false;
         self.input.clear();
@@ -1986,6 +1999,19 @@ pub(crate) fn handle_production_conversation_lineage_input(
         key_messages.clear();
         return;
     }
+    if state.naming.is_some() {
+        naming::handle_input(
+            &keyboard,
+            key_messages.read(),
+            pointer,
+            &selection,
+            &creatures,
+            &mut runtime.runtime,
+            &mut state,
+        );
+        key_messages.clear();
+        return;
+    }
     if state.developer_overlay != ux.debug_mode {
         state.developer_overlay = ux.debug_mode;
     }
@@ -2046,6 +2072,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
     );
     if state.input != previous_input || backspace_pressed {
         state.input_help_open = false;
+        state.input_error = None;
     }
     if (pointer == Some(composer::Control::Send)
         || (submit_enter && keyboard.just_pressed(KeyCode::Enter)))
@@ -2142,7 +2169,15 @@ fn send_player_speech(
     state: &mut ProductionConversationLineageUiState,
 ) -> Result<(), GameAppShellError> {
     let text = state.input.trim().to_string();
-    let explicit_addressee = named_addressee(&text, runtime.world());
+    let explicit_addressee = match named_addressee(&text, runtime.world()) {
+        Ok(addressee) => addressee,
+        Err(message) => {
+            state.input_cue = SpeechInputCue::Failed;
+            state.input_error = Some(message);
+            state.status = message.into();
+            return Ok(());
+        }
+    };
     let selected_addressee = state
         .address_selected
         .then(|| selected_organism(selection, creatures))
@@ -2277,16 +2312,28 @@ fn complete_player_speech(
     Ok(())
 }
 
-fn named_addressee(text: &str, world: &alife_world::HeadlessWorld) -> Option<OrganismId> {
-    let normalized = text.trim().to_ascii_lowercase();
-    world
+fn named_addressee(
+    text: &str,
+    world: &alife_world::HeadlessWorld,
+) -> Result<Option<OrganismId>, &'static str> {
+    let normalized = text.trim().to_lowercase();
+    let matches = world
         .object_snapshots()
         .into_iter()
-        .filter(|object| object.kind == WorldObjectKind::Agent)
+        .filter(|object| object.kind == WorldObjectKind::Agent && !object.consumed)
         .filter_map(|object| {
             let organism = object.organism_id?;
+            if world
+                .organism_registry()
+                .get(organism)
+                .is_some_and(|record| {
+                    !record.lifecycle().is_alive() || record.world_entity_id() != object.id
+                })
+            {
+                return None;
+            }
             let labels = [
-                object.label.to_ascii_lowercase(),
+                object.label.to_lowercase(),
                 format!("creature {}", organism.raw()),
             ];
             labels
@@ -2299,9 +2346,14 @@ fn named_addressee(text: &str, world: &alife_world::HeadlessWorld) -> Option<Org
                                 .is_some_and(|character| matches!(character, ',' | ':' | ' '))
                         })
                 })
-                .then_some(organism)
+                .then_some(organism.raw())
         })
-        .next()
+        .collect::<BTreeSet<_>>();
+    match matches.len() {
+        0 => Ok(None),
+        1 => Ok(matches.into_iter().next().map(OrganismId)),
+        _ => Err("Speech failed: that name matches more than one individual. Use a unique name or select one and omit the name."),
+    }
 }
 
 fn selected_organism(
@@ -2867,7 +2919,15 @@ fn habitat_command_for_input(
 }
 
 pub(crate) fn speech_entry_text(state: &ProductionConversationLineageUiState) -> String {
-    format!("{}|", state.input)
+    match state
+        .naming
+        .as_ref()
+        .and_then(|draft| draft.error)
+        .or(state.input_error)
+    {
+        Some(error) => format!("{}|\n{error}", state.input),
+        None => format!("{}|", state.input),
+    }
 }
 pub(crate) fn speech_composer_height(
     world: &bevy::prelude::World,

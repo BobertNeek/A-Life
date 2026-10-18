@@ -324,6 +324,146 @@ fn registered_agents_survive_portable_json_restore_with_exact_identity_and_signa
 }
 
 #[test]
+fn rename_round_trip_preserves_identity_and_acquired_world_state() {
+    use alife_core::MemoryId;
+    use alife_world::{
+        persist_creature_lifetime_state_asset, CreatureLifetimeMemoryRecord,
+        CreatureLifetimeStateAsset, CreatureLifetimeWeightValue,
+    };
+
+    let mut world = world_with_nontrivial_registry();
+    let mut habitats = HabitatAuthority::default();
+    for organism in [OrganismId(7), OrganismId(8)] {
+        habitats
+            .register_creature(organism, HabitatId::DEFAULT_WILD, Tick::ZERO)
+            .unwrap();
+    }
+    world.replace_habitat_authority(habitats).unwrap();
+    let id = world.entity_id("agent-b").unwrap();
+    let position = world.entity(id).unwrap().position;
+    world
+        .queue_player_care(OrganismId(8), position, true)
+        .unwrap();
+    world.try_advance_tick().unwrap();
+    world
+        .emit_player_tokens(
+            Some(OrganismId(8)),
+            position,
+            vec![alife_core::LanguageTokenId::new(73).unwrap()],
+        )
+        .unwrap();
+    let expected_records = registry_records(&world);
+    let root = std::env::temp_dir().join(format!(
+        "alife-agent-rename-lifetime-{}",
+        std::process::id()
+    ));
+    // Synthetic acquired values exercise file persistence, not live GPU learning.
+    let lifetime = CreatureLifetimeStateAsset {
+        schema_version: 1,
+        organism_id: OrganismId(8),
+        memory_records: vec![
+            CreatureLifetimeMemoryRecord {
+                memory_id: MemoryId(41),
+                source_organism_id: OrganismId(8),
+                value_q16: 41_001,
+            },
+            CreatureLifetimeMemoryRecord {
+                memory_id: MemoryId(42),
+                source_organism_id: OrganismId(7),
+                value_q16: 17_003,
+            },
+        ],
+        lifetime_weight_values: [(17, 0.125), (29, -0.25), (31, 0.375)]
+            .into_iter()
+            .map(|(synapse_index, value)| CreatureLifetimeWeightValue {
+                synapse_index,
+                value,
+            })
+            .collect(),
+    };
+    let (lifetime_ref, lifetime_entry) =
+        persist_creature_lifetime_state_asset(&root, &lifetime).unwrap();
+    let mut creature = bound_creature_save_state_for(&world, OrganismId(8));
+    creature.mind.memory_source_ids = vec![MemoryId(41), MemoryId(42)];
+    creature.learning.last_consolidated_tick = Some(world.tick());
+    creature.lifetime_state_asset = Some(lifetime_ref);
+    let mut portable = save_with_creatures(
+        &world,
+        vec![
+            bound_creature_save_state_for(&world, OrganismId(7)),
+            creature,
+        ],
+    );
+    portable.assets.entries.push(lifetime_entry);
+    portable.validate_with_asset_root(&root).unwrap();
+    assert_eq!(
+        portable
+            .load_creature_lifetime_state(OrganismId(8), &root)
+            .unwrap(),
+        lifetime
+    );
+    let mut expected = serde_json::to_value(&portable).unwrap();
+    let object = expected["world"]["objects"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|object| object["id"] == serde_json::json!(id.raw()))
+        .unwrap();
+    object["label"] = serde_json::json!("猫 Élan");
+
+    // Dead registered agents remain unavailable, with no partial name update.
+    let dead = world.entity_id("agent-a").unwrap();
+    let before_failure = world.canonical_signature_digest().unwrap();
+    assert_eq!(
+        world.rename_agent(dead, "Late Pip"),
+        Err(alife_world::RenameAgentError::InvalidTarget)
+    );
+    assert_eq!(world.canonical_signature_digest().unwrap(), before_failure);
+    assert_eq!(world.entity_id("agent-a"), Some(dead));
+    assert_eq!(world.entity_id("Late Pip"), None);
+
+    world.rename_agent(id, "  猫 Élan  ").unwrap();
+    portable.replace_headless_world_snapshot(&world).unwrap();
+    // Only the label may change across the complete save, including acquired
+    // biology, speech, learning summaries, and content-addressed lifetime state.
+    assert_eq!(serde_json::to_value(&portable).unwrap(), expected);
+    assert_eq!(registry_records(&world), expected_records);
+
+    let path = root.join("renamed-creature.alife.json");
+    portable.to_json_file(&path).unwrap();
+    let loaded = PortableSaveFile::from_json_file(&path).unwrap();
+    loaded.validate_with_asset_root(&root).unwrap();
+    assert_eq!(loaded, portable);
+    assert_eq!(
+        loaded
+            .load_creature_lifetime_state(OrganismId(8), &root)
+            .unwrap(),
+        lifetime
+    );
+    let mut restored = loaded.restore_headless_world().unwrap();
+    assert_eq!(restored.entity_id("猫 Élan"), Some(id));
+    assert_eq!(restored.entity_id("agent-b"), None);
+    assert_eq!(
+        restored.entity(id).unwrap().organism_id,
+        Some(OrganismId(8))
+    );
+    assert_eq!(registry_records(&restored), expected_records);
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        world.canonical_signature_digest().unwrap()
+    );
+
+    world.try_advance_tick().unwrap();
+    restored.try_advance_tick().unwrap();
+    assert_eq!(registry_records(&restored), registry_records(&world));
+    assert_eq!(
+        restored.canonical_signature_digest().unwrap(),
+        world.canonical_signature_digest().unwrap()
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn external_actor_cohort_roundtrips_without_permitting_missing_biology() {
     let mut world = world_with_nontrivial_registry();
     world

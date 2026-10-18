@@ -88,7 +88,7 @@ mod performance_receipt;
 mod phase31_performance_health;
 #[cfg(feature = "gpu-runtime")]
 mod phase31_slow_frame_ranking;
-mod status_hud;
+pub(crate) mod status_hud;
 mod terrain_water;
 mod ux_input;
 use crate::{

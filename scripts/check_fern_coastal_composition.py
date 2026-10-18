@@ -24,7 +24,7 @@ HISTORICAL_PROFILE_SHA256 = '6bc1ed02fc8805bd8613717267c50b0a784b031b8fcefa48520
 PROFILE = Path('scripts/fern-coastal-preview-rotation-profile.json')
 PROFILE_SHA256 = '54636cd97fab71ce79b523210f40a1d620f5fb3983388c623a6c6b62294c27dc'
 MAIN_INTEGRATION = Path('scripts/fern-coastal-main-integration-profile.json')
-MAIN_INTEGRATION_SHA256 = 'f5ba58ea4aa7dd15007cd0136cca18cedc5637e44ead60a8b5da45fdafc9f829'
+MAIN_INTEGRATION_SHA256 = 'ebbdbeba4c652e2b4aad897cd1d228506a80155b574a0081a328640e1da7c4a3'
 FROZEN = {
     HISTORICAL_PROFILE.as_posix(): HISTORICAL_PROFILE_SHA256,
     fern.PROFILE.as_posix(): fern.PROFILE_SHA256,

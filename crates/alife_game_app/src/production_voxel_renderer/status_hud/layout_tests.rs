@@ -269,7 +269,12 @@ fn assert_layout(world: &mut World, size: Vec2) {
         .query_filtered::<Entity, With<Identity>>()
         .single(world)
         .unwrap();
-    let header = world.get::<ChildOf>(identity).unwrap().parent();
+    let header = world
+        .query_filtered::<Entity, With<IdentityHeader>>()
+        .single(world)
+        .unwrap();
+    let identity_column = world.get::<ChildOf>(identity).unwrap().parent();
+    assert!(Box2::of(world, identity_column).contains(Box2::of(world, identity)));
     let header_box = Box2::of(world, header);
     let header_children = world
         .get::<Children>(header)
@@ -520,6 +525,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "normal_mixed_values",
             Some(Readout {
+                name: None,
                 holding_food: false,
                 stable_id: 42,
                 values: normal,
@@ -529,6 +535,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "high_burdens_low_reserves",
             Some(Readout {
+                name: None,
                 holding_food: false,
                 stable_id: 42,
                 values: [
@@ -545,6 +552,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "all_unknown",
             Some(Readout {
+                name: None,
                 holding_food: false,
                 stable_id: 42,
                 values: [None; 6],
@@ -554,6 +562,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "valid_zero",
             Some(Readout {
+                name: None,
                 holding_food: false,
                 stable_id: 42,
                 values: [Some(0.0); 6],
@@ -563,6 +572,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "high_signals",
             Some(Readout {
+                name: None,
                 holding_food: false,
                 stable_id: 42,
                 values: [
@@ -579,6 +589,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "partial_unknown",
             Some(Readout {
+                name: None,
                 holding_food: false,
                 stable_id: 42,
                 values: [Some(0.25), Some(0.82), None, Some(0.78), None, Some(0.12)],
@@ -588,6 +599,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "largest_stable_id",
             Some(Readout {
+                name: None,
                 holding_food: true,
                 stable_id: u64::MAX,
                 values: normal,
@@ -597,6 +609,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         (
             "debug_hidden",
             Some(Readout {
+                name: None,
                 holding_food: true,
                 stable_id: 42,
                 values: normal,
@@ -682,6 +695,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
     spawn(&mut world);
     for values in [[None; 6], [Some(0.0); 6], [Some(1.0); 6], [None; 6]] {
         let readout = Readout {
+            name: None,
             holding_food: false,
             stable_id: u64::MAX,
             values,
@@ -690,6 +704,7 @@ fn unknown_is_not_valid_zero_and_clear_or_debug_hides_selection() {
         assert_readout_components(&mut world, Some(&readout));
     }
     let readout = Readout {
+        name: None,
         holding_food: false,
         stable_id: u64::MAX,
         values: [Some(0.5); 6],
@@ -754,15 +769,18 @@ fn status_count_and_playback_follow_source_state_with_pause_precedence() {
 }
 
 #[test]
-fn readout_does_not_capture_input_and_stays_below_unchanged_menu_source_layers() {
+fn only_rename_control_can_capture_input_and_hud_stays_below_menu_layers() {
     let mut world = World::new();
     spawn(&mut world);
     for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
         let pickable = world.get::<bevy::picking::Pickable>(entity).unwrap();
         assert!(!pickable.should_block_lower && !pickable.is_hoverable);
         assert_eq!(world.get::<FocusPolicy>(entity), Some(&FocusPolicy::Pass));
-        assert!(
-            world.get::<Button>(entity).is_none() && world.get::<Interaction>(entity).is_none()
+        assert!(world.get::<Button>(entity).is_none());
+        assert_eq!(
+            world.get::<Interaction>(entity).is_some(),
+            world.get::<RenameButton>(entity).is_some(),
+            "only the explicit naming control owns pointer interaction"
         );
     }
     let menu = include_str!("../menu.rs");
@@ -790,6 +808,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
     spawn(&mut world);
     care_dock::spawn(&mut world);
     let readout = Readout {
+        name: None,
         holding_food: false,
         stable_id: 42,
         values: [Some(0.5); 6],
@@ -807,7 +826,7 @@ fn real_dock_retains_priority_and_status_restores_when_it_fits() {
         adapt_bottom_controls_visibility(&mut world, size, true);
         assert_eq!(visible_in_hierarchy(&world, panel), visible);
     }
-    assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 238.0);
+    assert_eq!(panel_bottom(Vec2::new(320.0, 240.0)), 236.0);
 }
 
 #[test]
@@ -831,6 +850,7 @@ fn explicit_help_uses_space_above_dock_and_temporarily_hides_selected_status() {
         ))
         .id();
     let readout = Readout {
+        name: None,
         holding_food: false,
         stable_id: 42,
         values: [Some(0.5); 6],
@@ -855,6 +875,7 @@ fn food_badge_clears_and_restores_without_resizing_the_header_or_intercepting_in
         .unwrap();
     let header = app.world().get::<ChildOf>(badge).unwrap().parent();
     let readout = Readout {
+        name: None,
         stable_id: u64::MAX,
         values: [Some(0.5); 6],
         holding_food: true,
@@ -884,5 +905,112 @@ fn food_badge_clears_and_restores_without_resizing_the_header_or_intercepting_in
             original_box = Some((bounds.min, bounds.max));
         }
         assert_layout(app.world_mut(), Vec2::new(320.0, 480.0));
+    }
+}
+
+#[test]
+fn long_canonical_names_keep_full_accessible_text_and_a_separate_complete_numeric_id() {
+    for size in VIEWPORTS {
+        let mut app = layout_app(size);
+        for name in ["W".repeat(32), "Étoile 🌙".to_owned(), "星".repeat(32)] {
+            let mut row = data_tests::row();
+            row.world_entity_id = WorldEntityId(u64::MAX);
+            row.object.id = row.world_entity_id;
+            row.object.label = name.clone();
+            let readout = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
+            set_readout(app.world_mut(), Some(&readout), false);
+            app.update();
+            app.update();
+            assert_layout(app.world_mut(), size);
+            let world = app.world_mut();
+            let name_entity = world
+                .query_filtered::<Entity, With<CreatureName>>()
+                .single(world)
+                .unwrap();
+            assert_eq!(world.get::<Text>(name_entity).unwrap().0, name);
+            assert_eq!(
+                world.get::<AccessibilityNode>(name_entity).unwrap().label(),
+                Some(name.as_str())
+            );
+            assert_eq!(
+                world.get::<Node>(name_entity).unwrap().overflow,
+                Overflow::clip()
+            );
+            assert_eq!(
+                world.get::<TextLayout>(name_entity).unwrap().linebreak,
+                bevy::text::LineBreak::NoWrap
+            );
+            let identity = world
+                .query_filtered::<Entity, With<Identity>>()
+                .single(world)
+                .unwrap();
+            assert_eq!(
+                world.get::<Text>(identity).unwrap().0,
+                format!("#{}", u64::MAX)
+            );
+            let name_bounds = Box2::of(world, name_entity);
+            let id_bounds = Box2::of(world, identity);
+            assert!(!name_bounds.overlaps(id_bounds));
+            assert!(
+                id_bounds.size().x >= 150.0,
+                "ID line lost its reserved space at {size:?}"
+            );
+            let header = world
+                .query_filtered::<Entity, With<IdentityHeader>>()
+                .single(world)
+                .unwrap();
+            assert_eq!(Box2::of(world, header).size().y, HEADER_HEIGHT);
+        }
+    }
+    // Component values and UiSurface boxes are evidence; these tests do not
+    // shape fonts, render unsupported Unicode glyphs, or claim screenshot QA.
+}
+
+#[test]
+fn naming_button_is_the_only_input_target_and_fails_closed_without_a_living_identity() {
+    let row = data_tests::row();
+    let named = Readout::from_row(row.world_entity_id, row.organism_id, Some(&row), []);
+    let unknown = Readout::from_row(row.world_entity_id, row.organism_id, None, []);
+    let mut world = World::new();
+    spawn(&mut world);
+    let button = world
+        .query_filtered::<Entity, With<RenameButton>>()
+        .single(&world)
+        .unwrap();
+    for (readout, debug, enabled) in [
+        (Some(&named), false, true),
+        (Some(&unknown), false, false),
+        (Some(&named), true, false),
+        (None, false, false),
+        (Some(&named), false, true),
+    ] {
+        set_readout(&mut world, readout, debug);
+        let accessible = world.get::<AccessibilityNode>(button).unwrap();
+        assert_eq!(accessible.role(), accesskit::Role::Button);
+        assert!(accessible.supports_action(accesskit::Action::Click));
+        assert_eq!(accessible.is_disabled(), !enabled);
+        assert_eq!(accessible.is_hidden(), !enabled);
+        assert_eq!(visible_in_hierarchy(&world, button), enabled);
+        assert!(world.get::<Interaction>(button).is_some());
+        if enabled {
+            assert_eq!(
+                accessible.label(),
+                Some(format!("Name {}", row.object.label).as_str())
+            );
+        }
+        for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
+            let pickable = world.get::<bevy::picking::Pickable>(entity).unwrap();
+            let input = entity == button && enabled;
+            assert_eq!(pickable.is_hoverable, input);
+            assert_eq!(pickable.should_block_lower, input);
+            assert_eq!(
+                world.get::<FocusPolicy>(entity),
+                Some(if input {
+                    &FocusPolicy::Block
+                } else {
+                    &FocusPolicy::Pass
+                })
+            );
+        }
     }
 }

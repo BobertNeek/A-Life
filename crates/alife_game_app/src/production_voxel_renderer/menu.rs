@@ -695,7 +695,7 @@ fn handle_input_with_availability(world: &mut World, availability: LoadAvailabil
     #[cfg(feature = "gpu-runtime")]
     let conversation_open = world
         .get_resource::<ProductionConversationLineageUiState>()
-        .is_some_and(|state| state.blocks_world_shortcuts());
+        .is_some_and(|state| state.captures_menu_input());
     #[cfg(not(feature = "gpu-runtime"))]
     let conversation_open = false;
     let clicks = world

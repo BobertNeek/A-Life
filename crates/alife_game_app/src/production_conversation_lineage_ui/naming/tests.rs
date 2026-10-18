@@ -1,0 +1,829 @@
+//! CPU state, real raw input, world naming and addressing contracts. No GPU or OS input.
+use super::*;
+use alife_core::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity};
+use alife_world::{HeadlessScenarioBuilder, StableVoxelObjectRef, WorldOrganismRecord};
+use bevy::{a11y::AccessibilityNode, input::keyboard::Key, prelude::*};
+
+fn world() -> HeadlessWorld {
+    let mut world = HeadlessScenarioBuilder::new(21)
+        .agent("founder", OrganismId(1), Vec3f::ZERO)
+        .agent("Élodie", OrganismId(2), Vec3f::new(3.0, 0.0, 0.0))
+        .build()
+        .unwrap();
+    for (label, id) in [("founder", OrganismId(1)), ("Élodie", OrganismId(2))] {
+        let genome = CreatureGenome::early_mammal_founder(
+            21,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let phenotype = genome.express().unwrap();
+        let chemistry =
+            alife_core::BiochemistryState::new_with_age(&phenotype, Tick::ZERO, Tick::ZERO)
+                .unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    id,
+                    world.entity_id(label).unwrap(),
+                    genome,
+                    phenotype,
+                    chemistry,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    world
+}
+fn draft(world: &HeadlessWorld, opening: Option<bool>) -> Draft {
+    Draft {
+        stable_id: world.entity_id("founder").unwrap(),
+        organism_id: OrganismId(1),
+        original_name: "founder".into(),
+        runtime_identity: SpeechRuntimeIdentity {
+            authority: crate::gpu_live_runtime::LiveRuntimeSaveAuthorityView {
+                save_id: "synthetic-naming".into(),
+                deterministic_seed: 21,
+                sensor_profile: SensorProfile::GroundedObjectSlotsV1,
+                organism_ids: vec![OrganismId(1), OrganismId(2)],
+            },
+            started_at_tick: Tick::ZERO,
+        },
+        opening,
+        preedit: String::new(),
+        pending_input: None,
+        error: None,
+    }
+}
+fn state(world: &HeadlessWorld, opening: Option<bool>) -> ProductionConversationLineageUiState {
+    let mut state = super::super::speech_completion_state_tests::state();
+    open(&mut state, draft(world, opening));
+    state
+}
+fn key(code: KeyCode, text: Option<&str>, repeat: bool) -> KeyboardInput {
+    KeyboardInput {
+        key_code: code,
+        logical_key: Key::Character(text.unwrap_or_default().into()),
+        state: ButtonState::Pressed,
+        text: text.map(Into::into),
+        repeat,
+        window: Entity::PLACEHOLDER,
+    }
+}
+fn selected(id: WorldEntityId) -> Fvr03ProductionVoxelSelectionResource {
+    Fvr03ProductionVoxelSelectionResource {
+        hovered: None,
+        selected: Some(StableVoxelObjectRef {
+            kind: StableVoxelRefKind::Creature,
+            stable_id: Some(id),
+            chunk: alife_world::VoxelChunkCoord::new(0, 0),
+            tile: None,
+        }),
+    }
+}
+
+#[test]
+fn opening_order_repeats_unicode_and_confirm_are_captured_without_speech() {
+    let world = world();
+    let mut state = state(&world, Some(true));
+    let keys = ButtonInput::default();
+    assert!(!edit(
+        &mut state,
+        &keys,
+        [
+            key(KeyCode::KeyC, Some("shortcut"), false),
+            key(KeyCode::F2, None, true),
+            key(KeyCode::F2, None, false),
+            key(KeyCode::KeyC, Some("é猫"), false),
+            key(KeyCode::Enter, Some("\r"), false)
+        ]
+        .iter(),
+        None
+    ));
+    assert_eq!(state.input, "é猫");
+    assert!(state.blocks_world_shortcuts());
+    assert!(!edit(
+        &mut state,
+        &keys,
+        [
+            key(KeyCode::Enter, None, true),
+            key(KeyCode::Backspace, None, true),
+            key(KeyCode::KeyC, Some("🐾"), true)
+        ]
+        .iter(),
+        None
+    ));
+    assert_eq!(state.input, "é🐾");
+    assert!(edit(
+        &mut state,
+        &keys,
+        [
+            key(KeyCode::Enter, None, false),
+            key(KeyCode::KeyC, Some("must not leak"), false),
+            key(KeyCode::Enter, None, false)
+        ]
+        .iter(),
+        None
+    ));
+    assert_eq!(state.input, "é🐾");
+    let mut world = world;
+    let result = world.rename_agent(state.naming.as_ref().unwrap().stable_id, &state.input);
+    complete(&mut state, result);
+    assert!(state.naming.is_none() && !state.input_open && state.input.is_empty());
+    assert!(
+        world.audible_utterances().is_empty(),
+        "confirming a name emits no speech"
+    );
+    assert_eq!(world.entity_id("é🐾"), Some(WorldEntityId(1)));
+}
+
+#[test]
+fn pointer_opening_cancel_and_invalid_names_keep_world_atomic_and_draft_editable() {
+    let mut world = world();
+    let id = world.entity_id("founder").unwrap();
+    let before = world.canonical_signature_digest().unwrap();
+    let mut state = state(&world, Some(false));
+    let keys = ButtonInput::default();
+    assert!(!edit(
+        &mut state,
+        &keys,
+        [key(KeyCode::KeyC, Some("opening click text"), false)].iter(),
+        Some(composer::Control::Send)
+    ));
+    assert!(state.input.is_empty());
+    for name in ["", "  ", "ÉLODIE", &"猫".repeat(33)] {
+        state.input = name.into();
+        assert!(edit(
+            &mut state,
+            &keys,
+            [].iter(),
+            Some(composer::Control::Send)
+        ));
+        let result = world.rename_agent(id, &state.input);
+        complete(&mut state, result);
+        assert!(state.input_open && state.naming.as_ref().unwrap().error.is_some());
+        assert_eq!(state.input, name);
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    }
+    edit(
+        &mut state,
+        &keys,
+        [key(KeyCode::KeyC, Some("new"), false)].iter(),
+        None,
+    );
+    assert!(state.naming.as_ref().unwrap().error.is_none());
+    let mut keys = keys;
+    keys.press(KeyCode::Escape);
+    assert!(!edit(
+        &mut state,
+        &keys,
+        [key(KeyCode::Enter, None, false)].iter(),
+        Some(composer::Control::Send)
+    ));
+    assert!(state.naming.is_none() && state.input.is_empty() && !state.input_open);
+    assert_eq!(world.canonical_signature_digest().unwrap(), before);
+}
+
+#[test]
+fn target_is_bound_to_stable_id_organism_and_original_canonical_name() {
+    let mut world = world();
+    let draft = draft(&world, None);
+    assert!(target_matches(
+        &draft,
+        &selected(draft.stable_id),
+        Some(OrganismId(1)),
+        &world
+    ));
+    assert!(!target_matches(
+        &draft,
+        &selected(WorldEntityId(2)),
+        Some(OrganismId(2)),
+        &world
+    ));
+    assert!(!target_matches(
+        &draft,
+        &selected(draft.stable_id),
+        Some(OrganismId(2)),
+        &world
+    ));
+    world
+        .rename_agent(draft.stable_id, "changed elsewhere")
+        .unwrap();
+    assert!(!target_matches(
+        &draft,
+        &selected(draft.stable_id),
+        Some(OrganismId(1)),
+        &world
+    ));
+}
+
+#[test]
+fn name_composer_hides_address_and_captures_held_input_through_dismissal() {
+    use crate::production_voxel_renderer::care_dock::tests::layout_app;
+    let world = world();
+    let mut app = layout_app(Vec2::new(640.0, 360.0));
+    app.insert_resource(state(&world, None))
+        .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<ButtonInput<MouseButton>>();
+    composer::spawn(app.world_mut());
+    composer::adapt(app.world_mut());
+    for (control, node, a11y) in app
+        .world_mut()
+        .query::<(&composer::Control, &Node, &AccessibilityNode)>()
+        .iter(app.world())
+    {
+        if *control == composer::Control::Address {
+            assert_eq!(node.display, Display::None);
+            assert!(a11y.is_hidden());
+        }
+        if *control == composer::Control::Send {
+            assert_eq!(a11y.label(), Some("Confirm individual name. Enter."));
+        }
+    }
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Enter);
+    composer::collect_input(app.world_mut());
+    cancel(
+        &mut app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>(),
+    );
+    composer::collect_input(app.world_mut());
+    assert!(app
+        .world()
+        .resource::<ProductionConversationLineageUiState>()
+        .blocks_world_shortcuts());
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::Enter);
+    composer::collect_input(app.world_mut());
+    assert!(!app
+        .world()
+        .resource::<ProductionConversationLineageUiState>()
+        .blocks_world_shortcuts());
+}
+
+#[test]
+fn unicode_names_and_aliases_resolve_and_ambiguous_legacy_names_fail_closed() {
+    let mut world = world();
+    let id = world.entity_id("founder").unwrap();
+    world.rename_agent(id, "猫 Élan").unwrap();
+    for text in ["猫 ÉLAN, come", "creature 1: come"] {
+        assert_eq!(named_addressee(text, &world), Ok(Some(OrganismId(1))));
+    }
+    assert_eq!(named_addressee("cat come", &world), Ok(None));
+    let ambiguous = HeadlessScenarioBuilder::new(21)
+        .agent("Pip", OrganismId(1), Vec3f::ZERO)
+        .agent("PIP", OrganismId(2), Vec3f::ZERO)
+        .agent("Pip Junior", OrganismId(3), Vec3f::ZERO)
+        .agent("creature 1", OrganismId(4), Vec3f::ZERO)
+        .build()
+        .unwrap();
+    for text in ["pip, come", "pip junior: come", "creature 1 come"] {
+        assert!(named_addressee(text, &ambiguous).is_err(), "{text}");
+    }
+    assert_eq!(
+        named_addressee("creature 3, come", &ambiguous),
+        Ok(Some(OrganismId(3)))
+    );
+    assert!(ambiguous.audible_utterances().is_empty());
+}
+
+#[test]
+fn player_toy_labels_cannot_be_taken_by_a_name_before_the_toy_exists() {
+    let mut world = world();
+    let id = world.entity_id("founder").unwrap();
+    let before = world.canonical_signature_digest().unwrap();
+    for name in ["player-plaything", " PLAYER-ACTIVITY-TOY "] {
+        assert_eq!(
+            crate::gpu_live_runtime::rename_player_creature_in_world(&mut world, id, name),
+            Err(alife_world::RenameAgentError::ReservedName)
+        );
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    }
+}
+
+#[test]
+fn actual_opening_collector_handles_pointer_f2_accessibility_and_gates() {
+    use crate::production_voxel_renderer::{
+        care_dock::tests::layout_app, menu, status_hud::RenameButton,
+    };
+    let mut app = layout_app(Vec2::new(640.0, 360.0));
+    app.insert_resource(super::super::speech_completion_state_tests::state())
+        .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<ButtonInput<MouseButton>>()
+        .init_resource::<OpenInput>()
+        .init_resource::<menu::MenuState>()
+        .add_message::<ActionRequest>();
+    let button = app
+        .world_mut()
+        .spawn((
+            RenameButton,
+            Node::default(),
+            Visibility::Visible,
+            Interaction::Hovered,
+        ))
+        .id();
+    assert_eq!(collect_opening(app.world_mut()), None);
+    assert!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .blocks_world_shortcuts(),
+        "hover captures world clicks and camera input"
+    );
+    *app.world_mut().get_mut::<Interaction>(button).unwrap() = Interaction::Pressed;
+    app.world_mut()
+        .resource_mut::<ButtonInput<MouseButton>>()
+        .press(MouseButton::Left);
+    assert_eq!(collect_opening(app.world_mut()), Some(false));
+    assert_eq!(
+        collect_opening(app.world_mut()),
+        None,
+        "held click cannot reopen"
+    );
+    app.world_mut()
+        .resource_mut::<ButtonInput<MouseButton>>()
+        .release(MouseButton::Left);
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::F2);
+    assert_eq!(collect_opening(app.world_mut()), Some(true));
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .clear();
+    let request = || {
+        ActionRequest(accesskit::ActionRequest {
+            action: AccessibleAction::Click,
+            target: accesskit::NodeId(button.to_bits()),
+            data: None,
+        })
+    };
+    app.world_mut().write_message(request());
+    assert_eq!(collect_opening(app.world_mut()), Some(false));
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .debug_mode = true;
+    app.world_mut().write_message(request());
+    assert_eq!(collect_opening(app.world_mut()), None);
+    app.world_mut()
+        .resource_mut::<Fvr05ProductionUxStateResource>()
+        .debug_mode = false;
+    assert_eq!(
+        collect_opening(app.world_mut()),
+        None,
+        "blocked accessibility input is drained"
+    );
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<bevy::window::PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
+    app.world_mut().write_message(request());
+    assert_eq!(collect_opening(app.world_mut()), None);
+    app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
+    *app.world_mut().get_mut::<Visibility>(button).unwrap() = Visibility::Hidden;
+    app.world_mut().write_message(request());
+    assert_eq!(collect_opening(app.world_mut()), None);
+    *app.world_mut().get_mut::<Visibility>(button).unwrap() = Visibility::Visible;
+    app.insert_resource(
+        LiveBrainPresentationFrameResource::from_authoritative_world(&world()).unwrap(),
+    );
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Escape);
+    menu::handle_input(app.world_mut());
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .clear();
+    app.world_mut().write_message(request());
+    assert_eq!(
+        collect_opening(app.world_mut()),
+        None,
+        "menu captures rename input"
+    );
+}
+
+fn ime_app(initially_enabled: bool) -> (App, Entity) {
+    use crate::production_voxel_renderer::care_dock::tests::layout_app;
+    let mut app = layout_app(Vec2::new(640.0, 360.0));
+    app.insert_resource(state(&world(), None))
+        .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<ButtonInput<MouseButton>>()
+        .add_message::<Ime>()
+        .add_message::<KeyboardInput>()
+        .add_message::<WindowEvent>();
+    composer::spawn(app.world_mut());
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .get_mut::<Window>(window)
+        .unwrap()
+        .ime_enabled = initially_enabled;
+    (app, window)
+}
+
+// Match bevy_winit::forward_bevy_events: publish typed copies plus the same
+// source events in the combined stream. The latter is the naming authority.
+fn window_event(app: &mut App, event: impl Into<WindowEvent>) {
+    let event = event.into();
+    match &event {
+        WindowEvent::KeyboardInput(key) => {
+            app.world_mut().write_message(key.clone());
+        }
+        WindowEvent::Ime(ime) => {
+            app.world_mut().write_message(ime.clone());
+        }
+        _ => {}
+    }
+    app.world_mut().write_message(event);
+}
+fn window_key(window: Entity, code: KeyCode, text: Option<&str>) -> KeyboardInput {
+    KeyboardInput {
+        window,
+        ..key(code, text, false)
+    }
+}
+fn pending_edit(app: &mut App, pointer: Option<composer::Control>) -> bool {
+    let keys = app.world().resource::<ButtonInput<KeyCode>>().clone();
+    let mut raw_reader = MessageCursor::<KeyboardInput>::default();
+    let raw = raw_reader
+        .read(app.world().resource::<Messages<KeyboardInput>>())
+        .cloned()
+        .collect::<Vec<_>>();
+    edit(
+        &mut app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>(),
+        &keys,
+        raw.iter(),
+        pointer,
+    )
+}
+
+#[test]
+fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() {
+    // Some backends deliver the candidate Enter before Commit; others after.
+    for enter_before_commit in [false, true] {
+        let (mut app, window) = ime_app(false);
+        window_event(
+            &mut app,
+            Ime::Preedit {
+                window,
+                value: "ねこ".into(),
+                cursor: Some((6, 6)),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        assert!(app.world().get::<Window>(window).unwrap().ime_enabled);
+        assert!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .naming
+                .as_ref()
+                .unwrap()
+                .preedit
+                .is_empty(),
+            "collector queues input until bound runtime/target validation"
+        );
+        assert!(!pending_edit(&mut app, Some(composer::Control::Send)));
+        composer::adapt(app.world_mut());
+        let text = app
+            .world_mut()
+            .query_filtered::<&Text, With<ProductionSpeechEntryPanel>>()
+            .single(app.world())
+            .unwrap();
+        assert_eq!(text.0, "ねこ|");
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        if enter_before_commit {
+            window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        }
+        window_event(
+            &mut app,
+            Ime::Preedit {
+                window,
+                value: String::new(),
+                cursor: None,
+            },
+        );
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "猫 Élan".into(),
+            },
+        );
+        if !enter_before_commit {
+            window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        }
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        let state = app
+            .world()
+            .resource::<ProductionConversationLineageUiState>();
+        assert_eq!(state.input, "猫 Élan");
+        assert!(state.naming.as_ref().unwrap().preedit.is_empty());
+        assert!(state.blocks_world_shortcuts());
+        composer::collect_input(app.world_mut());
+        assert!(
+            !pending_edit(&mut app, None),
+            "empty combined stream must not replay typed Enter copies"
+        );
+        window_event(&mut app, window_key(window, KeyCode::Enter, None));
+        composer::collect_input(app.world_mut());
+        assert!(pending_edit(&mut app, None));
+        let mut canonical = world();
+        {
+            let mut state = app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>();
+            let result =
+                canonical.rename_agent(state.naming.as_ref().unwrap().stable_id, &state.input);
+            complete(&mut state, result);
+        }
+        composer::adapt(app.world_mut());
+        assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
+        assert_eq!(canonical.entity_id("猫 Élan"), Some(WorldEntityId(1)));
+        assert!(canonical.audible_utterances().is_empty());
+    }
+}
+
+#[test]
+fn ordered_window_input_preserves_normal_typing_and_backspace_around_ime_commit() {
+    let (mut app, window) = ime_app(false);
+    app.world_mut()
+        .resource_mut::<ProductionConversationLineageUiState>()
+        .input = "prefix".into();
+    window_event(&mut app, window_key(window, KeyCode::KeyA, Some("a")));
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(&mut app, window_key(window, KeyCode::KeyB, Some("b")));
+    window_event(
+        &mut app,
+        Ime::Preedit {
+            window,
+            value: "ねこ".into(),
+            cursor: Some((6, 6)),
+        },
+    );
+    window_event(
+        &mut app,
+        window_key(window, KeyCode::KeyX, Some("composition key")),
+    );
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(
+        &mut app,
+        Ime::Preedit {
+            window,
+            value: String::new(),
+            cursor: None,
+        },
+    );
+    window_event(
+        &mut app,
+        Ime::Commit {
+            window,
+            value: "猫".into(),
+        },
+    );
+    // This is a real subsequent raw character, even though it equals the commit.
+    // Deduplication belongs to Winit, never a comparison of text payloads here.
+    window_event(&mut app, window_key(window, KeyCode::KeyC, Some("猫")));
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(&mut app, window_key(window, KeyCode::KeyD, Some("d")));
+    window_event(&mut app, window_key(window, KeyCode::Enter, None));
+    composer::collect_input(app.world_mut());
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "prefix"
+    );
+    assert!(!pending_edit(&mut app, None));
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "prefixb猫d"
+    );
+    window_event(&mut app, window_key(window, KeyCode::Backspace, None));
+    window_event(&mut app, window_key(window, KeyCode::KeyE, Some("e")));
+    window_event(&mut app, window_key(window, KeyCode::Enter, None));
+    composer::collect_input(app.world_mut());
+    assert!(pending_edit(&mut app, None));
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "prefixb猫e"
+    );
+}
+
+#[test]
+fn ime_cancel_focus_help_and_closed_events_restore_settings_without_replay() {
+    for initially_enabled in [false, true] {
+        let (mut app, window) = ime_app(initially_enabled);
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window: Entity::PLACEHOLDER,
+                value: "wrong window".into(),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .input_help_open = true;
+        composer::adapt(app.world_mut());
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().ime_enabled,
+            initially_enabled
+        );
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "help must drain".into(),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .input_help_open = false;
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        window_event(
+            &mut app,
+            Ime::Preedit {
+                window,
+                value: "cancel this".into(),
+                cursor: Some((0, 0)),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Escape);
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .blocks_world_shortcuts());
+        composer::adapt(app.world_mut());
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().ime_enabled,
+            initially_enabled
+        );
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "closed must drain".into(),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::Escape);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear();
+        open(
+            &mut app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>(),
+            draft(&world(), None),
+        );
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "unfocused must drain".into(),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        let state = app
+            .world()
+            .resource::<ProductionConversationLineageUiState>();
+        assert!(state.naming.is_none() && state.input.is_empty());
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().ime_enabled,
+            initially_enabled
+        );
+    }
+}
+
+#[test]
+fn shared_composer_initializes_system_font_fallback_once() {
+    let (mut app, _) = ime_app(false);
+    assert!(app
+        .world()
+        .contains_resource::<composer::SystemFontsLoaded>());
+    let faces = app
+        .world()
+        .resource::<bevy::text::CosmicFontSystem>()
+        .db()
+        .faces()
+        .count();
+    composer::adapt(app.world_mut());
+    composer::collect_input(app.world_mut());
+    assert_eq!(
+        app.world()
+            .resource::<bevy::text::CosmicFontSystem>()
+            .db()
+            .faces()
+            .count(),
+        faces
+    );
+    // Hosts may have zero fallback fonts or lack particular scripts. This is
+    // initialization/API evidence, not a native glyph-coverage claim.
+}
+
+#[test]
+fn ime_opening_frame_commits_are_drained_and_speech_drafts_are_untouched() {
+    for opening in [true, false] {
+        let (mut app, window) = ime_app(false);
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .naming
+            .as_mut()
+            .unwrap()
+            .opening = Some(opening);
+        window_event(
+            &mut app,
+            window_key(window, KeyCode::KeyC, Some("before boundary")),
+        );
+        window_event(&mut app, window_key(window, KeyCode::F2, None));
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "opening commit must drain".into(),
+            },
+        );
+        window_event(&mut app, window_key(window, KeyCode::KeyD, Some("after")));
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, Some(composer::Control::Send)));
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            if opening { "after" } else { "" }
+        );
+        composer::collect_input(app.world_mut());
+        assert!(!pending_edit(&mut app, None));
+        {
+            let mut state = app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>();
+            cancel(&mut state);
+            state.input_open = true;
+            state.input = "ordinary speech".into();
+        }
+        window_event(
+            &mut app,
+            Ime::Commit {
+                window,
+                value: "must not enter speech".into(),
+            },
+        );
+        composer::collect_input(app.world_mut());
+        assert_eq!(
+            app.world()
+                .resource::<ProductionConversationLineageUiState>()
+                .input,
+            "ordinary speech"
+        );
+        assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
+    }
+}

@@ -8359,6 +8359,15 @@ impl GpuLiveBrainRuntime {
         self.appearances.get(organism_id, genome_id)
     }
 
+    /// Change only canonical identity metadata; GPU learning and ownership stay resident.
+    pub fn rename_player_creature(
+        &mut self,
+        id: WorldEntityId,
+        name: &str,
+    ) -> Result<(), alife_world::RenameAgentError> {
+        rename_player_creature_in_world(&mut self.world, id, name)
+    }
+
     /// Places one bounded food resource through canonical world authority.
     /// The candidate world is fully validated before it replaces live state.
     pub fn place_player_food(
@@ -10543,6 +10552,21 @@ fn move_food_in_world(
         .position;
     *world = candidate;
     Ok(position)
+}
+
+pub(crate) fn rename_player_creature_in_world(
+    world: &mut HeadlessWorld,
+    id: WorldEntityId,
+    name: &str,
+) -> Result<(), alife_world::RenameAgentError> {
+    // These labels are used to find the player's persistent physical toys.
+    if matches!(
+        name.trim().to_lowercase().as_str(),
+        "player-plaything" | "player-activity-toy"
+    ) {
+        return Err(alife_world::RenameAgentError::ReservedName);
+    }
+    world.rename_agent(id, name)
 }
 
 fn place_food_in_world(
