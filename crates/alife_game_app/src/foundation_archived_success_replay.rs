@@ -254,8 +254,12 @@ pub fn inspect_archived_successes(
         serde_json::from_slice(&std::fs::read(source_cycle.join("actor-checkpoint.json"))?)?;
     let value: alife_training::PpoValueHeadCheckpoint =
         serde_json::from_slice(&std::fs::read(source_cycle.join("value-checkpoint.json"))?)?;
-    crate::foundation_training_cycle::validate_cycle_optimizer_handoff(
-        &cycle, &asset, &actor, &value,
+    crate::foundation_critic_correction::validate_cycle_optimizer_handoff_at(
+        source_cycle,
+        &cycle,
+        &asset,
+        &actor,
+        &value,
     )?;
     if progress {
         eprintln!(
@@ -1049,6 +1053,68 @@ pub(crate) mod tests {
             inspect().unwrap_err().to_string(),
             "inspection source value head is bound to a different feature count"
         );
+    }
+
+    #[test]
+    fn inspection_binds_declared_residual_sidecar_before_archive_loading() {
+        let (directory, _, _) = selected_source_fixture();
+        let manifest_path = directory.join("manifest.json");
+        let mut archive: ArchivedSuccessManifest =
+            serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+        // A known archive-ordering sentinel distinguishes source admission from
+        // archive loading, without constructing a GPU session or replay evidence.
+        archive.entries[0].episode = directory.clone();
+        archive.entries[0].previous = directory.clone();
+        let manifest_bytes = serde_json::to_vec(&archive).unwrap();
+        std::fs::write(&manifest_path, &manifest_bytes).unwrap();
+        let inspect = || inspect_archived_successes(&directory, &manifest_path);
+        let assert_source_admitted = || {
+            let before = checkpoint_bytes(&directory);
+            assert_eq!(
+                inspect().unwrap_err().to_string(),
+                "archived episode is not a sealed older continuation of this founder"
+            );
+            assert_eq!(checkpoint_bytes(&directory), before);
+        };
+        // Historical cycles remain admissible without a residual sidecar.
+        assert_source_admitted();
+        let sidecar = directory.join(crate::foundation_critic_correction::RESIDUAL_UPDATE);
+        let bytes = b"{\"optimizer_updates\":2}";
+        std::fs::write(&sidecar, bytes).unwrap();
+        let mut cycle: FoundationCycleReceipt =
+            serde_json::from_slice(&std::fs::read(directory.join("cycle.json")).unwrap()).unwrap();
+        cycle.critic_residual_update_sha256 = Some(format!("{:x}", Sha256::digest(bytes)));
+        std::fs::write(
+            directory.join("cycle.json"),
+            serde_json::to_vec(&cycle).unwrap(),
+        )
+        .unwrap();
+        assert_source_admitted();
+        let checkpoint_before = checkpoint_bytes(&directory);
+        std::fs::write(&sidecar, b"tampered residual evidence").unwrap();
+        assert_eq!(
+            inspect().unwrap_err().to_string(),
+            "critic residual update SHA256 mismatch"
+        );
+        assert_eq!(
+            std::fs::read(&sidecar).unwrap(),
+            b"tampered residual evidence"
+        );
+        std::fs::remove_file(&sidecar).unwrap();
+        assert_eq!(
+            inspect()
+                .unwrap_err()
+                .downcast_ref::<std::io::Error>()
+                .unwrap()
+                .kind(),
+            std::io::ErrorKind::NotFound
+        );
+        assert!(!sidecar.exists());
+        assert_eq!(checkpoint_bytes(&directory), checkpoint_before);
+        assert_eq!(std::fs::read(&manifest_path).unwrap(), manifest_bytes);
+        std::fs::write(&sidecar, bytes).unwrap();
+        assert_source_admitted();
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

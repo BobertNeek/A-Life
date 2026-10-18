@@ -70,6 +70,7 @@ jobs:
       - name: Residual checkpoint admission and preserved continuation CPU tests
         run: |
           cargo test --locked -p alife_game_app --features foundation-training --lib residual_checkpoint_ -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --lib inspection_binds_declared_residual_sidecar_before_archive_loading -- --test-threads=1
           cargo test --locked -p alife_game_app --features foundation-training --lib terrain_continuation_preserves_full_heads_and_rejects_tampering -- --test-threads=1
           cargo test --locked -p alife_game_app --features foundation-training --lib critic_correction_continuation_preserves_policy_actor_and_actual_critic_age -- --test-threads=1
       - name: Critic residual WGSL parse and validation
