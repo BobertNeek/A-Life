@@ -626,9 +626,32 @@ mod tests {
         .unwrap();
         // Shared with Python admission tests: actual serde output, including
         // nullable fields and f32 JSON values, must retain this native shape.
-        for (field, value) in expected.as_object().unwrap() {
-            assert_eq!(&trace[field], value, "native comparison field {field}");
-        }
+        let assert_fixture = |trace: &serde_json::Value| {
+            for (field, value) in expected.as_object().unwrap() {
+                assert_eq!(
+                    trace.get(field),
+                    Some(value),
+                    "native comparison field {field}"
+                );
+            }
+        };
+        assert_fixture(&trace);
+
+        // JSON indexing returns Null for an absent key. A required nullable
+        // field must still fail the same fixture assertion when omitted.
+        assert_eq!(
+            expected.get("semantic_context"),
+            Some(&serde_json::Value::Null)
+        );
+        let mut missing_nullable = trace.clone();
+        missing_nullable
+            .as_object_mut()
+            .unwrap()
+            .remove("semantic_context");
+        assert!(
+            std::panic::catch_unwind(|| assert_fixture(&missing_nullable)).is_err(),
+            "fixture admitted a missing nullable semantic_context"
+        );
     }
 
     #[test]
