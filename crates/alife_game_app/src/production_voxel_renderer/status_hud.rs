@@ -135,6 +135,8 @@ struct HeldFood;
 #[derive(Component)]
 struct QuantityGrid;
 #[derive(Component)]
+struct QuantityIcon;
+#[derive(Component)]
 struct MeterTrack(Quantity);
 #[derive(Component)]
 struct MeterFill(Quantity);
@@ -477,7 +479,8 @@ pub(super) fn spawn(world: &mut World) {
                 ChildOf(grid),
             ))
             .id();
-        icon(world, card, image(quantity.name()), 32.0);
+        let quantity_icon = icon(world, card, image(quantity.name()), 32.0);
+        world.entity_mut(quantity_icon).insert(QuantityIcon);
         let track = world
             .spawn((
                 Node {
@@ -686,8 +689,16 @@ fn apply_layout(world: &mut World, size: Vec2) {
         .query_filtered::<&mut Node, With<Quantity>>()
         .iter_mut(world)
     {
-        node.height = Val::Px(if short { 56.0 } else { 68.0 });
+        node.height = Val::Px(if short { 48.0 } else { 68.0 });
         node.row_gap = Val::Px(if short { 4.0 } else { 8.0 });
+    }
+    for mut node in world
+        .query_filtered::<&mut Node, With<QuantityIcon>>()
+        .iter_mut(world)
+    {
+        let size = Val::Px(if short { 28.0 } else { 32.0 });
+        node.width = size;
+        node.height = size;
     }
 }
 fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
@@ -788,7 +799,7 @@ fn panel_bottom(size: Vec2) -> f32 {
     76.0 + 18.0
         + HEADER_HEIGHT
         + 4.0
-        + rows as f32 * if size.y < 300.0 { 56.0 } else { 68.0 }
+        + rows as f32 * if size.y < 300.0 { 48.0 } else { 68.0 }
         + (rows - 1) as f32 * 6.0
 }
 fn adapt_bottom_controls_visibility(world: &mut World, size: Vec2, selected_visible: bool) {

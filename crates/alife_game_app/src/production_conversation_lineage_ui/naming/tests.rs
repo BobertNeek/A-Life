@@ -51,6 +51,8 @@ fn draft(world: &HeadlessWorld, opening: Option<bool>) -> Draft {
             started_at_tick: Tick::ZERO,
         },
         opening,
+        preedit: String::new(),
+        ime_activity: false,
         error: None,
     }
 }
@@ -402,4 +404,291 @@ fn actual_opening_collector_handles_pointer_f2_accessibility_and_gates() {
         None,
         "menu captures rename input"
     );
+}
+
+fn ime_app(initially_enabled: bool) -> (App, Entity) {
+    use crate::production_voxel_renderer::care_dock::tests::layout_app;
+    let mut app = layout_app(Vec2::new(640.0, 360.0));
+    app.insert_resource(state(&world(), None))
+        .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<ButtonInput<MouseButton>>()
+        .add_message::<Ime>();
+    composer::spawn(app.world_mut());
+    let window = app
+        .world_mut()
+        .query_filtered::<Entity, With<PrimaryWindow>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .get_mut::<Window>(window)
+        .unwrap()
+        .ime_enabled = initially_enabled;
+    (app, window)
+}
+
+#[test]
+fn ime_unicode_commit_is_real_draft_text_and_composition_enter_never_confirms() {
+    let (mut app, window) = ime_app(false);
+    app.world_mut().write_message(Ime::Preedit {
+        window,
+        value: "ねこ".into(),
+        cursor: Some((6, 6)),
+    });
+    composer::collect_input(app.world_mut());
+    assert!(app.world().get::<Window>(window).unwrap().ime_enabled);
+    let keys = ButtonInput::default();
+    {
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        assert!(state.input.is_empty(), "preedit is not committed name data");
+        assert!(!edit(
+            &mut state,
+            &keys,
+            [key(KeyCode::Enter, None, false)].iter(),
+            None
+        ));
+        assert!(!edit(
+            &mut state,
+            &keys,
+            [].iter(),
+            Some(composer::Control::Send)
+        ));
+    }
+    composer::adapt(app.world_mut());
+    let text = app
+        .world_mut()
+        .query_filtered::<&Text, With<ProductionSpeechEntryPanel>>()
+        .single(app.world())
+        .unwrap();
+    assert_eq!(text.0, "ねこ|");
+    app.world_mut().write_message(Ime::Preedit {
+        window,
+        value: String::new(),
+        cursor: None,
+    });
+    app.world_mut().write_message(Ime::Commit {
+        window,
+        value: "猫 Élan".into(),
+    });
+    composer::collect_input(app.world_mut());
+    {
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        assert!(!edit(
+            &mut state,
+            &keys,
+            [
+                key(KeyCode::KeyC, Some("猫 Élan"), false),
+                key(KeyCode::Enter, None, false)
+            ]
+            .iter(),
+            None
+        ));
+        assert_eq!(
+            state.input, "猫 Élan",
+            "IME commit is inserted exactly once"
+        );
+        assert!(state.naming.as_ref().unwrap().preedit.is_empty());
+        assert!(state.blocks_world_shortcuts());
+    }
+    composer::collect_input(app.world_mut());
+    let mut canonical = world();
+    {
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        assert!(edit(
+            &mut state,
+            &keys,
+            [key(KeyCode::Enter, None, false)].iter(),
+            None
+        ));
+        let result = canonical.rename_agent(state.naming.as_ref().unwrap().stable_id, &state.input);
+        complete(&mut state, result);
+    }
+    composer::adapt(app.world_mut());
+    assert!(
+        !app.world().get::<Window>(window).unwrap().ime_enabled,
+        "closing restores the host setting in the same frame"
+    );
+    assert_eq!(canonical.entity_id("猫 Élan"), Some(WorldEntityId(1)));
+    assert!(canonical.audible_utterances().is_empty());
+}
+
+#[test]
+fn ime_cancel_focus_help_and_closed_events_restore_settings_without_replay() {
+    for initially_enabled in [false, true] {
+        let (mut app, window) = ime_app(initially_enabled);
+        composer::collect_input(app.world_mut());
+        app.world_mut().write_message(Ime::Commit {
+            window: Entity::PLACEHOLDER,
+            value: "wrong window".into(),
+        });
+        composer::collect_input(app.world_mut());
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .input_help_open = true;
+        composer::adapt(app.world_mut());
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().ime_enabled,
+            initially_enabled
+        );
+        app.world_mut().write_message(Ime::Commit {
+            window,
+            value: "help must drain".into(),
+        });
+        composer::collect_input(app.world_mut());
+        app.world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .input_help_open = false;
+        composer::collect_input(app.world_mut());
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        app.world_mut().write_message(Ime::Preedit {
+            window,
+            value: "cancel this".into(),
+            cursor: Some((0, 0)),
+        });
+        composer::collect_input(app.world_mut());
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Escape);
+        composer::collect_input(app.world_mut());
+        {
+            let mut state = app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>();
+            let mut keys = ButtonInput::default();
+            keys.press(KeyCode::Escape);
+            assert!(!edit(&mut state, &keys, [].iter(), None));
+            assert!(
+                state.blocks_world_shortcuts(),
+                "held dismissal remains captured"
+            );
+        }
+        composer::adapt(app.world_mut());
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().ime_enabled,
+            initially_enabled
+        );
+        app.world_mut().write_message(Ime::Commit {
+            window,
+            value: "closed must drain".into(),
+        });
+        composer::collect_input(app.world_mut());
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::Escape);
+        open(
+            &mut app
+                .world_mut()
+                .resource_mut::<ProductionConversationLineageUiState>(),
+            draft(&world(), None),
+        );
+        composer::collect_input(app.world_mut());
+        assert!(app
+            .world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input
+            .is_empty());
+        app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
+        app.world_mut().write_message(Ime::Commit {
+            window,
+            value: "unfocused must drain".into(),
+        });
+        composer::collect_input(app.world_mut());
+        let state = app
+            .world()
+            .resource::<ProductionConversationLineageUiState>();
+        assert!(state.naming.is_none() && state.input.is_empty());
+        assert_eq!(
+            app.world().get::<Window>(window).unwrap().ime_enabled,
+            initially_enabled
+        );
+    }
+}
+
+#[test]
+fn shared_composer_initializes_system_font_fallback_once() {
+    let (mut app, _) = ime_app(false);
+    assert!(app
+        .world()
+        .contains_resource::<composer::SystemFontsLoaded>());
+    let faces = app
+        .world()
+        .resource::<bevy::text::CosmicFontSystem>()
+        .db()
+        .faces()
+        .count();
+    composer::adapt(app.world_mut());
+    composer::collect_input(app.world_mut());
+    assert_eq!(
+        app.world()
+            .resource::<bevy::text::CosmicFontSystem>()
+            .db()
+            .faces()
+            .count(),
+        faces
+    );
+    // Hosts may have zero fallback fonts or lack particular scripts. This is
+    // initialization/API evidence, not a native glyph-coverage claim.
+}
+
+#[test]
+fn ime_opening_frame_commits_are_drained_and_speech_drafts_are_untouched() {
+    let (mut app, window) = ime_app(false);
+    app.world_mut()
+        .resource_mut::<ProductionConversationLineageUiState>()
+        .naming
+        .as_mut()
+        .unwrap()
+        .opening = Some(false);
+    app.world_mut().write_message(Ime::Commit {
+        window,
+        value: "before opening boundary".into(),
+    });
+    composer::collect_input(app.world_mut());
+    {
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        assert!(!edit(&mut state, &ButtonInput::default(), [].iter(), None));
+        assert!(state.input.is_empty());
+    }
+    composer::collect_input(app.world_mut());
+    assert!(app
+        .world()
+        .resource::<ProductionConversationLineageUiState>()
+        .input
+        .is_empty());
+    {
+        let mut state = app
+            .world_mut()
+            .resource_mut::<ProductionConversationLineageUiState>();
+        cancel(&mut state);
+        state.input_open = true;
+        state.input = "ordinary speech".into();
+    }
+    app.world_mut().write_message(Ime::Commit {
+        window,
+        value: "must not enter speech".into(),
+    });
+    composer::collect_input(app.world_mut());
+    assert_eq!(
+        app.world()
+            .resource::<ProductionConversationLineageUiState>()
+            .input,
+        "ordinary speech"
+    );
+    assert!(!app.world().get::<Window>(window).unwrap().ime_enabled);
 }

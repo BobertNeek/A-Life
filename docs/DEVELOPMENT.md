@@ -95,6 +95,9 @@ cargo test --locked -p alife_game_app --features production-voxel-frontend --lib
 Select a living creature and click its pencil button or press F2 to name it.
 Type the name in the shared wordless composer; Enter or its arrow confirms,
 and Escape or its cross cancels. The address toggle is hidden during naming.
+Input-method composition commits text first; a separate Enter confirms the name.
+The composer loads installed system fonts as fallbacks for player-entered text;
+available glyph coverage depends on those fonts.
 Empty names, names longer than 32 Unicode scalar values, control characters,
 case-equivalent names already used by another object, and world-generated
 label namespaces are rejected with a short explanation beside the draft.

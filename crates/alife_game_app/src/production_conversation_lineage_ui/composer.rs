@@ -36,6 +36,8 @@ pub(crate) struct DraftViewport;
 struct Help;
 #[derive(Resource)]
 struct Icons(BTreeMap<&'static str, Handle<Image>>);
+#[derive(Resource)]
+pub(super) struct SystemFontsLoaded;
 #[derive(Default, Resource)]
 pub(crate) struct InputState {
     pub(super) pending: Option<Control>,
@@ -105,6 +107,17 @@ fn decoration() -> (bevy::picking::Pickable, FocusPolicy) {
     (bevy::picking::Pickable::IGNORE, FocusPolicy::Pass)
 }
 pub(crate) fn spawn(world: &mut World) {
+    // Bevy's embedded default font contains only ASCII. Populate the shared
+    // shaping database once so personal names can use installed fallback fonts.
+    // Coverage follows the host's fonts; no network or bundled assets are used.
+    if !world.contains_resource::<SystemFontsLoaded>() {
+        world.init_resource::<bevy::text::CosmicFontSystem>();
+        world
+            .resource_mut::<bevy::text::CosmicFontSystem>()
+            .db_mut()
+            .load_system_fonts();
+        world.insert_resource(SystemFontsLoaded);
+    }
     world.init_resource::<InputState>();
     world.init_resource::<naming::OpenInput>();
     world.init_resource::<InputFocus>();
@@ -395,6 +408,7 @@ fn collect_available_input(world: &mut World, open: bool, blocked: bool) {
                     .collect();
                 if let Some(draft) = state.naming.as_mut() {
                     draft.error = None;
+                    draft.preedit.clear();
                 }
                 state.input_error = None;
                 state.input_help_open = false;
@@ -439,15 +453,23 @@ fn width(size: Vec2) -> f32 {
 }
 fn height(state: &ProductionConversationLineageUiState, size: Vec2, bottom: f32) -> f32 {
     let columns = ((width(size) - 26.0) / 18.0).floor().max(1.0) as usize;
-    let lines = speech_entry_text(state)
-        .chars()
-        .count()
-        .max(1)
-        .div_ceil(columns);
+    let lines = entry_text(state).chars().count().max(1).div_ceil(columns);
     (80.0 + lines as f32 * 18.0 * 1.3)
         .max(120.0)
         .ceil()
         .min((size.y - bottom - 12.0).max(0.0))
+}
+fn entry_text(state: &ProductionConversationLineageUiState) -> String {
+    if let Some(preedit) = state
+        .naming
+        .as_ref()
+        .map(|draft| &draft.preedit)
+        .filter(|text| !text.is_empty())
+    {
+        format!("{}{preedit}|", state.input)
+    } else {
+        speech_entry_text(state)
+    }
 }
 pub(crate) fn composer_height(world: &World, size: Vec2) -> Option<f32> {
     let state = world.get_resource::<ProductionConversationLineageUiState>()?;
@@ -456,6 +478,7 @@ pub(crate) fn composer_height(world: &World, size: Vec2) -> Option<f32> {
         .then(|| height(state, size, speech_composer_bottom(world)))
 }
 pub(crate) fn adapt(world: &mut World) {
+    naming::sync_ime_window(world);
     let size = world
         .query_filtered::<&Window, With<bevy::window::PrimaryWindow>>()
         .iter(world)
@@ -469,7 +492,7 @@ pub(crate) fn adapt(world: &mut World) {
     let help = state.input_help_open;
     let selected = state.address_selected;
     let naming = state.naming.is_some();
-    let text = speech_entry_text(state);
+    let text = entry_text(state);
     let draft = state.input.clone();
     let height = height(state, size, bottom);
     let mut cue = state.input_cue;

@@ -62,18 +62,21 @@ def unicode_cmap(data):
 
 
 def composer_template(source):
-    match = re.search(
-        r'fn speech_entry_text\([^\n]*\) -> String \{\s*format!\(\s*'
-        r'("(?:[^"\\]|\\.)*"),\s*state\.input\s*\)\s*\}',
-        source,
-        re.DOTALL,
+    start = source.index('pub(crate) fn speech_entry_text(')
+    end = source.index('pub(crate) fn speech_composer_height(', start)
+    function = source[start:end]
+    matches = re.findall(
+        r'format!\(\s*("(?:[^"\\]|\\.)*"),\s*state\.input\s*\)',
+        function,
     )
-    if not match:
+    if not matches or len(matches) != function.count('format!('):
         raise ValueError("cannot verify the unmodified input display argument")
-    template = ast.literal_eval(match[1])
-    if template != "{}|":
-        raise ValueError("expected only the teaching draft and ASCII end caret")
-    return template, "|"
+    templates = [ast.literal_eval(value) for value in matches]
+    # Validation may append a separate explanation; the draft and its caret
+    # retain the same literal rendering in both branches.
+    if templates not in (["{}|"], ["{}|\n{error}", "{}|"]):
+        raise ValueError("expected the unchanged draft/caret and optional validation explanation")
+    return ''.join(templates).replace('{error}', ''), "|"
 
 
 def main():

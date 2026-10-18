@@ -5,6 +5,7 @@ use bevy::{
     a11y::ActionRequest,
     ecs::message::MessageCursor,
     prelude::{Entity, Interaction, MouseButton, World},
+    window::{Ime, PrimaryWindow},
 };
 
 #[derive(Debug, Clone)]
@@ -14,6 +15,8 @@ pub(super) struct Draft {
     original_name: String,
     runtime_identity: SpeechRuntimeIdentity,
     opening: Option<bool>, // true: F2; false: pointer/accessibility opening
+    pub(super) preedit: String,
+    ime_activity: bool,
     pub(super) error: Option<&'static str>,
 }
 
@@ -21,6 +24,8 @@ pub(super) struct Draft {
 pub(super) struct OpenInput {
     reader: MessageCursor<ActionRequest>,
     pressed: bool,
+    ime_reader: MessageCursor<Ime>,
+    ime_window: Option<(Entity, bool)>,
 }
 
 fn shown(world: &World, mut entity: Entity) -> bool {
@@ -117,9 +122,14 @@ fn collect_opening(world: &mut World) -> Option<bool> {
 }
 
 pub(super) fn collect_input(world: &mut World) {
-    let Some(keyboard) = collect_opening(world) else {
-        return;
-    };
+    if let Some(keyboard) = collect_opening(world) {
+        open_selected(world, keyboard);
+    }
+    sync_ime_window(world);
+    collect_ime(world);
+}
+
+fn open_selected(world: &mut World, keyboard: bool) {
     let selection = world.resource::<Fvr03ProductionVoxelSelectionResource>();
     let creatures = world.resource::<Fvr04ProductionCreatureSceneResource>();
     let Some(runtime) = world.get_non_send_resource::<ProductionGpuBrainRuntimeResource>() else {
@@ -158,12 +168,123 @@ pub(super) fn collect_input(world: &mut World) {
         original_name: object.label.clone(),
         runtime_identity,
         opening: Some(keyboard),
+        preedit: String::new(),
+        ime_activity: false,
         error: None,
     };
     open(
         &mut world.resource_mut::<ProductionConversationLineageUiState>(),
         draft,
     );
+}
+
+/// Own IME only while the naming entry has focus, preserving the host setting.
+/// Called again during presentation so confirmation/cancellation restores it
+/// in the same frame, after the keyboard handler closes the composer.
+pub(super) fn sync_ime_window(world: &mut World) {
+    let state = world.resource::<ProductionConversationLineageUiState>();
+    let active = state.naming.is_some() && state.input_open && !state.input_help_open;
+    let blocked = world
+        .get_resource::<crate::production_voxel_renderer::menu::MenuState>()
+        .is_some_and(crate::production_voxel_renderer::menu::captures_input_state);
+    let target = if active && !blocked {
+        world
+            .query_filtered::<(Entity, &bevy::prelude::Window), With<PrimaryWindow>>()
+            .iter(world)
+            .find_map(|(entity, window)| window.focused.then_some(entity))
+    } else {
+        None
+    };
+    let previous = world.resource::<OpenInput>().ime_window;
+    if previous.map(|(entity, _)| entity) != target {
+        if let Some((entity, enabled)) = previous {
+            if let Some(mut window) = world.get_mut::<bevy::prelude::Window>(entity) {
+                window.ime_enabled = enabled;
+            }
+        }
+        let next = target.map(|entity| {
+            (
+                entity,
+                world
+                    .get::<bevy::prelude::Window>(entity)
+                    .unwrap()
+                    .ime_enabled,
+            )
+        });
+        world.resource_mut::<OpenInput>().ime_window = next;
+    }
+    if let Some(entity) = target {
+        world
+            .get_mut::<bevy::prelude::Window>(entity)
+            .unwrap()
+            .ime_enabled = true;
+    } else if let Some(draft) = world
+        .resource_mut::<ProductionConversationLineageUiState>()
+        .naming
+        .as_mut()
+    {
+        draft.preedit.clear();
+    }
+}
+
+fn collect_ime(world: &mut World) {
+    // Always advance this cursor, including while closed or behind another
+    // modal, so a later name entry cannot replay an old OS commit.
+    let messages = world.resource_scope(|world, mut input: bevy::prelude::Mut<OpenInput>| {
+        world
+            .get_resource::<bevy::prelude::Messages<Ime>>()
+            .map(|messages| input.ime_reader.read(messages).cloned().collect::<Vec<_>>())
+            .unwrap_or_default()
+    });
+    let target = world
+        .resource::<OpenInput>()
+        .ime_window
+        .map(|(entity, _)| entity);
+    let mut state = world.resource_mut::<ProductionConversationLineageUiState>();
+    let Some(draft) = state.naming.as_mut() else {
+        return;
+    };
+    draft.ime_activity = !draft.preedit.is_empty();
+    if draft.opening.is_some() || target.is_none() {
+        return;
+    }
+    for message in messages {
+        let window = match &message {
+            Ime::Preedit { window, .. }
+            | Ime::Commit { window, .. }
+            | Ime::Enabled { window }
+            | Ime::Disabled { window } => *window,
+        };
+        if Some(window) != target {
+            continue;
+        }
+        match message {
+            Ime::Preedit { value, .. } => {
+                let draft = state.naming.as_mut().unwrap();
+                draft.ime_activity = true;
+                draft.preedit = value
+                    .chars()
+                    .filter(|c| !c.is_control())
+                    .take(MAX_TYPED_CHARS)
+                    .collect();
+            }
+            Ime::Commit { value, .. } => {
+                let draft = state.naming.as_mut().unwrap();
+                draft.ime_activity = true;
+                draft.preedit.clear();
+                draft.error = None;
+                let remaining = MAX_TYPED_CHARS.saturating_sub(state.input.chars().count());
+                state
+                    .input
+                    .extend(value.chars().filter(|c| !c.is_control()).take(remaining));
+                state.input_help_open = false;
+            }
+            Ime::Disabled { .. } => {
+                state.naming.as_mut().unwrap().preedit.clear();
+            }
+            Ime::Enabled { .. } => {}
+        }
+    }
 }
 
 fn open(state: &mut ProductionConversationLineageUiState, draft: Draft) {
@@ -254,6 +375,7 @@ fn edit<'a>(
         state.input_help_open = !state.input_help_open;
     }
     let opening = state.naming.as_mut().unwrap().opening.take();
+    let ime_activity = state.naming.as_ref().unwrap().ime_activity;
     let before = state.input.clone();
     let submit = if opening == Some(false) {
         false
@@ -268,6 +390,11 @@ fn edit<'a>(
             }
             if !after_open {
                 after_open = message.key_code == KeyCode::F2 && !message.repeat;
+                continue;
+            }
+            // OS composition owns these keys. Its confirming Enter may arrive
+            // in the same frame as Commit, so that frame never saves a name.
+            if ime_activity {
                 continue;
             }
             if message.key_code == KeyCode::Enter {
@@ -290,7 +417,7 @@ fn edit<'a>(
         state.naming.as_mut().unwrap().error = None;
         state.input_help_open = false;
     }
-    opening.is_none() && (submit || pointer == Some(composer::Control::Send))
+    opening.is_none() && !ime_activity && (submit || pointer == Some(composer::Control::Send))
 }
 
 fn complete(
