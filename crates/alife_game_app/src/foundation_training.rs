@@ -20,7 +20,9 @@ use alife_training::{
 use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+mod comparison_identity;
 pub(crate) mod diagnostics;
+pub use comparison_identity::FoundationProbeComparisonIdentityV1;
 mod food_outcome;
 mod lesson_trace;
 pub use food_outcome::FoundationFoodOutcome;
@@ -514,6 +516,9 @@ pub struct FoundationPilotReceipt {
     pub vocabulary_token: Option<u16>,
     #[serde(default)]
     pub initial_world_signature: String,
+    /// Absent in historical artifacts; qualification must not infer a match.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_comparison_identity: Option<FoundationProbeComparisonIdentityV1>,
     #[serde(default)]
     pub silent_request: bool,
     #[serde(default)]
@@ -1698,6 +1703,8 @@ fn run_foundation_training_pilot_with_request(
         scenario.fixed_speaker_position = Some(position);
     }
     let initial_world_signature = format!("{:?}", game.world.canonical_signature_digest()?);
+    let initial_comparison_identity =
+        Some(comparison_identity::initial_identity(&game.world, &asset)?);
     let food = scenario.food;
     let food_position = scenario_lesson.map(|_| {
         let position = game
@@ -2496,6 +2503,7 @@ fn run_foundation_training_pilot_with_request(
         lesson_completed,
         vocabulary_token: scenario.vocabulary_token,
         initial_world_signature,
+        initial_comparison_identity,
         silent_request: scenario.silent_request,
         request_target: scenario.vocabulary_target,
         request_responses,
