@@ -10,9 +10,8 @@ import math
 from pathlib import Path
 import re
 
+from foundation_probe_schema import InvalidComparisonEvidence, number, uint, validate_sensory_context
 
-class InvalidComparisonEvidence(ValueError):
-    pass
 
 
 def required(record, key):
@@ -29,10 +28,6 @@ def checked_sha(value, label):
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
         raise InvalidComparisonEvidence(f"invalid {label} SHA-256")
     return value
-
-
-def uint(value, bits, *, positive=False):
-    return type(value) is int and int(positive) <= value < 2**bits
 
 
 def canonical(value):
@@ -103,9 +98,6 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
     if not isinstance(first, dict) or set(first) - set(input_fields) - output_fields - {"sampling", "candidates", "physiology"}:
         raise InvalidComparisonEvidence("unsupported decision schema; unknown fields need an explicit contract")
     context = {key: required(first, key) for key in input_fields}
-    for key in ("frame_digest", "position", "gaze_rotation", "heard_tokens", "semantic_context", "object_slots", "terrain_ranges"):
-        if context[key] is None:
-            raise InvalidComparisonEvidence(f"missing sensory input {key}")
     for key in ("organism_id", "tick", "decision_tick", "sequence_id", "dispatch_generation"):
         if not uint(context[key], 64, positive=key in {"organism_id", "sequence_id", "dispatch_generation"}):
             raise InvalidComparisonEvidence(f"malformed decision identity {key}")
@@ -113,13 +105,7 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
     if not isinstance(frame_digest, list) or len(frame_digest) != 4 or not all(uint(word, 64) for word in frame_digest):
         raise InvalidComparisonEvidence("malformed sensory frame digest")
     candidates = required(first, "candidates")
-    if not isinstance(candidates, list) or not candidates:
-        raise InvalidComparisonEvidence("missing candidate support")
-    for candidate in candidates:
-        if not isinstance(candidate, dict) or set(candidate) != {"action", "family", "index", "logit", "observation", "target", "target_position"}:
-            raise InvalidComparisonEvidence("malformed/unsupported candidate schema")
-        if type(candidate["logit"]) not in (int, float) or not math.isfinite(candidate["logit"]):
-            raise InvalidComparisonEvidence("nonfinite candidate logit")
+    validate_sensory_context(context, candidates)
     if not uint(context["representative_mask"], 32, positive=True) or not isinstance(context["motor_masks"], list) or len(context["motor_masks"]) != 6 or not all(uint(m, 32) for m in context["motor_masks"]):
         raise InvalidComparisonEvidence("malformed candidate masks")
     # Scores are treatment outputs; all candidate identity/observation fields bind.
@@ -129,8 +115,10 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
     if not isinstance(physiology, dict) or not physiology_fields <= physiology.keys():
         raise InvalidComparisonEvidence("missing pre-decision physiology")
     context["physiology"] = {k: v for k, v in physiology.items() if k.startswith("before_")}
-    if any(type(v) not in (int, float) or not math.isfinite(v) for v in context["physiology"].values()):
-        raise InvalidComparisonEvidence("invalid pre-decision physiology")
+    if set(context["physiology"]) != physiology_fields:
+        raise InvalidComparisonEvidence("unsupported pre-decision physiology schema")
+    for key, value in context["physiology"].items():
+        number(value, "pre-decision physiology " + key, 0, 1)
     components = dict(world=world, provenance=provenance, setup=setup, context=context)
     return dict(schema_version=1, components=components, comparison_sha256=sha256(canonical(components)),
                 policy_sha256=expected_policy_sha256, executable_sha256=expected_executable_sha256,

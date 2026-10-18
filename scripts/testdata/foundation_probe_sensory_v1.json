@@ -1,0 +1,139 @@
+{
+  "position": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0
+  },
+  "gaze_rotation": {
+    "x": 0.0,
+    "y": 0.0,
+    "z": 0.0,
+    "w": 1.0
+  },
+  "terrain_ranges": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "heard_tokens": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "semantic_context": null,
+  "global_grip_before_decision": 0.0,
+  "object_slots": [
+    {
+      "slot_index": 0,
+      "tracked_object_id": 9,
+      "bearing": [
+        -0.25,
+        0.5
+      ],
+      "distance": 0.5,
+      "relative_velocity": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "color": [
+        0.20000000298023224,
+        0.20000000298023224,
+        0.20000000298023224
+      ],
+      "material": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "shape": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "chemical": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "contact": 1.0,
+      "proprioception": [
+        0.0,
+        0.0
+      ],
+      "temperature": 0.0,
+      "terrain": [
+        0.0,
+        0.0
+      ],
+      "confidence": 0.75
+    }
+  ],
+  "candidates": [
+    {
+      "index": 0,
+      "action": 101,
+      "family": "Approach",
+      "target": 3,
+      "observation": {
+        "ObjectSlot": 0
+      },
+      "target_position": {
+        "x": -1.25,
+        "y": 0.125,
+        "z": 3.5
+      },
+      "logit": -1.25
+    },
+    {
+      "index": 1,
+      "action": 211,
+      "family": "Other",
+      "target": 3,
+      "observation": {
+        "ObjectSlot": 0
+      },
+      "target_position": {
+        "x": -1.25,
+        "y": 0.125,
+        "z": 3.5
+      },
+      "logit": 0.5
+    },
+    {
+      "index": 2,
+      "action": 1,
+      "family": "Idle",
+      "target": null,
+      "observation": "None",
+      "target_position": null,
+      "logit": 0.0
+    }
+  ]
+}

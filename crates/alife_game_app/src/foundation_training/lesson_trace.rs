@@ -616,6 +616,22 @@ mod tests {
     }
 
     #[test]
+    fn native_sensory_json_matches_comparison_fixture() {
+        let (frame, behavior, decision, outcome) = fixture(0.0);
+        let trace = serialize_step(&frame, &behavior, &decision, None, &outcome, Some(false));
+        let expected: serde_json::Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../scripts/testdata/foundation_probe_sensory_v1.json"
+        )))
+        .unwrap();
+        // Shared with Python admission tests: actual serde output, including
+        // nullable fields and f32 JSON values, must retain this native shape.
+        for (field, value) in expected.as_object().unwrap() {
+            assert_eq!(&trace[field], value, "native comparison field {field}");
+        }
+    }
+
+    #[test]
     fn additive_fields_preserve_the_previous_lesson_step_shape() {
         let (frame, behavior, decision, outcome) = fixture(0.0);
         let mut trace = serialize_step(&frame, &behavior, &decision, None, &outcome, Some(false));
