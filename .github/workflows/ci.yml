@@ -33,6 +33,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::god_hand:: -- --test-threads=1 --color=never'
       - name: Run live food projection and carried-object CPU tests
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::live_food_projection::tests:: -- --test-threads=1 --color=never'
+      - name: Run live sleep phase and lifecycle CPU tests
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::live_sleep_feedback::tests:: -- --test-threads=1 --color=never'
       - name: Run selected-creature HUD CPU data and layout tests
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::status_hud:: -- --test-threads=1 --color=never'
 

@@ -68,7 +68,13 @@ The bridge is implemented and integrated in source. This status does not substit
 - The save/load UX autosave policy is 15 minutes of production simulation time. Sleep-journal publication is separate neural durability work, not a player save on every tick.
 - Full autonomous lifecycle and lineage behavior still needs current-source causal and rendered proof.
 - Dynamic overlay geometry is still derived from the launch snapshot.
-- VFX placement follows live creatures, but effect triggers are still selected from launch state rather than live events.
+- Sleep feedback reads each living individual's authoritative sleep phase and follows
+  its displayed root pose. Three small, wordless amber bubbles clear on waking,
+  missing authority, identity mismatch, removal and load; pause freezes their pulse.
+  At most eight individuals share one mesh and material. This is presentation only;
+  it does not change sleep, learning or persistence. Other scene VFX triggers remain
+  launch-snapshot based, and stay disabled on authored terrain. Native gameplay
+  visual acceptance remains unverified.
 - Creature LOD is profile-selected rather than camera-distance selected.
 
 ## Evolutionary-intelligence results
