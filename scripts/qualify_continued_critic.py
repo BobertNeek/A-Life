@@ -107,6 +107,14 @@ def main():
     args = parser.parse_args()
     if args.old_trainer and not args.old_source_repository:
         parser.error("The legacy control needs its original source checkout for truthful revision receipts")
+    # The legacy control runs from its own source checkout. Pin every CLI path
+    # to the invocation directory before that process-wide cwd change.
+    for name in ("source", "output", "trainer", "evaluator", "inspector", "reserve_disk",
+                 "old_trainer", "old_source_repository"):
+        path = getattr(args, name)
+        if path is not None:
+            setattr(args, name, path.resolve())
+    args.protected_checkpoint = [path.resolve() for path in args.protected_checkpoint]
     deadline = dt.datetime.fromisoformat(args.deadline_utc)
     if deadline.tzinfo is None or not 1 <= args.cycles <= 128:
         parser.error("Require an aware deadline and 1..128 disposable cycles")

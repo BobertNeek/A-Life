@@ -64,7 +64,7 @@ class SeparateSliceGates(unittest.TestCase):
 
 # Host-only orchestration checks; native commands are deterministic doubles.
 class QualificationComparability(unittest.TestCase):
-    def run_qualification(self, current_actor_rows=128):
+    def run_qualification(self, current_actor_rows=128, *, relative_paths=False, legacy_control=False):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
@@ -79,6 +79,16 @@ class QualificationComparability(unittest.TestCase):
         write(source / "value-checkpoint.json", dict(optimizer_step=16004))
         (source / "trained.alife-foundation").write_bytes(b"preserved-asset")
         protected = qualification.file_map(source)
+        extra_protected = root / "other-protected"
+        extra_protected.mkdir()
+        (extra_protected / "state.bin").write_bytes(b"protected state")
+        extra_before = qualification.file_map(extra_protected)
+        reserve = root / "reserve"
+        reserve.mkdir()
+        old_repository = root / "old source checkout"
+        old_repository.mkdir()
+        old_trainer = root / "old-trainer"
+        old_trainer.write_bytes(b"old trainer")
         binaries = {}
         for role in ["trainer", "evaluator", "inspector"]:
             binary = root / role
@@ -87,8 +97,16 @@ class QualificationComparability(unittest.TestCase):
         commands = []
         def native(argv, timeout):
             commands.append(argv)
+            self.assertTrue(Path(argv[0]).is_absolute())
+            self.assertTrue(Path(argv[0]).is_file())
             role = Path(argv[0]).name
             mode = argv[1]
+            if role == "old-trainer":
+                self.assertEqual(Path.cwd(), old_repository)
+                self.assertEqual(Path(argv[2]), output / "source-clone")
+                self.assertEqual(Path(argv[3]), output / "legacy-control-cycle1")
+            else:
+                self.assertEqual(Path.cwd(), root)
             stdout = b"{}"
             if role == "trainer" and mode == "--evaluate":
                 target, asset, lesson, cap, seed, founder = argv[2:]
@@ -96,7 +114,7 @@ class QualificationComparability(unittest.TestCase):
                 write(Path(target) / "pilot.json", dict(seed=int(seed), ticks=min(8, int(cap)),
                       consumed_events=int(int(cap) >= 8), founder_seed_base=int(founder),
                       lesson=lesson, teacher_mode=False))
-            elif role == "trainer" and mode == "--resume-cycle":
+            elif role in ("trainer", "old-trainer") and mode == "--resume-cycle":
                 target = Path(argv[3])
                 sidecar = target / "critic-residual-update.json"
                 write(sidecar, dict(optimizer_updates=2))
@@ -133,23 +151,54 @@ class QualificationComparability(unittest.TestCase):
                 raise AssertionError((role, mode))
             return subprocess.CompletedProcess(argv, 0, stdout, b"")
         deadline = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=1)).isoformat()
-        argv = ["qualify_continued_critic.py", "--source", str(source), "--output", str(output),
+        def cli_path(path):
+            return str(path.relative_to(root) if relative_paths else path)
+        argv = ["qualify_continued_critic.py", "--source", cli_path(source), "--output", cli_path(output),
                 "--cycles", "1", "--first-seed", "100", "--fresh-context-seeds", "200", "201",
-                "--acceptance-seeds", "300", "301", "--deadline-utc", deadline]
+                "--acceptance-seeds", "300", "301", "--deadline-utc", deadline,
+                "--reserve-disk", cli_path(reserve), "--protected-checkpoint", cli_path(extra_protected)]
         for role, binary in binaries.items():
-            argv += ["--" + role, str(binary)]
+            argv += ["--" + role, cli_path(binary)]
+        if legacy_control:
+            argv += ["--old-trainer", cli_path(old_trainer),
+                     "--old-source-repository", cli_path(old_repository)]
+        def headroom(disk):
+            self.assertEqual(disk, reserve)
+            return {}
         error = None
-        with patch.dict(qualification.os.environ), patch.object(sys, "argv", argv), \
+        with contextlib.chdir(root), patch.dict(qualification.os.environ), patch.object(sys, "argv", argv), \
                 patch.object(qualification, "workers", return_value=[]), \
-                patch.object(qualification, "resources", return_value={}), \
+                patch.object(qualification, "resources", side_effect=headroom), \
                 patch.object(qualification, "run_inspector", side_effect=native), \
                 contextlib.redirect_stdout(io.StringIO()):
             try:
                 qualification.main()
             except ValueError as caught:
                 error = caught
+            self.assertEqual(Path.cwd(), root)
         self.assertEqual(qualification.file_map(source), protected)
+        self.assertEqual(qualification.file_map(extra_protected), extra_before)
+        self.assertEqual(list(old_repository.iterdir()), [])
+        records = qualification.read(output / "COMMANDS.json")
+        for record in records:
+            self.assertTrue((output / (record["label"] + ".stdout.log")).is_file())
+            self.assertTrue((output / (record["label"] + ".stderr.log")).is_file())
+        plan = qualification.read(output / "PLAN.json")
+        self.assertEqual(set(plan["protected"]), {str(source), str(extra_protected)})
+        for binary, digest in plan["binaries"].items():
+            self.assertTrue(Path(binary).is_absolute())
+            self.assertEqual(qualification.sha(binary), digest)
         return qualification.read(output / "RESULT.json"), commands, error
+
+    def test_legacy_control_preserves_invocation_paths_and_receipts(self):
+        for relative in (False, True):
+            with self.subTest(relative_paths=relative):
+                result, commands, error = self.run_qualification(relative_paths=relative, legacy_control=True)
+                self.assertIsNone(error)
+                self.assertTrue(result["matched_legacy_actor_checkpoint_exact"])
+                self.assertTrue(result["protected_checkpoints_unchanged"])
+                self.assertEqual(result["accepted_cycles"], 1)
+                self.assertEqual(sum(Path(c[0]).name == "old-trainer" for c in commands), 1)
 
     def test_matched_caps_fixed_contexts_and_disposable_counters(self):
         result, commands, error = self.run_qualification()

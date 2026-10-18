@@ -12,6 +12,7 @@ use std::{
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const MARKER: &str = "critic-correction.json";
+pub(crate) const RESIDUAL_UPDATE: &str = "critic-residual-update.json";
 const CORE: [&str; 4] = [
     "cycle.json",
     "trained.alife-foundation",
@@ -166,7 +167,20 @@ fn pinned_read(root: &Path, name: &str, expected: &BTreeMap<String, String>) -> 
     Ok(bytes)
 }
 
-/// The ordinary sealed-cycle contract remains unchanged when no marker exists.
+fn validate_residual_update(directory: &Path, receipt: &FoundationCycleReceipt) -> Result<()> {
+    if let Some(expected) = &receipt.critic_residual_update_sha256 {
+        if !valid_sha(expected) {
+            return Err("invalid critic residual update SHA256".into());
+        }
+        let bytes = read_bounded(&directory.join(RESIDUAL_UPDATE), MAX_FILE_BYTES)?;
+        if sha(&bytes) != *expected {
+            return Err("critic residual update SHA256 mismatch".into());
+        }
+    }
+    Ok(())
+}
+
+/// Validate any declared residual evidence before either sealed-cycle route.
 pub(crate) fn validate_cycle_optimizer_handoff_at(
     directory: &Path,
     receipt: &FoundationCycleReceipt,
@@ -174,6 +188,7 @@ pub(crate) fn validate_cycle_optimizer_handoff_at(
     actor: &FoundationTrainerCheckpoint,
     value: &PpoValueHeadCheckpoint,
 ) -> Result<()> {
+    validate_residual_update(directory, receipt)?;
     let marker = directory.join(MARKER);
     match std::fs::symlink_metadata(&marker) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -246,6 +261,7 @@ pub(crate) fn validate_cycle_optimizer_handoff_at(
         "value-checkpoint.json",
         &source_files,
     )?)?;
+    validate_residual_update(&source, &source_receipt)?;
     validate_cycle_optimizer_handoff(&source_receipt, &source_asset, &source_actor, &source_value)?;
     let source_digest: String = source_asset
         .digest()
