@@ -2,6 +2,7 @@
 use super::*;
 use alife_core::{BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, SleepPhase};
 use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord};
+use bevy::prelude::Vec2;
 use std::time::Duration;
 
 fn authoritative_world(count: usize, phase: SleepPhase) -> HeadlessWorld {
@@ -111,6 +112,50 @@ fn reseed(app: &mut App, world: &HeadlessWorld) {
         .resource_mut::<LiveBrainPresentationFrameResource>()
         .reseed_from_loaded_world(world)
         .unwrap();
+}
+
+fn assert_camera_facing_bubbles(
+    app: &App,
+    root: Entity,
+    cue: Entity,
+    camera_rotation: Quat,
+) -> Vec<Vec3> {
+    let root = app.world().get::<Transform>(root).unwrap().compute_affine();
+    let cue_pose = app.world().get::<Transform>(cue).unwrap().compute_affine();
+    let children = app.world().get::<Children>(cue).unwrap();
+    assert_eq!(children.len(), 3);
+    children
+        .iter()
+        .map(|child| {
+            let ring = app
+                .world()
+                .get::<Transform>(*child)
+                .unwrap()
+                .compute_affine();
+            // Match affine hierarchy propagation; decomposed Transform multiplication
+            // would silently discard the shear caused by rotating below nonuniform scale.
+            let affine = root * cue_pose * ring;
+            let axes = [Vec3::X, Vec3::Y, Vec3::Z].map(|axis| affine.transform_vector3(axis));
+            let lengths = axes.map(Vec3::length);
+            assert!(lengths[0] > 0.0);
+            assert!((lengths[0] - lengths[1]).abs() < 1e-6);
+            assert!((lengths[0] - lengths[2]).abs() < 1e-6);
+            let axes = axes.map(Vec3::normalize);
+            for (first, second) in [(0, 1), (0, 2), (1, 2)] {
+                assert!(axes[first].dot(axes[second]).abs() < 1e-6);
+            }
+            // A torus lies in local XZ. Its quarter-turn makes its local Y
+            // normal face camera-local +Z and its two ring axes match the screen.
+            for (actual, expected) in axes.into_iter().zip([
+                camera_rotation * Vec3::X,
+                camera_rotation * Vec3::Z,
+                camera_rotation * Vec3::NEG_Y,
+            ]) {
+                assert!((actual - expected).length() < 1e-6);
+            }
+            affine.transform_point3(Vec3::ZERO)
+        })
+        .collect()
 }
 
 #[test]
@@ -273,17 +318,51 @@ fn cue_tracks_displayed_pose_and_camera_between_ticks_and_freezes_pulse_on_pause
     let seconds = app.world().get::<SleepCue>(cue).unwrap().seconds;
     assert!((seconds - 0.25).abs() < 1e-6);
     let local = *app.world().get::<Transform>(cue).unwrap();
-    let composed = displayed.mul_transform(local);
-    assert!(composed.rotation.abs_diff_eq(camera_rotation, 1e-6));
+    let composed_position =
+        (displayed.compute_affine() * local.compute_affine()).transform_point3(Vec3::ZERO);
     assert!(
-        composed.translation.y > displayed.translation.y + 1.5,
+        composed_position.y > displayed.translation.y + 1.5,
         "height follows the displayed scaled pose, not a fixed world height"
     );
     let xz_offset = Vec2::new(
-        composed.translation.x - displayed.translation.x,
-        composed.translation.z - displayed.translation.z,
+        composed_position.x - displayed.translation.x,
+        composed_position.z - displayed.translation.z,
     );
     assert!(xz_offset.length() < 0.4);
+    assert_camera_facing_bubbles(&app, root, cue, camera_rotation);
+    for (scale, root_rotation, camera_rotation) in [
+        (
+            Vec3::new(0.60, 0.67, 0.62),
+            Quat::from_rotation_y(0.7),
+            Quat::from_rotation_y(-0.6) * Quat::from_rotation_x(-0.3),
+        ),
+        (
+            Vec3::new(0.74, 0.75, 0.72),
+            Quat::from_rotation_y(2.1),
+            Quat::from_rotation_y(0.8) * Quat::from_rotation_x(-0.9),
+        ),
+        (
+            Vec3::new(1.2, 0.8, 1.1),
+            Quat::from_euler(EulerRot::XYZ, 0.4, 0.7, -0.2),
+            Quat::from_euler(EulerRot::XYZ, -0.6, -0.3, 0.1),
+        ),
+    ] {
+        *app.world_mut().get_mut::<Transform>(root).unwrap() =
+            displayed.with_rotation(root_rotation).with_scale(scale);
+        app.world_mut()
+            .get_mut::<Transform>(camera)
+            .unwrap()
+            .rotation = camera_rotation;
+        advance(&mut app, 0);
+        assert_camera_facing_bubbles(&app, root, cue, camera_rotation);
+    }
+    *app.world_mut().get_mut::<Transform>(root).unwrap() = displayed;
+    app.world_mut()
+        .get_mut::<Transform>(camera)
+        .unwrap()
+        .rotation = camera_rotation;
+    advance(&mut app, 0);
+    let bubble_positions = assert_camera_facing_bubbles(&app, root, cue, camera_rotation);
     assert_eq!(
         app.world().resource::<LiveBrainPresentationFrameResource>(),
         &frame,
@@ -297,6 +376,11 @@ fn cue_tracks_displayed_pose_and_camera_between_ticks_and_freezes_pulse_on_pause
     advance(&mut app, 2_000);
     assert_eq!(app.world().get::<SleepCue>(cue).unwrap().seconds, seconds);
     assert_eq!(*app.world().get::<Transform>(cue).unwrap(), local);
+    assert_eq!(
+        assert_camera_facing_bubbles(&app, root, cue, camera_rotation),
+        bubble_positions,
+        "pause freezes every displayed bubble, not only its anchor"
+    );
     app.world_mut()
         .get_mut::<Transform>(root)
         .unwrap()
@@ -304,8 +388,16 @@ fn cue_tracks_displayed_pose_and_camera_between_ticks_and_freezes_pulse_on_pause
     advance(&mut app, 2_000);
     assert_eq!(app.world().get::<SleepCue>(cue).unwrap().seconds, seconds);
     let moved_root = *app.world().get::<Transform>(root).unwrap();
-    let moved = moved_root.mul_transform(*app.world().get::<Transform>(cue).unwrap());
-    assert!((moved.translation - composed.translation - Vec3::new(2.0, 5.0, -3.0)).length() < 1e-5);
+    let moved_position = (moved_root.compute_affine()
+        * app.world().get::<Transform>(cue).unwrap().compute_affine())
+    .transform_point3(Vec3::ZERO);
+    assert!((moved_position - composed_position - Vec3::new(2.0, 5.0, -3.0)).length() < 1e-5);
+    for (moved, previous) in assert_camera_facing_bubbles(&app, root, cue, camera_rotation)
+        .into_iter()
+        .zip(bubble_positions)
+    {
+        assert!((moved - previous - Vec3::new(2.0, 5.0, -3.0)).length() < 1e-5);
+    }
     app.world_mut()
         .resource_mut::<Fvr05ProductionUxStateResource>()
         .settings
@@ -377,6 +469,19 @@ fn live_death_and_authoritative_retirement_clear_a_sleeping_cue() {
     reseed(&mut app, &world);
     advance(&mut app, 0);
     assert!(cue_entities(&mut app).is_empty());
+    // Retirement requires the existing archive-before-removal manifest links.
+    world
+        .link_birth_manifest(
+            row.organism_id,
+            alife_core::Blake3Digest::from_bytes([1; 32]),
+        )
+        .unwrap();
+    world
+        .link_life_manifest(
+            row.organism_id,
+            alife_core::Blake3Digest::from_bytes([2; 32]),
+        )
+        .unwrap();
     world.retire_dead_organism(row.organism_id).unwrap();
     reseed(&mut app, &world);
     advance(&mut app, 0);
@@ -388,11 +493,11 @@ fn stable_identity_selects_a_bounded_set_and_transitions_reuse_shared_assets() {
     let sleeping = authoritative_world(MAX_CUES + 3, SleepPhase::Consolidating);
     let awake = authoritative_world(MAX_CUES + 3, SleepPhase::Awake);
     let mut rows = sleeping.presentation_snapshot().organisms;
-    rows.sort_by_key(|row| row.world_entity_id);
+    rows.sort_by_key(|row| row.world_entity_id.raw());
     let expected = rows
         .iter()
         .take(MAX_CUES)
-        .map(|row| row.world_entity_id)
+        .map(|row| row.world_entity_id.raw())
         .collect::<BTreeSet<_>>();
     let mut app = fixture(&sleeping);
     // Reverse ECS insertion order to ensure capacity never selects an arbitrary individual.
@@ -404,7 +509,7 @@ fn stable_identity_selects_a_bounded_set_and_transitions_reuse_shared_assets() {
         .world_mut()
         .query::<&SleepCue>()
         .iter(app.world())
-        .map(|cue| cue.stable_id)
+        .map(|cue| cue.stable_id.raw())
         .collect::<BTreeSet<_>>();
     assert_eq!(marked, expected);
     let handles = ring_handles(&mut app);
@@ -424,6 +529,114 @@ fn stable_identity_selects_a_bounded_set_and_transitions_reuse_shared_assets() {
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
         assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 1);
     }
+}
+
+#[test]
+fn selection_highlights_the_body_and_keeps_sleep_bubble_materials_shared_across_cycles() {
+    fn bubble_materials(app: &mut App) -> Vec<Handle<StandardMaterial>> {
+        app.world_mut()
+            .query_filtered::<&MeshMaterial3d<StandardMaterial>, With<SleepBubble>>()
+            .iter(app.world())
+            .map(|material| material.0.clone())
+            .collect()
+    }
+
+    let sleeping = authoritative_world(1, SleepPhase::Consolidating);
+    let awake = authoritative_world(1, SleepPhase::Awake);
+    let row = sleeping.presentation_snapshot().organisms.remove(0);
+    let mut app = fixture(&sleeping);
+    // The ordering edge flushes sync's child spawns/despawns before the actual
+    // production highlighter traverses the selected creature's descendants.
+    app.add_systems(Update, god_hand::highlight.after(sync));
+    let root = spawn_root(&mut app, &row, Transform::default());
+    let selected = StableVoxelObjectRef {
+        kind: StableVoxelRefKind::Creature,
+        stable_id: Some(row.world_entity_id),
+        chunk: VoxelChunkCoord::new(0, 0),
+        tile: Some(VoxelTileCoord::new(0, 0)),
+    };
+    app.insert_resource(Fvr03ProductionVoxelSelectionResource {
+        hovered: None,
+        selected: Some(selected),
+    });
+    let body_mesh = app
+        .world_mut()
+        .resource_mut::<Assets<Mesh>>()
+        .add(Cuboid::new(0.5, 1.0, 0.5));
+    let body_material = app
+        .world_mut()
+        .resource_mut::<Assets<StandardMaterial>>()
+        .add(StandardMaterial::default());
+    let body = app
+        .world_mut()
+        .spawn((
+            Mesh3d(body_mesh),
+            MeshMaterial3d(body_material.clone()),
+            Transform::default(),
+            ChildOf(root),
+        ))
+        .id();
+    advance(&mut app, 0);
+    let highlighted_body = app
+        .world()
+        .get::<MeshMaterial3d<StandardMaterial>>(body)
+        .unwrap()
+        .0
+        .clone();
+    assert_ne!(
+        highlighted_body, body_material,
+        "the ordinary body still highlights"
+    );
+    let materials = bubble_materials(&mut app);
+    assert_eq!(materials.len(), 3);
+    let shared_bubble = materials[0].clone();
+    assert!(materials.iter().all(|material| *material == shared_bubble));
+    assert_ne!(shared_bubble, body_material);
+    assert_ne!(shared_bubble, highlighted_body);
+    assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 3);
+
+    for _ in 0..8 {
+        for selection in [None, Some(selected)] {
+            app.world_mut()
+                .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
+                .selected = selection;
+            advance(&mut app, 0);
+            let expected_body = if selection.is_some() {
+                &highlighted_body
+            } else {
+                &body_material
+            };
+            assert_eq!(
+                &app.world()
+                    .get::<MeshMaterial3d<StandardMaterial>>(body)
+                    .unwrap()
+                    .0,
+                expected_body
+            );
+            let materials = bubble_materials(&mut app);
+            assert_eq!(materials.len(), 3);
+            assert!(materials.iter().all(|material| *material == shared_bubble));
+            assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 3);
+        }
+        reseed(&mut app, &awake);
+        advance(&mut app, 0);
+        assert!(cue_entities(&mut app).is_empty());
+        assert!(bubble_materials(&mut app).is_empty());
+        assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 3);
+        reseed(&mut app, &sleeping);
+        advance(&mut app, 0);
+        assert_eq!(cue_entities(&mut app).len(), 1);
+        let materials = bubble_materials(&mut app);
+        assert_eq!(materials.len(), 3);
+        assert!(materials.iter().all(|material| *material == shared_bubble));
+        assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 3);
+    }
+    app.world_mut().entity_mut(root).despawn();
+    advance(&mut app, 0);
+    assert!(cue_entities(&mut app).is_empty());
+    assert!(bubble_materials(&mut app).is_empty());
+    assert!(app.world().get_entity(body).is_err());
+    assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 3);
 }
 
 #[cfg(feature = "gpu-runtime")]

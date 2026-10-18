@@ -353,11 +353,14 @@ pub(super) fn highlight(
     children: Query<&Children>,
     roots: Query<(Entity, &ProductionCreatureAssemblyRoot)>,
     objects: Query<(Entity, &live_food_projection::LiveCareObject)>,
-    mut meshes: Query<(
-        Entity,
-        &mut MeshMaterial3d<StandardMaterial>,
-        Option<&SelectedTint>,
-    )>,
+    mut meshes: Query<
+        (
+            Entity,
+            &mut MeshMaterial3d<StandardMaterial>,
+            Option<&SelectedTint>,
+        ),
+        Without<live_sleep_feedback::SleepBubble>,
+    >,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut markers: Query<&mut Visibility, With<Fvr03ProductionVoxelSelectionMarker>>,
     tinted: Query<Entity, With<SelectedTint>>,

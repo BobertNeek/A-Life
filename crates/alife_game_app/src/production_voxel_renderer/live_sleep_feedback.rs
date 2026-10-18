@@ -13,6 +13,9 @@ pub(super) struct SleepCue {
     seconds: f32,
 }
 
+#[derive(Component)]
+pub(super) struct SleepBubble(usize);
+
 #[derive(Default)]
 pub(super) struct SharedAssets {
     handles: Option<(Handle<Mesh>, Handle<StandardMaterial>)>,
@@ -68,9 +71,27 @@ fn cue_transform(root: &Transform, camera_rotation: Quat, seconds: f32) -> Trans
     // Keep the bubbles beside the silhouette, facing the player at either camera angle.
     let offset = camera_rotation * Vec3::new(0.32, 0.06 + breath * 0.025, 0.0);
     Transform {
-        translation: Vec3::new(0.0, 2.15, 0.0) + root.rotation.inverse() * offset / root.scale,
-        rotation: root.rotation.inverse() * camera_rotation,
-        scale: Vec3::splat(1.0 + breath * 0.04) / root.scale,
+        translation: Vec3::new(0.0, 1.90, 0.0) + root.rotation.inverse() * offset / root.scale,
+        // Cancel nonuniform root scale before the children turn toward the camera.
+        // Combining the inverse scale and billboard rotation here would shear them.
+        rotation: Quat::IDENTITY,
+        scale: root.scale.recip(),
+    }
+}
+
+fn bubble_transform(
+    root_rotation: Quat,
+    camera_rotation: Quat,
+    seconds: f32,
+    index: usize,
+) -> Transform {
+    let (x, y, radius) = [(0.0, 0.0, 0.045), (0.14, 0.16, 0.065), (0.33, 0.35, 0.085)][index];
+    let rotation = root_rotation.inverse() * camera_rotation;
+    let pulse = 1.0 + (seconds * 1.3).sin() * 0.04;
+    Transform {
+        translation: rotation * Vec3::new(x, y, 0.0) * pulse,
+        rotation: rotation * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2),
+        scale: Vec3::splat(radius * pulse),
     }
 }
 
@@ -94,8 +115,16 @@ pub(super) fn sync(
     >,
     cameras: Query<&Transform, (With<Fvr03ProductionVoxelCamera>, Without<SleepCue>)>,
     mut cues: Query<
-        (Entity, &mut SleepCue, &mut Transform),
+        (Entity, &mut SleepCue, &mut Transform, &Children),
         Without<ProductionCreatureAssemblyRoot>,
+    >,
+    mut bubbles: Query<
+        (&SleepBubble, &mut Transform),
+        (
+            Without<SleepCue>,
+            Without<ProductionCreatureAssemblyRoot>,
+            Without<Fvr03ProductionVoxelCamera>,
+        ),
     >,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -113,7 +142,10 @@ pub(super) fn sync(
                 && transform.scale.abs().min_element() > f32::EPSILON
                 && sleeping_individual(&frame.current, root, visual)
             {
-                eligible.insert((root.stable_id, root.organism_id), (entity, *transform));
+                eligible.insert(
+                    (root.stable_id.raw(), root.organism_id.raw()),
+                    (entity, *transform),
+                );
             }
         }
     }
@@ -122,14 +154,23 @@ pub(super) fn sync(
         .into_iter()
         .take(MAX_CUES)
         .collect::<BTreeMap<_, _>>();
-    for (entity, mut cue, mut transform) in &mut cues {
-        let key = (cue.stable_id, cue.organism_id);
+    for (entity, mut cue, mut transform, children) in &mut cues {
+        let key = (cue.stable_id.raw(), cue.organism_id.raw());
         if let Some((_, pose)) = eligible.get(&key).filter(|(root, _)| *root == cue.root) {
             cue.seconds =
                 advance_fvr04_animation_phase(cue.seconds, time.delta_secs(), speed, paused);
             let next = cue_transform(pose, camera_rotation, cue.seconds);
             if *transform != next {
                 *transform = next;
+            }
+            for child in children {
+                if let Ok((bubble, mut transform)) = bubbles.get_mut(*child) {
+                    let next =
+                        bubble_transform(pose.rotation, camera_rotation, cue.seconds, bubble.0);
+                    if *transform != next {
+                        *transform = next;
+                    }
+                }
             }
             eligible.remove(&key);
         } else {
@@ -156,8 +197,8 @@ pub(super) fn sync(
                 Name::new("Live sleeping individual: quiet bubbles"),
                 SleepCue {
                     root,
-                    stable_id,
-                    organism_id,
+                    stable_id: WorldEntityId(stable_id),
+                    organism_id: OrganismId(organism_id),
                     seconds: 0.0,
                 },
                 cue_transform(&pose, camera_rotation, 0.0),
@@ -166,14 +207,12 @@ pub(super) fn sync(
                 ChildOf(root),
             ))
             .with_children(|parent| {
-                for (x, y, radius) in [(0.0, 0.0, 0.045), (0.14, 0.16, 0.065), (0.33, 0.35, 0.085)]
-                {
+                for index in 0..3 {
                     parent.spawn((
+                        SleepBubble(index),
                         Mesh3d(mesh.clone()),
                         MeshMaterial3d(material.clone()),
-                        Transform::from_xyz(x, y, 0.0)
-                            .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2))
-                            .with_scale(Vec3::splat(radius)),
+                        bubble_transform(pose.rotation, camera_rotation, 0.0, index),
                         bevy::picking::Pickable::IGNORE,
                         bevy::light::NotShadowCaster,
                         bevy::light::NotShadowReceiver,
