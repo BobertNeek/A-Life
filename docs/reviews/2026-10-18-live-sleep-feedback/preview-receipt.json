@@ -1,0 +1,194 @@
+{
+  "classification": "Static Blender source/art preview; no Bevy/native gameplay or lifecycle execution",
+  "asset": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
+  "asset_sha256": "60e972f6ba691f347703306d089d801ec47aa97cc2b7b41b962a56bf0a2ea6d7",
+  "blender": "4.3.2",
+  "renderer": "Cycles CPU",
+  "samples": 32,
+  "denoising": false,
+  "threads": 4,
+  "resolution": [
+    1920,
+    900
+  ],
+  "camera": {
+    "projection": "orthographic",
+    "ortho_scale_width": 7.6,
+    "approximate_game_direction": [
+      0.5,
+      0.72,
+      0.84
+    ]
+  },
+  "production_root_scale_xyz": [
+    0.67,
+    0.71,
+    0.66
+  ],
+  "cue": {
+    "phase_seconds": 0,
+    "anchor_local_game_xyz": [
+      0,
+      1.9,
+      0
+    ],
+    "camera_offset": [
+      0.32,
+      0.06,
+      0
+    ],
+    "rings_xy_outer_radius": [
+      [
+        0,
+        0,
+        0.045
+      ],
+      [
+        0.14,
+        0.16,
+        0.065
+      ],
+      [
+        0.33,
+        0.35,
+        0.085
+      ]
+    ],
+    "torus_inner_outer": [
+      0.72,
+      1.0
+    ],
+    "torus_segments": [
+      32,
+      24
+    ],
+    "material_srgba": [
+      1,
+      0.8,
+      0.43,
+      0.65
+    ],
+    "unlit": true,
+    "hierarchy": "Root R*D, cue rotation identity / inverse D, ring child rotation root^-1*camera; Blender primitive basis incorporates game rotX90",
+    "affine_checks": [
+      {
+        "outer_radius": 0.045,
+        "world_axis_lengths": [
+          0.045000003170635856,
+          0.04500000430245139,
+          0.04500000414076346
+        ],
+        "normalized_axis_dots": [
+          -2.566074686072284e-08,
+          -8.635654458188924e-08,
+          1.4901161193847656e-08
+        ]
+      },
+      {
+        "outer_radius": 0.065,
+        "world_axis_lengths": [
+          0.06499999852134629,
+          0.06500000143172935,
+          0.0650000007601025
+        ],
+        "normalized_axis_dots": [
+          -2.566074641663363e-08,
+          -8.635654435984463e-08,
+          -1.4901161193847656e-08
+        ]
+      },
+      {
+        "outer_radius": 0.085,
+        "world_axis_lengths": [
+          0.08500000107704715,
+          0.08500000518582307,
+          0.08500000381623113
+        ],
+        "normalized_axis_dots": [
+          -2.566074686072284e-08,
+          -8.635654435984463e-08,
+          0.0
+        ]
+      }
+    ]
+  },
+  "poses": [
+    {
+      "state": "AWAKE",
+      "clip": "Hearthling_CuriousIdle_Hearthling_Rig",
+      "frame": 1,
+      "clip_seconds": 0.041666666666666664,
+      "world_bounds_xyz": [
+        [
+          -2.5791726112365723,
+          -1.2792415618896484
+        ],
+        [
+          -1.573021650314331,
+          -0.6199637055397034
+        ],
+        [
+          2.363929496596029e-07,
+          1.5783588886260986
+        ]
+      ],
+      "sleep_cue": false
+    },
+    {
+      "state": "SLEEPING",
+      "clip": "Hearthling_Sleep_Hearthling_Rig.001",
+      "frame": 1,
+      "clip_seconds": 0.041666666666666664,
+      "world_bounds_xyz": [
+        [
+          -0.4777137339115143,
+          0.6264855861663818
+        ],
+        [
+          -0.4561077356338501,
+          0.7865232229232788
+        ],
+        [
+          4.231929651155042e-08,
+          1.2123974561691284
+        ]
+      ],
+      "sleep_cue": true
+    },
+    {
+      "state": "AWAKE AFTER WAKE",
+      "clip": "Hearthling_CuriousIdle_Hearthling_Rig.002",
+      "frame": 1,
+      "clip_seconds": 0.041666666666666664,
+      "world_bounds_xyz": [
+        [
+          1.6313616037368774,
+          2.9312925338745117
+        ],
+        [
+          0.9332494139671326,
+          1.8863074779510498
+        ],
+        [
+          2.36062319913799e-07,
+          1.5783588886260986
+        ]
+      ],
+      "sleep_cue": false
+    }
+  ],
+  "limitations": [
+    "Cloud CPU renderer with neutral ground and studio lights",
+    "Production color grading and terrain occlusion not reproduced",
+    "Cycles transparent emission approximates Bevy unlit StandardMaterial alpha blending",
+    "Presence/absence panels illustrate policy; lifecycle correctness belongs to ECS tests",
+    "No gameplay, performance, or native visual acceptance claim"
+  ],
+  "output_sha256": "9c7a2af6b894d54e651ded9147542b785c65dc41df64fc0e44a1f63703679416",
+  "reviewed_source_sha256": "db3d319a2d8822cc4c2a01754701fc542cd4afaf5aa13d6ab486afb5979688b5",
+  "source_note": "Source continued changing during the render. After completion, current cue_transform and bubble_transform were inspected: the phase-zero anchor 1.90, inverse-scale parent, billboard children, radii, offsets, and material inputs still match this preview. source_sha256 is the initial render snapshot; reviewed_source_sha256 records that follow-up source review.",
+  "source_sha256_at_render_start": "afdf6d459fc9687095f21d764739ba7e4be1b5ae85a48a4595f73f5a468de445",
+  "post_render_source_review": "Subsequent rustfmt and ID-key compile fixes do not change cue geometry; final cue_transform and bubble_transform compared with preview.",
+  "original_png_sha256": "9c7a2af6b894d54e651ded9147542b785c65dc41df64fc0e44a1f63703679416",
+  "preview_jpeg_sha256": "ac5994cb99a11817c98011f1b075a272d566f78a84c7ec276a27cc27dc55772d"
+}

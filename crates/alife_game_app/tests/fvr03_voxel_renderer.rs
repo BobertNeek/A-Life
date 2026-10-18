@@ -548,7 +548,6 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         for required in [
             Fvr07ProductionVfxKind::PheromoneTrail,
             Fvr07ProductionVfxKind::SporeDrift,
-            Fvr07ProductionVfxKind::SleepGlow,
             Fvr07ProductionVfxKind::DangerHazardParticles,
             Fvr07ProductionVfxKind::EatingResourceEffect,
             Fvr07ProductionVfxKind::BirthDeathEffect,
@@ -557,6 +556,8 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         ] {
             assert!(vfx_kinds.contains(&required), "missing VFX {required:?}");
         }
+        assert!(!vfx_kinds.contains(&Fvr07ProductionVfxKind::SleepGlow),
+            "sleep feedback must be reconciled from live authority, never launch pressure or fallback");
         assert!(
             vfx.iter()
                 .filter(|entry| {

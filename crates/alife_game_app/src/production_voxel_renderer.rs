@@ -80,6 +80,7 @@ mod island;
 mod landscape;
 mod live_creature_projection;
 mod live_food_projection;
+mod live_sleep_feedback;
 pub(crate) mod menu;
 #[cfg(feature = "gpu-runtime")]
 mod performance_receipt;
@@ -142,7 +143,7 @@ pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "approved-blender-vertex-col
 pub const FVR10_SURFACE_DETAIL_VERSION: &str = "fvr10-screenshot-visible-surface-detail-v2";
 /// Dynamic overlay geometry still comes from the scene snapshot. See `docs/STATUS.md`.
 pub const FVR05_DYNAMIC_OVERLAYS_TRACK_LIVE_STATE: bool = false;
-/// VFX positions follow live creatures, but effect selection is not event-driven yet.
+/// Legacy scene VFX remain snapshot-driven; live sleep feedback is reconciled separately.
 pub const FVR07_VFX_TRIGGERS_TRACK_LIVE_STATE: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -2172,6 +2173,7 @@ pub fn spawn_fvr03_production_voxel_scene(
         (
             god_hand::highlight,
             god_hand::animate.after(island::constrain_camera),
+            live_sleep_feedback::sync.after(god_hand::animate),
             sync_fvr11_creature_contact_shadows,
             sync_fvr04_camera_follow,
             island::constrain_camera.after(sync_fvr04_camera_follow),
@@ -3707,17 +3709,6 @@ fn fvr07_vfx_spawns(
         }
     }
 
-    for creature in fvr07_creatures_for_vfx(Fvr07ProductionVfxKind::SleepGlow, creatures)
-        .into_iter()
-        .take(per_kind)
-    {
-        fvr07_push_creature_vfx(
-            &mut spawns,
-            settings,
-            Fvr07ProductionVfxKind::SleepGlow,
-            creature,
-        );
-    }
     for creature in fvr07_creatures_for_vfx(Fvr07ProductionVfxKind::BirthDeathEffect, creatures)
         .into_iter()
         .take(per_kind)
@@ -3816,13 +3807,6 @@ fn fvr07_creatures_for_vfx(
     let mut candidates = creatures
         .iter()
         .filter(|creature| match kind {
-            Fvr07ProductionVfxKind::SleepGlow => {
-                creature.visual.cues.sleep_pressure.value >= 0.25
-                    || matches!(
-                        creature.visual.animation,
-                        CreatureAnimationState::Sleeping | CreatureAnimationState::Resting
-                    )
-            }
             Fvr07ProductionVfxKind::BirthDeathEffect => {
                 creature.reproductive_drive >= 0.28
                     || matches!(
@@ -3833,7 +3817,7 @@ fn fvr07_creatures_for_vfx(
             _ => false,
         })
         .collect::<Vec<_>>();
-    if candidates.is_empty() {
+    if candidates.is_empty() && kind == Fvr07ProductionVfxKind::BirthDeathEffect {
         if let Some(creature) = creatures.first() {
             candidates.push(creature);
         }
