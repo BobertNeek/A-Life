@@ -213,6 +213,19 @@ fn live_and_restored_records_keep_saved_individuals_when_order_changes() {
     let mut staged = staged();
     staged.save.creatures[0].appearance.fur_pattern = 1;
     staged.save.creatures[1].appearance.fur_pattern = 14;
+    for saved in &mut staged.save.creatures {
+        let organism = staged
+            .world
+            .organism_registry()
+            .get(saved.organism_id)
+            .unwrap();
+        let projected = saved
+            .appearance
+            .with_body_phenotype(&organism.phenotype().body);
+        // Saved cosmetic buckets can be valid yet differ from canonical body genes.
+        saved.appearance.palette_family = (projected.palette_family + 1) % 16;
+        saved.appearance.body_mass_trait = (projected.body_mass_trait + 3) % 16;
+    }
     let frame =
         LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), &staged.world).unwrap();
     let saved_bytes = serde_json::to_vec(&staged.save).unwrap();
@@ -237,6 +250,17 @@ fn live_and_restored_records_keep_saved_individuals_when_order_changes() {
             VoxelChunkCoord::new(0, 0),
         )
         .unwrap();
+        let organism = staged
+            .world
+            .organism_registry()
+            .get(saved.organism_id)
+            .unwrap();
+        assert_eq!(
+            record.visual.appearance,
+            saved
+                .appearance
+                .with_body_phenotype(&organism.phenotype().body),
+        );
         fingerprints.insert(record.visual.stable_id, record.visual.appearance);
     }
     let mut restored: PortableSaveFile = serde_json::from_slice(&saved_bytes).unwrap();

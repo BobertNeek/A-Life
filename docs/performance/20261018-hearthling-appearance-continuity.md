@@ -16,8 +16,11 @@ Live newborn projection formerly generated appearance from IDs, while the first
 checkpoint inherited cosmetic genes from parents and conception seed. The two
 paths could display different ear/tail/coat details before and after reload.
 A small app-only cache now preserves exact saved appearances and derives new
-entries once through the existing inheritance/body projection. Both presentation
-and checkpoint summaries read that value. Entries bind organism and genome IDs;
+entries once through the existing inheritance/body projection. Checkpoints keep
+raw saved cosmetics intact. Both initial/restored and live presentation apply
+the same existing read-only body-phenotype projection for palette and mass; the
+canonical body retains ownership of those two traits. All other saved cosmetic
+genes pass through unchanged. Entries bind organism and genome IDs;
 live projection also checks the frame's world-entity binding. Retired parents
 remain available through newborn inheritance, then the cache is pruned to the
 resident set. Curated cohort replacement stages its appearance cache before GPU
@@ -71,8 +74,8 @@ at their exact revisions.
 The learning-summary sentinel check is CPU data-preservation evidence; it does
 not exercise a real GPU learned-weight checkpoint.
 
-Independent R2 review found and resolved curated-reset publication and stale
-frame identity gaps. Native committed/error/unknown reset execution remains
+Independent R2 review found and resolved curated-reset publication, stale
+frame identity, and inconsistent live/restored body-projection gaps. Native committed/error/unknown reset execution remains
 unmeasured. Revert the change as one unit if continuity regressions are found;
 no save migration or asset rollback is required.
 

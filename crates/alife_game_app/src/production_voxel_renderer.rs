@@ -4499,7 +4499,9 @@ fn fvr04_live_creature_visual_record(
         &presentation.biochemistry.homeostasis,
         presentation.sleep_phase,
         selected_action_kind,
-        appearance,
+        // Match initial/restored projection: the canonical body owns hue/size.
+        // All other saved cosmetic genes pass through unchanged.
+        appearance.with_body_phenotype(&presentation.phenotype.body),
     )
     .ok()?;
     let cognitive = frame.cognitive_for_organism(organism_id);
