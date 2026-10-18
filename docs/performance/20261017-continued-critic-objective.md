@@ -34,11 +34,25 @@ Every residual update validates finite predictions, gradients, gradient norm and
 all prospective weights/moments before changing any coordinate. A rejected update
 preserves weights, moments and optimizer age. The native analytic regression
 checks elapsed-time/terminal gradients, bias, coefficient before clipping,
-AdamW weights/m/v, and early and late nonfinite rejection.
-Finite classification inspects IEEE-754 exponent bits. The first Windows scratch
-fixture at 2026-10-17 23:58 UTC exposed an accepted overflow update with the former
-comparison-based check; the corrected classifier requires a fresh GPU fixture
-before any coupled qualification proceeds.
+AdamW weights/m/v, and prediction and late-moment rejection cases. Those rejection
+expectations require actual native arithmetic and checkpoint observations.
+
+The exponent-bit classifier proposed in `e1ff185a` is provisional defensive
+hardening, not a demonstrated fix for a former classifier defect or a portable
+intermediate-overflow rejection guarantee. The first Windows scratch fixture at
+2026-10-17 23:58 UTC passed its prediction-overflow rejection and unchanged-state
+assertions, then accepted the late-moment case with `m_bias = f32::MAX`. Its
+short-circuit assertion stopped before reading the accepted checkpoint. It did
+not establish that a nonfinite value was computed or stored.
+
+[WGSL floating-point evaluation](https://www.w3.org/TR/WGSL/#floating-point-evaluation)
+permits reassociation and indeterminate runtime-overflow results. Combining Adam
+denominators can keep this fixture's final update finite; that scalar observation
+is not a measurement of the adapter's actual operation ordering or result.
+An instrumented original-library probe will always read the checkpoint after the
+step result and record weights, both moments and optimizer age, including float
+encodings, plus existing GPU prediction/gradient observations. The probe evidence
+must determine the correction before candidate selection and coupled qualification.
 
 `cycle.json` records critic objective version 1 and binds
 `critic-residual-update.json` by SHA256. Historical receipts deserialize as
