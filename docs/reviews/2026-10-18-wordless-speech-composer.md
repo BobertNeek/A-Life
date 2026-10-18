@@ -1,6 +1,6 @@
 # Wordless speech composer — 2026-10-18
 
-Implementation source: [a694cc3b](https://github.com/BobertNeek/A-Life/commit/a694cc3b30bb4e7bd962c0eb11d45b1ecef15f51),
+Implementation source: [c4f4e671](https://github.com/BobertNeek/A-Life/commit/c4f4e6716fe69e66887d3727696d5ea8adcd9ef5),
 based on main `a9ac8bf8`. [PR #89](https://github.com/BobertNeek/A-Life/pull/89)
 contains subsequent CI/report changes and their current hosted results.
 
@@ -24,9 +24,11 @@ are unchanged; PR #84's native critic qualification and the PC are untouched.
 
 Local results on that implementation source:
 
-- `bash scripts/check_speech_cpu.sh`: 25 speech/composer cases passed (7 state,
-  6 worker, 6 opening-input, 6 composer UI/control). The CI follow-up adds the
-  separately passed 15 care-dock cases to this same lane.
+- `bash scripts/check_speech_cpu.sh`: all 40 cases passed (7 speech state,
+  6 worker, 6 opening-input, 6 composer UI/control, and 15 care-dock). The steady
+  composer also preserves `Text` change detection, avoiding an idle rewrite.
+- Feature-gated strict Clippy passed with `cargo clippy --locked -p alife_game_app
+  --lib --features bevy-app,gpu-runtime -- -D warnings`.
 - The complete care-dock CPU suite: 15 passed, including composer exclusion
   bounds at 1280×720, 640×360, 320×480 and 320×240, short/error states, actual
   CPU UI focus hit tests, held-pointer capture, and preserved draft text.
@@ -48,7 +50,7 @@ and replay with the commands in [Development](../DEVELOPMENT.md). SHA-256:
 | --- | --- |
 | CPU geometry JSON | `9a669e1ca21a32d093b4d60275cf0ad999f7c672e8d28ee6e43fad44afd57914` |
 | Browser checks JSON | `ea287be26ff21874d08628ab892640bc10e1e4eb016423ab595d083afa1da84c` |
-| Composer source | `bc2beb92c4a78e62dca085954cbf34d709f85001f819021886e0179e35917541` |
+| Composer source | `7deec835350df130c63a05d02453dd83de1d5c75bd69c07b04f890d6ac347eb6` |
 
 The CPU fixtures call production helpers and Bevy UI hit-testing, with synthetic
 state and UI-stack/visibility setup. They do not instantiate the GPU-only input
