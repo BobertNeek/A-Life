@@ -145,6 +145,16 @@ freshly compiled and passed in the combined care/speech code source tree
 `9e6054b6db37673eb299a347c5bf092a8c4744f6`. They exercise the production
 boundary helpers; GPU-only input handlers and live input remain unqualified.
 
+Backspace now edits inside the same ordered raw-key stream as printable text.
+Each pressed Backspace event removes one Unicode scalar, including held repeats;
+releases do nothing. Backspace before the opening fresh Enter is discarded with
+other pre-opening input. The 512-character cap applies in event order: text
+rejected while full cannot reappear after a later deletion. Escape still cancels
+the current draft before reading edits, Tab keeps its address-mode behavior, and
+held/repeated Enter cannot submit. Five additional CPU regressions cover these
+editing cases alongside the existing opening and submission guards; they do not
+instantiate the GPU-only input handler or establish native input acceptance.
+
 Accepted asynchronous player translation clears and closes its submitted draft
 immediately. A later successful worker completion preserves the current composer
 text and open/closed state, clearing the completed Pending cue while preserving
@@ -264,13 +274,13 @@ Reproduce it on Linux after installing the distribution's `libudev-dev` and
 bash scripts/check_speech_cpu.sh
 ```
 
-This checks at least seven composer-state, six worker, six opening-input,
+This checks at least seven composer-state, six worker, eleven keyboard-input,
 six wordless-composer UI/control tests, and fifteen care-dock tests, including
 the reopened-draft regression. Composer tests exercise actual CPU UiSurface geometry at 1280x720,
 640x360, 320x480 and 320x240, CPU UI focus hit tests, repeated open/cancel,
 held-input capture, focus restoration, and stale accessibility-request draining.
-It refuses empty or ignored
-coverage. Two build jobs and test-only optimization/debug overrides bound compile
+It also runs the editing/opening source contracts and 19 Python reference-model
+cases, and refuses empty or ignored Rust coverage. Two build jobs and test-only optimization/debug overrides bound compile
 cost; debug assertions remain enabled. These CPU fixtures do not exercise the
 GPU-only Bevy input/completion handlers, OS screen-reader integration, native
 rendering or gameplay acceptance.
