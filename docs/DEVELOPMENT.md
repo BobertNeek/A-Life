@@ -265,8 +265,8 @@ bash scripts/check_speech_cpu.sh
 ```
 
 This checks at least seven composer-state, six worker, six opening-input,
-and six wordless-composer UI/control tests, including the reopened-draft
-regression. Composer tests exercise actual CPU UiSurface geometry at 1280x720,
+six wordless-composer UI/control tests, and fifteen care-dock tests, including
+the reopened-draft regression. Composer tests exercise actual CPU UiSurface geometry at 1280x720,
 640x360, 320x480 and 320x240, CPU UI focus hit tests, repeated open/cancel,
 held-input capture, focus restoration, and stale accessibility-request draining.
 It refuses empty or ignored

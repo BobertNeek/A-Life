@@ -25,8 +25,8 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 module=production_conversation_lineage_ui
 regression="${module}::speech_completion_state_tests::worker_completion_preserves_a_reopened_newer_unicode_draft"
-for group in speech_completion_state_tests:7 speech_worker_tests:6 speech_input_tests:6 composer::tests:6; do
-  filter="${module}::${group%:*}::"
+for group in "${module}::speech_completion_state_tests:7" "${module}::speech_worker_tests:6" "${module}::speech_input_tests:6" "${module}::composer::tests:6" production_voxel_renderer::care_dock::tests:15; do
+  filter="${group%:*}::"
   "${command[@]}" "$filter" -- --test-threads=1 --color=never | tee "$log"
   # Cargo considers an empty filter a success. Refuse missing or ignored coverage.
   python3 - "$log" "${group##*:}" <<'PY'
@@ -36,7 +36,7 @@ results = re.findall(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignor
 if len(results) != 1 or int(results[0][0]) < int(sys.argv[2]) or results[0][1:] != ('0', '0'):
     raise SystemExit('Focused speech coverage missing, failed, or ignored')
 PY
-  if [ "${group%:*}" = speech_completion_state_tests ]; then
+  if [ "${group%:*}" = "${module}::speech_completion_state_tests" ]; then
     grep -Fqx "test ${regression} ... ok" "$log" || {
       echo "Required reopened-draft regression did not pass" >&2
       exit 1
