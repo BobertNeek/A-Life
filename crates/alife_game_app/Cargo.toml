@@ -25,6 +25,7 @@ name = "inspect_saved_policy"
 required-features = ["foundation-training"]
 
 [dependencies]
+accesskit = { version = "=0.21.1", optional = true }
 alife_core = { path = "../alife_core" }
 alife_archive = { path = "../alife_archive", optional = true }
 alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
@@ -60,6 +61,7 @@ windows-sys = { version = "0.61.2", features = [
 [features]
 default = []
 bevy-app = [
+    "dep:accesskit",
     "dep:alife_bevy_adapter",
     "dep:bevy",
     "bevy/default_app",
@@ -74,6 +76,7 @@ bevy-app = [
     "bevy/bevy_sprite_render",
     "bevy/bevy_text",
     "bevy/bevy_ui",
+    "bevy/bevy_input_focus",
     "bevy/bevy_ui_render",
     "bevy/mesh_picking",
     "bevy/png",

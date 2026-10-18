@@ -25,11 +25,11 @@ log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 module=production_conversation_lineage_ui
 regression="${module}::speech_completion_state_tests::worker_completion_preserves_a_reopened_newer_unicode_draft"
-for group in speech_completion_state_tests:7 speech_worker_tests:6 speech_input_tests:6; do
+for group in speech_completion_state_tests:7 speech_worker_tests:6 speech_input_tests:6 composer::tests:6; do
   filter="${module}::${group%:*}::"
   "${command[@]}" "$filter" -- --test-threads=1 --color=never | tee "$log"
   # Cargo considers an empty filter a success. Refuse missing or ignored coverage.
-  python3 - "$log" "${group#*:}" <<'PY'
+  python3 - "$log" "${group##*:}" <<'PY'
 import pathlib, re, sys
 log = pathlib.Path(sys.argv[1]).read_text()
 results = re.findall(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;', log)

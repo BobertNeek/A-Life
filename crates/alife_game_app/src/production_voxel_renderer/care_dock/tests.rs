@@ -109,7 +109,7 @@ fn ux() -> Fvr05ProductionUxStateResource {
         #[cfg(feature="gpu-runtime")] last_manual_checkpoint_status:None,
     }
 }
-fn layout_app(size: Vec2) -> App {
+pub(crate) fn layout_app(size: Vec2) -> App {
     let mut app = App::new();
     app.add_plugins(HierarchyPropagatePlugin::<ComputedUiTargetCamera>::new(
         PostUpdate,
@@ -363,7 +363,7 @@ fn val(value: Val) -> Value {
 fn rect(r: UiRect) -> Value {
     json!({"top":val(r.top),"right":val(r.right),"bottom":val(r.bottom),"left":val(r.left)})
 }
-fn export_nodes(world: &mut World) -> Vec<Value> {
+pub(crate) fn export_nodes(world: &mut World) -> Vec<Value> {
     let entities = world
         .query_filtered::<Entity, With<Node>>()
         .iter(world)
@@ -378,16 +378,19 @@ fn export_nodes(world: &mut World) -> Vec<Value> {
             else if world.get::<Marker>(e).is_some(){"evidence_marker"}
             else if world.get::<ErrorMarker>(e).is_some(){"separate_alert_gutter"}else{"container"};
         #[cfg(feature = "gpu-runtime")]
-        let role = if world.get::<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>(e).is_some() {
+        let role = if world.get::<crate::production_conversation_lineage_ui::composer::DraftViewport>(e).is_some() {
+            "speech_draft_viewport"
+        } else if world.get::<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>(e).is_some() {
             "speech_composer"
         } else if world.get::<Text>(e).is_some() { "speech_text" } else { role };
         let border=world.get::<BorderColor>(e).map(|b|{
             for c in [b.top,b.right,b.bottom,b.left]{no_green(c);}
             json!({"top":rgba(b.top),"right":rgba(b.right),"bottom":rgba(b.bottom),"left":rgba(b.left)})});
         let image=world.get::<ImageNode>(e).map(|image|{
-            no_green(image.color);let name=image_name(world,e).unwrap();
+            no_green(image.color);let name=image_name(world,e);
+            let source_path=name.map(|n|format!("assets/ui/care_dock/{n}.png")).or_else(||crate::production_conversation_lineage_ui::composer::image_path(world,&image.image)).expect("embedded UI icon");
             let asset=world.resource::<Assets<Image>>().get(&image.image).unwrap();
-            json!({"name":name,"source_path":format!("assets/ui/care_dock/{name}.png"),
+            json!({"name":name,"source_path":source_path,
                 "decoded_size":[asset.width(),asset.height()],"tint":rgba(image.color)})});
         let background=world.get::<BackgroundColor>(e).map(|b|{no_green(b.0);rgba(b.0)});
         json!({"entity":format!("{e:?}"),"parent":world.get::<ChildOf>(e).map(|p|format!("{:?}",p.parent())),
@@ -1330,18 +1333,15 @@ fn composer_fixtures() -> Vec<Value> {
                 .query_filtered::<Entity, With<ProductionSpeechComposerBounds>>()
                 .single(app.world())
                 .unwrap();
-            let entry = app
-                .world()
-                .get::<Children>(bounds)
-                .unwrap()
-                .iter()
-                .next()
-                .unwrap();
+            let entry = app.world_mut().query_filtered::<Entity, With<crate::production_conversation_lineage_ui::ProductionSpeechEntryPanel>>()
+                .single(app.world()).unwrap();
+            let viewport = app.world_mut().query_filtered::<Entity, With<crate::production_conversation_lineage_ui::composer::DraftViewport>>()
+                .single(app.world()).unwrap();
             app.world_mut().get_mut::<Text>(entry).unwrap().0 = text.clone();
             adapt_speech_composer(app.world_mut());
             assert_eq!(
                 app.world()
-                    .get::<bevy::ui::ScrollPosition>(bounds)
+                    .get::<bevy::ui::ScrollPosition>(viewport)
                     .unwrap()
                     .0
                     .y,
@@ -1392,10 +1392,13 @@ fn composer_fixtures() -> Vec<Value> {
                 app.world().get::<TextLayout>(entry).unwrap().linebreak,
                 bevy::text::LineBreak::WordOrCharacter
             );
-            let node = app.world().get::<Node>(bounds).unwrap();
+            let node = app.world().get::<Node>(viewport).unwrap();
             assert_eq!(node.overflow.x, bevy::ui::OverflowAxis::Clip);
             assert_eq!(node.overflow.y, bevy::ui::OverflowAxis::Scroll);
-            assert_eq!(node.bottom, Val::Px(if error { 108.0 } else { 92.0 }));
+            assert_eq!(
+                app.world().get::<Node>(bounds).unwrap().bottom,
+                Val::Px(if error { 108.0 } else { 92.0 })
+            );
             assert!(occupied_top(app.world_mut(), size) <= composer.min.y + EPSILON);
             fixtures.push(json!({"case":case, "viewport":[size.x,size.y], "error":error,
                 "composer_box":composer.json(), "dock_box":dock.json(), "alert_box":alert_box.json(),
@@ -1409,7 +1412,7 @@ fn composer_fixtures() -> Vec<Value> {
             assert!(!visible(app.world(), bounds));
             assert_eq!(
                 app.world()
-                    .get::<bevy::ui::ScrollPosition>(bounds)
+                    .get::<bevy::ui::ScrollPosition>(viewport)
                     .unwrap()
                     .0
                     .y,
@@ -1486,7 +1489,7 @@ struct CpuFocusModal;
 // InheritedVisibility are supplied without renderer/extraction plugins. The
 // hit-test, cursor conversion, clipping, Interaction updates and input capture
 // themselves use Bevy's production ui_focus_system and collect_input.
-fn cpu_focus_fixture_stack(world: &mut World) {
+pub(crate) fn cpu_focus_fixture_stack(world: &mut World) {
     fn walk(world: &World, entity: Entity, nodes: &mut Vec<Entity>) {
         nodes.push(entity);
         if let Some(children) = world.get::<Children>(entity) {
@@ -1501,6 +1504,10 @@ fn cpu_focus_fixture_stack(world: &mut World) {
         .unwrap();
     let mut nodes = Vec::new();
     walk(world, root, &mut nodes);
+    let composers = world.query_filtered::<Entity, With<crate::production_conversation_lineage_ui::ProductionSpeechComposerBounds>>().iter(world).collect::<Vec<_>>();
+    for composer in composers {
+        walk(world, composer, &mut nodes);
+    }
     let modals = world
         .query_filtered::<Entity, With<CpuFocusModal>>()
         .iter(world)
@@ -1521,7 +1528,7 @@ fn cpu_focus_fixture_stack(world: &mut World) {
         uinodes: nodes,
     });
 }
-fn focus_cursor(world: &mut World, point: Vec2) {
+pub(crate) fn focus_cursor(world: &mut World, point: Vec2) {
     let window = world
         .query_filtered::<Entity, With<PrimaryWindow>>()
         .single(world)

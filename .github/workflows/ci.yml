@@ -36,6 +36,9 @@ jobs:
       - name: Run selected-creature HUD CPU data and layout tests
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::status_hud:: -- --test-threads=1 --color=never'
 
+      - name: Run care dock and speech composer CPU layout and input tests
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::care_dock::tests:: -- --test-threads=1 --color=never'
+
   broadleaf-canopy:
     name: Broadleaf canopy CPU regression
     runs-on: ubuntu-latest

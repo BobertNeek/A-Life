@@ -1,9 +1,11 @@
 //! Production composer state-helper tests only; no GPU completion handler fixture.
 use super::*;
 
-fn state() -> ProductionConversationLineageUiState {
+pub(super) fn state() -> ProductionConversationLineageUiState {
     ProductionConversationLineageUiState {
         input_open: false,
+        input_capture_held: false,
+        input_help_open: false,
         input_cue: SpeechInputCue::None,
         input: String::new(),
         address_selected: true,

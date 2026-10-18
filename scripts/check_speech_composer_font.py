@@ -64,17 +64,16 @@ def unicode_cmap(data):
 def composer_template(source):
     match = re.search(
         r'fn speech_entry_text\([^\n]*\) -> String \{\s*format!\(\s*'
-        r'("(?:[^"\\]|\\.)*")(?P<arguments>.*?)\n    \)\n\}',
+        r'("(?:[^"\\]|\\.)*"),\s*state\.input\s*\)\s*\}',
         source,
         re.DOTALL,
     )
-    if not match or not re.search(r",\s*state\.input\s*$", match["arguments"]):
-        raise ValueError("cannot verify the existing unmodified input display argument")
+    if not match:
+        raise ValueError("cannot verify the unmodified input display argument")
     template = ast.literal_eval(match[1])
-    caret = re.search(r"\n\{\}([^\n])\n", template)
-    if template.count("{}") != 2 or not caret:
-        raise ValueError("expected two display arguments and a single end-caret character")
-    return template, caret[1]
+    if template != "{}|":
+        raise ValueError("expected only the teaching draft and ASCII end caret")
+    return template, "|"
 
 
 def main():
