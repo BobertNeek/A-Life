@@ -682,6 +682,16 @@ unsupported schemas fail explicitly; historical artifacts cannot fall back to a
 weaker context-only check. Run `python scripts/compare_foundation_probes.py --help`
 for the read-only CLI. An identity match is not an adoption or competence gate.
 
+Each artifact's retained inputs must pass the native JSON contract before any
+comparison. This includes finite vector/quaternion objects, 16 terrain channels
+and heard-token slots, bounded grounded-object records, candidate references,
+and coherent held-target ownership. Unknown nested fields, Boolean numeric
+substitutes, wrong dimensions and out-of-range values fail even when both probes
+contain the same corruption. Native optional semantic context, empty object
+slots and targetless candidates remain valid. A shared fixture is checked against
+the actual Rust trace serializer and the Python reader in CPU CI; it is software
+contract evidence, not a behavioral assessment.
+
 The original 2026-10-18 actor-centering qualification and its **do-not-adopt**
 decision remain unchanged. Its full-world signature included the tested policy.
 This repair applies to future predeclared protocols; it does not reinterpret or

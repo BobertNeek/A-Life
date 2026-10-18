@@ -45,3 +45,18 @@ all failed qualification receipts are immutable. The decision remains
 **do not adopt**. No old artifact is newly qualified, no adoption threshold is
 relaxed, and no curriculum mechanic is added. Future experiments require their
 own predeclared identity version and all behavioral adoption gates.
+
+## Late sensory-validation review repair
+
+The PR96 P1 finding reproduced paired `position` strings reporting a match.
+Under AOA-INV-010, AOA-SENSE-001, AOA-CTX-001 and AOA-CTX-003, equality cannot
+substitute for validating either artifact. Validate retained fields against
+`alife_core` math, sensory ABI, grounding and perception contracts and the native
+trace/food-outcome serializers before hashing. Reject malformed nested schemas,
+types, dimensions, numeric bounds and unresolved candidate slot references.
+Preserve native null optional context, sparse heard-token slots, empty object
+slots, signed world coordinates and nonzero non-unit quaternions. Share a fixture
+between Python admission tests and the Rust serializer test to catch format drift.
+Verify paired corruption, valid native forms and approved policy-output changes;
+retain all provenance and historical-identity gates. No runtime policy or learning
+behavior changes, historical receipt edits or qualification reruns are in scope.

@@ -11,7 +11,8 @@ on:
       - "crates/alife_core/src/foundation.rs"
       - "crates/alife_game_app/src/foundation_training.rs"
       - "crates/alife_game_app/src/foundation_training/**"
-      - "scripts/*foundation_probes.py"
+      - "scripts/*foundation_probe*.py"
+      - "scripts/testdata/foundation_probe_sensory_v1.json"
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
@@ -38,7 +39,8 @@ on:
       - "crates/alife_core/src/foundation.rs"
       - "crates/alife_game_app/src/foundation_training.rs"
       - "crates/alife_game_app/src/foundation_training/**"
-      - "scripts/*foundation_probes.py"
+      - "scripts/*foundation_probe*.py"
+      - "scripts/testdata/foundation_probe_sensory_v1.json"
       - "crates/alife_game_app/src/foundation_training_cycle.rs"
       - "crates/alife_game_app/src/foundation_training_cycle/**"
       - "crates/alife_game_app/src/foundation_archived_success_replay.rs"
@@ -85,6 +87,8 @@ jobs:
         run: cargo test --locked -p alife_world --test headless_world_signature --test policy_weight_comparison_signature -- --test-threads=1
       - name: Native comparison receipt binds policy and executable without GPU work
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::comparison_identity::tests -- --test-threads=1
+      - name: Native sensory serialization matches the shared Python admission fixture
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::lesson_trace::tests::native_sensory_json_matches_comparison_fixture -- --exact
       - name: Prepared values, advantages, disabled I/O and row cap
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::ppo_diagnostics::tests -- --test-threads=1
       - name: Actor-only centering preserves raw targets and full-batch windows
