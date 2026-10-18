@@ -2034,13 +2034,17 @@ pub(crate) fn handle_production_conversation_lineage_input(
         key_messages.clear();
         return;
     }
-    if keyboard.just_pressed(KeyCode::Backspace) {
-        state.input_help_open = false;
-        state.input.pop();
-    }
     let previous_input = state.input.clone();
-    let submit_enter = append_player_speech_key_text(&mut state.input, key_messages.read(), false);
-    if state.input != previous_input {
+    let mut backspace_pressed = false;
+    let submit_enter = append_player_speech_key_text(
+        &mut state.input,
+        key_messages.read().inspect(|message| {
+            backspace_pressed |=
+                message.state == ButtonState::Pressed && message.key_code == KeyCode::Backspace;
+        }),
+        false,
+    );
+    if state.input != previous_input || backspace_pressed {
         state.input_help_open = false;
     }
     if (pointer == Some(composer::Control::Send)
@@ -2062,6 +2066,7 @@ pub(crate) fn handle_production_conversation_lineage_input(
 
 // KeyboardInput retains order; ButtonInput's per-frame edge set does not.
 // Consume the entire opening frame so pre-Enter shortcuts cannot leak into typing.
+// Text and Backspace edits follow raw order, including repeated Backspace.
 // Only a fresh raw Enter in an already-open composer requests submission.
 fn append_player_speech_key_text<'a>(
     input: &mut String,
@@ -2076,6 +2081,10 @@ fn append_player_speech_key_text<'a>(
         }
         if !after_opening_enter {
             after_opening_enter = message.key_code == KeyCode::Enter && !message.repeat;
+            continue;
+        }
+        if message.key_code == KeyCode::Backspace {
+            input.pop();
             continue;
         }
         if !opened_this_frame && message.key_code == KeyCode::Enter && !message.repeat {

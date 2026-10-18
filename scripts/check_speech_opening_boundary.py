@@ -30,6 +30,10 @@ fn append_player_speech_key_text<'a>(
             after_opening_enter = message.key_code == KeyCode::Enter && !message.repeat;
             continue;
         }
+        if message.key_code == KeyCode::Backspace {
+            input.pop();
+            continue;
+        }
         if !opened_this_frame && message.key_code == KeyCode::Enter && !message.repeat {
             submit_enter = true;
         }
@@ -56,7 +60,7 @@ def source_contract(source, tests, lockfile, composer):
     helper_start = source.index("fn append_player_speech_key_text<'a>(")
     helper_end = source.index("#[cfg(test)]", helper_start)
     assert normalized(source[helper_start:helper_end]) == normalized(HELPER_CONTRACT), (
-        "ordered reader or existing printable/Unicode/length policy changed"
+        "ordered editing helper or existing printable/Unicode/length policy changed"
     )
     start = source.index("pub(crate) fn handle_production_conversation_lineage_input(")
     end = source.index("// KeyboardInput retains order;", start)
@@ -66,7 +70,13 @@ def source_contract(source, tests, lockfile, composer):
     assert '#[path = "production_conversation_lineage_ui/speech_input_tests.rs"]' in source
     assert handler.count("append_player_speech_key_text(") == 2
     assert "append_player_speech_key_text(&mut state.input, key_messages.read(), true);" in handler
-    assert "append_player_speech_key_text(&mut state.input, key_messages.read(), false);" in handler
+    assert "key_messages.read().inspect(|message| {" in handler
+    assert "backspace_pressed |= message.state == ButtonState::Pressed" in normalized(handler)
+    active_call = handler[handler.index("let submit_enter = append_player_speech_key_text("):handler.index("if state.input != previous_input")]
+    assert "}), false, );" in normalized(active_call)
+    assert "state.input != previous_input || backspace_pressed" in handler
+    assert "keyboard.just_pressed(KeyCode::Backspace)" not in handler
+    assert "state.input.pop()" not in handler
     assert """if crate::production_voxel_renderer::menu::captures_input(menu) {
         key_messages.clear();
         return;
@@ -103,6 +113,11 @@ def source_contract(source, tests, lockfile, composer):
         "preopening_text_never_reappears_on_the_next_frame",
         "active_typing_preserves_unicode_printable_repeats_and_the_existing_limit",
         "held_enter_repeats_do_not_retrigger_the_bevy_submit_edge",
+        "same_frame_text_and_backspace_follow_raw_event_order",
+        "backspace_release_and_attached_text_do_not_edit_or_insert_twice",
+        "held_backspace_repeats_edit_without_a_new_aggregate_edge",
+        "opening_boundary_discards_old_edits_and_applies_new_edits_in_order",
+        "ordered_backspace_and_text_keep_the_character_limit_without_replaying_rejected_text",
     ):
         assert f"fn {name}()" in tests, name
     assert "app.add_plugins(InputPlugin);" in tests
@@ -133,6 +148,9 @@ def append_reference(input_text, events, opened_this_frame):
             continue
         if not after_opening_enter:
             after_opening_enter = message.key == "Enter" and not message.repeat
+            continue
+        if message.key == "Backspace":
+            input_text = input_text[:-1]
             continue
         for character in message.text:
             # Rust char::is_control(): Unicode general category Cc (not all category C).
@@ -284,6 +302,34 @@ class ReferenceModelTests(unittest.TestCase):
         self.assertEqual(f.submits, 1)
         f.frame([Event("Enter", "released"), enter()])
         self.assertEqual(f.submits, 2)
+
+
+    def test_same_frame_text_backspace_order(self):
+        self.assertEqual(append_reference("ab", [text("c"), Event("Backspace")], False), "ab")
+        self.assertEqual(append_reference("ab", [Event("Backspace"), text("c")], False), "ac")
+
+    def test_held_backspace_repeats_use_raw_events(self):
+        f = ReferenceFrames(opened=True)
+        f.input = "é猫ab"
+        f.frame([Event("Backspace")])
+        f.frame([Event("Backspace", repeat=True), Event("Backspace", repeat=True)])
+        self.assertEqual(f.input, "é")
+        f.frame([Event("Backspace", repeat=True), Event("Backspace", repeat=True)])
+        self.assertEqual(f.input, "")
+        f.frame([Event("Backspace", "released", "ignored")])
+        self.assertEqual(f.input, "")
+
+    def test_opening_boundary_keeps_ordered_new_edits(self):
+        events = [text("old"), Event("Backspace"), enter(True), enter(), text("é猫"), Event("Backspace"), text("c"), enter()]
+        f = ReferenceFrames()
+        f.frame(events)
+        self.assertEqual(f.input, "éc")
+        self.assertEqual(f.submits, 0)
+
+    def test_backspace_and_the_character_limit_follow_raw_order(self):
+        full = "猫" * MAX_TYPED_CHARS
+        self.assertEqual(append_reference(full, [text("é"), Event("Backspace")], False), full[:-1])
+        self.assertEqual(append_reference(full, [Event("Backspace"), text("é猫")], False), full[:-1] + "é")
 
 
 def main():
