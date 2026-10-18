@@ -5,6 +5,9 @@ foundation_training/{lesson_trace,food_outcome}.rs. This validates evidence;
 it does not normalize inputs or execute an organism.
 """
 
+import math
+import struct
+
 F32_MAX = 3.4028234663852886e38
 
 
@@ -26,9 +29,16 @@ def record(value, fields, label):
 
 
 def number(value, label, lower=-F32_MAX, upper=F32_MAX):
-    # Bounds also reject NaN/infinity and integers that would overflow f32.
-    if type(value) not in (int, float) or not lower <= value <= upper:
+    if type(value) not in (int, float):
         invalid(label)
+    try:
+        native = struct.unpack("<f", struct.pack("<f", value))[0]
+    except (OverflowError, struct.error):
+        invalid(label)
+    if not math.isfinite(native) or not lower <= native <= upper:
+        invalid(label)
+    # Use the converted value only for validation, never replace evidence.
+    return native
 
 
 def integer(value, bits, label, *, positive=False):
@@ -50,10 +60,9 @@ def vector(value, length, label, lower=0.0, upper=1.0):
 
 def position(value, label, *, quaternion=False):
     record(value, "xyzw" if quaternion else "xyz", label)
-    for element in value.values():
-        number(element, label)
+    native = [number(element, label) for element in value.values()]
     # Quatf::validate rejects zero, but does not require unit length.
-    if quaternion and not any(value.values()):
+    if quaternion and not any(native):
         invalid(label)
 
 

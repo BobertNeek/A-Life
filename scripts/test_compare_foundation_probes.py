@@ -214,6 +214,22 @@ class ComparisonIdentityTests(unittest.TestCase):
             row["lesson_target_held_before_decision"] = None
         self.paired(native_values, accepted=True)
 
+    def test_native_f32_conversion_rejects_underflowed_zero_quaternion(self):
+        self.paired(lambda row: row.__setitem__("gaze_rotation", dict(x=1e-300,y=0,z=0,w=0)))
+
+    def test_native_f32_boundary_decimals_remain_valid_without_rewriting_evidence(self):
+        def native_values(row):
+            row["position"] = dict(x=3.4028235e38, y=-3.4028235e38, z=1e-45)
+            row["gaze_rotation"] = dict(x=1e-45, y=0, z=0, w=0)
+        self.paired(native_values, accepted=True)
+        # The validator uses f32 conversion for legality, but hashes originals.
+        from foundation_probe_schema import validate_sensory_context
+        value = json.loads((self.root/"control/lesson-diagnostic.json").read_text())["steps"][0]
+        native_values(value)
+        before = copy.deepcopy(value)
+        validate_sensory_context(value, value["candidates"])
+        self.assertEqual(before, value)
+
     def test_policy_weights_derived_digests_and_scores_may_differ(self):
         before = {p: p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         result = self.compare()
