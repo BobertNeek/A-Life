@@ -78,6 +78,43 @@ fn finite_fixture_close(
     Ok(())
 }
 
+fn stress_state_contract(
+    label: &str,
+    session: &GpuAuthoritativeSession,
+    before: &PpoValueHeadCheckpoint,
+    features: &[Vec<f32>],
+    rows: &[CriticResidualRow],
+) -> Result<serde_json::Value> {
+    let mut probe = FrozenCriticResidualExperiment::new(session, before, features, rows, 1)?;
+    let step = probe.step(session, AdamWConfig::default());
+    // Always read state, including after unexpected acceptance. This validates
+    // every stored word as finite and every second moment as nonnegative.
+    let after = probe
+        .checkpoint(session)
+        .map_err(|error| format!("{label}: step={step:?}; checkpoint={error:?}"))?;
+    let before_bits: Vec<_> = before.parameters.iter().map(|v| v.to_bits()).collect();
+    let after_bits: Vec<_> = after.parameters.iter().map(|v| v.to_bits()).collect();
+    let accepted = step.is_ok();
+    let expected_age = before.optimizer_step + u32::from(accepted);
+    if after.feature_count != before.feature_count
+        || after.last_updated_policy_version != before.last_updated_policy_version
+        || after.optimizer_step != expected_age
+        || (!accepted && before_bits != after_bits)
+    {
+        return Err(format!(
+            "{label}: extreme-input transaction violated checkpoint state contract"
+        )
+        .into());
+    }
+    Ok(
+        serde_json::json!({"case":label,"outcome":if accepted {"accepted_finite_state"} else {"rejected_unchanged_state"},
+        "step_result":format!("{step:?}"),"optimizer_step_before":before.optimizer_step,
+        "optimizer_step_after":after.optimizer_step,"before_parameters":before.parameters,
+        "after_parameters":after.parameters,"before_bits":before_bits,"after_bits":after_bits,
+        "finite_checkpoint_and_nonnegative_v":true,"rejected_state_bit_unchanged":(!accepted).then_some(true)}),
+    )
+}
+
 fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_json::Value> {
     // Analytic scalar fixture, developer test only, never a live neural shadow.
     let checkpoint = PpoValueHeadCheckpoint {
@@ -159,31 +196,27 @@ fn gpu_gradient_regression(session: &GpuAuthoritativeSession) -> Result<serde_js
         reward: 0.25,
         discount: 0.99942255,
     }];
-    let mut rejected = FrozenCriticResidualExperiment::new(
+    // WGSL permits reassociation and indeterminate runtime-overflow results.
+    // Extreme finite input is not proof that the adapter produced nonfinite
+    // stored state. Require valid accepted state or bit-exact rejected state.
+    let prediction_stress = stress_state_contract(
+        "prediction_overflow",
         session,
         &checkpoint,
         &overflow_features,
         &overflow_rows,
-        1,
     )?;
-    if rejected.step(session, AdamWConfig::default()).is_ok()
-        || rejected.checkpoint(session)? != checkpoint
-    {
-        return Err("nonfinite residual update mutated weights, moments, or age".into());
-    }
-    // A bad prospective final coordinate must not leave earlier coordinates
-    // partially updated even when every input and the gradient are finite.
-    let mut late_bad = checkpoint.clone();
-    late_bad.parameters[5] = f32::MAX;
-    let mut rejected =
-        FrozenCriticResidualExperiment::new(session, &late_bad, &features, &overflow_rows, 1)?;
-    if rejected.step(session, AdamWConfig::default()).is_ok()
-        || rejected.checkpoint(session)? != late_bad
-    {
-        return Err("late-coordinate preflight rejection partially updated critic/Adam".into());
-    }
+    let mut late_extreme = checkpoint.clone();
+    late_extreme.parameters[5] = f32::MAX;
+    let moment_stress = stress_state_contract(
+        "late_moment_overflow",
+        session,
+        &late_extreme,
+        &features,
+        &overflow_rows,
+    )?;
     Ok(
-        serde_json::json!({"passed":true,"discounts":[0.99942255,0.5,0.0],"checked":"current and next predictions; full feature gradient; bias e*(1-gamma); coefficient before clipping; AdamW weights/m/v and age; terminal gamma0; no-update checkpoint exact; rejected nonfinite update preserves every parameter and age"}),
+        serde_json::json!({"passed":true,"discounts":[0.99942255,0.5,0.0],"checked":"current and next predictions; full feature gradient; bias e*(1-gamma); coefficient before clipping; AdamW weights/m/v and age; terminal gamma0; no-update checkpoint exact; extreme inputs accept only validated finite state with one optimizer step or reject with every state bit unchanged", "stress_cases":[prediction_stress,moment_stress]}),
     )
 }
 
