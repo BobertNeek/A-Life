@@ -9,7 +9,7 @@
   "workflow_transition": {
     "path": ".github/workflows/ci.yml",
     "historical_sha256": "b816625446333bfb3be6d0d31c425eb9c5298ff1bce6445b4e3d7e10664e1edb",
-    "current_sha256": "c3ae3c9b6a824aac9ffee919e1b5c8e7f7a6dfb2ad3064a89c6a4d591ca8adf7"
+    "current_sha256": "5af19372b487382058798c1348a60ec7c6585098d6c3f8a38d12f41fef07e082"
   },
   "integration_test": {
     "path": "scripts/test_fern_coastal_main_integration.py",

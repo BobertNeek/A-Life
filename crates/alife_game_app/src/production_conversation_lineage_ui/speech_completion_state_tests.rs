@@ -4,9 +4,12 @@ use super::*;
 pub(super) fn state() -> ProductionConversationLineageUiState {
     ProductionConversationLineageUiState {
         input_open: false,
+        naming: None,
+        name_pointer_capture: false,
         input_capture_held: false,
         input_help_open: false,
         input_cue: SpeechInputCue::None,
+        input_error: None,
         input: String::new(),
         address_selected: true,
         muted: false,

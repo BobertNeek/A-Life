@@ -345,6 +345,7 @@ pub(super) fn animate(
 
 #[allow(
     clippy::too_many_arguments,
+    clippy::type_complexity,
     reason = "Bevy injects independent ECS system parameters."
 )]
 pub(super) fn highlight(
