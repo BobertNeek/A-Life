@@ -13,6 +13,7 @@ on:
       - "crates/alife_runtime/**"
       - "crates/alife_game_app/src/foundation*.rs"
       - "crates/alife_game_app/src/bin/train_n2048_care.rs"
+      - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
       - "crates/alife_training/**"
   push:
     branches: ["main", "codex/**"]
@@ -25,6 +26,7 @@ on:
       - "crates/alife_runtime/**"
       - "crates/alife_game_app/src/foundation*.rs"
       - "crates/alife_game_app/src/bin/train_n2048_care.rs"
+      - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
       - "crates/alife_training/**"
 
 permissions:
@@ -53,6 +55,8 @@ jobs:
         run: cargo test --locked -p alife_gpu_backend --features training-rollout --test closed_loop_activity activity_contract_is_validated_once_per_dispatch_row_before_neuron_work -- --exact
       - name: Acquisition rehearsal CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
+      - name: Actor-centering CLI CPU admission tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --test actor_advantage_centering_cli -- --test-threads=1
       - name: Build training executable
         run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Check rehearsal admission before runtime creation
@@ -90,7 +94,7 @@ jobs:
             target = 'x86_64-pc-windows-msvc'
             features = @('foundation-training')
             build_profile = 'dev'
-            cpu_checks = @('training shader LF/CRLF/mixed base and sampler composition contracts', 'activity row prepass source contract across line endings', 'four acquisition rehearsal unit tests', 'CLI bounds 0 and 513 rejected', 'CLI 512 reaches sealed-source admission', 'rejected admission preserves absent output')
+            cpu_checks = @('training shader LF/CRLF/mixed base and sampler composition contracts', 'activity row prepass source contract across line endings', 'four acquisition rehearsal unit tests', 'three actor-centering CLI admission tests including mixed source packages', 'CLI bounds 0 and 513 rejected', 'CLI 512 reaches sealed-source admission', 'rejected admission preserves absent output')
             gpu_training_executed = $false
             founder_promoted = $false
             workflow_run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"

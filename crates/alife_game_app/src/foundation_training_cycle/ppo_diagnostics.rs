@@ -30,7 +30,7 @@ pub(super) fn write_if_enabled(
         .take(MAX_ROWS)
         .map(|(row, transition)| {
             let elapsed = f64::from(transition.elapsed_seconds);
-            json!({
+            let mut value = json!({
                 "row": row,
                 "trajectory_id": transition.trajectory_id,
                 "step": transition.step,
@@ -50,7 +50,11 @@ pub(super) fn write_if_enabled(
                 },
                 "advantage": batch.advantages()[row],
                 "return": batch.returns()[row],
-            })
+            });
+            if batch.actor_advantage_centering_mean().is_some() {
+                value["actor_advantage"] = json!(batch.actor_advantage(row));
+            }
+            value
         })
         .collect::<Vec<_>>();
     let mut diagnostic = context();
@@ -68,6 +72,9 @@ pub(super) fn write_if_enabled(
     diagnostic["emitted_rows"] = json!(rows.len());
     diagnostic["rows_truncated"] = json!(rows.len() != batch.len());
     diagnostic["rows"] = json!(rows);
+    if let Some(mean) = batch.actor_advantage_centering_mean() {
+        diagnostic["actor_advantage_centering_mean"] = json!(mean);
+    }
     // One bounded write per rollout, after target preparation and before updates.
     // A prepared sidecar alone is never proof of committed optimizer updates.
     let bytes = serde_json::to_vec_pretty(&diagnostic)?;
@@ -150,6 +157,59 @@ mod tests {
             PpoBatch::from_rollout(7, transitions, PpoConfig::default()).unwrap(),
             references,
         )
+    }
+
+    #[test]
+    fn actor_centering_is_reported_separately_without_rewriting_raw_diagnostics() {
+        let raw_output = Output::new();
+        let centered_output = Output::new();
+        let (raw, references) = fixture(4);
+        let mut centered = raw.clone();
+        let mean = centered.center_actor_advantages().unwrap();
+        write_if_enabled(
+            true,
+            &raw_output.0,
+            &raw,
+            PpoConfig::default(),
+            &references,
+            || json!({"purpose":"actor_credit_comparison"}),
+        )
+        .unwrap();
+        write_if_enabled(
+            true,
+            &centered_output.0,
+            &centered,
+            PpoConfig::default(),
+            &references,
+            || json!({"purpose":"actor_credit_comparison"}),
+        )
+        .unwrap();
+        let raw_json = raw_output.read();
+        let mut centered_json = centered_output.read();
+        assert!(raw_json.get("actor_advantage_centering_mean").is_none());
+        let recorded_mean = centered_json["actor_advantage_centering_mean"]
+            .as_f64()
+            .unwrap();
+        assert!((recorded_mean - mean).abs() <= f64::EPSILON * mean.abs().max(1.0));
+        centered_json
+            .as_object_mut()
+            .unwrap()
+            .remove("actor_advantage_centering_mean");
+        for (row, value) in centered_json["rows"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .enumerate()
+        {
+            // JSON parsing can differ in the last f64 digit. The actor credit
+            // contract is the exact f32 word uploaded to WGSL.
+            assert_eq!(
+                (value["actor_advantage"].as_f64().unwrap() as f32).to_bits(),
+                centered.actor_advantage(row).unwrap().to_bits()
+            );
+            value.as_object_mut().unwrap().remove("actor_advantage");
+        }
+        assert_eq!(centered_json, raw_json);
     }
 
     #[test]

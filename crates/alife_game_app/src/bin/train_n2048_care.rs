@@ -247,6 +247,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut lesson = None;
     let mut preserve_objective_from = None;
     let mut sampling_temperature = None;
+    let mut center_actor_advantages = false;
     let mut acquisition_rehearsal_epochs = None;
     let mut archived_success_manifest = None;
     let mut archived_success_epochs = None;
@@ -257,6 +258,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing training seed")?
                 .to_string_lossy()
                 .parse::<u64>()?;
+        } else if flag == "--center-actor-advantages" {
+            if center_actor_advantages {
+                return Err("duplicate actor advantage centering flag".into());
+            }
+            center_actor_advantages = true;
         } else if flag == "--archived-success-manifest" {
             if archived_success_manifest.is_some() {
                 return Err("duplicate archived success manifest".into());
@@ -413,6 +419,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("archived success replay needs both archive flags and a sealed GrabFood resume, without other practice or objective overrides".into());
     }
+    if center_actor_advantages
+        && (mode != "--resume-cycle"
+            || previous.is_none()
+            || lesson != Some(alife_game_app::FoundationTeacherLesson::GrabFood)
+            || preserve_objective_from.is_some()
+            || food_after_world_tick.is_some()
+            || acquisition_rehearsal_epochs.is_some()
+            || archived_success_manifest.is_some()
+            || archived_success_epochs.is_some())
+    {
+        return Err("actor advantage centering requires a sealed GrabFood --resume-cycle without other overrides".into());
+    }
     if mode == "--pilot" || mode == "--teacher-pilot" {
         if food_after_world_tick.is_some() {
             return Err("food availability is only supported in cycle mode".into());
@@ -455,7 +473,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if let Some(manifest) = archived_success_manifest {
+                let result = if center_actor_advantages {
+                    alife_game_app::resume_foundation_grab_cycle_with_centered_actor_advantages(
+                        previous
+                            .as_deref()
+                            .ok_or("actor centering needs existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        sampling_temperature.unwrap_or(1.0),
+                    )
+                } else if let Some(manifest) = archived_success_manifest {
                     alife_game_app::resume_foundation_grab_cycle_with_archived_success_replay(
                         previous
                             .as_deref()
