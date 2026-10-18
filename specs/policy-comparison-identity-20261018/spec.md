@@ -14,6 +14,10 @@ Keep that canonical identity byte-compatible. Add a distinct versioned compariso
 domain binding one designated subject. Validate its actual asset and record
 first, then project exactly `genome.n2048_foundation_candidate.weights`, its
 asset-level `digest`, and `manifest.weight_asset.digest`. Retain all other fields,
+except rederive the subject's genetics/development content digest from the
+projected genome and unchanged phenotype in a comparison-specific domain. Keep
+that reference's ownership, schema, revision and causal tick and the entire
+remaining graph. Retain the full non-treatment state,
 including weight count, schema, graph/ABI identities, training stage, complete
 promotion provenance, genotype, phenotype, physiology, lifecycle, archive state,
 and every other organism's complete policy. Never admit a projected asset.

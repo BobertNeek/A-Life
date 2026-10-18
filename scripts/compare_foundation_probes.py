@@ -31,6 +31,10 @@ def checked_sha(value, label):
     return value
 
 
+def uint(value, bits, *, positive=False):
+    return type(value) is int and int(positive) <= value < 2**bits
+
+
 def canonical(value):
     try:
         return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
@@ -102,6 +106,12 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
     for key in ("frame_digest", "position", "gaze_rotation", "heard_tokens", "semantic_context", "object_slots", "terrain_ranges"):
         if context[key] is None:
             raise InvalidComparisonEvidence(f"missing sensory input {key}")
+    for key in ("organism_id", "tick", "decision_tick", "sequence_id", "dispatch_generation"):
+        if not uint(context[key], 64, positive=key in {"organism_id", "sequence_id", "dispatch_generation"}):
+            raise InvalidComparisonEvidence(f"malformed decision identity {key}")
+    frame_digest = context["frame_digest"]
+    if not isinstance(frame_digest, list) or len(frame_digest) != 4 or not all(uint(word, 64) for word in frame_digest):
+        raise InvalidComparisonEvidence("malformed sensory frame digest")
     candidates = required(first, "candidates")
     if not isinstance(candidates, list) or not candidates:
         raise InvalidComparisonEvidence("missing candidate support")
@@ -110,7 +120,7 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
             raise InvalidComparisonEvidence("malformed/unsupported candidate schema")
         if type(candidate["logit"]) not in (int, float) or not math.isfinite(candidate["logit"]):
             raise InvalidComparisonEvidence("nonfinite candidate logit")
-    if type(context["representative_mask"]) is not int or not 0 < context["representative_mask"] < 2**64 or not isinstance(context["motor_masks"], list) or len(context["motor_masks"]) != 6 or any(type(m) is not int or not 0 <= m < 2**64 for m in context["motor_masks"]):
+    if not uint(context["representative_mask"], 32, positive=True) or not isinstance(context["motor_masks"], list) or len(context["motor_masks"]) != 6 or not all(uint(m, 32) for m in context["motor_masks"]):
         raise InvalidComparisonEvidence("malformed candidate masks")
     # Scores are treatment outputs; all candidate identity/observation fields bind.
     context["candidates"] = [{k: v for k, v in c.items() if k != "logit"} for c in candidates]

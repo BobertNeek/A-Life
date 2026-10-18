@@ -15,6 +15,7 @@ on:
       - "crates/alife_game_app/src/foundation_training/**"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
+      - "crates/alife_world/tests/*signature.rs"
       - "crates/alife_game_app/src/bin/train_n2048_care.rs"
       - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
       - "crates/alife_training/**"
@@ -31,6 +32,7 @@ on:
       - "crates/alife_game_app/src/foundation_training/**"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
+      - "crates/alife_world/tests/*signature.rs"
       - "crates/alife_game_app/src/bin/train_n2048_care.rs"
       - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
       - "crates/alife_training/**"
@@ -65,6 +67,8 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --test actor_advantage_centering_cli -- --test-threads=1
       - name: Native comparison identity CPU provenance binding
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::comparison_identity::tests -- --test-threads=1
+      - name: Canonical and policy-weight comparison world identity CPU regressions
+        run: cargo test --locked -p alife_world --test headless_world_signature --test policy_weight_comparison_signature -- --test-threads=1
       - name: Build training executable
         run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care
       - name: Check rehearsal admission before runtime creation

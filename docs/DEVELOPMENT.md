@@ -665,6 +665,10 @@ do not establish competence. See the [bounded comparison contract](../specs/acto
 New native probes record `initial_comparison_identity` before GPU runtime
 creation. Its separately versioned world signature excludes only the designated
 subject's N2048 weight vector and the two digests derived from that vector.
+The subject's genetics/development content digest is rederived from the
+projected genome and unchanged phenotype in a separate comparison domain after
+validating the original record. Its reference metadata and remaining state graph
+remain bound.
 The complete remaining manifest (including count, ABI, curriculum and promotion
 provenance), other organisms' policies, world state and physiology remain bound.
 The original canonical world signature is preserved for identity and audit.

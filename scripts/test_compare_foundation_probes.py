@@ -171,6 +171,35 @@ class ComparisonIdentityTests(unittest.TestCase):
         self.assertEqual(mismatch.returncode, 1, mismatch.stderr)
         self.assertFalse(json.loads(mismatch.stdout)["matched"])
 
+    def test_paired_malformed_identity_digest_and_masks_cannot_match(self):
+        originals = {branch: json.loads((self.root / branch / "lesson-diagnostic.json").read_text())
+                     for branch in ("control", "candidate")}
+        for key, malformed in (("dispatch_generation", None), ("dispatch_generation", 2**64),
+                               ("sequence_id", True), ("tick", -1),
+                               ("frame_digest", "not-a-digest"), ("frame_digest", [1, 2, 3]),
+                               ("frame_digest", [1, 2, 3, 2**64]), ("frame_digest", [True] * 4),
+                               ("representative_mask", 2**32), ("motor_masks", [2**32] * 6)):
+            with self.subTest(key=key, malformed=malformed):
+                for branch, original in originals.items():
+                    data = copy.deepcopy(original)
+                    data["steps"][0][key] = malformed
+                    self.write(branch, "lesson-diagnostic.json", data)
+                with self.assertRaises(InvalidComparisonEvidence):
+                    self.compare()
+
+    def test_paired_missing_or_nonfinite_physiology_cannot_match(self):
+        originals = {branch: json.loads((self.root / branch / "lesson-diagnostic.json").read_text())
+                     for branch in ("control", "candidate")}
+        for malformed in (None, {}, dict(originals["control"]["steps"][0]["physiology"], before_energy=None),
+                          dict(originals["control"]["steps"][0]["physiology"], before_energy=float("inf"))):
+            with self.subTest(malformed=malformed):
+                for branch, original in originals.items():
+                    data = copy.deepcopy(original)
+                    data["steps"][0]["physiology"] = malformed
+                    self.write(branch, "lesson-diagnostic.json", data)
+                with self.assertRaises(InvalidComparisonEvidence):
+                    self.compare()
+
 
 if __name__ == "__main__":
     unittest.main()

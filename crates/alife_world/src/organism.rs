@@ -1403,6 +1403,27 @@ impl WorldOrganismRegistry {
                     .and_then(serde_json::Value::as_object_mut)
                     .and_then(|reference| reference.remove("digest"))
                     .ok_or(ScaffoldContractError::InvalidId)?;
+                // This reference hashes the genome, so its original content
+                // digest also contains the treatment. Rederive only that
+                // digest from the projected genome and unchanged phenotype;
+                // retain ownership, schema, revision, causal tick and graph.
+                // The original record was validated above, before projection.
+                let mut genetics = CanonicalDigestBuilder::new(
+                    b"alife.organism.policy-weight-comparison.genetics-development.v1",
+                );
+                for field in ["genome", "phenotype"] {
+                    let bytes = serde_json::to_vec(
+                        projected
+                            .get(field)
+                            .ok_or(ScaffoldContractError::InvalidId)?,
+                    )
+                    .map_err(|_| ScaffoldContractError::InvalidId)?;
+                    genetics.write_bytes(&bytes);
+                }
+                *projected
+                    .pointer_mut("/state_graph/genetics_development/content_digest")
+                    .ok_or(ScaffoldContractError::InvalidId)? =
+                    serde_json::json!(genetics.finish256());
                 serde_json::to_vec(&projected).map_err(|_| ScaffoldContractError::InvalidId)?
             } else {
                 serde_json::to_vec(record).map_err(|_| ScaffoldContractError::InvalidId)?

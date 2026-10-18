@@ -146,7 +146,7 @@ fn world_tick_position_terrain_speech_tracking_and_lifecycle_rules_remain_bound(
         .unwrap();
     let mut tracking = original.clone();
     let mut tracked = tracking.tracked_objects().save_state(id).unwrap();
-    tracked.capacity -= 1;
+    tracked.next_id = tracked.next_id.checked_add(1).unwrap();
     tracking.restore_tracked_object_states([tracked]).unwrap();
     let mut lifecycle_rule = original.clone();
     lifecycle_rule
@@ -198,14 +198,51 @@ fn physiology_lifecycle_and_nonpolicy_genome_state_remain_bound() {
         biology.policy_weight_comparison_signature_v1(id).unwrap()
     );
     let mut genome = original.clone();
-    let mut value = serde_json::to_value(genome.organism_registry().get(id).unwrap()).unwrap();
-    value["genome"]["lineage_id"] = serde_json::json!(999_999_u64);
-    let record: WorldOrganismRecord = serde_json::from_value(value).unwrap();
+    let source = genome.organism_registry().get(id).unwrap();
+    let mut changed_genome = source.genome().clone();
+    changed_genome.lineage_id = alife_core::LineageId(999_999);
+    let changed_phenotype = changed_genome.express().unwrap();
+    let record = WorldOrganismRecord::new(
+        id,
+        source.world_entity_id(),
+        changed_genome,
+        changed_phenotype,
+        *source.biochemistry(),
+        source.birth_tick(),
+    )
+    .unwrap();
     genome.replace_organism_record_exact(record).unwrap();
     assert_ne!(
         baseline,
         genome.policy_weight_comparison_signature_v1(id).unwrap()
     );
+}
+
+#[test]
+fn projected_genetics_reference_preserves_graph_and_causal_metadata() {
+    let original = world(&asset(0.0, TrainingStageManifest::bootstrap()), 1);
+    let id = subject(&original);
+    let baseline = original.policy_weight_comparison_signature_v1(id).unwrap();
+    for pointer in [
+        "/state_graph/transaction_revision",
+        "/state_graph/genetics_development/schema_version",
+        "/state_graph/genetics_development/revision",
+        "/state_graph/genetics_development/causal_tick",
+        "/state_graph/brain/revision",
+        "/state_graph/memory/revision",
+    ] {
+        let mut changed = original.clone();
+        let mut value = serde_json::to_value(changed.organism_registry().get(id).unwrap()).unwrap();
+        let field = value.pointer_mut(pointer).unwrap();
+        *field = serde_json::json!(field.as_u64().unwrap() + 1);
+        let record: WorldOrganismRecord = serde_json::from_value(value).unwrap();
+        changed.replace_organism_record_exact(record).unwrap();
+        assert_ne!(
+            baseline,
+            changed.policy_weight_comparison_signature_v1(id).unwrap(),
+            "{pointer}"
+        );
+    }
 }
 
 #[test]
