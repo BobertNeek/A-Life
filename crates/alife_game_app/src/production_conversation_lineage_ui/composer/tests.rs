@@ -116,6 +116,16 @@ fn wordless_controls_stay_fixed_above_long_drafts_at_four_viewports_and_error_gu
                 .map(|t| t.0.clone())
                 .collect::<Vec<_>>();
             assert!(texts.iter().all(|t| *t == format!("{draft}|") || t == HELP));
+            app.world_mut().clear_trackers();
+            adapt(app.world_mut());
+            assert!(
+                !app.world()
+                    .entity(entry)
+                    .get_ref::<Text>()
+                    .unwrap()
+                    .is_changed(),
+                "idle composer must not request text shaping again"
+            );
             fixtures.push(serde_json::json!({"viewport":[size.x,size.y],"case":"long_draft","error":error,
                 "nodes":crate::production_voxel_renderer::care_dock::tests::export_nodes(app.world_mut())}));
             app.world_mut()

@@ -316,9 +316,12 @@ pub(super) fn collect_input(world: &mut World) {
             .get_pressed()
             .next()
             .is_some();
-    world
-        .resource_mut::<ProductionConversationLineageUiState>()
-        .input_capture_held = (open || gated) && held;
+    let next_capture = (open || gated) && held;
+    if next_capture != gated {
+        world
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .input_capture_held = next_capture;
+    }
     let blocked = world
         .get_resource::<crate::production_voxel_renderer::menu::MenuState>()
         .is_some_and(crate::production_voxel_renderer::menu::captures_input_state);
@@ -482,7 +485,8 @@ pub(crate) fn adapt(world: &mut World) {
         scroll.0.y = if open && !help { 1_000_000.0 } else { 0.0 };
     }
     for (mut shown,mut node,mut a11y) in world.query_filtered::<(&mut Text,&mut Node,&mut AccessibilityNode),With<ProductionSpeechEntryPanel>>().iter_mut(world) {
-        shown.0.clone_from(&text);node.display=if help {Display::None}else{Display::Flex};a11y.set_value(draft.clone());
+        // Preserve Text change detection so idle frames do not request shaping.
+        if shown.0 != text { shown.0.clone_from(&text); }node.display=if help {Display::None}else{Display::Flex};a11y.set_value(draft.clone());
         if open && !help {a11y.clear_hidden();}else{a11y.set_hidden();}
     }
     for (mut node, mut a11y) in world
@@ -516,7 +520,7 @@ pub(crate) fn adapt(world: &mut World) {
             } else {
                 Toggled::False
             });
-            a11y.set_label(if selected {"Address selected creature. Tab toggles nearby listeners. A name in the draft takes precedence."}else{"Address nearby listeners or a name in the draft. Tab toggles selected creature."});
+            a11y.set_label(if selected {"Prefer the selected creature when available, otherwise nearby listeners. Tab toggles nearby listeners. A name in the draft takes precedence."}else{"Address nearby listeners or a name in the draft. Tab toggles selected creature."});
         }
         if *control == Control::Help {
             a11y.set_toggled(if help { Toggled::True } else { Toggled::False });
