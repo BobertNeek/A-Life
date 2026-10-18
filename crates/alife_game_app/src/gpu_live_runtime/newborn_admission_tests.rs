@@ -157,6 +157,97 @@ fn newborn_fixture_reaches_natural_birth_at_the_passive_boundary() {
     }
 }
 
+#[test]
+fn natural_newborn_checkpoint_and_reopened_save_keep_the_live_inherited_appearance() {
+    let mut world = ready_parent_world();
+    let mut appearances = CreatureAppearanceCache::default();
+    let mut summaries = Vec::new();
+    for (index, record) in parent_records(&world).iter().enumerate() {
+        appearances.admit(record).unwrap();
+        let (_, resident) = GpuLiveBrainRuntime::compile_birth(
+            &world,
+            BrainScaleTier::Nano512,
+            SensorProfile::PrivilegedAffordanceV1,
+            record.organism_id(),
+        )
+        .unwrap();
+        let mut saved = checkpoint_creature_save_state(
+            appearances
+                .get(record.organism_id(), record.genome().id)
+                .unwrap(),
+            record,
+            &resident,
+            BrainScaleTier::Nano512,
+        )
+        .unwrap();
+        saved.appearance =
+            CreatureAppearanceGenome::founder_for_species(index as u8, 0xA11F_7100 + index as u64)
+                .with_body_phenotype(&record.phenotype().body);
+        summaries.push(saved);
+    }
+    appearances.seed_saved(&summaries).unwrap();
+    world.try_advance_tick().unwrap();
+    let child = world.organism_registry().get(CHILD).unwrap();
+    let record_before = serde_json::to_vec(child).unwrap();
+    let expected = CreatureAppearanceGenome::offspring_from_parents(
+        summaries[0].appearance,
+        summaries[1].appearance,
+        child.genome().conception_seed,
+    )
+    .with_body_phenotype(&child.phenotype().body);
+    appearances.admit(child).unwrap();
+    let live_appearance = appearances.get(CHILD, child.genome().id).unwrap();
+    assert_eq!(live_appearance, expected);
+    let (_, resident) = GpuLiveBrainRuntime::compile_birth(
+        &world,
+        BrainScaleTier::Nano512,
+        SensorProfile::PrivilegedAffordanceV1,
+        CHILD,
+    )
+    .unwrap();
+    summaries.push(
+        checkpoint_creature_save_state(live_appearance, child, &resident, BrainScaleTier::Nano512)
+            .unwrap(),
+    );
+    assert_eq!(serde_json::to_vec(child).unwrap(), record_before);
+    // Parent chemistry advanced through a real birth; keep summaries at the same boundary.
+    for saved in &mut summaries {
+        let record = world.organism_registry().get(saved.organism_id).unwrap();
+        saved.development_tick = record.biochemistry().development.last_update_tick;
+        saved.mind.tick = record.biochemistry().tick;
+        saved.mind.homeostasis = record.biochemistry().homeostasis;
+    }
+    let save = PortableSaveFile::from_headless_world(
+        "hearthling-natural-birth-appearance",
+        &world,
+        alife_world::RuntimeConfig::deterministic_default(SEED, BrainScaleTier::Nano512),
+        AssetManifest::empty(),
+        summaries,
+    )
+    .unwrap();
+    let bytes = serde_json::to_vec(&save).unwrap();
+    let path = std::env::temp_dir().join(format!(
+        "alife-natural-birth-appearance-{}.json",
+        std::process::id(),
+    ));
+    std::fs::write(&path, &bytes).unwrap();
+    let reopened = PortableSaveFile::from_json_file(&path).unwrap();
+    std::fs::remove_file(path).unwrap();
+    let restored_world = reopened.restore_headless_world().unwrap();
+    let mut restored_appearances = CreatureAppearanceCache::default();
+    restored_appearances
+        .seed_saved(&reopened.creatures)
+        .unwrap();
+    let restored_child = restored_world.organism_registry().get(CHILD).unwrap();
+    restored_appearances.admit(restored_child).unwrap();
+    assert_eq!(
+        restored_appearances.get(CHILD, restored_child.genome().id),
+        Some(live_appearance)
+    );
+    assert_eq!(serde_json::to_vec(restored_child).unwrap(), record_before);
+    assert_eq!(serde_json::to_vec(&reopened).unwrap(), bytes);
+}
+
 struct CpuAuthority {
     world: HeadlessWorld,
     residents: BTreeMap<u64, ResidentCognition>,

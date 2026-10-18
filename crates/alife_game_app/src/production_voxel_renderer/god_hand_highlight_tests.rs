@@ -1,6 +1,8 @@
 //! CPU/ECS parity with the pre-optimization selection pass, without a renderer.
 use super::*;
 
+type HighlightSnapshotRow = (String, String, Option<(String, String)>);
+
 #[derive(Resource, Default)]
 struct ChangedMeshes(Vec<Entity>);
 
@@ -188,7 +190,7 @@ impl Fixture {
         self.app.update();
     }
 
-    fn snapshot(&mut self) -> Vec<(String, String, Option<(String, String)>)> {
+    fn snapshot(&mut self) -> Vec<HighlightSnapshotRow> {
         let world = self.app.world_mut();
         let mut query = world.query::<(
             &Name,

@@ -229,7 +229,7 @@ fn status_cues_distinguish_pending_rejection_and_unavailable_without_success_cla
         assert!(!a11y.label().unwrap().contains("success"));
         let child = app.world().get::<Children>(status).unwrap()[0];
         assert_eq!(
-            app.world().get::<Visibility>(child).unwrap() == &Visibility::Hidden,
+            *app.world().get::<Visibility>(child).unwrap() == Visibility::Hidden,
             cue == SpeechInputCue::None
         );
         if cue != SpeechInputCue::None {
