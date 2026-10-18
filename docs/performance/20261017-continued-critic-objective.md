@@ -35,6 +35,10 @@ all prospective weights/moments before changing any coordinate. A rejected updat
 preserves weights, moments and optimizer age. The native analytic regression
 checks elapsed-time/terminal gradients, bias, coefficient before clipping,
 AdamW weights/m/v, and early and late nonfinite rejection.
+Finite classification inspects IEEE-754 exponent bits. The first Windows scratch
+fixture at 2026-10-17 23:58 UTC exposed an accepted overflow update with the former
+comparison-based check; the corrected classifier requires a fresh GPU fixture
+before any coupled qualification proceeds.
 
 `cycle.json` records critic objective version 1 and binds
 `critic-residual-update.json` by SHA256. Historical receipts deserialize as

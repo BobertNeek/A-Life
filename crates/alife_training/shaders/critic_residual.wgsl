@@ -5,7 +5,8 @@ struct Header { shape:vec4<u32>, adam:vec4<f32>, regularization:vec4<f32>, reser
 @group(0) @binding(2) var<storage,read> rows:array<vec4<u32>>;
 @group(0) @binding(3) var<storage,read_write> head:array<f32>;
 @group(0) @binding(4) var<storage,read_write> result:array<vec4<f32>>;
-fn finite(x:f32)->bool{return x==x && abs(x)<=3.402823466e+38;}
+// Inspect the encoding so overflow rejection does not depend on float comparisons.
+fn finite(x:f32)->bool{return (bitcast<u32>(x)&0x7f800000u)!=0x7f800000u;}
 @compute @workgroup_size(64) fn predict(@builtin(global_invocation_id) id:vec3<u32>){
     let row=id.x;if row>=h.shape.y{return;} let n=h.shape.x;let r=rows[row];
     var current=head[n];var next=head[n];
