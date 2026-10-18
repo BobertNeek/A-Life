@@ -187,7 +187,10 @@ mod tests {
         let raw_json = raw_output.read();
         let mut centered_json = centered_output.read();
         assert!(raw_json.get("actor_advantage_centering_mean").is_none());
-        assert_eq!(centered_json["actor_advantage_centering_mean"], json!(mean));
+        let recorded_mean = centered_json["actor_advantage_centering_mean"]
+            .as_f64()
+            .unwrap();
+        assert!((recorded_mean - mean).abs() <= f64::EPSILON * mean.abs().max(1.0));
         centered_json
             .as_object_mut()
             .unwrap()
@@ -198,9 +201,11 @@ mod tests {
             .iter_mut()
             .enumerate()
         {
+            // JSON parsing can differ in the last f64 digit. The actor credit
+            // contract is the exact f32 word uploaded to WGSL.
             assert_eq!(
-                value["actor_advantage"],
-                json!(centered.actor_advantage(row))
+                (value["actor_advantage"].as_f64().unwrap() as f32).to_bits(),
+                centered.actor_advantage(row).unwrap().to_bits()
             );
             value.as_object_mut().unwrap().remove("actor_advantage");
         }

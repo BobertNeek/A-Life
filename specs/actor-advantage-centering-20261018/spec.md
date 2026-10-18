@@ -60,6 +60,25 @@ fallback is introduced. Roll back by omitting the opt-in flag. Preserve any
 failed disposable output as uncredited evidence and repair ordinary tooling
 failures within scope.
 
+## Predeclared comparison
+
+The machine-readable [protocol](protocol.json) fixes four16-row cycles per
+branch at temperature32, followed by four physically distinct temperature1
+poses for each of Grab and held-food Eating. Planned training seeds are
+202610174001-202610174004 and held-out seeds202610174111-202610174114;
+preparation reserves none. Every seed is explicitly paired across branches.
+Source admission binds all57files of immutable policy7400 and its complete
+actor/value Adam ages16684/19800. First-cycle captures, raw GAE, rewards, and
+targets, critic feature/update receipts, and full first-cycle value checkpoint
+must match. Later trajectories can differ; accepted optimizer dose
+and held-out first contexts must match for qualification.
+
+The candidate must acquire by explicit Grab in at least3/4poses and exceed
+control, retain Eating in all4poses without per-seed regression, and satisfy
+the fixed probability/selectivity thresholds in the protocol. Advancing the
+curriculum additionally requires4/4Grab poses. A trial can report a negative
+result without qualifying adoption. Source selection remains unchanged.
+
 ## Review and verification receipt
 
 Mode2 uses an independent R2 read-only source review. All three findings were
@@ -71,3 +90,15 @@ assertions. Hosted Linux and Windows builds and focused tests are pending.
 The local heavy-work admission at15:12UTC rejected launch because input idle
 was0seconds outside the automatic window. No GPU comparison has run and no
 learning benefit or production adoption is claimed.
+
+The immutable source passed native CPU checkpoint admission at policy7400 and
+ages16684/19800, with `neural_execution=false` and `weights_modified=false`.
+Both original and recoverable directories match the saved57-file SHA-256 map.
+Controller R2 findings were also resolved before any trial: allocation history
+uses an immutable per-trial snapshot, and first-cycle critic-state/feature/update
+equality participates in the qualification gate. Preparation allocated no seeds.
+
+The first hosted Linux run compiled successfully; its new provenance assertion
+failed on a JSON parser's final-f64-digit difference. The corrected test checks
+the exact serialized-to-f32 actor word and separately keeps full raw-diagnostic
+equality. Its rerun remains required before considering CPU validation complete.

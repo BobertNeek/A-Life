@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "source_policy": 7400,
+  "actor_Adam_age": 16684,
+  "value_Adam_age": 19800,
+  "branches": [
+    "control",
+    "centered"
+  ],
+  "paired_training_seeds": [
+    202610174001,
+    202610174002,
+    202610174003,
+    202610174004
+  ],
+  "heldout_seeds": [
+    202610174111,
+    202610174112,
+    202610174113,
+    202610174114
+  ],
+  "founder_seed": 539363617,
+  "requested_cycles_per_branch": 4,
+  "training_rows_per_cycle": 16,
+  "bootstrap_rows": 1,
+  "requested_epochs": 2,
+  "collection_temperature": 32,
+  "evaluation_temperature": 1,
+  "evaluation_decision_cap": 16,
+  "max_trial_seconds": 900,
+  "production_cycles_credited": 0,
+  "same_executable_required": true,
+  "full_Adam_continuation_required": true,
+  "first_capture_raw_GAE_rewards_targets_and_replay_must_match": true,
+  "first_critic_state_features_and_update_receipt_must_match": true,
+  "actual_accepted_actor_and_value_dose_must_match": true,
+  "qualification_diagnostics_required": true,
+  "immutable_source_all_files_required": true,
+  "later_trajectories_may_diverge": true,
+  "adoption_gate": {
+    "candidate_Grab_successes_at_least": 3,
+    "candidate_Grab_successes_must_exceed_control": true,
+    "candidate_Eating_successes_required": 4,
+    "no_per_seed_Eating_regression": true,
+    "median_Grab_log_probability_gain_at_least": 0.09531017980432493,
+    "median_held_Eat_log_probability_gain_at_least": -0.01005033585350145,
+    "median_task_selectivity_gain_at_least": 0.05,
+    "positive_selectivity_seeds_at_least": 3
+  },
+  "curriculum_gate": "All four physically distinct held-out Grab poses must acquire by explicit Grab, with retained Eating.",
+  "source_selection_changed": false
+}
