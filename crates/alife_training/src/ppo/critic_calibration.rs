@@ -1,5 +1,5 @@
-//! Explicit offline critic-only experiment. Frozen production GPU features are
-//! inputs; no actor gradients, actor optimizer, world mutation, or PPO credit.
+//! Full sampled residual updates on frozen production GPU features. The caller
+//! owns campaign/PPO accounting; this kernel never updates the actor or world.
 use super::{invalid, read_gpu_f32, PpoValueHeadCheckpoint};
 use crate::{AdamWConfig, TrainingError};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
@@ -91,7 +91,7 @@ impl FrozenCriticResidualExperiment {
             storage,
         );
         let mut head_words = checkpoint.parameters.clone();
-        head_words.resize((checkpoint.feature_count as usize + 1) * 4, 0.0);
+        head_words.resize((checkpoint.feature_count as usize + 1) * 4 + 1, 0.0);
         let head = make(
             "critic-existing-weights-Adam-and-gradient",
             bytemuck::cast_slice(&head_words),
@@ -180,6 +180,7 @@ impl FrozenCriticResidualExperiment {
         session: &GpuAuthoritativeSession,
         config: AdamWConfig,
         step: u32,
+        coefficient: f32,
     ) -> Result<(), TrainingError> {
         config.validate()?;
         let mut words = [0u32; 16];
@@ -197,6 +198,10 @@ impl FrozenCriticResidualExperiment {
         {
             words[4 + i] = value.to_bits();
         }
+        if !coefficient.is_finite() || coefficient <= 0.0 {
+            return Err(invalid());
+        }
+        words[10] = coefficient.to_bits();
         session
             .backend()
             .offline_training_device_queue()?
@@ -226,8 +231,18 @@ impl FrozenCriticResidualExperiment {
         session: &GpuAuthoritativeSession,
         config: AdamWConfig,
     ) -> Result<(), TrainingError> {
+        self.step_with_coefficient(session, config, 1.0)
+    }
+
+    /// The coefficient belongs to the loss, before clipping and AdamW.
+    pub fn step_with_coefficient(
+        &mut self,
+        session: &GpuAuthoritativeSession,
+        config: AdamWConfig,
+        coefficient: f32,
+    ) -> Result<(), TrainingError> {
         let next = self.step.checked_add(1).ok_or_else(invalid)?;
-        self.upload(session, config, next)?;
+        self.upload(session, config, next, coefficient)?;
         let (device, queue) = session.backend().offline_training_device_queue()?;
         let mut encoder = device.create_command_encoder(&Default::default());
         self.dispatch(&mut encoder, &self.predict, self.row_count.div_ceil(64));
@@ -238,6 +253,10 @@ impl FrozenCriticResidualExperiment {
         );
         self.dispatch(&mut encoder, &self.update, 1);
         queue.submit(Some(encoder.finish()));
+        let flag = u64::from(self.feature_count + 1) * 16;
+        if read_gpu_f32(session, &self.head, flag..flag + 4)?.as_slice() != [1.0] {
+            return Err(TrainingError::MalformedReadback);
+        }
         self.step = next;
         Ok(())
     }
@@ -246,7 +265,7 @@ impl FrozenCriticResidualExperiment {
         &self,
         session: &GpuAuthoritativeSession,
     ) -> Result<Vec<[f32; 4]>, TrainingError> {
-        self.upload(session, AdamWConfig::default(), self.step.max(1))?;
+        self.upload(session, AdamWConfig::default(), self.step.max(1), 1.0)?;
         let (device, queue) = session.backend().offline_training_device_queue()?;
         let mut encoder = device.create_command_encoder(&Default::default());
         self.dispatch(&mut encoder, &self.predict, self.row_count.div_ceil(64));
@@ -262,7 +281,7 @@ impl FrozenCriticResidualExperiment {
         &self,
         session: &GpuAuthoritativeSession,
     ) -> Result<Vec<f32>, TrainingError> {
-        self.upload(session, AdamWConfig::default(), self.step.max(1))?;
+        self.upload(session, AdamWConfig::default(), self.step.max(1), 1.0)?;
         let (device, queue) = session.backend().offline_training_device_queue()?;
         let mut encoder = device.create_command_encoder(&Default::default());
         self.dispatch(&mut encoder, &self.predict, self.row_count.div_ceil(64));

@@ -34,6 +34,8 @@ fn default_sampling_temperature() -> f32 {
     1.0
 }
 
+mod critic_residual;
+
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
         return Err("cycle sampling temperature must be finite in 0.0001..=128".into());
@@ -126,6 +128,12 @@ fn training_biological_value(
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct FoundationCycleReceipt {
+    /// Zero identifies historical GAE-return critic regression; one uses the
+    /// full sampled residual on captured current/actual-next GPU features.
+    #[serde(default)]
+    pub critic_objective_version: u16,
+    #[serde(default)]
+    pub critic_residual_update_sha256: Option<String>,
     #[serde(default = "legacy_objective_version")]
     pub biological_objective_version: u16,
     #[serde(default)]
@@ -3036,7 +3044,9 @@ fn run_foundation_training_cycle_in_owned_output(
     )?;
     std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
-    let mut critic_capture_features = capture_only.then(|| Vec::with_capacity(training_ticks + 1));
+    budget
+        .check_additional((training_ticks as u64 + 1) * u64::from(phenotype.neuron_count()) * 4)?;
+    let mut critic_capture_features = Vec::with_capacity(training_ticks + 1);
     let speech_label = |frame: &alife_core::PerceptionFrame,
                         previous: Option<&alife_core::ExperiencePatch>| {
         crate::foundation_training::grounded_speech_label(
@@ -3052,11 +3062,9 @@ fn run_foundation_training_cycle_in_owned_output(
     let append_started = Instant::now();
     speech_targets.push(speech_label(&first[0].frame, None));
     let mut last_speech_patch = first[0].patch.clone();
-    if let Some(features) = &mut critic_capture_features {
-        features.push(crate::foundation_training::snapshot_activation(
-            &first[0].after_inference,
-        )?);
-    }
+    critic_capture_features.push(crate::foundation_training::snapshot_activation(
+        &first[0].after_inference,
+    )?);
     references.push(writer.append(&first.remove(0))?);
     replay_append_seconds += append_started.elapsed().as_secs_f64();
     let mut gap = false;
@@ -3257,11 +3265,9 @@ fn run_foundation_training_cycle_in_owned_output(
         let append_started = Instant::now();
         speech_targets.push(speech_label(&captured[0].frame, Some(&last_speech_patch)));
         last_speech_patch = captured[0].patch.clone();
-        if let Some(features) = &mut critic_capture_features {
-            features.push(crate::foundation_training::snapshot_activation(
-                &captured[0].after_inference,
-            )?);
-        }
+        critic_capture_features.push(crate::foundation_training::snapshot_activation(
+            &captured[0].after_inference,
+        )?);
         references.push(writer.append(&captured.remove(0))?);
         replay_append_seconds += append_started.elapsed().as_secs_f64();
         if terminal_biology.is_some() {
@@ -3504,7 +3510,7 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     if capture_only {
         use sha2::{Digest, Sha256};
-        let features = critic_capture_features.ok_or("missing critic capture features")?;
+        let features = critic_capture_features;
         if features.len() != references.len()
             || features.iter().any(|row| {
                 row.len() != phenotype.neuron_count() as usize
@@ -3614,6 +3620,9 @@ fn run_foundation_training_cycle_in_owned_output(
                 "terminal_death_tick": terminal_death_tick,
                 "bootstrap_decision_tick": references.get(train_rows).map(|row| row.tick),
                 "bootstrap_value": values.get(train_rows),
+                "critic_objective_version": critic_residual::OBJECTIVE_VERSION,
+                "critic_objective": "full_sampled_one_step_bellman_residual",
+                "GAE_returns_are_actor_credit_only": true,
             })
         },
     )?;
@@ -3636,7 +3645,13 @@ fn run_foundation_training_cycle_in_owned_output(
         }
         segment_start = segment_end;
     }
-    let update = train_recurrent_ppo_cohort(
+    // GAE remains policy credit. It must not silently reinstate the old critic
+    // return-regression objective after a residual-only correction.
+    let actor_only_ppo = PpoConfig {
+        value_coefficient: 0.0,
+        ..ppo_config
+    };
+    let mut update = train_recurrent_ppo_cohort(
         &mut trainer,
         &mut value,
         spans.len(),
@@ -3665,9 +3680,30 @@ fn run_foundation_training_cycle_in_owned_output(
                 auxiliary: None,
             })
         },
-        ppo_config,
+        actor_only_ppo,
         policy_version,
     )?;
+    let critic_updates = update
+        .actor_optimizer_step
+        .checked_sub(actor_optimizer_step_before)
+        .ok_or("actor optimizer step regressed")?;
+    let (residual_checkpoint, residual_receipt) = critic_residual::train(
+        trainer.session(),
+        value.checkpoint(trainer.session())?,
+        &critic_capture_features,
+        batch.transitions(),
+        ppo_config,
+        critic_updates,
+        policy_version,
+    )?;
+    update.value_optimizer_step = residual_checkpoint.optimizer_step;
+    value = PpoTrainingState::from_checkpoint(residual_checkpoint)?;
+    let residual_bytes = serde_json::to_vec_pretty(&residual_receipt)?;
+    let critic_residual_update_sha256 = {
+        use sha2::{Digest, Sha256};
+        format!("{:x}", Sha256::digest(&residual_bytes))
+    };
+    std::fs::write(output.join("critic-residual-update.json"), residual_bytes)?;
     ppo_stage.finish();
     let acquisition_rehearsal = if rehearsal_epochs != 0 {
         let rehearsal_stage = timing.stage("acquisition_rehearsal");
@@ -3790,6 +3826,8 @@ fn run_foundation_training_cycle_in_owned_output(
     value_stage.finish();
     std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
     let receipt = FoundationCycleReceipt {
+        critic_objective_version: critic_residual::OBJECTIVE_VERSION,
+        critic_residual_update_sha256: Some(critic_residual_update_sha256),
         biological_objective_version: BIOLOGICAL_OBJECTIVE_VERSION,
         objective_state_reset,
         objective_transition_from,

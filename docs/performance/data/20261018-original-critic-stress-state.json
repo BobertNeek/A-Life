@@ -1,0 +1,78 @@
+{
+  "observed_utc": "2026-10-18T00:32:18.033503+00:00",
+  "cases": {
+    "prediction_overflow": {
+      "INITIAL_WEIGHTS_DECIMAL": "[2.0, -1.0, 3.0]",
+      "INITIAL_WEIGHTS_BITS": "[1073741824, 3212836864, 1077936128]",
+      "INITIAL_M_DECIMAL": "[0.1, 0.2, 0.3]",
+      "INITIAL_M_BITS": "[1036831949, 1045220557, 1050253722]",
+      "INITIAL_V_DECIMAL": "[0.01, 0.02, 0.03]",
+      "INITIAL_V_BITS": "[1008981770, 1017370378, 1022739087]",
+      "INITIAL_OPTIMIZER_STEP": "7",
+      "INITIAL_POLICY": "Some(5124)",
+      "DIRECT_STEP": "Err(MalformedReadback)",
+      "AFTER_CHECKPOINT": "Ok(PpoValueHeadCheckpoint { feature_count: 2, optimizer_step: 7, parameters: [2.0, -1.0, 3.0, 0.1, 0.2, 0.3, 0.01, 0.02, 0.03], last_updated_policy_version: Some(5124) })",
+      "AFTER_WEIGHTS_DECIMAL": "[2.0, -1.0, 3.0]",
+      "AFTER_WEIGHTS_BITS": "[1073741824, 3212836864, 1077936128]",
+      "AFTER_M_DECIMAL": "[0.1, 0.2, 0.3]",
+      "AFTER_M_BITS": "[1036831949, 1045220557, 1050253722]",
+      "AFTER_V_DECIMAL": "[0.01, 0.02, 0.03]",
+      "AFTER_V_BITS": "[1008981770, 1017370378, 1022739087]",
+      "AFTER_OPTIMIZER_STEP": "7",
+      "AFTER_POLICY": "Some(5124)",
+      "CHECKPOINT_BIT_UNCHANGED": "true",
+      "FRESH_BEFORE_UPDATE_EVALUATION": "Err(MalformedReadback)",
+      "FRESH_GRADIENT": "[inf, inf, inf]",
+      "FRESH_GRADIENT_BITS": "[2139095040, 2139095040, 2139095040]",
+      "nonfinite_GPU_gradient_words": 3
+    },
+    "late_moment_overflow": {
+      "INITIAL_WEIGHTS_DECIMAL": "[2.0, -1.0, 3.0]",
+      "INITIAL_WEIGHTS_BITS": "[1073741824, 3212836864, 1077936128]",
+      "INITIAL_M_DECIMAL": "[0.1, 0.2, 3.4028235e38]",
+      "INITIAL_M_BITS": "[1036831949, 1045220557, 2139095039]",
+      "INITIAL_V_DECIMAL": "[0.01, 0.02, 0.03]",
+      "INITIAL_V_BITS": "[1008981770, 1017370378, 1022739087]",
+      "INITIAL_OPTIMIZER_STEP": "7",
+      "INITIAL_POLICY": "Some(5124)",
+      "DIRECT_STEP": "Ok(())",
+      "AFTER_CHECKPOINT": "Ok(PpoValueHeadCheckpoint { feature_count: 2, optimizer_step: 8, parameters: [1.9999262, -1.0000359, -8.319779e34, 0.16069028, 0.109268874, 3.062541e38, 0.010489705, 0.020480283, 0.02997], last_updated_policy_version: Some(5124) })",
+      "AFTER_WEIGHTS_DECIMAL": "[1.9999262, -1.0000359, -8.319779e34]",
+      "AFTER_WEIGHTS_BITS": "[1073741205, 3212837165, 4185927614]",
+      "AFTER_M_DECIMAL": "[0.16069028, 0.109268874, 3.062541e38]",
+      "AFTER_M_BITS": "[1042582526, 1038075996, 2137417317]",
+      "AFTER_V_DECIMAL": "[0.010489705, 0.020480283, 0.02997]",
+      "AFTER_V_BITS": "[1009507587, 1017628228, 1022722981]",
+      "AFTER_OPTIMIZER_STEP": "8",
+      "AFTER_POLICY": "Some(5124)",
+      "CHECKPOINT_BIT_UNCHANGED": "false",
+      "FRESH_BEFORE_UPDATE_EVALUATION": "Ok([[3.0, 12.0, -9.243071, 0.99942255]])",
+      "FRESH_EVALUATION_BITS": "[[1077936128, 1094713344, 3239306142, 1065343528]]",
+      "FRESH_GRADIENT": "[27.707863, -27.723875, -0.005337409]",
+      "FRESH_GRADIENT_BITS": "[1105045940, 3252537983, 3148801391]",
+      "nonfinite_GPU_gradient_words": 0
+    }
+  },
+  "diagnostic_source_sha256": "eddcbba34461e755a92b1c5446303dd5da1a4205b5a40d10c6e06b36d2e8b308",
+  "original_fixture_source_sha256": "0e298567e2f65c53dfcdba743435e0a5587ab16e3de57213e4c9268ed6eb339e",
+  "original_fixture_binary_sha256": "f191ed63ea419cf11b757e97557a5fdaea4907b3b968b6d03f4138022dd42e57",
+  "binary_sha256": "76b9ead61d2c1cf52d28158b61d67a0ec06f2b1f5798746ed84540278a206eea",
+  "accepted_learning_used": false,
+  "compiled_library_artifacts": {
+    "alife_training": {
+      "filename": "libalife_training-2c4ff91e926a4dd3.rlib",
+      "sha256": "c501ea68f6ff97bed89060759e763fcb273a27c2f02ffc5320270ffe11106f43"
+    },
+    "alife_runtime": {
+      "filename": "libalife_runtime-e38a06f8117ce6ef.rlib",
+      "sha256": "6dd836c1f2a4c9c345d975672044ef77cb37dd7248e5a7ac92787b079f81da3f"
+    },
+    "alife_gpu_backend": {
+      "filename": "libalife_gpu_backend-dbe8ab5951fddc2e.rlib",
+      "sha256": "39309972ed9658cd7413eb4f8cabdc8c537ec6cd54728b14b91a65798945e6de"
+    }
+  },
+  "scope": "Original compiled-library synthetic two-feature scratch tensors; no integrated-world or competence claim.",
+  "resolution": "Late required rejection was an incorrect fixture assumption on this adapter. Accepted late state was finite with nonnegative v and age7->8; prediction stress rejected with all nine state words and age unchanged. No former-classifier defect demonstrated.",
+  "operation_ordering": "Not directly measured; finite late result is consistent with permitted reassociation but does not identify the driver transformation."
+}
