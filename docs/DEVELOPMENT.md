@@ -634,3 +634,28 @@ and grounding receipts while the ordinary game continues.
 - Keep durable reports in tracked report paths. Keep generated Cargo, graph, screenshot, log, and raw corpus output under ignored targets.
 - Do not use `git clean`, force-push, destructive reset, branch deletion, reflog expiration, or Git garbage collection as routine cleanup.
 - Stage intended files only. Preserve unrelated user work.
+
+## Experimental actor-only advantage centering
+
+The foundation trainer accepts `--center-actor-advantages` only with a sealed
+GrabFood `--resume-cycle` and `--lesson grab_food`. Omission preserves the
+existing actor objective. The option cannot be combined with acquisition or
+archive replay, biological-objective transitions, or food-delay overrides.
+
+The experiment subtracts the complete captured batch's raw GAE mean only from
+the actor credit uploaded to WGSL. Replay windows retain that full-batch mean.
+Raw rewards, GAE, returns, collection probabilities and temperature, residual
+critic targets and algorithm, and ordinary world/lifetime-learning semantics
+remain unchanged. The existing actor/value weights and full Adam state continue
+normally. Centering can change KL stopping and therefore accepted actor steps
+and the coupled critic step count; compare actual accepted dose in each branch.
+`cycle.json` records `actor_advantage_centering_mean` when enabled. Opt-in PPO
+diagnostics additionally record each `actor_advantage` beside its raw `advantage`;
+the disabled diagnostic and default receipt formats retain their existing fields.
+
+This is a disabled-by-default comparison control, not a qualified learning
+improvement. Centering can make a genuinely successful late acquisition's actor
+credit negative. Require matched disposable GPU evidence, genuinely varied
+held-out ordinary-temperature Grab possession outcomes, and retained Eating
+before proposing adoption. CPU arithmetic, compilation, and fitting loss alone
+do not establish competence. See the [bounded comparison contract](../specs/actor-advantage-centering-20261018/spec.md).

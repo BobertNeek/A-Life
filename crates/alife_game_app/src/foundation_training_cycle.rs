@@ -142,6 +142,9 @@ pub struct FoundationCycleReceipt {
     pub objective_transition_from: Option<u16>,
     #[serde(default = "default_sampling_temperature")]
     pub sampling_temperature: f32,
+    /// Experimental actor-only centering; raw GAE and critic targets are intact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_advantage_centering_mean: Option<f64>,
     #[serde(default)]
     pub acquisition_rehearsal: Option<crate::FoundationAcquisitionRehearsalReceipt>,
     #[serde(default)]
@@ -2428,6 +2431,30 @@ pub fn resume_foundation_training_cycle_with_lesson_temperature(
     )
 }
 
+/// Opt-in actor-only credit comparison on an existing sealed GrabFood cycle.
+/// Default continuations retain the original, uncentered actor advantages.
+pub fn resume_foundation_grab_cycle_with_centered_actor_advantages(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    sampling_temperature: f32,
+) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_actor_credit(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(FoundationTeacherLesson::GrabFood),
+        None,
+        sampling_temperature,
+        0,
+        None,
+        true,
+    )
+}
+
 /// Rehearse only this continued life's first genuinely acquired food after PPO.
 /// The actor's existing Adam history continues; the PPO value state is frozen
 /// during the optional imitation phase. Ordinary runtime sampling is unchanged.
@@ -2539,6 +2566,35 @@ fn run_foundation_training_cycle_from_with_temperature(
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
 ) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_actor_credit(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        food_available_world_tick,
+        lesson,
+        preserve_objective_from,
+        sampling_temperature,
+        rehearsal_epochs,
+        archived_replay,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_foundation_training_cycle_from_with_actor_credit(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
+    sampling_temperature: f32,
+    rehearsal_epochs: u32,
+    archived_replay: Option<(&Path, u32)>,
+    center_actor_advantages: bool,
+) -> Result<FoundationCycleReceipt> {
     let timing = CycleStageTiming::from_environment(|| {
         serde_json::json!({
             "source_head_declared": std::env::var("ALIFE_PHASE31_SOURCE_HEAD").ok(),
@@ -2568,6 +2624,7 @@ fn run_foundation_training_cycle_from_with_temperature(
         sampling_temperature,
         rehearsal_epochs,
         archived_replay,
+        center_actor_advantages,
         &timing,
         false,
     );
@@ -2616,6 +2673,7 @@ pub fn capture_foundation_critic_trajectory(
         sampling_temperature,
         0,
         None,
+        false,
         &timing,
         true,
     )
@@ -2641,11 +2699,27 @@ fn run_foundation_training_cycle_profiled(
     sampling_temperature: f32,
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
+    center_actor_advantages: bool,
     timing: &CycleStageTiming,
     capture_only: bool,
 ) -> Result<FoundationCycleOutcome> {
     let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
+    if center_actor_advantages
+        && (capture_only
+            || rehearsal_epochs != 0
+            || archived_replay.is_some()
+            || preserve_objective_from.is_some()
+            || food_available_world_tick.is_some()
+            || lesson != Some(FoundationTeacherLesson::GrabFood)
+            || !previous.is_some_and(|path| {
+                path.join("cycle.json").is_file()
+                    && !path.join("adaptation.json").is_file()
+                    && !path.join("warmup.json").is_file()
+            }))
+    {
+        return Err("actor advantage centering requires a sealed GrabFood continuation without other overrides".into());
+    }
     if rehearsal_epochs != 0 || archived_replay.is_some() {
         if rehearsal_epochs != 0 {
             crate::foundation_acquisition_rehearsal::validate_rehearsal_epochs(rehearsal_epochs)?;
@@ -2790,6 +2864,7 @@ fn run_foundation_training_cycle_profiled(
                 sampling_temperature,
                 rehearsal_epochs,
                 archived_replay,
+                center_actor_advantages,
                 timing,
                 if capture_only { previous } else { None },
             )
@@ -2852,6 +2927,7 @@ fn run_foundation_training_cycle_in_owned_output(
     sampling_temperature: f32,
     rehearsal_epochs: u32,
     archived_replay: Option<(&Path, u32)>,
+    center_actor_advantages: bool,
     timing: &CycleStageTiming,
     capture_source: Option<&Path>,
 ) -> Result<FoundationCycleOutcome> {
@@ -3749,7 +3825,12 @@ fn run_foundation_training_cycle_in_owned_output(
         targets_stage.finish();
         return Ok(FoundationCycleOutcome::CriticCapture(receipt));
     }
-    let batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
+    let mut batch = PpoBatch::from_rollout(policy_version, transitions, ppo_config)?;
+    let actor_advantage_centering_mean = if center_actor_advantages {
+        Some(batch.center_actor_advantages()?)
+    } else {
+        None
+    };
     let ppo_rollout_diagnostics_sha256 = ppo_diagnostics::write_if_enabled(
         std::env::var_os("ALIFE_PPO_DIAGNOSTICS").as_deref() == Some(std::ffi::OsStr::new("1")),
         output,
@@ -3976,6 +4057,7 @@ fn run_foundation_training_cycle_in_owned_output(
         objective_state_reset,
         objective_transition_from,
         sampling_temperature,
+        actor_advantage_centering_mean,
         acquisition_rehearsal,
         archived_success_replay,
         seed,

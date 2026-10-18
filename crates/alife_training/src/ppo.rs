@@ -252,6 +252,7 @@ pub struct PpoBatch {
     transitions: Vec<PpoTransition>,
     advantages: Vec<f32>,
     returns: Vec<f32>,
+    actor_advantage_centering_mean: Option<f64>,
 }
 
 impl PpoBatch {
@@ -325,6 +326,7 @@ impl PpoBatch {
             transitions,
             advantages,
             returns,
+            actor_advantage_centering_mean: None,
         })
     }
 
@@ -339,6 +341,42 @@ impl PpoBatch {
     }
     pub fn advantages(&self) -> &[f32] {
         &self.advantages
+    }
+
+    /// Opt-in actor credit experiment. Center the complete captured batch once,
+    /// before replay windows are sliced. Rewards, raw GAE, returns, old values,
+    /// collection probabilities, and optimizer state remain unchanged.
+    pub fn center_actor_advantages(&mut self) -> Result<f64, TrainingError> {
+        if self.advantages.is_empty() {
+            return Err(invalid());
+        }
+        let mean = self
+            .advantages
+            .iter()
+            .map(|&value| f64::from(value))
+            .sum::<f64>()
+            / self.advantages.len() as f64;
+        if !mean.is_finite()
+            || self
+                .advantages
+                .iter()
+                .any(|&value| !((f64::from(value) - mean) as f32).is_finite())
+        {
+            return Err(invalid());
+        }
+        self.actor_advantage_centering_mean = Some(mean);
+        Ok(mean)
+    }
+
+    pub fn actor_advantage_centering_mean(&self) -> Option<f64> {
+        self.actor_advantage_centering_mean
+    }
+
+    pub fn actor_advantage(&self, index: usize) -> Option<f32> {
+        self.advantages.get(index).map(|&value| {
+            self.actor_advantage_centering_mean
+                .map_or(value, |mean| (f64::from(value) - mean) as f32)
+        })
     }
     pub fn returns(&self) -> &[f32] {
         &self.returns
@@ -360,6 +398,7 @@ impl PpoBatch {
             transitions: self.transitions[range.clone()].to_vec(),
             advantages: self.advantages[range.clone()].to_vec(),
             returns: self.returns[range].to_vec(),
+            actor_advantage_centering_mean: self.actor_advantage_centering_mean,
         })
     }
 
@@ -617,7 +656,7 @@ impl PpoGpuObjective {
             row[0] = u32::from(action.candidate_count);
             row[1] = u32::from(action.representative);
             row[2] = action.old_joint_log_probability.to_bits();
-            row[3] = batch.advantages[index].to_bits();
+            row[3] = batch.actor_advantage(index).ok_or_else(invalid)?.to_bits();
             row[4] = batch.returns[index].to_bits();
             row[5] = transition.old_value.to_bits();
             row[6] = action.representative_mask;
@@ -1716,6 +1755,87 @@ mod tests {
         assert!(imitation_mean_loss(&metrics).is_err());
         assert!(imitation_mean_loss(&[]).is_err());
         assert!(imitation_mean_loss(&[0.0, f32::NAN, 0.0, 1.0]).is_err());
+    }
+
+    fn terminal_credit_batch(rewards: &[f32]) -> PpoBatch {
+        let transitions = rewards
+            .iter()
+            .enumerate()
+            .map(|(row, &reward)| PpoTransition {
+                policy_version: 7,
+                trajectory_id: row as u64 + 1,
+                step: 0,
+                action: PpoJointAction {
+                    candidate_count: 1,
+                    representative_mask: 1,
+                    motor_masks: [0; 6],
+                    representative: 0,
+                    forced_slots: vec![Some(4)],
+                    motor_candidates: [None, None, None, None, Some(0), None],
+                    old_joint_log_probability: 0.0,
+                    temperature: 1.0,
+                },
+                reward,
+                old_value: 0.0,
+                next_value: 0.0,
+                elapsed_seconds: 0.05,
+                boundary: PpoBoundary::Terminated,
+            })
+            .collect();
+        PpoBatch::from_rollout(7, transitions, PpoConfig::default()).unwrap()
+    }
+
+    #[test]
+    fn actor_centering_is_opt_in_and_preserves_raw_credit_and_targets() {
+        let original = terminal_credit_batch(&[4.0, 8.0, -3.0]);
+        assert_eq!(original.actor_advantage_centering_mean(), None);
+        for row in 0..original.len() {
+            assert_eq!(
+                original.actor_advantage(row).unwrap().to_bits(),
+                original.advantages()[row].to_bits()
+            );
+        }
+        let mut centered = original.clone();
+        assert_eq!(centered.center_actor_advantages().unwrap(), 3.0);
+        assert_eq!(centered.actor_advantage_centering_mean(), Some(3.0));
+        assert_eq!(
+            (0..3)
+                .map(|row| centered.actor_advantage(row).unwrap())
+                .collect::<Vec<_>>(),
+            [1.0, 5.0, -6.0]
+        );
+        assert_eq!(centered.advantages(), original.advantages());
+        assert_eq!(centered.returns(), original.returns());
+        assert_eq!(centered.transitions(), original.transitions());
+        assert_eq!(centered.policy_version(), original.policy_version());
+        assert_eq!(centered.actor_advantage(3), None);
+    }
+
+    #[test]
+    fn actor_centered_windows_keep_the_full_batch_mean() {
+        let mut batch = terminal_credit_batch(&[4.0, 8.0, -3.0]);
+        batch.center_actor_advantages().unwrap();
+        let first = batch.window(0..1).unwrap();
+        assert_eq!(first.actor_advantage_centering_mean(), Some(3.0));
+        assert_eq!(first.actor_advantage(0), Some(1.0));
+        let later = batch.window(1..3).unwrap();
+        assert_eq!(later.actor_advantage(0), Some(5.0));
+        assert_eq!(later.actor_advantage(1), Some(-6.0));
+        assert_eq!(later.advantages(), &[8.0, -3.0]);
+        assert_eq!(later.returns(), &[8.0, -3.0]);
+    }
+
+    #[test]
+    fn actor_centering_constant_credit_is_zero_and_finite_overflow_is_rejected() {
+        let mut constant = terminal_credit_batch(&[2.0, 2.0]);
+        constant.center_actor_advantages().unwrap();
+        assert_eq!(constant.actor_advantage(0), Some(0.0));
+        assert_eq!(constant.actor_advantage(1), Some(0.0));
+        assert_eq!(constant.returns(), &[2.0, 2.0]);
+        let mut extreme = terminal_credit_batch(&[f32::MAX, f32::MAX, -f32::MAX]);
+        let unchanged = extreme.clone();
+        assert!(extreme.center_actor_advantages().is_err());
+        assert_eq!(extreme, unchanged);
     }
 
     #[test]

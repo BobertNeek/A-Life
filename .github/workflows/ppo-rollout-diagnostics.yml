@@ -12,6 +12,9 @@ on:
       - "crates/alife_game_app/src/foundation_critic_correction/**"
       - "crates/alife_game_app/src/critic_qualification.rs"
       - "crates/alife_training/src/ppo/critic_calibration.rs"
+      - "crates/alife_training/src/ppo.rs"
+      - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
+      - "crates/alife_game_app/src/bin/train_n2048_care.rs"
       - "crates/alife_training/shaders/critic_residual.wgsl"
       - "scripts/*ppo_diagnostics.py"
       - "scripts/*continued_critic.py"
@@ -29,6 +32,9 @@ on:
       - "crates/alife_game_app/src/foundation_critic_correction/**"
       - "crates/alife_game_app/src/critic_qualification.rs"
       - "crates/alife_training/src/ppo/critic_calibration.rs"
+      - "crates/alife_training/src/ppo.rs"
+      - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
+      - "crates/alife_game_app/src/bin/train_n2048_care.rs"
       - "crates/alife_training/shaders/critic_residual.wgsl"
       - "scripts/*ppo_diagnostics.py"
       - "scripts/*continued_critic.py"
@@ -61,6 +67,10 @@ jobs:
           python-version: '3.12'
       - name: Prepared values, advantages, disabled I/O and row cap
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::ppo_diagnostics::tests -- --test-threads=1
+      - name: Actor-only centering preserves raw targets and full-batch windows
+        run: cargo test --locked -p alife_training --lib ppo::tests::actor_ -- --test-threads=1
+      - name: Actor-centering CLI rejects incompatible and unsealed sources without GPU work
+        run: cargo test --locked -p alife_game_app --features foundation-training --test actor_advantage_centering_cli -- --test-threads=1
       - name: Sealing, exact signed targets and copied diagnostic reporting
         run: python -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
       - name: Native checkpoint admission rejects truncated, swapped and stale artifacts
