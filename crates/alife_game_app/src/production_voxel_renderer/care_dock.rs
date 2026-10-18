@@ -267,7 +267,7 @@ pub(super) fn spawn(world: &mut World) {
 
 /// Capture dock pointer input before menu and all world readers. Speech becomes
 /// a real conversation capture before the menu's existing hand cancellation.
-pub(super) fn collect_input(world: &mut World) {
+pub(crate) fn collect_input(world: &mut World) {
     let menu_blocked = world
         .get_resource::<menu::MenuState>()
         .is_some_and(|s| menu::is_open(s) || menu::is_captured(s));
@@ -663,4 +663,4 @@ fn apply_feedback(
 
 #[cfg(test)]
 #[path = "care_dock/tests.rs"]
-mod tests;
+pub(crate) mod tests;

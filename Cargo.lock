@@ -144,6 +144,7 @@ dependencies = [
 name = "alife_game_app"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "alife_archive",
  "alife_bevy_adapter",
  "alife_core",

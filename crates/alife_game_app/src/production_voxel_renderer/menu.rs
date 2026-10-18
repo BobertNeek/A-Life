@@ -395,7 +395,11 @@ pub(crate) fn is_open(state: &MenuState) -> bool {
 }
 
 pub(crate) fn captures_input(state: Option<Res<MenuState>>) -> bool {
-    state.is_some_and(|state| state.captured || state.screen != Screen::Closed || state.busy())
+    state.is_some_and(|state| captures_input_state(&state))
+}
+
+pub(crate) fn captures_input_state(state: &MenuState) -> bool {
+    state.captured || state.screen != Screen::Closed || state.busy()
 }
 
 pub(super) fn world_input_allowed(state: Option<Res<MenuState>>) -> bool {

@@ -113,9 +113,20 @@ F1 explicitly opens keyboard help, while the ordinary strip stays hidden.
 The dock captures its pointer area and held-button dismissal frames before world
 readers. Mouse speech opens the same existing composer path as Enter, establishes
 conversation capture before hand/world readers, and keeps all typed teaching text,
-creature speech and named-addressee precedence. The composer chrome itself remains
-for a separately bounded restyle. A clipped scroll parent follows the existing
-end caret so up to 512 typed characters stay intact inside short viewports. The dock has priority in short windows: selected
+creature speech and named-addressee precedence. The composer uses matching
+wordless address, send, cancel, and help controls.
+The address icon switches between nearby-listener waves and the selected-creature
+reticle; a name in the typed draft still takes precedence. Enter/Tab/Escape retain
+their speech behavior. F1 or the question button temporarily shows keyboard help;
+typing returns to the intact draft. An empty draft mutes the send arrow. Dispatch
+uses the dock's broken-ring pending, cross rejection, and question unavailable cues,
+without claiming hearing, comprehension, or biological success. AccessKit labels,
+draft value updates, and click/SetValue actions accompany the wordless chrome.
+The draft receives keyboard focus while open and restores prior focus on close.
+Closing captures held keys/buttons through release. Controls remain fixed while a
+separate clipped draft viewport follows the existing end caret, preserving up to
+512 typed characters inside short viewports. The dock has priority in short
+windows: selected
 physiology temporarily hides if it would overlap the actual dock budget or the
 expanded text composer/help budget, and restores when space permits. Full live
 GPU compositing, engine glyph layout and production neural integration remain
@@ -253,12 +264,29 @@ Reproduce it on Linux after installing the distribution's `libudev-dev` and
 bash scripts/check_speech_cpu.sh
 ```
 
-This checks at least seven composer-state, six worker, and six opening-input
-tests, including the reopened-draft regression. It refuses empty or ignored
+This checks at least seven composer-state, six worker, six opening-input,
+six wordless-composer UI/control tests, and fifteen care-dock tests, including
+the reopened-draft regression. Composer tests exercise actual CPU UiSurface geometry at 1280x720,
+640x360, 320x480 and 320x240, CPU UI focus hit tests, repeated open/cancel,
+held-input capture, focus restoration, and stale accessibility-request draining.
+It refuses empty or ignored
 coverage. Two build jobs and test-only optimization/debug overrides bound compile
 cost; debug assertions remain enabled. These CPU fixtures do not exercise the
-GPU-only Bevy completion handlers, render the live composer, or prove gameplay
-acceptance. The existing default-workspace and Tier 0-1 gates remain unchanged.
+GPU-only Bevy input/completion handlers, OS screen-reader integration, native
+rendering or gameplay acceptance.
+
+To export source-derived geometry and inspect a browser replay of the shipping
+icons and draft, set `ALIFE_SPEECH_COMPOSER_CPU_FIXTURE` to an existing ignored
+`target/artifacts/` output path while running the speech check, then run:
+
+```sh
+python scripts/preview_speech_composer.py target/artifacts/speech-composer/geometry.json target/artifacts/speech-composer/preview.html --font <cached-bevy_text-0.18.1/src/FiraMono-subset.ttf>
+```
+
+This preview uses browser text layout/compositing with actual CPU Bevy container
+bounds. It is distinct from native Bevy glyph layout, physical-GPU compositing,
+production input dispatch and live speech acceptance. The existing
+default-workspace and Tier 0-1 gates remain unchanged.
 
 Release-oriented checks may also require:
 

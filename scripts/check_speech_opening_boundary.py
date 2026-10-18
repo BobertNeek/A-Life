@@ -50,7 +50,7 @@ def normalized(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
-def source_contract(source, tests, lockfile):
+def source_contract(source, tests, lockfile, composer):
     for crate in ("bevy_input", "bevy_ecs"):
         assert f'name = "{crate}"\nversion = "0.18.1"' in lockfile, crate
     helper_start = source.index("fn append_player_speech_key_text<'a>(")
@@ -82,16 +82,20 @@ def source_contract(source, tests, lockfile):
     assert """if state.lineage_open {
         key_messages.clear();""" in handler
     closed_start = handler.index("    if !state.input_open {")
-    closed_end = handler.index("    if keyboard.just_pressed(KeyCode::Escape)", closed_start)
+    closed_end = handler.index("    if composer::apply_controls(", closed_start)
     closed = handler[closed_start:closed_end]
     assert closed.count("return;") == 1
     assert "send_player_speech(" not in closed
     assert closed.rstrip().endswith("key_messages.clear();\n        return;\n    }")
-    assert """state.status = "Player speech cancelled".to_string();
+    assert """if composer::apply_controls(&mut state, &keyboard, pointer) {
         key_messages.clear();
         return;""" in handler
+    assert 'state.status = "Player speech cancelled".to_string();' in composer
+    assert "state.input.clear();" in composer
+    assert "keyboard.just_pressed(KeyCode::Escape) || pointer == Some(Control::Cancel)" in composer
     assert handler.count("send_player_speech(") == 1
-    assert "if submit_enter && keyboard.just_pressed(KeyCode::Enter) && !state.input.trim().is_empty() {" in handler
+    assert "|| (submit_enter && keyboard.just_pressed(KeyCode::Enter)))" in handler
+    assert "&& !state.input.trim().is_empty()" in handler
     for name in (
         "opening_frame_keeps_only_text_after_the_first_fresh_enter",
         "an_enter_release_or_repeat_is_not_the_opening_text_boundary",
@@ -287,10 +291,11 @@ def main():
     root = Path(__file__).resolve().parents[1]
     parser.add_argument("--source", type=Path, default=root / "crates/alife_game_app/src/production_conversation_lineage_ui.rs")
     parser.add_argument("--tests", type=Path, default=root / "crates/alife_game_app/src/production_conversation_lineage_ui/speech_input_tests.rs")
+    parser.add_argument("--composer-source", type=Path, default=root / "crates/alife_game_app/src/production_conversation_lineage_ui/composer.rs")
     parser.add_argument("--lockfile", type=Path, default=root / "Cargo.lock")
     args = parser.parse_args()
     try:
-        source_contract(args.source.read_text(), args.tests.read_text(), args.lockfile.read_text())
+        source_contract(args.source.read_text(), args.tests.read_text(), args.lockfile.read_text(), args.composer_source.read_text())
     except (AssertionError, ValueError, OSError) as error:
         print(f"Source-contract FAIL: {error}", file=sys.stderr)
         return 1

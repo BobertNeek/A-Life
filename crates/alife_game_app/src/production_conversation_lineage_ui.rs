@@ -54,6 +54,8 @@ use crate::{
     ProductionVoxelLaunchSummary,
 };
 
+pub(crate) mod composer;
+
 const MAX_TYPED_CHARS: usize = 512;
 const MAX_COHORT_SIZE: usize = 16;
 const MIN_COHORT_SIZE: usize = 4;
@@ -809,6 +811,8 @@ enum PlayerSpeechCompletionOrigin {
 #[derive(Debug, Clone, Resource)]
 pub struct ProductionConversationLineageUiState {
     input_open: bool,
+    input_capture_held: bool,
+    input_help_open: bool,
     input_cue: SpeechInputCue,
     input: String,
     address_selected: bool,
@@ -844,6 +848,8 @@ impl ProductionConversationLineageUiState {
         let lineage_root = default_lineage_root();
         Self {
             input_open: false,
+            input_capture_held: false,
+            input_help_open: false,
             input_cue: SpeechInputCue::None,
             input: String::new(),
             address_selected: false,
@@ -876,7 +882,7 @@ impl ProductionConversationLineageUiState {
     }
 
     pub const fn blocks_world_shortcuts(&self) -> bool {
-        self.input_open || self.lineage_open
+        self.input_open || self.lineage_open || self.input_capture_held
     }
 
     pub(crate) fn speech_input_cue(&self) -> SpeechInputCue {
@@ -887,6 +893,7 @@ impl ProductionConversationLineageUiState {
     pub(crate) fn open_player_speech_input(&mut self) {
         self.input_cue = SpeechInputCue::None;
         self.input_open = true;
+        self.input_help_open = false;
         self.input.clear();
         self.status = "Player speech input opened at the Hand".to_string();
     }
@@ -894,6 +901,7 @@ impl ProductionConversationLineageUiState {
     fn accept_player_speech_translation(&mut self) {
         self.input.clear();
         self.input_open = false;
+        self.input_help_open = false;
         self.input_cue = SpeechInputCue::Pending;
         self.status = "Translating player speech with the bounded local SLM".to_string();
     }
@@ -905,6 +913,7 @@ impl ProductionConversationLineageUiState {
             self.input_cue = SpeechInputCue::None;
             self.input.clear();
             self.input_open = false;
+            self.input_help_open = false;
         } else if self.input_cue == SpeechInputCue::Pending {
             // Consume the completed job's cue without clearing a newer draft's
             // busy rejection or other non-pending cue.
@@ -1107,6 +1116,13 @@ pub fn install_production_conversation_lineage_ui(
     spawn_ui(app, layout);
     app.add_systems(
         Update,
+        composer::collect_input
+            .after(crate::production_voxel_renderer::care_dock::collect_input)
+            .before(crate::production_voxel_renderer::menu::handle_input)
+            .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::Input),
+    )
+    .add_systems(
+        Update,
         handle_production_conversation_lineage_input
             .after(crate::production_voxel_renderer::menu::handle_input)
             .in_set(crate::production_voxel_renderer::ProductionVoxelPresentationSet::Input),
@@ -1126,48 +1142,7 @@ pub fn install_production_conversation_lineage_ui(
 }
 
 pub(crate) fn spawn_speech_entry(world: &mut bevy::prelude::World) {
-    let bounds = world
-        .spawn((
-            Name::new("Player speech composer bounds"),
-            ProductionSpeechComposerBounds,
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(16.0),
-                right: Val::Px(16.0),
-                bottom: Val::Px(92.0),
-                height: Val::Px(58.0),
-                padding: UiRect::all(Val::Px(12.0)),
-                flex_direction: FlexDirection::Column,
-                overflow: bevy::ui::Overflow {
-                    x: bevy::ui::OverflowAxis::Clip,
-                    y: bevy::ui::OverflowAxis::Scroll,
-                },
-                ..Default::default()
-            },
-            bevy::ui::ScrollPosition::default(),
-            BackgroundColor(Color::srgba(0.025, 0.040, 0.022, 0.92)),
-            GlobalZIndex(80),
-            Visibility::Hidden,
-        ))
-        .id();
-    world.spawn((
-        Name::new("A-Life player Hand speech entry"),
-        ProductionSpeechEntryPanel,
-        Text::new("Speak near the Hand"),
-        bevy::prelude::TextLayout::new_with_linebreak(bevy::text::LineBreak::WordOrCharacter),
-        TextFont {
-            font_size: 18.0,
-            ..Default::default()
-        },
-        TextColor(Color::srgb(0.96, 0.93, 0.76)),
-        Node {
-            width: Val::Percent(100.0),
-            flex_shrink: 0.0,
-            ..Default::default()
-        },
-        Visibility::Inherited,
-        ChildOf(bounds),
-    ));
+    composer::spawn(world);
 }
 
 fn spawn_ui(app: &mut App, layout: LineageLabLayout) {
@@ -1999,8 +1974,10 @@ pub(crate) fn handle_production_conversation_lineage_input(
     mut reset_commands: MessageWriter<ProductionCuratedFounderResetCommand>,
     mut runtime: NonSendMut<ProductionGpuBrainRuntimeResource>,
     mut speech_worker: NonSendMut<ProductionSpeechTranslationWorker>,
+    mut composer_input: ResMut<composer::InputState>,
     mut state: ResMut<ProductionConversationLineageUiState>,
 ) {
+    let pointer = composer_input.pending.take();
     if crate::production_voxel_renderer::menu::captures_input(menu) {
         key_messages.clear();
         return;
@@ -2011,6 +1988,10 @@ pub(crate) fn handle_production_conversation_lineage_input(
     }
     if state.developer_overlay != ux.debug_mode {
         state.developer_overlay = ux.debug_mode;
+    }
+    if !state.input_open && state.input_capture_held {
+        key_messages.clear();
+        return;
     }
     if !state.input_open && !state.lineage_open && keyboard.get_just_pressed().next().is_none() {
         key_messages.clear();
@@ -2049,22 +2030,23 @@ pub(crate) fn handle_production_conversation_lineage_input(
         return;
     }
 
-    if keyboard.just_pressed(KeyCode::Escape) {
-        state.input_open = false;
-        state.input.clear();
-        state.input_cue = SpeechInputCue::None;
-        state.status = "Player speech cancelled".to_string();
+    if composer::apply_controls(&mut state, &keyboard, pointer) {
         key_messages.clear();
         return;
     }
-    if keyboard.just_pressed(KeyCode::Tab) {
-        state.address_selected = !state.address_selected;
-    }
     if keyboard.just_pressed(KeyCode::Backspace) {
+        state.input_help_open = false;
         state.input.pop();
     }
+    let previous_input = state.input.clone();
     let submit_enter = append_player_speech_key_text(&mut state.input, key_messages.read(), false);
-    if submit_enter && keyboard.just_pressed(KeyCode::Enter) && !state.input.trim().is_empty() {
+    if state.input != previous_input {
+        state.input_help_open = false;
+    }
+    if (pointer == Some(composer::Control::Send)
+        || (submit_enter && keyboard.just_pressed(KeyCode::Enter)))
+        && !state.input.trim().is_empty()
+    {
         if let Err(error) = send_player_speech(
             &selection,
             &creatures,
@@ -2876,39 +2858,15 @@ fn habitat_command_for_input(
 }
 
 pub(crate) fn speech_entry_text(state: &ProductionConversationLineageUiState) -> String {
-    format!(
-        "Speak near the Hand  |  To: {}\n{}|\nEnter send  Tab address selected  Esc cancel",
-        if state.address_selected {
-            "selected creature"
-        } else {
-            "broadcast / named addressee"
-        },
-        state.input
-    )
-}
-fn composer_height(
-    state: &ProductionConversationLineageUiState,
-    size: bevy::prelude::Vec2,
-    bottom: f32,
-) -> f32 {
-    let columns = ((size.x - 56.0) / 18.0).floor().max(1.0) as usize;
-    let lines = speech_entry_text(state)
-        .split('\n')
-        .map(|line| line.chars().count().max(1).div_ceil(columns))
-        .sum::<usize>();
-    (lines as f32 * 18.0 * 1.3 + 24.0)
-        .max(58.0)
-        .min((size.y - bottom - 12.0).max(0.0))
+    format!("{}|", state.input)
 }
 pub(crate) fn speech_composer_height(
     world: &bevy::prelude::World,
     size: bevy::prelude::Vec2,
 ) -> Option<f32> {
-    let state = world.get_resource::<ProductionConversationLineageUiState>()?;
-    state
-        .input_open
-        .then(|| composer_height(state, size, speech_composer_bottom(world)))
+    composer::composer_height(world, size)
 }
+
 pub(crate) fn speech_composer_bottom(world: &bevy::prelude::World) -> f32 {
     if world
         .get_resource::<Fvr05ProductionUxStateResource>()
@@ -2919,25 +2877,9 @@ pub(crate) fn speech_composer_bottom(world: &bevy::prelude::World) -> f32 {
         92.0
     }
 }
-/// A clipped, scrollable parent keeps long teaching input inside the viewport.
-/// Existing entry edits at the end, so following the end caret preserves the
-/// current interaction contract without truncating or changing teaching text.
+/// Keep controls fixed while the clipped draft follows its end caret.
 pub(crate) fn adapt_speech_composer(world: &mut bevy::prelude::World) {
-    let size = world
-        .query_filtered::<&bevy::prelude::Window, With<bevy::window::PrimaryWindow>>()
-        .iter(world)
-        .next()
-        .map_or(bevy::prelude::Vec2::new(1280.0, 720.0), |w| {
-            bevy::prelude::Vec2::new(w.width(), w.height())
-        });
-    let bottom = speech_composer_bottom(world);
-    let state = world.resource::<ProductionConversationLineageUiState>();
-    let open = state.input_open;
-    let height = composer_height(state, size, bottom);
-    for (mut node,mut visible,mut scroll) in world.query_filtered::<(&mut Node,&mut Visibility,&mut bevy::ui::ScrollPosition),With<ProductionSpeechComposerBounds>>().iter_mut(world) {
-        node.height=Val::Px(height); node.bottom=Val::Px(bottom); *visible=if open {Visibility::Inherited}else{Visibility::Hidden};
-        scroll.0.y = if open { 1_000_000.0 } else { 0.0 };
-    }
+    composer::adapt(world);
 }
 
 #[allow(clippy::type_complexity)]
