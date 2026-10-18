@@ -140,7 +140,13 @@ fn live_newborn_record_and_incremental_root_use_the_same_asset_free_preparation(
             );
             fvr04_live_creature_visual_record(
                 &frame,
-                240_824,
+                staged
+                    .save
+                    .creatures
+                    .iter()
+                    .find(|creature| Some(creature.organism_id) == object.organism_id)
+                    .unwrap()
+                    .appearance,
                 object,
                 tile,
                 VoxelChunkCoord::for_tile(16, tile),
@@ -150,6 +156,15 @@ fn live_newborn_record_and_incremental_root_use_the_same_asset_free_preparation(
         .collect::<Vec<_>>();
     newborns.sort_by_key(|record| record.visual.stable_id.raw());
     assert_eq!(newborns.len(), 2);
+    for record in &newborns {
+        let saved = staged
+            .save
+            .creatures
+            .iter()
+            .find(|creature| creature.organism_id == record.visual.organism_id)
+            .unwrap();
+        assert_eq!(record.visual.appearance, saved.appearance);
+    }
     let mut world = World::new();
     world.insert_resource(BevyEntityMap::default());
     let context = context(ProductionFrontendProfileId::Balanced1080p, 2);
@@ -191,4 +206,46 @@ fn live_newborn_record_and_incremental_root_use_the_same_asset_free_preparation(
             .count(),
         0
     );
+}
+
+#[test]
+fn live_and_restored_records_keep_saved_individuals_when_order_changes() {
+    let mut staged = staged();
+    staged.save.creatures[0].appearance.fur_pattern = 1;
+    staged.save.creatures[1].appearance.fur_pattern = 14;
+    let frame =
+        LiveBrainPresentationFrame::from_authoritative_world(Vec::new(), &staged.world).unwrap();
+    let saved_bytes = serde_json::to_vec(&staged.save).unwrap();
+    let mut fingerprints = BTreeMap::new();
+    for object in frame
+        .objects()
+        .filter(|object| object.kind == WorldObjectKind::Agent)
+    {
+        let saved = staged
+            .save
+            .creatures
+            .iter()
+            .find(|creature| Some(creature.organism_id) == object.organism_id)
+            .unwrap();
+        let appearance = saved.appearance;
+        let tile = VoxelTileCoord::new(0, 0);
+        let record = fvr04_live_creature_visual_record(
+            &frame,
+            appearance,
+            object,
+            tile,
+            VoxelChunkCoord::new(0, 0),
+        )
+        .unwrap();
+        fingerprints.insert(record.visual.stable_id, record.visual.appearance);
+    }
+    let mut restored: PortableSaveFile = serde_json::from_slice(&saved_bytes).unwrap();
+    restored.creatures.reverse();
+    for record in records(&restored) {
+        assert_eq!(
+            fingerprints[&record.visual.stable_id],
+            record.visual.appearance
+        );
+    }
+    assert_eq!(serde_json::to_vec(&staged.save).unwrap(), saved_bytes);
 }

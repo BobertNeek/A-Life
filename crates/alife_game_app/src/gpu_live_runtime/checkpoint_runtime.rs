@@ -533,8 +533,12 @@ impl GpuLiveBrainRuntime {
                 .residents
                 .get(&raw)
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            let appearance = self
+                .appearances
+                .get(organism_id, record.genome().id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             let summary =
-                checkpoint_creature_save_state(replacement, record, resident, self.brain_class)?;
+                checkpoint_creature_save_state(appearance, record, resident, self.brain_class)?;
             replacement.creatures.push(summary);
         }
         replacement

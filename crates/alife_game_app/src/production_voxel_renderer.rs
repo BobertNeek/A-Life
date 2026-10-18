@@ -4469,7 +4469,7 @@ fn project_authoritative_creature_root_transform(
 #[cfg(any(feature = "gpu-runtime", test))]
 fn fvr04_live_creature_visual_record(
     frame: &LiveBrainPresentationFrame,
-    world_seed: u64,
+    appearance: CreatureAppearanceGenome,
     object: &alife_world::WorldObject,
     tile: VoxelTileCoord,
     chunk: VoxelChunkCoord,
@@ -4499,13 +4499,7 @@ fn fvr04_live_creature_visual_record(
         &presentation.biochemistry.homeostasis,
         presentation.sleep_phase,
         selected_action_kind,
-        CreatureAppearanceGenome::from_ids(
-            presentation.organism_id,
-            presentation.genome.id,
-            presentation.organism_id.raw() as usize,
-            world_seed,
-        )
-        .with_body_phenotype(&presentation.phenotype.body),
+        appearance,
     )
     .ok()?;
     let cognitive = frame.cognitive_for_organism(organism_id);

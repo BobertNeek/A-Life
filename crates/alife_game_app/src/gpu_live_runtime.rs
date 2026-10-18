@@ -8,6 +8,7 @@
 mod action_credit_food_tests;
 #[cfg(test)]
 mod adaptive_exploration_causality;
+mod appearance;
 mod approximate_cognition;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod checkpoint_manifest_pruning_tests;
@@ -49,6 +50,7 @@ use cpu_preparation::{
 pub use foundation_worlds::*;
 pub use semantic_prior::SemanticPriorMetrics;
 
+use appearance::CreatureAppearanceCache;
 use durability_hold::{
     brain_atp_world_tick_mode, motor_eligible, sleep_recovery_body_event_due, BrainAtpWorldTickMode,
 };
@@ -3436,6 +3438,7 @@ pub struct GpuLiveBrainRuntime {
     backend: GpuAuthoritativeSession,
     handles: BTreeMap<u64, GpuBrainHandle>,
     residents: BTreeMap<u64, ResidentCognition>,
+    appearances: CreatureAppearanceCache,
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
@@ -5174,6 +5177,7 @@ impl GpuLiveBrainRuntime {
             }
         }
         runtime.canonical_save_id = Some(save.save_id.clone());
+        runtime.appearances.seed_saved(&save.creatures)?;
         runtime.checkpoint_durability = Some(GpuLiveCheckpointDurability {
             store,
             durable_manifest,
@@ -5573,6 +5577,14 @@ impl GpuLiveBrainRuntime {
         }
 
         let mut candidate_residents = BTreeMap::new();
+        let mut candidate_appearances = CreatureAppearanceCache::default();
+        if let Some(durability) = &self.checkpoint_durability {
+            candidate_appearances
+                .seed_saved(&durability.published.save.creatures)
+                .map_err(
+                    |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
+                )?;
+        }
         let mut candidate_memories = BTreeMap::new();
         let mut candidate_topologies = BTreeMap::new();
         let mut candidate_archive_birth_manifests = BTreeMap::new();
@@ -5584,6 +5596,16 @@ impl GpuLiveBrainRuntime {
             sensory_abi_version: SensoryAbiVersion::CURRENT.raw(),
         };
         for entry in &plan.entries {
+            let record = self
+                .world
+                .organism_registry()
+                .get(entry.organism_id)
+                .ok_or(CuratedFounderResetRuntimeError::GpuResidencyPreSubmit {
+                    error: ScaffoldContractError::BrainOwnershipMismatch,
+                })?;
+            candidate_appearances.admit(record).map_err(|error| {
+                CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
+            })?;
             entry.projection.validate().map_err(|error| {
                 CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error }
             })?;
@@ -5692,6 +5714,7 @@ impl GpuLiveBrainRuntime {
             new_generation_fingerprint: plan.fingerprint,
             ordered_entries,
         };
+        candidate_appearances.retain_organisms(&candidate_handle_keys.iter().copied().collect());
         let outcome = self.backend.replace_curated_cohort(&cohort);
         let receipt = match outcome {
             GpuCuratedResidencyOutcome::Committed(receipt) => receipt,
@@ -5719,6 +5742,7 @@ impl GpuLiveBrainRuntime {
             .collect();
         self.handles = candidate_handles;
         self.residents = candidate_residents;
+        self.appearances = candidate_appearances;
         self.memories = candidate_memories;
         self.topologies = candidate_topologies;
         self.retained_learning.clear();
@@ -6297,6 +6321,7 @@ impl GpuLiveBrainRuntime {
             backend: GpuAuthoritativeSession::new(backend, consumer),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
+            appearances: CreatureAppearanceCache::default(),
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
@@ -6453,6 +6478,7 @@ impl GpuLiveBrainRuntime {
             backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
+            appearances: CreatureAppearanceCache::default(),
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
@@ -6548,6 +6574,7 @@ impl GpuLiveBrainRuntime {
                 .get(organism_id)
                 .cloned()
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            runtime.appearances.admit(&record)?;
             if let Some(state) = checkpoint_index.get(&raw).copied() {
                 let checkpoint = GpuBrainCheckpointWrite {
                     save_state: state.clone(),
@@ -7264,6 +7291,14 @@ impl GpuLiveBrainRuntime {
                 continue;
             }
             let organism_id = OrganismId(raw);
+            // Retired parents' cosmetics remain until all births are resolved.
+            // Existing residents do not recompute or allocate appearance.
+            let record = self
+                .world
+                .organism_registry()
+                .get(organism_id)
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+            self.appearances.admit(record)?;
             let (phenotype, resident) = Self::compile_birth(
                 &self.world,
                 self.brain_class,
@@ -7309,6 +7344,7 @@ impl GpuLiveBrainRuntime {
         self.last_sealed_patches
             .retain(|patch| self.handles.contains_key(&patch.header().organism_id.raw()));
         let resident_set_after = self.handles.keys().copied().collect::<BTreeSet<_>>();
+        self.appearances.retain_organisms(&resident_set_after);
         self.sleep_journal_capacity.admit_population(population)?;
         if resident_set_after != resident_set_before {
             if let Err(error) = self.request_exact_population_checkpoint() {
@@ -8307,6 +8343,20 @@ impl GpuLiveBrainRuntime {
 
     pub fn world_seed(&self) -> u64 {
         self.world.seed()
+    }
+
+    #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
+    pub(crate) fn creature_appearance(
+        &self,
+        organism_id: OrganismId,
+        genome_id: alife_core::GenomeId,
+        world_entity_id: WorldEntityId,
+    ) -> Option<CreatureAppearanceGenome> {
+        let record = self.world.organism_registry().get(organism_id)?;
+        if record.genome().id != genome_id || record.world_entity_id() != world_entity_id {
+            return None;
+        }
+        self.appearances.get(organism_id, genome_id)
     }
 
     /// Places one bounded food resource through canonical world authority.
@@ -10219,7 +10269,7 @@ fn validate_candidate_newborn(
 }
 
 fn checkpoint_creature_save_state(
-    replacement: &PortableSaveFile,
+    appearance: CreatureAppearanceGenome,
     record: &WorldOrganismRecord,
     resident: &ResidentCognition,
     brain_class: BrainScaleTier,
@@ -10230,43 +10280,12 @@ fn checkpoint_creature_save_state(
         });
     }
     let biochemistry = record.biochemistry();
-    let appearance = match (
-        record
-            .genome()
-            .parent_genome_ids
-            .first()
-            .and_then(|genome_id| {
-                replacement
-                    .creatures
-                    .iter()
-                    .find(|creature| creature.genome_id == *genome_id)
-                    .map(|creature| creature.appearance)
-            }),
-        record
-            .genome()
-            .parent_genome_ids
-            .get(1)
-            .and_then(|genome_id| {
-                replacement
-                    .creatures
-                    .iter()
-                    .find(|creature| creature.genome_id == *genome_id)
-                    .map(|creature| creature.appearance)
-            }),
-    ) {
-        (Some(parent_a), Some(parent_b)) => CreatureAppearanceGenome::offspring_from_parents(
-            parent_a,
-            parent_b,
-            record.genome().conception_seed,
-        ),
-        _ => CreatureAppearanceGenome::default(),
-    };
     Ok(CreatureSaveState {
         organism_id: record.organism_id(),
         genome_id: record.genome().id,
         brain_class,
         development_tick: biochemistry.development.last_update_tick,
-        appearance: appearance.with_body_phenotype(&record.phenotype().body),
+        appearance,
         mind: CreatureMindSaveSummary {
             tick: biochemistry.tick,
             homeostasis: biochemistry.homeostasis,

@@ -37,6 +37,11 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::live_sleep_feedback::tests:: -- --test-threads=1 --color=never'
       - name: Run selected-creature HUD CPU data and layout tests
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::status_hud:: -- --test-threads=1 --color=never'
+      - name: Run shared Hearthling appearance and save projection CPU tests
+        run: |
+          cargo test --locked -p alife_game_app --features production-voxel-frontend --lib hearthling -- --test-threads=1 --color=never
+          cargo test --locked -p alife_game_app --features production-voxel-frontend --lib gpu_live_runtime::appearance::tests -- --test-threads=1 --color=never
+          cargo test --locked -p alife_game_app --features production-voxel-frontend --lib natural_newborn_checkpoint_and_reopened_save -- --test-threads=1 --color=never
 
   broadleaf-canopy:
     name: Broadleaf canopy CPU regression

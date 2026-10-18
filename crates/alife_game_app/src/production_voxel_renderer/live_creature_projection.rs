@@ -169,18 +169,24 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                     return;
                 }
 
-                let Some(world_seed) = world
-                    .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
-                    .map(|runtime| runtime.runtime.world_seed())
-                else {
-                    return;
-                };
                 let tile_summaries = world
                     .get_resource::<Fvr03ProductionVoxelSceneResource>()
                     .map(|scene| scene.tile_summaries_by_tile.clone())
                     .unwrap_or_default();
                 let mut newborns = Vec::with_capacity(pending_newborns.len());
                 for object in pending_newborns {
+                    let Some(appearance) = frame.current.organism(object.id).and_then(|row| {
+                        world
+                            .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()?
+                            .runtime
+                            .creature_appearance(
+                                row.organism_id,
+                                row.genome.id,
+                                row.world_entity_id,
+                            )
+                    }) else {
+                        continue;
+                    };
                     let tile = VoxelTileCoord::new(
                         object.position.x.floor() as i32,
                         object.position.z.floor() as i32,
@@ -191,7 +197,7 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         .unwrap_or_else(|| VoxelChunkCoord::new(0, 0));
                     if let Some(record) = fvr04_live_creature_visual_record(
                         &frame.current,
-                        world_seed,
+                        appearance,
                         object,
                         tile,
                         chunk,

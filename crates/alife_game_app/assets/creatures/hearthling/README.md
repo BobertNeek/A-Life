@@ -115,3 +115,29 @@ reintroduce the historical graphics implementation into the current main branch.
 
 The landscape source is `../../landscape/landscape.blend`. Export those props
 with `scripts/export_landscape.py`, then refresh the same manifest receipts.
+
+Individual appearance continuity
+--------------------------------
+
+Live newborn presentation and checkpoint creation read the same small app-owned
+appearance cache. Restored entries retain the exact saved appearance genome;
+new entries use the existing parental cosmetic inheritance and body-phenotype
+projection once at admission. Entries bind organism and genome identity, remain
+available while newborns inherit from retiring parents, and are pruned to the
+resident set. Display names, render order, animation time and frame rate do not
+seed appearance. This does not rewrite organism genes, memories or learned
+weights, or add fields to the save format.
+
+Coat tint remains the existing six shared palette buckets on the vertex-colored
+coat and warm-ochre materials. The neutral bucket uses the original materials;
+the other five buckets add at most ten shared material variants for these two
+source materials. Revision 9's historically named `brows and tuft shadows` slot
+is the polished nose and stays on its original material, as do the eyes, mouth
+and tongue. Coat vertex colors include cream markings and the tail tip, and the
+eye primitive includes sclera, pupil and iris: whole-material tint cannot vary
+these regions independently.
+
+This continuity change retains the shipping GLB, normal image, mesh handles,
+skin, three animation clips and inherited bone scales. It adds no mesh rebuild,
+shader, texture or per-frame material update. Six material primitives describe
+the asset structure; they are not an RTX draw-call or frame-time measurement.

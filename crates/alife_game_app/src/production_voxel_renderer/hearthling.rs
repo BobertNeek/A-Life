@@ -14,6 +14,18 @@ const WALK_CLIP_START: f32 = 1.0 / 24.0;
 const WALK_CLIP_SECONDS: f32 = 3.0;
 const INGESTION_FEEDBACK_SECONDS: f32 = 0.60;
 const SPEECH_FEEDBACK_SECONDS: f32 = 0.45;
+const COAT_TINTS: [[f32; 3]; 6] = [
+    [1.0, 1.0, 1.0],
+    [0.76, 1.06, 1.28],
+    [1.18, 0.86, 0.76],
+    [0.87, 0.86, 1.24],
+    [0.86, 1.13, 0.83],
+    [1.16, 1.03, 0.78],
+];
+const COAT_MATERIAL_NAMES: [&str; 2] = [
+    "Hearthling | vertex-colored coat",
+    "Hearthling | warm ochre",
+];
 
 #[derive(Default)]
 struct OutcomeFeedback {
@@ -94,6 +106,35 @@ fn advance_walk(distance: f32, forward_scale: f32, seconds: f32) -> f32 {
 struct SharedHearthlingAssets {
     graph: Option<(Handle<AnimationGraph>, Vec<AnimationNodeIndex>)>,
     coats: BTreeMap<(bevy::asset::AssetId<StandardMaterial>, usize), Handle<StandardMaterial>>,
+}
+
+impl SharedHearthlingAssets {
+    fn coat(
+        &mut self,
+        source: &Handle<StandardMaterial>,
+        palette_family: u8,
+        materials: &mut Assets<StandardMaterial>,
+    ) -> Handle<StandardMaterial> {
+        let palette = usize::from(palette_family) % COAT_TINTS.len();
+        if palette == 0 {
+            return source.clone();
+        }
+        self.coats
+            .entry((source.id(), palette))
+            .or_insert_with(|| {
+                let mut material = materials.get(source).expect("loaded glTF material").clone();
+                let color = material.base_color.to_linear();
+                let tint = COAT_TINTS[palette];
+                material.base_color = Color::linear_rgba(
+                    color.red * tint[0],
+                    color.green * tint[1],
+                    color.blue * tint[2],
+                    color.alpha,
+                );
+                materials.add(material)
+            })
+            .clone()
+    }
 }
 
 #[derive(Component)]
@@ -365,23 +406,10 @@ fn ready(
         })
         .clone();
     let state = clip(marker.animation);
-    // Tint only the coat. Eyes, nose, tongue and cream muzzle keep authored colors.
-    let tints = [
-        [1.0, 1.0, 1.0],
-        [0.76, 1.06, 1.28],
-        [1.18, 0.86, 0.76],
-        [0.87, 0.86, 1.24],
-        [0.86, 1.13, 0.83],
-        [1.16, 1.03, 0.78],
-    ];
-    let palette = usize::from(visual.appearance.palette_family) % tints.len();
-    let tint = tints[palette];
-    let coat_materials = [
-        "Hearthling | vertex-colored coat",
-        "Hearthling | warm ochre",
-        "Hearthling | brows and tuft shadows",
-    ]
-    .map(|name| gltf.named_materials[name].id());
+    // Revision 9 reuses the historical brow slot for the polished nose.
+    // Keep it, the eyes, mouth and tongue on their original shared materials.
+    // Cream markings inside the coat's COLOR_0 still receive its existing tint.
+    let coat_materials = COAT_MATERIAL_NAMES.map(|name| gltf.named_materials[name].id());
     let mut mesh_count = 0;
     for entity in children.iter_descendants(event.entity) {
         if let Ok(name) = names.get(entity) {
@@ -437,26 +465,8 @@ fn ready(
                 .insert(Aabb::from_min_max(Vec3::splat(-6.0), Vec3::splat(6.0)));
             if coat_materials.contains(&handle.0.id()) {
                 let replacement =
-                    shared
-                        .coats
-                        .entry((handle.0.id(), palette))
-                        .or_insert_with(|| {
-                            let mut material = materials
-                                .get(&handle.0)
-                                .expect("loaded glTF material")
-                                .clone();
-                            let color = material.base_color.to_linear();
-                            material.base_color = Color::linear_rgba(
-                                color.red * tint[0],
-                                color.green * tint[1],
-                                color.blue * tint[2],
-                                color.alpha,
-                            );
-                            materials.add(material)
-                        });
-                commands
-                    .entity(entity)
-                    .insert(MeshMaterial3d(replacement.clone()));
+                    shared.coat(&handle.0, visual.appearance.palette_family, &mut materials);
+                commands.entity(entity).insert(MeshMaterial3d(replacement));
             }
         }
     }
@@ -618,6 +628,72 @@ pub(super) fn animate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn all_gene_buckets_reuse_a_bounded_material_pool_without_changing_sources() {
+        let mut materials = Assets::<StandardMaterial>::default();
+        let original = StandardMaterial {
+            base_color: Color::linear_rgba(0.8, 0.6, 0.4, 0.9),
+            perceptual_roughness: 0.72,
+            ..default()
+        };
+        let sources = [
+            materials.add(original.clone()),
+            materials.add(original.clone()),
+        ];
+        let mut shared = SharedHearthlingAssets::default();
+        let mut handles = BTreeMap::new();
+        for _ in 0..64 {
+            for gene in 0..alife_world::CREATURE_APPEARANCE_GENE_BUCKETS {
+                for source in &sources {
+                    let handle = shared.coat(source, gene, &mut materials);
+                    let key = (source.id(), usize::from(gene) % COAT_TINTS.len());
+                    if let Some(previous) = handles.insert(key, handle.clone()) {
+                        assert_eq!(previous, handle);
+                    }
+                    if key.1 == 0 {
+                        assert_eq!(&handle, source);
+                    }
+                    let tinted = materials.get(&handle).unwrap();
+                    assert_eq!(tinted.perceptual_roughness, original.perceptual_roughness);
+                    assert_eq!(tinted.base_color.to_linear().alpha, 0.9);
+                }
+            }
+        }
+        assert_eq!(shared.coats.len(), 2 * (COAT_TINTS.len() - 1));
+        assert_eq!(materials.len(), 2 * COAT_TINTS.len());
+        for source in sources {
+            assert_eq!(
+                materials.get(&source).unwrap().base_color,
+                original.base_color
+            );
+        }
+    }
+
+    #[test]
+    fn shipping_material_roles_keep_the_polished_nose_and_eyes_out_of_coat_tint() {
+        let glb = include_bytes!("../../assets/creatures/hearthling/hearthling.glb");
+        let json_bytes = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        let gltf: serde_json::Value = serde_json::from_slice(&glb[20..20 + json_bytes]).unwrap();
+        let names = gltf["materials"].as_array().unwrap();
+        assert_eq!(names.len(), 6);
+        assert_eq!(
+            names
+                .iter()
+                .filter(|material| {
+                    COAT_MATERIAL_NAMES.contains(&material["name"].as_str().unwrap())
+                })
+                .count(),
+            2
+        );
+        for name in [
+            "Hearthling | brows and tuft shadows",
+            "Hearthling | spherical eyes",
+        ] {
+            assert!(names.iter().any(|material| material["name"] == name));
+            assert!(!COAT_MATERIAL_NAMES.contains(&name));
+        }
+    }
 
     #[test]
     fn outcome_feedback_deduplicates_events_freezes_on_pause_and_returns_to_sampled_pose() {
