@@ -24,6 +24,14 @@ fn edit(path: &Path, change: impl FnOnce(&mut serde_json::Value)) {
 }
 
 pub(crate) fn fixture() -> Fixture {
+    fixture_with_residual(None)
+}
+
+pub(crate) fn residual_fixture() -> Fixture {
+    fixture_with_residual(Some(b"{\"optimizer_updates\":2}"))
+}
+
+fn fixture_with_residual(residual: Option<&[u8]>) -> Fixture {
     let source = crate::foundation_archived_success_replay::tests::checkpoint_fixture(5124);
     let root = source.with_file_name(format!(
         "{}-correction",
@@ -33,6 +41,12 @@ pub(crate) fn fixture() -> Fixture {
     let preserved = root.join("source");
     std::fs::rename(source, &preserved).unwrap();
     let source = preserved;
+    if let Some(bytes) = residual {
+        std::fs::write(source.join(RESIDUAL_UPDATE), bytes).unwrap();
+        edit(&source.join("cycle.json"), |data| {
+            data["critic_residual_update_sha256"] = sha(bytes).into();
+        });
+    }
     std::fs::create_dir(source.join("nested")).unwrap();
     std::fs::write(source.join("nested/preserved.bin"), b"exact acquired state").unwrap();
     let target = root.join("target");

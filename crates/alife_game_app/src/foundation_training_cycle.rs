@@ -908,6 +908,12 @@ pub fn continue_foundation_to_terrain_with_legacy(
             for name in ["cycle.json", "value-checkpoint.json"] {
                 std::fs::copy(previous.join(name), output.join(name))?;
             }
+            let cycle: FoundationCycleReceipt =
+                serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+            if cycle.critic_residual_update_sha256.is_some() {
+                let name = crate::foundation_critic_correction::RESIDUAL_UPDATE;
+                std::fs::copy(previous.join(name), output.join(name))?;
+            }
             std::fs::write(
                 output.join("terrain-continuation.json"),
                 serde_json::to_vec_pretty(&receipt)?,
@@ -1272,6 +1278,114 @@ fn prepare_terrain_founder_refresh(
 #[cfg(test)]
 mod founder_refresh_tests {
     use super::*;
+
+    fn assert_residual_checkpoint_admission(directory: &Path, accepted: bool) {
+        let names = [
+            "cycle.json",
+            "trained.alife-foundation",
+            "actor-checkpoint.json",
+            "value-checkpoint.json",
+            "critic-correction.json",
+        ];
+        let before = names.map(|name| std::fs::read(directory.join(name)).ok());
+        let continuation = load_cycle_continuation(directory, None);
+        assert_eq!(
+            continuation.is_ok(),
+            accepted,
+            "continuation: {:?}",
+            continuation.err()
+        );
+        let inspection = crate::inspect_foundation_checkpoint(directory, 5124);
+        assert_eq!(inspection.is_ok(), accepted, "inspection: {inspection:?}");
+        assert_eq!(
+            names.map(|name| std::fs::read(directory.join(name)).ok()),
+            before
+        );
+    }
+
+    #[test]
+    fn residual_checkpoint_admission_requires_bound_regular_sidecar() {
+        use crate::foundation_critic_correction::RESIDUAL_UPDATE;
+        let fixture = crate::foundation_critic_correction::tests::residual_fixture();
+        let path = fixture.source.join(RESIDUAL_UPDATE);
+        let bytes = std::fs::read(&path).unwrap();
+        let cycle = std::fs::read(fixture.source.join("cycle.json")).unwrap();
+        assert_residual_checkpoint_admission(&fixture.source, true);
+        assert_residual_checkpoint_admission(&fixture.target, true);
+        for changed in [b"{\"optimizer_updates\":3}".as_slice(), b""] {
+            std::fs::write(&path, changed).unwrap();
+            assert_residual_checkpoint_admission(&fixture.source, false);
+            assert_eq!(std::fs::read(&path).unwrap(), changed);
+        }
+        std::fs::remove_file(&path).unwrap();
+        assert_residual_checkpoint_admission(&fixture.source, false);
+        assert!(!path.exists());
+        std::fs::create_dir(&path).unwrap();
+        assert_residual_checkpoint_admission(&fixture.source, false);
+        assert!(path.is_dir());
+        std::fs::remove_dir(&path).unwrap();
+        let oversized = std::fs::File::create(&path).unwrap();
+        oversized.set_len(128 * 1024 * 1024 + 1).unwrap();
+        drop(oversized);
+        assert_residual_checkpoint_admission(&fixture.source, false);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().len(),
+            128 * 1024 * 1024 + 1
+        );
+        std::fs::remove_file(&path).unwrap();
+        #[cfg(unix)]
+        {
+            // Even an exact-hash symlink must not substitute for the regular sidecar.
+            std::os::unix::fs::symlink(fixture.target.join(RESIDUAL_UPDATE), &path).unwrap();
+            assert_residual_checkpoint_admission(&fixture.source, false);
+            std::fs::remove_file(&path).unwrap();
+        }
+        std::fs::write(&path, &bytes).unwrap();
+        for malformed in [
+            String::new(),
+            "A".repeat(64),
+            "g".repeat(64),
+            "0".repeat(63),
+        ] {
+            let mut receipt: FoundationCycleReceipt = serde_json::from_slice(&cycle).unwrap();
+            receipt.critic_residual_update_sha256 = Some(malformed);
+            std::fs::write(
+                fixture.source.join("cycle.json"),
+                serde_json::to_vec(&receipt).unwrap(),
+            )
+            .unwrap();
+            assert_residual_checkpoint_admission(&fixture.source, false);
+        }
+        std::fs::write(fixture.source.join("cycle.json"), cycle).unwrap();
+        assert_residual_checkpoint_admission(&fixture.source, true);
+        assert_residual_checkpoint_admission(&fixture.target, true);
+        let target_path = fixture.target.join(RESIDUAL_UPDATE);
+        std::fs::remove_file(&target_path).unwrap();
+        assert_residual_checkpoint_admission(&fixture.target, false);
+        std::fs::write(&target_path, b"tampered correction evidence").unwrap();
+        assert_residual_checkpoint_admission(&fixture.target, false);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
+
+    #[test]
+    fn residual_checkpoint_admission_preserves_legacy_receipts_without_a_digest() {
+        let fixture = crate::foundation_critic_correction::tests::fixture();
+        let cycle = std::fs::read(fixture.source.join("cycle.json")).unwrap();
+        let receipt: FoundationCycleReceipt = serde_json::from_slice(&cycle).unwrap();
+        assert!(receipt.critic_residual_update_sha256.is_none());
+        assert_residual_checkpoint_admission(&fixture.source, true);
+        assert_residual_checkpoint_admission(&fixture.target, true);
+        // Undeclared historical diagnostics are not newly required or interpreted.
+        let path = fixture
+            .source
+            .join(crate::foundation_critic_correction::RESIDUAL_UPDATE);
+        std::fs::write(&path, b"unreferenced historical evidence").unwrap();
+        assert_residual_checkpoint_admission(&fixture.source, true);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"unreferenced historical evidence"
+        );
+    }
 
     #[test]
     fn critic_correction_continuation_preserves_policy_actor_and_actual_critic_age() {
@@ -1752,7 +1866,19 @@ mod founder_refresh_tests {
 
     #[test]
     fn terrain_continuation_preserves_full_heads_and_rejects_tampering() {
+        for residual in [false, true] {
+            terrain_continuation_preserves_full_heads(residual);
+        }
+    }
+
+    fn terrain_continuation_preserves_full_heads(residual: bool) {
         let (mut receipt, terrain, mut actor, value) = cycle_handoff();
+        let residual_bytes = b"{\"optimizer_updates\":2}";
+        if residual {
+            use sha2::{Digest, Sha256};
+            receipt.critic_residual_update_sha256 =
+                Some(format!("{:x}", Sha256::digest(residual_bytes)));
+        }
         let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.seed, 1).unwrap();
         config.brain_class = BrainScaleTier::Standard2048;
         config.founder_seed_base = receipt.founder_seed_base;
@@ -1804,7 +1930,7 @@ mod founder_refresh_tests {
         let original = root.join("original");
         let output = root.join("continued");
         std::fs::create_dir_all(&original).unwrap();
-        let files = [
+        let mut files = vec![
             ("cycle.json", serde_json::to_vec(&receipt).unwrap()),
             (
                 "trained.alife-foundation",
@@ -1813,6 +1939,12 @@ mod founder_refresh_tests {
             ("actor-checkpoint.json", serde_json::to_vec(&actor).unwrap()),
             ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
         ];
+        if residual {
+            files.push((
+                crate::foundation_critic_correction::RESIDUAL_UPDATE,
+                residual_bytes.to_vec(),
+            ));
+        }
         for (name, bytes) in &files {
             std::fs::write(original.join(name), bytes).unwrap();
         }
@@ -1824,6 +1956,18 @@ mod founder_refresh_tests {
         rebound.source_foundation_digest = actor.source_foundation_digest;
         assert_eq!(rebound, actor);
         assert_eq!(restored.value, value);
+        let sidecar = output.join(crate::foundation_critic_correction::RESIDUAL_UPDATE);
+        if residual {
+            assert_eq!(std::fs::read(&sidecar).unwrap(), residual_bytes);
+            std::fs::remove_file(&sidecar).unwrap();
+            assert!(load_cycle_continuation(&output, None).is_err());
+            std::fs::write(&sidecar, b"tampered terrain evidence").unwrap();
+            assert!(load_cycle_continuation(&output, None).is_err());
+            std::fs::write(&sidecar, residual_bytes).unwrap();
+            assert!(load_cycle_continuation(&output, None).is_ok());
+        } else {
+            assert!(!sidecar.exists());
+        }
         for name in ["cycle.json", "value-checkpoint.json"] {
             assert_eq!(
                 std::fs::read(output.join(name)).unwrap(),

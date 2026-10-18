@@ -70,6 +70,12 @@ version 0. The new sidecar records actual ages, real feature hash, loss rows,
 optimizer configuration, and initial 16/whole/last 16 residual slices per update.
 It does not add offline repair steps to policy or episode counters.
 
+Checkpoint continuation and CPU inspection require a bounded regular sidecar
+whose SHA256 matches whenever the receipt declares that digest. This applies
+to ordinary sealed cycles and critic correction clones. Terrain continuation
+copies the referenced sidecar unchanged and validates it on restore. Historical
+receipts without the optional digest remain admissible without that sidecar.
+
 ## Qualification and current limits
 
 Run `qualify_critic_residual --gradient-regression` on an available native training
@@ -84,6 +90,10 @@ acceptance seeds. Each initial 16, whole 128 and last 16 MSE must separately rem
 at or below `max(4*baseline,1.0)`, with finite in-support predictions. A whole-window
 average cannot hide an initial transient. An optional old-binary control verifies
 that one matched cycle produces the same actor checkpoint and full Adam state.
+All CLI paths are resolved against the invocation directory before the legacy
+control switches to its original source checkout; logs, binary hashes, resource
+reserves and protected checkpoints keep their original destinations. CPU command
+doubles cover both relative and absolute paths through this control.
 Both baseline and candidate metrics must contain exactly 16/128/16 real rows for
 the initial, whole and final slices. If real death shortens a requested
 128-transition context, its terminal evidence is preserved and qualification is
