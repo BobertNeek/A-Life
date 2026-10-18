@@ -1,6 +1,7 @@
 # Hearthling appearance continuity and shared resources, 2026-10-18
 
 Base: `961cddad6b6a6f850eb47f936b7c9cf01383ab39`.
+Integrated naming PR92 at `57e13160ed4918a0f4435d36e2192031d6437275`.
 Scope: appearance continuity and bounded material reuse. This is a prerequisite
 for Cassidy's selected 9/16/19 individual variation direction, not a completed
 selected-model refinement or a native performance qualification.
@@ -64,9 +65,12 @@ GPU learned-state persistence.
 
 ## Validation and limits
 
-All ten CPU appearance tests passed, including eight cache tests, the real
-natural-birth checkpoint/production-save reopen regression, and the existing
-saved-gene population test. Formatting, whitespace, static core boundaries, all
+All 40 targeted CPU tests passed after integrating PR92: 17 Hearthling renderer,
+10 appearance, and 13 naming tests. Appearance coverage includes eight cache
+tests, the real natural-birth checkpoint/production-save reopen regression, and
+the existing saved-gene population test. Strict all-target frontend Clippy also
+passed. Two existing test-only lint warnings were fixed without behavioral
+changes. Formatting, whitespace, static core boundaries, all
 77 documentation assertions, and the shipping GLB check passed. A dedicated
 Hearthling workflow runs focused renderer and appearance tests; pinned art
 source receipts remain unchanged. The PR records frontend and hosted CI results
