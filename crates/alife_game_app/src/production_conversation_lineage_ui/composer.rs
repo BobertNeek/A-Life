@@ -106,6 +106,7 @@ fn decoration() -> (bevy::picking::Pickable, FocusPolicy) {
 }
 pub(crate) fn spawn(world: &mut World) {
     world.init_resource::<InputState>();
+    world.init_resource::<naming::OpenInput>();
     world.init_resource::<InputFocus>();
     world.init_resource::<Assets<Image>>();
     let mut icons = BTreeMap::new();
@@ -301,6 +302,7 @@ pub(crate) fn spawn(world: &mut World) {
 /// Runs after dock opening and before the menu/world readers. All unread a11y
 /// actions are drained even when closed, unfocused, or behind another modal.
 pub(super) fn collect_input(world: &mut World) {
+    naming::collect_input(world);
     let Some(state) = world.get_resource::<ProductionConversationLineageUiState>() else {
         return;
     };
@@ -385,11 +387,16 @@ fn collect_available_input(world: &mut World, open: bool, blocked: bool) {
         {
             if let Some(ActionData::Value(value)) = request.data {
                 let mut state = world.resource_mut::<ProductionConversationLineageUiState>();
+                let naming = state.naming.is_some();
                 state.input = value
                     .chars()
-                    .filter(|c| !c.is_control())
+                    .filter(|c| naming || !c.is_control())
                     .take(MAX_TYPED_CHARS)
                     .collect();
+                if let Some(draft) = state.naming.as_mut() {
+                    draft.error = None;
+                }
+                state.input_error = None;
                 state.input_help_open = false;
             }
         }
@@ -413,6 +420,7 @@ pub(super) fn apply_controls(
         state.input_open = false;
         state.input.clear();
         state.input_cue = SpeechInputCue::None;
+        state.input_error = None;
         state.input_help_open = false;
         state.status = "Player speech cancelled".to_string();
         return true;
@@ -460,11 +468,13 @@ pub(crate) fn adapt(world: &mut World) {
     let open = state.input_open;
     let help = state.input_help_open;
     let selected = state.address_selected;
+    let naming = state.naming.is_some();
     let text = speech_entry_text(state);
     let draft = state.input.clone();
     let height = height(state, size, bottom);
     let mut cue = state.input_cue;
     if cue == SpeechInputCue::None
+        && !naming
         && world
             .get_non_send_resource::<ProductionSpeechTranslationWorker>()
             .is_some_and(|w| w.active_key() == Some(SpeechTranslationJobKey::Player))
@@ -476,6 +486,7 @@ pub(crate) fn adapt(world: &mut World) {
         node.width=Val::Px(width(size));node.right=Val::Auto;node.left=Val::Px((size.x-width(size))*0.5);
         node.height=Val::Px(height);node.bottom=Val::Px(bottom);
         *visible=if open {Visibility::Inherited}else{Visibility::Hidden};
+        a11y.set_label(if naming {"Name the selected individual"}else{"Speech from the Hand"});
         if open {a11y.clear_hidden();} else {a11y.set_hidden();}
     }
     for mut scroll in world
@@ -487,12 +498,22 @@ pub(crate) fn adapt(world: &mut World) {
     for (mut shown,mut node,mut a11y) in world.query_filtered::<(&mut Text,&mut Node,&mut AccessibilityNode),With<ProductionSpeechEntryPanel>>().iter_mut(world) {
         // Preserve Text change detection so idle frames do not request shaping.
         if shown.0 != text { shown.0.clone_from(&text); }node.display=if help {Display::None}else{Display::Flex};a11y.set_value(draft.clone());
+        a11y.set_label(if naming {"Individual name. Up to 32 characters. Enter confirms; Escape cancels."}else{"Speech draft. Enter sends, Tab changes address, Escape cancels. A name in the draft overrides selected addressing."});
         if open && !help {a11y.clear_hidden();}else{a11y.set_hidden();}
     }
-    for (mut node, mut a11y) in world
-        .query_filtered::<(&mut Node, &mut AccessibilityNode), With<Help>>()
+    for (mut node, mut a11y, mut text) in world
+        .query_filtered::<(&mut Node, &mut AccessibilityNode, &mut Text), With<Help>>()
         .iter_mut(world)
     {
+        let next = if naming {
+            "Enter confirm  Esc cancel\nName: up to 32 characters"
+        } else {
+            HELP
+        };
+        if text.0 != next {
+            text.0 = next.into();
+        }
+        a11y.set_label(next);
         node.display = if help { Display::Flex } else { Display::None };
         if open && help {
             a11y.clear_hidden();
@@ -500,15 +521,21 @@ pub(crate) fn adapt(world: &mut World) {
             a11y.set_hidden();
         }
     }
-    for (control, interaction, mut border, mut a11y) in world
+    for (control, interaction, mut border, mut a11y, mut node) in world
         .query::<(
             &Control,
             &Interaction,
             &mut BorderColor,
             &mut AccessibilityNode,
+            &mut Node,
         )>()
         .iter_mut(world)
     {
+        node.display = if naming && *control == Control::Address {
+            Display::None
+        } else {
+            Display::Flex
+        };
         *border = bevel(
             *interaction != Interaction::Pressed
                 && !(*control == Control::Address && selected)
@@ -530,7 +557,14 @@ pub(crate) fn adapt(world: &mut World) {
         } else {
             a11y.clear_disabled();
         }
-        if open {
+        if *control == Control::Send {
+            a11y.set_label(if naming {
+                "Confirm individual name. Enter."
+            } else {
+                "Send speech. Enter."
+            });
+        }
+        if open && !(naming && *control == Control::Address) {
             a11y.clear_hidden();
         } else {
             a11y.set_hidden();

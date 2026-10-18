@@ -35,7 +35,7 @@ fn authoritative_world_with_energy(energy: Option<f32>) -> HeadlessWorld {
     }
     world
 }
-fn row() -> WorldOrganismPresentationRow {
+pub(super) fn row() -> WorldOrganismPresentationRow {
     authoritative_world()
         .presentation_snapshot()
         .organisms
@@ -119,7 +119,14 @@ fn unknown_row_and_every_identity_lifecycle_mismatch_fail_closed() {
         Readout::from_row(stable, organism, None, []).values,
         [None; 6]
     );
+    assert_eq!(
+        Readout::from_row(stable, organism, Some(&row), []).name,
+        Some(row.object.label.clone())
+    );
     let mut mutations = Vec::new();
+    let mut consumed = row.clone();
+    consumed.object.consumed = true;
+    mutations.push(consumed);
     let mut changed = row.clone();
     changed.world_entity_id = WorldEntityId(stable.raw() + 1);
     mutations.push(changed);
@@ -153,6 +160,7 @@ fn unknown_row_and_every_identity_lifecycle_mismatch_fail_closed() {
     for changed in mutations {
         let readout = Readout::from_row(stable, organism, Some(&changed), [&food]);
         assert_eq!(readout.values, [None; 6]);
+        assert_eq!(readout.name, None);
         assert!(
             !readout.holding_food,
             "mismatched or dead selection cannot claim possession"
@@ -254,6 +262,44 @@ fn selected_readout_does_not_depend_on_spawn_metadata_and_rebinds_on_frame_remov
         .entity_mut(entity)
         .remove::<Fvr04ProductionCreatureVisualMarker>();
     assert_eq!(selected_readout(&world, stable).values, [None; 6]);
+}
+#[test]
+fn canonical_name_changes_while_frame_is_paused_and_invalid_targets_never_use_stale_names() {
+    let mut canonical = authoritative_world();
+    let row = canonical.presentation_snapshot().organisms.remove(0);
+    let stable = row.world_entity_id;
+    let organism = row.organism_id;
+    let original = row.object.label.clone();
+    assert_eq!(
+        selected_name(None, stable, organism, Some(&row)),
+        Some(original.clone())
+    );
+    canonical.rename_agent(stable, "Étoile 🌙").unwrap();
+    assert_eq!(
+        selected_name(Some(&canonical), stable, organism, Some(&row)),
+        Some("Étoile 🌙".to_owned()),
+        "a paused presentation row must not mask a canonical rename"
+    );
+    assert_eq!(row.object.label, original);
+    assert_eq!(
+        selected_name(Some(&canonical), stable, OrganismId(2), Some(&row)),
+        None,
+        "another living organism cannot claim the selected object's name"
+    );
+    let missing = HeadlessWorld::new(21);
+    assert_eq!(
+        selected_name(Some(&missing), stable, organism, Some(&row)),
+        None,
+        "load/removal must not resurrect the old frame name"
+    );
+    let mut stale = row.clone();
+    stale.lifecycle = alife_world::OrganismLifecycle::Dead {
+        death_tick: Tick(1),
+    };
+    assert_eq!(selected_name(None, stable, organism, Some(&stale)), None);
+    stale = row;
+    stale.object.organism_id = Some(OrganismId(2));
+    assert_eq!(selected_name(None, stable, organism, Some(&stale)), None);
 }
 #[test]
 fn embedded_icons_decode_as_distinct_nonempty_rgba_images() {

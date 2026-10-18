@@ -1310,7 +1310,9 @@ pub struct HeadlessWorld {
     injected_tick_late_failure_after_first_organism: bool,
 }
 
+mod naming;
 pub(crate) mod player_hand;
+pub use naming::{RenameAgentError, MAX_AGENT_NAME_CHARS};
 #[cfg(test)]
 mod prediction_residual_pulse_tests;
 

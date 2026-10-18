@@ -1,7 +1,8 @@
-//! Read-only, wordless selected-creature physiology, possession and playback readout.
+//! Wordless selected-creature identity, physiology, possession and playback readout.
 //! Icon meters show measured quantities, not six interchangeable needs or health scores.
 use super::*;
-use alife_world::WorldObject;
+use alife_world::{HeadlessWorld, WorldObject};
+use bevy::a11y::AccessibilityNode;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, BorderRadius, FocusPolicy, UiRect};
@@ -77,6 +78,7 @@ fn normalized(value: f32) -> Option<f32> {
 #[derive(Debug, Clone, PartialEq)]
 struct Readout {
     stable_id: u64,
+    name: Option<String>,
     values: [Option<f32>; 6],
     holding_food: bool,
 }
@@ -87,16 +89,10 @@ impl Readout {
         row: Option<&WorldOrganismPresentationRow>,
         objects: impl IntoIterator<Item = &'a WorldObject>,
     ) -> Self {
-        let row = row.filter(|row| {
-            row.world_entity_id == stable_id
-                && row.organism_id == organism_id
-                && row.object.id == stable_id
-                && row.object.kind == WorldObjectKind::Agent
-                && row.object.organism_id == Some(organism_id)
-                && row.lifecycle.is_alive()
-        });
+        let row = row.filter(|row| valid_row(stable_id, organism_id, row));
         Self {
             stable_id: stable_id.raw(),
+            name: row.map(|row| row.object.label.clone()),
             values: QUANTITIES.map(|quantity| row.and_then(|row| quantity.value(row))),
             // Possession is physical ownership, never a nearby fruit or a motor intention.
             holding_food: row.is_some()
@@ -108,10 +104,32 @@ impl Readout {
         }
     }
 }
+fn valid_row(
+    stable_id: WorldEntityId,
+    organism_id: OrganismId,
+    row: &WorldOrganismPresentationRow,
+) -> bool {
+    stable_id.is_valid()
+        && organism_id.is_valid()
+        && row.world_entity_id == stable_id
+        && row.organism_id == organism_id
+        && row.object.id == stable_id
+        && row.object.kind == WorldObjectKind::Agent
+        && row.object.organism_id == Some(organism_id)
+        && !row.object.consumed
+        && row.lifecycle.is_alive()
+}
 #[derive(Component)]
 struct HudRoot;
 #[derive(Component)]
 struct Identity;
+#[derive(Component)]
+struct IdentityHeader;
+#[derive(Component)]
+struct CreatureName;
+/// Pointer and accessibility entry point for the shared naming composer.
+#[derive(Component)]
+pub(crate) struct RenameButton;
 #[derive(Component)]
 struct HeldFood;
 #[derive(Component)]
@@ -135,6 +153,7 @@ struct Icons(BTreeMap<&'static str, Handle<Image>>);
 const PANEL: Color = Color::srgb(0.075, 0.115, 0.135);
 const CARD: Color = Color::srgb(0.050, 0.075, 0.090);
 const INK: Color = Color::srgb(0.98, 0.96, 0.84);
+const HEADER_HEIGHT: f32 = 36.0;
 const EMBEDDED: [(&str, &[u8]); 13] = [
     (
         "holding_food",
@@ -297,9 +316,10 @@ pub(super) fn spawn(world: &mut World) {
     let identity = world
         .spawn((
             Name::new("Actual selected stable identity, no portrait"),
+            IdentityHeader,
             Node {
                 width: Val::Percent(100.0),
-                height: Val::Px(22.0),
+                height: Val::Px(HEADER_HEIGHT),
                 flex_shrink: 0.0,
                 align_items: AlignItems::Center,
                 column_gap: Val::Px(6.0),
@@ -309,20 +329,54 @@ pub(super) fn spawn(world: &mut World) {
         ))
         .id();
     icon(world, identity, image("selection"), 16.0);
+    let identity_text = world
+        .spawn((
+            Node {
+                min_width: Val::Px(0.0),
+                height: Val::Px(32.0),
+                flex_grow: 1.0,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            ChildOf(identity),
+        ))
+        .id();
     world.spawn((
         Text::new(""),
         TextFont {
-            font_size: 12.0,
+            font_size: 13.0,
             ..default()
         },
         TextColor(INK),
+        TextLayout::new_with_linebreak(bevy::text::LineBreak::NoWrap),
         Node {
-            width: Val::Px(180.0),
+            width: Val::Percent(100.0),
+            min_width: Val::Px(0.0),
             height: Val::Px(18.0),
+            overflow: Overflow::clip(),
+            flex_shrink: 0.0,
+            ..default()
+        },
+        CreatureName,
+        AccessibilityNode(accesskit::Node::new(accesskit::Role::Label)),
+        ChildOf(identity_text),
+    ));
+    world.spawn((
+        Text::new(""),
+        TextFont {
+            font_size: 10.0,
+            ..default()
+        },
+        TextColor(INK),
+        TextLayout::new_with_linebreak(bevy::text::LineBreak::NoWrap),
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Px(14.0),
+            flex_shrink: 0.0,
             ..default()
         },
         Identity,
-        ChildOf(identity),
+        ChildOf(identity_text),
     ));
     let held_food = icon(world, identity, image("holding_food"), 22.0);
     world.entity_mut(held_food).insert((
@@ -330,6 +384,63 @@ pub(super) fn spawn(world: &mut World) {
         HeldFood,
         Visibility::Hidden,
     ));
+    let mut rename_accessibility = accesskit::Node::new(accesskit::Role::Button);
+    rename_accessibility.set_label("Name selected creature");
+    rename_accessibility.add_action(accesskit::Action::Click);
+    rename_accessibility.set_disabled();
+    rename_accessibility.set_hidden();
+    let rename = world
+        .spawn((
+            Name::new("Name selected creature"),
+            RenameButton,
+            Interaction::None,
+            Node {
+                width: Val::Px(36.0),
+                height: Val::Px(36.0),
+                flex_shrink: 0.0,
+                border: UiRect::all(Val::Px(2.0)),
+                border_radius: BorderRadius::all(Val::Px(10.0)),
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            BackgroundColor(CARD),
+            bevel(true),
+            Visibility::Hidden,
+            AccessibilityNode(rename_accessibility),
+            ChildOf(identity),
+        ))
+        .id();
+    // A pencil built from native UI shapes needs no font glyph or image asset.
+    let pencil = world
+        .spawn((
+            Node {
+                width: Val::Px(18.0),
+                height: Val::Px(6.0),
+                flex_shrink: 0.0,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            UiTransform::from_rotation(Rot2::degrees(-45.0)),
+            ChildOf(rename),
+        ))
+        .id();
+    for (width, height, color) in [
+        (3.0, 6.0, Color::srgb(0.78, 0.56, 0.43)),
+        (11.0, 6.0, INK),
+        (4.0, 3.0, Color::srgb(0.42, 0.83, 0.71)),
+    ] {
+        world.spawn((
+            Node {
+                width: Val::Px(width),
+                height: Val::Px(height),
+                flex_shrink: 0.0,
+                ..default()
+            },
+            BackgroundColor(color),
+            ChildOf(pencil),
+        ));
+    }
     let grid = world
         .spawn((
             QuantityGrid,
@@ -423,7 +534,7 @@ pub(super) fn spawn(world: &mut World) {
             ChildOf(card),
         ));
     }
-    // A readout never becomes an input target or blocks world/menu picking.
+    // Meters remain passive. Only the explicit naming control accepts input.
     let mut pending = vec![status, root];
     while let Some(entity) = pending.pop() {
         if let Some(children) = world.get::<Children>(entity) {
@@ -467,6 +578,47 @@ fn set_readout(world: &mut World, readout: Option<&Readout>, debug: bool) {
         if text.0 != next {
             text.0 = next;
         }
+    }
+    let name = readout.and_then(|r| r.name.as_deref());
+    for (mut text, mut accessible) in world
+        .query_filtered::<(&mut Text, &mut AccessibilityNode), With<CreatureName>>()
+        .iter_mut(world)
+    {
+        let next = name.unwrap_or("");
+        if text.0 != next {
+            text.0 = next.to_owned();
+        }
+        // The complete canonical name remains available when the line clips.
+        accessible.set_label(next);
+    }
+    for (mut visible, mut pickable, mut focus, mut interaction, mut border, mut accessible) in world
+        .query_filtered::<(
+            &mut Visibility,
+            &mut bevy::picking::Pickable,
+            &mut FocusPolicy,
+            &mut Interaction,
+            &mut BorderColor,
+            &mut AccessibilityNode,
+        ), With<RenameButton>>()
+        .iter_mut(world)
+    {
+        if let Some(name) = name.filter(|_| !debug) {
+            *visible = Visibility::Inherited;
+            *pickable = bevy::picking::Pickable::default();
+            *focus = FocusPolicy::Block;
+            accessible.set_label(format!("Name {name}"));
+            accessible.clear_disabled();
+            accessible.clear_hidden();
+        } else {
+            *visible = Visibility::Hidden;
+            *pickable = bevy::picking::Pickable::IGNORE;
+            *focus = FocusPolicy::Pass;
+            *interaction = Interaction::None;
+            accessible.set_label("Name selected creature");
+            accessible.set_disabled();
+            accessible.set_hidden();
+        }
+        *border = bevel(*interaction != Interaction::Pressed);
     }
     let values = readout.map_or([None; 6], |r| r.values);
     for mut visibility in world
@@ -555,18 +707,52 @@ fn selected_readout(world: &World, stable_id: WorldEntityId) -> Readout {
     identity.map_or(
         Readout {
             stable_id: stable_id.raw(),
+            name: None,
             values: [None; 6],
             holding_food: false,
         },
         |organism_id| {
-            Readout::from_row(
+            let mut readout = Readout::from_row(
                 stable_id,
                 organism_id,
                 row,
                 frame.into_iter().flat_map(|frame| frame.current.objects()),
-            )
+            );
+            #[cfg(feature = "gpu-runtime")]
+            let canonical = world
+                .get_non_send_resource::<ProductionGpuBrainRuntimeResource>()
+                .map(|runtime| runtime.runtime.world());
+            #[cfg(not(feature = "gpu-runtime"))]
+            let canonical = None;
+            readout.name = selected_name(canonical, stable_id, organism_id, row);
+            readout
         },
     )
+}
+fn selected_name(
+    canonical: Option<&HeadlessWorld>,
+    stable_id: WorldEntityId,
+    organism_id: OrganismId,
+    row: Option<&WorldOrganismPresentationRow>,
+) -> Option<String> {
+    if let Some(canonical) = canonical {
+        // Names are world metadata and can change while presentation is paused.
+        // An available runtime is authoritative even when its target is absent.
+        let object = canonical.entity(stable_id)?;
+        let record = canonical.organism_registry().get(organism_id)?;
+        return (stable_id.is_valid()
+            && organism_id.is_valid()
+            && object.id == stable_id
+            && object.kind == WorldObjectKind::Agent
+            && object.organism_id == Some(organism_id)
+            && !object.consumed
+            && record.world_entity_id() == stable_id
+            && record.organism_id() == organism_id
+            && record.lifecycle().is_alive())
+        .then(|| object.label.clone());
+    }
+    row.filter(|row| valid_row(stable_id, organism_id, row))
+        .map(|row| row.object.label.clone())
 }
 fn set_status(world: &mut World, count: usize, paused: bool, fast: bool) {
     let handle = world.resource::<Icons>().0[if paused {
@@ -600,7 +786,7 @@ fn panel_bottom(size: Vec2) -> f32 {
     let columns = ((width - 18.0 + 8.0) / 60.0).floor().max(1.0) as usize;
     let rows = QUANTITIES.len().div_ceil(columns);
     76.0 + 18.0
-        + 22.0
+        + HEADER_HEIGHT
         + 4.0
         + rows as f32 * if size.y < 300.0 { 56.0 } else { 68.0 }
         + (rows - 1) as f32 * 6.0

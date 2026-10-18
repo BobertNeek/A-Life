@@ -65,8 +65,10 @@ warned as poor health. No HUD logic changes chemistry or selects actions.
 Missing identity/frame/row or invalid values show a question mark; a known zero
 has a real empty track. Launch/save expression defaults are not evidence. The
 HUD does not extrapolate between ticks, during pause, or after a simulation stop.
-The reticle and full numeric stable ID identify selection without an invented
-portrait. A fruit-in-palm badge in that identity header appears only when the
+The canonical personal name and full numeric stable ID identify selection
+without an invented portrait. The name clips within its own line; the complete
+name remains available through accessibility and speech addressing. A
+fruit-in-palm badge in that identity header appears only when the
 current frame contains unconsumed Food carried by that exact living selected
 organism. Missing or mismatched identity/frame/row, a nearby fruit, a different
 owner, a carried non-food object, or consumed food cannot show the badge. It is
@@ -76,7 +78,8 @@ The count chip shows rendered creature count and running/paused/fast
 playback icons. F3 hides these player readouts while preserving the existing
 textual inspector, animation/response details, and debug rails. The HUD wraps
 at narrow widths, and uses shorter cards below 300px viewport height. All HUD
-nodes ignore picking and pass UI focus. The existing menu's modal/entry source
+meter nodes ignore picking and pass UI focus. The header's pencil button is
+the sole HUD input target. The existing menu's modal/entry source
 layers (100/90) remain above the HUD (30); CPU tests guard those layers and
 non-interactive components, without proving combined live input dispatch.
 CPU standalone-HUD tests cover 1280x720, 640x360, 320x480 and 320x240.
@@ -87,6 +90,33 @@ with a single build job and debug symbols disabled. It does not enable
 
 ```sh
 cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_voxel_renderer::status_hud:: -- --test-threads=1 --color=never
+```
+
+Select a living creature and click its pencil button or press F2 to name it.
+Type the name in the shared wordless composer; Enter or its arrow confirms,
+and Escape or its cross cancels. The address toggle is hidden during naming.
+Empty names, names longer than 32 Unicode scalar values, control characters,
+case-equivalent names already used by another object, and world-generated
+label namespaces are rejected with a short explanation beside the draft.
+Outer whitespace is trimmed. Selection changes, an unavailable target, a world
+authority change, or focus loss discard the draft. Opening and dismissal input
+remain captured until held controls are released.
+
+Naming changes the canonical world label and lookup, retaining the stable ID,
+organism record, and acquired state. Save after naming to retain it on reopen;
+there is no separate UI alias or save schema. The HUD reads the canonical name
+even while paused. A leading personal name or `creature N` continues to address
+spatial speech at the Hand. Unicode lowercase comparison is shared with naming;
+if legacy labels, aliases, or overlapping name prefixes match multiple
+individuals, speech is rejected and the draft retained. Select one and omit the
+name, or choose an unambiguous name. This identifies the intended listener; it
+does not establish that a creature has learned or understands its name.
+
+The naming, composer, raw-input, and speech CPU regressions run together in
+the frontend CI job:
+
+```sh
+cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_conversation_lineage_ui:: -- --test-threads=1 --color=never
 ```
 
 The ordinary player hint strip is replaced by a five-control wordless care dock:

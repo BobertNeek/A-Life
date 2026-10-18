@@ -186,7 +186,7 @@ fn assert_spatial_player_hearing(text: &str, addressed: Option<OrganismId>) {
     let source = player_speech_position(&selection, &world).unwrap();
     assert_eq!(source, Vec3f::new(0.5, 0.5, 0.0));
     let input = submitted_text(text);
-    let addressee = named_addressee(&input, &world);
+    let addressee = named_addressee(&input, &world).unwrap();
     assert_eq!(addressee, addressed);
     let request = request(&input, addressee);
     let mut worker = ProductionSpeechTranslationWorker::default();
