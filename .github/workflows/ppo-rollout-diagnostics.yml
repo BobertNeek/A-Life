@@ -95,6 +95,8 @@ jobs:
         run: cargo test --locked -p alife_training --lib ppo::tests::actor_ -- --test-threads=1
       - name: Actor-centering CLI rejects incompatible and unsealed sources without GPU work
         run: cargo test --locked -p alife_game_app --features foundation-training --test actor_advantage_centering_cli -- --test-threads=1
+      - name: Training CLI argument CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --bin train_n2048_care -- --test-threads=1
       - name: Sealing, exact signed targets and copied diagnostic reporting
         run: python -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
       - name: Native checkpoint admission rejects truncated, swapped and stale artifacts
