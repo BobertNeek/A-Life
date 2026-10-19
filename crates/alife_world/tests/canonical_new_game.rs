@@ -309,11 +309,30 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             .apply_registered_command(&command(HeadlessActionIds::PLAY, toy), entity, Tick(1))
             .unwrap();
         assert!(play.action_result.execution.succeeded);
-        assert_eq!(play.action_result.body_event.play_stimulation, 1.0);
-        assert_eq!(
-            trial.entity(toy).unwrap().position,
-            baseline.entity(toy).unwrap().position
-        );
+        if toy == ball {
+            assert_eq!(
+                play.action_result.phase,
+                alife_world::ActionPhase::Preparation
+            );
+            assert_eq!(play.action_result.body_event.play_stimulation, 0.0);
+            assert_eq!(trial.entity(toy).unwrap().carried_by, Some(organism));
+            trial.try_advance_tick().unwrap();
+            let activation = trial
+                .apply_registered_command(&command(HeadlessActionIds::PLAY, toy), entity, Tick(2))
+                .unwrap();
+            assert_eq!(
+                activation.action_result.phase,
+                alife_world::ActionPhase::Completed
+            );
+            assert_eq!(activation.action_result.body_event.play_stimulation, 1.0);
+        } else {
+            assert_eq!(play.action_result.body_event.play_stimulation, 1.0);
+            assert_eq!(
+                trial.entity(toy).unwrap().position,
+                baseline.entity(toy).unwrap().position
+            );
+            assert_eq!(trial.entity(toy).unwrap().carried_by, None);
+        }
         assert!(!trial.entity(toy).unwrap().consumed);
         let mut trial = baseline.clone();
         assert!(
@@ -362,31 +381,55 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
         0,
     )
     .unwrap();
-    let bundle = alife_core::MotorCommandBundle::new(
+    let mut bundle = alife_core::MotorCommandBundle::new(
         organism,
         alife_core::ExperienceSequenceId(1),
         baseline.tick(),
         vec![channel],
     )
     .unwrap();
-    let neural = alife_core::NeuralEmissionFrame::new(
-        baseline.tick(),
-        1,
-        vec![alife_core::NeuralEmission::new(
-            alife_core::NeuralEmissionClass::ExecutiveSustain,
-            0.0,
-            1.0,
+    let neural_at = |tick| {
+        alife_core::NeuralEmissionFrame::new(
+            tick,
+            1,
+            vec![alife_core::NeuralEmission::new(
+                alife_core::NeuralEmissionClass::ExecutiveSustain,
+                0.0,
+                1.0,
+            )
+            .unwrap()],
         )
-        .unwrap()],
-    )
-    .unwrap();
+        .unwrap()
+    };
+    let neural = neural_at(baseline.tick());
     let mut new_toy = baseline.clone();
     let mut familiar_toy = baseline.clone();
+    for (world, novelty) in [(&mut new_toy, 1.0), (&mut familiar_toy, 0.0)] {
+        let preparation = world
+            .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+                &bundle,
+                entity,
+                &neural,
+                novelty,
+                &[(ball, novelty)],
+            )
+            .unwrap();
+        assert_eq!(
+            preparation.channel_receipts[0].phase,
+            alife_world::ActionPhase::Preparation
+        );
+        assert_eq!(preparation.body_event.play_stimulation, 0.0);
+        assert_eq!(preparation.body_event.investigation, 0.0);
+        world.try_advance_tick().unwrap();
+    }
+    bundle.tick = new_toy.tick();
+    bundle.sequence_id = alife_core::ExperienceSequenceId(2);
+    let active_neural = neural_at(new_toy.tick());
     let new_play = new_toy
         .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
             &bundle,
             entity,
-            &neural,
+            &active_neural,
             1.0,
             &[(ball, 1.0)],
         )
@@ -395,7 +438,7 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
         .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
             &bundle,
             entity,
-            &neural,
+            &active_neural,
             0.0,
             &[(ball, 0.0)],
         )
@@ -696,7 +739,25 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
     let mut game = phase3_game(1);
     let founder = &game.receipt.founders[0];
     let hazard = game.world.entity_id("hazard-01").unwrap();
-    let command = HeadlessWorldCommand::approach(founder.organism_id, hazard).unwrap();
+    // This safety fixture supplies its chosen endpoint; it does not infer a
+    // hidden destination from an entity ID or exercise navigation competence.
+    let command = alife_core::ActionCommand::structured(
+        founder.organism_id,
+        alife_world::HeadlessActionIds::APPROACH,
+        alife_core::ActionKind::Move,
+        alife_core::ActionTarget::new(
+            Some(hazard),
+            Some(game.world.entity(hazard).unwrap().position),
+        ),
+        alife_core::Intensity::new(1.0).unwrap(),
+        alife_core::DurationTicks::new(1),
+        alife_core::Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
 
     let meadow_step = game
         .world
@@ -750,7 +811,20 @@ fn canonical_new_game_meadow_is_safe_until_actual_hazard_contact() {
 
     // Contact has a real consequence, but it does not trap the creature there.
     let food = game.world.entity_id("food-01").unwrap();
-    let retreat = HeadlessWorldCommand::approach(founder.organism_id, food).unwrap();
+    let retreat = alife_core::ActionCommand::structured(
+        founder.organism_id,
+        alife_world::HeadlessActionIds::APPROACH,
+        alife_core::ActionKind::Move,
+        alife_core::ActionTarget::new(Some(food), Some(game.world.entity(food).unwrap().position)),
+        alife_core::Intensity::new(1.0).unwrap(),
+        alife_core::DurationTicks::new(1),
+        alife_core::Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap();
     for _ in 0..3 {
         let next_tick = Tick(game.world.tick().raw() + 1);
         let step = game

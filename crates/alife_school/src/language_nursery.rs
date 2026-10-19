@@ -301,18 +301,30 @@ impl LanguageNursery {
         lesson: &LanguageNurseryLesson,
     ) -> Result<Vec<HeadlessActionResult>, ScaffoldContractError> {
         let mut actions = Vec::new();
+        // The external demonstrator chooses the lesson's known endpoint. A
+        // nearby learner can occlude it; only the ordinary physical action and
+        // its visible outcome reach the learner, never this private choice.
+        let approach = || {
+            ActionCommand::structured(
+                peer,
+                HeadlessActionIds::APPROACH,
+                ActionKind::Move,
+                ActionTarget::new(Some(target), Some(lesson.object_position)),
+                Intensity::new(1.0)?,
+                DurationTicks::new(1),
+                Confidence::new(1.0)?,
+                0,
+                None,
+                None,
+                None,
+            )
+        };
         match lesson.demonstration {
             NurseryDemonstration::Approach => {
-                actions.push(
-                    self.world
-                        .apply_command(&HeadlessWorldCommand::approach(peer, target)?)?,
-                );
+                actions.push(self.world.apply_command(&approach()?)?);
             }
             NurseryDemonstration::Eat => {
-                actions.push(
-                    self.world
-                        .apply_command(&HeadlessWorldCommand::approach(peer, target)?)?,
-                );
+                actions.push(self.world.apply_command(&approach()?)?);
                 actions.push(self.world.apply_command(&ActionCommand::structured(
                     peer,
                     HeadlessActionIds::GRAB,

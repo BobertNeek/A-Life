@@ -401,12 +401,15 @@ fn action_execution_supports_approach_flee_grab_and_vocalize() {
     let berry = world.entity_id("berry").unwrap();
     let thorn = world.entity_id("thorn").unwrap();
 
+    // These chosen endpoints test dispatch and physical effects. The legacy
+    // XY layout puts the thorn around eye height and can occlude the berry;
+    // this fixture does not infer hidden destinations from entity IDs.
     let approached = world
         .apply_command(&command(
             HeadlessActionIds::APPROACH,
             ActionKind::Move,
             Some(berry),
-            None,
+            Some(world.entity(berry).unwrap().position),
         ))
         .unwrap();
     assert!(approached.execution.succeeded);
@@ -424,7 +427,7 @@ fn action_execution_supports_approach_flee_grab_and_vocalize() {
             HeadlessActionIds::FLEE,
             ActionKind::Move,
             Some(thorn),
-            None,
+            Some(world.entity(thorn).unwrap().position),
         ))
         .unwrap();
     assert!(fled.execution.succeeded);

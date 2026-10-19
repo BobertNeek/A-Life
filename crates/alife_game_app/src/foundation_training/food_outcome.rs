@@ -1,9 +1,10 @@
-//! Output-only food evidence. No score, reward, or stopping-condition consumer.
+//! Exact-target measured food evidence for care acceptance, never a reward bonus.
 use alife_core::{
     ExperiencePatch, MotorChannel, OrganismId, PhysicalContactKind, Tick, WorldEntityId,
 };
 
-/// Observed events within this probe, not curriculum credit or a meal-failure score.
+/// Observed events within this probe. Care completion uses nourished meals;
+/// this record never supplies curriculum reward.
 /// A successful explicit-Grab probe can stop before any meal is observed.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FoundationFoodOutcome {
@@ -606,6 +607,22 @@ mod tests {
         summary.observe_selected(observation, &decision, &outcome);
         assert_eq!(summary.consumption_events, 1);
         assert_eq!(summary.nourished_meal_events, 1);
+        assert!(super::super::care_meal_completed(
+            Some(&summary),
+            learner,
+            target
+        ));
+        assert!(!super::super::care_meal_completed(
+            Some(&summary),
+            OrganismId(999),
+            target
+        ));
+        assert!(!super::super::care_meal_completed(
+            Some(&summary),
+            learner,
+            WorldEntityId(999)
+        ));
+        assert!(!super::super::care_meal_completed(None, learner, target));
         for variant in 0..10 {
             let mut wrong_decision = decision.clone();
             let mut wrong_outcome = outcome.clone();

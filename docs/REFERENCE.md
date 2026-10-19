@@ -31,9 +31,10 @@ geometry rule, without object-kind recognition or action scoring
 
 Visibility does not authorize ingestion. For reachable, safe, unheld food,
 selected Eat executes a real pickup using ordinary Grab reach, grip-path,
-ownership, liveness, and manipulation-effector checks. It requires a free grip:
-another held object is neither dropped nor replaced, and a player-held target
-cannot be taken. "Safe" here means Food with no authored hazard pain; this is
+ownership, liveness, and manipulation-effector checks. Explicitly carried or
+unknown legacy possession is protected. A temporary activity-held object may be
+placed safely when switching to another legal hands-on target; this is a separate
+preparation interval before pickup or use. A player-held target cannot be taken. "Safe" here means Food with no authored hazard pain; this is
 world execution validation, never a candidate score or extra brain input.
 Out-of-reach Eat fails without navigation. This first decision retains selected
 Eat identity, reports Touch and zero nutrition, and leaves the exact target
@@ -50,6 +51,54 @@ Successful Touch cannot establish eating completion or completed-action speech
 labels. CPU geometry, world, and sealed-scaffold regressions do not establish
 on-policy GPU behavior, learned preference, or founder promotion
 (`AOA-TEACH-007`, `AOA-OBS-002`).
+
+## Hands-on preparation and local movement
+
+Eat and Play share bounded physical hand preparation. A mobile ball must be
+acquired before actual Play; a fixed activity toy is used in place. Acquisition
+and safe placement report `Preparation`, retain the selected activity identity,
+and provide no nutrition, play stimulation, investigation novelty, completed-Play
+speech label, or activity praise. Actual activation reports `Completed` and a
+measured stimulation dose. App-only label evidence binds organism, sequence,
+source/outcome ticks, selected manipulation primitive/target, and actual Touch;
+missing or mismatched evidence supplies no completed-Play label. Adapted actuator
+intensity need not equal the originally requested intensity.
+
+Grip transfers name the affected object, old/new owner, old/new position, and
+acquisition, release, placement, or consumption. Safe placement validates the
+new target first, then checks a fixed set of nearby supported positions, reach,
+terrain, swept object clearance, and occupancy. Failure keeps possession. Look,
+Inspect, Approach, and movement never acquire or release an object implicitly.
+Activity provenance persists; legacy held objects default to protected carrying.
+
+Approach/entity-directed movement can take one bounded clearance step only when
+the target appears in a fresh, calibrated, bounded canonical terrain-vision
+snapshot. The selector receives nine nearby physical clearance ranges and the
+observed bearing, never hidden target coordinates, an opening search, or a route.
+Body size and a conservative carried-object envelope constrain clearance;
+ordinary terrain/collision/grip checks still validate the selected step.
+Transparent solid barriers remain physical obstacles.
+
+A hidden destination permits no automatic corner detour. Explicit learned
+intermediate movement can reveal it and restore assistance. Each decision
+rechecks visibility; target occlusion pauses assistance on the next decision,
+without completing a remembered multi-step maneuver. A persisted finite detour
+budget replenishes only after net improvement beyond the best observed distance;
+oscillating outward/inward steps, repeated commands, and reload cannot reset it.
+Changing hidden distant geometry cannot select a route. Destination choice,
+exploration, hidden-corner navigation, and persistence remain learned behavior
+(`AOA-SENSE-001/002`, `AOA-MOTOR-002/005`, `AOA-EMB-001/003`,
+`AOA-TIME-001/003`). These are physical execution conventions, not evidence of
+learned competence or a settled training curriculum.
+
+Care evaluation exposes prompted and silent conditions for held food, reachable
+unheld food (`EatReachableFood`), and short Feeding approaches. Silence suppresses
+initial and repeated spatial requests; absence of a demonstrator alone does not
+make a probe silent. Care demonstrations select Eat for pickup and consumption.
+Care success uses exact learner/target `FoundationFoodOutcome` nourishing-meal
+evidence; blocked actions are reported separately. The existing explicit-Grab
+experiment retains its distinct qualification and credit boundary. See the
+[care-first next-run plan](training/care-first-next-run-2026-10-19.md).
 
 ## Brain classes
 

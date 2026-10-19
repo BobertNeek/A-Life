@@ -31,6 +31,9 @@ impl GpuLiveBrainRuntime {
         };
         let curated_first_tick = curated_first_tick_resident.is_some();
         self.retire_dead_organisms()?;
+        #[cfg(feature = "foundation-training")]
+        self.recent_foundation_activity
+            .retain(|id, _| self.handles.contains_key(id));
         self.reconcile_population()?;
         if let Some(prior) = self.semantic_prior.as_mut() {
             prior.retain_lives(&self.handles);
@@ -1024,9 +1027,23 @@ impl GpuLiveBrainRuntime {
                 {
                     return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
                 }
+                let activity_evidence = summaries
+                    .iter()
+                    .find_map(|summary| FoundationActivityEvidence::from_summary(summary, &patch));
+                if let Some(evidence) = &activity_evidence {
+                    let recent = self
+                        .recent_foundation_activity
+                        .entry(frame.organism_id().raw())
+                        .or_default();
+                    if recent.len() == 2 {
+                        recent.remove(0);
+                    }
+                    recent.push(evidence.clone());
+                }
                 self.last_foundation_training_steps
                     .push(FoundationTrainingStep {
                         outcome_credit: alife_core::OutcomeCreditPacket::from_sealed_patch(&patch)?,
+                        activity_evidence,
                         frame,
                         memory_upload,
                         before,

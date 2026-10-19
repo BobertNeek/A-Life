@@ -1010,6 +1010,10 @@ pub struct WorldObjectSaveState {
     pub teacher_channel: Option<TeacherPerceptionChannel>,
     pub consumed: bool,
     pub carried_by: Option<OrganismId>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub activity_hold: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_steering: Option<crate::LocalSteeringState>,
     pub grounded_physical: GroundedPhysicalProperties,
     pub tracking_provenance: PhysicalTrackingProvenance,
     pub tracking_key: PhysicalTrackingKey,
@@ -1080,6 +1084,10 @@ struct WorldObjectSaveWire {
     teacher_channel: Option<TeacherPerceptionChannel>,
     consumed: bool,
     carried_by: Option<OrganismId>,
+    #[serde(default)]
+    activity_hold: bool,
+    #[serde(default)]
+    local_steering: Option<crate::LocalSteeringState>,
     #[serde(default)]
     grounded_physical: Option<GroundedPhysicalProperties>,
     #[serde(default)]
@@ -1168,6 +1176,8 @@ impl WorldObjectSaveWire {
             teacher_channel: self.teacher_channel,
             consumed: self.consumed,
             carried_by: self.carried_by,
+            activity_hold: self.activity_hold,
+            local_steering: self.local_steering,
             grounded_physical,
             tracking_provenance,
             tracking_key,
@@ -2402,6 +2412,15 @@ impl WorldObjectSaveState {
         if let Some(id) = self.carried_by {
             id.validate()?;
         }
+        if self.activity_hold && (self.carried_by.is_none() || self.consumed) {
+            return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+        }
+        if let Some(state) = self.local_steering {
+            state.validate()?;
+            if self.kind != WorldObjectKind::Agent {
+                return Err(PersistenceError::Contract(ScaffoldContractError::InvalidId));
+            }
+        }
         self.position.validate()?;
         if !self.body_yaw.is_finite()
             || !self.head_yaw.is_finite()
@@ -2463,6 +2482,8 @@ impl From<WorldObject> for WorldObjectSaveState {
             teacher_channel: value.teacher_channel,
             consumed: value.consumed,
             carried_by: value.carried_by,
+            activity_hold: value.activity_hold,
+            local_steering: value.local_steering,
             grounded_physical: value.grounded_physical,
             tracking_provenance: value.tracking_provenance,
             tracking_key: value.tracking_key,
@@ -2489,6 +2510,8 @@ impl From<WorldObjectSaveState> for WorldObject {
             teacher_channel: value.teacher_channel,
             consumed: value.consumed,
             carried_by: value.carried_by,
+            activity_hold: value.activity_hold,
+            local_steering: value.local_steering,
             grounded_physical: value.grounded_physical,
             tracking_provenance: value.tracking_provenance,
             tracking_key: value.tracking_key,

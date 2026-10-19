@@ -83,7 +83,7 @@ fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
         FoundationTeacherLesson::MazeNavigation => 5,
         FoundationTeacherLesson::VocabularyReception => 6,
         FoundationTeacherLesson::VocabularyProduction => 7,
-        FoundationTeacherLesson::EatHeldFood => 8,
+        FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::EatReachableFood => 8,
         FoundationTeacherLesson::GrabFood => 9,
     }
 }

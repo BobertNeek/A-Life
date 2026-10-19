@@ -202,6 +202,8 @@ pub struct FoundationCycleReceipt {
     #[serde(default)]
     pub held_food_setup: Option<crate::foundation_training::FoundationHeldFoodSetup>,
     #[serde(default)]
+    pub reachable_food_setup: Option<crate::FoundationGrabFoodSetup>,
+    #[serde(default)]
     pub grab_food_setup: Option<crate::FoundationGrabFoodSetup>,
     #[serde(default)]
     pub grab_food_acquisitions: Vec<crate::FoundationGrabAcquisition>,
@@ -215,6 +217,7 @@ pub struct FoundationCycleReceipt {
     pub curriculum_reward_rows: Vec<crate::FoundationCurriculumRewardRow>,
     #[serde(default)]
     pub curriculum_reward_total: f32,
+    /// Nourishing meals of the care target held before the action, including reachable care.
     #[serde(default)]
     pub held_food_consumption_events: usize,
     /// Actual captured meals whose action row participates in the update.
@@ -223,6 +226,9 @@ pub struct FoundationCycleReceipt {
     /// Fresh world/lifetime setup opportunities, not replay rows or epochs.
     #[serde(default)]
     pub prepared_held_food_opportunities: usize,
+    /// Fresh initially unheld, reachable care opportunities; separate from held setup.
+    #[serde(default)]
+    pub prepared_reachable_food_opportunities: usize,
     #[serde(default)]
     pub captured_replay_rows: usize,
     #[serde(default)]
@@ -256,7 +262,7 @@ fn digest(asset: &FoundationWeightAsset) -> String {
         .collect()
 }
 
-fn cycle_replay_dose(
+pub(crate) fn cycle_replay_dose(
     captured_rows: usize,
     trained_rows: usize,
     meal_rows: &[usize],
@@ -1453,6 +1459,59 @@ mod founder_refresh_tests {
         assert!(cycle_replay_dose(3, 1, &[]).is_err());
         assert!(cycle_replay_dose(3, 2, &[3]).is_err());
         assert!(cycle_replay_dose(3, 2, &[1, 1]).is_err());
+    }
+
+    #[test]
+    fn reachable_care_cycle_receipt_preserves_setup_and_separate_opportunity() {
+        let (mut receipt, asset, _, _) = cycle_handoff();
+        let mut config =
+            alife_world::CanonicalNewGameConfig::phase3(receipt.founder_seed_base, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        let scenario = crate::foundation_training::configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(FoundationTeacherLesson::EatReachableFood),
+            None,
+            false,
+        )
+        .unwrap();
+        receipt.lesson = Some(FoundationTeacherLesson::EatReachableFood);
+        receipt.reachable_food_setup = scenario.reachable_food_setup.clone();
+        receipt.prepared_reachable_food_opportunities =
+            usize::from(scenario.reachable_food_setup.is_some());
+        let setup = receipt.reachable_food_setup.as_ref().unwrap();
+        let target = setup.target;
+        let organism = setup.organism;
+        assert_eq!(receipt.prepared_held_food_opportunities, 0);
+        assert!(receipt.held_food_setup.is_none() && receipt.grab_food_setup.is_none());
+        assert!(receipt.grab_food_acquisitions.is_empty());
+        assert_eq!(receipt.curriculum_reward_total, 0.0);
+
+        let mut encoded = serde_json::to_value(&receipt).unwrap();
+        let restored: FoundationCycleReceipt = serde_json::from_value(encoded.clone()).unwrap();
+        assert_eq!(restored.prepared_reachable_food_opportunities, 1);
+        let restored_setup = restored.reachable_food_setup.unwrap();
+        assert_eq!(restored_setup.target, target);
+        assert_eq!(restored_setup.organism, organism);
+        assert_eq!(restored_setup.initial_owner, None);
+
+        // Receipts predating these diagnostics have neither new field.
+        encoded
+            .as_object_mut()
+            .unwrap()
+            .remove("reachable_food_setup");
+        encoded
+            .as_object_mut()
+            .unwrap()
+            .remove("prepared_reachable_food_opportunities");
+        let legacy: FoundationCycleReceipt = serde_json::from_value(encoded).unwrap();
+        assert!(legacy.reachable_food_setup.is_none());
+        assert_eq!(legacy.prepared_reachable_food_opportunities, 0);
     }
 
     fn cycle_handoff() -> (
@@ -3044,6 +3103,7 @@ fn run_foundation_training_cycle_in_owned_output(
             "teacher_cue_tokens": scenario.as_ref().map(|s| &s.teacher_cue_tokens),
             "teacher_cue_kind": "contextual_request_not_completed_action_narration",
             "held_food_setup": scenario.as_ref().and_then(|s|s.held_food_setup.as_ref()),
+            "reachable_food_setup": scenario.as_ref().and_then(|s|s.reachable_food_setup.as_ref()),
             "grab_food_setup": scenario.as_ref().and_then(|s|s.grab_food_setup.as_ref()),
             "vocabulary_target": scenario.as_ref().and_then(|s|s.vocabulary_target).map(|id|id.raw()),
             "food_position": scenario_position("food-01")?,
@@ -3113,16 +3173,11 @@ fn run_foundation_training_cycle_in_owned_output(
             crate::foundation_grab_food::food_ownership(runtime.world(), setup.target)
         })
     };
+    let care_food_subject = scenario
+        .as_ref()
+        .and_then(|setup| setup.care_food_subject());
     let lesson_food_held = |runtime: &GpuLiveBrainRuntime| {
-        scenario
-            .as_ref()
-            .and_then(|s| s.held_food_setup.as_ref())
-            .is_some_and(|setup| {
-                runtime
-                    .world()
-                    .entity(setup.target)
-                    .is_some_and(|food| food.carried_by == Some(setup.organism) && !food.consumed)
-            })
+        care_food_subject.is_some_and(|subject| subject.is_held(runtime.world()))
     };
     let observe_lesson = |step: &crate::FoundationTrainingStep, held: bool| {
         scenario.as_ref().map_or((false, false), |s| {
@@ -3131,7 +3186,7 @@ fn run_foundation_training_cycle_in_owned_output(
                     &step.frame,
                     &s.teacher_cue_tokens,
                 ),
-                crate::foundation_training::held_food_step_consumed(step, s.food, held),
+                care_food_subject.is_some_and(|subject| subject.step_consumed(step, held)),
             )
         })
     };
@@ -3267,21 +3322,25 @@ fn run_foundation_training_cycle_in_owned_output(
     budget
         .check_additional((training_ticks as u64 + 1) * u64::from(phenotype.neuron_count()) * 4)?;
     let mut critic_capture_features = Vec::with_capacity(training_ticks + 1);
-    let speech_label = |frame: &alife_core::PerceptionFrame,
-                        previous: Option<&alife_core::ExperiencePatch>| {
-        crate::foundation_training::grounded_speech_label(
-            frame,
-            scenario.as_ref().and_then(|s| s.vocabulary_token),
-            scenario.as_ref().and_then(|s| s.vocabulary_noun),
-            scenario.as_ref().and_then(|s| s.vocabulary_target),
-            previous,
-            lesson == Some(FoundationTeacherLesson::VocabularyProduction),
-        )
-    };
+    let speech_label =
+        |frame: &alife_core::PerceptionFrame,
+         previous: Option<&alife_core::ExperiencePatch>,
+         activity: Option<&crate::gpu_live_runtime::FoundationActivityEvidence>| {
+            crate::foundation_training::grounded_speech_label(
+                frame,
+                scenario.as_ref().and_then(|s| s.vocabulary_token),
+                scenario.as_ref().and_then(|s| s.vocabulary_noun),
+                scenario.as_ref().and_then(|s| s.vocabulary_target),
+                previous,
+                activity,
+                lesson == Some(FoundationTeacherLesson::VocabularyProduction),
+            )
+        };
     let mut speech_targets = Vec::with_capacity(training_ticks + 1);
     let append_started = Instant::now();
-    speech_targets.push(speech_label(&first[0].frame, None));
+    speech_targets.push(speech_label(&first[0].frame, None, None));
     let mut last_speech_patch = first[0].patch.clone();
+    let mut last_speech_activity = first[0].activity_evidence.clone();
     critic_capture_features.push(crate::foundation_training::snapshot_activation(
         &first[0].after_inference,
     )?);
@@ -3326,7 +3385,11 @@ fn run_foundation_training_cycle_in_owned_output(
         }
         if matches!(
             lesson,
-            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+            Some(
+                FoundationTeacherLesson::EatHeldFood
+                    | FoundationTeacherLesson::EatReachableFood
+                    | FoundationTeacherLesson::GrabFood
+            )
         ) {
             crate::foundation_training::prime_foundation_lesson_prior(
                 &mut runtime,
@@ -3483,8 +3546,13 @@ fn run_foundation_training_cycle_in_owned_output(
             }
         }
         let append_started = Instant::now();
-        speech_targets.push(speech_label(&captured[0].frame, Some(&last_speech_patch)));
+        speech_targets.push(speech_label(
+            &captured[0].frame,
+            Some(&last_speech_patch),
+            last_speech_activity.as_ref(),
+        ));
         last_speech_patch = captured[0].patch.clone();
+        last_speech_activity = captured[0].activity_evidence.clone();
         critic_capture_features.push(crate::foundation_training::snapshot_activation(
             &captured[0].after_inference,
         )?);
@@ -4089,6 +4157,9 @@ fn run_foundation_training_cycle_in_owned_output(
             .as_ref()
             .map_or_else(Vec::new, |s| s.teacher_cue_tokens.clone()),
         held_food_setup: scenario.as_ref().and_then(|s| s.held_food_setup.clone()),
+        reachable_food_setup: scenario
+            .as_ref()
+            .and_then(|s| s.reachable_food_setup.clone()),
         grab_food_setup: grab_setup.cloned(),
         grab_food_acquisitions,
         trained_grab_food_acquisitions,
@@ -4103,6 +4174,11 @@ fn run_foundation_training_cycle_in_owned_output(
             scenario
                 .as_ref()
                 .is_some_and(|s| s.held_food_setup.is_some()),
+        ),
+        prepared_reachable_food_opportunities: usize::from(
+            scenario
+                .as_ref()
+                .is_some_and(|s| s.reachable_food_setup.is_some()),
         ),
         captured_replay_rows: references.len(),
         trained_replay_rows: train_rows,

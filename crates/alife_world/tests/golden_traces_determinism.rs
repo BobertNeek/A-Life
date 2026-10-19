@@ -10,10 +10,10 @@ use alife_world::{
 };
 use serde::{Deserialize, Serialize};
 
-const GOLDEN_TRACE_SCHEMA: &str = "alife.p19.golden_trace.v2";
-// v1 remains historical evidence. v2 records the intentional 20 Hz movement,
-// solid contact legality, and kind-specific physical chemical cues.
-const GOLDEN_TRACE_SCHEMA_VERSION: u16 = 2;
+const GOLDEN_TRACE_SCHEMA: &str = "alife.p19.golden_trace.v3";
+// v1/v2 remain historical evidence. v3 adds activity-hold and steering state
+// to world identity without relaxing the existing physical outcome checks.
+const GOLDEN_TRACE_SCHEMA_VERSION: u16 = 3;
 const STOCHASTIC_SEED_FIELD: &str = "scenario.seed";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,7 +206,7 @@ fn golden_fixture_path(key: &str) -> PathBuf {
         .join("tests")
         .join("fixtures")
         .join("golden_traces")
-        .join("v2")
+        .join("v3")
         .join(format!("{key}.json"))
 }
 

@@ -3399,11 +3399,79 @@ impl CuratedFounderResetRuntimePort for GpuLiveBrainRuntime {
     }
 }
 
-/// Owns all production neural authority for one headless world.
+/// Measured manipulation evidence bound to one sealed patch. App-only and
+/// transient: it changes neither the core patch ABI nor neural inputs.
+#[cfg(feature = "foundation-training")]
+#[derive(Debug, Clone)]
+pub struct FoundationActivityEvidence {
+    pub organism_id: OrganismId,
+    pub source_tick: Tick,
+    pub outcome_tick: Tick,
+    pub sequence_id: u64,
+    pub receipt: alife_world::HeadlessMotorChannelReceipt,
+}
+
+#[cfg(feature = "foundation-training")]
+impl FoundationActivityEvidence {
+    fn from_summary(summary: &LiveBrainTickSummary, patch: &ExperiencePatch) -> Option<Self> {
+        let evidence = Self {
+            organism_id: summary.organism_id,
+            source_tick: summary.world_tick_before,
+            outcome_tick: summary.world_tick_after,
+            sequence_id: summary.patch_sequence_id?,
+            receipt: summary
+                .motor_execution
+                .as_ref()?
+                .channel_receipts
+                .iter()
+                .find(|receipt| receipt.command.channel == alife_core::MotorChannel::Manipulation)?
+                .clone(),
+        };
+        evidence.matches_patch(patch).then_some(evidence)
+    }
+
+    pub(crate) fn matches_patch(&self, patch: &ExperiencePatch) -> bool {
+        self.organism_id == patch.header().organism_id
+            && self.source_tick == patch.pre_action().perception().tick()
+            && self.outcome_tick == patch.outcome().outcome_tick
+            && self.sequence_id == patch.header().sequence_id.raw()
+    }
+
+    pub(crate) fn completed_play(
+        &self,
+        patch: &ExperiencePatch,
+        target: Option<WorldEntityId>,
+    ) -> bool {
+        self.matches_patch(patch)
+            && target.is_some()
+            && self.receipt.command.channel == alife_core::MotorChannel::Manipulation
+            && self.receipt.command.primitive == alife_world::HeadlessActionIds::PLAY
+            && self
+                .receipt
+                .command
+                .target
+                .and_then(|binding| binding.entity)
+                == target
+            && patch.selected_bundle().is_some_and(|bundle| {
+                bundle.channels.iter().any(|channel| {
+                    channel.channel == self.receipt.command.channel
+                        && channel.primitive == self.receipt.command.primitive
+                        && channel.target == self.receipt.command.target
+                })
+            })
+            && self.receipt.phase == alife_world::ActionPhase::Completed
+            && (self.receipt.play_stimulation > 0.0 || self.receipt.investigation > 0.0)
+            && self.receipt.physical.contact == alife_core::PhysicalContactKind::Touch
+            && self.receipt.physical.target_entity == target
+    }
+}
+
+/// One captured foundation step, including its matching physical activity receipt.
 #[cfg(feature = "foundation-training")]
 #[derive(Debug, Clone)]
 pub struct FoundationTrainingStep {
     pub outcome_credit: alife_core::OutcomeCreditPacket,
+    pub activity_evidence: Option<FoundationActivityEvidence>,
     pub frame: PerceptionFrame,
     pub memory_upload: GpuMemoryContextUpload,
     pub before: alife_gpu_backend::training_rollout::GpuTrainingStateSnapshot,
@@ -3433,6 +3501,8 @@ pub struct GpuLiveBrainRuntime {
     training_demonstrator: Option<FoundationTrainingDemonstrator>,
     #[cfg(feature = "foundation-training")]
     last_foundation_training_steps: Vec<FoundationTrainingStep>,
+    #[cfg(feature = "foundation-training")]
+    recent_foundation_activity: BTreeMap<u64, Vec<FoundationActivityEvidence>>,
     #[cfg(feature = "foundation-training")]
     last_foundation_terminal_biology: BTreeMap<u64, BiochemistryState>,
     backend: GpuAuthoritativeSession,
@@ -6092,6 +6162,19 @@ impl GpuLiveBrainRuntime {
         std::mem::take(&mut self.last_foundation_training_steps)
     }
 
+    /// At most two captured manipulation receipts per live organism, retained
+    /// for current-action praise and the preceding action's speech label.
+    #[cfg(feature = "foundation-training")]
+    pub(crate) fn foundation_activity_evidence(
+        &self,
+        patch: &ExperiencePatch,
+    ) -> Option<&FoundationActivityEvidence> {
+        self.recent_foundation_activity
+            .get(&patch.header().organism_id.raw())?
+            .iter()
+            .find(|evidence| evidence.matches_patch(patch))
+    }
+
     /// Explicit lessons attempt hints rather than the training dropout ablation.
     #[cfg(feature = "foundation-training")]
     pub(crate) fn require_foundation_rich_information(&mut self) -> Result<(), GameAppShellError> {
@@ -6317,6 +6400,8 @@ impl GpuLiveBrainRuntime {
             #[cfg(feature = "foundation-training")]
             last_foundation_training_steps: Vec::new(),
             #[cfg(feature = "foundation-training")]
+            recent_foundation_activity: BTreeMap::new(),
+            #[cfg(feature = "foundation-training")]
             last_foundation_terminal_biology: BTreeMap::new(),
             backend: GpuAuthoritativeSession::new(backend, consumer),
             handles: BTreeMap::new(),
@@ -6473,6 +6558,8 @@ impl GpuLiveBrainRuntime {
             training_demonstrator: None,
             #[cfg(feature = "foundation-training")]
             last_foundation_training_steps: Vec::new(),
+            #[cfg(feature = "foundation-training")]
+            recent_foundation_activity: BTreeMap::new(),
             #[cfg(feature = "foundation-training")]
             last_foundation_terminal_biology: BTreeMap::new(),
             backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
@@ -8048,6 +8135,8 @@ impl GpuLiveBrainRuntime {
         if result.is_err() {
             #[cfg(feature = "foundation-training")]
             self.last_foundation_training_steps.clear();
+            #[cfg(feature = "foundation-training")]
+            self.recent_foundation_activity.clear();
             #[cfg(feature = "foundation-training")]
             self.last_foundation_terminal_biology.clear();
             staged_sleep.restore(self);

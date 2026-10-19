@@ -755,6 +755,10 @@ mod tests {
                 .unwrap();
         let receipt = alife_world::HeadlessMotorChannelReceipt {
             command: command.clone(),
+            phase: alife_world::headless::ActionPhase::Completed,
+            grip_transfers: Vec::new(),
+            play_stimulation: 0.0,
+            investigation: 0.0,
             observation: None,
             physical: alife_core::PhysicalActionOutcome {
                 contact: alife_core::PhysicalContactKind::Consumed,
