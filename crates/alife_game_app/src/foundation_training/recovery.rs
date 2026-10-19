@@ -273,6 +273,149 @@ mod tests {
         )
     }
 
+    // Counterfactual numerical/provenance fixtures retain the executed command
+    // and physical receipt, but replace fatigue observations and re-seal their
+    // frame/transition bindings. They do not establish causal body recovery.
+    fn counterfactual_fatigue(patch: &ExperiencePatch, before: f32, after: f32) -> ExperiencePatch {
+        let changed = changed_outcome(patch, |outcome| {
+            let transition = outcome.measured_physiology.as_mut().unwrap();
+            transition.before.homeostasis.drives.fatigue = before;
+            transition.after.homeostasis.drives.fatigue = after;
+        });
+        let frame = patch.pre_action().perception();
+        let mut homeostasis = *frame.homeostasis();
+        homeostasis.drives.fatigue = before;
+        let frame = alife_core::PerceptionFrameDraft::new(
+            frame.organism_id(),
+            frame.tick(),
+            frame.sensor_profile(),
+            frame.sensory().clone(),
+            frame.body(),
+            homeostasis,
+            frame.candidates().to_vec(),
+            frame.profile_provenance(),
+            frame.grounded_object_slots().to_vec(),
+        )
+        .unwrap()
+        .finalize(frame.context().clone())
+        .unwrap();
+        let action = &patch.decision().selected_action;
+        let outcome = changed.outcome().clone();
+        let motor = patch.selected_bundle().cloned().zip(outcome.joint.clone());
+        action_patch(
+            frame,
+            action.target_entity,
+            outcome,
+            action.action_id,
+            motor,
+        )
+    }
+
+    #[test]
+    fn counterfactual_nonrest_relief_and_later_awake_meal_require_executed_rest() {
+        let (mut world, food) = prepared(true);
+        let mut patches = vec![execute(
+            &mut world,
+            Ids::LOOK_CENTER,
+            None,
+            &[
+                (MotorChannel::Orientation, Ids::LOOK_CENTER, None),
+                (MotorChannel::Posture, Ids::NO_POSTURE, None),
+            ],
+        )];
+        feed(&mut world, food, &mut patches, None);
+        let initial = patches[0].pre_action().homeostasis().drives.fatigue;
+        let relieved = initial - 0.03;
+        let patches: Vec<_> = patches
+            .iter()
+            .enumerate()
+            .map(|(index, patch)| {
+                counterfactual_fatigue(patch, if index == 0 { initial } else { relieved }, relieved)
+            })
+            .collect();
+        assert!(patches.iter().all(|patch| !rest_executed(patch)));
+        let first = patches[0].outcome().measured_physiology.unwrap();
+        assert!(first.after.homeostasis.drives.fatigue < first.before.homeostasis.drives.fatigue);
+        let meal = patches.last().unwrap();
+        let transition = meal.outcome().measured_physiology.unwrap();
+        assert!(transition.after.homeostasis.drives.fatigue <= initial - 0.02);
+        assert!(!transition.after.body.sleeping);
+        assert!(super::super::selected_eat_consumed(
+            &meal.decision().selected_action,
+            meal.selected_bundle(),
+            meal.outcome(),
+            food,
+        ));
+        assert!(!lesson_completed(food, &patches));
+    }
+
+    #[test]
+    fn counterfactual_exact_fatigue_boundaries_accept_rest_crossing_episode_threshold() {
+        let (mut world, food) = prepared(true);
+        let mut patches = vec![
+            execute(&mut world, Ids::LOOK_CENTER, None, &[]),
+            execute(
+                &mut world,
+                Ids::LOOK_CENTER,
+                None,
+                &[
+                    (MotorChannel::Orientation, Ids::LOOK_CENTER, None),
+                    (MotorChannel::Posture, ActionKind::Rest.canonical_id(), None),
+                ],
+            ),
+        ];
+        feed(&mut world, food, &mut patches, None);
+        let initial = 0.12_f32;
+        let target = initial - 0.02;
+        let intermediate = initial - 0.015;
+        let patches: Vec<_> = patches
+            .iter()
+            .enumerate()
+            .map(|(index, patch)| {
+                let (before, after) = match index {
+                    0 => (initial, intermediate),
+                    1 => (intermediate, target),
+                    _ => (target, target),
+                };
+                counterfactual_fatigue(patch, before, after)
+            })
+            .collect();
+        assert_eq!(
+            patches[0]
+                .pre_action()
+                .homeostasis()
+                .drives
+                .fatigue
+                .to_bits(),
+            initial.to_bits()
+        );
+        assert!(!rest_executed(&patches[0]));
+        assert!(rest_executed(&patches[1]));
+        let rest = patches[1].outcome().measured_physiology.unwrap();
+        assert!(rest.after.homeostasis.drives.fatigue < rest.before.homeostasis.drives.fatigue);
+        assert!(
+            rest.before.homeostasis.drives.fatigue - rest.after.homeostasis.drives.fatigue < 0.02
+        );
+        assert_eq!(
+            rest.after.homeostasis.drives.fatigue.to_bits(),
+            target.to_bits()
+        );
+        let meal = patches.last().unwrap();
+        let transition = meal.outcome().measured_physiology.unwrap();
+        assert_eq!(
+            transition.after.homeostasis.drives.fatigue.to_bits(),
+            target.to_bits()
+        );
+        assert!(!transition.after.body.sleeping);
+        assert!(super::super::selected_eat_consumed(
+            &meal.decision().selected_action,
+            meal.selected_bundle(),
+            meal.outcome(),
+            food,
+        ));
+        assert!(lesson_completed(food, &patches));
+    }
+
     #[test]
     fn direct_interrupted_and_factorized_recovery_require_later_waking_meal() {
         let (initial_world, food) = prepared(true);
