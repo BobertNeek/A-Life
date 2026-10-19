@@ -3267,21 +3267,25 @@ fn run_foundation_training_cycle_in_owned_output(
     budget
         .check_additional((training_ticks as u64 + 1) * u64::from(phenotype.neuron_count()) * 4)?;
     let mut critic_capture_features = Vec::with_capacity(training_ticks + 1);
-    let speech_label = |frame: &alife_core::PerceptionFrame,
-                        previous: Option<&alife_core::ExperiencePatch>| {
-        crate::foundation_training::grounded_speech_label(
-            frame,
-            scenario.as_ref().and_then(|s| s.vocabulary_token),
-            scenario.as_ref().and_then(|s| s.vocabulary_noun),
-            scenario.as_ref().and_then(|s| s.vocabulary_target),
-            previous,
-            lesson == Some(FoundationTeacherLesson::VocabularyProduction),
-        )
-    };
+    let speech_label =
+        |frame: &alife_core::PerceptionFrame,
+         previous: Option<&alife_core::ExperiencePatch>,
+         activity: Option<&crate::gpu_live_runtime::FoundationActivityEvidence>| {
+            crate::foundation_training::grounded_speech_label(
+                frame,
+                scenario.as_ref().and_then(|s| s.vocabulary_token),
+                scenario.as_ref().and_then(|s| s.vocabulary_noun),
+                scenario.as_ref().and_then(|s| s.vocabulary_target),
+                previous,
+                activity,
+                lesson == Some(FoundationTeacherLesson::VocabularyProduction),
+            )
+        };
     let mut speech_targets = Vec::with_capacity(training_ticks + 1);
     let append_started = Instant::now();
-    speech_targets.push(speech_label(&first[0].frame, None));
+    speech_targets.push(speech_label(&first[0].frame, None, None));
     let mut last_speech_patch = first[0].patch.clone();
+    let mut last_speech_activity = first[0].activity_evidence.clone();
     critic_capture_features.push(crate::foundation_training::snapshot_activation(
         &first[0].after_inference,
     )?);
@@ -3326,7 +3330,11 @@ fn run_foundation_training_cycle_in_owned_output(
         }
         if matches!(
             lesson,
-            Some(FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::GrabFood)
+            Some(
+                FoundationTeacherLesson::EatHeldFood
+                    | FoundationTeacherLesson::EatReachableFood
+                    | FoundationTeacherLesson::GrabFood
+            )
         ) {
             crate::foundation_training::prime_foundation_lesson_prior(
                 &mut runtime,
@@ -3483,8 +3491,13 @@ fn run_foundation_training_cycle_in_owned_output(
             }
         }
         let append_started = Instant::now();
-        speech_targets.push(speech_label(&captured[0].frame, Some(&last_speech_patch)));
+        speech_targets.push(speech_label(
+            &captured[0].frame,
+            Some(&last_speech_patch),
+            last_speech_activity.as_ref(),
+        ));
         last_speech_patch = captured[0].patch.clone();
+        last_speech_activity = captured[0].activity_evidence.clone();
         critic_capture_features.push(crate::foundation_training::snapshot_activation(
             &captured[0].after_inference,
         )?);

@@ -309,11 +309,30 @@ fn food_and_toy_variants_have_physical_gene_controlled_and_persistent_effects() 
             .apply_registered_command(&command(HeadlessActionIds::PLAY, toy), entity, Tick(1))
             .unwrap();
         assert!(play.action_result.execution.succeeded);
-        assert_eq!(play.action_result.body_event.play_stimulation, 1.0);
-        assert_eq!(
-            trial.entity(toy).unwrap().position,
-            baseline.entity(toy).unwrap().position
-        );
+        if toy == ball {
+            assert_eq!(
+                play.action_result.phase,
+                alife_world::ActionPhase::Preparation
+            );
+            assert_eq!(play.action_result.body_event.play_stimulation, 0.0);
+            assert_eq!(trial.entity(toy).unwrap().carried_by, Some(organism));
+            trial.try_advance_tick().unwrap();
+            let activation = trial
+                .apply_registered_command(&command(HeadlessActionIds::PLAY, toy), entity, Tick(2))
+                .unwrap();
+            assert_eq!(
+                activation.action_result.phase,
+                alife_world::ActionPhase::Completed
+            );
+            assert_eq!(activation.action_result.body_event.play_stimulation, 1.0);
+        } else {
+            assert_eq!(play.action_result.body_event.play_stimulation, 1.0);
+            assert_eq!(
+                trial.entity(toy).unwrap().position,
+                baseline.entity(toy).unwrap().position
+            );
+            assert_eq!(trial.entity(toy).unwrap().carried_by, None);
+        }
         assert!(!trial.entity(toy).unwrap().consumed);
         let mut trial = baseline.clone();
         assert!(

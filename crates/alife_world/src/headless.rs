@@ -86,11 +86,11 @@ const NONVISUAL_CANDIDATE_DENSITY_DIVISOR: usize = 16;
 const VOCAL_TOKEN_ID_BASE: u32 = 400_000;
 pub const SPONTANEOUS_SPEECH_COOLDOWN_TICKS: u64 = 32;
 const PROMPTED_SPEECH_COOLDOWN_TICKS: u64 = 8;
-const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v7";
+const HEADLESS_WORLD_SIGNATURE_DOMAIN: &[u8] = b"alife.headless-world.signature.v8";
 /// Current schema required by every fresh headless-world signature receipt.
 ///
-/// Version 7 additionally binds gaze and optical opacity.
-pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 7;
+/// Version 8 additionally binds activity grip provenance and local steering limits.
+pub const HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION: u16 = 8;
 
 fn map_organism_registry_error(error: OrganismRegistryError) -> ScaffoldContractError {
     match error {
@@ -1120,6 +1120,11 @@ pub struct WorldObject {
     pub teacher_channel: Option<TeacherPerceptionChannel>,
     pub consumed: bool,
     pub carried_by: Option<OrganismId>,
+    /// Temporary possession acquired while preparing a hands-on activity.
+    /// False also conservatively protects possession restored from older saves.
+    pub activity_hold: bool,
+    /// Bounded actuator non-progress state; contains no route or hidden pose.
+    pub local_steering: Option<LocalSteeringState>,
     pub grounded_physical: GroundedPhysicalProperties,
     pub tracking_provenance: PhysicalTrackingProvenance,
     pub tracking_key: PhysicalTrackingKey,
@@ -1179,12 +1184,15 @@ pub struct HeadlessSensoryReport {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessActionResult {
     pub command: ActionCommand,
+    pub phase: ActionPhase,
     pub execution: ReferenceActionExecution,
     /// Learning observation only. Registered biology is advanced from
     /// `body_event` through the world organism registry.
     pub observation: ReferenceOutcomeObservation,
     pub body_event: BodyEventDelta,
     pub touched_entities: Vec<WorldEntityId>,
+    /// Measured grip changes; these do not change the selected motor primitive.
+    pub grip_transfers: Vec<GripTransfer>,
     pub emitted_utterance: Option<AudibleUtterance>,
 }
 
@@ -1201,6 +1209,9 @@ pub struct HeadlessActionBiologyReceipt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HeadlessMotorChannelReceipt {
     pub command: ChannelCommand,
+    pub phase: ActionPhase,
+    pub grip_transfers: Vec<GripTransfer>,
+    pub play_stimulation: f32,
     pub observation: Option<MeasuredChannelObservation>,
     pub physical: PhysicalActionOutcome,
 }
@@ -1212,6 +1223,7 @@ pub struct HeadlessMotorTransactionReceipt {
     pub succeeded: bool,
     pub joint: JointPhysicalOutcome,
     pub channel_receipts: Vec<HeadlessMotorChannelReceipt>,
+    pub grip_transfers: Vec<GripTransfer>,
     pub body_event: BodyEventDelta,
     pub biology_before: BiochemistryState,
     pub biology_after: BiochemistryState,
@@ -1320,6 +1332,10 @@ pub struct HeadlessWorld {
     injected_tick_late_failure_after_first_organism: bool,
 }
 
+mod hands;
+pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
+mod local_steering;
+pub use local_steering::LocalSteeringState;
 mod naming;
 pub(crate) mod player_hand;
 pub use naming::{RenameAgentError, MAX_AGENT_NAME_CHARS};
@@ -2497,6 +2513,7 @@ impl HeadlessWorld {
         let mut digest = CanonicalDigestBuilder::new(domain);
         digest.write_u16(schema_version);
         if let Some(subject) = policy_weight_subject {
+            digest.write_u16(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION);
             digest.write_u64(subject.raw());
         }
         digest.write_u64(self.seed);
@@ -2594,7 +2611,7 @@ impl HeadlessWorld {
             .values()
             .map(|object| {
                 format!(
-                    "{}:{:?}:{}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:?}:{:.3}:{:?}:{}:{:?}:{}",
+                    "{}:{:?}:{}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:?}:{:.3}:{:?}:{}:{:?}:{}:{}:{:?}",
                     object.id.raw(),
                     object.kind,
                     object.label,
@@ -2609,6 +2626,8 @@ impl HeadlessWorld {
                     object.consumed,
                     object.carried_by,
                     grounded_identity_signature(object),
+                    object.activity_hold,
+                    object.local_steering,
                 )
             })
             .collect()
@@ -3298,6 +3317,7 @@ impl HeadlessWorld {
         for object in self.objects.values_mut() {
             if object.carried_by == Some(carrier) {
                 object.carried_by = None;
+                object.activity_hold = false;
             }
         }
     }
@@ -4515,6 +4535,13 @@ impl HeadlessWorld {
                     .find(|(id, _)| Some(*id) == result.command.target_entity)
                     .map_or(0.0, |(_, value)| *value);
                 if result.execution.succeeded
+                    && result.phase == ActionPhase::Completed
+                    && !result.grip_transfers.iter().any(|transfer| {
+                        matches!(
+                            transfer.kind,
+                            GripTransferKind::Released | GripTransferKind::Placed
+                        )
+                    })
                     && matches!(
                         classify_action(&result.command),
                         HeadlessAction::Inspect
@@ -4605,6 +4632,9 @@ impl HeadlessWorld {
             channel_outcomes.push(ChannelPhysicalOutcome::new(channel.channel, physical)?);
             channel_receipts.push(HeadlessMotorChannelReceipt {
                 command: channel.clone(),
+                phase: result.phase,
+                grip_transfers: result.grip_transfers.clone(),
+                play_stimulation: result.body_event.play_stimulation,
                 observation,
                 physical,
             });
@@ -4637,6 +4667,10 @@ impl HeadlessWorld {
             succeeded,
             joint,
             channel_receipts,
+            grip_transfers: executed
+                .iter()
+                .flat_map(|(_, result)| result.grip_transfers.iter().copied())
+                .collect(),
             body_event,
             biology_before,
             biology_after,
@@ -5017,6 +5051,8 @@ impl HeadlessWorld {
             teacher_channel: spec.teacher_channel,
             consumed: false,
             carried_by: None,
+            activity_hold: false,
+            local_steering: None,
             grounded_physical: GroundedPhysicalProperties::deterministic_for_kind(
                 spec.kind,
                 spawn_sequence,
@@ -5040,7 +5076,7 @@ impl HeadlessWorld {
             command.organism_id,
             matches!(
                 classify_action(command),
-                HeadlessAction::Grab | HeadlessAction::Eat
+                HeadlessAction::Grab | HeadlessAction::Eat | HeadlessAction::Play
             )
             .then_some(command.target_entity)
             .flatten(),
@@ -5253,6 +5289,9 @@ impl HeadlessWorld {
             Ok(target) => target,
             Err(_) => return self.invalid_target(command, command.target_entity),
         };
+        if let Some(preparation) = self.prepare_hands_on(command, agent_id, target, false)? {
+            return Ok(preparation);
+        }
         let agent = self
             .objects
             .get(&agent_id.raw())
@@ -5302,7 +5341,7 @@ impl HeadlessWorld {
         )
     }
 
-    fn grab_target_is_legal(
+    fn grasp_target_is_reachable(
         &self,
         organism_id: OrganismId,
         agent_id: WorldEntityId,
@@ -5312,6 +5351,11 @@ impl HeadlessWorld {
             return false;
         };
         let agent_position = agent.position;
+        let agent_is_live = !agent.consumed
+            && self
+                .organism_registry
+                .get(organism_id)
+                .is_none_or(|record| record.lifecycle().is_alive());
         let Some(object) = self.objects.get(&target.raw()) else {
             return false;
         };
@@ -5349,12 +5393,29 @@ impl HeadlessWorld {
             && (target_carried_by == Some(organism_id)
                 || (self.solid_segment_clear(agent_position, grip)
                     && self.solid_segment_clear(target_position, grip)));
-        has_manipulation_effector
+        agent_is_live
+            && has_manipulation_effector
             && target_is_live
             && target_is_mobile
             && !target_is_self
             && !owned_by_other
+            && self.player_held_object() != Some(target)
             && within_reach
+    }
+
+    fn grab_target_is_legal(
+        &self,
+        organism_id: OrganismId,
+        agent_id: WorldEntityId,
+        target: WorldEntityId,
+    ) -> bool {
+        self.grasp_target_is_reachable(organism_id, agent_id, target)
+            && (self.objects[&target.raw()].carried_by == Some(organism_id)
+                || !self.objects.values().any(|object| {
+                    !object.consumed
+                        && object.carried_by == Some(organism_id)
+                        && object.id != target
+                }))
     }
 
     fn eat_can_pick_up(&self, organism_id: OrganismId, target: WorldEntityId) -> bool {
@@ -5364,17 +5425,12 @@ impl HeadlessWorld {
         let Ok(agent_id) = self.agent_entity_id(organism_id) else {
             return false;
         };
-        // This convenience action has one free grip. Never replace, release,
-        // or silently stack another possession, including the player's hold.
         food.kind == WorldObjectKind::Food
             && food.hazard_pain == 0.0
             && food.carried_by.is_none()
             && self.player_held_object() != Some(target)
-            && !self
-                .objects
-                .values()
-                .any(|object| !object.consumed && object.carried_by == Some(organism_id))
-            && self.grab_target_is_legal(organism_id, agent_id, target)
+            && self.grasp_target_is_reachable(organism_id, agent_id, target)
+            && self.activity_grip_available(organism_id, target)
     }
 
     fn execute_grab(
@@ -5387,6 +5443,7 @@ impl HeadlessWorld {
             Err(_) => return self.invalid_target(command, command.target_entity),
         };
         let target_carried_by = self.objects[&target.raw()].carried_by;
+        let previous_position = self.objects[&target.raw()].position;
         if !self.grab_target_is_legal(command.organism_id, agent_id, target) {
             return self.finish_action(
                 command,
@@ -5408,17 +5465,31 @@ impl HeadlessWorld {
         } else {
             Some(command.organism_id)
         };
+        object.activity_hold = false;
         if target_carried_by != Some(command.organism_id) {
             self.sync_carried_pose(command.organism_id)?;
         }
-        self.finish_action(
+        let mut result = self.finish_action(
             command,
             true,
             None,
             physical(PhysicalContactKind::Touch, Some(target), Vec3f::ZERO, 0.06)?,
             OutcomeProfile::grab(),
             vec![target],
-        )
+        )?;
+        result.grip_transfers.push(GripTransfer {
+            object: target,
+            previous_owner: target_carried_by,
+            new_owner: self.objects[&target.raw()].carried_by,
+            previous_position,
+            new_position: self.objects[&target.raw()].position,
+            kind: if target_carried_by == Some(command.organism_id) {
+                GripTransferKind::Released
+            } else {
+                GripTransferKind::Acquired
+            },
+        });
+        Ok(result)
     }
 
     fn emit_vocalization_token(
@@ -5475,13 +5546,14 @@ impl HeadlessWorld {
                 Vec::new(),
             );
         }
-        if self.eat_can_pick_up(command.organism_id, target) {
-            // Acquire only in this decision. The original Eat identity stays in
-            // action, channel, and sealed learning receipts; it is not a sampled
-            // Grab and must not earn explicit-Grab curriculum credit.
-            let agent_id = self.agent_entity_id(command.organism_id)?;
-            return self.execute_grab(command, agent_id);
+        let agent_id = self.agent_entity_id(command.organism_id)?;
+        if self.objects[&target.raw()].kind == WorldObjectKind::Food {
+            if let Some(preparation) = self.prepare_hands_on(command, agent_id, target, true)? {
+                return Ok(preparation);
+            }
         }
+        // Non-food attempts retain their ordinary reachable contact and hazard
+        // consequences, without acquiring or releasing any possession.
         let Some(object) = self.objects.get(&target.raw()) else {
             return self.invalid_target(command, Some(target));
         };
@@ -5525,6 +5597,7 @@ impl HeadlessWorld {
         let taste = object.grounded_physical.chemical[2];
         object.consumed = true;
         object.carried_by = None;
+        object.activity_hold = false;
         self.ingestion_observations.insert(
             command.organism_id.raw(),
             IngestionObservation {
@@ -5534,7 +5607,7 @@ impl HeadlessWorld {
         );
         self.ecology.record_consumed(target, self.tick);
         self.rebuild_ecology_metrics();
-        self.finish_action(
+        let mut result = self.finish_action(
             command,
             true,
             None,
@@ -5546,7 +5619,16 @@ impl HeadlessWorld {
             )?,
             OutcomeProfile::food(nutrition, pain),
             vec![target],
-        )
+        )?;
+        result.grip_transfers.push(GripTransfer {
+            object: target,
+            previous_owner: Some(command.organism_id),
+            new_owner: None,
+            previous_position: target_position,
+            new_position: target_position,
+            kind: GripTransferKind::Consumed,
+        });
+        Ok(result)
     }
 
     fn execute_move(
@@ -5570,6 +5652,13 @@ impl HeadlessWorld {
             .get(&agent_id.raw())
             .expect("agent exists")
             .position;
+        if command
+            .target_entity
+            .is_some_and(|target| !self.objects.contains_key(&target.raw()))
+        {
+            return self.invalid_target(command, command.target_entity);
+        }
+        let mut observed_goal = None;
         let max_step = MOVE_STEP * command.intensity.raw();
         let destination = match intent {
             MoveIntent::Forward => {
@@ -5583,27 +5672,49 @@ impl HeadlessWorld {
                     Vec3f::new(yaw.cos() * max_step, 0.0, yaw.sin() * max_step),
                 ))
             }
-            MoveIntent::Absolute => command
+            MoveIntent::Absolute if command.target_position.is_some() => command
                 .target_position
-                .or_else(|| {
-                    command
-                        .target_entity
-                        .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
-                })
                 .map(|target| step_toward(start, target, max_step)),
-            MoveIntent::Approach => command
-                .target_entity
-                .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
-                .map(|target| step_toward(start, target, max_step)),
-            MoveIntent::Flee => command
-                .target_entity
-                .and_then(|id| self.objects.get(&id.raw()).map(|object| object.position))
-                .map(|target| step_away(start, target, max_step)),
+            MoveIntent::Absolute | MoveIntent::Approach => {
+                let Some(target) = command.target_entity else {
+                    return self.invalid_target(command, None);
+                };
+                if let Some(relative) = self.visible_motion_target(command.organism_id, target)? {
+                    observed_goal = Some((target, relative));
+                    Some(step_toward(start, add(start, relative), max_step))
+                } else if let Some(remembered) = command.target_position {
+                    // A creature-supplied remembered point permits a straight
+                    // movement only. It cannot authorize a local detour.
+                    Some(step_toward(start, remembered, max_step))
+                } else {
+                    return self.blocked_local_move(command);
+                }
+            }
+            MoveIntent::Flee => {
+                let observed = match command.target_entity {
+                    Some(target) => self.visible_motion_target(command.organism_id, target)?,
+                    None => None,
+                };
+                observed
+                    .map(|relative| add(start, relative))
+                    .or(command.target_position)
+                    .map(|target| step_away(start, target, max_step))
+            }
         };
         let Some(mut destination) = destination else {
             return self.invalid_target(command, command.target_entity);
         };
         destination.validate()?;
+        let mut detour = false;
+        if let Some((target, relative)) = observed_goal {
+            let Some((selected, diverted)) =
+                self.steer_visible_step(command.organism_id, target, relative, destination)?
+            else {
+                return self.blocked_local_move(command);
+            };
+            destination = selected;
+            detour = diverted;
+        }
         if let Some(terrain) = self.terrain.as_ref() {
             let Some(grounded) = terrain.resolve_move(start, destination) else {
                 return self.finish_action(
@@ -5675,6 +5786,7 @@ impl HeadlessWorld {
             agent.body_yaw = yaw;
         }
         self.sync_carried_pose(command.organism_id)?;
+        self.commit_local_steering(command.organism_id, observed_goal, displacement, detour)?;
         let zone_hazard = self
             .ecology
             .zone_at(destination)
@@ -5751,10 +5863,16 @@ impl HeadlessWorld {
         observation.contradiction_observed = profile.contradiction || !succeeded;
         Ok(HeadlessActionResult {
             command,
+            phase: if succeeded {
+                ActionPhase::Completed
+            } else {
+                ActionPhase::Attempt
+            },
             execution,
             observation,
             body_event: profile.body_event,
             touched_entities,
+            grip_transfers: Vec::new(),
             emitted_utterance: None,
         })
     }
@@ -6326,6 +6444,16 @@ fn write_world_object_signature(
     }
     digest.write_bool(object.consumed);
     write_optional_u64(digest, object.carried_by.map(OrganismId::raw));
+    digest.write_bool(object.activity_hold);
+    match object.local_steering {
+        Some(state) => {
+            digest.write_some();
+            digest.write_u64(state.target.raw());
+            digest.write_u8(state.non_progress_steps);
+            write_f32_bits(digest, state.best_observed_distance);
+        }
+        None => digest.write_none(),
+    }
 
     let physical = object.grounded_physical;
     write_vec3_bits(digest, physical.velocity);
@@ -7377,6 +7505,15 @@ fn validate_persisted_object(object: &WorldObject) -> Result<(), ScaffoldContrac
     }
     if let Some(carried_by) = object.carried_by {
         carried_by.validate()?;
+    }
+    if object.activity_hold && (object.carried_by.is_none() || object.consumed) {
+        return Err(ScaffoldContractError::InvalidId);
+    }
+    if let Some(state) = object.local_steering {
+        state.validate()?;
+        if object.kind != WorldObjectKind::Agent {
+            return Err(ScaffoldContractError::InvalidId);
+        }
     }
     object.position.validate()?;
     object.grounded_physical.validate_contract()?;
@@ -10238,14 +10375,28 @@ mod task_3_2a_tests {
         let reverse_low_entity = reverse.entity_id("agent-low").unwrap();
         let forward_action = forward
             .apply_registered_command(
-                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, forward_hazard).unwrap(),
+                &HeadlessWorldCommand::structured(
+                    TASK_4_1_LOW_ORGANISM,
+                    HeadlessActionIds::APPROACH,
+                    ActionKind::Move,
+                    Some(forward_hazard),
+                    Some(forward.entity(forward_hazard).unwrap().position),
+                )
+                .unwrap(),
                 forward_low_entity,
                 next_tick,
             )
             .unwrap();
         let reverse_action = reverse
             .apply_registered_command(
-                &HeadlessWorldCommand::approach(TASK_4_1_LOW_ORGANISM, reverse_hazard).unwrap(),
+                &HeadlessWorldCommand::structured(
+                    TASK_4_1_LOW_ORGANISM,
+                    HeadlessActionIds::APPROACH,
+                    ActionKind::Move,
+                    Some(reverse_hazard),
+                    Some(reverse.entity(reverse_hazard).unwrap().position),
+                )
+                .unwrap(),
                 reverse_low_entity,
                 next_tick,
             )

@@ -49,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
             "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
+            "eat_reachable_food" => alife_game_app::FoundationTeacherLesson::EatReachableFood,
             "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
             "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
             "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
@@ -150,6 +151,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         {
             "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
             "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
+            "eat_reachable_food" => alife_game_app::FoundationTeacherLesson::EatReachableFood,
             "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
             "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
             "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
@@ -357,6 +359,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 {
                     "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
                     "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
+                    "eat_reachable_food" => {
+                        alife_game_app::FoundationTeacherLesson::EatReachableFood
+                    }
                     "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
                     "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
                     "obstacle_navigation" => {
@@ -635,7 +640,15 @@ fn parse_evaluation_options(
     }
     options.evaluation.validate()?;
     if options.silent && options.request_token.is_none() {
-        return Err("silence requires controlled request token".into());
+        if !matches!(
+            lesson,
+            alife_game_app::FoundationTeacherLesson::EatHeldFood
+                | alife_game_app::FoundationTeacherLesson::EatReachableFood
+                | alife_game_app::FoundationTeacherLesson::Feeding
+        ) {
+            return Err("silence requires a care lesson or controlled request token".into());
+        }
+        options.evaluation.silent_request = true;
     }
     if options.request_token.is_some() {
         if lesson != alife_game_app::FoundationTeacherLesson::VocabularyReception
@@ -906,6 +919,20 @@ mod evaluation_options_tests {
                 options.evaluation.sampling_temperature,
                 if values.len() == 2 { 1.0 } else { 32.0 }
             );
+        }
+    }
+
+    #[test]
+    fn silent_care_options_are_explicit_and_keep_prompted_default() {
+        for lesson in [
+            FoundationTeacherLesson::EatHeldFood,
+            FoundationTeacherLesson::EatReachableFood,
+            FoundationTeacherLesson::Feeding,
+        ] {
+            assert!(!parse(&[], lesson).unwrap().evaluation.silent_request);
+            let options = parse(&["--silent-request"], lesson).unwrap();
+            assert!(options.evaluation.silent_request);
+            assert_eq!(options.request_token, None);
         }
     }
 

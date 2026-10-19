@@ -189,6 +189,7 @@ impl FoundationTrainingSharedDevice {
                     .backend
                     .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
                 runtime.last_foundation_training_steps.clear();
+                runtime.recent_foundation_activity.clear();
             }
         }
         result

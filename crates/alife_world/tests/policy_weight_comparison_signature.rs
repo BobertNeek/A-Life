@@ -274,3 +274,60 @@ fn missing_candidate_and_malformed_payloads_cannot_be_projected() {
         assert!(malformed.encode_canonical().is_err(), "{path}");
     }
 }
+
+#[test]
+fn activity_grip_provenance_is_never_excluded_from_policy_comparison() {
+    let mut original = world(&asset(0.0, TrainingStageManifest::bootstrap()), 1);
+    let (subject, entity) = original.organism_entity_ids()[0];
+    let body = original.entity(entity).unwrap();
+    let ball = original
+        .spawn_toy(
+            "comparison-ball",
+            Vec3f::new(
+                body.position.x + 0.7 * body.body_yaw.cos(),
+                body.position.y,
+                body.position.z + 0.7 * body.body_yaw.sin(),
+            ),
+            true,
+        )
+        .unwrap();
+    let play = alife_world::HeadlessWorldCommand::structured(
+        subject,
+        alife_world::HeadlessActionIds::PLAY,
+        alife_core::ActionKind::Interact,
+        Some(ball),
+        None,
+    )
+    .unwrap();
+    assert!(original.apply_command(&play).unwrap().execution.succeeded);
+    let mut save = alife_world::PortableSaveFile::from_headless_world(
+        "grip-comparison",
+        &original,
+        alife_world::RuntimeConfig::deterministic_default(
+            original.seed(),
+            BrainScaleTier::Standard2048,
+        ),
+        alife_world::AssetManifest::empty(),
+        Vec::new(),
+    )
+    .unwrap();
+    save.world
+        .objects
+        .iter_mut()
+        .find(|object| object.id == ball)
+        .unwrap()
+        .activity_hold = false;
+    let changed = save.restore_headless_world().unwrap();
+    assert_ne!(
+        original.canonical_signature_digest().unwrap(),
+        changed.canonical_signature_digest().unwrap()
+    );
+    assert_ne!(
+        original
+            .policy_weight_comparison_signature_v1(subject)
+            .unwrap(),
+        changed
+            .policy_weight_comparison_signature_v1(subject)
+            .unwrap()
+    );
+}
