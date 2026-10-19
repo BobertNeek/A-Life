@@ -24,8 +24,11 @@ to **0.18.1**, with `std` enabled in the production frontend:
 - [Transform propagation](https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_transform/src/systems.rs#L109)
   marks dirty trees and rewrites root globals. Guards can skip those operations,
   plus child matrix calculation/comparison, while static-tree optimization is
-  active. The queries still scan. Above the default 30% dynamic threshold,
-  hierarchy propagation runs regardless of these guards.
+  active. The queries still scan. The default 30% threshold compares entities
+  matching `Changed<Transform>`, `Changed<ChildOf>` or `Added<GlobalTransform>`
+  against entities with `TransformTreeChanged`. Guards can affect this ratio.
+  If the guarded world still exceeds the threshold, static-tree optimization
+  is disabled and hierarchy propagation runs regardless of the guards.
 - Crucially, [child propagation already uses `set_if_neq`](https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_transform/src/systems.rs#L566).
   Identical finite mesh-child globals retain their ticks. Thus the
   [GPU extraction filter](https://github.com/bevyengine/bevy/blob/v0.18.1/crates/bevy_pbr/src/render/mesh.rs#L1491)
@@ -62,8 +65,8 @@ writes were already zero in both variants. This excludes app lookup/terrain
 costs, rendering and GPU execution; it is **not a game-frame or FPS measurement**.
 Rust/Cargo 1.98.1 ran on the saved cloud Xeon Platinum 8573C environment.
 The normal new-game ecology seeds three care objects (`alife_world/src/new_game.rs:304–317`);
-players may add more. Revisit only if actual gameplay profiling at a larger
-population identifies this CPU work as material.
+players may add more. Revisit if actual gameplay profiling identifies this CPU
+work as material at any population.
 
 The provisional patch passed all 16 food-projection CPU tests (13 existing and
 three experimental), including bitwise legacy parity, signed zero, NaN payloads,
