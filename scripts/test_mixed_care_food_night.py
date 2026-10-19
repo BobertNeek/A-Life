@@ -15,6 +15,8 @@ import run_grab_food_night as grab
 
 
 class MixedCareTests(unittest.TestCase):
+    POLICY = "strict"
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -42,14 +44,29 @@ class MixedCareTests(unittest.TestCase):
             self.put(self.source / f"{head}-checkpoint.json", {"optimizer_step": age})
         self.history_path = self.root / "history.json"
         self.history = {"schema": 1, "kind": "mixed-care-seed-history", "complete": True,
-                        "source_sha256": mixed.file_hashes(self.source), "consumed_seed_ranges": [[42, 42], [700, 707]],
-                        "reserved_seed_ranges": [[1000, 1662]], "assessment_seeds": [9000],
+                        "source_sha256": mixed.file_hashes(self.source), "consumed_seed_ranges": [[42, 42], [700, 707], [800, 803]],
+                        "reserved_seed_ranges": [[1000, 1662]], "assessment_seeds": list(range(9000, 9016)),
                         "imports": [], "evidence": "SYNTHETIC fixture; no historical reconciliation"}
         self.put(self.history_path, self.history)
         self.commands = []
         self.ledger_path = self.lane / mixed.LEDGER
+        self.admission = {"policy": self.POLICY, "historical_freshness": mixed.FRESHNESS[self.POLICY]}
+        if self.POLICY == "known-exclusions":
+            evidence = self.root / "synthetic-recovery-evidence.txt"
+            evidence.write_text("SYNTHETIC source inventory: no real checkpoint, seeds, attempts or reconciliation.")
+            self.history.update(complete=False, seed_admission=self.admission,
+                missing_history="SYNTHETIC older launcher records are absent, so historical seed freshness is unknown.",
+                recovery_reconciliation={
+                    "accepted_checkpoint_authoritative": True,
+                    "known_inflight_attempts_reconciled_or_excluded": True,
+                    "no_known_detached_later_accepted_chain": True,
+                    "prior_ledger_runs_sha256": mixed.object_hash([]),
+                    "explanation": "SYNTHETIC inventory cites this fixture source and all surviving local attempt records.",
+                    "evidence": [{"path": str(evidence), "sha256": mixed.host.sha256(evidence)}]})
+            self.put(self.history_path, self.history)
         self.write = mixed.seeds.write_document
         self.run_inspector = mixed.inspector_io.run_inspector
+        self.admit_context = mixed.admit_run_context
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(mixed, "admit_run_context"))
@@ -72,7 +89,14 @@ class MixedCareTests(unittest.TestCase):
                 "--checkpoint-inspector", str(self.inspector), "--source", str(self.source),
                 "--schedule", str(self.schedule), "--seed-history", str(self.history_path),
                 "--seed", "100", "--seed-count", "6", "--cutoff",
-                (dt.datetime.now(mixed.host.UTC) + dt.timedelta(hours=2)).isoformat(), *extra]
+                (dt.datetime.now(mixed.host.UTC) + dt.timedelta(hours=2)).isoformat(),
+                *(["--seed-admission", self.POLICY] if self.POLICY != "strict" else []), *extra]
+
+    def publish_history(self):
+        if self.POLICY == "known-exclusions":
+            runs = self.get(self.ledger_path)["runs"] if self.ledger_path.exists() else []
+            self.history["recovery_reconciliation"]["prior_ledger_runs_sha256"] = mixed.object_hash(runs)
+        self.put(self.history_path, self.history)
 
     def plan(self, extra=()):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
@@ -137,9 +161,15 @@ class MixedCareTests(unittest.TestCase):
 
     def test_plan_only_and_cross_lesson_chain_counts(self):
         plan = self.plan()
+        self.assertEqual(plan["seed_admission"], self.admission)
+        plan_bytes = (self.output / "plan.json").read_bytes()
         self.assertFalse(self.ledger_path.exists())
         self.assertEqual(self.commands, [])
         result = mixed.execute(plan)
+        self.assertEqual(result["seed_admission"], self.admission)
+        run = mixed.read_ledger(self.ledger_path)["runs"][0]
+        self.assertEqual(run["plan"]["seed_admission"], self.admission)
+        self.assertEqual(mixed.seed_admission(run["history_import"]), self.admission)
         self.assertEqual(result["accepted_episodes"], 3)
         self.assertEqual([a[-1] for a in self.commands], list(mixed.LESSONS))
         for previous, current in zip(self.commands, self.commands[1:]):
@@ -158,6 +188,7 @@ class MixedCareTests(unittest.TestCase):
         self.assertFalse(result["promoted"])
         self.assertEqual(mixed.execute(plan, resume=True), result)
         self.assertEqual(len(self.commands), 3)
+        self.assertEqual((self.output / "plan.json").read_bytes(), plan_bytes)
 
     def test_interrupt_unsealed_uses_fresh_seed_and_same_latest_predecessor(self):
         plan = self.plan()
@@ -299,11 +330,11 @@ class MixedCareTests(unittest.TestCase):
                 "history_sha256": "fixture", "reserved_utc": "fixture"}]})
         original = imported.read_bytes()
         with self.assertRaisesRegex(ValueError, "explicit exact-byte import"):
-            mixed.history(self.history_path, mixed.file_hashes(self.source), 42, self.lane)
+            mixed.history(self.history_path, mixed.file_hashes(self.source), 42, self.lane, admission=self.admission)
         self.history["imports"] = [{"path": str(imported), "sha256": mixed.host.sha256(imported)}]
         self.put(self.history_path, self.history)
         plan = self.plan()
-        for seed in (42, 700, 707, 1000, 1662, 200, 210, 9000, 9010):
+        for seed in [42, *range(700, 708), *range(800, 804), *range(1000, 1663), *range(200, 211), *range(9000, 9016)]:
             changed = {**plan, "seed_range": [seed, seed]}
             with self.assertRaisesRegex(ValueError, "overlaps excluded"):
                 mixed.reserve(changed, self.ledger_path, commit=False)
@@ -415,13 +446,15 @@ class MixedCareTests(unittest.TestCase):
     def test_new_allocation_must_use_latest_seal_and_older_resume_cannot_fork(self):
         plan = self.plan()
         result = mixed.execute(plan)
-        stale = {**plan, "output": str(self.lane / "next"), "seed_range": [300, 305]}
+        self.publish_history()
+        stale = {**plan, "output": str(self.lane / "next"), "seed_range": [300, 305],
+                 "history_sha256": mixed.host.sha256(self.history_path)}
         with self.assertRaisesRegex(ValueError, "latest accepted"):
             mixed.reserve(stale, self.ledger_path, commit=False)
         latest = Path(result["latest_checkpoint"])
         self.history["source_sha256"] = mixed.file_hashes(latest)
         self.history["consumed_seed_ranges"].append([100, 102])
-        self.put(self.history_path, self.history)
+        self.publish_history()
         self.output = self.lane / "next"
         self.source = latest
         next_plan = self.plan(["--seed", "300"])
@@ -435,12 +468,12 @@ class MixedCareTests(unittest.TestCase):
                      {"lesson": "feeding", "episodes": 1, "decisions": 129}):
             with self.assertRaises(ValueError):
                 mixed.schedule_rows({"schema": 1, "steps": [step]})
-        for key, value in (("complete", False), ("consumed_seed_ranges", []), ("imports", None),
+        for key, value in (("complete", self.POLICY != "strict"), ("consumed_seed_ranges", []), ("imports", None),
                            ("source_sha256", {name: "0" * 64 for name in mixed.FILES})):
             invalid = {**self.history, key: value}
             self.put(self.history_path, invalid)
             with self.assertRaises(ValueError):
-                mixed.history(self.history_path, mixed.file_hashes(self.source), 42, self.lane)
+                mixed.history(self.history_path, mixed.file_hashes(self.source), 42, self.lane, admission=self.admission)
 
     def test_checked_in_example_and_saved_plan_start_then_resume(self):
         example, _ = mixed.load(Path(__file__).resolve().parent.parent / "docs/examples/mixed-care-schedule.json")
@@ -450,6 +483,45 @@ class MixedCareTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(mixed.main(["--output", str(self.output), "--run", mode]), 0)
         self.assertEqual(len(self.commands), 3)
+
+    def test_legacy_strict_plan_bytes_are_not_retagged_on_start_or_resume(self):
+        strict = {**self.history, "complete": True}
+        strict.pop("seed_admission", None)
+        self.put(self.history_path, strict)
+        plan = self.plan(["--seed-admission", "strict"])
+        plan.pop("seed_admission")
+        self.put(self.output / "plan.json", plan)
+        original = (self.output / "plan.json").read_bytes()
+        for mode in ("--start", "--resume"):
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(mixed.main(["--output", str(self.output), "--run", mode]), 0)
+            self.assertEqual((self.output / "plan.json").read_bytes(), original)
+        self.assertNotIn("seed_admission", mixed.read_ledger(self.ledger_path)["runs"][0]["plan"])
+        self.assertEqual(len(self.commands), 3)
+
+    def test_saved_execution_rejects_every_policy_flag(self):
+        self.plan()
+        for mode in ("--start", "--resume"):
+            for policy in mixed.FRESHNESS:
+                with self.subTest(mode=mode, policy=policy), \
+                        contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(mixed.main(["--output", str(self.output), "--run", mode,
+                                                 "--seed-admission", policy]), 1)
+        self.assertFalse(self.ledger_path.exists())
+        self.assertEqual(self.commands, [])
+
+    def test_reviewed_git_source_and_authoritative_lane_remain_required(self):
+        plan = self.plan()
+        with self.assertRaisesRegex(ValueError, "authoritative.*lane"):
+            self.admit_context(plan)
+        plan["output"] = str(Path(__file__).resolve().parent.parent / "target/founder-training/fixture")
+        for responses, error in (([" M synthetic.py"], "clean reviewed"),
+                                 (["", "different-commit"], "source commit changed")):
+            with patch.object(mixed.subprocess, "check_output", side_effect=responses):
+                with self.assertRaisesRegex(ValueError, error):
+                    self.admit_context(plan)
+        with patch.object(mixed.subprocess, "check_output", side_effect=["", plan["git_head"]]):
+            self.admit_context(plan)
 
     def test_optimizer_bootstrap_reset_and_predecessor_mismatches_reject(self):
         plan = self.plan()
@@ -479,7 +551,7 @@ class MixedCareTests(unittest.TestCase):
         latest = Path(result["latest_checkpoint"])
         self.history["source_sha256"] = mixed.file_hashes(latest)
         self.history["consumed_seed_ranges"].append([100, 102])
-        self.put(self.history_path, self.history)
+        self.publish_history()
         candidate = {**plan, "source": str(latest), "source_sha256": mixed.file_hashes(latest),
                      "source_seed": 102, "history_sha256": mixed.host.sha256(self.history_path),
                      "output": str(self.lane / "new"), "seed_range": [104, 105]}
@@ -686,6 +758,207 @@ class MixedCareTests(unittest.TestCase):
         self.ledger_path.symlink_to(self.root / "missing-ledger")
         with self.assertRaisesRegex(ValueError, "symlink"):
             mixed.reserve(plan, self.ledger_path, commit=False)
+
+
+class KnownExclusionsTests(MixedCareTests):
+    """Run every ownership, native admission and recovery regression in opt-in mode too."""
+    POLICY = "known-exclusions"
+
+    def test_default_never_falls_back_to_incomplete_history(self):
+        argv = self.argv()
+        index = argv.index("--seed-admission")
+        del argv[index:index + 2]
+        for extra in ([], ["--seed-admission", "strict"]):
+            errors = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(errors):
+                self.assertEqual(mixed.main([*argv, *extra]), 1)
+            self.assertIn("complete mixed-care seed history required in strict mode", errors.getvalue())
+            self.assertFalse(self.output.exists())
+            self.assertFalse(self.ledger_path.exists())
+        self.assertEqual(self.commands, [])
+
+    def test_opt_in_requires_honest_freshness_explanation_and_evidence_attestation(self):
+        original = copy.deepcopy(self.history)
+        invalid = [
+            {**original, "complete": value} for value in (True, None, 0)]
+        invalid += [{key: value for key, value in original.items() if key != missing}
+                    for missing in ("seed_admission", "missing_history", "recovery_reconciliation")]
+        invalid += [{**original, "missing_history": value} for value in (
+            "", "unknown", "x" * 4097, " " * 4096 + original["missing_history"])]
+        invalid += [{**original, "seed_admission": value} for value in (
+            {"policy": "known-exclusions", "historical_freshness": "operator-attested-complete"},
+            {"policy": "strict", "historical_freshness": "unknown"}, None)]
+        recovery = original["recovery_reconciliation"]
+        for key in recovery:
+            invalid.append({**original, "recovery_reconciliation": {k: v for k, v in recovery.items() if k != key}})
+        for key in ("accepted_checkpoint_authoritative", "known_inflight_attempts_reconciled_or_excluded",
+                    "no_known_detached_later_accepted_chain"):
+            for value in (False, 1, "true"):
+                invalid.append({**original, "recovery_reconciliation": {**recovery, key: value}})
+        for key, value in (("explanation", "done"), ("evidence", []), ("prior_ledger_runs_sha256", "unbound")):
+            invalid.append({**original, "recovery_reconciliation": {**recovery, key: value}})
+        for index, doc in enumerate(invalid):
+            with self.subTest(invalid=index):
+                self.put(self.history_path, doc)
+                with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(mixed.main(self.argv()), 1)
+                self.assertFalse(self.output.exists())
+                self.assertFalse(self.ledger_path.exists())
+        self.assertEqual(self.commands, [])
+
+    def test_saved_mode_cannot_be_removed_changed_or_incoherent_on_resume(self):
+        plan = self.plan()
+        mixed.reserve(plan, self.ledger_path)
+        original = self.ledger_path.read_bytes()
+        for mode in (None, {"policy": "strict", "historical_freshness": mixed.FRESHNESS["strict"]},
+                     {"policy": "known-exclusions", "historical_freshness": mixed.FRESHNESS["strict"]}):
+            changed = copy.deepcopy(plan)
+            if mode is None:
+                changed.pop("seed_admission")
+            else:
+                changed["seed_admission"] = mode
+            with self.assertRaisesRegex(ValueError, "plan collision"):
+                mixed.execute(changed, resume=True)
+            self.assertEqual(self.ledger_path.read_bytes(), original)
+        # Even coordinated plan-hash edits cannot retag incomplete ledger history as strict.
+        ledger = self.get(self.ledger_path)
+        run = ledger["runs"][0]
+        run["plan"].pop("seed_admission")
+        run["plan_sha256"] = mixed.object_hash(run["plan"])
+        run["history_import"].pop("seed_admission")
+        self.put(self.ledger_path, ledger)
+        with self.assertRaisesRegex(ValueError, "history seed admission mismatch"):
+            mixed.read_ledger(self.ledger_path)
+        self.assertEqual(self.commands, [])
+
+    def test_missing_saved_mode_never_infers_opt_in_on_start(self):
+        plan = self.plan()
+        plan.pop("seed_admission")
+        self.put(self.output / "plan.json", plan)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(mixed.main(["--output", str(self.output), "--run", "--start"]), 1)
+        self.assertFalse(self.ledger_path.exists())
+        self.assertEqual(self.commands, [])
+
+    def test_recovery_evidence_bytes_are_pinned_for_start_and_resume(self):
+        plan = self.plan()
+        evidence = Path(self.history["recovery_reconciliation"]["evidence"][0]["path"])
+        original_evidence = evidence.read_bytes()
+        evidence.write_text("changed fixture inventory")
+        with self.assertRaisesRegex(ValueError, "recovery evidence changed"):
+            mixed.execute(plan)
+        self.assertFalse(self.ledger_path.exists())
+        evidence.write_bytes(original_evidence)
+        mixed.reserve(plan, self.ledger_path)
+        original = self.ledger_path.read_bytes()
+        evidence.write_text("changed fixture inventory")
+        with self.assertRaisesRegex(ValueError, "recovery evidence changed"):
+            mixed.execute(plan, resume=True)
+        self.assertEqual(self.ledger_path.read_bytes(), original)
+        self.assertEqual(self.commands, [])
+
+    def test_evidence_must_not_pin_the_legitimately_changing_live_ledger(self):
+        self.put(self.ledger_path, {"schema": 1, "kind": "mixed-care-seed-ledger", "excluded_seed_ranges": [],
+                                    "assessment_seeds": [], "runs": []})
+        self.history["recovery_reconciliation"]["evidence"] = [
+            {"path": str(self.ledger_path), "sha256": mixed.host.sha256(self.ledger_path)}]
+        self.publish_history()
+        with self.assertRaisesRegex(ValueError, "immutable snapshot, not the live mixed ledger"):
+            mixed.history(self.history_path, mixed.file_hashes(self.source), 42, self.lane, admission=self.admission)
+
+    def test_resume_rechecks_exact_history_import_bytes_and_source_binding(self):
+        imported = self.lane / mixed.seeds.LEDGER_NAME
+        self.put(imported, {"schema": 1, "kind": "grab-food-seed-ledger", "training_seed_ranges": [[300, 310]],
+                           "assessment_seeds": [], "allocations": []})
+        self.history["imports"] = [{"path": str(imported), "sha256": mixed.host.sha256(imported)}]
+        self.publish_history()
+        plan = self.plan()
+        mixed.reserve(plan, self.ledger_path)
+        original_ledger = self.ledger_path.read_bytes()
+        for path, error in ((self.history_path, "history changed on resume"),
+                            (imported, "Grab import bytes"), (self.source / "actor-checkpoint.json", "sealed source changed")):
+            original = path.read_bytes()
+            path.write_bytes(original + b" ")
+            with self.subTest(target=path.name), self.assertRaisesRegex(ValueError, error):
+                mixed.execute(plan, resume=True)
+            path.write_bytes(original)
+            self.assertEqual(self.ledger_path.read_bytes(), original_ledger)
+        self.history["source_sha256"] = {name: "0" * 64 for name in mixed.FILES}
+        self.put(self.history_path, self.history)
+        with self.assertRaisesRegex(ValueError, "not bound to this sealed source"):
+            mixed.execute(plan, resume=True)
+        self.assertEqual(self.commands, [])
+
+    def next_candidate(self, plan, source):
+        self.history_path = self.root / "next-history.json"
+        self.history["source_sha256"] = {name: mixed.file_hashes(source)[name] for name in mixed.FILES}
+        self.history["consumed_seed_ranges"].append([100, 105])
+        self.publish_history()
+        return {**plan, "source": str(source), "source_sha256": mixed.file_hashes(source),
+                "source_seed": self.get(source / "cycle.json")["seed"], "history": str(self.history_path),
+                "history_sha256": mixed.host.sha256(self.history_path),
+                "output": str(self.lane / "next"), "seed_range": [300, 305]}
+
+    def test_attestation_cannot_bypass_pending_prior_run_or_changed_adoption_state(self):
+        plan = self.plan()
+        with patch.object(mixed.host, "run_child", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                mixed.execute(plan)
+        candidate = self.next_candidate(plan, self.source)
+        original = self.ledger_path.read_bytes()
+        with self.assertRaisesRegex(ValueError, "prior pending attempt must be reconciled"):
+            mixed.reserve(candidate, self.ledger_path, commit=False)
+        self.assertEqual(self.ledger_path.read_bytes(), original)
+        mixed.execute(plan, resume=True)
+        with self.assertRaisesRegex(ValueError, "prior ledger runs changed"):
+            mixed.reserve(candidate, self.ledger_path, commit=False)
+
+    def test_prior_abandoned_late_seal_remains_manual_conflict(self):
+        plan = self.plan()
+        with patch.object(mixed.host, "run_child", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                mixed.execute(plan)
+        result = mixed.execute(plan, resume=True)
+        candidate = self.next_candidate(plan, Path(result["latest_checkpoint"]))
+        abandoned = self.output / "attempt-00000"
+        abandoned.mkdir()
+        self.put(abandoned / "cycle.json", {})
+        with self.assertRaisesRegex(ValueError, "abandoned attempt later acquired a seal"):
+            mixed.reserve(candidate, self.ledger_path, commit=False)
+
+    def test_prior_accepted_missing_or_changed_outputs_cannot_be_attested_away(self):
+        plan = self.plan()
+        result = mixed.execute(plan)
+        candidate = self.next_candidate(plan, Path(result["latest_checkpoint"]))
+        checkpoint = self.output / "attempt-00000/actor-checkpoint.json"
+        checkpoint.write_text("changed prior accepted output")
+        with self.assertRaisesRegex(ValueError, "prior accepted receipt/checkpoint changed"):
+            mixed.reserve(candidate, self.ledger_path, commit=False)
+        checkpoint.unlink()
+        with self.assertRaises(FileNotFoundError):
+            mixed.reserve(candidate, self.ledger_path, commit=False)
+        self.assertEqual(len(self.commands), 3)
+
+    def test_prior_run_checks_still_run_when_resuming_a_later_allocation(self):
+        plan = self.plan()
+        result = mixed.execute(plan)
+        candidate = self.next_candidate(plan, Path(result["latest_checkpoint"]))
+        Path(candidate["output"]).mkdir()
+        mixed.reserve(candidate, self.ledger_path)
+        (self.output / "attempt-00000/initial.alife-foundation").write_bytes(b"changed old chain")
+        with self.assertRaisesRegex(ValueError, "prior accepted receipt/checkpoint changed"):
+            mixed.execute(candidate, resume=True)
+        self.assertEqual(len(self.commands), 3)
+
+    def test_uint64_numeric_exclusions_are_not_reduced_modulo_32_bits(self):
+        plan = self.plan()
+        candidate = {**plan, "seed_range": [2**32 + 700, 2**32 + 705]}
+        mixed.reserve(candidate, self.ledger_path, commit=False)
+        self.history["reserved_seed_ranges"].append(candidate["seed_range"])
+        self.publish_history()
+        candidate["history_sha256"] = mixed.host.sha256(self.history_path)
+        with self.assertRaisesRegex(ValueError, "overlaps excluded"):
+            mixed.reserve(candidate, self.ledger_path, commit=False)
 
 
 if __name__ == "__main__":
