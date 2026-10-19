@@ -85,11 +85,24 @@ independent and unchanged.
 The CPU preparation suite passed with `--features gpu-runtime`: 21 tests passed,
 3 existing timing probes were intentionally ignored, and none failed. Formatting,
 static core boundaries and all 77 documentation assertions passed. The existing
-training-continuity CI job now explicitly runs this preparation suite with its
-`foundation-training` feature set; these tests construct no device or dispatch.
+full-workspace CI command enables `alife_game_app/gpu-runtime` through
+`alife_tools/Cargo.toml` and runs these tests without a filter. This feature
+connection is confirmed by `cargo tree --locked --workspace -e features -i
+alife_game_app`; these preparation tests construct no device or dispatch.
 
 All 7 `alife_core --test attention_hysteresis` integration tests passed. Strict
 `alife_game_app --features gpu-runtime --all-targets` Clippy passed with warnings
 denied. These checks used Rust/Cargo 1.98.1 in the fresh cloud environment.
-Publication is awaiting owner coordination, so hosted exact-head CI has not run
-yet. No runtime performance measurement was made.
+Draft PR100 initially added a redundant targeted CI step. The hosted art audit
+correctly rejected that workflow edit because its exact bytes are source-pinned.
+The redundant step was removed, restoring `.github/workflows/ci.yml` byte for
+byte to the verified base. No pin, art audit, historical profile or existing
+workflow behavior was changed. The resulting three-file change retains
+aggregate test coverage without expanding into art provenance updates.
+After restoration, both art audits passed locally, along with the 74 composition,
+4 preview-rotation and 3 main-integration CPU tests and all 77 docs assertions.
+
+An independent internal R2 source review passed on the initial source head.
+The final corrected head requires its own R2 confirmation and hosted aggregate
+checks before the parent-owned ready/merge gate. No runtime performance
+measurement was made.
