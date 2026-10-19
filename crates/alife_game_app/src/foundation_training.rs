@@ -25,6 +25,7 @@ pub(crate) mod diagnostics;
 pub use comparison_identity::FoundationProbeComparisonIdentityV1;
 mod food_outcome;
 mod lesson_trace;
+mod recovery;
 pub use food_outcome::FoundationFoodOutcome;
 mod maze;
 pub use diagnostics::{FoundationLessonBudget, FoundationSpeechBehaviorDiagnostics};
@@ -2266,27 +2267,7 @@ fn run_foundation_training_pilot_with_request(
                 })
         }
         FoundationTeacherLesson::Recovery => {
-            let initial = steps[0].frame.homeostasis().drives.fatigue;
-            let final_fatigue = steps
-                .last()
-                .and_then(|step| step.patch.outcome().measured_physiology)
-                .map(|transition| transition.after.homeostasis.drives.fatigue);
-            let rest_end = steps.iter().position(|step| !teacher_step_rest(step));
-            initial >= 0.12
-                && final_fatigue.is_some_and(|final_fatigue| final_fatigue <= initial - 0.02)
-                && rest_end.is_some_and(|index| {
-                    index > 0
-                        && steps[..index].iter().all(teacher_step_rest)
-                        && steps[index..].iter().all(|step| {
-                            if config.sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
-                                !teacher_step_rest(step)
-                            } else {
-                                teacher_step_targets(step, food)
-                            }
-                        })
-                })
-                && food_consumed
-                && steps.iter().all(|step| !teacher_step_blocked(step))
+            recovery::lesson_completed(food, steps.iter().map(|step| &step.patch))
         }
     });
     if let Some(summary) = food_outcome.as_mut() {
@@ -2672,13 +2653,6 @@ pub(crate) fn heard_foundation_teacher_cue(
         })
 }
 
-fn teacher_step_rest(step: &crate::FoundationTrainingStep) -> bool {
-    step.frame
-        .candidates()
-        .get(step.behavior.representative_index as usize)
-        .is_some_and(|candidate| candidate.family == alife_core::CandidateActionFamily::Rest)
-}
-
 fn teacher_step_targets(
     step: &crate::FoundationTrainingStep,
     target: alife_core::WorldEntityId,
@@ -2690,8 +2664,12 @@ fn teacher_step_targets(
 }
 
 fn teacher_step_blocked(step: &crate::FoundationTrainingStep) -> bool {
-    step.patch.outcome().physical.contact == alife_core::PhysicalContactKind::Blocked
-        || step.patch.outcome().joint.as_ref().is_some_and(|joint| {
+    teacher_outcome_blocked(step.patch.outcome())
+}
+
+fn teacher_outcome_blocked(outcome: &alife_core::PostActionOutcome) -> bool {
+    outcome.physical.contact == alife_core::PhysicalContactKind::Blocked
+        || outcome.joint.as_ref().is_some_and(|joint| {
             joint
                 .channel_outcomes
                 .iter()
@@ -4975,14 +4953,22 @@ mod held_food_lesson_tests {
         action: alife_core::ActionId,
         motor: Option<(MotorCommandBundle, JointPhysicalOutcome)>,
     ) -> alife_core::ExperiencePatch {
+        action_patch(frame, Some(target), outcome, action, motor)
+    }
+
+    pub(super) fn action_patch(
+        frame: alife_core::PerceptionFrame,
+        target: Option<alife_core::WorldEntityId>,
+        outcome: PostActionOutcome,
+        action: alife_core::ActionId,
+        motor: Option<(MotorCommandBundle, JointPhysicalOutcome)>,
+    ) -> alife_core::ExperiencePatch {
         // Synthetic selection scaffolding verifies labels over measured CPU
         // world outcomes. It does not claim a GPU selected this action.
         let candidate = frame
             .candidates()
             .iter()
-            .find(|candidate| {
-                candidate.action_id == action && candidate.target.entity == Some(target)
-            })
+            .find(|candidate| candidate.action_id == action && candidate.target.entity == target)
             .unwrap();
         let confidence = Confidence::new(1.0).unwrap();
         let class = alife_core::BrainClassSpec::for_tier(BrainScaleTier::Standard2048);

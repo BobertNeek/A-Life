@@ -74,12 +74,17 @@ can reduce the stimulation dose to zero without authorizing any biology change.
 Before stage 4, add a need-choice assessment of exact-target Play activation and
 measured boredom relief when bored. A novelty investigation is separate evidence,
 not proof of boredom relief. Recovery already has ordinary fatigue reduction and
-re-engagement; its later care assessment must use executed posture and measured
-physiology and accept interrupted or factorized recovery. The current Recovery
-lesson's representative-candidate and strict Rest-prefix predicates are a known
-assessment limitation, not a care competence gate for stages 1-3. These later-stage
-assessment checks are deferred until that stage is authorized; no new biology or
-general assessment framework is required for immediate held/reachable-food care.
+re-engagement. Its assessment uses sealed posture execution and measured physiology,
+accepting interrupted and factorized Rest. Initial fatigue must still be at least
+0.12, and measured episode fatigue must fall by at least 0.02. A successful executed
+Rest step must itself lower fatigue and end at or below initial fatigue minus 0.02;
+final fatigue must remain at or below that threshold. A later awake Eat must consume
+the exact food target. Concurrent Eat+Rest alone does not establish waking
+re-engagement, and blocked actions still fail. These
+source-bound software checks do not establish policy competence. Recovery remains
+outside the care competence gates for stages 1-3; later-stage policy checks remain
+deferred until that stage is authorized. No new biology or general assessment
+framework is required for immediate held/reachable-food care.
 
 Software checks establish the execution and assessment contracts only. They do
 not establish current policy competence, founder promotion, durable memory, or
