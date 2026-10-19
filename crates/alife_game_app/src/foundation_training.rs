@@ -4886,7 +4886,13 @@ mod held_food_lesson_tests {
         target: alife_core::WorldEntityId,
         outcome: PostActionOutcome,
     ) -> alife_core::ExperiencePatch {
-        activity_narration_patch(frame, target, outcome, alife_world::HeadlessActionIds::EAT)
+        activity_narration_patch(
+            frame,
+            target,
+            outcome,
+            alife_world::HeadlessActionIds::EAT,
+            None,
+        )
     }
 
     fn activity_narration_patch(
@@ -4894,6 +4900,7 @@ mod held_food_lesson_tests {
         target: alife_core::WorldEntityId,
         outcome: PostActionOutcome,
         action: alife_core::ActionId,
+        motor: Option<(MotorCommandBundle, JointPhysicalOutcome)>,
     ) -> alife_core::ExperiencePatch {
         // Synthetic selection scaffolding verifies labels over measured CPU
         // world outcomes. It does not claim a GPU selected this action.
@@ -4936,6 +4943,38 @@ mod held_food_lesson_tests {
             frame,
         )
         .unwrap();
+        if let Some((bundle, joint)) = motor {
+            // CPU fixture scaffolding seals the actual executed bundle and
+            // channel outcomes. It does not claim GPU neural selection.
+            let context = alife_core::CognitiveContextFrame::empty(
+                bundle.organism_id,
+                bundle.sequence_id,
+                bundle.tick,
+            )
+            .unwrap();
+            let prediction = alife_core::PredictionTargetReceipt::for_successor(
+                bundle.organism_id,
+                bundle.sequence_id,
+                action,
+                bundle.tick,
+                context.canonical_digest().unwrap(),
+                alife_core::SemanticStateVector::new(vec![0.0; 2]).unwrap(),
+                alife_core::JointMotorCondition::from_bundle(&bundle).unwrap(),
+                alife_core::SemanticStateVector::new(vec![0.0; 2]).unwrap(),
+            )
+            .unwrap();
+            let work = alife_core::CognitiveWorkReceipt::zero();
+            return alife_core::ExperiencePatch::new_v12_with_decision(
+                pre_action,
+                decision,
+                bundle,
+                outcome.with_v12_joint(joint, work).unwrap(),
+                prediction,
+                work,
+                context,
+            )
+            .unwrap();
+        }
         alife_core::ExperiencePatchBuilder::new(outcome.sequence_id)
             .record_pre_action(pre_action)
             .unwrap()
@@ -5067,7 +5106,7 @@ mod held_food_lesson_tests {
                 true,
             )
             .unwrap();
-        for completed in [false, true] {
+        for (index, completed) in [false, true].into_iter().enumerate() {
             let before = frame(&mut world);
             let command = before
                 .candidates()
@@ -5079,16 +5118,54 @@ mod held_food_lesson_tests {
                 .expect("the unobstructed ball must offer an observed Play candidate")
                 .to_command(subject, Confidence::new(1.0).unwrap())
                 .unwrap();
+            let bundle = MotorCommandBundle::new(
+                subject,
+                ExperienceSequenceId(index as u64 + 1),
+                before.tick(),
+                vec![
+                    alife_core::channel_command_for_action(MotorChannel::Manipulation, &command)
+                        .unwrap(),
+                ],
+            )
+            .unwrap();
             let measured = world
-                .apply_registered_command(&command, entity, Tick(world.tick().raw() + 1))
+                .apply_registered_motor_bundle(&bundle, entity)
                 .unwrap();
+            let receipt = measured.channel_receipts[0].clone();
+            assert!(
+                measured.succeeded,
+                "registered Play must physically succeed"
+            );
+            assert_eq!(receipt.command.channel, MotorChannel::Manipulation);
+            assert_eq!(
+                receipt.phase,
+                if completed {
+                    alife_world::ActionPhase::Completed
+                } else {
+                    alife_world::ActionPhase::Preparation
+                }
+            );
+            assert_eq!(receipt.physical.contact, PhysicalContactKind::Touch);
+            assert_eq!(receipt.physical.target_entity, Some(ball));
+            assert_eq!(world.entity(ball).unwrap().carried_by, Some(subject));
+            if completed {
+                assert!(receipt.play_stimulation > 0.0);
+                assert!(receipt.grip_transfers.is_empty());
+            } else {
+                assert_eq!(receipt.play_stimulation, 0.0);
+                assert_eq!(receipt.grip_transfers.len(), 1);
+                assert_eq!(
+                    receipt.grip_transfers[0].kind,
+                    alife_world::GripTransferKind::Acquired
+                );
+            }
             world.try_advance_tick().unwrap();
             let outcome = PostActionOutcome::new(
                 subject,
-                ExperienceSequenceId(1),
+                bundle.sequence_id,
                 world.tick(),
-                measured.action_result.execution.succeeded,
-                measured.action_result.execution.physical,
+                measured.succeeded,
+                measured.joint.execution,
                 HomeostaticDelta::zero(),
                 SignedValence::ZERO,
                 NormalizedScalar::ZERO,
@@ -5105,34 +5182,29 @@ mod held_food_lesson_tests {
                 .unwrap(),
             )
             .unwrap();
+            let legacy_patch = activity_narration_patch(
+                before.clone(),
+                ball,
+                outcome.clone(),
+                alife_world::HeadlessActionIds::PLAY,
+                None,
+            );
             let patch = activity_narration_patch(
                 before,
                 ball,
                 outcome,
                 alife_world::HeadlessActionIds::PLAY,
+                Some((bundle, measured.joint)),
             );
-            let mut receipt_command = alife_core::channel_command_for_action(
-                alife_core::MotorChannel::Manipulation,
-                &command,
-            )
-            .unwrap();
-            // The world adapts actuator intensity to embodiment gain. Identity
-            // and patch provenance, rather than full command equality, bind it.
-            receipt_command.intensity = Intensity::new(0.7).unwrap();
+            assert!(patch.selected_bundle().is_some());
             let evidence = crate::gpu_live_runtime::FoundationActivityEvidence {
                 organism_id: subject,
                 source_tick: patch.pre_action().perception().tick(),
                 outcome_tick: patch.outcome().outcome_tick,
                 sequence_id: patch.header().sequence_id.raw(),
-                receipt: alife_world::HeadlessMotorChannelReceipt {
-                    command: receipt_command,
-                    phase: measured.action_result.phase,
-                    grip_transfers: measured.action_result.grip_transfers,
-                    play_stimulation: measured.action_result.body_event.play_stimulation,
-                    observation: None,
-                    physical: measured.action_result.execution.physical,
-                },
+                receipt,
             };
+            assert!(!evidence.completed_play(&legacy_patch, Some(ball)));
             let after = frame(&mut world);
             let label = |evidence| {
                 grounded_speech_label(
@@ -5148,6 +5220,11 @@ mod held_food_lesson_tests {
             };
             assert_eq!(label(Some(&evidence)).token, completed.then_some(13));
             assert_eq!(label(None).token, None);
+            // Embodiment can adapt intensity; identity and patch provenance
+            // bind the receipt rather than full command equality.
+            let mut adapted = evidence.clone();
+            adapted.receipt.command.intensity = Intensity::new(0.7).unwrap();
+            assert_eq!(label(Some(&adapted)).token, completed.then_some(13));
             let mut stale = evidence.clone();
             stale.sequence_id += 1;
             assert_eq!(label(Some(&stale)).token, None);
