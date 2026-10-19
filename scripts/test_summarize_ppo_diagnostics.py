@@ -361,7 +361,7 @@ class PpoDiagnosticSummaryTests(unittest.TestCase):
 
 
 class BoundedInspectorRunnerTests(unittest.TestCase):
-    def run_child(self, code, timeout=5):
+    def run_child(self, code, timeout=5, on_started=None):
         children, launch = [], subprocess.Popen
         def record_child(*args, **kwargs):
             self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
@@ -370,7 +370,7 @@ class BoundedInspectorRunnerTests(unittest.TestCase):
             return child
         with mock.patch.object(MODULE.subprocess, "Popen", side_effect=record_child):
             try:
-                return MODULE.run_inspector([sys.executable, "-c", code], timeout=timeout)
+                return MODULE.run_inspector([sys.executable, "-c", code], timeout=timeout, on_started=on_started)
             finally:
                 self.assertEqual(len(children), 1)
                 child = children[0]
@@ -384,6 +384,24 @@ class BoundedInspectorRunnerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stdout, b"x" * MODULE.OUTPUT_LIMIT)
         self.assertEqual(result.stderr, b"y" * MODULE.OUTPUT_LIMIT)
+
+    def test_optional_callback_registers_real_child_before_successful_cleanup(self):
+        children = []
+        result = self.run_child("print('read-only fixture')", on_started=children.append)
+        self.assertEqual(len(children), 1)
+        self.assertEqual(children[0].poll(), 0)
+        self.assertEqual(result.stdout, b"read-only fixture\n")
+
+    def test_callback_exception_still_kills_reaps_and_closes_real_child(self):
+        children = []
+        def reject(child):
+            children.append(child)
+            raise RuntimeError("fixture ownership registration failed")
+        with self.assertRaisesRegex(RuntimeError, "ownership registration failed"):
+            self.run_child("import time; time.sleep(30)", on_started=reject)
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertTrue(children[0].stdout.closed and children[0].stderr.closed)
 
     def test_each_overflow_kills_child_promptly_and_keeps_only_one_extra_byte(self):
         for stream in (1, 2):

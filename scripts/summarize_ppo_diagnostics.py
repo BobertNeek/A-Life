@@ -77,7 +77,8 @@ def snapshot(directory):
     return result
 
 
-def run_inspector(argv, timeout=INSPECTOR_TIMEOUT):
+def run_inspector(argv, timeout=INSPECTOR_TIMEOUT, *, on_started=None):
+    """Run bounded read-only inspection; optional ownership registration is protected by cleanup."""
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, bufsize=0, creationflags=flags)
@@ -92,6 +93,8 @@ def run_inspector(argv, timeout=INSPECTOR_TIMEOUT):
             pass  # A normal exit may already have ended this child.
 
     try:
+        if on_started is not None:
+            on_started(process)
         for stream in streams:
             os.set_blocking(stream.fileno(), False)
         while streams or process.poll() is None:

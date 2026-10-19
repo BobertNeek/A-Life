@@ -22,6 +22,12 @@ import time
 
 UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
+MIXED_LEDGER_NAME = ".mixed-care-seed-reservations.json"
+
+
+def assert_legacy_lane(lane):
+    if (lane / MIXED_LEDGER_NAME).exists() or (lane / MIXED_LEDGER_NAME).is_symlink():
+        raise ValueError("mixed-care ledger present: use the mixed-care scheduler; legacy launchers cannot reserve against it")
 
 
 def read_json(path):
@@ -274,7 +280,7 @@ def assert_lane_idle():
                 names.append(path.read_text().strip())
             except (FileNotFoundError, PermissionError):
                 pass
-    busy = [name for name in names if name in ("cargo", "rustc", "train_n2048_care") or
+    busy = [name for name in names if name in ("cargo", "rustc", "train_n2048_care", "train_n2048_car") or
             name.startswith(("alife_", "wgsl_foundation_trainer", "n2048_foundation_abi"))]
     if busy:
         raise RuntimeError(f"Cargo/game/GPU lane occupied: {busy}; no other process was stopped")
@@ -346,6 +352,7 @@ def main(argv=None):
                 raise ValueError("training seed range repeats the source episode; select a fresh range")
         input_hashes[str(args.binary)] = sha256(args.binary)
         args.output = args.output.resolve()
+        assert_legacy_lane(args.output.parent)
         # Do not acquire the owner lock or start any executable in plan mode.
         args.output.mkdir(parents=True, exist_ok=False)
         state = {"schema": 1, "status": "planned", "lesson": "eat_held_food", "promoted": False,
@@ -430,6 +437,7 @@ def run_night(args, state, state_path, input_hashes):
 
     try:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        assert_legacy_lane(args.output.parent)
         os.write(descriptor, json.dumps({"pid": os.getpid(), "output": str(args.output)}).encode())
         state["status"] = "running"; state["started_utc"] = dt.datetime.now(UTC).isoformat(); publish()
         # Missing optional prior provenance is reported, never an episode gate.

@@ -140,9 +140,16 @@ def commit(path, prepared, allocation):
     A failed commit never authorizes dispatch. A surviving reservation is never
     rolled back, including after an uncertain or zero-training-dose attempt.
     """
-    path = Path(path)
     value = {**prepared, "allocations": prepared["allocations"] + [
         {**allocation, "reserved_utc": dt.datetime.now(dt.timezone.utc).isoformat()}]}
+    write_document(path, value)
+
+
+def write_document(path, value):
+    """Durably replace a bounded JSON document; caller owns its lane lock."""
+    path = Path(path)
+    if path.is_symlink():
+        raise ValueError("durable document must not be a symlink")
     payload = (json.dumps(value, indent=2, allow_nan=False) + "\n").encode("utf-8")
     if len(payload) > MAX_DOCUMENT_BYTES:
         raise ValueError("seed ledger exceeds its bounded document size; reconcile before continuing")
