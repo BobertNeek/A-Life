@@ -25,8 +25,12 @@ pub(crate) mod diagnostics;
 pub use comparison_identity::FoundationProbeComparisonIdentityV1;
 mod food_outcome;
 mod lesson_trace;
+mod play_assessment;
 mod recovery;
 pub use food_outcome::FoundationFoodOutcome;
+pub use play_assessment::{
+    assess_foundation_play, FoundationPlayAssessment, FoundationPlayBoredomObservation,
+};
 mod maze;
 pub use diagnostics::{FoundationLessonBudget, FoundationSpeechBehaviorDiagnostics};
 
@@ -2293,6 +2297,20 @@ fn run_foundation_training_pilot_with_request(
                 if let Some(observation) = observation {
                     observation.decorate_trace(&mut trace);
                 }
+                trace["play_assessment"] =
+                    serde_json::to_value(scenario.vocabulary_target.and_then(|target| {
+                        let organism = runtime
+                            .world()
+                            .organism_registry()
+                            .get(step.patch.header().organism_id)?;
+                        assess_foundation_play(
+                            organism.phenotype(),
+                            &step.patch,
+                            step.activity_evidence.as_ref(),
+                            target,
+                        )
+                    }))
+                    .expect("Play assessment contains only finite measured values");
                 trace
             })
             .collect::<Vec<_>>();
@@ -4973,6 +4991,9 @@ mod held_food_lesson_tests {
         let confidence = Confidence::new(1.0).unwrap();
         let class = alife_core::BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
         let genome = BrainGenome::scaffold(42, class.id);
+        let genome_id = outcome
+            .measured_physiology
+            .map_or(genome.id, |transition| transition.before.source_genome_id);
         let phenotype_hash = alife_core::PhenotypeHash([1, 2, 3, 4]);
         let decision = alife_core::DecisionSnapshot::from_neural_selection(
             outcome.sequence_id,
@@ -4996,9 +5017,9 @@ mod held_food_lesson_tests {
             outcome.sequence_id,
             class.id,
             phenotype_hash,
-            genome.id,
+            genome_id,
             genome.schema_version,
-            DevelopmentState::new(genome.id, frame.tick(), NormalizedScalar::new(0.5).unwrap()),
+            DevelopmentState::new(genome_id, frame.tick(), NormalizedScalar::new(0.5).unwrap()),
             frame,
         )
         .unwrap();
