@@ -63,6 +63,10 @@ fn cycle_sampling_config(
     Ok(config)
 }
 
+fn next_cohort_run_id(seed: u64) -> String {
+    format!("n2048-cycle-next-{}", u128::from(seed) + 1)
+}
+
 /// An objective change may retain learned state only when the caller names the
 /// actual older version. Ordinary resume never silently resets either head.
 fn validate_objective_continuation(
@@ -1287,6 +1291,27 @@ fn prepare_terrain_founder_refresh(
 #[cfg(test)]
 mod founder_refresh_tests {
     use super::*;
+
+    #[test]
+    fn next_cohort_run_id_preserves_ordinary_names() {
+        assert_eq!(next_cohort_run_id(1), "n2048-cycle-next-2");
+        assert_eq!(
+            next_cohort_run_id(202610170001),
+            "n2048-cycle-next-202610170002"
+        );
+        assert_eq!(
+            next_cohort_run_id(u64::MAX - 1),
+            "n2048-cycle-next-18446744073709551615"
+        );
+    }
+
+    #[test]
+    fn next_cohort_run_id_handles_maximum_seed_without_overflow() {
+        assert_eq!(
+            next_cohort_run_id(u64::MAX),
+            "n2048-cycle-next-18446744073709551616"
+        );
+    }
 
     fn assert_residual_checkpoint_admission(directory: &Path, accepted: bool) {
         let names = [
@@ -4087,7 +4112,7 @@ fn run_foundation_training_cycle_in_owned_output(
         BrainScaleTier::Standard2048,
         next_config.sensor_profile,
         alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
-        format!("n2048-cycle-next-{}", seed + 1),
+        next_cohort_run_id(seed),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
         cycle_sampling_config(seed, policy_version.wrapping_add(1), sampling_temperature)?,
     )?;
