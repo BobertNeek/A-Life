@@ -173,8 +173,11 @@ count. No combined success rate or automatic promotion is calculated.
 
 Run the stdlib fixtures and existing affected checks:
 
+The existing CI `test*food_night.py` discovery includes this scheduler suite;
+the source-pinned workflow and art provenance remain unchanged.
+
 ```sh
-python -S -m unittest discover -s scripts -p 'test_run_mixed_care_serial.py' -v
+python -S -m unittest discover -s scripts -p 'test_mixed_care_food_night.py' -v
 python -S -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
 python -S -m unittest discover -s scripts -p 'test*food_night.py' -v
 python -S -m unittest discover -s scripts -p 'test_grab_food_seed_reservations.py' -v
