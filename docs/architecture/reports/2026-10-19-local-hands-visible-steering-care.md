@@ -22,6 +22,15 @@ Legacy unknown possession defaults to protected carry. Repeated drop/regrab does
 not supply activity stimulation or investigation novelty. Reachable non-food Eat
 attempts retain ordinary physical contact and hazard consequences.
 
+Play narration and activity praise bind matching completed target activation to
+positive measured investigation or play stimulation from that same channel.
+A novelty-1.0 activation supplies investigation instead of familiar-toy play
+stimulation; its physical completion can be narrated without inventing boredom
+relief. The registered motor-receipt regression covers both activation cases and
+pickup-only preparation. Scripted Era1 peer demonstrations supply their own
+known transformed endpoint; learner movement still obeys fresh visibility
+admission, and demonstration success/digest validation is unchanged.
+
 Opaque hidden destinations disable automatic detours. Learned intermediate
 movement can restore sight; target occlusion pauses assistance on the next
 physical decision. The finite detour allowance replenishes only after meaningful

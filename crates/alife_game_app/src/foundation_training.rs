@@ -5106,7 +5106,10 @@ mod held_food_lesson_tests {
                 true,
             )
             .unwrap();
-        for (index, completed) in [false, true].into_iter().enumerate() {
+        for (index, (completed, novelty)) in [(false, 0.0), (true, 1.0), (true, 0.0)]
+            .into_iter()
+            .enumerate()
+        {
             let before = frame(&mut world);
             let command = before
                 .candidates()
@@ -5128,10 +5131,34 @@ mod held_food_lesson_tests {
                 ],
             )
             .unwrap();
+            let neural = alife_core::NeuralEmissionFrame::new(
+                before.tick(),
+                1,
+                vec![alife_core::NeuralEmission::new(
+                    alife_core::NeuralEmissionClass::ExecutiveSustain,
+                    0.0,
+                    1.0,
+                )
+                .unwrap()],
+            )
+            .unwrap();
             let measured = world
-                .apply_registered_motor_bundle(&bundle, entity)
+                .apply_registered_motor_bundle_with_perceived_novelty_in_staged_tick(
+                    &bundle,
+                    entity,
+                    &neural,
+                    novelty,
+                    &[(ball, novelty)],
+                )
                 .unwrap();
             let receipt = measured.channel_receipts[0].clone();
+            let stimulated = completed && novelty < 1.0;
+            // Novel activation supplies investigation; familiar activation
+            // supplies play stimulation. Both are measured completed Play.
+            assert_eq!(
+                measured.body_event.investigation,
+                if completed { novelty } else { 0.0 }
+            );
             assert!(
                 measured.succeeded,
                 "registered Play must physically succeed"
@@ -5149,7 +5176,7 @@ mod held_food_lesson_tests {
             assert_eq!(receipt.physical.target_entity, Some(ball));
             assert_eq!(world.entity(ball).unwrap().carried_by, Some(subject));
             if completed {
-                assert!(receipt.play_stimulation > 0.0);
+                assert_eq!(receipt.play_stimulation > 0.0, stimulated);
                 assert!(receipt.grip_transfers.is_empty());
             } else {
                 assert_eq!(receipt.play_stimulation, 0.0);
@@ -5219,6 +5246,10 @@ mod held_food_lesson_tests {
                 .unwrap()
             };
             assert_eq!(label(Some(&evidence)).token, completed.then_some(13));
+            assert_eq!(
+                completed_language_activity(&patch, Some(&evidence), 13, Some(ball)),
+                completed
+            );
             assert_eq!(label(None).token, None);
             // Embodiment can adapt intensity; identity and patch provenance
             // bind the receipt rather than full command equality.
@@ -5236,9 +5267,10 @@ mod held_food_lesson_tests {
             // was the selected word/action response.
             failed_activation.receipt.physical.contact = PhysicalContactKind::None;
             assert_eq!(label(Some(&failed_activation)).token, None);
-            let mut zero_stimulation = evidence.clone();
-            zero_stimulation.receipt.play_stimulation = 0.0;
-            assert_eq!(label(Some(&zero_stimulation)).token, None);
+            let mut zero_consequence = evidence.clone();
+            zero_consequence.receipt.play_stimulation = 0.0;
+            zero_consequence.receipt.investigation = 0.0;
+            assert_eq!(label(Some(&zero_consequence)).token, None);
         }
     }
 

@@ -34,6 +34,10 @@ next-run plan. They do not start training or settle broader qualification.
   nourishment, taste, and ownership cleanup. No navigation occurs during Eat.
 - Play acquires a mobile ball before activation. Acquisition is not play
   stimulation. A fixed activity toy is operated in place and cannot be carried.
+- Completed Play narration and activity praise require matching physical
+  activation and a positive measured consequence from that same channel:
+  investigation for a novel target or play stimulation for a familiar one.
+  This does not change novelty biology or create a boredom reward for a novel toy.
 - Explicit Grab acquisition records deliberate carrying; automatic activity
   acquisition records temporary activity possession. A different activity cannot
   silently discard an explicitly carried object. Explicit release remains a

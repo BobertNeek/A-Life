@@ -1212,6 +1212,8 @@ pub struct HeadlessMotorChannelReceipt {
     pub phase: ActionPhase,
     pub grip_transfers: Vec<GripTransfer>,
     pub play_stimulation: f32,
+    /// Measured investigation from this channel after interaction novelty modulation.
+    pub investigation: f32,
     pub observation: Option<MeasuredChannelObservation>,
     pub physical: PhysicalActionOutcome,
 }
@@ -4635,6 +4637,7 @@ impl HeadlessWorld {
                 phase: result.phase,
                 grip_transfers: result.grip_transfers.clone(),
                 play_stimulation: result.body_event.play_stimulation,
+                investigation: result.body_event.investigation,
                 observation,
                 physical,
             });

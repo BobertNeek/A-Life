@@ -1436,10 +1436,16 @@ fn run_peer_demonstration(
         .ok_or(ScaffoldContractError::InvalidId)?;
     let tick = world.tick();
     let world_before_digest = world.canonical_signature_digest()?.words;
-    let result = world.apply_command(&HeadlessWorldCommand::approach(
-        manifest.familiar_peer,
-        target_entity,
-    )?)?;
+    let mut command = HeadlessWorldCommand::approach(manifest.familiar_peer, target_entity)?;
+    // The scripted demonstrator owns this endpoint, including held-out transforms.
+    // This does not expose a hidden destination to the learner's policy.
+    command.target_position = Some(
+        world
+            .entity(target_entity)
+            .ok_or(ScaffoldContractError::InvalidId)?
+            .position,
+    );
+    let result = world.apply_command(&command)?;
     let receipt = Era1PeerDemonstrationReceipt {
         tick,
         actor: manifest.familiar_peer,
@@ -1800,6 +1806,60 @@ mod registered_trial_world_tests {
             .agent("subject", SUBJECT, Vec3f::ZERO)
             .build()
             .unwrap()
+    }
+
+    #[test]
+    fn scripted_peer_demonstration_moves_and_replays_across_layout_transforms() {
+        for held_out_transform in [false, true] {
+            for world_variant_id in 1..=3 {
+                let manifest = Era1TrialManifest::new(
+                    41_001,
+                    Era1WorldFamily::PeerDemonstration,
+                    SUBJECT,
+                    OrganismId(42),
+                    OrganismId(43),
+                    world_variant_id,
+                    held_out_transform,
+                    1,
+                )
+                .unwrap();
+                let mut world = build_era1_trial_world(&manifest).unwrap();
+                let mut replay = world.clone();
+                let peer = world
+                    .organism_entity_ids()
+                    .into_iter()
+                    .find_map(|(organism, entity)| {
+                        (organism == manifest.familiar_peer).then_some(entity)
+                    })
+                    .unwrap();
+                let before_position = world.entity(peer).unwrap().position;
+                let before_digest = world.canonical_signature_digest().unwrap().words;
+                let receipt = run_peer_demonstration(&manifest, &mut world).unwrap();
+
+                assert!(receipt.succeeded);
+                assert_eq!(receipt.actor, manifest.familiar_peer);
+                assert_eq!(receipt.action, ActionKind::Move);
+                assert_eq!(
+                    receipt.target_entity,
+                    world.entity_id("era1-object-a").unwrap()
+                );
+                assert_ne!(world.entity(peer).unwrap().position, before_position);
+                assert_eq!(receipt.world_before_digest, before_digest);
+                assert_ne!(receipt.world_after_digest, before_digest);
+                assert_eq!(
+                    receipt.world_after_digest,
+                    world.canonical_signature_digest().unwrap().words
+                );
+                assert_eq!(
+                    run_peer_demonstration(&manifest, &mut replay).unwrap(),
+                    receipt
+                );
+                assert_eq!(
+                    replay.canonical_signature_digest().unwrap(),
+                    world.canonical_signature_digest().unwrap()
+                );
+            }
+        }
     }
 
     #[test]

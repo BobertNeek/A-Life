@@ -3460,7 +3460,7 @@ impl FoundationActivityEvidence {
                 })
             })
             && self.receipt.phase == alife_world::ActionPhase::Completed
-            && self.receipt.play_stimulation > 0.0
+            && (self.receipt.play_stimulation > 0.0 || self.receipt.investigation > 0.0)
             && self.receipt.physical.contact == alife_core::PhysicalContactKind::Touch
             && self.receipt.physical.target_entity == target
     }
