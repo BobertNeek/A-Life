@@ -291,11 +291,17 @@ fn activity_grip_provenance_is_never_excluded_from_policy_comparison() {
             true,
         )
         .unwrap();
-    let play = alife_world::HeadlessWorldCommand::structured(
+    let play = alife_core::ActionCommand::structured(
         subject,
         alife_world::HeadlessActionIds::PLAY,
         alife_core::ActionKind::Interact,
-        Some(ball),
+        alife_core::ActionTarget::new(Some(ball), None),
+        alife_core::Intensity::new(1.0).unwrap(),
+        alife_core::DurationTicks::new(1),
+        alife_core::Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
         None,
     )
     .unwrap();
