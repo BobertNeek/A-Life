@@ -116,6 +116,8 @@ jobs:
         run: cargo test --locked -p alife_gpu_backend --all-targets --features training-rollout
       - name: Familiar-object unresolved-gap input chain CPU regression
         run: cargo test --locked -p alife_game_app --features foundation-training --lib repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local
+      - name: Immutable CPU preparation and focal novelty equivalence regressions
+        run: 'cargo test --locked -p alife_game_app --features foundation-training --lib gpu_live_runtime::cpu_preparation::tests:: -- --test-threads=1'
       - name: Foundation scenario and replay CPU tests
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
       - name: Objective continuation CPU tests

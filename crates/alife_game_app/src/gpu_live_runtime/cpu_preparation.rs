@@ -106,6 +106,21 @@ pub(super) fn upload_error(error: GpuClosedLoopError) -> ScaffoldContractError {
     }
 }
 
+// select_focal_targets copies identities and salience from the same selected
+// indices, including hysteresis reordering. Tracked novelty was computed from
+// this job's immutable memory bank before selection; reuse those exact bits.
+fn selected_focal_novelty(attention: &AttentionFrame) -> f32 {
+    attention
+        .focal_targets
+        .first()
+        .zip(attention.salience_components.first())
+        .and_then(|(identity, salience)| {
+            matches!(identity, alife_core::StableFocusIdentity::TrackedObject(_))
+                .then_some(salience.novelty.raw())
+        })
+        .unwrap_or(0.0)
+}
+
 fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparationOutcome {
     if job.input.approximate_cache.is_some() {
         return super::approximate_cognition::prepare_row(job, measure);
@@ -196,20 +211,7 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
         hysteresis = Some(attention.hysteresis);
         preparation_stage = "focal routing";
         let routed_draft = route_focal_candidates(draft, &attention)?;
-        let novelty = attention
-            .focal_targets
-            .first()
-            .and_then(|id| match id {
-                alife_core::StableFocusIdentity::TrackedObject(object) => Some(
-                    1.0 - memory.bank().object_familiarity(
-                        input.draft.organism_id(),
-                        *object,
-                        memory.profile(),
-                    ),
-                ),
-                _ => None,
-            })
-            .unwrap_or(0.0);
+        let novelty = selected_focal_novelty(&attention);
         let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
         timing.attention_context_wall_ns = timing
             .attention_context_wall_ns

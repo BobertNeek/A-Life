@@ -382,6 +382,150 @@ fn assert_same_trace(actual: &CpuPreparationOutcome, expected: &CpuPreparationOu
     assert_eq!(actual.hysteresis, expected.hysteresis);
 }
 
+#[test]
+fn selected_focal_novelty_preserves_bits_for_ranked_retained_empty_and_nontracked_focus() {
+    let mut fixture = OwnerFixture::new(317, false);
+    seed_memory(&mut fixture, 1);
+    let draft = &fixture.input.draft;
+    let mut summaries = grounded_peripheral_summaries(draft.grounded_object_slots()).unwrap();
+    for summary in &mut summaries {
+        let StableFocusIdentity::TrackedObject(object) = summary.identity else {
+            unreachable!()
+        };
+        summary.salience = alife_core::SalienceComponents {
+            novelty: NormalizedScalar::new(
+                1.0 - fixture.memory.bank().object_familiarity(
+                    draft.organism_id(),
+                    object,
+                    fixture.memory.profile(),
+                ),
+            )
+            .unwrap(),
+            ..Default::default()
+        };
+    }
+    assert_eq!(
+        summaries[0].salience.novelty.raw().to_bits(),
+        0.5_f32.to_bits()
+    );
+    assert_eq!(
+        summaries[1].salience.novelty.raw().to_bits(),
+        1.0_f32.to_bits()
+    );
+    let select = |summaries: &[_], previous_identity, requested_focal_count| {
+        select_focal_targets(
+            draft.organism_id(),
+            fixture.input.sequence_id,
+            draft.tick(),
+            summaries,
+            HysteresisState {
+                previous_identity,
+                ..Default::default()
+            },
+            AttentionSelectionPolicy {
+                protected_minimum: 0,
+                requested_focal_count,
+                switch_cost: NormalizedScalar(0.2),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        select(&summaries, None, 1).focal_targets[0],
+        summaries[1].identity
+    );
+    assert_eq!(
+        select(&summaries, Some(summaries[0].identity), 1).focal_targets[0],
+        summaries[0].identity,
+        "hysteresis moves the less novel incumbent ahead of the raw winner"
+    );
+    let mut cases = vec![summaries.clone(), Vec::new()];
+    let mut reversed = summaries.clone();
+    reversed.reverse();
+    cases.push(reversed);
+    for identity in [
+        StableFocusIdentity::Organism(OrganismId(999)),
+        StableFocusIdentity::Concept(alife_core::ConceptCellId(999)),
+        StableFocusIdentity::NeuralStructural(alife_core::NeuralStructuralIdentity(999)),
+    ] {
+        let mut mixed = summaries.clone();
+        let mut summary = summaries[0];
+        summary.identity = identity;
+        summary.salience.drive = NormalizedScalar(1.0);
+        summary.salience.novelty = NormalizedScalar(0.75);
+        mixed.push(summary);
+        assert_eq!(select(&mixed, None, 1).focal_targets[0], identity);
+        cases.push(mixed);
+    }
+    let before = fixture.snapshot();
+    for summaries in cases {
+        for previous in [
+            None,
+            Some(summaries.first().map_or(
+                StableFocusIdentity::TrackedObject(TrackedObjectId(999_999)),
+                |summary| summary.identity,
+            )),
+            Some(StableFocusIdentity::TrackedObject(TrackedObjectId(999_999))),
+        ] {
+            for count in [0, 1, 2, 8] {
+                let attention = select(&summaries, previous, count);
+                let expected = attention
+                    .focal_targets
+                    .first()
+                    .and_then(|identity| match identity {
+                        StableFocusIdentity::TrackedObject(object) => Some(
+                            1.0 - fixture.memory.bank().object_familiarity(
+                                draft.organism_id(),
+                                *object,
+                                fixture.memory.profile(),
+                            ),
+                        ),
+                        _ => None,
+                    })
+                    .unwrap_or(0.0);
+                assert_eq!(
+                    selected_focal_novelty(&attention).to_bits(),
+                    expected.to_bits()
+                );
+            }
+        }
+    }
+    assert_eq!(fixture.snapshot(), before);
+}
+
+#[test]
+fn focal_novelty_reuse_preserves_complete_trace_with_empty_focus_and_switches() {
+    let mut fixture = OwnerFixture::new(319, true);
+    seed_memory(&mut fixture, 1);
+    with_candidate_count(&mut fixture, 26);
+    let slot = canonical_slots(1).remove(0);
+    let identities = [
+        None,
+        Some(StableFocusIdentity::TrackedObject(
+            fixture.input.draft.grounded_object_slots()[0].tracked_object_id,
+        )),
+        Some(StableFocusIdentity::TrackedObject(
+            fixture.input.draft.grounded_object_slots()[1].tracked_object_id,
+        )),
+        Some(StableFocusIdentity::TrackedObject(TrackedObjectId(999_999))),
+    ];
+    for previous in identities {
+        for count in [0, 1, 2] {
+            fixture.input.hysteresis.previous_identity = previous;
+            fixture.input.policy.protected_minimum = 0;
+            fixture.input.policy.focal_capacity = 2;
+            fixture.input.policy.requested_focal_count = count;
+            let before = fixture.snapshot();
+            let job = fixture.job(&slot);
+            let actual = prepare_cpu_row(&job, false);
+            assert!(actual.result.is_ok());
+            assert_same_trace(&actual, &legacy_serial_reference(&job));
+            assert_eq!(fixture.snapshot(), before);
+        }
+    }
+}
+
 fn visits(count: usize) -> PreparationFaults {
     PreparationFaults {
         visits: (0..count).map(|_| AtomicUsize::new(0)).collect(),
