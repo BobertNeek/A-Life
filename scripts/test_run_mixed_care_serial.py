@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import run_mixed_care_serial as mixed
 import run_grab_food_night as grab
@@ -49,6 +49,7 @@ class MixedCareTests(unittest.TestCase):
         self.commands = []
         self.ledger_path = self.lane / mixed.LEDGER
         self.write = mixed.seeds.write_document
+        self.run_inspector = mixed.inspector_io.run_inspector
         self.stack = contextlib.ExitStack()
         self.addCleanup(self.stack.close)
         self.stack.enter_context(patch.object(mixed, "admit_run_context"))
@@ -77,7 +78,9 @@ class MixedCareTests(unittest.TestCase):
         self.assertEqual(result, 0)
         return self.get(self.output / "plan.json")
 
-    def fake_inspect(self, argv, timeout):
+    def fake_inspect(self, argv, timeout, *, on_started=None):
+        if on_started is not None:
+            on_started(Mock(poll=Mock(return_value=0)))
         self.assertEqual(argv[1], "--validate-checkpoint")
         source = Path(argv[2])
         receipt = self.get(source / "cycle.json")
@@ -91,6 +94,7 @@ class MixedCareTests(unittest.TestCase):
 
     def fake_child(self, argv, log, deadline, guard, environment, on_started):
         guard()
+        on_started(Mock(poll=Mock(return_value=0)))
         # Reservation and pending intent must already survive on disk.
         ledger = mixed.read_ledger(self.ledger_path)
         attempt = ledger["runs"][-1]["attempts"][-1]
@@ -119,7 +123,7 @@ class MixedCareTests(unittest.TestCase):
                    "prepared_reachable_food_opportunities": int(lesson == "eat_reachable_food"),
                    "held_food_consumption_events": int(lesson != "feeding"),
                    "trained_held_food_consumption_events": int(lesson == "eat_reachable_food"),
-                   "consumed_events": 7 if lesson == "feeding" else 9,
+                   "consumed_events": 3 if lesson == "feeding" else 1,
                    "actor_optimizer_updates": 2, "value_optimizer_updates": 3, "completed_epochs": 2}
         if lesson != "feeding":
             receipt["held_food_setup" if lesson == "eat_held_food" else "reachable_food_setup"] = setup
@@ -142,7 +146,7 @@ class MixedCareTests(unittest.TestCase):
         self.assertEqual(totals["eat_held_food"]["trained_exact_nourishing_consumption_events"], 0)
         self.assertEqual(totals["eat_held_food"]["exact_nourishing_consumption_events"], 1)
         self.assertEqual(totals["eat_reachable_food"]["trained_exact_nourishing_consumption_events"], 1)
-        self.assertEqual(totals["feeding"]["generic_consumed_events"], 7)
+        self.assertEqual(totals["feeding"]["generic_consumed_events"], 3)
         self.assertEqual(totals["feeding"]["exact_nourishing_consumption_events"], 0)
         for index, lesson in enumerate(mixed.LESSONS):
             self.assertEqual(totals[lesson]["requested_training_ticks"], index + 2)
@@ -381,6 +385,7 @@ class MixedCareTests(unittest.TestCase):
                            ("bootstrap_replay_rows", 0), ("requested_training_ticks", 5),
                            ("objective_state_reset", True), ("biological_objective_version", 1),
                            ("trained_held_food_consumption_events", 2), ("captured_replay_rows", True),
+                           ("consumed_events", original["captured_replay_rows"] + 1),
                            ("old_asset_digest", "wrong")):
             with self.subTest(field=key):
                 self.put(receipt_path, {**original, key: value})
@@ -433,6 +438,139 @@ class MixedCareTests(unittest.TestCase):
         self.assertTrue((self.lane / ".eat-held-food-owner.lock").exists())
         with self.assertRaises(FileExistsError):
             mixed.execute(plan, resume=True)
+
+    def assert_inspector_cleanup_uncertainty(self, fail_at):
+        plan = self.plan()
+        child = Mock(returncode=None)
+        child.poll.return_value = None
+        child.stdout.read.side_effect = OSError("fixture inspector read failure")
+        child.kill.side_effect = OSError("fixture inspector kill failure")
+        child.wait.side_effect = subprocess.TimeoutExpired("fixture inspector cleanup", 1)
+        calls = 0
+        def invoke(argv, timeout, *, on_started=None):
+            nonlocal calls
+            calls += 1
+            if calls == fail_at:
+                return self.run_inspector(argv, timeout, on_started=on_started)
+            return self.fake_inspect(argv, timeout, on_started=on_started)
+        with patch.object(mixed.inspector_io, "run_inspector", side_effect=invoke), \
+                patch.object(mixed.subprocess, "Popen", return_value=child), \
+                patch.object(mixed.os, "set_blocking"):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                mixed.execute(plan)
+        self.assertTrue((self.lane / ".eat-held-food-owner.lock").exists())
+        self.assertEqual(calls, fail_at)
+        self.assertEqual(len(self.commands), 0 if fail_at == 1 else 1)
+        child.kill.assert_called_once_with()
+        child.wait.assert_called_once_with(timeout=1)
+        child.stdout.close.assert_called_once_with()
+        child.stderr.close.assert_called_once_with()
+
+    def test_initial_inspector_cleanup_uncertainty_retains_owner_lock(self):
+        self.assert_inspector_cleanup_uncertainty(fail_at=1)
+
+    def test_seal_inspector_cleanup_uncertainty_retains_lock_after_trainer_exit(self):
+        self.assert_inspector_cleanup_uncertainty(fail_at=2)
+
+    def test_successful_real_inspector_helper_cleanup_releases_owner_lock(self):
+        plan = self.plan()
+        children = []
+        def spawn(argv, **kwargs):
+            report = self.fake_inspect(argv, timeout=90)
+            child = Mock(returncode=0)
+            child.poll.return_value = 0
+            child.wait.return_value = 0
+            child.stdout.read.side_effect = [report.stdout, b""]
+            child.stderr.read.return_value = b""
+            children.append(child)
+            return child
+        with patch.object(mixed.inspector_io, "run_inspector", side_effect=self.run_inspector), \
+                patch.object(mixed.subprocess, "Popen", side_effect=spawn), \
+                patch.object(mixed.os, "set_blocking"):
+            result = mixed.execute(plan)
+        self.assertEqual(result["accepted_episodes"], 3)
+        self.assertEqual(len(children), 7)  # Initial admission plus current/predecessor for each seal.
+        self.assertFalse((self.lane / ".eat-held-food-owner.lock").exists())
+        for child in children:
+            child.wait.assert_called_once_with(timeout=1)
+            child.stdout.close.assert_called_once_with()
+            child.stderr.close.assert_called_once_with()
+
+    def test_stop_between_resume_inspectors_prevents_every_later_child(self):
+        plan = self.plan()
+        mixed.execute(plan)
+        calls = []
+        def stop_after_first(argv, timeout, *, on_started=None):
+            calls.append(argv)
+            result = self.fake_inspect(argv, timeout, on_started=on_started)
+            (self.output / "STOP").touch()
+            return result
+        with patch.object(mixed.inspector_io, "run_inspector", side_effect=stop_after_first):
+            with self.assertRaisesRegex(ValueError, "STOP"):
+                mixed.execute(plan, resume=True)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(self.commands), 3)
+        self.assertFalse((self.lane / ".eat-held-food-owner.lock").exists())
+
+    def test_current_inspector_failure_guard_prevents_predecessor_dispatch(self):
+        plan = self.plan()
+        calls = []
+        def stop_after_current(argv, timeout, *, on_started=None):
+            calls.append(argv)
+            result = self.fake_inspect(argv, timeout, on_started=on_started)
+            if len(calls) == 2:  # Initial source, then the first trainer's current seal.
+                (self.output / "STOP").touch()
+            return result
+        with patch.object(mixed.inspector_io, "run_inspector", side_effect=stop_after_current):
+            with self.assertRaisesRegex(ValueError, "STOP"):
+                mixed.execute(plan)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(self.commands), 1)
+
+    def test_each_inspector_budget_is_bounded_by_absolute_cutoff(self):
+        plan = self.plan()
+        cutoff = dt.datetime.now(mixed.host.UTC) + dt.timedelta(seconds=5)
+        budgets = []
+        def invoke(argv, timeout, *, on_started=None):
+            budgets.append(timeout)
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, (cutoff - dt.datetime.now(mixed.host.UTC)).total_seconds() + .01)
+            return self.fake_inspect(argv, timeout, on_started=on_started)
+        with patch.object(mixed.inspector_io, "run_inspector", side_effect=invoke):
+            mixed.execute(plan, cutoff=cutoff)
+        self.assertEqual(len(budgets), 7)
+        self.assertTrue(all(timeout <= 5 for timeout in budgets))
+
+    def test_expired_cutoff_between_resume_inspectors_prevents_next_child(self):
+        plan = self.plan()
+        mixed.execute(plan)
+        now = dt.datetime.now(mixed.host.UTC)
+        cutoff = now + dt.timedelta(seconds=5)
+        clock = Mock(wraps=dt.datetime)
+        clock.now.return_value = now
+        calls = []
+        def exhaust_after_first(argv, timeout, *, on_started=None):
+            calls.append(argv)
+            result = self.fake_inspect(argv, timeout, on_started=on_started)
+            clock.now.return_value = cutoff + dt.timedelta(seconds=1)
+            return result
+        with patch.object(mixed.dt, "datetime", clock), \
+                patch.object(mixed.inspector_io, "run_inspector", side_effect=exhaust_after_first):
+            with self.assertRaisesRegex(ValueError, "cutoff reached"):
+                mixed.execute(plan, resume=True, cutoff=cutoff)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(len(self.commands), 3)
+
+    def test_feeding_generic_consumption_cannot_exceed_captured_decisions(self):
+        plan = self.plan()
+        mixed.execute(plan)
+        directory = self.output / "attempt-00002"
+        receipt = self.get(directory / "cycle.json")
+        receipt["consumed_events"] = receipt["captured_replay_rows"] + 1
+        self.put(directory / "cycle.json", receipt)
+        with self.assertRaisesRegex(ValueError, "invalid integer count"):
+            mixed.validate_cycle(directory, self.output / "attempt-00001",
+                                 mixed.schedule_rows(plan["schedule"])[2], 102, self.inspector)
 
     def test_resume_with_explicit_cutoff_can_reconcile_after_original_budget(self):
         plan = self.plan()

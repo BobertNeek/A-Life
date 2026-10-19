@@ -122,8 +122,12 @@ directly under `target/founder-training`. All runs use its existing exclusive
 `.eat-held-food-owner.lock`. The scheduler never removes another owner's lock.
 If a hard crash leaves a lock, an operator must verify the owner and every child
 are stopped before manually reconciling it; there is no automatic stale takeover.
-Child-cleanup uncertainty retains the lock. Resource, STOP, source/binary changes,
+Trainer and native-inspector children share the same ownership tracking;
+cleanup uncertainty for either retains the lock. Resource, STOP, source/binary changes,
 command failures and persistence failures stop further dispatch.
+The guard runs before every inspector dispatch, including accepted-chain replay
+and each current/predecessor check. An inspector's budget is at most 90 seconds
+and never exceeds the remaining absolute schedule cutoff.
 
 Under that lock, `.mixed-care-seed-reservations.json` reserves the entire seed
 interval before any trainer. Every attempt is persisted as pending before launch.
@@ -163,13 +167,15 @@ trains N; the bootstrap is not additional trained dose. Exact nourishing held/
 reachable consumption and its trained-row subset use the native
 `held_food_consumption_events` and `trained_held_food_consumption_events` counters.
 Feeding reports only generic captured `consumed_events`, which may include its
-bootstrap row. It is not exact nourishing success and has no inferred trained-meal
+bootstrap row and cannot exceed the number of captured rows. It is not exact
+nourishing success and has no inferred trained-meal
 count. No combined success rate or automatic promotion is calculated.
 
 Run the stdlib fixtures and existing affected checks:
 
 ```sh
 python -S -m unittest discover -s scripts -p 'test_run_mixed_care_serial.py' -v
+python -S -m unittest discover -s scripts -p 'test_summarize_ppo_diagnostics.py' -v
 python -S -m unittest discover -s scripts -p 'test*food_night.py' -v
 python -S -m unittest discover -s scripts -p 'test_grab_food_seed_reservations.py' -v
 bash scripts/check.sh --quick

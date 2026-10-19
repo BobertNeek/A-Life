@@ -46,15 +46,19 @@ def unchanged(directory, expected):
     require(file_hashes(directory) == expected, f"sealed source changed: {directory}")
 
 
-def inspect(directory, binary):
+def inspect(directory, binary, *, on_started=None, guard=None, cutoff=None):
     """Use the existing full native CPU admission; host checks cannot replace it."""
     before = file_hashes(directory)
     receipt, _ = inspector_io.load_json(directory / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
     require(receipt.get("biological_objective_version") == 2 and
             receipt.get("objective_state_reset") is False, "requires objective2 without reset")
     policy = integer(receipt.get("policy_version"), 0, seeds.MAX_SEED - 1)
+    if guard is not None:
+        guard()
+    timeout = 90 if cutoff is None else min(90, (cutoff - dt.datetime.now(host.UTC)).total_seconds())
+    require(timeout > 0, "schedule cutoff reached before checkpoint inspection")
     result = inspector_io.run_inspector([str(binary), "--validate-checkpoint", str(directory),
-                                        "--expected-policy", str(policy)], timeout=90)
+                                        "--expected-policy", str(policy)], timeout=timeout, on_started=on_started)
     result.check_returncode()
     report = inspector_io.decode_json(result.stdout, "checkpoint inspection")
     require(report.get("neural_execution") is False and report.get("weights_modified") is False
@@ -210,9 +214,10 @@ COUNT_FIELDS = ("requested_training_ticks", "captured_replay_rows", "trained_rep
                 "bootstrap_replay_rows", "completed_epochs", "actor_optimizer_updates", "value_optimizer_updates")
 
 
-def validate_cycle(directory, previous, row, seed, inspector):
-    receipt, report, hashes = inspect(directory, inspector)
-    old, ages, _ = inspect(previous, inspector)
+def validate_cycle(directory, previous, row, seed, inspector, *, on_started=None, guard=None, cutoff=None):
+    options = {"on_started": on_started, "guard": guard, "cutoff": cutoff}
+    receipt, report, hashes = inspect(directory, inspector, **options)
+    old, ages, _ = inspect(previous, inspector, **options)
     require(receipt.get("seed") == seed and receipt.get("lesson") == row["lesson"] and
             receipt.get("founder_seed_base") == old.get("founder_seed_base") and
             receipt.get("policy_version") == old["policy_version"] + 1 and
@@ -248,7 +253,7 @@ def validate_cycle(directory, previous, row, seed, inspector):
     captured = integer(receipt.get("held_food_consumption_events"))
     trained = integer(receipt.get("trained_held_food_consumption_events"))
     require(trained <= captured <= held + reachable, "exact nourishing meal counts disagree")
-    integer(receipt.get("consumed_events"))
+    integer(receipt.get("consumed_events"), 0, receipt["captured_replay_rows"])
     hashes["initial.alife-foundation"] = host.sha256(directory / "initial.alife-foundation")
     return receipt, hashes
 
@@ -324,10 +329,11 @@ def execute(plan, *, resume=False, cutoff=None):
             require(os.name != "nt" or resources["idle_seconds"] >= plan["idle_seconds"], "interactive PC use resumed")
 
         # Rebuild the chain and validate surviving accepted seals before dispatch.
+        inspection_options = {"on_started": active.append, "guard": guard, "cutoff": cutoff}
         previous = Path(plan["source"])
         unchanged(previous, plan["source_sha256"])
         guard()
-        inspect(previous, Path(plan["inspector"]))
+        inspect(previous, Path(plan["inspector"]), **inspection_options)
         slot = 0
         for index, attempt in enumerate(run["attempts"]):
             directory = output / f"attempt-{index:05d}"
@@ -340,7 +346,8 @@ def execute(plan, *, resume=False, cutoff=None):
                 for name, digest in attempt["sha256"].items():
                     require(host.sha256(directory / name) == digest, "accepted receipt/checkpoint changed")
             if (directory / "cycle.json").exists():
-                receipt, hashes = validate_cycle(directory, previous, rows[slot], attempt["seed"], Path(plan["inspector"]))
+                receipt, hashes = validate_cycle(directory, previous, rows[slot], attempt["seed"],
+                                                 Path(plan["inspector"]), **inspection_options)
                 if attempt["status"] == "accepted":
                     require(receipt == attempt["receipt"] and hashes == attempt["sha256"], "accepted dose changed")
                 else:
@@ -379,7 +386,8 @@ def execute(plan, *, resume=False, cutoff=None):
                            host.prior_environment(), on_started=active.append)
             guard()
             unchanged(previous, expected)
-            receipt, hashes = validate_cycle(directory, previous, row, seed, Path(plan["inspector"]))
+            receipt, hashes = validate_cycle(directory, previous, row, seed, Path(plan["inspector"]),
+                                             **inspection_options)
             attempt.update(status="accepted", receipt=receipt, sha256=hashes)
             seeds.write_document(ledger_path, ledger)
             seeds.write_document(output / "schedule.json", summary(run))
@@ -389,7 +397,7 @@ def execute(plan, *, resume=False, cutoff=None):
     finally:
         os.close(descriptor)
         # A cleanup failure may leave a child alive: retain ownership for manual reconciliation.
-        if not active or active[-1].poll() is not None:
+        if all(child.poll() is not None for child in active):
             lock.unlink()
 
 
