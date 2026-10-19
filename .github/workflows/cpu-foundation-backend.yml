@@ -1,0 +1,41 @@
+name: CPU foundation backend
+
+on:
+  push:
+    branches: ["main", "feat/cpu-foundation-backend", "codex/**"]
+    paths: ["crates/alife_training/**", "crates/alife_core/**", ".github/workflows/cpu-foundation-backend.yml"]
+  pull_request:
+    branches: ["main"]
+    paths: ["crates/alife_training/**", "crates/alife_core/**", ".github/workflows/cpu-foundation-backend.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  native-cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      VK_ICD_FILENAMES: /no-vulkan-icd.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Check formatting
+        run: cargo fmt --all --check
+      - name: Run CPU kernels and native continuation contracts without an ICD
+        run: |
+          cargo test --locked -p alife_training --features cpu-backend --lib cpu::
+          cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test checkpoint_validation --test blocked_legacy_pipelines -- --nocapture
+      - name: Strict CPU source review
+        run: cargo clippy --locked -p alife_training --features cpu-backend --lib --test cpu_backend -- -D warnings
+      - name: Compile hardware differential test without requesting an adapter
+        run: cargo check --locked -p alife_training --features cpu-backend,gpu-tests --test cpu_backend

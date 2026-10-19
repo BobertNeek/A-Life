@@ -21,4 +21,5 @@ serde_json.workspace = true
 
 [features]
 default = []
+cpu-backend = []
 gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]

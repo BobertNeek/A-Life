@@ -1,6 +1,8 @@
 //! Offline-only exact-graph WGSL foundation training.
 
 mod active_battery;
+#[cfg(feature = "cpu-backend")]
+pub mod cpu;
 mod curriculum;
 mod era1_trials;
 mod evolution;
