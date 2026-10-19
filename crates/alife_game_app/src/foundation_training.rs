@@ -567,6 +567,7 @@ pub struct FoundationPilotReceipt {
     /// One-shot terminal biology retained from the successful retirement tick.
     #[serde(default)]
     pub held_food_terminal_biology: Option<alife_core::BiochemistryState>,
+    /// Word/action selection diagnostic, not completed care or need relief.
     #[serde(default)]
     pub vocabulary_target_actions: usize,
     #[serde(default)]
@@ -5033,7 +5034,7 @@ mod held_food_lesson_tests {
     #[test]
     fn play_narration_requires_matching_completed_measured_activation() {
         let mut world = unconfigured(42);
-        configure_foundation_scenario(
+        let scenario = configure_foundation_scenario(
             &mut world,
             42,
             Some(FoundationTeacherLesson::GrabFood),
@@ -5043,6 +5044,18 @@ mod held_food_lesson_tests {
         .unwrap();
         let (subject, entity) = world.organism_entity_ids()[0];
         let body = world.entity(entity).unwrap().clone();
+        // This care arrangement puts food directly in front of the body. Move
+        // that unused occluder aside so the Play target is actually perceived.
+        move_scenario_object(
+            &mut world,
+            scenario.food,
+            Vec3f::new(
+                body.position.x - 30.0,
+                body.position.y,
+                body.position.z + 20.0,
+            ),
+        )
+        .unwrap();
         let ball = world
             .spawn_toy(
                 "label-ball",
@@ -5063,7 +5076,7 @@ mod held_food_lesson_tests {
                     candidate.action_id == alife_world::HeadlessActionIds::PLAY
                         && candidate.target.entity == Some(ball)
                 })
-                .unwrap()
+                .expect("the unobstructed ball must offer an observed Play candidate")
                 .to_command(subject, Confidence::new(1.0).unwrap())
                 .unwrap();
             let measured = world
@@ -5141,6 +5154,11 @@ mod held_food_lesson_tests {
             let mut wrong_touch = evidence.clone();
             wrong_touch.receipt.physical.target_entity = Some(entity);
             assert_eq!(label(Some(&wrong_touch)).token, None);
+            let mut failed_activation = evidence.clone();
+            // MissingAffordance produces no physical contact, even if PLAY
+            // was the selected word/action response.
+            failed_activation.receipt.physical.contact = PhysicalContactKind::None;
+            assert_eq!(label(Some(&failed_activation)).token, None);
             let mut zero_stimulation = evidence.clone();
             zero_stimulation.receipt.play_stimulation = 0.0;
             assert_eq!(label(Some(&zero_stimulation)).token, None);

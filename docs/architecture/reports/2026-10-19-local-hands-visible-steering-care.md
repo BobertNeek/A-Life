@@ -1,4 +1,4 @@
-# Local hands, visible steering, and care assessment — 2026-10-19
+# Local hands, visible steering, and care assessment â€” 2026-10-19
 
 Non-normative implementation report for the patch based on `5d0a8c3f` on
 `feat/local-hands-and-visible-steering-20261019`. The controlling v2.0 architecture

@@ -277,7 +277,13 @@ fn missing_candidate_and_malformed_payloads_cannot_be_projected() {
 
 #[test]
 fn activity_grip_provenance_is_never_excluded_from_policy_comparison() {
-    let mut original = world(&asset(0.0, TrainingStageManifest::bootstrap()), 1);
+    let source = asset(0.0, TrainingStageManifest::bootstrap());
+    let mut config = CanonicalNewGameConfig::phase3(71_001, 1).unwrap();
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = 539_363_617;
+    config.sensor_profile = source.manifest().sensor_profile();
+    let game = create_canonical_new_game_with_n2048_candidate(&config, &source).unwrap();
+    let mut original = game.world;
     let (subject, entity) = original.organism_entity_ids()[0];
     let body = original.entity(entity).unwrap();
     let ball = original
@@ -314,7 +320,7 @@ fn activity_grip_provenance_is_never_excluded_from_policy_comparison() {
             BrainScaleTier::Standard2048,
         ),
         alife_world::AssetManifest::empty(),
-        Vec::new(),
+        game.creatures,
     )
     .unwrap();
     save.world

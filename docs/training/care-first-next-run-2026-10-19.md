@@ -1,4 +1,4 @@
-# Care-first next-run plan — 2026-10-19
+# Care-first next-run plan â€” 2026-10-19
 
 This is an operator plan for the approved gameplay, not a training receipt or
 architecture change. Training and learning evaluations remain on hold until the
@@ -64,6 +64,22 @@ Grab and from nourishment. The Grab experiment's +0.25 acquisition credit is not
 nutrition and does not enter automatic care pickup. Report blocked actions as a
 separate diagnostic; an earlier bump, or another motor channel's failure, must not
 invalidate a genuine exact-target nourishing meal.
+
+Vocabulary action counts and vocabulary lesson completion measure word/action
+selection, not completed care. Successful play praise requires the matching
+completed physical activation receipt; selecting PLAY against a missing affordance
+does not qualify. Preserve ordinary novel-toy investigation and curiosity: novelty
+can reduce the stimulation dose to zero without authorizing any biology change.
+
+Before stage 4, add a need-choice assessment of exact-target Play activation and
+measured boredom relief when bored. A novelty investigation is separate evidence,
+not proof of boredom relief. Recovery already has ordinary fatigue reduction and
+re-engagement; its later care assessment must use executed posture and measured
+physiology and accept interrupted or factorized recovery. The current Recovery
+lesson's representative-candidate and strict Rest-prefix predicates are a known
+assessment limitation, not a care competence gate for stages 1-3. These later-stage
+assessment checks are deferred until that stage is authorized; no new biology or
+general assessment framework is required for immediate held/reachable-food care.
 
 Software checks establish the execution and assessment contracts only. They do
 not establish current policy competence, founder promotion, durable memory, or
