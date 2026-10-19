@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "steps": [
+    {"lesson": "eat_held_food", "episodes": 1, "decisions": 16},
+    {"lesson": "eat_reachable_food", "episodes": 1, "decisions": 16},
+    {"lesson": "feeding", "episodes": 1, "decisions": 16}
+  ]
+}

@@ -394,6 +394,13 @@ nourishment also requires prior possession and measured body benefit without
 fresh harm. No new GPU readback or CPU neural fallback is used.
 ### Grab-night seed reservations
 
+For explicit serial mixtures of held-food, reachable-food and Feeding lessons,
+see the [configurable mixed-care scheduler](MIXED_CARE_SERIAL.md). It requires a
+separate complete source-bound import contract and uses the shared owner lock.
+Once its mixed ledger exists, the Grab and held-food night launchers refuse to
+run in that lane, including after preflight races. It does not reconcile missing
+real historical ledgers or approve a numerical mixture or promotion gate.
+
 Every `scripts/run_grab_food_night.py` plan and run now requires
 `--seed-history PATH`. This is a deliberately fail-closed CLI change. Supply a
 separate, complete operator-reconciled allocation manifest for the exact selected

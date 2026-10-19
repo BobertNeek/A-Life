@@ -23,6 +23,7 @@ import time
 
 import grab_food_seed_reservations as seed_reservations
 import summarize_ppo_diagnostics as inspector_io
+from run_eat_held_food_night import assert_legacy_lane
 
 UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
@@ -663,6 +664,7 @@ def main(argv=None):
             source_critic_only_updates = (read_json(args.source / "value-checkpoint.json")["optimizer_step"] -
                                          source_cycle["value_optimizer_step"])
         args.output = args.output.resolve()
+        assert_legacy_lane(args.output.parent)
         args.seed_history = args.seed_history.resolve(strict=True)
         source_hashes = {name: input_hashes[str(args.source / name)] for name in seed_reservations.SOURCE_FILES}
         _, history_digest = seed_reservations.prepare(args.seed_history,
@@ -827,6 +829,7 @@ def run_night(args, state, state_path, input_hashes):
 
     try:
         descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        assert_legacy_lane(args.output.parent)
         os.write(descriptor, json.dumps({"pid": os.getpid(), "output": str(args.output)}).encode())
         state["status"] = "running"; state["started_utc"] = dt.datetime.now(UTC).isoformat(); publish()
         # Missing optional prior provenance is reported, never an episode gate.
