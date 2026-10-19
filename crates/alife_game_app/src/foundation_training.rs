@@ -2297,20 +2297,21 @@ fn run_foundation_training_pilot_with_request(
                 if let Some(observation) = observation {
                     observation.decorate_trace(&mut trace);
                 }
-                trace["play_assessment"] =
-                    serde_json::to_value(scenario.vocabulary_target.and_then(|target| {
-                        let organism = runtime
-                            .world()
-                            .organism_registry()
-                            .get(step.patch.header().organism_id)?;
-                        assess_foundation_play(
-                            organism.phenotype(),
-                            &step.patch,
-                            step.activity_evidence.as_ref(),
-                            target,
-                        )
-                    }))
-                    .expect("Play assessment contains only finite measured values");
+                if let Some(assessment) = scenario.vocabulary_target.and_then(|target| {
+                    let organism = runtime
+                        .world()
+                        .organism_registry()
+                        .get(step.patch.header().organism_id)?;
+                    assess_foundation_play(
+                        organism.phenotype(),
+                        &step.patch,
+                        step.activity_evidence.as_ref(),
+                        target,
+                    )
+                }) {
+                    trace["play_assessment"] = serde_json::to_value(assessment)
+                        .expect("Play assessment contains only finite measured values");
+                }
                 trace
             })
             .collect::<Vec<_>>();
