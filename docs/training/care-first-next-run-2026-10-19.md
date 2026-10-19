@@ -72,8 +72,32 @@ does not qualify. Preserve ordinary novel-toy investigation and curiosity: novel
 can reduce the stimulation dose to zero without authorizing any biology change.
 
 Before stage 4, add a need-choice assessment of exact-target Play activation and
-measured boredom relief when bored. A novelty investigation is separate evidence,
-not proof of boredom relief. Recovery already has ordinary fatigue reduction and
+measured boredom relief when bored. Its supporting read-only
+`assess_foundation_play` helper now reports exact-target activation separately
+from measured boredom relief. Existing
+vocabulary-target lesson traces include the per-step `play_assessment`; vocabulary
+completion and completed-Play narration retain their existing meaning. No new
+lesson, curriculum gate, or training/evaluation run is introduced; the full choice
+scene and policy checks remain deferred.
+
+The helper binds organism, sequence, source/outcome ticks, selected Play target,
+and the matching sealed Manipulation physical receipt. Boredom observations also
+require the measured starting genome, tick and homeostasis to match the pre-action
+frame and the supplied inherited phenotype. It recognizes the current single
+positive analogue species-22 boredom receptor and negative drive valuation, with
+a lowering PlayStimulation emitter. Unsupported inherited circuitry or unavailable
+physiology is unknown. Existing need means boredom above that receptor's inherited
+nominal (currently zero); relief requires a positive Play stimulation dose and a
+strict measured decrease within that same activation transition. There is no new
+minimum boredom or relief magnitude. Partial novelty can coexist with stimulation.
+A novelty-only investigation remains visible activation evidence and never
+qualifies as boredom relief, even alongside an unrelated measured reduction.
+These are observations during an activation, not proof that Play alone caused
+the change or that a policy chose useful care. This preserves measured physiology
+and joint-channel evidence without fabricated channel rewards (`AOA-BIO-024`,
+`AOA-BIO-025`, `AOA-LEARN-004`, `AOA-LEARN-007`).
+
+Recovery already has ordinary fatigue reduction and
 re-engagement. Its assessment uses sealed posture execution and measured physiology,
 accepting interrupted and factorized Rest. Initial fatigue must still be at least
 0.12, and measured episode fatigue must fall by at least 0.02. A successful executed
