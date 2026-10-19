@@ -153,6 +153,11 @@ impl HeadlessWorld {
             state.target == target && state.non_progress_steps >= MAX_NON_PROGRESS_STEPS
         });
         Ok(select_clearance_step(ranges, step, exhausted).map(|index| {
+            if index == 0 {
+                // Keep step_toward's exact endpoint snap. Reconstructing an
+                // unobstructed step through trigonometry can move it by an ULP.
+                return (original, false);
+            }
             let yaw = bearing + STEERING_ANGLES[index].to_radians();
             (
                 Vec3f::new(
@@ -160,7 +165,7 @@ impl HeadlessWorld {
                     original.y,
                     observer.position.z + yaw.sin() * step,
                 ),
-                index != 0,
+                true,
             )
         }))
     }
@@ -293,6 +298,37 @@ mod tests {
 
     fn low_blocker() -> [f32; 6] {
         [0.26, -0.15, 0.45, 0.15, 0.0, 0.2]
+    }
+
+    #[test]
+    fn clear_visible_oblique_arrival_keeps_the_exact_chosen_endpoint() {
+        for angle in [
+            133.32324_f32.to_radians(),
+            -133.32324_f32.to_radians(),
+            std::f32::consts::PI,
+            0.218827,
+            -1.2,
+            0.35,
+        ] {
+            let (mut world, target) = world(Vec::new(), 0.2);
+            let endpoint = Vec3f::new(3.138_172, 0.0, -2.085_676_2);
+            world.objects.get_mut(&target.raw()).unwrap().position = endpoint;
+            let actor = world.agent_entity_id(ORGANISM).unwrap();
+            let body = world.objects.get_mut(&actor.raw()).unwrap();
+            body.position = Vec3f::new(
+                endpoint.x - 0.05 * angle.cos(),
+                endpoint.y,
+                endpoint.z - 0.05 * angle.sin(),
+            );
+            body.body_yaw = angle;
+            assert!(world
+                .visible_motion_target(ORGANISM, target)
+                .unwrap()
+                .is_some());
+            let moved = world.apply_command(&approach(target)).unwrap();
+            assert!(moved.execution.succeeded);
+            assert_eq!(world.entity(actor).unwrap().position, endpoint);
+        }
     }
 
     fn roundtrip(world: &HeadlessWorld) -> HeadlessWorld {

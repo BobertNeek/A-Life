@@ -10,6 +10,28 @@ use alife_world::{
 
 const ORGANISM: OrganismId = OrganismId(1);
 
+fn chosen_point_approach(
+    target: alife_core::WorldEntityId,
+    point: Vec3f,
+) -> alife_core::ActionCommand {
+    // Pose-setting fixtures choose this endpoint even when it starts behind
+    // gaze. They test subsequent sensing, not hidden-target navigation.
+    alife_core::ActionCommand::structured(
+        ORGANISM,
+        HeadlessActionIds::APPROACH,
+        alife_core::ActionKind::Move,
+        alife_core::ActionTarget::new(Some(target), Some(point)),
+        alife_core::Intensity::new(1.0).unwrap(),
+        alife_core::DurationTicks::new(1),
+        alife_core::Confidence::new(1.0).unwrap(),
+        0,
+        None,
+        None,
+        None,
+    )
+    .unwrap()
+}
+
 #[test]
 fn new_objects_keep_kind_specific_chemistry_across_spawn_order() {
     for sequence in [1, 2, 5, 40, 4_000] {
@@ -69,9 +91,9 @@ fn looking_straight_at_food_after_approach_keeps_the_terrain_frame_valid() {
             .build()
             .unwrap();
         let food = world.entity_id("food").unwrap();
-        world
-            .apply_command(&alife_world::HeadlessWorldCommand::approach(ORGANISM, food).unwrap())
-            .unwrap();
+        let approach = chosen_point_approach(food, world.entity(food).unwrap().position);
+        let moved = world.apply_command(&approach).unwrap();
+        assert!(moved.execution.succeeded);
         let frame = world
             .perception_frame(
                 ORGANISM,
@@ -105,7 +127,7 @@ fn coincident_terrain_food_stays_visible_and_eat_pickup_precedes_consumption() {
             .unwrap();
         let agent = world.entity_id("agent").unwrap();
         let food = world.entity_id("food").unwrap();
-        let approach = alife_world::HeadlessWorldCommand::approach(ORGANISM, food).unwrap();
+        let approach = chosen_point_approach(food, target);
         let mut grab = None;
         for snapped in [false, true] {
             assert!(world.apply_command(&approach).unwrap().execution.succeeded);

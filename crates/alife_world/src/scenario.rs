@@ -1300,7 +1300,10 @@ fn social_trust_fear(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError
             HeadlessActionIds::APPROACH,
             ActionKind::Move,
             Some("friend"),
-            None,
+            // This scripted social-context fixture chooses its endpoint. The
+            // nearby opaque threat can occlude the friend at eye height; an
+            // entity ID alone must not infer that hidden position for movement.
+            Some(pos(0.8, 0.0)),
             0.72,
             0.82,
         )?],
