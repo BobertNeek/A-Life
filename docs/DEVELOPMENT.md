@@ -395,8 +395,11 @@ fresh harm. No new GPU readback or CPU neural fallback is used.
 ### Grab-night seed reservations
 
 For explicit serial mixtures of held-food, reachable-food and Feeding lessons,
-see the [configurable mixed-care scheduler](MIXED_CARE_SERIAL.md). It requires a
-separate complete source-bound import contract and uses the shared owner lock.
+see the [configurable mixed-care scheduler](MIXED_CARE_SERIAL.md). It defaults to a
+complete source-bound import contract and uses the shared owner lock. A new plan
+may explicitly opt into its documented known-exclusions policy with incomplete
+history, unknown freshness and an evidence-backed recovery attestation; existing
+plans retain their saved policy and all checkpoint/reconciliation checks.
 Once its mixed ledger exists, the Grab and held-food night launchers refuse to
 run in that lane, including after preflight races. It does not reconcile missing
 real historical ledgers or approve a numerical mixture or promotion gate.
