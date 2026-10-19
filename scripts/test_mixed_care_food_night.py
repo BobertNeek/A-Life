@@ -325,7 +325,7 @@ class MixedCareTests(unittest.TestCase):
     def test_explicit_import_preserves_reserved_consumed_and_grab_allocation_receipts(self):
         imported = self.lane / mixed.seeds.LEDGER_NAME
         self.put(imported, {"schema": 1, "kind": "grab-food-seed-ledger", "training_seed_ranges": [],
-            "assessment_seeds": [], "allocations": [{"training_seed_range": [200, 210], "assessment_seed": 9010,
+            "assessment_seeds": [], "allocations": [{"training_seed_range": [200, 210], "assessment_seed": 9020,
                 "source_sha256": self.history["source_sha256"], "output": "fixture", "history_path": "fixture",
                 "history_sha256": "fixture", "reserved_utc": "fixture"}]})
         original = imported.read_bytes()
@@ -334,7 +334,7 @@ class MixedCareTests(unittest.TestCase):
         self.history["imports"] = [{"path": str(imported), "sha256": mixed.host.sha256(imported)}]
         self.put(self.history_path, self.history)
         plan = self.plan()
-        for seed in [42, *range(700, 708), *range(800, 804), *range(1000, 1663), *range(200, 211), *range(9000, 9016)]:
+        for seed in [42, *range(700, 708), *range(800, 804), *range(1000, 1663), *range(200, 211), *range(9000, 9016), 9020]:
             changed = {**plan, "seed_range": [seed, seed]}
             with self.assertRaisesRegex(ValueError, "overlaps excluded"):
                 mixed.reserve(changed, self.ledger_path, commit=False)
