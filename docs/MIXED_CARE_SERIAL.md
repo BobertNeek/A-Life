@@ -56,6 +56,8 @@ neither can be inferred from policy age, accepted episode count or Adam age.
 
 If the lane contains `.grab-food-seed-reservations.json`, `imports` must include
 `{"path": "<absolute original ledger path>", "sha256": "<exact-byte SHA-256>"}`.
+The lane-local Grab ledger must be a regular file; live and dangling symlinks
+are rejected before planning output or reserving seeds.
 Other explicitly identified Grab ledgers may also be included. Import validates
 the Grab-specific kind and allocation provenance and excludes every training
 interval and assessment seed, including allocation receipts omitted from summary
