@@ -62,6 +62,14 @@ leaving its existing training mix unchanged. Exact learner/target
 actions are reported separately and do not erase a genuine meal. Language
 production is not a prerequisite for the care lesson.
 
+Pilot and cycle meal accounting derive exact care identity from either held or
+reachable setup and snapshot real possession before each action. Pickup does not
+count as a meal; later measured nourishment contributes a meal row only for that
+learner and target. Trained meal dose excludes bootstrap-only rows. Cycle and
+scenario receipts preserve reachable setup, with initially held and initially
+reachable opportunities reported separately. Explicit Grab acquisition credit
+and its curriculum reward remain exclusive to the GrabFood experiment.
+
 The [care-first plan](../../training/care-first-next-run-2026-10-19.md) records
 held care, reachable unheld care, visible approach, and need-driven choices before
 hidden intermediate routes. Training and learning evaluations remain held.

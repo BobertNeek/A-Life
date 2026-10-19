@@ -1819,6 +1819,7 @@ fn run_foundation_training_pilot_with_request(
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     let mut held_food_possession_frames = Vec::new();
+    let care_food_subject = scenario.care_food_subject();
     let mut grab_food_acquisitions = Vec::new();
     let food_subject = scenario
         .grab_food_setup
@@ -1861,12 +1862,8 @@ fn run_foundation_training_pilot_with_request(
                 prime_foundation_lesson_prior(&mut runtime, output, scenario_lesson)?;
             }
         }
-        let held_food_before = runtime.world().entity(food).is_some_and(|object| {
-            scenario
-                .held_food_setup
-                .as_ref()
-                .is_some_and(|setup| object.carried_by == Some(setup.organism) && !object.consumed)
-        });
+        let held_food_before =
+            care_food_subject.is_some_and(|subject| subject.is_held(runtime.world()));
         if held_food_before {
             held_food_possession_frames.push(runtime.world().tick().raw());
         }
@@ -2080,11 +2077,12 @@ fn run_foundation_training_pilot_with_request(
     let held_food_consumption_events = steps
         .iter()
         .filter(|step| {
-            held_food_step_consumed(
-                step,
-                food,
-                held_food_possession_frames.contains(&step.frame.tick().raw()),
-            )
+            care_food_subject.is_some_and(|subject| {
+                subject.step_consumed(
+                    step,
+                    held_food_possession_frames.contains(&step.frame.tick().raw()),
+                )
+            })
         })
         .count();
     let vocabulary_target_actions = steps
@@ -2602,20 +2600,6 @@ fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
         })
 }
 
-pub(crate) fn held_food_step_consumed(
-    step: &crate::FoundationTrainingStep,
-    target: alife_core::WorldEntityId,
-    held_before: bool,
-) -> bool {
-    held_food_action_consumed(
-        &step.patch.decision().selected_action,
-        step.patch.decision().selected_bundle.as_ref(),
-        step.patch.outcome(),
-        target,
-        held_before,
-    )
-}
-
 fn held_food_action_consumed(
     action: &alife_core::ActionCommand,
     bundle: Option<&alife_core::MotorCommandBundle>,
@@ -2754,6 +2738,67 @@ pub(crate) struct FoundationScenarioSetup {
     pub(crate) start_tick: u64,
     last_language_praise_tick: std::cell::Cell<Option<u64>>,
     language_praise_count: std::cell::Cell<u8>,
+}
+
+/// Exact care identity shared by pilot and cycle accounting, never Grab credit.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct FoundationCareFoodSubject {
+    organism: alife_core::OrganismId,
+    target: alife_core::WorldEntityId,
+}
+
+impl FoundationScenarioSetup {
+    pub(crate) fn care_food_subject(&self) -> Option<FoundationCareFoodSubject> {
+        self.held_food_setup
+            .as_ref()
+            .map(|setup| FoundationCareFoodSubject {
+                organism: setup.organism,
+                target: setup.target,
+            })
+            .or_else(|| {
+                self.reachable_food_setup
+                    .as_ref()
+                    .map(|setup| FoundationCareFoodSubject {
+                        organism: setup.organism,
+                        target: setup.target,
+                    })
+            })
+    }
+}
+
+impl FoundationCareFoodSubject {
+    pub(crate) fn is_held(self, world: &alife_world::HeadlessWorld) -> bool {
+        world
+            .entity(self.target)
+            .is_some_and(|food| food.carried_by == Some(self.organism) && !food.consumed)
+    }
+
+    pub(crate) fn step_consumed(
+        self,
+        step: &crate::FoundationTrainingStep,
+        held_before: bool,
+    ) -> bool {
+        step.frame.organism_id() == self.organism
+            && self.action_consumed(
+                &step.patch.decision().selected_action,
+                step.patch.selected_bundle(),
+                step.patch.outcome(),
+                held_before,
+            )
+    }
+
+    fn action_consumed(
+        self,
+        action: &alife_core::ActionCommand,
+        bundle: Option<&alife_core::MotorCommandBundle>,
+        outcome: &alife_core::PostActionOutcome,
+        held_before: bool,
+    ) -> bool {
+        action.organism_id == self.organism
+            && outcome.organism_id == self.organism
+            && bundle.is_none_or(|bundle| bundle.organism_id == self.organism)
+            && held_food_action_consumed(action, bundle, outcome, self.target, held_before)
+    }
 }
 
 pub(crate) fn close_foundation_navigation_gate(
@@ -4644,7 +4689,17 @@ mod held_food_lesson_tests {
         assert_eq!(scenario.teacher_cue_tokens, vec![8, 1]);
         let mut navigation = GroundedNavigationTeacher::default();
         let mut waypoint_passed = false;
-        for completed in [false, true] {
+        let care = scenario.care_food_subject().unwrap();
+        let wrong_target = FoundationCareFoodSubject {
+            target: scenario.hazard,
+            ..care
+        };
+        let wrong_learner = FoundationCareFoodSubject {
+            organism: alife_core::OrganismId(care.organism.raw() + 1),
+            ..care
+        };
+        let mut meal_rows = Vec::new();
+        for (row, completed) in [false, true].into_iter().enumerate() {
             let perceived = frame(&mut world);
             let demonstrator = grounded_lesson_teacher(
                 &perceived,
@@ -4662,7 +4717,16 @@ mod held_food_lesson_tests {
             let chosen = &perceived.candidates()[demonstrator.representative_index as usize];
             assert_eq!(chosen.action_id, alife_world::HeadlessActionIds::EAT);
             assert_eq!(chosen.target.entity, Some(scenario.food));
-            let (_, measured) = eat_outcome(&mut world, scenario.food);
+            let held_before = care.is_held(&world);
+            assert_eq!(held_before, completed);
+            let (command, measured) = eat_outcome(&mut world, scenario.food);
+            let meal = care.action_consumed(&command, None, &measured, held_before);
+            assert_eq!(meal, completed);
+            if meal {
+                meal_rows.push(row);
+            }
+            assert!(!wrong_target.action_consumed(&command, None, &measured, held_before));
+            assert!(!wrong_learner.action_consumed(&command, None, &measured, held_before));
             assert_eq!(
                 measured.physical.contact,
                 if completed {
@@ -4681,6 +4745,15 @@ mod held_food_lesson_tests {
                 }
             );
         }
+        assert_eq!(meal_rows, vec![1]);
+        assert_eq!(
+            crate::foundation_training_cycle::cycle_replay_dose(2, 2, &meal_rows).unwrap(),
+            (0, 1)
+        );
+        assert_eq!(
+            crate::foundation_training_cycle::cycle_replay_dose(2, 1, &meal_rows).unwrap(),
+            (1, 0)
+        );
     }
 
     #[test]
@@ -5279,6 +5352,7 @@ mod held_food_lesson_tests {
         for seed in [42, 91, 132] {
             let (mut world, scenario) = prepared(seed);
             let setup = scenario.held_food_setup.as_ref().unwrap();
+            assert!(scenario.care_food_subject().unwrap().is_held(&world));
             assert_eq!(
                 setup.grab_command.action_id,
                 alife_world::HeadlessActionIds::GRAB
