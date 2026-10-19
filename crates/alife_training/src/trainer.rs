@@ -224,6 +224,31 @@ impl FoundationTrainer {
         &self.session
     }
 
+    /// Packed replay buffer bound, also covering the initial trainer allocation.
+    /// The caller can reject a window before allocating its device scratch.
+    /// Persistent objectives/accumulation and overlapping old/new allocations
+    /// must be budgeted separately by the orchestration layer.
+    pub fn replay_allocation_bytes(
+        phenotype: &BrainPhenotype,
+        sequence: &TrainingSequence,
+    ) -> Result<u64, TrainingError> {
+        sequence.validate_for(phenotype)?;
+        let bytes = |meta_words: usize, layout: PackedLayout| {
+            let words = layout.state_words
+                + layout.gradient_words
+                + layout.output_words
+                + layout.training_words
+                + meta_words as u64
+                + phenotype.synapses().len() as u64 * 5;
+            words * 4
+                + u64::from(phenotype.microstep_count()) * u64::from(layout.ticks) * HEADER_BYTES
+                + READBACK_BYTES
+        };
+        let (meta, replay) = pack_metadata_and_layout(phenotype, Some(sequence))?;
+        let (initial_meta, initial) = pack_metadata_and_layout(phenotype, None)?;
+        Ok(bytes(meta.len(), replay).max(bytes(initial_meta.len(), initial)))
+    }
+
     /// Starts an offline cohort under an exactly compiled export of the current
     /// GPU weights. This never replaces genetics in a living organism. Graph,
     /// dynamics and learning coordinates must be unchanged, so Adam moments,

@@ -74,7 +74,7 @@ pub fn create_canonical_new_game(
     foundation: &FoundationWeightAsset,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     validate_phase3_inputs(config, foundation)?;
-    create_new_game_inner(config, foundation, None)
+    create_new_game_inner(config, foundation, None, false)
 }
 
 /// Explicit N2048 experiment using the same ecology and inherited physiology.
@@ -95,7 +95,29 @@ pub fn create_canonical_new_game_with_n2048_candidate(
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
     foundation.encode_canonical()?;
-    create_new_game_inner(config, foundation, None)
+    create_new_game_inner(config, foundation, None, false)
+}
+
+/// Explicit offline group of fifty newborns sharing one inherited neural policy.
+/// Each has a distinct organism/body/chemistry/memory identity. The ordinary
+/// New Game population limit is unchanged; this is a training admission only.
+pub fn create_canonical_foundation_training_group(
+    world_seed: u64,
+    founder_seed_base: u64,
+    foundation: &FoundationWeightAsset,
+) -> Result<CanonicalNewGame, ScaffoldContractError> {
+    let mut config = CanonicalNewGameConfig::phase3(world_seed, 1)?;
+    if founder_seed_base == 0
+        || foundation.manifest().capacity_class_id() != BrainCapacityClass::N2048_ID
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile);
+    }
+    foundation.encode_canonical()?;
+    config.founder_count = 50;
+    config.founder_seed_base = founder_seed_base;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.sensor_profile = foundation.manifest().sensor_profile();
+    create_new_game_inner(&config, foundation, None, true)
 }
 
 /// Explicit experimental founder: candidate cognition and inherited pain sensing
@@ -109,13 +131,14 @@ pub fn create_canonical_new_game_with_nociceptive_candidate(
     if candidate.source().sensor_profile() != config.sensor_profile {
         return Err(ScaffoldContractError::PhenotypeCompile);
     }
-    create_new_game_inner(config, &foundation, Some(candidate))
+    create_new_game_inner(config, &foundation, Some(candidate), false)
 }
 
 fn create_new_game_inner(
     config: &CanonicalNewGameConfig,
     foundation: &FoundationWeightAsset,
     candidate: Option<&alife_core::Nano512ActionCreditCandidateV2>,
+    training_group: bool,
 ) -> Result<CanonicalNewGame, ScaffoldContractError> {
     let manifest = foundation.manifest();
     let foundation_identity = FoundationGeneticIdentity::new(
@@ -136,10 +159,18 @@ fn create_new_game_inner(
         let founder_seed = config
             .founder_seed_base
             .checked_mul(16)
-            .and_then(|seed| seed.checked_add(ordinal))
+            .and_then(|seed| seed.checked_add(if training_group { 1 } else { ordinal }))
             .ok_or(ScaffoldContractError::InvalidId)?;
         let world_label = format!("founder-{ordinal:02}");
-        let position = founder_position(slot);
+        let position = if training_group {
+            Vec3f::new(
+                (f32::from(slot % 10) - 4.5) * 24.0,
+                (f32::from(slot / 10) - 2.0) * 24.0,
+                0.0,
+            )
+        } else {
+            founder_position(slot)
+        };
         let mut genome =
             alife_core::CreatureGenome::early_mammal_founder(founder_seed, foundation_identity)?;
         // Founder reserve economics are inherited biology, not a survival timer.
@@ -192,6 +223,100 @@ fn create_new_game_inner(
         .replace_habitat_authority(habitats)
         .map_err(|_| ScaffoldContractError::InvalidId)?;
     spawn_phase3_ecology(&mut world)?;
+    if training_group {
+        // Ordinary physical walls prevent accidental competition between plots.
+        let mut obstacles = Vec::new();
+        for founder in &founders {
+            let p = world
+                .entity(founder.world_entity_id)
+                .ok_or(ScaffoldContractError::InvalidId)?
+                .position;
+            // Terrain admission converts legacy X/Y into grounded X/Z.
+            let (x, z) = (p.x, p.y);
+            obstacles.extend([
+                [x - 8.2, z - 8.2, x - 7.8, z + 8.2, 0.0, 3.0],
+                [x + 7.8, z - 8.2, x + 8.2, z + 8.2, 0.0, 3.0],
+                [x - 8.2, z - 8.2, x + 8.2, z - 7.8, 0.0, 3.0],
+                [x - 8.2, z + 7.8, x + 8.2, z + 8.2, 0.0, 3.0],
+            ]);
+        }
+        world.enable_terrain_for_new_game(
+            crate::WorldTerrain::new(
+                crate::TerrainData {
+                    width: 2,
+                    depth: 2,
+                    origin_x: -256.0,
+                    origin_z: -256.0,
+                    spacing: 512.0,
+                    heights: vec![0.0; 4],
+                    obstacles,
+                    water_level: None,
+                },
+                crate::LocomotionLimits::default(),
+            )?,
+            Vec3f::ZERO,
+        )?;
+        // A shared habitat, with distinct local starting scenes. No success
+        // labels or scores enter perception; all resources are ordinary objects.
+        for founder in &founders {
+            let position = world
+                .entity(founder.world_entity_id)
+                .ok_or(ScaffoldContractError::InvalidId)?
+                .position;
+            let angle = ((config.world_seed ^ founder.organism_id.raw().wrapping_mul(0x9e3779b9))
+                % 6283) as f32
+                / 1000.0;
+            let distance = 0.6
+                + ((config.world_seed.rotate_left(17)
+                    ^ founder.organism_id.raw().wrapping_mul(7919))
+                    % 1800) as f32
+                    / 1000.0;
+            let food = world.editor_spawn_object(WorldEditorSpawnSpec {
+                label: format!("group-food-{}", founder.organism_id.raw()),
+                kind: WorldObjectKind::Food,
+                organism_id: None,
+                position: Vec3f::new(
+                    position.x + distance * angle.cos(),
+                    position.y,
+                    position.z + distance * angle.sin(),
+                ),
+                nutrition: 0.65,
+                hazard_pain: 0.0,
+                radius: 0.45,
+                token_id: None,
+            })?;
+            world.set_food_variety(
+                food,
+                crate::FoodVariety::from_seed(config.world_seed ^ founder.organism_id.raw()),
+            )?;
+            if founder.organism_id.raw() % 3 == 0 {
+                world.editor_spawn_object(WorldEditorSpawnSpec {
+                    label: format!("group-hazard-{}", founder.organism_id.raw()),
+                    kind: WorldObjectKind::Hazard,
+                    organism_id: None,
+                    position: Vec3f::new(
+                        position.x - angle.sin() * 3.0,
+                        0.0,
+                        position.z + angle.cos() * 3.0,
+                    ),
+                    nutrition: 0.0,
+                    hazard_pain: 0.12,
+                    radius: 0.5,
+                    token_id: None,
+                })?;
+            } else {
+                world.spawn_toy(
+                    &format!("group-toy-{}", founder.organism_id.raw()),
+                    Vec3f::new(
+                        position.x - angle.cos() * 2.5,
+                        0.0,
+                        position.z - angle.sin() * 2.5,
+                    ),
+                    founder.organism_id.raw() % 2 == 0,
+                )?;
+            }
+        }
+    }
 
     Ok(CanonicalNewGame {
         world,

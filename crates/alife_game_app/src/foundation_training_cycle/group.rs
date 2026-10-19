@@ -1,0 +1,1009 @@
+//! Fifty organism slots in one ordinary world/GPU transaction, one offline policy.
+//! The production class-arena kernels carry the hardware row dimension. Only
+//! replay is streamed; collecting fifty separate serial sessions is not used.
+use super::*;
+use crate::{FoundationReplayRecordRef, FoundationReplaySource};
+use alife_core::OrganismId;
+use std::{collections::BTreeMap, path::PathBuf};
+mod admission;
+
+pub const FOUNDATION_TRAINING_GROUP_SIZE: usize = 50;
+
+pub struct FoundationGroupRequest<'a> {
+    pub previous: &'a Path,
+    pub output: &'a Path,
+    pub seed_history: &'a Path,
+    pub seed: u64,
+    pub decisions_per_organism: usize,
+    /// Explicit incomplete-history opt-in. It never asserts historical freshness.
+    pub known_exclusions: bool,
+    pub replay_device_limit_bytes: u64,
+    pub replay_host_limit_bytes: u64,
+    pub sampling_temperature: f32,
+}
+
+struct Life {
+    id: OrganismId,
+    phenotype: alife_core::CreaturePhenotype,
+    directory: PathBuf,
+    writer: FoundationReplayWriter,
+    references: Vec<FoundationReplayRecordRef>,
+    features: Vec<Vec<f32>>,
+    death: Option<(u64, alife_core::BiochemistryState)>,
+    initial_energy: f32,
+    minimum_energy: f32,
+    last_captured_energy: f32,
+    initial_sensory_sha256: Option<String>,
+    successes: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Span {
+    life: usize,
+    burn: usize,
+    start: usize,
+    end: usize,
+}
+
+fn truncated(captured_rows: usize, requested_rows: usize) -> bool {
+    captured_rows > requested_rows
+}
+
+fn spans(
+    life: usize,
+    references: &[FoundationReplayRecordRef],
+    rows: usize,
+    width: usize,
+) -> Vec<Span> {
+    let mut result = Vec::new();
+    let mut segment_start = 0;
+    while segment_start < rows {
+        let segment = references[segment_start].segment;
+        let end = references[segment_start..rows]
+            .iter()
+            .position(|r| r.segment != segment)
+            .map_or(rows, |offset| segment_start + offset);
+        for start in (segment_start..end).step_by(width) {
+            result.push(Span {
+                life,
+                burn: start.saturating_sub(128).max(segment_start),
+                start,
+                end: (start + width).min(end),
+            });
+        }
+        segment_start = end;
+    }
+    result
+}
+
+fn group_source(previous: &Path) -> Result<SealedCycleContinuation> {
+    if !previous.join("group50.json").is_file() {
+        return load_cycle_continuation(previous, None);
+    }
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(previous.join("group50.json"))?)?;
+    let asset = FoundationWeightAsset::decode_canonical(&std::fs::read(
+        previous.join("trained.alife-foundation"),
+    )?)?;
+    let actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&std::fs::read(previous.join("actor-checkpoint.json"))?)?;
+    let value: alife_training::PpoValueHeadCheckpoint =
+        serde_json::from_slice(&std::fs::read(previous.join("value-checkpoint.json"))?)?;
+    let policy = receipt["policy_version"]
+        .as_u64()
+        .ok_or("missing group policy version")?;
+    PpoTrainingState::from_checkpoint(value.clone())?;
+    if receipt["schema"] != 1
+        || receipt["complete"] != true
+        || receipt["biological_objective_version"] != BIOLOGICAL_OBJECTIVE_VERSION
+        || receipt["critic_objective_version"] != critic_residual::OBJECTIVE_VERSION
+        || receipt["next_cohort_optimizer_rebound"] != true
+        || receipt["new_asset_digest"] != digest(&asset)
+        || actor.source_foundation_digest != asset.digest()
+        || receipt["actor_optimizer_step"].as_u64() != Some(u64::from(actor.optimizer_step))
+        || receipt["value_optimizer_step"].as_u64() != Some(u64::from(value.optimizer_step))
+        || value.last_updated_policy_version != Some(policy)
+        || actor.weights != asset.weights()
+        || receipt["actor_checkpoint_sha256"]
+            != admission::hash(&std::fs::read(previous.join("actor-checkpoint.json"))?)
+        || receipt["value_checkpoint_sha256"]
+            != admission::hash(&std::fs::read(previous.join("value-checkpoint.json"))?)
+    {
+        return Err("group checkpoint is not an exact complete native handoff".into());
+    }
+    let founder_seed = receipt["founder_seed_base"]
+        .as_u64()
+        .filter(|s| *s > 0)
+        .ok_or("missing founder seed")?;
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(
+        receipt["seed"].as_u64().ok_or("missing source seed")?,
+        1,
+    )?;
+    config.founder_seed_base = founder_seed;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.sensor_profile = asset.manifest().sensor_profile();
+    let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)?;
+    let record = game
+        .world
+        .organism_registry()
+        .iter()
+        .next()
+        .ok_or("missing source group founder")?;
+    let genome = record.phenotype().brain_genome.clone();
+    let development = crate::gpu_live_runtime::foundation_construction_development(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)?,
+    )?;
+    let (phenotype, _) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        asset.clone(),
+    )?;
+    actor.validate_for(&phenotype, asset.digest())?;
+    if value.feature_count != phenotype.neuron_count() {
+        return Err("group critic feature coordinates changed".into());
+    }
+    Ok(SealedCycleContinuation {
+        asset,
+        actor,
+        value,
+        policy_version: policy.checked_add(1).ok_or("policy overflow")?,
+        founder_seed_base: receipt["founder_seed_base"]
+            .as_u64()
+            .filter(|s| *s > 0)
+            .ok_or("missing founder seed")?,
+        objective_transition_from: None,
+    })
+}
+
+// Conservative replay peak: old/new packed sets can overlap during a shape
+// change. The reserve covers the persistent PPO objective, actor accumulation,
+// checkpoint/rollback/readback and bounded critic feature scratch. Runtime
+// class arenas are reported separately. This is a bound, not measured VRAM.
+fn replay_auxiliary_bound_bytes(neurons: u64, synapses: u64) -> u64 {
+    // Persistent accumulation + packed checkpoint readback, PPO objective/
+    // rollback, metrics readback, and bounded residual feature/head scratch.
+    synapses * 24
+        + neurons * 257 * 8
+        + (neurons + 1) * 64
+        + alife_training::MAX_TRAINING_SEQUENCE_TICKS as u64 * (64 + 45 + 8) * 4
+        + 2 * 1024 * 1024
+}
+fn replay_peak_bytes(
+    phenotype: &alife_core::BrainPhenotype,
+    sequence: &alife_training::TrainingSequence,
+) -> Result<u64> {
+    Ok(
+        FoundationTrainer::replay_allocation_bytes(phenotype, sequence)? * 2
+            + replay_auxiliary_bound_bytes(
+                u64::from(phenotype.neuron_count()),
+                phenotype.synapses().len() as u64,
+            ),
+    )
+}
+
+fn load(
+    life: &Life,
+    span: Span,
+    source: &FoundationReplaySource,
+    phenotype: &alife_core::BrainPhenotype,
+    budget: FoundationReplayBudget,
+    device_limit: u64,
+) -> Result<crate::FoundationReplayWindow> {
+    let replay = load_foundation_replay_window(
+        &life.directory,
+        &life.references[span.burn..span.end],
+        span.start - span.burn,
+        source,
+        phenotype,
+        budget,
+    )?;
+    let allocation = replay_peak_bytes(phenotype, &replay.sequence)?;
+    if allocation > device_limit {
+        return Err(format!(
+            "replay needs {allocation} packed device bytes, exceeds {device_limit}"
+        )
+        .into());
+    }
+    Ok(replay)
+}
+
+/// Native continuation with no optimizer reset or historical rollout injection.
+/// Seeds are reserved before any world/device operation, including failed runs.
+pub fn run_foundation_training_group(
+    request: FoundationGroupRequest<'_>,
+) -> Result<serde_json::Value> {
+    if request.seed == 0
+        || !(1..=2048).contains(&request.decisions_per_organism)
+        || request.replay_device_limit_bytes < 16 * 1024 * 1024
+        || request.replay_device_limit_bytes > 2 * 1024 * 1024 * 1024
+    {
+        return Err("group50 needs a nonzero seed, 1..=2048 decisions per organism and 16..=2048 MiB replay budget".into());
+    }
+    cycle_ppo_config(request.sampling_temperature)?;
+    let admitted = group_source(request.previous)?;
+    let provenance = admission::admit(
+        request.previous,
+        request.seed_history,
+        request.output,
+        request.seed,
+        request.known_exclusions,
+    )?;
+    let lane = request
+        .output
+        .parent()
+        .ok_or("group output needs a parent directory")?;
+    std::fs::create_dir_all(lane)?;
+    let lock_path = lane.join(".eat-held-food-owner.lock");
+    let lock = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&lock_path)?;
+    struct Lock(PathBuf, std::fs::File);
+    impl Drop for Lock {
+        fn drop(&mut self) {
+            let _ = &self.1;
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+    let _lock = Lock(lock_path, lock);
+    // Recheck under the shared lane lock; no stale snapshot can authorize a seed.
+    let provenance_locked = admission::admit(
+        request.previous,
+        request.seed_history,
+        request.output,
+        request.seed,
+        request.known_exclusions,
+    )?;
+    if provenance != provenance_locked {
+        return Err("seed evidence changed before reservation".into());
+    }
+    // Immutable, importable exclusion receipt. Creating this file is the seed
+    // reservation; a failed or uncertain attempt never removes it.
+    let ledger_path = lane.join(format!(".group50-seed-{}.json", request.seed));
+    let ledger = serde_json::json!({"schema":1,"kind":"grab-food-seed-ledger",
+        "training_seed_ranges":[[request.seed,request.seed]],"assessment_seeds":[],"allocations":[],
+        "group50_reservation":{"output":request.output,"world_seed":request.seed,"admission":provenance}});
+    let mut reservation = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&ledger_path)?;
+    use std::io::Write;
+    reservation.write_all(&serde_json::to_vec(&ledger)?)?;
+    reservation.sync_all()?;
+    crate::foundation_training_output::in_new_directory(
+        request.output,
+        || run_owned(&request, admitted, &provenance),
+        |error| {
+            let _=std::fs::write(request.output.join("failure.json"),serde_json::to_vec_pretty(&serde_json::json!({"error":error.to_string(),"seed_admission":provenance,"seed_consumed":true})).unwrap_or_default());
+        },
+    )
+}
+
+fn run_owned(
+    request: &FoundationGroupRequest<'_>,
+    admitted: SealedCycleContinuation,
+    provenance: &serde_json::Value,
+) -> Result<serde_json::Value> {
+    let output = request.output;
+    let SealedCycleContinuation {
+        asset,
+        policy_version,
+        founder_seed_base,
+        actor,
+        value: old_value,
+        ..
+    } = admitted;
+    let started = Instant::now();
+    let budget = FoundationReplayBudget {
+        host_limit_bytes: request.replay_host_limit_bytes,
+    };
+    budget.check_additional(256 * 1024 * 1024)?;
+    std::fs::write(
+        output.join("seed-provenance.json"),
+        serde_json::to_vec_pretty(provenance)?,
+    )?;
+    std::fs::create_dir(output.join("source-receipts"))?;
+    for entry in std::fs::read_dir(request.previous)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file()
+            && (entry.path().extension().is_some_and(|e| e == "json")
+                || entry.file_name() == "trained.alife-foundation")
+        {
+            std::fs::copy(
+                entry.path(),
+                output.join("source-receipts").join(entry.file_name()),
+            )?;
+        }
+    }
+    for (name, expected) in provenance["source_sha256"]
+        .as_object()
+        .ok_or("missing native source bindings")?
+    {
+        if admission::hash(&std::fs::read(output.join("source-receipts").join(name))?)
+            != expected.as_str().ok_or("bad source hash")?
+        {
+            return Err("source changed between admission and immutable copy".into());
+        }
+    }
+    let copied = group_source(request.previous)?;
+    if copied.asset != asset
+        || copied.actor != actor
+        || copied.value != old_value
+        || copied.policy_version != policy_version
+        || copied.founder_seed_base != founder_seed_base
+    {
+        return Err("copied source differs from admitted native optimizer state".into());
+    }
+    std::fs::write(
+        output.join("initial.alife-foundation"),
+        asset.encode_canonical()?,
+    )?;
+    let mut game = alife_world::create_canonical_foundation_training_group(
+        request.seed,
+        founder_seed_base,
+        &asset,
+    )?;
+    crate::foundation_training::ground_foundation_training_world(&mut game.world)?;
+    game.world.set_age_death_disabled_for_new_game(true)?;
+    let population = game
+        .world
+        .organism_registry()
+        .iter()
+        .map(|r| {
+            (
+                r.organism_id(),
+                r.phenotype().clone(),
+                r.biochemistry().body.energy,
+            )
+        })
+        .collect::<Vec<_>>();
+    if population.len() != FOUNDATION_TRAINING_GROUP_SIZE {
+        return Err("group admission did not create fifty private organisms".into());
+    }
+    std::fs::write(
+        output.join("scenario.json"),
+        serde_json::to_vec_pretty(
+            &serde_json::json!({"world_seed":request.seed,"founder_seed_base":founder_seed_base,
+        "habitat":"shared_canonical_world","population":50,"founders":game.receipt.founders.iter().map(|f|serde_json::json!({"organism_id":f.organism_id.raw(),
+            "position":game.world.entity(f.world_entity_id).map(|e|e.position.to_array())})).collect::<Vec<_>>(),"age_death_disabled":true}),
+        )?,
+    )?;
+    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
+        backend,
+        game.world,
+        request.seed,
+        BrainScaleTier::Standard2048,
+        asset.manifest().sensor_profile(),
+        alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
+        format!("n2048-group50-{}", request.seed),
+        alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+        cycle_sampling_config(request.seed, policy_version, request.sampling_temperature)?,
+    )?;
+    let asset_root = output.join("world-assets");
+    std::fs::create_dir(&asset_root)?;
+    let save_path = output.join("world.json");
+    let mut config = alife_world::RuntimeConfig::deterministic_default(
+        request.seed,
+        BrainScaleTier::Standard2048,
+    );
+    config.features.gpu_backend_enabled = true;
+    let base = alife_world::PortableSaveFile::from_headless_world(
+        format!("n2048-group50-{}", request.seed),
+        runtime.world(),
+        config,
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )?;
+    base.validate_with_asset_root(&asset_root)?;
+    runtime.attach_durable_checkpoint_boundary(&save_path, &asset_root, base)?;
+    let exact = runtime.capture_portable_checkpoint()?;
+    let published = GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
+    if published.save != exact {
+        return Err("group exact initial save changed".into());
+    }
+    runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
+    runtime.set_performance_measurement_enabled(true);
+    let collection_started = Instant::now();
+    runtime.tick()?;
+    let first = runtime.take_foundation_training_steps();
+    if first.len() != 50 {
+        return Err(format!(
+            "group initial tick expected50 GPU decisions, got{}",
+            first.len()
+        )
+        .into());
+    }
+    let phenotype = first[0].before.phenotype.as_ref().clone();
+    let mut trainer = FoundationTrainer::from_session(
+        alife_runtime::GpuAuthoritativeSession::new(
+            runtime.new_staging_like_live()?,
+            alife_runtime::GpuSessionConsumerKind::Training,
+        ),
+        phenotype.clone(),
+        asset.clone(),
+        actor.stage_mask.clone(),
+        actor.config,
+    )?;
+    trainer.restore_checkpoint(&actor)?;
+    let checkpoint_bytes = initial_actor_checkpoint_bytes(Some(&actor), || {
+        Ok(serde_json::to_vec(&trainer.checkpoint()?)?)
+    })?;
+    let source = foundation_replay_source(&phenotype, &asset, policy_version, &checkpoint_bytes)?;
+    let mut lives = population
+        .into_iter()
+        .map(|(id, body, energy)| {
+            let directory = output.join("replay").join(format!("organism-{}", id.raw()));
+            Ok((
+                id.raw(),
+                Life {
+                    id,
+                    phenotype: body,
+                    writer: FoundationReplayWriter::new(
+                        &directory,
+                        source.clone(),
+                        phenotype.clone(),
+                        &asset,
+                        budget,
+                    )?,
+                    directory,
+                    references: Vec::new(),
+                    features: Vec::new(),
+                    death: None,
+                    initial_energy: energy,
+                    minimum_energy: energy,
+                    last_captured_energy: energy,
+                    initial_sensory_sha256: None,
+                    successes: Vec::new(),
+                },
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    let mut captured = first;
+    let mut neural_work = alife_core::BrainWorkCounters::default();
+    let mut max_batch_rows = 0;
+    let mut no_progress_poll_count = 0u64;
+    let mut batch_histogram = BTreeMap::<usize, u64>::new();
+    let mut stalled = Instant::now();
+    loop {
+        let rows = captured.len();
+        max_batch_rows = max_batch_rows.max(rows);
+        if rows > 0 {
+            *batch_histogram.entry(rows).or_default() += 1;
+        }
+        for step in captured.drain(..) {
+            let life = lives
+                .get_mut(&step.frame.organism_id().raw())
+                .ok_or("unexpected organism admitted into pinned group")?;
+            if truncated(life.references.len(), request.decisions_per_organism) {
+                continue;
+            }
+            if step.before.phenotype.as_ref() != &phenotype {
+                return Err("group organism does not share the pinned founder graph".into());
+            }
+            if life
+                .references
+                .last()
+                .is_some_and(|r| r.tick + 1 != step.frame.tick().raw())
+            {
+                verify_foundation_replay_step(&mut trainer, &step)?;
+                life.writer.start_segment()?;
+            }
+            let measured = step
+                .patch
+                .outcome()
+                .measured_physiology
+                .ok_or("group patch lacks organism-owned biology")?;
+            life.minimum_energy = life.minimum_energy.min(measured.after.body.energy);
+            life.last_captured_energy = measured.after.body.energy;
+            if life.initial_sensory_sha256.is_none() {
+                life.initial_sensory_sha256 =
+                    Some(admission::hash(&serde_json::to_vec(step.frame.sensory())?));
+            }
+            if consumed(&step) {
+                life.successes.push(serde_json::json!({"row":life.references.len(),"decision_tick":step.frame.tick().raw(),
+                "outcome_tick":step.patch.outcome().outcome_tick.raw(),"elapsed_seconds":collection_started.elapsed().as_secs_f64(),"patch":step.patch.header()}));
+            }
+            neural_work.microsteps = neural_work
+                .microsteps
+                .saturating_add(step.work.counters.microsteps);
+            neural_work.neuron_updates += step.work.counters.neuron_updates;
+            neural_work.synapse_ops += step.work.counters.synapse_ops;
+            neural_work.tile_visits += step.work.counters.tile_visits;
+            neural_work.decoder_candidate_ops += step.work.counters.decoder_candidate_ops;
+            neural_work.memory_context_ops += step.work.counters.memory_context_ops;
+            life.features
+                .push(crate::foundation_training::snapshot_activation(
+                    &step.after_inference,
+                )?);
+            life.references.push(life.writer.append(&step)?);
+        }
+        for life in lives.values_mut() {
+            // Once the real next decision is captured, this trajectory is a
+            // truncation. Later unrecorded actions/death cannot change its mask.
+            if life.death.is_some()
+                || truncated(life.references.len(), request.decisions_per_organism)
+            {
+                continue;
+            }
+            if let Some(record) = runtime.world().organism_registry().get(life.id) {
+                life.minimum_energy = life.minimum_energy.min(record.biochemistry().body.energy);
+                if !record.lifecycle().is_alive() {
+                    life.death = Some((
+                        record
+                            .lifecycle()
+                            .death_tick()
+                            .ok_or("dead organism lacks death tick")?
+                            .raw(),
+                        *record.biochemistry(),
+                    ));
+                }
+            } else {
+                let death = runtime
+                    .archive_retirement_receipt(life.id)
+                    .ok_or("group organism disappeared without archived retirement")?
+                    .death_tick
+                    .raw();
+                let biology = runtime
+                    .take_foundation_terminal_biology(life.id)
+                    .ok_or("archived group death lacks canonical terminal biology")?;
+                if biology.tick.raw() != death {
+                    return Err("terminal group biology tick mismatch".into());
+                }
+                life.death = Some((death, biology));
+            }
+        }
+        if !runtime.last_memory_preparation_errors().is_empty()
+            || !runtime.last_post_seal_learning_failures().is_empty()
+        {
+            return Err(
+                "group encountered rejected canonical preparation/learning; refusing PPO".into(),
+            );
+        }
+        if lives.values().all(|life| {
+            life.death.is_some() || truncated(life.references.len(), request.decisions_per_organism)
+        }) {
+            break;
+        }
+        let tick = runtime.world().tick();
+        if tick.raw() > request.decisions_per_organism as u64 * 8 + 4096 {
+            return Err("group reached bounded world-tick limit".into());
+        }
+        budget.check_additional(256 * 1024 * 1024)?;
+        runtime.tick_outcome()?;
+        if runtime.world().tick() == tick {
+            no_progress_poll_count += 1;
+            if stalled.elapsed().as_secs() > 300 {
+                return Err("group checkpoint made no progress for five minutes".into());
+            }
+        } else {
+            stalled = Instant::now();
+        }
+        captured = runtime.take_foundation_training_steps();
+    }
+    let collection_seconds = collection_started.elapsed().as_secs_f64();
+    let runtime_metrics = runtime.performance_metrics();
+    let mut value = PpoTrainingState::from_checkpoint(old_value.clone())?;
+    let mut batches = Vec::new();
+    let mut life_vec = Vec::new();
+    let mut all_spans = Vec::new();
+    let mut peak_replay_bytes = 0;
+    let mut critic_checkpoint = None;
+    for life in lives.into_values() {
+        let rows = life
+            .references
+            .len()
+            .saturating_sub(usize::from(life.death.is_none()));
+        if rows == 0 {
+            return Err("group organism has no complete learning transition".into());
+        }
+        std::fs::write(
+            life.directory.join("manifest.json"),
+            serde_json::to_vec(&life.references)?,
+        )?;
+        let mut values = Vec::new();
+        let mut actions = Vec::new();
+        let mut previous_after = None;
+        for span in spans(0, &life.references, life.references.len(), 128) {
+            let span = Span {
+                burn: span.start,
+                ..span
+            };
+            let replay = load(
+                &life,
+                span,
+                &source,
+                &phenotype,
+                budget,
+                request.replay_device_limit_bytes,
+            )?;
+            peak_replay_bytes =
+                peak_replay_bytes.max(replay_peak_bytes(&phenotype, &replay.sequence)?);
+            values.extend(value.predict_values(&mut trainer, &replay.sequence)?);
+            if critic_checkpoint.is_none() {
+                let restored = value.checkpoint(trainer.session())?;
+                if restored != old_value {
+                    return Err("group value/Adam changed before any training".into());
+                }
+                critic_checkpoint = Some(restored);
+            }
+            for (offset, (behavior, patch)) in
+                replay.behavior.iter().zip(&replay.patches).enumerate()
+            {
+                let i = span.start + offset;
+                let physiology = patch
+                    .outcome()
+                    .measured_physiology
+                    .ok_or("group replay lacks measured biology")?;
+                if i > 0 && life.references[i].tick > life.references[i - 1].tick + 1 {
+                    let gap = alife_core::MeasuredPhysiologyTransition::new(
+                        previous_after.ok_or("missing prior group biology")?,
+                        physiology.before,
+                    )?;
+                    let dt =
+                        (life.references[i].tick - life.references[i - 1].tick - 1) as f32 / 20.0;
+                    let discount = (-std::f32::consts::LN_2 * dt
+                        / cycle_ppo_config(request.sampling_temperature)?
+                            .discount_half_life_seconds)
+                        .exp();
+                    let prior: &mut (PpoJointAction, f32) =
+                        actions.last_mut().ok_or("missing group gap predecessor")?;
+                    prior.1 = (prior.1
+                        + training_biological_value(&gap, &life.phenotype)? * discount)
+                        .clamp(-1.0, 1.0);
+                }
+                previous_after = Some(physiology.after);
+                if i == rows {
+                    continue;
+                }
+                let receptors = physiology.before.neural_receptor_frame(&life.phenotype)?;
+                let modulator = alife_core::OutcomeCreditPacket::from_sealed_patch(patch)?
+                    .with_biochemical_receptors(&receptors)?
+                    .modulator();
+                actions.push((
+                    joint_action(behavior)?,
+                    training_receptor_profile(&life.phenotype).project(&modulator.frame())?,
+                ));
+            }
+        }
+        if let Some((_, terminal)) = life.death {
+            let previous = previous_after.ok_or("terminal group life lacks sealed biology")?;
+            let gap = alife_core::MeasuredPhysiologyTransition::new(previous, terminal)?;
+            let dt = (terminal.tick.raw() - previous.tick.raw()) as f32 / 20.0;
+            let discount = (-std::f32::consts::LN_2 * dt
+                / cycle_ppo_config(request.sampling_temperature)?.discount_half_life_seconds)
+                .exp();
+            let prior = actions
+                .last_mut()
+                .ok_or("terminal group life lacks trainable action")?;
+            prior.1 = (prior.1 + training_biological_value(&gap, &life.phenotype)? * discount)
+                .clamp(-1.0, 1.0);
+        }
+        let config = cycle_ppo_config(request.sampling_temperature)?;
+        let transitions = actions
+            .into_iter()
+            .enumerate()
+            .map(|(i, (action, reward))| {
+                let terminal = life.death.is_some() && i + 1 == rows;
+                let next_tick = if terminal {
+                    life.death.unwrap().0
+                } else {
+                    life.references[i + 1].tick
+                };
+                PpoTransition {
+                    policy_version,
+                    trajectory_id: life.id.raw(),
+                    step: i as u64,
+                    action,
+                    reward,
+                    old_value: values[i],
+                    next_value: if terminal { 0.0 } else { values[i + 1] },
+                    elapsed_seconds: (next_tick - life.references[i].tick) as f32 / 20.0,
+                    boundary: if terminal {
+                        PpoBoundary::Terminated
+                    } else if i + 1 == rows {
+                        PpoBoundary::Truncated
+                    } else {
+                        PpoBoundary::Continuing
+                    },
+                }
+            })
+            .collect();
+        let batch = PpoBatch::from_rollout(policy_version, transitions, config)?;
+        let index = life_vec.len();
+        let mut planned = spans(index, &life.references, rows, 256);
+        // Fit actual packed buffers to the declared device ceiling. Splitting
+        // loss spans preserves each segment's full available 128-row burn-in.
+        let mut cursor = 0;
+        while cursor < planned.len() {
+            let span = planned[cursor];
+            let replay = load_foundation_replay_window(
+                &life.directory,
+                &life.references[span.burn..span.end],
+                span.start - span.burn,
+                &source,
+                &phenotype,
+                budget,
+            )?;
+            let bytes = replay_peak_bytes(&phenotype, &replay.sequence)?;
+            if bytes > request.replay_device_limit_bytes {
+                if span.end - span.start <= 1 {
+                    return Err("device replay ceiling cannot hold required burn-in".into());
+                }
+                let mid = span.start + (span.end - span.start) / 2;
+                planned[cursor] = Span { end: mid, ..span };
+                planned.insert(
+                    cursor + 1,
+                    Span {
+                        burn: mid.saturating_sub(128).max(span.burn),
+                        start: mid,
+                        ..span
+                    },
+                );
+            } else {
+                peak_replay_bytes = peak_replay_bytes.max(bytes);
+                cursor += 1;
+            }
+        }
+        all_spans.extend(planned);
+        batches.push(batch);
+        life_vec.push(life);
+    }
+    // Interleave individuals before effective batches; every window still keeps
+    // its exact private recurrent, chemistry, action, lifetime and sequence masks.
+    all_spans.sort_by_key(|s| (s.start, s.life));
+    let config = cycle_ppo_config(request.sampling_temperature)?;
+    let actor_age = trainer.optimizer_step();
+    let update_started = Instant::now();
+    let update = train_recurrent_ppo_cohort(
+        &mut trainer,
+        &mut value,
+        all_spans.len(),
+        50,
+        |index| {
+            let span = all_spans[index];
+            let replay = load(
+                &life_vec[span.life],
+                span,
+                &source,
+                &phenotype,
+                budget,
+                request.replay_device_limit_bytes,
+            )
+            .map_err(|_| {
+                alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
+            })?;
+            Ok(PpoTrainingWindow {
+                speech_targets: vec![None; replay.sequence.ticks.len()],
+                sequence: replay.sequence,
+                batch: batches[span.life].window(span.start..span.end)?,
+                auxiliary: None,
+            })
+        },
+        PpoConfig {
+            value_coefficient: 0.0,
+            ..config
+        },
+        policy_version,
+    )?;
+    let mut critic_checkpoint = critic_checkpoint.ok_or("group lacks restored value head")?;
+    // The accepted critic objective uses frozen actual production next features.
+    // One central value checkpoint/Adam history traverses all lives, including
+    // failures, in bounded windows; no bootstrap ever points to another life.
+    let mut critic_updates = 0u64;
+    for _ in 0..update
+        .completed_epochs
+        .max(u32::from(update.actor_optimizer_step > actor_age))
+    {
+        for (life, batch) in life_vec.iter().zip(&batches) {
+            for start in (0..batch.len()).step_by(256) {
+                let end = (start + 256).min(batch.len());
+                let transitions = &batch.transitions()[start..end];
+                let feature_end = (end
+                    + usize::from(transitions.last().unwrap().boundary != PpoBoundary::Terminated))
+                .min(life.features.len());
+                let (next, _) = critic_residual::train(
+                    trainer.session(),
+                    critic_checkpoint,
+                    &life.features[start..feature_end],
+                    transitions,
+                    config,
+                    1,
+                    policy_version,
+                )?;
+                critic_checkpoint = next;
+                critic_updates += 1;
+            }
+        }
+    }
+    if update.actor_optimizer_step == actor_age || critic_updates == 0 {
+        return Err("group completed without accepted actor/value updates".into());
+    }
+    let update_seconds = update_started.elapsed().as_secs_f64();
+    let trained = trainer.export_candidate(TrainingStageManifest::new(
+        1,
+        1,
+        u16::try_from(policy_version.checked_add(1).ok_or("stage overflow")?)?,
+    ))?;
+    std::fs::write(
+        output.join("trained.alife-foundation"),
+        trained.encode_canonical()?,
+    )?;
+    let mut next_config = alife_world::CanonicalNewGameConfig::phase3(request.seed, 1)?;
+    next_config.brain_class = BrainScaleTier::Standard2048;
+    next_config.founder_seed_base = founder_seed_base;
+    next_config.sensor_profile = trained.manifest().sensor_profile();
+    let mut next_game =
+        alife_world::create_canonical_new_game_with_n2048_candidate(&next_config, &trained)?;
+    crate::foundation_training::ground_foundation_training_world(&mut next_game.world)?;
+    let mut next = GpuLiveBrainRuntime::new_profiled_foundation_training(
+        runtime.new_staging_like_live()?,
+        next_game.world,
+        request.seed,
+        BrainScaleTier::Standard2048,
+        next_config.sensor_profile,
+        alife_archive::LineageLibraryConfig::profile_default(output.join("next-lineage")),
+        next_cohort_run_id(request.seed),
+        alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+        cycle_sampling_config(
+            request.seed,
+            policy_version
+                .checked_add(1)
+                .ok_or("next policy overflow")?,
+            request.sampling_temperature,
+        )?,
+    )?;
+    next.tick()?;
+    let next_steps = next.take_foundation_training_steps();
+    if next_steps.len() != 1 {
+        return Err("exported group policy did not produce native next-cohort decision".into());
+    }
+    trainer.rebind_for_next_cohort(
+        next_steps[0].before.phenotype.as_ref().clone(),
+        trained.clone(),
+    )?;
+    let actor_bytes = serde_json::to_vec(&trainer.checkpoint()?)?;
+    let value_bytes = serde_json::to_vec(&critic_checkpoint)?;
+    std::fs::write(output.join("actor-checkpoint.json"), &actor_bytes)?;
+    std::fs::write(output.join("value-checkpoint.json"), &value_bytes)?;
+    let decisions = batches.iter().map(PpoBatch::len).sum::<usize>();
+    let successes = life_vec.iter().filter(|l| !l.successes.is_empty()).count();
+    let episodes=life_vec.iter().zip(&batches).map(|(life,batch)|serde_json::json!({"organism_id":life.id.raw(),"world_seed":request.seed,"policy_version":policy_version,
+        "captured_rows":life.references.len(),"valid_learning_decisions":batch.len(),"terminal_death_tick":life.death.map(|v|v.0),"initial_energy":life.initial_energy,
+        "minimum_energy":life.minimum_energy,"last_captured_outcome_energy":life.last_captured_energy,
+        "initial_sensory_sha256":life.initial_sensory_sha256,
+        "success_definition":"sealed_world_consumption","successes":life.successes,"replay_manifest":life.directory.join("manifest.json"),
+        "disclosed_retry":false,"seed_admission":provenance["seed_admission"]})).collect::<Vec<_>>();
+    let elapsed = started.elapsed().as_secs_f64();
+    let receipt = serde_json::json!({"schema":1,"complete":true,"mode":"group50_shared_habitat","population":50,"world_seed":request.seed,"seed":request.seed,
+        "founder_seed_base":founder_seed_base,"policy_version":policy_version,"biological_objective_version":BIOLOGICAL_OBJECTIVE_VERSION,"critic_objective_version":critic_residual::OBJECTIVE_VERSION,
+        "objective_state_reset":false,"sampling_temperature":request.sampling_temperature,"source":source,"seed_provenance":provenance,"episodes":episodes,
+        "new_asset_digest":digest(&trained),"actor_checkpoint_sha256":admission::hash(&actor_bytes),"value_checkpoint_sha256":admission::hash(&value_bytes),
+        "actor_optimizer_step":update.actor_optimizer_step,"value_optimizer_step":critic_checkpoint.optimizer_step,"actor_optimizer_updates":update.actor_optimizer_step-actor_age,
+        "value_optimizer_updates":critic_updates,"next_cohort_optimizer_rebound":true,"completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,
+        "valid_learning_decisions":decisions,"collection_seconds":collection_seconds,"update_seconds":update_seconds,"total_seconds":elapsed,
+        "valid_learning_decisions_per_collection_second":decisions as f64/collection_seconds,"valid_learning_decisions_per_total_second":decisions as f64/elapsed,
+        "successful_episodes":successes,
+        "distinct_initial_sensory_states":life_vec.iter().filter_map(|l|l.initial_sensory_sha256.as_ref()).collect::<std::collections::BTreeSet<_>>().len(),
+        "distinct_successful_initial_sensory_states":life_vec.iter().filter(|l|!l.successes.is_empty()).filter_map(|l|l.initial_sensory_sha256.as_ref()).collect::<std::collections::BTreeSet<_>>().len(),"successful_organism_ids":life_vec.iter().filter(|l|!l.successes.is_empty()).map(|l|l.id.raw()).collect::<Vec<_>>(),
+        "time_to_first_genuine_success_seconds":life_vec.iter().flat_map(|l|&l.successes).filter_map(|v|v["elapsed_seconds"].as_f64()).reduce(f64::min),
+        "success_diversity_scope":"distinct_organisms_and_initial_local_scenes_in_one_shared_world; correlated_outcomes_possible",
+        "retention_evidence":"unknown_requires_trainer_removed_followup","neural_work_captured":neural_work,"max_collector_batch_rows":max_batch_rows,"GPU_batch_path":"staged_tick/tick_memory_batch_training/class_arena_hardware_rows","collector_batch_row_histogram":batch_histogram,"no_progress_poll_count":no_progress_poll_count,
+        "runtime_performance":runtime_metrics,"hardware":runtime.hardware_receipt(),"collector_admission":runtime.admission_receipt(),"replay_windows":all_spans.len(),"effective_gradient_batch_windows":50,
+        "active_BPTT_graphs":1,"transient_packed_buffer_sets_bound":2,"peak_replay_device_bound_bytes":peak_replay_bytes,"replay_device_limit_bytes":request.replay_device_limit_bytes,"replay_host_limit_bytes":request.replay_host_limit_bytes,
+        "GPU_qualification":"requires_real_adapter_run; no_CPU_receipt_substitution"});
+    std::fs::write(
+        output.join("runtime-performance.json"),
+        serde_json::to_vec_pretty(&runtime_metrics)?,
+    )?;
+    std::fs::write(
+        output.join("group50.json"),
+        serde_json::to_vec_pretty(&receipt)?,
+    )?;
+    Ok(receipt)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn completed_live_trajectory_stays_truncated_while_other_lives_continue() {
+        let requested = 16;
+        let completed_rows = 17;
+        assert!(truncated(completed_rows, requested));
+        // A later death cannot enter the death-observation branch or turn its
+        // extra captured real-next row into a learning/terminal row.
+        let later_death_seen = true;
+        let terminated = later_death_seen && !truncated(completed_rows, requested);
+        assert!(!terminated);
+        assert_eq!(completed_rows - usize::from(!terminated), requested);
+        assert!(!truncated(8, requested));
+    }
+    #[test]
+    fn replay_auxiliary_bound_covers_n2048_objective_checkpoint_and_critic() {
+        let (n, s) = (2048u64, 400_000u64);
+        let ppo = 128 + 2048 * (64 + 45 + 8) * 4 + (n + 1) * 20 * 2;
+        let checkpoint_and_accumulation = s * (16 + 4);
+        let critic = 257 * n * 4 + (n + 1) * 16 + 256 * 32 + 64;
+        assert!(replay_auxiliary_bound_bytes(n, s) >= ppo + checkpoint_and_accumulation + critic);
+    }
+    #[test]
+    fn recurrent_spans_never_cross_organisms_or_sleep_boundaries() {
+        let refs = (0..1000)
+            .map(|i| FoundationReplayRecordRef {
+                record_index: i,
+                segment: u64::from(i >= 600),
+                tick: i + 1,
+                encoded_bytes: 1,
+                digest: [0; 32],
+            })
+            .collect::<Vec<_>>();
+        let plan = spans(17, &refs, 999, 256);
+        assert_eq!(plan.iter().map(|s| s.end - s.start).sum::<usize>(), 999);
+        assert!(plan.iter().all(|s| s.life == 17
+            && s.start - s.burn <= 128
+            && s.end - s.start <= 256
+            && refs[s.burn].segment == refs[s.end - 1].segment));
+        assert!(plan.iter().any(|s| s.start == 600 && s.burn == 600));
+    }
+    #[test]
+    fn fifty_canonical_newborns_have_private_identity_and_one_policy() {
+        let asset = initial_n2048_care_asset(839721).unwrap();
+        let mut game =
+            alife_world::create_canonical_foundation_training_group(943111, 839721, &asset)
+                .unwrap();
+        assert_eq!(game.creatures.len(), 50);
+        game.world.validate_organism_bindings().unwrap();
+        let records = game.world.organism_registry().iter().collect::<Vec<_>>();
+        assert_eq!(records.len(), 50);
+        let first = records[0].phenotype().brain_genome.clone();
+        for record in &records {
+            assert_eq!(record.phenotype().brain_genome, first);
+            assert_eq!(record.biochemistry().tick, alife_core::Tick::ZERO);
+        }
+        let ids = records
+            .iter()
+            .map(|r| r.organism_id().raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(ids.len(), 50);
+        assert!(alife_world::CanonicalNewGameConfig::phase3(943111, 50).is_err());
+        crate::foundation_training::ground_foundation_training_world(&mut game.world).unwrap();
+        let positions = game
+            .receipt
+            .founders
+            .iter()
+            .map(|f| game.world.entity(f.world_entity_id).unwrap().position)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            positions
+                .iter()
+                .map(|p| (p.x.to_bits(), p.z.to_bits()))
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            50
+        );
+        for (i, p) in positions.iter().enumerate() {
+            for q in &positions[i + 1..] {
+                assert!((p.x - q.x).hypot(p.z - q.z) >= 24.0);
+            }
+            let terrain = game.world.terrain().unwrap();
+            assert!(terrain.walkable(p.x, p.z));
+            assert!(terrain
+                .resolve_move(*p, alife_core::Vec3f::new(p.x + 10.0, 0.0, p.z))
+                .is_none());
+            let food = game
+                .world
+                .entity(
+                    game.world
+                        .entity_id(&format!("group-food-{}", i + 1))
+                        .unwrap(),
+                )
+                .unwrap();
+            assert!((food.position.x - p.x).hypot(food.position.z - p.z) < 3.0);
+        }
+    }
+}
