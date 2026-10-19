@@ -6,6 +6,8 @@ use crate::{FoundationReplayRecordRef, FoundationReplaySource};
 use alife_core::OrganismId;
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
+#[cfg(test)]
+mod checkpoint_tests;
 
 pub const FOUNDATION_TRAINING_GROUP_SIZE: usize = 50;
 
@@ -76,9 +78,47 @@ fn spans(
     result
 }
 
+fn admitted_actor_rows(spans: &[Span], updates: u32, lives: usize) -> (Vec<usize>, u64) {
+    let batches = spans.len().div_ceil(50);
+    let mut seen = vec![false; spans.len()];
+    let mut exposures = 0;
+    if batches > 0 {
+        for update in 0..updates as usize {
+            let start = update % batches * 50;
+            let end = (start + 50).min(spans.len());
+            for index in start..end {
+                seen[index] = true;
+                exposures += (spans[index].end - spans[index].start) as u64;
+            }
+        }
+    }
+    let mut counts = vec![0; lives];
+    for (span, seen) in spans.iter().zip(seen) {
+        if seen {
+            counts[span.life] += span.end - span.start;
+        }
+    }
+    (counts, exposures)
+}
+
 fn group_source(previous: &Path) -> Result<SealedCycleContinuation> {
     if !previous.join("group50.json").is_file() {
-        return load_cycle_continuation(previous, None);
+        let source = load_cycle_continuation(previous, None)?;
+        let receipt: FoundationCycleReceipt =
+            serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
+        let phenotype = crate::foundation_archived_success_replay::compile_source(
+            source.asset.clone(),
+            receipt.seed,
+            source.founder_seed_base,
+        )?;
+        source
+            .actor
+            .validate_for(&phenotype, source.asset.digest())?;
+        PpoTrainingState::from_checkpoint(source.value.clone())?;
+        if source.value.feature_count != phenotype.neuron_count() {
+            return Err("native cycle critic feature coordinates changed".into());
+        }
+        return Ok(source);
     }
     let receipt: serde_json::Value =
         serde_json::from_slice(&std::fs::read(previous.join("group50.json"))?)?;
@@ -95,6 +135,8 @@ fn group_source(previous: &Path) -> Result<SealedCycleContinuation> {
     PpoTrainingState::from_checkpoint(value.clone())?;
     if receipt["schema"] != 1
         || receipt["complete"] != true
+        || receipt["mode"] != "group50_shared_habitat"
+        || receipt["population"] != 50
         || receipt["biological_objective_version"] != BIOLOGICAL_OBJECTIVE_VERSION
         || receipt["critic_objective_version"] != critic_residual::OBJECTIVE_VERSION
         || receipt["next_cohort_optimizer_rebound"] != true
@@ -103,7 +145,12 @@ fn group_source(previous: &Path) -> Result<SealedCycleContinuation> {
         || receipt["actor_optimizer_step"].as_u64() != Some(u64::from(actor.optimizer_step))
         || receipt["value_optimizer_step"].as_u64() != Some(u64::from(value.optimizer_step))
         || value.last_updated_policy_version != Some(policy)
-        || actor.weights != asset.weights()
+        || actor.weights.len() != asset.weights().len()
+        || actor
+            .weights
+            .iter()
+            .zip(asset.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
         || receipt["actor_checkpoint_sha256"]
             != admission::hash(&std::fs::read(previous.join("actor-checkpoint.json"))?)
         || receipt["value_checkpoint_sha256"]
@@ -159,6 +206,27 @@ fn group_source(previous: &Path) -> Result<SealedCycleContinuation> {
     })
 }
 
+/// Read-only native handoff validation. It allocates no seed and opens no GPU.
+/// Source admission does not assert historical seed freshness or restore a life.
+pub fn validate_foundation_training_group_source(previous: &Path) -> Result<serde_json::Value> {
+    let source = group_source(previous)?;
+    Ok(
+        serde_json::json!({"schema":1,"native_checkpoint_valid":true,
+        "next_policy_version":source.policy_version,
+        "biological_objective_version":BIOLOGICAL_OBJECTIVE_VERSION,
+        "critic_objective_version":critic_residual::OBJECTIVE_VERSION,
+        "objective_state_reset":false,"founder_seed_base":source.founder_seed_base,
+        "foundation_digest":digest(&source.asset),"learned_weight_count":source.actor.weights.len(),
+        "actor_optimizer_step":source.actor.optimizer_step,
+        "actor_update_age_min":source.actor.update_ages.iter().min(),
+        "actor_update_age_max":source.actor.update_ages.iter().max(),
+        "actor_checkpoint_sha256":admission::hash(&std::fs::read(previous.join("actor-checkpoint.json"))?),
+        "value_optimizer_step":source.value.optimizer_step,
+        "value_checkpoint_sha256":admission::hash(&std::fs::read(previous.join("value-checkpoint.json"))?),
+        "seed_reserved":false,"historical_freshness":"not_asserted","personal_lifetime_restored":false}),
+    )
+}
+
 // Conservative replay peak: old/new packed sets can overlap during a shape
 // change. The reserve covers the persistent PPO objective, actor accumulation,
 // checkpoint/rollback/readback and bounded critic feature scratch. Runtime
@@ -185,13 +253,19 @@ fn replay_peak_bytes(
     )
 }
 
+#[derive(Clone, Copy)]
+struct ReplayDeviceLimits {
+    peak: u64,
+    binding: u64,
+}
+
 fn load(
     life: &Life,
     span: Span,
     source: &FoundationReplaySource,
     phenotype: &alife_core::BrainPhenotype,
     budget: FoundationReplayBudget,
-    device_limit: u64,
+    limits: ReplayDeviceLimits,
 ) -> Result<crate::FoundationReplayWindow> {
     let replay = load_foundation_replay_window(
         &life.directory,
@@ -202,11 +276,13 @@ fn load(
         budget,
     )?;
     let allocation = replay_peak_bytes(phenotype, &replay.sequence)?;
-    if allocation > device_limit {
-        return Err(format!(
-            "replay needs {allocation} packed device bytes, exceeds {device_limit}"
-        )
-        .into());
+    if allocation > limits.peak
+        || FoundationTrainer::replay_storage_binding_bytes(phenotype, &replay.sequence)?
+            > limits.binding
+    {
+        return Err(
+            "replay exceeds peak allocation or measured adapter storage binding limit".into(),
+        );
     }
     Ok(replay)
 }
@@ -223,6 +299,14 @@ pub fn run_foundation_training_group(
     {
         return Err("group50 needs a nonzero seed, 1..=2048 decisions per organism and 16..=2048 MiB replay budget".into());
     }
+    if request.output.exists() {
+        return Err("group output must be a new directory".into());
+    }
+    if request.replay_host_limit_bytes == 0
+        || request.replay_host_limit_bytes > 8 * 1024 * 1024 * 1024
+    {
+        return Err("group replay host ceiling must be in1..=8192 MiB".into());
+    }
     cycle_ppo_config(request.sampling_temperature)?;
     let admitted = group_source(request.previous)?;
     let provenance = admission::admit(
@@ -235,21 +319,22 @@ pub fn run_foundation_training_group(
     let lane = request
         .output
         .parent()
-        .ok_or("group output needs a parent directory")?;
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
     std::fs::create_dir_all(lane)?;
     let lock_path = lane.join(".eat-held-food-owner.lock");
     let lock = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&lock_path)?;
-    struct Lock(PathBuf, std::fs::File);
+    struct Lock(PathBuf, Option<std::fs::File>);
     impl Drop for Lock {
         fn drop(&mut self) {
-            let _ = &self.1;
+            drop(self.1.take());
             let _ = std::fs::remove_file(&self.0);
         }
     }
-    let _lock = Lock(lock_path, lock);
+    let _lock = Lock(lock_path, Some(lock));
     // Recheck under the shared lane lock; no stale snapshot can authorize a seed.
     let provenance_locked = admission::admit(
         request.previous,
@@ -410,6 +495,7 @@ fn run_owned(
     runtime.set_performance_measurement_enabled(true);
     let collection_started = Instant::now();
     runtime.tick()?;
+    let mut batch_available_seconds = collection_started.elapsed().as_secs_f64();
     let first = runtime.take_foundation_training_steps();
     if first.len() != 50 {
         return Err(format!(
@@ -419,9 +505,24 @@ fn run_owned(
         .into());
     }
     let phenotype = first[0].before.phenotype.as_ref().clone();
+    let staging = runtime.new_staging_like_live()?;
+    let adapter_limits = staging.offline_training_device_queue()?.0.limits();
+    let limits = ReplayDeviceLimits {
+        peak: request.replay_device_limit_bytes,
+        binding: adapter_limits
+            .max_storage_buffer_binding_size
+            .min(adapter_limits.max_buffer_size),
+    };
+    let initial_sequence = crate::foundation_replay_sequence(&first[..1], 0)?;
+    if replay_peak_bytes(&phenotype, &initial_sequence)? > limits.peak
+        || FoundationTrainer::replay_storage_binding_bytes(&phenotype, &initial_sequence)?
+            > limits.binding
+    {
+        return Err("initial trainer exceeds replay allocation or adapter binding limit".into());
+    }
     let mut trainer = FoundationTrainer::from_session(
         alife_runtime::GpuAuthoritativeSession::new(
-            runtime.new_staging_like_live()?,
+            staging,
             alife_runtime::GpuSessionConsumerKind::Training,
         ),
         phenotype.clone(),
@@ -430,6 +531,7 @@ fn run_owned(
         actor.config,
     )?;
     trainer.restore_checkpoint(&actor)?;
+
     let checkpoint_bytes = initial_actor_checkpoint_bytes(Some(&actor), || {
         Ok(serde_json::to_vec(&trainer.checkpoint()?)?)
     })?;
@@ -468,6 +570,7 @@ fn run_owned(
     let mut max_batch_rows = 0;
     let mut no_progress_poll_count = 0u64;
     let mut batch_histogram = BTreeMap::<usize, u64>::new();
+    let mut verified_replay_boundaries = 0u64;
     let mut stalled = Instant::now();
     loop {
         let rows = captured.len();
@@ -485,12 +588,15 @@ fn run_owned(
             if step.before.phenotype.as_ref() != &phenotype {
                 return Err("group organism does not share the pinned founder graph".into());
             }
-            if life
+            let new_segment = life
                 .references
                 .last()
-                .is_some_and(|r| r.tick + 1 != step.frame.tick().raw())
-            {
+                .is_some_and(|r| r.tick + 1 != step.frame.tick().raw());
+            if life.references.is_empty() || new_segment {
                 verify_foundation_replay_step(&mut trainer, &step)?;
+                verified_replay_boundaries += 1;
+            }
+            if new_segment {
                 life.writer.start_segment()?;
             }
             let measured = step
@@ -506,7 +612,7 @@ fn run_owned(
             }
             if consumed(&step) {
                 life.successes.push(serde_json::json!({"row":life.references.len(),"decision_tick":step.frame.tick().raw(),
-                "outcome_tick":step.patch.outcome().outcome_tick.raw(),"elapsed_seconds":collection_started.elapsed().as_secs_f64(),"patch":step.patch.header()}));
+                "outcome_tick":step.patch.outcome().outcome_tick.raw(),"elapsed_seconds":batch_available_seconds,"patch":step.patch.header()}));
             }
             neural_work.microsteps = neural_work
                 .microsteps
@@ -575,6 +681,7 @@ fn run_owned(
         }
         budget.check_additional(256 * 1024 * 1024)?;
         runtime.tick_outcome()?;
+        batch_available_seconds = collection_started.elapsed().as_secs_f64();
         if runtime.world().tick() == tick {
             no_progress_poll_count += 1;
             if stalled.elapsed().as_secs() > 300 {
@@ -613,14 +720,7 @@ fn run_owned(
                 burn: span.start,
                 ..span
             };
-            let replay = load(
-                &life,
-                span,
-                &source,
-                &phenotype,
-                budget,
-                request.replay_device_limit_bytes,
-            )?;
+            let replay = load(&life, span, &source, &phenotype, budget, limits)?;
             peak_replay_bytes =
                 peak_replay_bytes.max(replay_peak_bytes(&phenotype, &replay.sequence)?);
             values.extend(value.predict_values(&mut trainer, &replay.sequence)?);
@@ -730,7 +830,10 @@ fn run_owned(
                 budget,
             )?;
             let bytes = replay_peak_bytes(&phenotype, &replay.sequence)?;
-            if bytes > request.replay_device_limit_bytes {
+            if bytes > limits.peak
+                || FoundationTrainer::replay_storage_binding_bytes(&phenotype, &replay.sequence)?
+                    > limits.binding
+            {
                 if span.end - span.start <= 1 {
                     return Err("device replay ceiling cannot hold required burn-in".into());
                 }
@@ -772,7 +875,7 @@ fn run_owned(
                 &source,
                 &phenotype,
                 budget,
-                request.replay_device_limit_bytes,
+                limits,
             )
             .map_err(|_| {
                 alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
@@ -871,12 +974,19 @@ fn run_owned(
     std::fs::write(output.join("actor-checkpoint.json"), &actor_bytes)?;
     std::fs::write(output.join("value-checkpoint.json"), &value_bytes)?;
     let decisions = batches.iter().map(PpoBatch::len).sum::<usize>();
+    let (actor_admitted_rows, actor_row_exposures) = admitted_actor_rows(
+        &all_spans,
+        update.actor_optimizer_step - actor_age,
+        life_vec.len(),
+    );
+    let admitted_decisions = actor_admitted_rows.iter().sum::<usize>();
+
     let successes = life_vec.iter().filter(|l| !l.successes.is_empty()).count();
-    let episodes=life_vec.iter().zip(&batches).map(|(life,batch)|serde_json::json!({"organism_id":life.id.raw(),"world_seed":request.seed,"policy_version":policy_version,
-        "captured_rows":life.references.len(),"valid_learning_decisions":batch.len(),"terminal_death_tick":life.death.map(|v|v.0),"initial_energy":life.initial_energy,
+    let episodes=life_vec.iter().zip(&batches).zip(&actor_admitted_rows).map(|((life,batch),admitted)|serde_json::json!({"organism_id":life.id.raw(),"world_seed":request.seed,"policy_version":policy_version,
+        "captured_rows":life.references.len(),"available_on_policy_decisions":batch.len(),"valid_learning_decisions":admitted,"terminal_death_tick":life.death.map(|v|v.0),"initial_energy":life.initial_energy,
         "minimum_energy":life.minimum_energy,"last_captured_outcome_energy":life.last_captured_energy,
         "initial_sensory_sha256":life.initial_sensory_sha256,
-        "success_definition":"sealed_world_consumption","successes":life.successes,"replay_manifest":life.directory.join("manifest.json"),
+        "success_definition":"sealed_world_consumption","successes":life.successes.iter().map(|event|{let mut e=event.clone();e["training_loss_row"]=serde_json::json!(event["row"].as_u64().is_some_and(|r|r<(batch.len() as u64)));e}).collect::<Vec<_>>(),"replay_manifest":life.directory.join("manifest.json"),
         "disclosed_retry":false,"seed_admission":provenance["seed_admission"]})).collect::<Vec<_>>();
     let elapsed = started.elapsed().as_secs_f64();
     let receipt = serde_json::json!({"schema":1,"complete":true,"mode":"group50_shared_habitat","population":50,"world_seed":request.seed,"seed":request.seed,
@@ -885,16 +995,19 @@ fn run_owned(
         "new_asset_digest":digest(&trained),"actor_checkpoint_sha256":admission::hash(&actor_bytes),"value_checkpoint_sha256":admission::hash(&value_bytes),
         "actor_optimizer_step":update.actor_optimizer_step,"value_optimizer_step":critic_checkpoint.optimizer_step,"actor_optimizer_updates":update.actor_optimizer_step-actor_age,
         "value_optimizer_updates":critic_updates,"next_cohort_optimizer_rebound":true,"completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,
-        "valid_learning_decisions":decisions,"collection_seconds":collection_seconds,"update_seconds":update_seconds,"total_seconds":elapsed,
-        "valid_learning_decisions_per_collection_second":decisions as f64/collection_seconds,"valid_learning_decisions_per_total_second":decisions as f64/elapsed,
+        "valid_learning_decisions":admitted_decisions,"available_on_policy_decisions":decisions,"actor_loss_row_exposures":actor_row_exposures,
+        "learning_counter_basis":"committed_actor_optimizer_steps_and_deterministic_window_schedule; unique_rows_separate_from_epoch_exposures","collection_seconds":collection_seconds,"update_seconds":update_seconds,"total_seconds":elapsed,
+        "valid_learning_decisions_per_collection_second":admitted_decisions as f64/collection_seconds,"valid_learning_decisions_per_total_second":admitted_decisions as f64/elapsed,
         "successful_episodes":successes,
+        "successful_training_row_episodes":life_vec.iter().zip(&batches).filter(|(life,batch)|life.successes.iter().any(|s|s["row"].as_u64().is_some_and(|r|r<(batch.len() as u64)))).count(),
         "distinct_initial_sensory_states":life_vec.iter().filter_map(|l|l.initial_sensory_sha256.as_ref()).collect::<std::collections::BTreeSet<_>>().len(),
         "distinct_successful_initial_sensory_states":life_vec.iter().filter(|l|!l.successes.is_empty()).filter_map(|l|l.initial_sensory_sha256.as_ref()).collect::<std::collections::BTreeSet<_>>().len(),"successful_organism_ids":life_vec.iter().filter(|l|!l.successes.is_empty()).map(|l|l.id.raw()).collect::<Vec<_>>(),
         "time_to_first_genuine_success_seconds":life_vec.iter().flat_map(|l|&l.successes).filter_map(|v|v["elapsed_seconds"].as_f64()).reduce(f64::min),
         "success_diversity_scope":"distinct_organisms_and_initial_local_scenes_in_one_shared_world; correlated_outcomes_possible",
         "retention_evidence":"unknown_requires_trainer_removed_followup","neural_work_captured":neural_work,"max_collector_batch_rows":max_batch_rows,"GPU_batch_path":"staged_tick/tick_memory_batch_training/class_arena_hardware_rows","collector_batch_row_histogram":batch_histogram,"no_progress_poll_count":no_progress_poll_count,
         "runtime_performance":runtime_metrics,"hardware":runtime.hardware_receipt(),"collector_admission":runtime.admission_receipt(),"replay_windows":all_spans.len(),"effective_gradient_batch_windows":50,
-        "active_BPTT_graphs":1,"transient_packed_buffer_sets_bound":2,"peak_replay_device_bound_bytes":peak_replay_bytes,"replay_device_limit_bytes":request.replay_device_limit_bytes,"replay_host_limit_bytes":request.replay_host_limit_bytes,
+        "active_BPTT_graphs":1,"transient_packed_buffer_sets_bound":2,"peak_replay_device_bound_bytes":peak_replay_bytes,"replay_device_limit_bytes":request.replay_device_limit_bytes,"adapter_storage_binding_limit_bytes":limits.binding,"replay_host_limit_bytes":request.replay_host_limit_bytes,
+        "verified_replay_boundaries":verified_replay_boundaries,"replay_numerical_tolerance":"abs<=1e-4+1e-4*abs(expected)",
         "GPU_qualification":"requires_real_adapter_run; no_CPU_receipt_substitution"});
     std::fs::write(
         output.join("runtime-performance.json"),
@@ -910,6 +1023,28 @@ fn run_owned(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn committed_learning_counts_stop_at_accepted_batches_and_separate_repeated_epochs() {
+        let plan = (0..53)
+            .map(|i| Span {
+                life: i % 2,
+                burn: 0,
+                start: i * 256,
+                end: i * 256 + i + 1,
+            })
+            .collect::<Vec<_>>();
+        let (none, exposures) = admitted_actor_rows(&plan, 0, 2);
+        assert_eq!((none, exposures), (vec![0, 0], 0));
+        let (first, one) = admitted_actor_rows(&plan, 1, 2);
+        assert_eq!(first.iter().sum::<usize>(), 1275);
+        assert_eq!(one, 1275);
+        let (all, two) = admitted_actor_rows(&plan, 2, 2);
+        assert_eq!(all.iter().sum::<usize>(), 1431);
+        assert_eq!(two, 1431);
+        let (same, three) = admitted_actor_rows(&plan, 3, 2);
+        assert_eq!(same, all);
+        assert_eq!(three, 1431 + 1275);
+    }
     #[test]
     fn completed_live_trajectory_stays_truncated_while_other_lives_continue() {
         let requested = 16;
@@ -952,9 +1087,9 @@ mod tests {
     }
     #[test]
     fn fifty_canonical_newborns_have_private_identity_and_one_policy() {
-        let asset = initial_n2048_care_asset(839721).unwrap();
+        let (asset, founder_seed) = checkpoint_tests::accepted_asset();
         let mut game =
-            alife_world::create_canonical_foundation_training_group(943111, 839721, &asset)
+            alife_world::create_canonical_foundation_training_group(943111, founder_seed, &asset)
                 .unwrap();
         assert_eq!(game.creatures.len(), 50);
         game.world.validate_organism_bindings().unwrap();

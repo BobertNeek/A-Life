@@ -96,6 +96,9 @@ fn exclusions(value: &Value, seed: u64) -> Result<()> {
                     || key == "seed_range"
                 {
                     let values = value.as_array().ok_or("invalid seed range evidence")?;
+                    if values.len() > 100_000 {
+                        return Err("seed ranges exceed bounded entry count".into());
+                    }
                     let pairs: Vec<&Value> = if values.first().is_some_and(Value::is_u64) {
                         vec![value]
                     } else {
@@ -151,6 +154,7 @@ fn import(
     seen: &mut BTreeSet<PathBuf>,
     records: &mut Vec<Value>,
     depth: usize,
+    bytes_total: &mut u64,
 ) -> Result<()> {
     if depth > 8 || records.len() >= 128 {
         return Err("seed evidence import budget exceeded".into());
@@ -160,6 +164,12 @@ fn import(
         return Err("duplicate/cyclic seed evidence import".into());
     }
     let (bytes, document) = read(&path)?;
+    *bytes_total = bytes_total
+        .checked_add(bytes.len() as u64)
+        .ok_or("seed evidence byte count overflow")?;
+    if *bytes_total > 64 * 1024 * 1024 {
+        return Err("aggregate seed evidence exceeds64 MiB".into());
+    }
     if document["schema"] != 1 {
         return Err("seed evidence requires schema 1".into());
     }
@@ -172,14 +182,14 @@ fn import(
             } else {
                 path.parent().unwrap().join(child)
             };
-            if hash(&std::fs::read(&child)?)
+            if hash(&read(&child)?.0)
                 != item["sha256"]
                     .as_str()
                     .ok_or("missing seed import digest")?
             {
                 return Err("seed evidence import changed".into());
             }
-            import(&child, seed, seen, records, depth + 1)?;
+            import(&child, seed, seen, records, depth + 1, bytes_total)?;
         }
     }
     records.push(json!({"path":path,"sha256":hash(&bytes),"document":document}));
@@ -247,15 +257,23 @@ pub(super) fn admit(
     }
     let mut seen = BTreeSet::new();
     let mut records = Vec::new();
-    import(history, seed, &mut seen, &mut records, 0)?;
+    import(history, seed, &mut seen, &mut records, 0, &mut 0)?;
     // Existing lane exclusions cannot be silently omitted. Each file must be an
     // exact-byte history import, including prior group reservations.
-    if let Some(lane) = output.parent() {
+    {
+        let lane = output
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
         if lane.exists() {
             for entry in std::fs::read_dir(lane)? {
                 let entry = entry?;
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
+                if entry.file_type()?.is_symlink() && name.starts_with('.') && name.contains("seed")
+                {
+                    return Err("seed reservation ledger must not be a symlink".into());
+                }
                 if (name == ".grab-food-seed-reservations.json"
                     || name == ".mixed-care-seed-reservations.json"
                     || name.starts_with(".group50-seed-") && name.ends_with(".json"))
@@ -293,5 +311,125 @@ mod tests {
             assert!(exclusions(&evidence, 30).is_ok());
         }
         assert!(exclusions(&json!({"consumed_seed_ranges":[[15,10]]}), 30).is_err());
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    struct Fixture {
+        root: PathBuf,
+        source: PathBuf,
+        history: PathBuf,
+        output: PathBuf,
+        document: Value,
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "alife-group-admission-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let source = root.join("source");
+            let lane = root.join("lane");
+            std::fs::create_dir_all(&source).unwrap();
+            std::fs::create_dir(&lane).unwrap();
+            let mut hashes = serde_json::Map::new();
+            for (name, bytes) in [
+                (
+                    "cycle.json",
+                    br#"{"seed":100,"retained":{"reserved_seed_ranges":[[250,255]]}}"#.as_slice(),
+                ),
+                ("trained.alife-foundation", b"native asset".as_slice()),
+                ("actor-checkpoint.json", b"native actor".as_slice()),
+                ("value-checkpoint.json", b"native value".as_slice()),
+            ] {
+                std::fs::write(source.join(name), bytes).unwrap();
+                hashes.insert(name.into(), json!(hash(bytes)));
+            }
+            let document = json!({"schema":1,"kind":"mixed-care-seed-history","complete":false,
+                "evidence":"preserved recovery evidence; historical completeness remains unknown","source_sha256":hashes,
+                "consumed_seed_ranges":[[100,100]],"reserved_seed_ranges":[[120,130]],"assessment_seeds":[140],"imports":[]});
+            let history = root.join("history.json");
+            std::fs::write(&history, serde_json::to_vec(&document).unwrap()).unwrap();
+            Self {
+                output: lane.join("run"),
+                root,
+                source,
+                history,
+                document,
+            }
+        }
+        fn write(&self) {
+            std::fs::write(&self.history, serde_json::to_vec(&self.document).unwrap()).unwrap();
+        }
+        fn admit(&self, seed: u64, known: bool) -> Result<Value> {
+            admit(&self.source, &self.history, &self.output, seed, known)
+        }
+    }
+    #[test]
+    fn strict_default_and_explicit_unknown_freshness_preserve_recovery_evidence() {
+        let mut f = Fixture::new();
+        assert!(f.admit(200, false).is_err());
+        let accepted = f.admit(200, true).unwrap();
+        assert_eq!(
+            accepted["seed_admission"],
+            json!({"policy":"known-exclusions","historical_freshness":"unknown"})
+        );
+        assert_eq!(accepted["evidence"][0]["document"], f.document);
+        f.document["complete"] = json!(true);
+        f.write();
+        assert!(f.admit(200, false).is_ok());
+        for seed in [100, 125, 140, 252] {
+            assert!(f.admit(seed, true).is_err());
+        }
+    }
+    #[test]
+    fn source_seed_and_inherited_exclusions_are_required_even_in_a_new_lane() {
+        let mut f = Fixture::new();
+        f.document["consumed_seed_ranges"] = json!([]);
+        f.write();
+        assert!(f
+            .admit(200, true)
+            .unwrap_err()
+            .to_string()
+            .contains("source seed"));
+        f.document["consumed_seed_ranges"] = json!([[100, 100]]);
+        f.write();
+        assert!(f.admit(252, true).is_err());
+        assert!(f.admit(100, true).is_err());
+    }
+    #[test]
+    fn all_lane_ledgers_require_exact_import_and_known_allocations_stay_excluded() {
+        let mut f = Fixture::new();
+        let ledger = f.output.parent().unwrap().join(".group50-seed-310.json");
+        let bytes=serde_json::to_vec(&json!({"schema":1,"kind":"grab-food-seed-ledger","training_seed_ranges":[[310,310]],"assessment_seeds":[311],"allocations":[]})).unwrap();
+        std::fs::write(&ledger, &bytes).unwrap();
+        assert!(f.admit(200, true).is_err());
+        f.document["imports"] = json!([{"path":ledger,"sha256":hash(&bytes)}]);
+        f.write();
+        assert!(f.admit(200, true).is_ok());
+        assert!(f.admit(310, true).is_err());
+        assert!(f.admit(311, true).is_err());
+        std::fs::write(&ledger, b"{}").unwrap();
+        assert!(f.admit(200, true).is_err());
+    }
+    #[test]
+    fn duplicate_exclusion_keys_fail_at_any_depth() {
+        for bytes in [
+            br#"{"schema":1,"schema":1}"#.as_slice(),
+            br#"{"imports":[{"reserved_seed_ranges":[[1,2]],"reserved_seed_ranges":[]}]}"#
+                .as_slice(),
+        ] {
+            assert!(serde_json::from_slice::<Unique>(bytes).is_err());
+        }
     }
 }

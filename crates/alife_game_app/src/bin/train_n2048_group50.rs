@@ -2,8 +2,26 @@
 use std::path::PathBuf;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let usage="usage: train_n2048_group50 SOURCE OUTPUT --seed N --seed-history FILE [--decisions 256] [--seed-admission known-exclusions] [--replay-device-mib 512] [--replay-host-mib 8192] [--temperature 1]";
-    let previous = PathBuf::from(args.next().ok_or(usage)?);
+    let usage="usage: train_n2048_group50 SOURCE OUTPUT --seed N --seed-history FILE [--decisions 256] [--seed-admission known-exclusions] [--replay-device-mib 512] [--replay-host-mib 8192] [--temperature 1]\n       train_n2048_group50 --validate-source SOURCE";
+    let first = args.next().ok_or(usage)?;
+    if first == "--help" {
+        println!("{usage}");
+        return Ok(());
+    }
+    if first == "--validate-source" {
+        let source = PathBuf::from(args.next().ok_or(usage)?);
+        if args.next().is_some() {
+            return Err(usage.into());
+        }
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &alife_game_app::validate_foundation_training_group_source(&source)?
+            )?
+        );
+        return Ok(());
+    }
+    let previous = PathBuf::from(first);
     let output = PathBuf::from(args.next().ok_or(usage)?);
     let mut seed = None;
     let mut history = None;

@@ -249,6 +249,27 @@ impl FoundationTrainer {
         Ok(bytes(meta.len(), replay).max(bytes(initial_meta.len(), initial)))
     }
 
+    /// Largest storage binding needed by a replay shape, checked before upload.
+    pub fn replay_storage_binding_bytes(
+        phenotype: &BrainPhenotype,
+        sequence: &TrainingSequence,
+    ) -> Result<u64, TrainingError> {
+        sequence.validate_for(phenotype)?;
+        let (meta, layout) = pack_metadata_and_layout(phenotype, Some(sequence))?;
+        Ok([
+            layout.state_words,
+            layout.gradient_words,
+            layout.output_words,
+            layout.training_words,
+            meta.len() as u64,
+            phenotype.synapses().len() as u64 * 3,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(0)
+            * 4)
+    }
+
     /// Starts an offline cohort under an exactly compiled export of the current
     /// GPU weights. This never replaces genetics in a living organism. Graph,
     /// dynamics and learning coordinates must be unchanged, so Adam moments,
