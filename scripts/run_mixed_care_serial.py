@@ -23,6 +23,46 @@ LESSONS = ("eat_held_food", "eat_reachable_food", "feeding")
 LEDGER = host.MIXED_LEDGER_NAME
 FILES = seeds.SOURCE_FILES
 require = inspector_io.require
+FRESHNESS = {"strict": "operator-attested-complete", "known-exclusions": "unknown"}
+
+
+def seed_admission(plan):
+    """Missing metadata always means strict; never infer opt-in from history."""
+    value = plan.get("seed_admission", {"policy": "strict", "historical_freshness": FRESHNESS["strict"]})
+    require(isinstance(value, dict) and set(value) == {"policy", "historical_freshness"} and
+            isinstance(value["policy"], str) and value["policy"] in FRESHNESS and
+            value["historical_freshness"] == FRESHNESS[value["policy"]], "invalid seed admission metadata")
+    return value
+
+
+def explanation(value):
+    require(isinstance(value, str) and 40 <= len(value.strip()) and len(value) <= 4096 and len(value.split()) >= 6,
+            "meaningful bounded missing-history/recovery explanation required")
+
+
+def recovery_attestation(doc, ledger_path):
+    """Validate an operator's cited attestation, never a substitute for ledger checks."""
+    explanation(doc.get("missing_history"))
+    attestation = doc.get("recovery_reconciliation")
+    assertions = {"accepted_checkpoint_authoritative", "known_inflight_attempts_reconciled_or_excluded",
+                  "no_known_detached_later_accepted_chain"}
+    require(isinstance(attestation, dict) and set(attestation) == assertions | {
+        "explanation", "evidence", "prior_ledger_runs_sha256"} and
+        all(attestation[key] is True for key in assertions), "explicit recovery reconciliation attestation required")
+    explanation(attestation["explanation"])
+    digest = attestation["prior_ledger_runs_sha256"]
+    require(isinstance(digest, str) and len(digest) == 64 and all(c in "0123456789abcdef" for c in digest),
+            "recovery attestation requires prior ledger runs digest")
+    evidence = seeds._list(attestation["evidence"])
+    require(evidence, "recovery attestation requires cited exact-byte evidence")
+    seen = set()
+    for item in evidence:
+        require(isinstance(item, dict) and set(item) == {"path", "sha256"} and
+                isinstance(item["path"], str) and Path(item["path"]).is_absolute(), "invalid recovery evidence reference")
+        path = Path(item["path"]).resolve(strict=True)
+        require(path != ledger_path.resolve(), "recovery evidence must be an immutable snapshot, not the live mixed ledger")
+        require(path not in seen and host.sha256(path) == item["sha256"], "recovery evidence changed or duplicated")
+        seen.add(path)
 
 
 def load(path):
@@ -107,11 +147,19 @@ def grab_import(path, expected):
     return ranges, assessments
 
 
-def history(path, source_hashes, source_seed, lane):
+def history(path, source_hashes, source_seed, lane, *, admission=None):
     doc, digest = load(path)
-    require(doc.get("kind") == "mixed-care-seed-history" and doc.get("complete") is True and
+    selected = seed_admission({} if admission is None else {"seed_admission": admission})
+    require(doc.get("kind") == "mixed-care-seed-history" and
             isinstance(doc.get("evidence"), str) and doc["evidence"].strip(),
-            "explicit complete mixed-care seed history and evidence required")
+            "explicit mixed-care seed history and evidence required")
+    if selected["policy"] == "strict":
+        require(doc.get("complete") is True, "explicit complete mixed-care seed history required in strict mode")
+    else:
+        require(doc.get("complete") is False and "seed_admission" in doc,
+                "known-exclusions requires explicit incomplete history and unknown historical freshness")
+        recovery_attestation(doc, lane / LEDGER)
+    require(seed_admission(doc) == selected, "history seed admission policy/freshness mismatch")
     require(seeds._hashes(doc.get("source_sha256")) == {name: source_hashes[name] for name in FILES},
             "history is not bound to this sealed source")
     reserved = seeds._ranges(doc.get("reserved_seed_ranges"))
@@ -150,6 +198,10 @@ def read_ledger(path):
         seen.add(run["output"])
         plan = run.get("plan")
         require(isinstance(plan, dict) and run.get("plan_sha256") == object_hash(plan), "ledger plan changed")
+        imported = run.get("history_import")
+        require(isinstance(imported, dict) and seed_admission(plan) == seed_admission(imported) and
+                imported.get("complete") is (seed_admission(plan)["policy"] == "strict"),
+                "ledger history seed admission mismatch")
         allocation = seeds._ranges([plan.get("seed_range")])[0]
         require(not any(allocation[0] <= last and first <= allocation[1] for first, last in ranges),
                 "ledger allocations overlap")
@@ -174,10 +226,39 @@ def object_hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
+def reconcile_prior_runs(doc, runs):
+    """Bind the attestation to surviving prior state; grant no acceptance or retries."""
+    require(doc["recovery_reconciliation"]["prior_ledger_runs_sha256"] == object_hash(runs),
+            "recovery attestation prior ledger runs changed")
+    latest = hashes = None
+    for run in runs:
+        plan = run["plan"]
+        require(latest is None or (plan["source"] == latest and plan["source_sha256"] == hashes),
+                "prior run source lineage collision")
+        unchanged(Path(plan["source"]), plan["source_sha256"])
+        previous = run["plan"]["source"]
+        hashes = plan["source_sha256"]
+        for index, attempt in enumerate(run["attempts"]):
+            directory = Path(run["output"]) / f"attempt-{index:05d}"
+            require(attempt.get("directory") == str(directory) and attempt.get("previous") == previous,
+                    "prior attempt lineage collision")
+            require(attempt["status"] != "pending", "prior pending attempt must be reconciled by its saved run")
+            if attempt["status"] == "abandoned":
+                require(not (directory / "cycle.json").exists(), "abandoned attempt later acquired a seal; reconcile manually")
+            else:
+                hashes = file_hashes(directory)
+                require({**hashes, "initial.alife-foundation": host.sha256(directory / "initial.alife-foundation")} ==
+                        attempt["sha256"], "prior accepted receipt/checkpoint changed")
+                receipt, _ = inspector_io.load_json(directory / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
+                require(receipt == attempt["receipt"], "prior accepted dose changed")
+                previous = str(directory)
+        latest = previous
+
+
 def reserve(plan, ledger_path, *, commit=True):
     """Reserve the entire proposed allocation, before any native trainer child."""
     doc, digest, ranges, assessments = history(Path(plan["history"]), plan["source_sha256"],
-        plan["source_seed"], ledger_path.parent)
+        plan["source_seed"], ledger_path.parent, admission=seed_admission(plan))
     require(digest == plan["history_sha256"], "history changed since planning")
     require(not ledger_path.is_symlink(), "mixed ledger must not be a symlink")
     if ledger_path.exists():
@@ -186,6 +267,8 @@ def reserve(plan, ledger_path, *, commit=True):
         ledger = {"schema": 1, "kind": "mixed-care-seed-ledger", "excluded_seed_ranges": [],
                   "assessment_seeds": [], "runs": []}
     require(all(run["output"] != plan["output"] for run in ledger["runs"]), "output already reserved; use --resume")
+    if seed_admission(plan)["policy"] == "known-exclusions":
+        reconcile_prior_runs(doc, ledger["runs"])
     if ledger["runs"]:
         prior = ledger["runs"][-1]
         require(not any(a["status"] == "pending" for a in prior["attempts"]),
@@ -278,7 +361,8 @@ def summary(run):
             total["exact_nourishing_consumption_events"] += receipt["held_food_consumption_events"]
             total["trained_exact_nourishing_consumption_events"] += receipt["trained_held_food_consumption_events"]
         latest = attempt["directory"]
-    return {"schema": 1, "kind": "mixed-care-summary", "per_lesson": totals, "latest_checkpoint": latest,
+    return {"schema": 1, "kind": "mixed-care-summary", "seed_admission": seed_admission(run["plan"]),
+            "per_lesson": totals, "latest_checkpoint": latest,
             "accepted_episodes": sum(total["episodes"] for total in totals.values()), "promoted": False,
             "personal_lifetime_continues": False, "trained_parameters_and_optimizer_continue": True}
 
@@ -315,8 +399,11 @@ def execute(plan, *, resume=False, cutoff=None):
         run = matches[0]
         require(run is ledger["runs"][-1], "a newer allocation owns this lineage; cannot resume an older run")
         rows = schedule_rows(plan["schedule"])
-        _, digest, _, _ = history(Path(plan["history"]), plan["source_sha256"], plan["source_seed"], lane)
+        doc, digest, _, _ = history(Path(plan["history"]), plan["source_sha256"], plan["source_seed"], lane,
+                                   admission=seed_admission(plan))
         require(digest == plan["history_sha256"], "history changed on resume")
+        if seed_admission(plan)["policy"] == "known-exclusions":
+            reconcile_prior_runs(doc, ledger["runs"][:-1])
 
         def guard():
             require(not (output / "STOP").exists(), "owner STOP requested interruption")
@@ -410,6 +497,8 @@ def arguments():
     parser.add_argument("--source", type=Path)
     parser.add_argument("--schedule", type=Path)
     parser.add_argument("--seed-history", type=Path)
+    parser.add_argument("--seed-admission", choices=tuple(FRESHNESS),
+                        help="new-plan policy; default strict, known-exclusions requires incomplete attested history")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--seed-count", type=int, help="whole reservation, including optional interruption spares")
     parser.add_argument("--cutoff", type=host.cutoff_time)
@@ -432,7 +521,7 @@ def main(argv=None):
         if args.resume or args.start:
             require(args.run, "--start/--resume requires --run")
             require(all(getattr(args, name) is None for name in
-                        ("binary", "checkpoint_inspector", "source", "schedule", "seed_history", "seed", "seed_count")),
+                        ("binary", "checkpoint_inspector", "source", "schedule", "seed_history", "seed", "seed_count", "seed_admission")),
                     "saved execution uses the immutable plan; do not supply a new configuration")
             plan, _ = load(output / "plan.json")
             require(plan.get("kind") == "mixed-care-plan" and plan.get("output") == str(output), "saved plan/output collision")
@@ -458,11 +547,13 @@ def main(argv=None):
             hashes = file_hashes(source)
             receipt, _ = inspector_io.load_json(source / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
             history_path = args.seed_history.resolve(strict=True)
-            _, digest, _, _ = history(history_path, hashes, receipt.get("seed"), output.parent)
+            policy = args.seed_admission or "strict"
+            admission = {"policy": policy, "historical_freshness": FRESHNESS[policy]}
+            _, digest, _, _ = history(history_path, hashes, receipt.get("seed"), output.parent, admission=admission)
             plan = {"schema": 1, "kind": "mixed-care-plan", "output": str(output), "source": str(source),
                     "source_sha256": hashes, "source_seed": receipt["seed"], "binary": str(binary), "inspector": str(inspector),
                     "binary_sha256": {str(path): host.sha256(path) for path in (binary, inspector)},
-                    "history": str(history_path), "history_sha256": digest, "schedule": schedule,
+                    "history": str(history_path), "history_sha256": digest, "seed_admission": admission, "schedule": schedule,
                     "seed_range": [first, first + count - 1], "cutoff": args.cutoff.isoformat(),
                     "command_seconds": args.command_seconds, "min_disk_gib": args.min_disk_gib,
                     "min_memory_gib": args.min_memory_gib, "idle_seconds": args.idle_seconds,
