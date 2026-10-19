@@ -1501,7 +1501,10 @@ mod founder_refresh_tests {
         assert_eq!(restored_setup.initial_owner, None);
 
         // Receipts predating these diagnostics have neither new field.
-        encoded.as_object_mut().unwrap().remove("reachable_food_setup");
+        encoded
+            .as_object_mut()
+            .unwrap()
+            .remove("reachable_food_setup");
         encoded
             .as_object_mut()
             .unwrap()
@@ -3170,7 +3173,9 @@ fn run_foundation_training_cycle_in_owned_output(
             crate::foundation_grab_food::food_ownership(runtime.world(), setup.target)
         })
     };
-    let care_food_subject = scenario.as_ref().and_then(|setup| setup.care_food_subject());
+    let care_food_subject = scenario
+        .as_ref()
+        .and_then(|setup| setup.care_food_subject());
     let lesson_food_held = |runtime: &GpuLiveBrainRuntime| {
         care_food_subject.is_some_and(|subject| subject.is_held(runtime.world()))
     };
@@ -4152,7 +4157,9 @@ fn run_foundation_training_cycle_in_owned_output(
             .as_ref()
             .map_or_else(Vec::new, |s| s.teacher_cue_tokens.clone()),
         held_food_setup: scenario.as_ref().and_then(|s| s.held_food_setup.clone()),
-        reachable_food_setup: scenario.as_ref().and_then(|s| s.reachable_food_setup.clone()),
+        reachable_food_setup: scenario
+            .as_ref()
+            .and_then(|s| s.reachable_food_setup.clone()),
         grab_food_setup: grab_setup.cloned(),
         grab_food_acquisitions,
         trained_grab_food_acquisitions,
