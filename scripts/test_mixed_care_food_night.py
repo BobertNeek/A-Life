@@ -67,14 +67,16 @@ class MixedCareTests(unittest.TestCase):
     def get(path):
         return json.loads(path.read_text())
 
-    def plan(self, extra=()):
-        argv = ["--output", str(self.output), "--binary", str(self.binary),
+    def argv(self, extra=()):
+        return ["--output", str(self.output), "--binary", str(self.binary),
                 "--checkpoint-inspector", str(self.inspector), "--source", str(self.source),
                 "--schedule", str(self.schedule), "--seed-history", str(self.history_path),
                 "--seed", "100", "--seed-count", "6", "--cutoff",
                 (dt.datetime.now(mixed.host.UTC) + dt.timedelta(hours=2)).isoformat(), *extra]
+
+    def plan(self, extra=()):
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            result = mixed.main(argv)
+            result = mixed.main(self.argv(extra))
         self.assertEqual(result, 0)
         return self.get(self.output / "plan.json")
 
@@ -307,6 +309,81 @@ class MixedCareTests(unittest.TestCase):
                 mixed.reserve(changed, self.ledger_path, commit=False)
         self.assertEqual(imported.read_bytes(), original)
         self.assertFalse(self.ledger_path.exists())
+        self.assertEqual(mixed.execute(plan)["accepted_episodes"], 3)
+        self.assertEqual(imported.read_bytes(), original)
+
+    def assert_lane_grab_symlink_blocks_plan_and_execution(self, plan, target):
+        link = self.lane / mixed.seeds.LEDGER_NAME
+        link.symlink_to(target)
+        rejected_output = self.lane / "rejected"
+        errors = io.StringIO()
+        with patch.object(mixed.inspector_io, "run_inspector") as inspector, \
+                patch.object(mixed.host, "run_child") as trainer:
+            with contextlib.redirect_stderr(errors), contextlib.redirect_stdout(io.StringIO()):
+                result = mixed.main(self.argv(["--output", str(rejected_output), "--run"]))
+            self.assertEqual(result, 1)
+            self.assertIn("Grab seed ledger must be a regular lane-local file, not a symlink", errors.getvalue())
+            self.assertFalse(rejected_output.exists())
+            # A link introduced after planning must also fail the under-lock recheck.
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(mixed.main(["--output", str(self.output), "--run", "--start"]), 1)
+            with self.assertRaisesRegex(ValueError, "Grab seed ledger.*symlink"):
+                mixed.execute(plan)
+            inspector.assert_not_called()
+            trainer.assert_not_called()
+        self.assertFalse(self.ledger_path.exists())
+        self.assertFalse((self.lane / ".eat-held-food-owner.lock").exists())
+        self.assertEqual({path.name for path in self.output.iterdir()}, {"plan.json"})
+        self.assertTrue(link.is_symlink())
+
+    def test_dangling_lane_grab_ledger_symlink_cannot_hide_exclusions(self):
+        plan = self.plan()
+        missing = self.root / "unavailable-grab-ledger.json"
+        self.assert_lane_grab_symlink_blocks_plan_and_execution(plan, missing)
+        self.assertFalse(missing.exists())
+
+    def test_live_lane_grab_ledger_symlink_rejects_even_an_explicit_target_import(self):
+        target = self.root / "regular-grab-ledger.json"
+        self.put(target, {"schema": 1, "kind": "grab-food-seed-ledger", "training_seed_ranges": [[300, 310]],
+                          "assessment_seeds": [], "allocations": []})
+        original = target.read_bytes()
+        self.history["imports"] = [{"path": str(target), "sha256": mixed.host.sha256(target)}]
+        self.put(self.history_path, self.history)
+        plan = self.plan()
+        self.assert_lane_grab_symlink_blocks_plan_and_execution(plan, target)
+        self.assertEqual(target.read_bytes(), original)
+
+    def test_live_lane_grab_ledger_symlink_without_import_is_rejected(self):
+        plan = self.plan()
+        target = self.root / "regular-grab-ledger.json"
+        self.put(target, {"schema": 1, "kind": "grab-food-seed-ledger", "training_seed_ranges": [[300, 310]],
+                          "assessment_seeds": [], "allocations": []})
+        original = target.read_bytes()
+        self.assert_lane_grab_symlink_blocks_plan_and_execution(plan, target)
+        self.assertEqual(target.read_bytes(), original)
+
+    def test_lane_grab_symlink_appearing_before_resume_preserves_existing_reservations(self):
+        plan = self.plan()
+        mixed.reserve(plan, self.ledger_path)
+        original = self.ledger_path.read_bytes()
+        link = self.lane / mixed.seeds.LEDGER_NAME
+        target = self.root / "temporarily-unavailable-grab-ledger.json"
+        for live in (False, True):
+            with self.subTest(live=live):
+                if live:
+                    self.put(target, {"schema": 1, "kind": "grab-food-seed-ledger", "training_seed_ranges": [[300, 310]],
+                                      "assessment_seeds": [], "allocations": []})
+                link.symlink_to(target)
+                with patch.object(mixed.inspector_io, "run_inspector") as inspector, \
+                        patch.object(mixed.host, "run_child") as trainer, \
+                        contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(mixed.main(["--output", str(self.output), "--run", "--resume"]), 1)
+                    inspector.assert_not_called()
+                    trainer.assert_not_called()
+                self.assertEqual(self.ledger_path.read_bytes(), original)
+                self.assertEqual({path.name for path in self.output.iterdir()}, {"plan.json"})
+                self.assertFalse((self.lane / ".eat-held-food-owner.lock").exists())
+                link.unlink()
 
     def test_history_bytes_and_missing_ledger_never_silently_reconcile(self):
         plan = self.plan()

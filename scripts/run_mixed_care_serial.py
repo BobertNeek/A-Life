@@ -127,6 +127,7 @@ def history(path, source_hashes, source_seed, lane):
         reserved += ranges
         assessments |= assessment
     grab = lane / seeds.LEDGER_NAME
+    require(not grab.is_symlink(), "Grab seed ledger must be a regular lane-local file, not a symlink")
     require(not grab.exists() or grab.resolve() in imported,
             "existing Grab ledger requires an explicit exact-byte import")
     require(seeds._contains(seeds._ranges(consumed), seeds._seed(source_seed)),
