@@ -282,7 +282,7 @@ pub(super) fn compile_decoders(
                     input_lane,
                     motor_index,
                 );
-                let weight = genetic_weight(
+                let weight = candidate_decoder_weight(
                     genome.genetic_prior_seed,
                     route_index,
                     neuron,
@@ -460,7 +460,7 @@ fn compile_n2048_decoders(
                 synapses.push(CompiledSynapse::new(
                     neuron,
                     neuron,
-                    genetic_weight(
+                    candidate_decoder_weight(
                         genome.genetic_prior_seed,
                         action_route_index,
                         neuron,
@@ -701,6 +701,8 @@ fn innate_priority_for_family(
             false,
             true,
         ),
+        // Preserve the bound contact-chemistry contract. The decoder uses
+        // observed bearing as a fallback only when contact is absent.
         CandidateActionFamily::Avoid => (
             DANGER,
             24.0 * reflex * genes.hazard_aversion,
@@ -718,6 +720,18 @@ fn innate_priority_for_family(
         (0, 0.0, None, false, false)
     } else {
         (mask, gain, cue, invert, reach)
+    }
+}
+
+// Candidate distance keeps its physical V1 meaning. Fresh readouts penalize
+// distance instead of rewarding it through positive motor activations. These
+// are mathematical readouts, not sign-constrained recurrent excitation.
+fn candidate_decoder_weight(seed: u64, route: u16, source: u32, lane: u32) -> f32 {
+    let magnitude = genetic_weight(seed, route, source, lane);
+    if lane == 2 {
+        -magnitude
+    } else {
+        magnitude
     }
 }
 
@@ -839,6 +853,8 @@ mod innate_priority_tests {
         drives.pain = 0.98;
         let mut hazard = rock;
         hazard.0[15] = -0.8;
+        hazard.0[1] = 1.0;
+        hazard.0[18] = 1.0;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);
         assert_eq!(avoid.innate_contribution(drives, food), 0.0);
         drives.pain = 0.0;

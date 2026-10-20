@@ -300,7 +300,7 @@ fn generic_families() -> [CandidateActionFamily; 6] {
         CandidateActionFamily::Avoid,
         CandidateActionFamily::Ingest,
         CandidateActionFamily::Contact,
-        CandidateActionFamily::Contact,
+        CandidateActionFamily::Other,
     ]
 }
 

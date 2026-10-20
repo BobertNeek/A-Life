@@ -33,7 +33,6 @@ fn update(@builtin(global_invocation_id) id: vec3<u32>) {
         let c = coefficients[pair * parameters.weights + w];
         gradient += metrics[pair].y * (c.x * c.y - c.z * c.w);
     }
-    // The fixed source's ActionCandidate routes are MotorProposal projections.
-    // Preserve their existing production genetic sign constraint.
-    weights[w] = max(0.0, weights[w] + parameters.rate * gradient / f32(parameters.pairs));
+    // Signed decoder coefficients do not inherit recurrent route sign rules.
+    weights[w] += parameters.rate * gradient / f32(parameters.pairs);
 }
