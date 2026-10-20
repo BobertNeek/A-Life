@@ -79,3 +79,30 @@ Qualification follow-up checks: three `rehearse_n2048_care` binary tests passed;
 strict foundation-training all-target Clippy and the CLI build passed. Bounded-mode
 missing-source admission and rejection of combined `--qualify --compare` passed
 as executable smoke checks with no output/device work. Docs remained 77/77.
+
+## Separate source-ancestry follow-on
+
+The bounded PC candidate remains b7a67384075223be24e5375a7fd3bfe96995042f.
+The `feat/rehearsal-source-ancestry` branch is a separate follow-on: schema 2
+binds the real behavioral receipt, exact parent file/manifest hashes, source
+policy/founder identity, objective versions, GPU execution domain and unchanged
+historical freshness. It requires both optimizer ages to advance by the single
+actual update. Publication follows the complete receipt. A device-free adapter
+returns the full founder/actor/value and verified provenance; it does not reserve
+seeds, resolve missing ancestors, restore a life or extend ordinary care resume.
+
+The existing independent R2 reviewer checked only this diff against b7a67384 and
+found no blocking correctness or provenance issue. No additional external review
+job or hardware workload was launched. Eight simulator-rehearsal library tests
+passed, including the two-link source chain, full checkpoint preservation,
+unsealed/altered receipt rejection and exact optimizer-age checks. Strict
+foundation-training all-target Clippy, formatting, whitespace, docs 77/77 and
+static core boundaries passed. A test-only f32/f64 JSON comparison was corrected
+to compare the same typed checkpoint encoding before the successful test run.
+
+`docs/SIMULATOR_REHEARSAL_INTEROP.md` records the gameplay asset mechanism and
+the remaining shared `FoundationTrainingHandoffV1`/ordinary-care admission work.
+The CPU owner owns the common type; CPU/group adapters must use the real receipt
+name and preserve both Adam histories, execution provenance and source ancestry.
+Schema 1 is not silently upgraded. This follow-on adds no hardware, measured
+learning-benefit or cross-backend continuation evidence.

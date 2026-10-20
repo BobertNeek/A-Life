@@ -81,6 +81,12 @@ perceptions, sampled commands, behavior probabilities and sealed outcomes. The
 continuation manifest binds exported weights, actor/value states and residual
 critic evidence. Native cycle files are never fabricated.
 
+See [Founder and optimizer handoff](SIMULATOR_REHEARSAL_INTEROP.md) for the
+explicit gameplay founder selection, the bounded candidate's schema 1 contract,
+the separate schema 2 ancestry follow-on, and the still-pending ordinary training
+source-admission adapter. Gameplay asset loading preserves the founder; offline
+optimizer continuation requires the complete training package.
+
 Newly constructed scenes are new within this experiment; this runner has no
 campaign-wide seed ledger. All historical freshness remains **unknown**. Holdout
 seeds are disjoint from every planned collection scene, but historical unseen-scene

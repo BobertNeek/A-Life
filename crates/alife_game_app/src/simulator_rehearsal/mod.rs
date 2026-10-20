@@ -17,6 +17,62 @@ use snapshots::*;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+/// Read-only rehearsal adapter for shared checkpoint admission. This is founder
+/// training state, not a restored organism or a seed-freshness admission.
+pub struct SimulatorRehearsalTrainingSource {
+    pub inspection: crate::FoundationCheckpointInspection,
+    pub asset: FoundationWeightAsset,
+    pub actor: alife_training::FoundationTrainerCheckpoint,
+    pub value: alife_training::PpoValueHeadCheckpoint,
+    pub receipt_file: &'static str,
+    pub manifest_file: &'static str,
+    pub biological_objective_version: u16,
+    pub critic_objective_version: u16,
+    pub execution_domain: &'static str,
+    pub compiler_world_seed: u64,
+    /// Verified exact receipt/manifest contents for provenance and ancestry.
+    pub receipt: serde_json::Value,
+    pub manifest: serde_json::Value,
+}
+
+/// Decode and validate a schema2 rehearsal package before creating any output,
+/// seed reservation, world, GPU backend or optimizer. Native-cycle sources use
+/// their own admission path. Callers must separately apply their ordinary seed,
+/// execution-domain and objective compatibility rules; no freshness is asserted.
+pub fn admit_simulator_rehearsal_training_source(
+    source: &Path,
+    expected_policy: u64,
+) -> Result<SimulatorRehearsalTrainingSource> {
+    if !source.join("rehearsal-continuation.json").try_exists()? {
+        return Err("simulator source requires its own continuation manifest".into());
+    }
+    let inspection = continuation::inspect(source, expected_policy)?;
+    let read = |name| continuation::read_verified(source, name, &inspection);
+    let asset = FoundationWeightAsset::decode_canonical(&read("trained.alife-foundation")?)?;
+    let actor = serde_json::from_slice(&read("actor-checkpoint.json")?)?;
+    let value = serde_json::from_slice(&read("value-checkpoint.json")?)?;
+    let receipt = serde_json::from_slice(&read("rehearsal.json")?)?;
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&read("rehearsal-continuation.json")?)?;
+    let compiler_world_seed = manifest["seed"]
+        .as_u64()
+        .ok_or("missing compiler scene seed")?;
+    Ok(SimulatorRehearsalTrainingSource {
+        inspection,
+        asset,
+        actor,
+        value,
+        receipt_file: "rehearsal.json",
+        manifest_file: "rehearsal-continuation.json",
+        biological_objective_version: 2,
+        critic_objective_version: 1,
+        execution_domain: "gpu-wgsl",
+        compiler_world_seed,
+        receipt,
+        manifest,
+    })
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SimulatorRehearsalConfig {
     pub seed: u64,
@@ -96,8 +152,9 @@ pub struct SimulatorRehearsalReceipt {
     pub generalization_evidence: &'static str,
 }
 
-/// The source must be a verified native objective2 cycle. Neither training head
-/// can be initialized or reset by this entry point. The original source is read-only.
+/// The source must be a verified native objective2 cycle or exact simulator
+/// continuation. Neither training head can be initialized or reset here.
+/// The original source is read-only.
 pub fn run_simulator_rehearsal(
     source: &Path,
     output: &Path,
@@ -670,13 +727,6 @@ pub fn run_simulator_rehearsal(
     if !next_cohort_checked {
         return Err("exported next cohort produced no real decision".into());
     }
-    continuation::publish(
-        output,
-        policy,
-        inspection.founder_seed_base,
-        trainer.optimizer_step(),
-        final_value.optimizer_step,
-    )?;
     let receipt = SimulatorRehearsalReceipt {
         schema: "alife.simulator-rehearsal.v1",
         config,
@@ -710,6 +760,14 @@ pub fn run_simulator_rehearsal(
     std::fs::write(
         output.join("rehearsal.json"),
         serde_json::to_vec_pretty(&receipt)?,
+    )?;
+    // Publish last: an incomplete run has no admissible continuation marker.
+    continuation::publish(
+        output,
+        policy,
+        &receipt.source,
+        trainer.optimizer_step(),
+        final_value.optimizer_step,
     )?;
     Ok(receipt)
 }
