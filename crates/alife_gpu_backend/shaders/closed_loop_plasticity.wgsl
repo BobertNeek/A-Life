@@ -222,6 +222,19 @@ fn eligibility_at_outcome(staged:f32, reference_decay:f32, outcome:GpuOutcomeCre
   return staged * eligibility_decay_for_ticks(reference_decay, elapsed);
 }
 
+// Both terms follow this synapse's temporally credited eligibility. Receptor
+// activation alone must not cancel uncredited inherited/consolidated strength.
+// Credit magnitude keeps Oja contraction nonnegative for either outcome or
+// eligibility sign; persisted traces remain eligible on currently masked routes.
+fn fast_plasticity_delta(
+  learning_rate:f32, normalization_rate:f32, alpha:f32,
+  local_third_factor:f32, credited_eligibility:f32, post:f32, effective:f32,
+) -> f32 {
+  let signed_credit = local_third_factor*credited_eligibility;
+  return learning_rate*alpha*signed_credit
+    - normalization_rate*abs(signed_credit)*post*post*effective;
+}
+
 fn evaluate_fast_plasticity_synapse(
   brain:GpuBrainSlotRecord,
   header:GpuLearningHeader,
@@ -254,8 +267,8 @@ fn evaluate_fast_plasticity_synapse(
   let credited_eligibility = eligibility_at_outcome(staging_eligibility, receptor.eligibility_decay, outcome);
   let local_third_factor = project_third_factor(receptor,outcome);
   let effective = genetic + lifetime + alpha*fast;
-  let delta = learning_rate*alpha*local_third_factor*credited_eligibility
-    - normalization_rate*post*post*effective;
+  let delta = fast_plasticity_delta(learning_rate,normalization_rate,alpha,
+    local_third_factor,credited_eligibility,post,effective);
   let next_fast = clamp(fast+delta,fast_min,fast_max);
   let guard =
       plasticity_guard_bit(0u, !finite_plasticity(staging_eligibility))
