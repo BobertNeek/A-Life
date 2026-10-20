@@ -860,13 +860,12 @@ impl GpuLiveBrainRuntime {
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             #[cfg(feature = "foundation-training")]
             let before_training = if self.training_sampling.is_some() {
-                batch
-                    .iter()
-                    .map(|prepared| {
-                        self.backend
-                            .capture_training_state(prepared.handle, prepared.frame.tick())
-                    })
-                    .collect::<Result<Vec<_>, _>>()?
+                self.backend.capture_training_states(
+                    &batch
+                        .iter()
+                        .map(|prepared| (prepared.handle, prepared.frame.tick()))
+                        .collect::<Vec<_>>(),
+                )?
             } else {
                 Vec::new()
             };
@@ -921,17 +920,37 @@ impl GpuLiveBrainRuntime {
                 self.backend.tick_memory_batch(&memory_batch)?
             };
             #[cfg(feature = "foundation-training")]
+            let after_training = if self.training_sampling.is_some() {
+                self.backend.capture_training_states(
+                    &batch
+                        .iter()
+                        .map(|prepared| (prepared.handle, prepared.frame.tick()))
+                        .collect::<Vec<_>>(),
+                )?
+            } else {
+                Vec::new()
+            };
+            #[cfg(feature = "foundation-training")]
+            if self.training_sampling.is_some()
+                && (before_training.len() != batch.len()
+                    || after_training.len() != batch.len()
+                    || gpu_ticks.len() != batch.len())
+            {
+                return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
+            }
+            #[cfg(feature = "foundation-training")]
             let mut training_rows = Vec::new();
             #[cfg(feature = "foundation-training")]
-            for ((prepared, gpu_tick), before) in batch.iter().zip(&gpu_ticks).zip(before_training)
+            for (((prepared, gpu_tick), before), after) in batch
+                .iter()
+                .zip(&gpu_ticks)
+                .zip(before_training)
+                .zip(after_training)
             {
                 let behavior = gpu_tick
                     .training_rollout
                     .clone()
                     .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                let after = self
-                    .backend
-                    .capture_training_state(prepared.handle, prepared.frame.tick())?;
                 training_rows.push((
                     prepared.frame.clone(),
                     prepared.memory_upload.clone(),

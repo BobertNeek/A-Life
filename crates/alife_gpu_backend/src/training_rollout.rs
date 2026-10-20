@@ -8,7 +8,7 @@ pub(crate) const TRAINING_PAYLOAD_TAG: u32 = 0x8000_0000;
 /// Exact GPU state at an explicitly requested training boundary. Offsets in
 /// brain_slot.word_ranges() are absolute; subtract mutable_word_base to index words.
 /// Kept outside portable saves and obtained through the existing GPU readback.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GpuTrainingStateSnapshot {
     pub handle: crate::GpuBrainHandle,
     pub tick: u64,

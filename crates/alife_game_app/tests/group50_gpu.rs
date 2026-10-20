@@ -39,6 +39,42 @@ fn fifty_private_organisms_complete_native_training_and_optimizer_handoff() {
     assert!(receipt["verified_replay_boundaries"].as_u64().unwrap() >= 50);
     assert!(receipt["actor_optimizer_updates"].as_u64().unwrap() > 0);
     assert!(receipt["value_optimizer_updates"].as_u64().unwrap() > 0);
+    assert_eq!(receipt["replay_persistence"]["data_sync_calls"], 1);
+    assert_eq!(receipt["replay_persistence"]["durable_cohort_commits"], 1);
+    let captured = receipt["episodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["captured_rows"].as_u64().unwrap())
+        .sum::<u64>();
+    assert_eq!(
+        receipt["replay_persistence"]["records"].as_u64(),
+        Some(captured)
+    );
+    assert!(
+        receipt["training_capture"]["captured_rows"]
+            .as_u64()
+            .unwrap()
+            >= 2 * captured
+    );
+    assert!(
+        receipt["training_capture"]["readback_submissions"]
+            .as_u64()
+            .unwrap()
+            < receipt["training_capture"]["captured_rows"]
+                .as_u64()
+                .unwrap()
+    );
+    assert!(output.join("replay/cohort-replay.bundle").is_file());
+    assert!(!output.join("replay/cohort-replay.pending").exists());
+    let replay_source = serde_json::from_value(receipt["source"].clone()).unwrap();
+    let recovered =
+        alife_game_app::inspect_foundation_cohort_replay(&output.join("replay"), &replay_source)
+            .unwrap();
+    assert!(
+        matches!(recovered,alife_game_app::FoundationCohortReplayRecovery::Committed{records,..}
+        if records as u64 == captured)
+    );
     assert!(receipt["next_cohort_optimizer_rebound"].as_bool().unwrap());
     assert!(receipt["peak_replay_device_bound_bytes"].as_u64().unwrap() <= 512 * 1024 * 1024);
     assert!(

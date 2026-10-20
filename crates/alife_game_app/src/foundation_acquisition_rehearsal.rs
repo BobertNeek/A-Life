@@ -330,6 +330,7 @@ mod tests {
     fn rehearse_one_real_loss_row_with_bounded_same_segment_burn_in() {
         let references = (0..300)
             .map(|row| FoundationReplayRecordRef {
+                cohort: None,
                 record_index: row,
                 segment: u64::from(row >= 220),
                 tick: row,

@@ -101,3 +101,51 @@ Final decision: source/tests/review are published for integration. Keep the PR
 draft until coordinated real-adapter qualification, accepted source validation and
 the required CI checks are reviewed. Operator commands, resource scopes and safe
 failure handling are in `docs/training/group50-2026-10-19.md`.
+
+## Batch capture and cohort replay successor
+
+Baseline is instrumented `4cca46b49e1f8a295811b18a1fe6b9ac68496366`, kept separate
+from PR111's `52559f55` head. The PC owner's read-only evidence resolves the prior
+timeout: the generation1 base manifest appeared at61.218521 seconds, with50 tick0
+organisms, no non-null GPU brains/runtime and no assets. Its referenced base file
+was50,513,021 bytes. The subsequent160 assets include50 each of active memory,
+topology sidecars and exact cognition for those same50 IDs at tick0, continuing
+through118.190058 seconds. The120.228-second attempt therefore demonstrated
+ongoing initial checkpoint capture. It did not establish that capture returned,
+exact publication/rebind finished, or any training tick ran. Its seed remains
+consumed; no retry or new GPU run was performed here.
+
+The staged training path previously performed one mutable-state wait before and
+after each awake organism. Nominal50x16 collection requires17 captured decisions
+per life, hence1700 state captures and850 separately synchronized replay records.
+The new capture API preflights the complete requested capability inventory, copies
+private mutable/uncached structural ranges into bounded shared staging packets,
+maps each packet once and restores request order. The existing single-row capture
+remains the real-GPU differential reference. Neither path advances neural state on
+the CPU. The caller supplies canonical frame tick labels; existing staged receipt
+checks retain action, generation, private context and old-policy ownership.
+
+Group replay now writes one pending bundle with independent compressed/authenticated
+records and an indexed, hash-bound footer. One successful data sync precedes exclusive
+durable publication after collection completes. Unix creation syncs directory
+ancestry, and publication syncs the containing directory; Windows follows the
+project's write-through rename protocol without replacing existing content.
+Recovery verifies the index and every record; pending bytes never become a native
+checkpoint or free a consumed seed. Partial encoding poisons the pending cohort.
+Ordinary serial writers retain their record-file protocol. Progress distinguishes
+staged rows from the sealed cohort; actual readback rows/submissions/bytes and cohort
+sync/commit counts are recorded without a speedup claim.
+
+Focused independent R2 review identified and closed module visibility and ancestor
+directory durability issues; the final delta review found no remaining blockers.
+Real GPU comparison, N2048 update/export/rebind and Windows execution remain
+unqualified in this GPU-free cloud. CPU fixtures do not certify their behavior.
+
+Focused validation passed:9 cohort crash/integrity tests,15 group/native-checkpoint
+contracts,3 replay codec/I/O tests and1 packet-order/bounds test. The existing CPU
+timing benchmark remains ignored. The fifty-row real-GPU single-vs-batch fixture
+and the complete N2048 group50 handoff fixture both compile with explicit GPU-test
+features; neither executed. Strict Clippy passed for the game library/group binary
+and for the GPU library/differential fixture. Formatting, diff lint and docs77/77
+passed. No workflows were changed or manually dispatched. Publication remains a
+draft successor, with broad CI/review jobs skipped as requested.

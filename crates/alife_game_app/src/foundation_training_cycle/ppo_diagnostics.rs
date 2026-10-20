@@ -146,6 +146,7 @@ mod tests {
             .collect();
         let references = (0..count)
             .map(|row| FoundationReplayRecordRef {
+                cohort: None,
                 record_index: row as u64,
                 segment: 0,
                 tick: row as u64,

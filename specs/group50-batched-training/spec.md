@@ -21,3 +21,13 @@ compile and strict Clippy; real GPU group-50 smoke remains blocked on GPU hardwa
 Independent R2 review before final publication. References: AOA-AUTH-001..005,
 AOA-INV-007/009, AOA-LEARN-002..007, AOA-FOUND-004/006, AOA-PERF-003/005/006,
 AOA-PERSIST-002/004.
+
+Batch-I/O successor acceptance: preflight ordered handle capabilities before
+bounded shared GPU readback, preserving exact pre/post private state and current
+dispatch/behavior ownership. Preserve single-row capture for real-device
+differential tests; use no CPU neural substitute. Stream group records into one
+indexed, authenticated pending bundle. A single data sync and exclusive durable
+publication seals the cohort only after collection completes. Pending/torn data
+must never authorize a native continuation or release consumed seeds. Add CPU
+ordering/codec/crash/recovery tests and compile real-GPU comparison fixtures;
+report hardware execution and Windows publication as unqualified until observed.

@@ -629,6 +629,10 @@ fn run_owned(
         Ok(serde_json::to_vec(&trainer.checkpoint()?)?)
     })?;
     let source = foundation_replay_source(&phenotype, &asset, policy_version, &checkpoint_bytes)?;
+    let mut replay_cohort = crate::foundation_training::CohortReplayWriter::new(
+        &output.join("replay"),
+        source.clone(),
+    )?;
     let mut lives = population
         .into_iter()
         .map(|(id, body, energy)| {
@@ -729,10 +733,11 @@ fn run_owned(
                 .push(crate::foundation_training::snapshot_activation(
                     &step.after_inference,
                 )?);
-            life.references.push(life.writer.append(&step)?);
+            life.references
+                .push(life.writer.append_cohort(&step, &mut replay_cohort)?);
             collected_rows += 1;
             progress.counts(
-                "collection_row",
+                "collection_row_staged",
                 serde_json::json!({
                 "organism_id":life.id.raw(),"organism_rows":life.references.len(),
                 "organism_row_target":request.decisions_per_organism+1,
@@ -815,10 +820,28 @@ fn run_owned(
         }
         captured = runtime.take_foundation_training_steps();
     }
+    if lives.values().any(|life| {
+        life.references
+            .len()
+            .saturating_sub(usize::from(life.death.is_none()))
+            == 0
+    }) {
+        return Err(
+            "group organism has no complete learning transition; cohort remains uncommitted".into(),
+        );
+    }
+    let phase = progress.begin("replay_cohort_seal");
+    let replay_commit = replay_cohort.seal()?;
+    phase.complete();
+    progress.counts(
+        "replay_cohort_sealed",
+        serde_json::to_value(&replay_commit)?,
+    );
     collection_phase.complete();
     let collection_seconds = collection_started.elapsed().as_secs_f64();
     let replay_phase = progress.begin("value_restore_and_replay_prepare");
     let runtime_metrics = runtime.performance_metrics();
+    let training_capture_metrics = runtime.foundation_training_capture_metrics();
     let mut value = PpoTrainingState::from_checkpoint(old_value.clone())?;
     let mut batches = Vec::new();
     let mut life_vec = Vec::new();
@@ -1210,7 +1233,7 @@ fn run_owned(
         "time_to_first_genuine_success_seconds":life_vec.iter().flat_map(|l|&l.successes).filter_map(|v|v["elapsed_seconds"].as_f64()).reduce(f64::min),
         "success_diversity_scope":"distinct_organisms_and_initial_local_scenes_in_one_shared_world; correlated_outcomes_possible",
         "retention_evidence":"unknown_requires_trainer_removed_followup","neural_work_captured":neural_work,"max_collector_batch_rows":max_batch_rows,"GPU_batch_path":"staged_tick/tick_memory_batch_training/class_arena_hardware_rows","collector_batch_row_histogram":batch_histogram,"no_progress_poll_count":no_progress_poll_count,
-        "runtime_performance":runtime_metrics,"hardware":runtime.hardware_receipt(),"collector_admission":runtime.admission_receipt(),"replay_windows":all_spans.len(),"effective_gradient_batch_windows":50,
+        "runtime_performance":runtime_metrics,"training_capture":training_capture_metrics,"replay_persistence":replay_commit,"hardware":runtime.hardware_receipt(),"collector_admission":runtime.admission_receipt(),"replay_windows":all_spans.len(),"effective_gradient_batch_windows":50,
         "active_BPTT_graphs":1,"transient_packed_buffer_sets_bound":2,"peak_replay_device_bound_bytes":peak_replay_bytes,"replay_device_limit_bytes":request.replay_device_limit_bytes,"adapter_storage_binding_limit_bytes":limits.binding,"replay_host_limit_bytes":request.replay_host_limit_bytes,
         "verified_replay_boundaries":verified_replay_boundaries,"replay_numerical_tolerance":"abs<=1e-4+1e-4*abs(expected)",
         "GPU_qualification":"requires_real_adapter_run; no_CPU_receipt_substitution"});
@@ -1276,6 +1299,7 @@ mod tests {
     fn recurrent_spans_never_cross_organisms_or_sleep_boundaries() {
         let refs = (0..1000)
             .map(|i| FoundationReplayRecordRef {
+                cohort: None,
                 record_index: i,
                 segment: u64::from(i >= 600),
                 tick: i + 1,
