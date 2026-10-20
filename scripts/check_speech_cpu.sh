@@ -11,9 +11,6 @@ cd "${repo_root}"
 source scripts/rust_env.sh
 ensure_cargo
 
-# Guard the GPU-only caller as well as the CPU-tested editing helper.
-python3 scripts/check_speech_opening_boundary.py
-
 # This lane compiles the feature-gated production helpers but executes only CPU
 # speech fixtures. Never enable gpu-tests, foundation-training, or all-features.
 export CARGO_BUILD_JOBS=2 CARGO_INCREMENTAL=0

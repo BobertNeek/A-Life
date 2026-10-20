@@ -7,7 +7,7 @@ description: Use for deep plan, /deep-plan, lateral planning, complex architectu
 
 Repository revision: 2026-10-01; recovered on 2026-10-14 from commit
 `a6d76d9014aab93167b2eeabcf66c7e5ffebc201`. Adapted from the May 22
-`Complete_Deep_Planning_SKILL.md`; see the [dated revision review](../../../docs/reviews/2026-10-01-deep-planning-skill.md).
+`Complete_Deep_Planning_SKILL.md`; the revision review remains in Git history.
 The reusable workflow is retained. Its A-Life sample plans are historical,
 source-bound analysis; they do not authorize implementation or external work.
 

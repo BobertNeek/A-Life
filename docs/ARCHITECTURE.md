@@ -68,42 +68,35 @@ recall every four ticks or on significant changes, searching at most sixteen
 records per channel. Concept summaries and quiet topology observations run
 every ten ticks. Immediate senses, neural selection and GPU outcome learning
 remain at tick rate. Each candidate receives a fresh current-frame decision key,
-even when its expectancy is cached. Owner/profile-bound caches are transient;
-individual and perceptual-category lookup keys retain the organism ID. Full
-bank checksums remain at save/load and compaction boundaries. Foundation
-training retains the audited per-frame path, with channel reuse receipts and
-sixty-four-record searches. See the
-[dated implementation and evidence](performance/20261013-approximate-cognition-runtime.md).
-Candidate memory
-admits consequences, surprises, manipulation, blocked attempts, and first novel
-inspection rather than routine movement ticks. Conflicting individual outcomes
-remain separate, with current same-context evidence preserved during bounded
-compression. Unknown individuals may borrow discounted evidence from matching
-observable colour, material, shape, chemical, and temperature cues; known
-individual namespaces never fall back to category evidence. Low-value unused
-memories lose confidence and eviction priority, while strong danger/reward is
-protected. Corroborating measured outcomes refresh retention without increasing
-belief through recall alone. These mechanisms supply evidence to WGSL neural
-arbitration.
+even when its expectancy is cached. Foundation training retains the audited
+per-frame path with batched GPU mutable-state capture (`capture_training_state_batch`).
+Candidate memory admits consequences, surprises, manipulation, blocked attempts,
+and first novel inspection rather than routine movement ticks.
+
+Action arbitration uses signed `ActionCandidate` and `SpeechPayload` decoder projections
+and signed `TemporalPredictive -> ActionPlanning` (`MotorProposal`) tracts, with dedicated
+motor neuron populations per `CandidateActionFamily` (`Ingest`, `Contact` for `Grab`,
+`Other` for `Play`, `Manipulate`, `Locomote`, and `Avoid`). Innate `Approach` priors
+are valence-aware via chemical/recalled valence (`feature 15`), and `Avoid` includes a
+non-contact spatial retreat fallback.
 
 GPU unavailability is typed unavailability. CPU reference helpers do not take over the production neural policy.
 
 ## Inherited biochemical learning signals
 
 Chemical dynamics remain in the inherited sparse graph: species baselines and
-decay, reactions, emitters, and receptors. The same graph now carries a
+decay, reactions, emitters, and receptors. The same graph carries a
 `BiologicalValueProfile` for measured drive/hormone changes, energy, injury, and
 failed-attempt disappointment. Its two homologs use the existing chemistry
 inheritance path. A sealed biology snapshot stores the expressed profile and
 validates it against its phenotype; the world cannot choose those weights.
 
 Baseline dopamine and cortisol modulate measured consequences rather than
-rewarding/punishing an action merely for existing. The founder PPO objective
-uses this same causal frame and the inherited action-credit receptor profile,
-including sleep gaps and terminal deterioration. Older optimizer/value states
-were trained against the previous objective; do not silently mix them into a
-new campaign. See the [2026-09-25 chemical audit](BIOCHEMICAL_CREDIT_AUDIT_2026-09-25.md)
-for every active species, defaults, evidence, and remaining gaps.
+rewarding/punishing an action merely for existing. In WGSL waking fast plasticity
+(`closed_loop_plasticity.wgsl`), Oja homeostatic normalization is gated by
+`clamp(abs(local_third_factor * credited_eligibility), 0.0, 1.0)` so unrewarded
+activity does not decay `genetic + lifetime` weights. The founder PPO objective
+uses this same causal frame and the inherited action-credit receptor profile.
 
 ## Production voxel startup
 

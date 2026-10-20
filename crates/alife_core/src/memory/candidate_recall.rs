@@ -215,7 +215,8 @@ pub(super) fn recall_target_channel_with_budget(
                     | CandidateActionFamily::Approach
                     | CandidateActionFamily::Contact)
             ) || (record.family_raw == u16::from(CandidateActionFamily::Other.raw())
-                && record.action_kind_raw == ActionKind::Hold.raw())
+                && (record.action_kind_raw == ActionKind::Hold.raw()
+                    || record.action_kind_raw == ActionKind::Interact.raw()))
         })
         .collect::<Vec<_>>();
     social_matches.sort_by(|(left, left_score), (right, right_score)| {

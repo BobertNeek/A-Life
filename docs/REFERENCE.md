@@ -114,8 +114,7 @@ initial and repeated spatial requests; absence of a demonstrator alone does not
 make a probe silent. Care demonstrations select Eat for pickup and consumption.
 Care success uses exact learner/target `FoundationFoodOutcome` nourishing-meal
 evidence; blocked actions are reported separately. The existing explicit-Grab
-experiment retains its distinct qualification and credit boundary. See the
-[care-first next-run plan](training/care-first-next-run-2026-10-19.md).
+experiment retains its distinct qualification and credit boundary.
 
 ## Brain classes
 
@@ -220,7 +219,3 @@ Save validation is fail-stop for invalid neural state. Checkpoint and save ident
 ## Superseded policy
 
 The current GPU-authority model supersedes old production CPU consolidation authority, GPU parity-gated CPU shadows, and automatic CPU neural fallback. Compatible save safety, sparse-layout, world-authority, sealed-patch, and evidence-honesty rules remain in force.
-
-Retired implementation snapshots live under `archive/legacy_true25d` and
-`archive/legacy_app_milestones`. They are source history only. Active code,
-commands, manifests, packages, and tests must not depend on those directories.

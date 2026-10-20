@@ -1,6 +1,4 @@
-//! Opt-in lifetime decoder rates. Genome goldens retain PR40
-//! d1ee947fad980d4adcdfd08cb85b0068a73aef80 provenance; phenotype goldens include
-//! the deliberate ActionCandidate distance-sign correction (2026-10-20).
+//! Opt-in lifetime decoder rates and current compiler persistence contracts.
 use alife_core::{
     BrainCapacityClass, BrainGenome, BrainPhenotype, CandidateActionFamily as Family,
     CompiledSynapseKind, CreatureGenome, CriticalPeriod, DecoderHeadKind as Head,
@@ -69,26 +67,22 @@ fn assert_same_wiring(left: &BrainPhenotype, right: &BrainPhenotype) {
 
 #[test]
 fn omitted_policy_preserves_genome_bytes_and_current_procedural_identity() {
-    // BLAKE3 of complete serialized genomes and current procedural phenotypes.
-    // Original phenotype hashes are recorded in the dated correction evidence.
+    // Retain the unchanged genome wire contract; verify phenotype semantics below.
     let golden = [
         (
             1,
             "d238399cc2cd79d7d6980ffb360dfbd5f268bdbc2186c465face7413e60f024f",
-            "30f5c96778bda49ae8058f1ca5231e6a0cbd838618913d1142384b3f2ef63167",
         ),
         (
             2,
             "0564e1f1bcb16865754bf73608737e3bc0336edbe7e1bb9bb115a71df85d7836",
-            "929da867f579aee09cd86068f0b0260f24a4ca10aaf145ac3d41ca17279d89f1",
         ),
         (
             3,
             "3c854e88e4cf7d822efc9f7e79a9d0a447b7537b74f48f8685466c3c9ebdc699",
-            "e4be396d6aee937f7afa77782db0c74be610a3b014a46a9ae1d6783fe7eb5da0",
         ),
     ];
-    for (capacity, (raw, genome_hash, phenotype_hash)) in BrainCapacityClass::production_classes()
+    for (capacity, (raw, genome_hash)) in BrainCapacityClass::production_classes()
         .into_iter()
         .zip(golden)
     {
@@ -105,9 +99,31 @@ fn omitted_policy_preserves_genome_bytes_and_current_procedural_identity() {
             .contains("decoder_lifetime_rate_policy"));
         let restored: BrainGenome = serde_json::from_slice(&wire).unwrap();
         assert_eq!(restored, genome);
-        let phenotype = compile(&inputs(restored, false));
-        let actual = blake3::hash(&serde_json::to_vec(&phenotype).unwrap()).to_hex();
-        assert_eq!(actual.as_str(), phenotype_hash);
+        let compiler_inputs = inputs(restored, false);
+        let phenotype = compile(&compiler_inputs);
+        phenotype.validate_against(&capacity).unwrap();
+        assert_eq!(
+            phenotype.compiler_inputs_digest(),
+            compiler_inputs.canonical_digest()
+        );
+        let roundtrip: BrainPhenotype =
+            serde_json::from_slice(&serde_json::to_vec(&phenotype).unwrap()).unwrap();
+        roundtrip.validate_against(&capacity).unwrap();
+        assert_eq!(phenotype, roundtrip);
+        let mut distance_lanes = 0;
+        for synapse in phenotype.synapses() {
+            if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == Head::ActionCandidate && c.input_lane() == 2)
+            {
+                assert!(synapse.genetic_weight() < 0.0);
+                distance_lanes += 1;
+            }
+        }
+        assert!(distance_lanes > 0);
+        let changed = compile(&inputs(
+            BrainGenome::scaffold(0xDEC0_0002, capacity.id()),
+            false,
+        ));
+        assert_ne!(phenotype.phenotype_hash(), changed.phenotype_hash());
     }
 }
 

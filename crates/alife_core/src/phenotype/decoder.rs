@@ -92,6 +92,8 @@ impl CandidateDecoderFamilyPlan {
             .map(|(_, value)| *value)
             .fold(0.0_f32, f32::max);
         let cue = self.innate_cue_lane.map_or(1.0, |lane| {
+            let noncontact_bearing = (1.0 - features.0[18])
+                * (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0);
             let signal = if lane == INNATE_NONCONTACT_CUE {
                 // Body-forward proposals have no object contact; the no-motion
                 // candidate has neither bearing nor contact and gets no prior.
@@ -113,7 +115,15 @@ impl CandidateDecoderFamilyPlan {
             } else if self.innate_cue_inverted {
                 -signal
             } else {
-                signal
+                let feature = features.0[usize::from(lane)];
+                if self.innate_cue_inverted && lane == 15 && features.0[18] == 0.0 && feature == 0.0
+                {
+                    0.55 * noncontact_bearing
+                } else if self.innate_cue_inverted {
+                    -feature
+                } else {
+                    feature
+                }
             };
             ((signal - 0.4) / 0.6).clamp(0.0, 1.0)
         });
