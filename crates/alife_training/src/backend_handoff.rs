@@ -7,6 +7,40 @@ use alife_core::{
     BrainCapacityClass, BrainPhenotype, FoundationWeightAsset, PhenotypeCompiler,
     PhenotypeCompilerInputs, ScaffoldContractError,
 };
+/// Resolve existing output parents (including symlinks) without creating them,
+/// and reject containment in either direction with every preserved source.
+/// Callers must write through the returned path after successful admission.
+pub fn resolve_isolated_training_output<'a>(
+    output: &std::path::Path,
+    preserved_sources: impl IntoIterator<Item = &'a std::path::Path>,
+) -> std::io::Result<std::path::PathBuf> {
+    use std::path::{Component, PathBuf};
+    let mut resolved = PathBuf::new();
+    for component in std::path::absolute(output)?.components() {
+        match component {
+            Component::CurDir => continue,
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            _ => resolved.push(component.as_os_str()),
+        }
+        match std::fs::symlink_metadata(&resolved) {
+            Ok(_) => resolved = resolved.canonicalize()?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error),
+        }
+    }
+    for source in preserved_sources {
+        let source = source.canonicalize()?;
+        if resolved.starts_with(&source) || source.starts_with(&resolved) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "training output must not overlap any read-only native source directory",
+            ));
+        }
+    }
+    Ok(resolved)
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FoundationTrainingBackendV1 {
     NativeCpu,

@@ -63,6 +63,10 @@ separate group50 worker owns population placement/vectorized execution.
 Seed allocation remains caller-owned. The CPU receipt records historical
 freshness as **Unknown** and preserves the complete source receipt and exact
 source hashes. It does not reserve seeds or claim accepted mixed-care ancestry.
+Before reading the source or creating output, the CPU CLI resolves existing
+output-parent symlinks and rejects overlap with the canonical source directory.
+Direct nesting, nonexistent parent paths and symlink aliases leave the complete
+source tree unchanged.
 The source must be a completed native handoff (`next-cohort-admitted`) or a
 completed CPU handoff (`complete-fresh-cohort-cpu`), or complete group50 native receipt, with matching asset, full
 checkpoints, objective versions and ages. Specialized critic-correction sources pass that existing native admission at

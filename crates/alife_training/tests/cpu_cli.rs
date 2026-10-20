@@ -10,6 +10,27 @@ fn run(args: &[&str]) -> std::process::Output {
 fn text(path: &Path) -> &str {
     path.to_str().unwrap()
 }
+fn snapshot_tree(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Option<Vec<u8>>> {
+    fn visit(
+        root: &Path,
+        path: &Path,
+        files: &mut std::collections::BTreeMap<std::path::PathBuf, Option<Vec<u8>>>,
+    ) {
+        for entry in fs::read_dir(path).unwrap() {
+            let path = entry.unwrap().path();
+            let key = path.strip_prefix(root).unwrap().to_path_buf();
+            if path.is_dir() {
+                files.insert(key, None);
+                visit(root, &path, files);
+            } else {
+                files.insert(key, Some(fs::read(path).unwrap()));
+            }
+        }
+    }
+    let mut files = std::collections::BTreeMap::new();
+    visit(root, root, &mut files);
+    files
+}
 #[test]
 fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() {
     let root = std::env::temp_dir().join(format!(
@@ -37,6 +58,38 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
+    let source_before = snapshot_tree(&first);
+    let forbidden_outputs = vec![
+        first.clone(),
+        first.join("new-parent/experiment"),
+        root.join("new-parent/../first/another-parent/experiment"),
+        root.clone(),
+    ];
+    #[cfg(unix)]
+    let forbidden_outputs = {
+        let mut forbidden_outputs = forbidden_outputs;
+        let alias = root.join("source-alias");
+        std::os::unix::fs::symlink(&first, &alias).unwrap();
+        forbidden_outputs.push(alias.join("new-parent/experiment"));
+        forbidden_outputs.push(alias);
+        forbidden_outputs
+    };
+    for forbidden in forbidden_outputs {
+        let result = run(&[
+            "--previous",
+            text(&first),
+            "--output",
+            text(&forbidden),
+            "--seed",
+            "799978",
+            "--ticks",
+            "6",
+        ]);
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("must not overlap"));
+        assert_eq!(snapshot_tree(&first), source_before);
+    }
+    assert!(!root.join("new-parent").exists());
     let names = [
         "phase.txt",
         "cpu-cycle.json",

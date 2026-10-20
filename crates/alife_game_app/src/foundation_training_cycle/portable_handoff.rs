@@ -1,8 +1,9 @@
 //! Device-free export after the existing serial/correction continuity verifier.
 use super::*;
 use alife_training::{
-    FoundationSerialHandoffBindingV1, FoundationTrainingBackendV1, FoundationTrainingHandoffV1,
-    SERIAL_HANDOFF_BINDING_FILE, SERIAL_HANDOFF_FILE, SERIAL_HANDOFF_SOURCE_FILES,
+    resolve_isolated_training_output, FoundationSerialHandoffBindingV1,
+    FoundationTrainingBackendV1, FoundationTrainingHandoffV1, SERIAL_HANDOFF_BINDING_FILE,
+    SERIAL_HANDOFF_FILE, SERIAL_HANDOFF_SOURCE_FILES,
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
@@ -10,25 +11,6 @@ fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn resolved_output(path: &Path) -> Result<std::path::PathBuf> {
-    use std::path::Component;
-    let mut resolved = std::path::PathBuf::new();
-    for component in std::path::absolute(path)?.components() {
-        match component {
-            Component::CurDir => continue,
-            Component::ParentDir => {
-                resolved.pop();
-            }
-            _ => resolved.push(component.as_os_str()),
-        }
-        match std::fs::symlink_metadata(&resolved) {
-            Ok(_) => resolved = resolved.canonicalize()?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
-            Err(error) => return Err(error.into()),
-        }
-    }
-    Ok(resolved)
-}
 fn protected_sources(previous: &Path) -> Result<std::collections::BTreeSet<std::path::PathBuf>> {
     let mut roots = std::collections::BTreeSet::new();
     let mut pending = vec![previous.canonicalize()?];
@@ -64,13 +46,9 @@ pub fn export_native_training_handoff(
     output: &Path,
 ) -> Result<FoundationSerialHandoffBindingV1> {
     let previous = previous.canonicalize()?;
-    let output = resolved_output(output)?;
-    if protected_sources(&previous)?
-        .iter()
-        .any(|root| output.starts_with(root) || root.starts_with(&output))
-    {
-        return Err("handoff output must not overlap any preserved native source directory".into());
-    }
+    let sources = protected_sources(&previous)?;
+    let output =
+        resolve_isolated_training_output(output, sources.iter().map(std::path::PathBuf::as_path))?;
     if output.exists() {
         return Err("handoff output must be a new directory".into());
     }

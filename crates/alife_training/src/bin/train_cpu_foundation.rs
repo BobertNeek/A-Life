@@ -3,10 +3,10 @@
 use alife_core::*;
 use alife_runtime::canonical_preparation::foundation_construction_development;
 use alife_training::{
-    cpu::*, AdamWConfig, FoundationSerialHandoffBindingV1, FoundationTrainerCheckpoint,
-    FoundationTrainingBackendV1, FoundationTrainingHandoffV1, PpoConfig, PpoValueHeadCheckpoint,
-    StageTrainableMask, SERIAL_HANDOFF_BINDING_FILE, SERIAL_HANDOFF_FILE,
-    SERIAL_HANDOFF_SOURCE_FILES,
+    cpu::*, resolve_isolated_training_output, AdamWConfig, FoundationSerialHandoffBindingV1,
+    FoundationTrainerCheckpoint, FoundationTrainingBackendV1, FoundationTrainingHandoffV1,
+    PpoConfig, PpoValueHeadCheckpoint, StageTrainableMask, SERIAL_HANDOFF_BINDING_FILE,
+    SERIAL_HANDOFF_FILE, SERIAL_HANDOFF_SOURCE_FILES,
 };
 use alife_world::*;
 use serde_json::{json, Value};
@@ -64,8 +64,14 @@ fn args() -> Result<Args> {
             _ => return Err(format!("unknown argument {key}").into()),
         }
     }
-    let previous = values.remove("--previous").map(PathBuf::from);
-    let output = PathBuf::from(values.remove("--output").ok_or("--output is required")?);
+    let previous = values
+        .remove("--previous")
+        .map(|path| PathBuf::from(path).canonicalize())
+        .transpose()?;
+    let output = resolve_isolated_training_output(
+        Path::new(&values.remove("--output").ok_or("--output is required")?),
+        previous.iter().map(PathBuf::as_path),
+    )?;
     let seed = values
         .remove("--seed")
         .ok_or("--seed is required; allocation is caller-owned")?
