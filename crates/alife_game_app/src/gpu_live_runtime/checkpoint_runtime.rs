@@ -29,6 +29,13 @@ fn durable_world_snapshots_match(
 }
 
 impl GpuLiveBrainRuntime {
+    #[cfg(feature = "foundation-training")]
+    pub fn foundation_training_capture_metrics(
+        &self,
+    ) -> alife_gpu_backend::GpuTrainingCaptureMetrics {
+        self.backend.training_capture_metrics()
+    }
+
     fn sleep_journal_pending_capacity(&self) -> Result<usize, ScaffoldContractError> {
         self.prospective_sleep_journal_capacity(self.handles.len())
     }

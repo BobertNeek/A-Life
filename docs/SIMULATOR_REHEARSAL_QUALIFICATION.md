@@ -1,6 +1,8 @@
 # Short simulator rehearsal qualification handoff
 
-Owner: the parent coordinates the existing PC owner after group50's bounded test.
+Owner: the parent coordinates the existing PC owner after the integrated source
+pin is published. Current-main integration supersedes the old b7a67384 candidate;
+do not reuse its source-bound qualification evidence for the new pin.
 This handoff does not start a workload. Use only the resource window confirmed by
 that owner. Do not run the default 600-second mode or `--compare` while Minecraft
 is active. If the agreed short window is unavailable, leave qualification pending.
@@ -36,6 +38,16 @@ part of this handoff.
    Precompile the single continuity test with `foundation-training,gpu-tests` and
    `--no-run`. Obtain its exact test-executable path from Cargo's compiler-artifact
    JSON; do not guess a binary from a wildcard. Set `RUST_MIN_STACK=33554432`.
+   The explicit prebuild commands are:
+
+   ```text
+   cargo build --locked -p alife_game_app --features foundation-training --bin rehearse_n2048_care --bin inspect_archived_success
+   cargo test --locked -p alife_game_app --features foundation-training,gpu-tests --lib simulator_rehearsal::gpu_tests::exact_restore_preserves_private_context_and_next_real_consequence --no-run --message-format=json
+   ```
+
+   Retain the compiler-artifact JSON from the second command and select the
+   executable whose target is `alife_game_app` and whose profile has `test: true`.
+   Record the source tree (`git rev-parse HEAD^{tree}`) as well as the commit.
 2. Read-only source admission, with no GPU session:
 
    ```text
@@ -63,10 +75,13 @@ part of this handoff.
    rehearse_n2048_care SOURCE QUALIFY_A 7400 SEED_A --qualify
    ```
 
-   Require successful native continuation publication, the actual nonzero trainable
+   Require successful schema 2 own-package continuation publication, the actual nonzero trainable
    row count, all-trainable-attempt coverage, current collection policy7401, and
    both optimizer ages advancing once without reset. Expected final ages are
    16685/19801. Report actual attempt/holdout counts, waits, budget exits and times.
+   The complete marker must name `rehearsal.json`, bind its hash and all four
+   native training/evidence files, retain the inspected source hashes and state
+   `execution_domain: gpu-wgsl`, `historical_freshness: unknown`, and no reset.
 5. Only after that passes and the next short window is confirmed:
 
    ```text
@@ -95,3 +110,5 @@ or failing assertion by exact phase and outcome; do not mark it complete.
 This qualifies mechanical continuity and state preservation only. Discovery,
 retention benefit, throughput benefit and historical unseen-scene generalization
 remain unmeasured until a separately resource-authorized comparison is completed.
+That comparison gates benefit claims, rather than safe delivery of the opt-in
+standalone experiment. Ordinary care/CPU/group adapters are separate work.

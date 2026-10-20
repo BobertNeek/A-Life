@@ -78,8 +78,19 @@ establish a learning or throughput advantage.
 BLAKE3-bound lineage records distinguish parent scene, snapshot, perturbation,
 current policy and sampling seed. Compact replay records preserve the actual
 perceptions, sampled commands, behavior probabilities and sealed outcomes. The
-continuation manifest binds exported weights, actor/value states and residual
-critic evidence. Native cycle files are never fabricated.
+schema 2 continuation manifest binds exported weights, complete actor/value
+states, residual critic evidence and the actual `rehearsal.json` receipt. It is
+published last and checks the source policy, exact parent hashes (including a
+parent rehearsal manifest), founder identity and one-step optimizer-age advance.
+An incomplete or altered package cannot become a continuation. Earlier schema 1
+packages are not silently upgraded. Native cycle files are never fabricated.
+
+`training_reward_sum` contains only actual training-loss-row rewards. It is null
+for untrainable attempts and holdouts; holdout outcomes report real useful-success
+counts, decisions and times, rather than inventing a zero reward measurement.
+Parent packages or retained receipts remain necessary to resolve the ancestry
+chain back to a separately accepted root; this manifest does not certify missing
+ancestors or campaign-wide freshness.
 
 Newly constructed scenes are new within this experiment; this runner has no
 campaign-wide seed ledger. All historical freshness remains **unknown**. Holdout
@@ -98,6 +109,20 @@ hardware session. The private policy7400 Library identity exists and the PC
 verified the upload/manifest. Cloud consumer byte validation is blocked by proxy
 CONNECT 403. The cloud has no hardware GPU. The parent owns coordination of any
 short PC execution; this document starts no workload or provisioning.
+
+Standalone delivery requires the current-main checks, R2 review, final-head CI,
+exact-restore hardware continuity and accepted policy7400 source-to-update-to-own-
+continuation qualification without resetting either Adam state. A matched
+discovery/retention comparison is required before claiming benefit; it is not an
+additional merge gate for this opt-in experiment. No founder is promoted here.
+
+The existing gameplay choice `--new-game --founder
+n2048:OUTPUT/trained.alife-foundation` loads the canonical genetic asset. Gameplay
+does not import the offline Adam optimizers or a rehearsing individual's private
+state. Ordinary care resume and CPU/group common admission remain separate,
+unimplemented routes and do not gate standalone delivery. The full ancestry
+follow-on remains preserved at `691ba2c84524ccaf110e97875d19afa016791847`;
+only its own-package validation is integrated here.
 
 Relevant controlling requirements: AOA-INV-009 (same causal step), AOA-BIO-026
 (measured biology), AOA-CTX-002 (canonical interoception), AOA-FOUND-004 (world

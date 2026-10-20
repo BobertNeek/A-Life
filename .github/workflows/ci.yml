@@ -118,6 +118,10 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local
       - name: Foundation scenario and replay CPU tests
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
+      - name: Group-50 native admission and replay CPU contracts
+        run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group::'
+      - name: Compile opt-in group-50 hardware fixture
+        run: cargo check --locked -p alife_game_app --features foundation-training,gpu-tests --test group50_gpu
       - name: Objective continuation CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
       - name: Initial actor checkpoint CPU tests

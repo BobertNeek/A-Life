@@ -22,3 +22,17 @@ will use public integration seams; any required overlapping seam is coordinated.
 Acceptance: real runnable simulator integration; legal-state and rejection tests;
 full private-state continuity; current-policy PPO version checks; bounded diverse
 pools and fresh/failure mixture; honest separate rehearsal/holdout reports.
+
+Current-main integration on 2026-10-20 retains both standalone and group50 CLIs.
+Own-package continuation must bind the actual behavioral receipt and exact parent
+hashes, preserve complete actor/value states, and publish only after a real next-
+cohort decision. Null training reward on holdouts/untrainable attempts denotes an
+unmeasured value, not measured zero.
+
+Remaining standalone merge acceptance: aggregate checks, R2 review, final-head CI
+and coordinated hardware exact-restore plus accepted policy7400 update/continuation
+with ages 16684/19800 preserved and advanced only by actual updates. The parent
+owns PC coordination and eventual merge. Matched learning/retention measurements
+gate benefit claims. CPU/common admission and ordinary care resume are separate
+work, not standalone merge gates. PR112 and the blocked Library transfer remain
+excluded; preserve the separate ancestry branch at 691ba2c8.

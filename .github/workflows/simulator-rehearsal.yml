@@ -1,0 +1,68 @@
+name: Simulator rehearsal contracts
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/simulator-rehearsal.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/alife_game_app/**"
+      - "crates/alife_training/**"
+      - "crates/alife_runtime/**"
+      - "crates/alife_gpu_backend/**"
+      - "crates/alife_world/**"
+      - "crates/alife_core/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/simulator-rehearsal.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/alife_game_app/**"
+      - "crates/alife_training/**"
+      - "crates/alife_runtime/**"
+      - "crates/alife_gpu_backend/**"
+      - "crates/alife_world/**"
+      - "crates/alife_core/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simulator-rehearsal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearsal-source:
+    name: Rehearsal CPU contracts and GPU fixture compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_MIN_STACK: '33554432'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Lawful world branches, policy identity and sequence masks
+        run: cargo test --locked -p alife_training --lib rehearsal
+      - name: Exact source ancestry, package integrity and budget boundaries
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib simulator_rehearsal
+      - name: Bounded CLI admission
+        run: cargo test --locked -p alife_game_app --features foundation-training --bin rehearse_n2048_care
+      - name: Compile continuity fixture without GPU execution
+        run: cargo test --locked -p alife_game_app --features foundation-training,gpu-tests --lib simulator_rehearsal::gpu_tests::exact_restore_preserves_private_context_and_next_real_consequence --no-run
+      - name: Strict training source Clippy
+        run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
+      - name: Formatting and documentation
+        run: |
+          cargo fmt --all -- --check
+          bash scripts/docs_check.sh

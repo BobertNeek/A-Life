@@ -16,6 +16,11 @@ path = "src/bin/rehearse_n2048_care.rs"
 required-features = ["foundation-training"]
 
 [[bin]]
+name = "train_n2048_group50"
+path = "src/bin/train_n2048_group50.rs"
+required-features = ["foundation-training"]
+
+[[bin]]
 name = "inspect_archived_success"
 path = "src/bin/inspect_archived_success.rs"
 required-features = ["foundation-training"]

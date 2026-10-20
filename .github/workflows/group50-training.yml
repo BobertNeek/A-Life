@@ -1,0 +1,84 @@
+name: Group50 training contracts
+
+on:
+  push:
+    # Dedicated qualification refs run this focused job without broad codex jobs.
+    branches: ["main", "group50-ci/**"]
+    paths:
+      - ".github/workflows/group50-training.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/alife_game_app/**"
+      - "crates/alife_gpu_backend/**"
+      - "crates/alife_training/**"
+      - "crates/alife_runtime/**"
+      - "crates/alife_world/**"
+      - "crates/alife_core/**"
+      - "scripts/run_mixed_care_serial.py"
+      - "scripts/run_eat_held_food_night.py"
+      - "scripts/grab_food_seed_reservations.py"
+      - "scripts/summarize_ppo_diagnostics.py"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/group50-training.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/alife_game_app/**"
+      - "crates/alife_gpu_backend/**"
+      - "crates/alife_training/**"
+      - "crates/alife_runtime/**"
+      - "crates/alife_world/**"
+      - "crates/alife_core/**"
+      - "scripts/run_mixed_care_serial.py"
+      - "scripts/run_eat_held_food_night.py"
+      - "scripts/grab_food_seed_reservations.py"
+      - "scripts/summarize_ppo_diagnostics.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: group50-training-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  group50-source:
+    name: Group50 CPU contracts and GPU fixture compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+    steps:
+      - name: Checkout exact qualification source
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check group50 CLI
+        run: cargo check --locked -p alife_game_app --features foundation-training --lib --bin train_n2048_group50
+      - name: Cohort replay durability and corruption CPU contracts
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::cohort_replay
+      - name: Native history, private replay and bounded-window CPU contracts
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group
+      - name: Existing serial replay codec CPU contracts
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::replay_io_tests
+      - name: Batched readback packet order and bounds CPU contracts
+        run: cargo test --locked -p alife_gpu_backend --features training-rollout --lib closed_loop_runtime::training_capture
+      - name: Compile fifty-row differential fixture without GPU execution
+        run: cargo test --locked -p alife_gpu_backend --features training-rollout,gpu-tests --test training_capture_batch --no-run
+      - name: Compile native group50 fixture without GPU execution
+        run: cargo test --locked -p alife_game_app --features foundation-training,gpu-tests --test group50_gpu --no-run
+      - name: Strict game training source Clippy
+        run: cargo clippy --locked -p alife_game_app --features foundation-training,gpu-tests --lib --bin train_n2048_group50 --test group50_gpu -- -D warnings
+      - name: Strict GPU capture fixture source Clippy
+        run: cargo clippy --locked -p alife_gpu_backend --features training-rollout,gpu-tests --lib --test training_capture_batch -- -D warnings
+      - name: Formatting and architecture boundaries
+        run: |
+          cargo fmt --all -- --check
+          bash scripts/check_core_boundaries.sh

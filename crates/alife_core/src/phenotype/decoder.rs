@@ -99,7 +99,18 @@ impl CandidateDecoderFamilyPlan {
             } else {
                 features.0[usize::from(lane)]
             };
-            let signal = if self.innate_cue_inverted {
+            // Object chemistry is unavailable before contact. Preserve the
+            // existing cue metadata (and bound foundation hashes), but ground
+            // danger-driven withdrawal in observed bearing at that boundary.
+            // This cannot identify which distant object is hazardous.
+            let signal = if self.family == CandidateActionFamily::Avoid
+                && lane == 15
+                && self.innate_cue_inverted
+                && !self.innate_requires_reach
+                && features.0[18] == 0.0
+            {
+                (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0)
+            } else if self.innate_cue_inverted {
                 -signal
             } else {
                 signal

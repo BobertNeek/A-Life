@@ -1677,14 +1677,43 @@ pub(crate) fn read_gpu_words(
     label: &'static str,
     metrics: Option<&crate::closed_loop_runtime::GpuMutableSlotReadbackCounters>,
 ) -> Result<Vec<u32>, ScaffoldContractError> {
-    let count = words
-        .end
-        .checked_sub(words.start)
-        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-    if count == 0 {
-        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+    let mut rows = read_gpu_word_ranges(device, queue, &[(source, words)], label, metrics)?;
+    rows.pop()
+        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)
+}
+
+/// One ordered copy submission, mapping and wait for disjoint private rows.
+/// Every source is checked before submission; no partially captured rows escape.
+pub(crate) fn read_gpu_word_ranges(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    sources: &[(&wgpu::Buffer, Range<u32>)],
+    label: &'static str,
+    metrics: Option<&crate::closed_loop_runtime::GpuMutableSlotReadbackCounters>,
+) -> Result<Vec<Vec<u32>>, ScaffoldContractError> {
+    if sources.is_empty() {
+        return Ok(Vec::new());
     }
-    let size = u64::from(count) * 4;
+    let mut size = 0u64;
+    let mut destinations = Vec::with_capacity(sources.len());
+    for (source, words) in sources {
+        let bytes = u64::from(
+            words
+                .end
+                .checked_sub(words.start)
+                .filter(|count| *count > 0)
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?,
+        ) * 4;
+        if u64::from(words.end) * 4 > source.size() {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let end = size
+            .checked_add(bytes)
+            .filter(|end| *end <= device.limits().max_buffer_size)
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+        destinations.push(size..end);
+        size = end;
+    }
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some(label),
         size,
@@ -1693,7 +1722,15 @@ pub(crate) fn read_gpu_words(
     });
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) });
-    encoder.copy_buffer_to_buffer(source, u64::from(words.start) * 4, &readback, 0, size);
+    for ((source, words), destination) in sources.iter().zip(&destinations) {
+        encoder.copy_buffer_to_buffer(
+            source,
+            u64::from(words.start) * 4,
+            &readback,
+            destination.start,
+            destination.end - destination.start,
+        );
+    }
     let command = encoder.finish();
     let (sender, receiver) = std::sync::mpsc::channel();
     command.map_buffer_on_submit(&readback, wgpu::MapMode::Read, 0..size, move |result| {
@@ -1708,6 +1745,13 @@ pub(crate) fn read_gpu_words(
         })
         .is_err();
     let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+    if poll_failed {
+        if let Some(metrics) = metrics {
+            metrics.record(size, poll_wait_ns, 0);
+        }
+        readback.unmap();
+        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+    }
     let receive_started = Instant::now();
     let receive_failed = receiver.recv().ok().and_then(Result::ok).is_none();
     let map_receive_wait_ns =
@@ -1715,12 +1759,18 @@ pub(crate) fn read_gpu_words(
     if let Some(metrics) = metrics {
         metrics.record(size, poll_wait_ns, map_receive_wait_ns);
     }
-    if poll_failed || receive_failed {
+    if receive_failed {
         readback.unmap();
         return Err(ScaffoldContractError::NeuralBackendUnavailable);
     }
     let mapped = readback.slice(..size).get_mapped_range();
-    let result = bytemuck::cast_slice::<u8, u32>(&mapped).to_vec();
+    let result = destinations
+        .iter()
+        .map(|range| {
+            bytemuck::cast_slice::<u8, u32>(&mapped[range.start as usize..range.end as usize])
+                .to_vec()
+        })
+        .collect();
     drop(mapped);
     readback.unmap();
     Ok(result)

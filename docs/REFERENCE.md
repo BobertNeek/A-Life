@@ -29,6 +29,19 @@ offset retains the gaze cone, even at contact distance. This is a general
 geometry rule, without object-kind recognition or action scoring
 (`AOA-WORLD-001`, `AOA-WORLD-002`, `AOA-SENSE-001`, `AOA-SENSE-002`).
 
+Terrain-vision object chemistry and temperature remain contact observations;
+anonymous bilateral smell is separate. Under danger urgency the inherited Avoid
+readout uses observed bearing before contact, without identifying which object
+is hazardous; contact retains the chemical cue.
+Hunger still primes non-contact investigation and contact/reach-gated tasting.
+Fresh procedural candidate distance coefficients are negative. Trained
+foundations replace them with their stored signed coefficients; recurrent
+excitatory/inhibitory sign rules do not constrain mathematical decoder weights.
+Play uses the existing Other family and Grab uses Contact, preserving every
+physical feature, including angular speed in lane 20. This changes the learned
+meaning of Play and requires requalification of older policies and replay.
+See the [founder regression report](performance/20261020-founder-brain-corrections.md).
+
 Visibility does not authorize ingestion. For reachable, safe, unheld food,
 selected Eat executes a real pickup using ordinary Grab reach, grip-path,
 ownership, liveness, and manipulation-effector checks. Explicitly carried or

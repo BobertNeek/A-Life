@@ -60,7 +60,9 @@ pub struct SimulatorAttemptReceipt {
     pub no_progress_polls: usize,
     pub stopped_for_sleep: bool,
     pub terminated: bool,
-    pub reward_sum: f32,
+    /// Sum over actual loss rows only. Holdouts and untrainable attempts are
+    /// not scored by this field; null must not be mistaken for measured zero.
+    pub training_reward_sum: Option<f32>,
     pub elapsed_seconds: f64,
     pub retained_snapshot: Option<u64>,
 }
@@ -96,8 +98,9 @@ pub struct SimulatorRehearsalReceipt {
     pub generalization_evidence: &'static str,
 }
 
-/// The source must be a verified native objective2 cycle. Neither training head
-/// can be initialized or reset by this entry point. The original source is read-only.
+/// The source must be a verified native objective2 cycle or exact simulator
+/// continuation. Neither training head can be initialized or reset here.
+/// The original source is read-only.
 pub fn run_simulator_rehearsal(
     source: &Path,
     output: &Path,
@@ -337,7 +340,7 @@ pub fn run_simulator_rehearsal(
                 no_progress_polls,
                 stopped_for_sleep,
                 terminated,
-                reward_sum: 0.0,
+                training_reward_sum: None,
                 elapsed_seconds: attempt_started.elapsed().as_secs_f64(),
                 retained_snapshot: None,
             });
@@ -525,7 +528,7 @@ pub fn run_simulator_rehearsal(
             terminated,
             train_rows: range.len(),
             useful_successes: useful,
-            reward_sum,
+            training_reward_sum: Some(reward_sum),
             elapsed_seconds: attempt_started.elapsed().as_secs_f64(),
             retained_snapshot: retained_id,
         };
@@ -662,7 +665,7 @@ pub fn run_simulator_rehearsal(
             terminated,
             train_rows: 0,
             useful_successes: useful,
-            reward_sum: 0.0,
+            training_reward_sum: None,
             elapsed_seconds: time.elapsed().as_secs_f64(),
             retained_snapshot: None,
         });
@@ -670,13 +673,6 @@ pub fn run_simulator_rehearsal(
     if !next_cohort_checked {
         return Err("exported next cohort produced no real decision".into());
     }
-    continuation::publish(
-        output,
-        policy,
-        inspection.founder_seed_base,
-        trainer.optimizer_step(),
-        final_value.optimizer_step,
-    )?;
     let receipt = SimulatorRehearsalReceipt {
         schema: "alife.simulator-rehearsal.v1",
         config,
@@ -710,6 +706,14 @@ pub fn run_simulator_rehearsal(
     std::fs::write(
         output.join("rehearsal.json"),
         serde_json::to_vec_pretty(&receipt)?,
+    )?;
+    // Publish last: an incomplete run has no admissible continuation marker.
+    continuation::publish(
+        output,
+        policy,
+        &receipt.source,
+        trainer.optimizer_step(),
+        final_value.optimizer_step,
     )?;
     Ok(receipt)
 }

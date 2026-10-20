@@ -224,6 +224,52 @@ impl FoundationTrainer {
         &self.session
     }
 
+    /// Packed replay buffer bound, also covering the initial trainer allocation.
+    /// The caller can reject a window before allocating its device scratch.
+    /// Persistent objectives/accumulation and overlapping old/new allocations
+    /// must be budgeted separately by the orchestration layer.
+    pub fn replay_allocation_bytes(
+        phenotype: &BrainPhenotype,
+        sequence: &TrainingSequence,
+    ) -> Result<u64, TrainingError> {
+        sequence.validate_for(phenotype)?;
+        let bytes = |meta_words: usize, layout: PackedLayout| {
+            let words = layout.state_words
+                + layout.gradient_words
+                + layout.output_words
+                + layout.training_words
+                + meta_words as u64
+                + phenotype.synapses().len() as u64 * 5;
+            words * 4
+                + u64::from(phenotype.microstep_count()) * u64::from(layout.ticks) * HEADER_BYTES
+                + READBACK_BYTES
+        };
+        let (meta, replay) = pack_metadata_and_layout(phenotype, Some(sequence))?;
+        let (initial_meta, initial) = pack_metadata_and_layout(phenotype, None)?;
+        Ok(bytes(meta.len(), replay).max(bytes(initial_meta.len(), initial)))
+    }
+
+    /// Largest storage binding needed by a replay shape, checked before upload.
+    pub fn replay_storage_binding_bytes(
+        phenotype: &BrainPhenotype,
+        sequence: &TrainingSequence,
+    ) -> Result<u64, TrainingError> {
+        sequence.validate_for(phenotype)?;
+        let (meta, layout) = pack_metadata_and_layout(phenotype, Some(sequence))?;
+        Ok([
+            layout.state_words,
+            layout.gradient_words,
+            layout.output_words,
+            layout.training_words,
+            meta.len() as u64,
+            phenotype.synapses().len() as u64 * 3,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(0)
+            * 4)
+    }
+
     /// Starts an offline cohort under an exactly compiled export of the current
     /// GPU weights. This never replaces genetics in a living organism. Graph,
     /// dynamics and learning coordinates must be unchanged, so Adam moments,
@@ -1963,9 +2009,14 @@ fn pack_metadata_and_layout(
                 u32::from(coordinate.input_lane()),
             ),
         };
-        let sign_policy = match projection.projection_type() {
-            ProjectionType::LateralInhibition => 1,
-            ProjectionType::Homeostatic | ProjectionType::MotorProposal => 2,
+        // Decoder coefficients are signed mathematical readouts. Only recurrent
+        // pathways obey the inherited excitatory/inhibitory route contract.
+        let sign_policy = match (synapse.kind(), projection.projection_type()) {
+            (CompiledSynapseKind::Recurrent, ProjectionType::LateralInhibition) => 1,
+            (
+                CompiledSynapseKind::Recurrent,
+                ProjectionType::Homeostatic | ProjectionType::MotorProposal,
+            ) => 2,
             _ => 0,
         };
         meta.extend_from_slice(&[
@@ -2547,6 +2598,82 @@ fn as_u32_u64(value: u64) -> Result<u32, TrainingError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn adam_metadata_constrains_recurrent_routes_but_preserves_signed_decoder_readouts() {
+        use alife_core::{
+            BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
+            SensorProfile, Tick,
+        };
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(96001, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        let mut weights: Vec<_> = phenotype
+            .synapses()
+            .iter()
+            .map(|s| s.genetic_weight())
+            .collect();
+        let speech = phenotype.synapses().iter().position(|s| matches!(s.kind(),
+            CompiledSynapseKind::Decoder(c) if c.head() == alife_core::DecoderHeadKind::SpeechPayload)).unwrap();
+        weights[speech] = -0.25;
+        let asset = FoundationWeightAsset::from_trained_weights(
+            &phenotype,
+            weights,
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        let (phenotype, _) =
+            PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset)
+                .unwrap();
+        let (metadata, layout) = pack_metadata_and_layout(&phenotype, None).unwrap();
+        assert_eq!(
+            metadata[layout.synapse_records as usize + speech * 8 + 7],
+            0
+        );
+        assert_eq!(phenotype.synapses()[speech].genetic_weight(), -0.25);
+        let mut signed_distance_readouts = 0;
+        let mut excitatory_routes = 0;
+        let mut inhibitory_routes = 0;
+        for (index, synapse) in phenotype.synapses().iter().enumerate() {
+            let policy = metadata[layout.synapse_records as usize + index * 8 + 7];
+            let projection =
+                phenotype.projections()[usize::from(synapse.route_index())].projection_type();
+            match synapse.kind() {
+                CompiledSynapseKind::Decoder(c) => {
+                    assert_eq!(
+                        policy, 0,
+                        "Adam must permit either sign for decoder coordinates"
+                    );
+                    if c.head() == alife_core::DecoderHeadKind::ActionCandidate
+                        && c.input_lane() == 2
+                    {
+                        assert!(synapse.genetic_weight() < 0.0);
+                        signed_distance_readouts += 1;
+                    }
+                }
+                CompiledSynapseKind::Recurrent => match projection {
+                    ProjectionType::Homeostatic | ProjectionType::MotorProposal => {
+                        assert_eq!(policy, 2);
+                        excitatory_routes += 1;
+                    }
+                    ProjectionType::LateralInhibition => {
+                        assert_eq!(policy, 1);
+                        inhibitory_routes += 1;
+                    }
+                    _ => assert_eq!(policy, 0),
+                },
+            }
+        }
+        assert!(signed_distance_readouts > 0 && excitatory_routes > 0 && inhibitory_routes > 0);
+    }
 
     #[test]
     fn training_shader_validates_and_contains_every_gradient_stage() {
