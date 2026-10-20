@@ -248,6 +248,9 @@ fn compile_inner(
                     }
                     _ => {}
                 }
+                // This overlay constructs a new genetic founder from the
+                // builtin source, rather than importing learned candidate weights.
+                composed = builtin_birth_distance_weight(synapse, composed);
                 synapse.set_genetic_weight(composed);
             }
         } else {
@@ -306,6 +309,12 @@ fn compile_inner(
                         composed = 0.000_1;
                     }
                     _ => {}
+                }
+                // The migrated descriptor admits only the canonical builtin.
+                // Apply the birth disposition after its stored weights replace
+                // procedural initialization; exact/private candidates keep theirs.
+                if inputs.migrated_n2048_foundation_v1().is_some() && !exact_candidate {
+                    composed = builtin_birth_distance_weight(synapse, composed);
                 }
                 if exact_candidate && composed.to_bits() != weight.to_bits() {
                     return Err(ScaffoldContractError::PhenotypeCompile);
@@ -371,4 +380,16 @@ fn splitmix64(mut value: u64) -> u64 {
     value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
     value ^ (value >> 31)
+}
+
+fn builtin_birth_distance_weight(synapse: &super::CompiledSynapse, weight: f32) -> f32 {
+    match synapse.kind() {
+        super::CompiledSynapseKind::Decoder(coordinate)
+            if coordinate.head() == super::DecoderHeadKind::ActionCandidate
+                && coordinate.input_lane() == 2 =>
+        {
+            -weight.abs()
+        }
+        _ => weight,
+    }
 }

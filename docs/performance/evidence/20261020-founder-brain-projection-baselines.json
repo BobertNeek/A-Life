@@ -133,5 +133,579 @@
     "derived scheduled-work checksums, including dispatch-header copies"
   ],
   "continuity_passed_tests": 220,
-  "physical_gpu_qualification": "Unknown"
+  "physical_gpu_qualification": "Unknown",
+  "decoder_lifetime_rate_policy_rebaseline": {
+    "source_test": "crates/alife_core/tests/decoder_lifetime_rate_policy.rs",
+    "genome_seed": "0xDEC0_0001",
+    "maturation": 0.35,
+    "profile": "GroundedTerrainVisionV1",
+    "original_source": "d1ee947fad980d4adcdfd08cb85b0068a73aef80",
+    "reason": "Deliberate procedural ActionCandidate lane-2 coefficient signs; unchanged genome-byte goldens and lifetime-rate policy semantics.",
+    "phenotype_json_blake3": [
+      {
+        "class": 1,
+        "original": "26d3cde262c7c45c6334e4ae12b361a8377fca8aa81942ab327c1ae0f223948d",
+        "corrected": "30f5c96778bda49ae8058f1ca5231e6a0cbd838618913d1142384b3f2ef63167"
+      },
+      {
+        "class": 2,
+        "original": "e9c7282e216d8c620e976a7a0a0396fc29bbddfa79e9ba07c9a095af33381230",
+        "corrected": "929da867f579aee09cd86068f0b0260f24a4ca10aaf145ac3d41ca17279d89f1"
+      },
+      {
+        "class": 3,
+        "original": "301c60dc1911b8552c2b87b3fcee88b8b28afc78305dced18abb0ca440ffa256",
+        "corrected": "e4be396d6aee937f7afa77782db0c74be610a3b014a46a9ae1d6783fe7eb5da0"
+      }
+    ]
+  },
+  "fresh_builtin_distance_reproduction": {
+    "before_source_commit": "1a06ead280a56fc9d501254c32f22ac2ea8f9349",
+    "corrected_construction_git_blob": "e1a655b458c0262f5a8b628242b0d2e2259b1da8",
+    "profile": "GroundedObjectSlotsV1",
+    "maturation": 1.0,
+    "physical_distance": [
+      2.0,
+      4.0
+    ],
+    "feature_distance": [
+      0.25,
+      0.5
+    ],
+    "paths": [
+      "N512FounderFoundationProjection::compile",
+      "PhenotypeCompiler::compile_from_foundation_asset + builtin_n2048_v1"
+    ],
+    "learned_candidates_rewritten": false,
+    "before": [
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.1988627,
+        "far_score": 0.20448889,
+        "reextracted_near_score": 0.1988627,
+        "distance_derivative": 0.02250469
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.21410543,
+        "far_score": 0.21971564,
+        "reextracted_near_score": 0.21410543,
+        "distance_derivative": 0.02244079
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.16396455,
+        "far_score": 0.16852842,
+        "reextracted_near_score": 0.16396455,
+        "distance_derivative": 0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.19880736,
+        "far_score": 0.20444784,
+        "reextracted_near_score": 0.19880736,
+        "distance_derivative": 0.02256182
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.21415485,
+        "far_score": 0.21977197,
+        "reextracted_near_score": 0.21415485,
+        "distance_derivative": 0.02246837
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.16390769,
+        "far_score": 0.16847156,
+        "reextracted_near_score": 0.16390769,
+        "distance_derivative": 0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.19869065,
+        "far_score": 0.20429504,
+        "reextracted_near_score": 0.19869065,
+        "distance_derivative": 0.02241746
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.21410879,
+        "far_score": 0.21968324,
+        "reextracted_near_score": 0.21410879,
+        "distance_derivative": 0.02229781
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.16386461,
+        "far_score": 0.16842847,
+        "reextracted_near_score": 0.16386461,
+        "distance_derivative": 0.01825543
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.41790268,
+        "far_score": 0.42924777,
+        "reextracted_near_score": 0.41790268,
+        "distance_derivative": 0.04538035
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.39956039,
+        "far_score": 0.41306096,
+        "reextracted_near_score": 0.39956039,
+        "distance_derivative": 0.05400238
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.60522103,
+        "far_score": 0.62273133,
+        "reextracted_near_score": 0.60522103,
+        "distance_derivative": 0.07004125
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.41776395,
+        "far_score": 0.42912489,
+        "reextracted_near_score": 0.41776395,
+        "distance_derivative": 0.04544378
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.39971998,
+        "far_score": 0.41326037,
+        "reextracted_near_score": 0.39971998,
+        "distance_derivative": 0.05416156
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.60462123,
+        "far_score": 0.62211829,
+        "reextracted_near_score": 0.60462123,
+        "distance_derivative": 0.06998822
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.41770399,
+        "far_score": 0.42907467,
+        "reextracted_near_score": 0.41770399,
+        "distance_derivative": 0.0454829
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.43215105,
+        "far_score": 0.44674376,
+        "reextracted_near_score": 0.43215105,
+        "distance_derivative": 0.05837084
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.60453379,
+        "far_score": 0.62203038,
+        "reextracted_near_score": 0.60453379,
+        "distance_derivative": 0.06998621
+      }
+    ],
+    "after": [
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.18761037,
+        "far_score": 0.18198419,
+        "reextracted_near_score": 0.18761037,
+        "distance_derivative": -0.02250469
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.202885,
+        "far_score": 0.1972748,
+        "reextracted_near_score": 0.202885,
+        "distance_derivative": -0.02244079
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.15483683,
+        "far_score": 0.150273,
+        "reextracted_near_score": 0.15483683,
+        "distance_derivative": -0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.18752646,
+        "far_score": 0.18188599,
+        "reextracted_near_score": 0.18752646,
+        "distance_derivative": -0.02256182
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.20292066,
+        "far_score": 0.19730356,
+        "reextracted_near_score": 0.20292066,
+        "distance_derivative": -0.02246837
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.15477999,
+        "far_score": 0.15021613,
+        "reextracted_near_score": 0.15477999,
+        "distance_derivative": -0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.18748194,
+        "far_score": 0.18187755,
+        "reextracted_near_score": 0.18748194,
+        "distance_derivative": -0.02241746
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.2029599,
+        "far_score": 0.19738545,
+        "reextracted_near_score": 0.2029599,
+        "distance_derivative": -0.02229781
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.15473689,
+        "far_score": 0.15017305,
+        "reextracted_near_score": 0.15473689,
+        "distance_derivative": -0.01825543
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.3952125,
+        "far_score": 0.38386741,
+        "reextracted_near_score": 0.3952125,
+        "distance_derivative": -0.04538035
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.37255919,
+        "far_score": 0.35905856,
+        "reextracted_near_score": 0.37255919,
+        "distance_derivative": -0.05400238
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.57020044,
+        "far_score": 0.55269015,
+        "reextracted_near_score": 0.57020044,
+        "distance_derivative": -0.07004125
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.39504209,
+        "far_score": 0.38368118,
+        "reextracted_near_score": 0.39504209,
+        "distance_derivative": -0.04544378
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.37263918,
+        "far_score": 0.35909876,
+        "reextracted_near_score": 0.37263918,
+        "distance_derivative": -0.05416156
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.56962705,
+        "far_score": 0.55212998,
+        "reextracted_near_score": 0.56962705,
+        "distance_derivative": -0.06998822
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.39496258,
+        "far_score": 0.38359183,
+        "reextracted_near_score": 0.39496258,
+        "distance_derivative": -0.0454829
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.40296569,
+        "far_score": 0.38837305,
+        "reextracted_near_score": 0.40296569,
+        "distance_derivative": -0.05837084
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.56954074,
+        "far_score": 0.55204421,
+        "reextracted_near_score": 0.56954074,
+        "distance_derivative": -0.06998621
+      }
+    ]
+  },
+  "combined_urgency_reproduction": {
+    "seed": 96001,
+    "capacity_class_id": 1,
+    "construction": "procedural",
+    "profile": "GroundedTerrainVisionV1",
+    "hunger": 0.98,
+    "selected_danger_drive": 0.98,
+    "rows": [
+      {
+        "danger": "fear",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "fear",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "fear",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "fear",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      },
+      {
+        "danger": "all",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "all",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "all",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "all",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      }
+    ]
+  }
 }

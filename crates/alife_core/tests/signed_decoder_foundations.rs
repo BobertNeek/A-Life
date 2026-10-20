@@ -27,7 +27,8 @@ fn legacy_nano_candidate_keeps_signed_readouts_and_every_frozen_weight() {
     let mut weights = source.weights().to_vec();
     let index = baseline.synapses().iter().position(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.input_lane() == 2)).unwrap();
     weights[index] = -0.375;
-    weights[index + 1] = 0.625;
+    let positive_distance = baseline.synapses().iter().enumerate().find(|(i, s)| *i != index && matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.input_lane() == 2)).unwrap().0;
+    weights[positive_distance] = 0.625;
     let asset = FoundationWeightAsset::from_trained_weights(
         &baseline,
         weights.clone(),
@@ -70,7 +71,8 @@ fn exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negativ
         .collect();
     let index = procedural.synapses().iter().position(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.input_lane() == 2)).unwrap();
     weights[index] = -0.375;
-    weights[index + 1] = 0.625;
+    let positive_distance = procedural.synapses().iter().enumerate().find(|(i, s)| *i != index && matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.input_lane() == 2)).unwrap().0;
+    weights[positive_distance] = 0.625;
     let speech = procedural
         .synapses()
         .iter()
@@ -138,4 +140,39 @@ fn exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negativ
         PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, invalid)
             .is_err()
     );
+}
+
+#[test]
+fn private_n2048_foundation_replacement_does_not_apply_builtin_birth_signs() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(96001, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+    let profile = SensorProfile::GroundedObjectSlotsV1;
+    let procedural = PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
+    let mut weights: Vec<_> = procedural
+        .synapses()
+        .iter()
+        .map(|s| s.genetic_weight())
+        .collect();
+    let index = procedural.synapses().iter().position(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.input_lane() == 2)).unwrap();
+    weights[index] = 0.375;
+    let private = FoundationWeightAsset::from_trained_weights(
+        &procedural,
+        weights,
+        TrainingStageManifest::new(1, 1, 1),
+    )
+    .unwrap();
+    let bytes = private.encode_canonical().unwrap();
+    let compiled = PhenotypeCompiler::compile_from_foundation_asset(
+        &genome,
+        &capacity,
+        &development,
+        profile,
+        &private,
+    )
+    .unwrap();
+    assert!(compiled.migrated_n2048_foundation_v1().is_none());
+    assert!((compiled.synapses()[index].genetic_weight() - 0.375).abs() < 0.0051);
+    assert_eq!(private.encode_canonical().unwrap(), bytes);
 }

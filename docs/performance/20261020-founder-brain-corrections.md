@@ -25,6 +25,15 @@ These are CPU source/arithmetic and physical-world tests, not GPU acceptance.
   separation; hunger reverses the decoded preference and approach reduces
   separation. Hidden source valence cannot change the candidate features.
   Contact still gates chemistry, temperature, and taste-supported ingestion.
+  A separate 16-case combined matrix sets hunger .98 together with fear .98,
+  pain .98, temperature stress .98, or all three. At distance four, normalized
+  Approach/Avoid cues are 1/1, actual scores are 2.039561/3.163879, and the chosen
+  movement retreats .1, independent of hidden chemical sign. At bitter contact
+  the cues are 0/.833333, scores .137550/2.669944, and retreat remains selected.
+  At positive-taste contact both movement cues are zero, scores .165141/.153626,
+  and Approach moves .1 toward the object; the ingestion prior is 2.394240.
+  Ingestion prior is zero at distance and at bitter contact. This tests actual
+  selection and displacement rather than inferring behavior from gain ratios.
   This is generic retreat under danger, not remote hazard recognition.
 - **Distance:** seed 41 N512 motor activations are .016131–.033836 under the
   fixture. The old Approach score rises from .075800 to .078528 as normalized
@@ -39,6 +48,19 @@ These are CPU source/arithmetic and physical-world tests, not GPU acceptance.
   also prefer proximity after upstream sensory changes. Positive recurrent
   MotorProposal/Homeostatic weights and the
   +.05 motor bias remain intact.
+- **Fresh builtin replacement:** the builtin asset's stored positive distance
+  coefficients really replaced the negative procedural initializer. The actual
+  default Nano founder-overlay path and `builtin_n2048_v1` construction are now
+  tested separately from procedural and learned-candidate paths. For seed 41,
+  Nano Approach at normalized distances .25/.5 changed from .19886270/.20448889
+  (derivative +.02250469) to .18761037/.18198419 (−.02250469). N2048 changed from
+  .41790268/.42924777 (+.04538035) to .39521250/.38386741 (−.04538035).
+  Approach, Avoid and Grab derivatives are negative for all three tested seeds
+  after composition, including re-extracted near observations. Only new Nano
+  founder overlays and canonical migrated builtin N2048 apply the distance
+  disposition after weight replacement. Fixed legacy source admission and exact
+  learned-candidate admission keep supplied weights. A private N2048 foundation
+  with positive distance weight .375 retains its positive sign.
 - **Readout identity:** Play formerly overwrote angular-speed lane 20 with 1.
   At angular speed 1 it has the same Contact family and features as Grab, so
   no learned weight can distinguish them. Play now uses the existing Other
@@ -96,16 +118,22 @@ the production terrain-vision profile.
 Accepted foundation assets, checkpoint backups, learned matrices, and Adam
 moments/ages are not rewritten or reset. Foundation replacement deliberately
 preserves a trained distance coefficient of either sign; this is not a blanket
-inversion of learned policies. Fresh procedural initialization alone guarantees
-the tested new sign disposition. Existing trained policies may retain distance
+inversion of learned policies. Fresh procedural initialization and the two tested builtin birth paths
+now supply the proximity disposition. Fixed legacy Nano admission remains an
+exact source/archive path; its unoverlaid stored positive distance weights are
+not a newly qualified founder policy. Existing trained policies may retain distance
 bias and require further learning or separately qualified replacement.
 
 Play's move to Other changes its readout coordinates and memory-family context.
 Older Play learning does not automatically transfer from Contact. Old Play
 replay frames carrying the overwritten physical lane are not silently converted.
 Foundation prior metadata and its bound hashes are preserved. Fresh procedural
-phenotype hashes change with their distance coefficients; no automatic migration
-of old exact procedural runtime snapshots is supplied. Historical source-bound
+phenotype hashes change with their distance coefficients, as do newly compiled
+Nano founder overlays and migrated builtin N2048 runtime identities. Existing
+source-bound compiler receipts/snapshots must be rebuilt and requalified for this
+source; no automatic migration or rewriting of accepted runtime snapshots is
+supplied. Newly created Nano projection receipts round-trip and validate under
+the corrected construction. Historical source-bound
 evidence remains evidence for its original source, and old policies are not
 qualified under the changed Play and non-contact Avoid semantics. Continuing a
 source-bound experiment requires its normal source admission and behavioral
@@ -148,13 +176,20 @@ behavior remain unqualified here.
 
 ## Validation
 
-Verified CPU checks include five founder/integration tests, 20 candidate tests,
-the vocabulary/replay test, the social-memory ordering regression, three signed
+Verified CPU checks include seven founder/integration tests, 20 candidate tests,
+the vocabulary/replay test, the social-memory ordering regression, four signed
 foundation tests (including the actual retained Nano file and signed speech),
-28 training unit tests, and the exact checkpoint-continuity command: 220 tests
+nine Nano projection compatibility tests, ten decoder lifetime-rate policy tests,
+28 training unit tests, and the exact checkpoint-continuity command at commit
+1a06ead: 220 tests
 across 27 binaries, including all 84 backend library tests. Static boundaries
-and all 77 documentation assertions also pass. The PR records final workspace,
-formatting, check, test, Clippy, and CI receipts. Physical GPU behavior is Unknown.
+and all 77 documentation assertions also pass. The final builtin correction is undergoing the complete workspace and
+checkpoint-continuity commands; the PR records their final receipts. The first
+workspace pass identified three stale procedural phenotype goldens in the
+lifetime-rate fixture. Their genome-byte hashes still match; the phenotype
+baselines were explicitly renewed for the intended distance signs, with original
+and corrected hashes retained in the evidence JSON. No lifetime-rate policy or
+production batch builder was changed. Physical GPU behavior is Unknown.
 
 The six batch golden changes were reproduced against `bda3b65` in a separate
 Cargo target, after rejecting a shared-target reference that linked current

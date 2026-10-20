@@ -22,10 +22,18 @@ fn brain(seed: u64, capacity: &BrainCapacityClass) -> BrainPhenotype {
 }
 
 fn draft(world: &mut HeadlessWorld, drives: DriveSnapshot) -> PerceptionFrameDraft {
+    draft_profile(world, drives, PROFILE)
+}
+
+fn draft_profile(
+    world: &mut HeadlessWorld,
+    drives: DriveSnapshot,
+    profile: SensorProfile,
+) -> PerceptionFrameDraft {
     let mut homeostasis = HomeostaticSnapshot::baseline(Tick::ZERO);
     homeostasis.drives = drives;
     world
-        .perception_frame_draft(SUBJECT, Tick::ZERO, PROFILE, homeostasis)
+        .perception_frame_draft(SUBJECT, Tick::ZERO, profile, homeostasis)
         .unwrap()
 }
 
@@ -686,5 +694,207 @@ fn ordinary_default_nano_newborn_damage_reaches_pain_without_maturing_other_chem
     println!(
         "ordinary Nano real collision damage={} pain={}",
         collision.action_result.body_event.damage, collision.biology_after.homeostasis.drives.pain
+    );
+}
+
+#[test]
+fn combined_hunger_and_danger_use_measured_cues_and_actual_movement() {
+    let brain = brain(96001, &BrainCapacityClass::n512());
+    for (name, danger_lanes) in [("fear", 1), ("pain", 2), ("temperature", 4), ("all", 7)] {
+        let mut drives = DriveSnapshot::baseline();
+        drives.hunger = 0.98;
+        drives.fear = if danger_lanes & 1 != 0 {
+            0.98
+        } else {
+            drives.fear
+        };
+        drives.pain = if danger_lanes & 2 != 0 { 0.98 } else { 0.0 };
+        drives.temperature_stress = if danger_lanes & 4 != 0 { 0.98 } else { 0.0 };
+        for distance in [4.0, 0.1] {
+            for chemical in [-0.9, 0.9] {
+                let mut props =
+                    GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Hazard, 2);
+                props.chemical = [chemical, 0.0, 0.0];
+                let mut world = HeadlessScenarioBuilder::new(42)
+                    .agent("subject", SUBJECT, Vec3f::ZERO)
+                    .hazard("object", Vec3f::new(distance, 0.0, 0.0), 0.15)
+                    .grounded_physical("object", props)
+                    .build()
+                    .unwrap();
+                let target = world.entity_id("object").unwrap();
+                let frame = draft(&mut world, drives);
+                let approach = candidate(&frame, HeadlessActionIds::APPROACH, target);
+                let avoid = candidate(&frame, HeadlessActionIds::FLEE, target);
+                let ingest = candidate(&frame, HeadlessActionIds::EAT, target);
+                let families = brain.candidate_decoder().families();
+                let approach_plan = &families[CandidateActionFamily::Approach.raw() as usize];
+                let avoid_plan = &families[CandidateActionFamily::Avoid.raw() as usize];
+                let ingest_plan = &families[CandidateActionFamily::Ingest.raw() as usize];
+                let approach_cue = approach_plan.innate_contribution(drives, approach.features)
+                    / ((drives.hunger - 0.55) * approach_plan.innate_gain());
+                let avoid_cue = avoid_plan.innate_contribution(drives, avoid.features)
+                    / ((0.98 - 0.55) * avoid_plan.innate_gain());
+                let contact = distance < 1.0;
+                let expected_avoid_cue = if !contact {
+                    1.0
+                } else if chemical < 0.0 {
+                    (0.9 - 0.4) / 0.6
+                } else {
+                    0.0
+                };
+                assert!((avoid_cue - expected_avoid_cue).abs() < 1e-5);
+                assert!((approach_cue - if contact { 0.0 } else { 1.0 }).abs() < 1e-5);
+                assert_eq!(
+                    frame.grounded_object_slots()[0].chemical[0],
+                    if contact { chemical } else { 0.0 }
+                );
+                let taste = ingest_plan.innate_contribution(drives, ingest.features);
+                assert_eq!(taste > 0.0, contact && chemical > 0.0);
+                let motor = fresh_activations(&brain, &frame);
+                let selected = *frame
+                    .candidates()
+                    .iter()
+                    .filter(|c| c.kind == ActionKind::Move)
+                    .max_by(|a, b| {
+                        decode(&brain, &motor, **a, drives)
+                            .0
+                            .total_cmp(&decode(&brain, &motor, **b, drives).0)
+                    })
+                    .unwrap();
+                assert_eq!(
+                    selected.family,
+                    if contact && chemical > 0.0 {
+                        CandidateActionFamily::Approach
+                    } else {
+                        CandidateActionFamily::Avoid
+                    },
+                    "{name} distance={distance} chemical={chemical}"
+                );
+                let approach_score = decode(&brain, &motor, approach, drives).0;
+                let avoid_score = decode(&brain, &motor, avoid, drives).0;
+                world
+                    .apply_command(
+                        &selected
+                            .to_command(SUBJECT, Confidence::new(1.0).unwrap())
+                            .unwrap(),
+                    )
+                    .unwrap();
+                let dx = world
+                    .entity(world.entity_id("subject").unwrap())
+                    .unwrap()
+                    .position
+                    .x;
+                if selected.family == CandidateActionFamily::Avoid {
+                    assert!(dx < 0.0);
+                }
+                if selected.family == CandidateActionFamily::Approach {
+                    assert!(dx > 0.0);
+                }
+                println!("combined={name} distance={distance} chemical={chemical} normalized_cues={approach_cue:.6}/{avoid_cue:.6} scores={approach_score:.6}/{avoid_score:.6} selected={:?} dx={dx:.6} taste_prior={taste:.6}", selected.family);
+            }
+        }
+    }
+}
+
+#[test]
+fn fresh_builtin_foundations_prefer_nearer_identical_observations() {
+    let mut proximity_holds = true;
+    let profile = SensorProfile::GroundedObjectSlotsV1;
+    for capacity in [BrainCapacityClass::n512(), BrainCapacityClass::n2048()] {
+        for seed in [41, 96001, 96002] {
+            let creature = CreatureGenome::early_mammal_founder(
+                seed,
+                FoundationGeneticIdentity::new(
+                    0x004E_3531_325F_5631,
+                    1,
+                    0x4E35_3132_5F00_FA11,
+                    capacity.id(),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+            .express()
+            .unwrap();
+            let brain = if capacity.id() == BrainCapacityClass::N512_ID {
+                let source = FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
+                N512FounderFoundationProjection::compile(&creature, profile, &source)
+                    .unwrap()
+                    .compiled_phenotype()
+                    .clone()
+            } else {
+                let source = FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
+                let genome = &creature.brain_genome;
+                let development = DevelopmentState::new(
+                    genome.id,
+                    Tick::ZERO,
+                    NormalizedScalar::new(1.0).unwrap(),
+                );
+                PhenotypeCompiler::compile_from_foundation_asset(
+                    genome,
+                    &capacity,
+                    &development,
+                    profile,
+                    &source,
+                )
+                .unwrap()
+            };
+            let props =
+                GroundedPhysicalProperties::deterministic_for_kind(WorldObjectKind::Food, 2);
+            let mut world = HeadlessScenarioBuilder::new(41)
+                .agent("subject", SUBJECT, Vec3f::ZERO)
+                .food("object", Vec3f::new(4.0, 0.0, 0.0), 0.6)
+                .grounded_physical("object", props)
+                .build()
+                .unwrap();
+            let target = world.entity_id("object").unwrap();
+            let far_frame = draft_profile(&mut world, DriveSnapshot::baseline(), profile);
+            world
+                .editor_move_object(target, Vec3f::new(2.0, 0.0, 0.0))
+                .unwrap();
+            world
+                .set_grounded_physical_properties(target, props)
+                .unwrap();
+            let near_frame = draft_profile(&mut world, DriveSnapshot::baseline(), profile);
+            let motor = fresh_activations(&brain, &far_frame);
+            let near_motor = fresh_activations(&brain, &near_frame);
+            let motor_lobe = brain
+                .lobe_layout()
+                .region(LobeKind::ActionPlanning)
+                .unwrap();
+            let (min, max) = motor[motor_lobe.start as usize..motor_lobe.end() as usize]
+                .iter()
+                .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &value| {
+                    (lo.min(value), hi.max(value))
+                });
+            println!(
+                "builtin class={:?} seed={seed} motor={min:.8}..{max:.8}",
+                capacity.id()
+            );
+            for action in [
+                HeadlessActionIds::APPROACH,
+                HeadlessActionIds::FLEE,
+                HeadlessActionIds::GRAB,
+            ] {
+                let near = candidate(&near_frame, action, target);
+                let far = candidate(&far_frame, action, target);
+                let mut normalized = far.features;
+                normalized.0[2] = near.features.0[2];
+                assert_eq!(normalized, near.features);
+                let (far_score, derivative) =
+                    decode(&brain, &motor, far, far_frame.homeostasis().drives);
+                let near_score = decode(&brain, &motor, near, near_frame.homeostasis().drives).0;
+                let actual_near =
+                    decode(&brain, &near_motor, near, near_frame.homeostasis().drives).0;
+                let fd = (far_score - near_score) / (far.features.0[2] - near.features.0[2]);
+                println!("builtin class={:?} seed={seed} family={:?} near={near_score:.8} far={far_score:.8} actual_near={actual_near:.8} derivative={derivative:.8}", capacity.id(), far.family);
+                assert!((fd - derivative).abs() < 1e-4);
+                proximity_holds &=
+                    derivative < 0.0 && near_score > far_score && actual_near > far_score;
+            }
+        }
+    }
+    assert!(
+        proximity_holds,
+        "fresh builtin replacement must retain a proximity disposition"
     );
 }
