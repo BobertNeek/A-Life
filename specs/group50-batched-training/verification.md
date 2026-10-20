@@ -68,6 +68,16 @@ suppressed; history bytes and absolute paths are bound before any reservation.
 Final integration review reported no findings. Open P0/P1/P2/P3
 findings: none. Artifact lint: pass; no unresolved clarification markers.
 
+Follow-up admission portability fix: the direct mixed-tail check uses filesystem
+identity (`Path.samefile`) plus the exact source hashes. Rust's Windows
+canonicalization can produce an extended-length path spelling that differs from
+the ledger's ordinary spelling; lexical equality could reject the same directory.
+Hash-first short-circuiting retains the group-descendant fallback. All15 group
+contracts passed again, and a focused R2 review reported no findings. Actual Windows
+execution remains with the qualification owner. References:
+[Rust canonicalization](https://doc.rust-lang.org/std/fs/fn.canonicalize.html),
+[Python path identity](https://docs.python.org/3/library/pathlib.html#pathlib.Path.samefile).
+
 The cloud exposes no GPU device. The hardware smoke, fifty-row recurrence/private
 state checks, frozen old-policy GPU comparison, central update/export/rebind and
 throughput measurement have not run. No seed was allocated. The accepted private

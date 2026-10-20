@@ -56,7 +56,9 @@ if runs:
     expected = accepted[-1]["sha256"] if accepted else prior["plan"]["source_sha256"]
     expected = {name: expected[name] for name in mixed.FILES}
     previous = pathlib.Path(sys.argv[4])
-    matches = previous.resolve() == latest and document["source_sha256"] == expected
+    # Rust canonicalization uses the Windows extended-length namespace. Compare
+    # filesystem identity so ordinary and verbatim spellings share one lineage.
+    matches = document["source_sha256"] == expected and previous.samefile(latest)
     if not matches and (previous / "group50.json").is_file():
         native, digest = mixed.load(previous / "group50.json")
         mixed.require(digest == document["source_sha256"].get("group50.json"), "group ancestry root changed")
