@@ -71,9 +71,11 @@ assets have a 512 MiB ceiling with conservative per-capture headroom; ordinary
 replay uses the existing host/disk ceilings.
 
 For the parent's short hardware qualification, append `--qualify`: four attempts
-of eight decisions, two eight-decision holdouts, and 15 seconds of collection
-admission. This is not a whole-process wall cap. Follow the serial execution and
-external hard-stop instructions in
+of eight decisions and two eight-decision holdouts. Collection admits work for
+240 seconds from source entry, including setup/captures; a separate 360-second
+whole-run allowance covers updates, holdouts, release and finalization. These are
+planning allowances, not measured completion guarantees. Follow the serial execution and
+external safety-stop instructions in
 [Short qualification handoff](SIMULATOR_REHEARSAL_QUALIFICATION.md); do not run the
 default comparison during the PC's Minecraft workload.
 
@@ -87,12 +89,19 @@ establish a learning or throughput advantage.
 
 `rehearsal.json`, per-attempt receipts, full `snapshot-*.json` files and their
 BLAKE3-bound lineage records distinguish parent scene, snapshot, perturbation,
-current policy and sampling seed. Compact replay records preserve the actual
+current policy and sampling seed. `stage-timing.json` persists actual entry-clock
+stage boundaries, failure status and decision counts, including on unsuccessful
+runs. Its synced append-only `stage-timing.jsonl` retains earlier complete records
+if an external stop interrupts the latest summary. Nested stage durations are inclusive and must not be added together. The
+behavioral receipt’s `elapsed_seconds` ends after resource release; timing JSON
+also covers final publication/verification. Compact replay records preserve the actual
 perceptions, sampled commands, behavior probabilities and sealed outcomes. The
 schema 2 continuation manifest binds exported weights, complete actor/value
 states, residual critic evidence and the actual `rehearsal.json` receipt. It is
-published last and checks the source policy, exact parent hashes (including a
+prevalidated before publication and checks the source policy, exact parent hashes (including a
 parent rehearsal manifest), founder identity and one-step optimizer-age advance.
+Qualification-source admission also requires completed in-budget finalization
+timing; an interrupted publication cannot qualify by marker presence alone.
 An incomplete or altered package cannot become a continuation. Earlier schema 1
 packages are not silently upgraded. Native cycle files are never fabricated.
 

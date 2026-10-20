@@ -29,7 +29,8 @@ fn parse_request(args: &[String]) -> Result<Request> {
         attempts: if qualify { 4 } else { 16 },
         decisions_per_attempt: if qualify { 8 } else { 32 },
         burn_in: 2,
-        collection_wall_limit_seconds: if qualify { 15 } else { 600 },
+        collection_wall_limit_seconds: if qualify { 240 } else { 600 },
+        qualification_wall_limit_seconds: qualify.then_some(360),
         control_fresh: args.get(4).is_some_and(|flag| flag == "--control-fresh"),
     };
     config.validate()?;
@@ -83,7 +84,12 @@ mod tests {
         assert_eq!(request.config.attempts, 4);
         assert_eq!(request.config.decisions_per_attempt, 8);
         assert_eq!(request.config.burn_in, 2);
-        assert_eq!(request.config.collection_wall_limit_seconds, 15);
+        assert_eq!(request.config.collection_wall_limit_seconds, 240);
+        assert_eq!(request.config.qualification_wall_limit_seconds, Some(360));
+        assert_eq!(
+            (request.config.attempts + 2) * request.config.decisions_per_attempt,
+            48
+        );
         assert!(!request.config.control_fresh);
         assert!(!request.compare);
         assert!(parse(&[
@@ -102,6 +108,7 @@ mod tests {
         assert_eq!(request.config.attempts, 16);
         assert_eq!(request.config.decisions_per_attempt, 32);
         assert_eq!(request.config.collection_wall_limit_seconds, 600);
+        assert_eq!(request.config.qualification_wall_limit_seconds, None);
         assert!(!request.compare);
         let control = parse(&["source", "output", "7400", "700001", "--control-fresh"]).unwrap();
         assert!(control.config.control_fresh);

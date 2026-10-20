@@ -102,12 +102,18 @@ struct ReceiptIdentity {
     trained_decisions: usize,
     first_update_covers_all_trainable_attempts: bool,
     historical_freshness: String,
+    #[serde(default)]
+    decisions: usize,
+    #[serde(default)]
+    holdout_decisions: usize,
 }
 
 #[derive(serde::Deserialize)]
 struct ReceiptConfig {
     seed: u64,
     expected_source_policy: u64,
+    #[serde(default)]
+    qualification_wall_limit_seconds: Option<u64>,
 }
 
 #[derive(serde::Deserialize)]
@@ -145,7 +151,18 @@ pub(super) fn inspect(
         return crate::inspect_foundation_checkpoint(source, expected);
     }
     let manifest_bytes = read_bounded(&source.join("rehearsal-continuation.json"))?;
-    let manifest: Continuation = serde_json::from_slice(&manifest_bytes)?;
+    inspect_package(source, expected, &manifest_bytes, true)
+}
+
+// Candidate verification happens before marker publication. Only this private
+// pre-publication path can omit the final timing check; source admission cannot.
+fn inspect_package(
+    source: &Path,
+    expected: u64,
+    manifest_bytes: &[u8],
+    require_completion: bool,
+) -> Result<crate::FoundationCheckpointInspection> {
+    let manifest: Continuation = serde_json::from_slice(manifest_bytes)?;
     if manifest.schema_version != 2
         || !manifest.complete
         || manifest.receipt_file != "rehearsal.json"
@@ -194,6 +211,9 @@ pub(super) fn inspect(
             "simulator receipt disagrees with source ancestry or optimizer continuation".into(),
         );
     }
+    if require_completion && receipt.config.qualification_wall_limit_seconds.is_some() {
+        require_qualification_completion(source, &receipt)?;
+    }
     let asset = FoundationWeightAsset::decode_canonical(&bytes["trained.alife-foundation"])?;
     let actor: alife_training::FoundationTrainerCheckpoint =
         serde_json::from_slice(&bytes["actor-checkpoint.json"])?;
@@ -218,7 +238,7 @@ pub(super) fn inspect(
         return Err("simulator optimizer handoff disagrees with exported policy".into());
     }
     PpoTrainingState::from_checkpoint(value)?;
-    bytes.insert("rehearsal-continuation.json", manifest_bytes);
+    bytes.insert("rehearsal-continuation.json", manifest_bytes.to_vec());
     Ok(crate::FoundationCheckpointInspection {
         expected_policy_version: expected,
         policy_version: expected,
@@ -245,6 +265,71 @@ pub(super) fn inspect(
         weights_modified: false,
         archive_checked: false,
     })
+}
+
+#[derive(serde::Deserialize)]
+struct CompletionTiming {
+    schema: String,
+    status: String,
+    error: Option<String>,
+    collection_allowance_seconds: u64,
+    qualification_allowance_seconds: Option<u64>,
+    elapsed_seconds: f64,
+    training_decisions: usize,
+    holdout_decisions: usize,
+    stages: Vec<CompletionStage>,
+}
+#[derive(serde::Deserialize)]
+struct CompletionStage {
+    name: String,
+    status: String,
+    error: Option<String>,
+    started_seconds: f64,
+    elapsed_seconds: Option<f64>,
+}
+
+fn require_qualification_completion(source: &Path, receipt: &ReceiptIdentity) -> Result<()> {
+    let timing: CompletionTiming =
+        serde_json::from_slice(&read_bounded(&source.join("stage-timing.json"))?)?;
+    let completed_stage = |name: &str| {
+        timing
+            .stages
+            .iter()
+            .filter(|stage| stage.name == name)
+            .count()
+            == 1
+    };
+    if receipt.config.qualification_wall_limit_seconds != Some(360)
+        || timing.schema != "alife.simulator-rehearsal-timing.v1"
+        || timing.status != "completed"
+        || timing.error.is_some()
+        || timing.collection_allowance_seconds != 240
+        || timing.qualification_allowance_seconds != Some(360)
+        || !timing.elapsed_seconds.is_finite()
+        || !(0.0..360.0).contains(&timing.elapsed_seconds)
+        || timing.training_decisions != receipt.decisions
+        || timing.holdout_decisions != receipt.holdout_decisions
+        || !(1..=32).contains(&timing.training_decisions)
+        || !(1..=16).contains(&timing.holdout_decisions)
+        || !completed_stage("execution_and_resource_release")
+        || !completed_stage("completion_publication")
+        || timing.stages.iter().any(|stage| {
+            stage.status != "completed"
+                || stage.error.is_some()
+                || !stage.started_seconds.is_finite()
+                || stage.started_seconds < 0.0
+                || stage.elapsed_seconds.is_none_or(|elapsed| {
+                    !elapsed.is_finite()
+                        || elapsed < 0.0
+                        || stage.started_seconds + elapsed > timing.elapsed_seconds
+                })
+        })
+    {
+        return Err(
+            "qualification continuation lacks completed in-budget finalization timing".into(),
+        );
+    }
+    Ok(())
 }
 
 pub(super) fn read_verified(
@@ -303,11 +388,9 @@ pub(super) fn publish(
         source: SourceIdentity::from_inspection(source)?,
         files,
     };
-    std::fs::write(
-        output.join("rehearsal-continuation.json"),
-        serde_json::to_vec_pretty(&manifest)?,
-    )?;
-    inspect(output, policy)?;
+    let encoded = serde_json::to_vec_pretty(&manifest)?;
+    inspect_package(output, policy, &encoded, false)?;
+    std::fs::write(output.join("rehearsal-continuation.json"), encoded)?;
     Ok(())
 }
 
@@ -498,6 +581,80 @@ mod tests {
         forged["source"]["file_digests"][0]["file_name"] = serde_json::json!("unknown.json");
         std::fs::write(&marker, serde_json::to_vec(&forged).unwrap()).unwrap();
         assert!(inspect(&output, 7401).is_err());
+        std::fs::remove_dir_all(source).unwrap();
+    }
+
+    #[test]
+    fn interrupted_qualification_publication_is_not_admissible_without_finalization() {
+        // Synthetic package-format fixture, not a claim of executed neural work.
+        let source = crate::foundation_archived_success_replay::tests::checkpoint_fixture(7400);
+        let original = inspect(&source, 7400).unwrap();
+        let output = continuation_fixture(&source, &original, "interrupted-qualification");
+        let receipt_path = output.join("rehearsal.json");
+        let mut receipt: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+        receipt["config"]["qualification_wall_limit_seconds"] = serde_json::json!(360);
+        receipt["decisions"] = serde_json::json!(1);
+        receipt["holdout_decisions"] = serde_json::json!(1);
+        std::fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+        let timing = RunTiming::new(240, Some(360));
+        timing.own_output(&output).unwrap();
+        timing
+            .stage("execution_and_resource_release", || {
+                timing.record_decisions(1, false)?;
+                timing.record_decisions(1, true)
+            })
+            .unwrap();
+        let pending = timing.stage("completion_publication", || {
+            publish_fixture(&output, &original)
+        });
+        pending.as_ref().unwrap();
+        assert!(output.join("rehearsal-continuation.json").exists());
+        // An operator kill skips finish(): the real marker remains, but public
+        // source admission must fail closed on its unfinished timing evidence.
+        assert!(inspect(&output, 7401)
+            .unwrap_err()
+            .to_string()
+            .contains("finalization timing"));
+        timing.finish(pending).unwrap();
+        assert!(inspect(&output, 7401).is_ok());
+        let timing_path = output.join("stage-timing.json");
+        let complete: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&timing_path).unwrap()).unwrap();
+        for (field, value) in [
+            ("status", serde_json::json!("running")),
+            ("status", serde_json::json!("failed")),
+            ("elapsed_seconds", serde_json::json!(360.0)),
+            ("training_decisions", serde_json::json!(2)),
+            ("qualification_allowance_seconds", serde_json::json!(600)),
+        ] {
+            let mut invalid = complete.clone();
+            invalid[field] = value;
+            std::fs::write(&timing_path, serde_json::to_vec(&invalid).unwrap()).unwrap();
+            assert!(inspect(&output, 7401).is_err(), "accepted {field}");
+        }
+        let mut interrupted = complete;
+        interrupted["stages"][1]["status"] = serde_json::json!("running");
+        interrupted["stages"][1]["elapsed_seconds"] = serde_json::Value::Null;
+        std::fs::write(&timing_path, serde_json::to_vec(&interrupted).unwrap()).unwrap();
+        assert!(inspect(&output, 7401).is_err());
+        std::fs::remove_file(timing_path).unwrap();
+        assert!(inspect(&output, 7401).is_err());
+        std::fs::remove_dir_all(source).unwrap();
+    }
+
+    #[test]
+    fn invalid_candidate_is_rejected_before_a_completion_marker_is_written() {
+        let source = crate::foundation_archived_success_replay::tests::checkpoint_fixture(7400);
+        let original = inspect(&source, 7400).unwrap();
+        let output = continuation_fixture(&source, &original, "invalid-candidate");
+        let value_path = output.join("value-checkpoint.json");
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&value_path).unwrap()).unwrap();
+        value["optimizer_step"] = serde_json::json!(0);
+        std::fs::write(value_path, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(publish_fixture(&output, &original).is_err());
+        assert!(!output.join("rehearsal-continuation.json").exists());
         std::fs::remove_dir_all(source).unwrap();
     }
 }

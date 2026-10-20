@@ -8,11 +8,14 @@ the unchanged failed fixture or reuse its source-bound evidence for the repair.
 The subsequent 910078f8 fixture completed its preceding continuity assertions but
 failed Windows output cleanup with live archive owners. Its overall result was
 still zero passed and one failed. The fixture now drains persistence and releases
-both runtimes before strict deletion, within the same 60-second execution window.
-The replacement pin still requires a complete hardware pass.
-This handoff does not start a workload. Use only the resource window confirmed by
-that owner. Do not run the default 600-second mode or `--compare` while Minecraft
-is active. If the agreed short window is unavailable, leave qualification pending.
+both runtimes before strict deletion. Exact e21749e8 continuity subsequently
+passed one test in 28.653 seconds including cleanup. Accepted-source A on that
+pin failed collection admission after 28.706 seconds with no complete attempt,
+no update and no continuation. B never ran. Preserve both failed-run evidence
+sets and the consumed A seed; do not retry that source pin unchanged.
+This handoff does not start a workload. The parent coordinates the same PC owner
+on a reviewed replacement pin, with fresh resource checks and new diagnostic
+seeds. Do not run default mode, comparison, extra organisms or a wider campaign.
 
 The private policy7400 Library identity exists; the PC verified its upload and
 manifest. CPU/group cloud consumers could not read bytes because proxy CONNECT
@@ -26,17 +29,61 @@ Use the PC's already validated local source package.
 admits at most four attempts of eight decisions and two holdouts of eight
 decisions: at most 48 neural decisions, 24 actor/critic loss rows (20 for four
 ordinary truncated attempts), one actor update and one residual-critic update. Burn-in and real bootstrap rows remain masked.
-Collection admission stops at 15 seconds, including source/device setup. Existing
-atomic GPU work, snapshots, optimizer work and holdouts are outside that soft
-collection deadline, so it is not a whole-process wall limit.
+Collection admission stops at **240 seconds from runner entry**, including source
+inspection, cold device setup, every initial durable snapshot, pre-decision
+exact capture, real decisions and replay/value preparation. The qualification
+profile has a separate **360-second whole-run allowance** including actor/critic
+updates, export/rebind, both holdouts, persistence drain, GPU/archive owner release
+and completion publication/verification. Ordinary modes retain their existing
+600-second collection profile; qualification cannot invoke comparison/control.
+The decision/window masks, exact captures, one-step updates and full acquired
+source/Adam identity remain unchanged.
 
-Run processes serially with an operator-enforced hard stop of at most 60 seconds
-per execution, or the PC owner's smaller agreed allowance. A slow cold start,
-timeout, zero trainable rows or partial output is **not a pass**. Stop and return
-the exact failure; do not increase the budget or retry automatically. Compilation
-must be completed separately when CPU resources permit; do not hide a long build
-inside the execution allowance. No paid provisioning or extra concurrent job is
-part of this handoff.
+These replace agent-selected 15/60-second smoke bounds, not a user cutoff. The
+failed A's capture ledger measured 9.6569172 seconds for one mandatory exact
+capture. Filesystem timestamps suggest ~8.7 seconds before output and ~18.2
+seconds for the first fresh runtime including that initial capture. These offsets
+are **not instrumented phase durations** and prove no neural decision. Using
+~18.2 seconds of fresh setup plus ~9.7 seconds of pre-decision capture per attempt
+and ~8.7 seconds of cold setup gives a planning estimate of roughly 120 seconds for
+four attempts before decisions/replay preparation. Collection's 240 seconds
+allows roughly twice that estimate; the remaining 120 seconds reserves update,
+holdout and publication work. Decision/PPO/holdout completion times remain
+unmeasured. Neither allowance guarantees completion or establishes benefit.
+
+`stage-timing.json` is mandatory after this invocation creates its new output
+folder. It retains entry-clock start/end times and completed/failed/running stages
+for source, cold device, scene/resident/archive setup, initial durable captures,
+pre-decision captures, each real decision, replay/value preparation, actor and
+critic updates, export/rebind, holdouts, persistence/resource release and final
+publication. Actual training/holdout decision counters are persisted even if an
+atomic GPU call crosses the allowance. A running stage has a null duration;
+missing stages were not observed. Nested durations are inclusive, not additive.
+Each timing update first appends and syncs a JSON record to
+`stage-timing.jsonl`, then writes the convenient latest JSON summary. If an
+operator stop interrupts a write, recover the last complete journal line; counts
+then describe only that last observed point, not work that may have followed.
+Journal recovery is diagnostic; do not reconstruct completion to admit a stopped
+run.
+Journal sync and logging overhead remain charged to the same clock. Zero-row attempt receipts retain null reward, including on budget failure. The
+successful behavioral receipt's elapsed time ends after resource release; the
+timing file also measures finalization. Failed runs retain partial artifacts and
+stage errors and never retain an admissible continuation marker. Package/Adam
+validation precedes marker publication. If an abrupt stop leaves marker bytes
+before finalization, subsequent qualification-source admission fails closed unless
+the timing summary records completed, in-budget finalization with matching actual
+decision counts. A marker file alone does not establish completion.
+
+Whole-run checks admit work before/after each stage and bound polling deadlines.
+Atomic GPU calls, filesystem work and driver teardown cannot be preempted by an
+in-process clock. Use an operator-enforced **360-second safety stop** per update
+invocation, or a smaller actual resource-window limit coordinated by the owner;
+record the external measured process time and any stop. The independent five-
+decision continuity fixture retains its existing 60-second bound. A timeout,
+zero trainable rows, zero selected continuity tests or partial output is **not a
+pass**. Stop and return the measured failure; never retry automatically or reuse
+a consumed seed. Compile separately, with no concurrent training job or paid
+provisioning. No checkpoint is promoted by qualification.
 
 ## Execution order
 

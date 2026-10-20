@@ -16,7 +16,9 @@ mod continuation;
 mod fixture_output;
 mod fresh;
 mod snapshots;
+mod timing;
 use snapshots::*;
+use timing::RunTiming;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -29,6 +31,9 @@ pub struct SimulatorRehearsalConfig {
     pub decisions_per_attempt: usize,
     pub burn_in: usize,
     pub collection_wall_limit_seconds: u64,
+    /// The standalone qualification profile only; ordinary modes retain their budgets.
+    #[serde(default)]
+    pub qualification_wall_limit_seconds: Option<u64>,
     pub control_fresh: bool,
 }
 impl SimulatorRehearsalConfig {
@@ -40,6 +45,16 @@ impl SimulatorRehearsalConfig {
             || !(1..=3600).contains(&self.collection_wall_limit_seconds)
         {
             return Err("invalid rehearsal budget (4..32 attempts, 8..32 decisions, 1..8 burn-in, 1..3600 seconds)".into());
+        }
+        if self.qualification_wall_limit_seconds.is_some()
+            && (self.qualification_wall_limit_seconds != Some(360)
+                || self.collection_wall_limit_seconds != 240
+                || self.attempts != 4
+                || self.decisions_per_attempt != 8
+                || self.burn_in != 2
+                || self.control_fresh)
+        {
+            return Err("qualification requires 4x8 attempts, 2x8 holdouts, burn-in 2, 240/360-second allowances and no comparison/control".into());
         }
         self.expected_source_policy
             .checked_add(2)
@@ -95,6 +110,7 @@ pub struct SimulatorRehearsalReceipt {
     pub value_optimizer_before: u32,
     pub value_optimizer_after: u32,
     pub first_update_covers_all_trainable_attempts: bool,
+    /// Entry through resource release; stage-timing.json also measures final publication.
     pub elapsed_seconds: f64,
     pub collection_stopped_for_budget: bool,
     pub historical_freshness: &'static str,
@@ -110,19 +126,57 @@ pub fn run_simulator_rehearsal(
     config: SimulatorRehearsalConfig,
 ) -> Result<SimulatorRehearsalReceipt> {
     config.validate()?;
-    let started = Instant::now();
-    let inspection = continuation::inspect(source, config.expected_source_policy)?;
-    let asset = FoundationWeightAsset::decode_canonical(&continuation::read_verified(
-        source,
-        "trained.alife-foundation",
-        &inspection,
-    )?)?;
-    let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
-        &continuation::read_verified(source, "actor-checkpoint.json", &inspection)?,
-    )?;
-    let value_checkpoint: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
-        &continuation::read_verified(source, "value-checkpoint.json", &inspection)?,
-    )?;
+    let timing = RunTiming::new(
+        config.collection_wall_limit_seconds,
+        config.qualification_wall_limit_seconds,
+    );
+    // The inner function owns all GPU/archive resources. Its return (including
+    // Drop) precedes finalization, so a completion marker cannot outrun teardown.
+    let result = timing
+        .stage("execution_and_resource_release", || {
+            run_with_resources(source, output, config, &timing)
+        })
+        .and_then(|mut receipt| {
+            receipt.elapsed_seconds = timing.elapsed().as_secs_f64();
+            timing.stage("completion_publication", || {
+                std::fs::write(
+                    output.join("rehearsal.json"),
+                    serde_json::to_vec_pretty(&receipt)?,
+                )?;
+                continuation::publish(
+                    output,
+                    receipt.collection_policy,
+                    &receipt.source,
+                    receipt.actor_optimizer_after,
+                    receipt.value_optimizer_after,
+                )?;
+                Ok(receipt)
+            })
+        });
+    timing.finish(result)
+}
+
+fn run_with_resources(
+    source: &Path,
+    output: &Path,
+    config: SimulatorRehearsalConfig,
+    timing: &RunTiming,
+) -> Result<SimulatorRehearsalReceipt> {
+    let (inspection, asset, actor, value_checkpoint) = timing.stage("source_admission", || {
+        let inspection = continuation::inspect(source, config.expected_source_policy)?;
+        let asset = FoundationWeightAsset::decode_canonical(&continuation::read_verified(
+            source,
+            "trained.alife-foundation",
+            &inspection,
+        )?)?;
+        let actor: alife_training::FoundationTrainerCheckpoint = serde_json::from_slice(
+            &continuation::read_verified(source, "actor-checkpoint.json", &inspection)?,
+        )?;
+        let value_checkpoint: alife_training::PpoValueHeadCheckpoint = serde_json::from_slice(
+            &continuation::read_verified(source, "value-checkpoint.json", &inspection)?,
+        )?;
+        Ok((inspection, asset, actor, value_checkpoint))
+    })?;
     let policy = config
         .expected_source_policy
         .checked_add(1)
@@ -134,8 +188,13 @@ pub fn run_simulator_rehearsal(
     let holdout_seeds = [config.seed + 1_000_000, config.seed + 1_000_001];
     validate_scene_partition(&train_seeds, &holdout_seeds)?;
     // Check GPU availability before creating any run output.
-    let device = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let device = timing.stage("cold_device_setup", || {
+        Ok(GpuClosedLoopBackend::new_required(
+            GpuRuntimeProfile::production_v1(),
+        )?)
+    })?;
     std::fs::create_dir(output)?;
+    timing.own_output(output)?;
     let checkpoint_root = output.join("snapshot-assets");
     std::fs::create_dir(&checkpoint_root)?;
     let store = GpuCheckpointAssetStore::new(&checkpoint_root)?;
@@ -156,7 +215,7 @@ pub fn run_simulator_rehearsal(
         ..PpoConfig::default()
     };
     for (attempt, seed) in train_seeds.iter().copied().enumerate() {
-        if started.elapsed().as_secs() >= config.collection_wall_limit_seconds {
+        if timing.collection_expired() {
             stopped = true;
             break;
         }
@@ -172,57 +231,76 @@ pub fn run_simulator_rehearsal(
             _ => None,
         };
         let sampling = sampling(seed, attempt as u64);
-        let (mut runtime, target, lineage, variation) = if let Some(parent) = parent {
-            parent.lineage.require_policy(policy, digest)?;
-            let organism = learner(&parent.world)?;
-            let target = parent.target;
-            let variant = SceneVariation::for_attempt(attempt);
-            match perturb_rehearsal_world(&parent.world, organism, target, variant) {
-                Ok((world, applied)) => {
-                    let backend = device.new_staging_like_live()?;
-                    let states = parent
-                        .save
-                        .creatures
-                        .iter()
-                        .filter_map(|creature| creature.gpu_brain.clone())
-                        .collect::<Vec<_>>();
-                    let mut runtime = GpuLiveBrainRuntime::restore_foundation_rehearsal(
-                        backend,
-                        world,
-                        parent.world.seed(),
-                        BrainScaleTier::Standard2048,
-                        &store,
-                        &parent.save.assets,
-                        &states,
-                        sampling,
-                    )?;
-                    let mut base = parent.save.clone();
-                    base.save_id = format!("simulator-rehearsal-{attempt}");
-                    base.replace_headless_world_snapshot(runtime.world())?;
-                    attach_durable(
-                        &mut runtime,
-                        output,
-                        &checkpoint_root,
-                        attempt as u64,
-                        base,
-                        true,
-                    )?;
-                    let lineage = RehearsalLineage {
-                        rollout: attempt as u64,
-                        parent_rollout: Some(parent.lineage.rollout),
-                        parent_snapshot: Some(parent.id),
-                        world_seed: parent.world.seed(),
-                        sampling_seed: u64::from(sampling.seed),
-                        policy_version: policy,
-                        foundation_digest: digest,
-                        source: requested,
-                        variation: variant,
-                        historically_fresh: false,
-                    };
-                    (runtime, target, lineage, Some(applied))
-                }
-                Err(_) => {
-                    invalid_variations += 1;
+        let (mut runtime, target, lineage, variation) =
+            timing.stage(format!("train-{attempt}/runtime_setup"), || {
+                let prepared = if let Some(parent) = parent {
+                    parent.lineage.require_policy(policy, digest)?;
+                    let organism = learner(&parent.world)?;
+                    let target = parent.target;
+                    let variant = SceneVariation::for_attempt(attempt);
+                    match perturb_rehearsal_world(&parent.world, organism, target, variant) {
+                        Ok((world, applied)) => {
+                            let backend = device.new_staging_like_live()?;
+                            let states = parent
+                                .save
+                                .creatures
+                                .iter()
+                                .filter_map(|creature| creature.gpu_brain.clone())
+                                .collect::<Vec<_>>();
+                            let mut runtime = GpuLiveBrainRuntime::restore_foundation_rehearsal(
+                                backend,
+                                world,
+                                parent.world.seed(),
+                                BrainScaleTier::Standard2048,
+                                &store,
+                                &parent.save.assets,
+                                &states,
+                                sampling,
+                            )?;
+                            let mut base = parent.save.clone();
+                            base.save_id = format!("simulator-rehearsal-{attempt}");
+                            base.replace_headless_world_snapshot(runtime.world())?;
+                            timing.stage("branch/initial_durable_capture", || {
+                                attach_durable(
+                                    &mut runtime,
+                                    output,
+                                    &checkpoint_root,
+                                    attempt as u64,
+                                    base,
+                                    true,
+                                )
+                            })?;
+                            let lineage = RehearsalLineage {
+                                rollout: attempt as u64,
+                                parent_rollout: Some(parent.lineage.rollout),
+                                parent_snapshot: Some(parent.id),
+                                world_seed: parent.world.seed(),
+                                sampling_seed: u64::from(sampling.seed),
+                                policy_version: policy,
+                                foundation_digest: digest,
+                                source: requested,
+                                variation: variant,
+                                historically_fresh: false,
+                            };
+                            (runtime, target, lineage, Some(applied))
+                        }
+                        Err(_) => {
+                            invalid_variations += 1;
+                            fresh_runtime(
+                                &device,
+                                &asset,
+                                inspection.founder_seed_base,
+                                seed,
+                                attempt as u64,
+                                policy,
+                                sampling,
+                                output,
+                                RehearsalSource::Fresh,
+                                Some(timing),
+                            )?
+                        }
+                    }
+                } else {
                     fresh_runtime(
                         &device,
                         &asset,
@@ -233,22 +311,11 @@ pub fn run_simulator_rehearsal(
                         sampling,
                         output,
                         RehearsalSource::Fresh,
+                        Some(timing),
                     )?
-                }
-            }
-        } else {
-            fresh_runtime(
-                &device,
-                &asset,
-                inspection.founder_seed_base,
-                seed,
-                attempt as u64,
-                policy,
-                sampling,
-                output,
-                RehearsalSource::Fresh,
-            )?
-        };
+                };
+                Ok(prepared)
+            })?;
         lineage.validate()?;
         let organism = learner(runtime.world())?;
         let organism_phenotype = runtime
@@ -268,7 +335,7 @@ pub fn run_simulator_rehearsal(
         let mut world_ticks = 0;
         let mut no_progress_polls = 0;
         for decision in 0..config.decisions_per_attempt {
-            if started.elapsed().as_secs() >= config.collection_wall_limit_seconds {
+            if timing.collection_expired() {
                 stopped = true;
                 break;
             }
@@ -278,13 +345,18 @@ pub fn run_simulator_rehearsal(
                 && capture_count < 128
                 && can_capture(output, &checkpoint_root, 2)?
             {
-                snapshot = Some(Arc::new(capture(
-                    &mut runtime,
-                    &store,
-                    capture_count as u64,
-                    target,
-                    lineage.clone(),
-                    output,
+                snapshot = Some(Arc::new(timing.stage(
+                    format!("train-{attempt}/capture-{decision}"),
+                    || {
+                        capture(
+                            &mut runtime,
+                            &store,
+                            capture_count as u64,
+                            target,
+                            lineage.clone(),
+                            output,
+                        )
+                    },
                 )?));
                 capture_count += 1;
                 if directory_bytes(&checkpoint_root)? > 512 * 1024 * 1024 {
@@ -292,26 +364,37 @@ pub fn run_simulator_rehearsal(
                 }
             }
             let unheld_before = unheld(runtime.world(), target);
-            let deadline =
-                started + std::time::Duration::from_secs(config.collection_wall_limit_seconds);
-            let Some(advanced) = progress_tick(&mut runtime, deadline, &mut no_progress_polls)?
+            let deadline = timing.collection_deadline();
+            let Some((advanced, terminal, mut captured)) =
+                timing.stage(format!("train-{attempt}/decision-{decision}"), || {
+                    let Some(advanced) =
+                        progress_tick(&mut runtime, deadline, &mut no_progress_polls)?
+                    else {
+                        return Ok(None);
+                    };
+                    let terminal =
+                        runtime
+                            .take_foundation_terminal_biology(organism)
+                            .or_else(|| {
+                                runtime.world().organism_registry().get(organism).and_then(
+                                    |record| {
+                                        (!record.lifecycle().is_alive())
+                                            .then_some(*record.biochemistry())
+                                    },
+                                )
+                            });
+                    let captured = runtime.take_foundation_training_steps();
+                    // Persist actual work before the post-stage wall check: a
+                    // slow atomic GPU call still consumed these decisions.
+                    timing.record_decisions(captured.len(), false)?;
+                    Ok(Some((advanced, terminal, captured)))
+                })?
             else {
                 stopped = true;
                 break;
             };
             world_ticks += advanced;
-            terminal_biology = runtime
-                .take_foundation_terminal_biology(organism)
-                .or_else(|| {
-                    runtime
-                        .world()
-                        .organism_registry()
-                        .get(organism)
-                        .and_then(|record| {
-                            (!record.lifecycle().is_alive()).then_some(*record.biochemistry())
-                        })
-                });
-            let mut captured = runtime.take_foundation_training_steps();
+            terminal_biology = terminal;
             if captured.is_empty() {
                 stopped_for_sleep = terminal_biology.is_none();
                 break; // train the completed prefix instead of discarding prior attempts
@@ -333,7 +416,7 @@ pub fn run_simulator_rehearsal(
         }
         let terminated = terminal_biology.is_some();
         if steps.len() < if terminated { 1 } else { 2 } {
-            receipts.push(SimulatorAttemptReceipt {
+            let receipt = SimulatorAttemptReceipt {
                 lineage,
                 variation,
                 decisions: steps.len(),
@@ -346,221 +429,244 @@ pub fn run_simulator_rehearsal(
                 training_reward_sum: None,
                 elapsed_seconds: attempt_started.elapsed().as_secs_f64(),
                 retained_snapshot: None,
-            });
+            };
+            write_attempt(output, attempt, &receipt)?;
+            receipts.push(receipt);
+            release_runtime(
+                runtime,
+                timing,
+                &format!("train-{attempt}/persistence_and_release"),
+                config.collection_wall_limit_seconds,
+            )?;
             continue;
         }
-        let burn_in = config
-            .burn_in
-            .min(steps.len() - if terminated { 1 } else { 2 });
-        let mut sequence = crate::foundation_replay_sequence(&steps, burn_in)?;
-        let phenotype = steps[0].before.phenotype.as_ref().clone();
-        asset.validate_against(&phenotype)?;
-        if trainer.is_none() {
-            let mut next = FoundationTrainer::from_session(
-                alife_runtime::GpuAuthoritativeSession::new(
-                    device.new_staging_like_live()?,
-                    alife_runtime::GpuSessionConsumerKind::Training,
-                ),
-                phenotype,
-                asset.clone(),
-                actor.stage_mask.clone(),
-                AdamWConfig::default(),
-            )?;
-            next.restore_checkpoint(&actor)?;
-            if serde_json::to_vec(&next.checkpoint()?)? != serde_json::to_vec(&actor)? {
-                return Err("actor changed before training".into());
-            }
-            trainer = Some(next);
-        }
-        let trainer = trainer.as_mut().ok_or("missing trainer")?;
-        // Predict every value with the unmodified source head before any update.
-        let values = value.predict_values(trainer, &sequence)?;
-        if windows.is_empty()
-            && serde_json::to_vec(&value.checkpoint(trainer.session())?)?
-                != serde_json::to_vec(&value_checkpoint)?
-        {
-            return Err("value head changed before training".into());
-        }
-        let replay_dir = output.join(format!("replay-{attempt:03}"));
-        let replay_source = crate::foundation_training::foundation_replay_source(
-            &steps[0].before.phenotype,
-            &asset,
-            policy,
-            &serde_json::to_vec(&actor)?,
-        )?;
-        let mut writer = crate::FoundationReplayWriter::new(
-            &replay_dir,
-            replay_source,
-            steps[0].before.phenotype.as_ref().clone(),
-            &asset,
-            crate::FoundationReplayBudget::default(),
-        )?;
-        let references = steps
-            .iter()
-            .map(|step| writer.append(step))
-            .collect::<Result<Vec<_>>>()?;
-        std::fs::write(
-            replay_dir.join("manifest.json"),
-            serde_json::to_vec_pretty(&references)?,
-        )?;
-        let feature_base = critic_features.len();
-        for step in &steps {
-            critic_features.push(crate::foundation_training::snapshot_activation(
-                &step.after_inference,
-            )?);
-        }
-        let range = rehearsal_loss_range(steps.len(), burn_in, terminated)?;
-        let mut transitions = Vec::new();
-        let mut reward_sum = 0.0;
-        for index in range.clone() {
-            let step = &steps[index];
-            let mut reward = biological_reward(step, &organism_phenotype)?;
-            let terminal = terminated && index + 1 == range.end;
-            let mut elapsed_seconds = if terminal {
-                0.05
-            } else {
-                (steps[index + 1].frame.tick().raw() - step.frame.tick().raw()) as f32 / 20.0
-            };
-            if terminal {
-                let after = step
-                    .patch
-                    .outcome()
-                    .measured_physiology
-                    .ok_or("terminal action missing physiology")?
-                    .after;
-                let final_state = terminal_biology.ok_or("missing terminal biology")?;
-                let (elapsed, tail_discount) = terminal_credit_timing(
-                    step.frame.tick().raw(),
-                    after.tick.raw(),
-                    final_state.tick.raw(),
-                    ppo.discount_half_life_seconds,
-                )?;
-                elapsed_seconds = elapsed;
-                if final_state.tick > after.tick {
-                    let gap = alife_core::MeasuredPhysiologyTransition::new(after, final_state)?;
-                    reward = (reward
-                        + biological_gap_reward(&gap, &organism_phenotype)? * tail_discount)
-                        .clamp(-1.0, 1.0);
+        timing.stage(
+            format!("train-{attempt}/replay_and_value_preparation"),
+            || {
+                let burn_in = config
+                    .burn_in
+                    .min(steps.len() - if terminated { 1 } else { 2 });
+                let mut sequence = crate::foundation_replay_sequence(&steps, burn_in)?;
+                let phenotype = steps[0].before.phenotype.as_ref().clone();
+                asset.validate_against(&phenotype)?;
+                if trainer.is_none() {
+                    let mut next = FoundationTrainer::from_session(
+                        alife_runtime::GpuAuthoritativeSession::new(
+                            device.new_staging_like_live()?,
+                            alife_runtime::GpuSessionConsumerKind::Training,
+                        ),
+                        phenotype,
+                        asset.clone(),
+                        actor.stage_mask.clone(),
+                        AdamWConfig::default(),
+                    )?;
+                    next.restore_checkpoint(&actor)?;
+                    if serde_json::to_vec(&next.checkpoint()?)? != serde_json::to_vec(&actor)? {
+                        return Err("actor changed before training".into());
+                    }
+                    trainer = Some(next);
                 }
-            }
-            reward_sum += reward;
-            critic_rows.push(alife_training::CriticResidualRow {
-                current: (feature_base + index) as u32,
-                next: (feature_base + if terminal { index } else { index + 1 }) as u32,
-                reward,
-                discount: if terminal {
-                    0.0
+                let trainer = trainer.as_mut().ok_or("missing trainer")?;
+                // Predict every value with the unmodified source head before any update.
+                let values = value.predict_values(trainer, &sequence)?;
+                if windows.is_empty()
+                    && serde_json::to_vec(&value.checkpoint(trainer.session())?)?
+                        != serde_json::to_vec(&value_checkpoint)?
+                {
+                    return Err("value head changed before training".into());
+                }
+                let replay_dir = output.join(format!("replay-{attempt:03}"));
+                let replay_source = crate::foundation_training::foundation_replay_source(
+                    &steps[0].before.phenotype,
+                    &asset,
+                    policy,
+                    &serde_json::to_vec(&actor)?,
+                )?;
+                let mut writer = crate::FoundationReplayWriter::new(
+                    &replay_dir,
+                    replay_source,
+                    steps[0].before.phenotype.as_ref().clone(),
+                    &asset,
+                    crate::FoundationReplayBudget::default(),
+                )?;
+                let references = steps
+                    .iter()
+                    .map(|step| writer.append(step))
+                    .collect::<Result<Vec<_>>>()?;
+                std::fs::write(
+                    replay_dir.join("manifest.json"),
+                    serde_json::to_vec_pretty(&references)?,
+                )?;
+                let feature_base = critic_features.len();
+                for step in &steps {
+                    critic_features.push(crate::foundation_training::snapshot_activation(
+                        &step.after_inference,
+                    )?);
+                }
+                let range = rehearsal_loss_range(steps.len(), burn_in, terminated)?;
+                let mut transitions = Vec::new();
+                let mut reward_sum = 0.0;
+                for index in range.clone() {
+                    let step = &steps[index];
+                    let mut reward = biological_reward(step, &organism_phenotype)?;
+                    let terminal = terminated && index + 1 == range.end;
+                    let mut elapsed_seconds = if terminal {
+                        0.05
+                    } else {
+                        (steps[index + 1].frame.tick().raw() - step.frame.tick().raw()) as f32
+                            / 20.0
+                    };
+                    if terminal {
+                        let after = step
+                            .patch
+                            .outcome()
+                            .measured_physiology
+                            .ok_or("terminal action missing physiology")?
+                            .after;
+                        let final_state = terminal_biology.ok_or("missing terminal biology")?;
+                        let (elapsed, tail_discount) = terminal_credit_timing(
+                            step.frame.tick().raw(),
+                            after.tick.raw(),
+                            final_state.tick.raw(),
+                            ppo.discount_half_life_seconds,
+                        )?;
+                        elapsed_seconds = elapsed;
+                        if final_state.tick > after.tick {
+                            let gap =
+                                alife_core::MeasuredPhysiologyTransition::new(after, final_state)?;
+                            reward = (reward
+                                + biological_gap_reward(&gap, &organism_phenotype)?
+                                    * tail_discount)
+                                .clamp(-1.0, 1.0);
+                        }
+                    }
+                    reward_sum += reward;
+                    critic_rows.push(alife_training::CriticResidualRow {
+                        current: (feature_base + index) as u32,
+                        next: (feature_base + if terminal { index } else { index + 1 }) as u32,
+                        reward,
+                        discount: if terminal {
+                            0.0
+                        } else {
+                            (-std::f64::consts::LN_2 * f64::from(elapsed_seconds)
+                                / f64::from(ppo.discount_half_life_seconds))
+                            .exp() as f32
+                        },
+                    });
+                    transitions.push(PpoTransition {
+                        policy_version: policy,
+                        trajectory_id: attempt as u64,
+                        step: index as u64,
+                        action: joint_action(&step.behavior)?,
+                        reward,
+                        old_value: values[index],
+                        next_value: if terminal { 0.0 } else { values[index + 1] },
+                        elapsed_seconds,
+                        boundary: if terminal {
+                            PpoBoundary::Terminated
+                        } else if index + 1 == range.end {
+                            PpoBoundary::Truncated
+                        } else {
+                            PpoBoundary::Continuing
+                        },
+                    });
+                }
+                // The final real decision bootstraps truncation; it has no loss.
+                if !terminated {
+                    sequence.ticks.pop();
+                }
+                let batch = PpoBatch::from_rollout(policy, transitions, ppo)?;
+                windows.push(PpoTrainingWindow {
+                    speech_targets: vec![None; sequence.ticks.len()],
+                    sequence,
+                    batch,
+                    auxiliary: None,
+                });
+                let difficult = terminated
+                    || steps.iter().any(|step| {
+                        let outcome = step.patch.outcome();
+                        let blocked = |physical: &alife_core::PhysicalActionOutcome| {
+                            matches!(
+                                physical.contact,
+                                alife_core::PhysicalContactKind::Blocked
+                                    | alife_core::PhysicalContactKind::Collision
+                            )
+                        };
+                        blocked(&outcome.physical)
+                            || outcome.joint.as_ref().is_some_and(|joint| {
+                                joint
+                                    .channel_outcomes
+                                    .iter()
+                                    .any(|channel| blocked(&channel.physical))
+                            })
+                            || outcome
+                                .measured_physiology
+                                .is_some_and(|transition| transition.aversive_value() > 0.0)
+                    });
+                let retained = if useful > 0 {
+                    successful_snapshot
+                } else if difficult {
+                    snapshot
                 } else {
-                    (-std::f64::consts::LN_2 * f64::from(elapsed_seconds)
-                        / f64::from(ppo.discount_half_life_seconds))
-                    .exp() as f32
-                },
-            });
-            transitions.push(PpoTransition {
-                policy_version: policy,
-                trajectory_id: attempt as u64,
-                step: index as u64,
-                action: joint_action(&step.behavior)?,
-                reward,
-                old_value: values[index],
-                next_value: if terminal { 0.0 } else { values[index + 1] },
-                elapsed_seconds,
-                boundary: if terminal {
-                    PpoBoundary::Terminated
-                } else if index + 1 == range.end {
-                    PpoBoundary::Truncated
-                } else {
-                    PpoBoundary::Continuing
-                },
-            });
-        }
-        // The final real decision bootstraps truncation; it has no loss.
-        if !terminated {
-            sequence.ticks.pop();
-        }
-        let batch = PpoBatch::from_rollout(policy, transitions, ppo)?;
-        windows.push(PpoTrainingWindow {
-            speech_targets: vec![None; sequence.ticks.len()],
-            sequence,
-            batch,
-            auxiliary: None,
-        });
-        let difficult = terminated
-            || steps.iter().any(|step| {
-                let outcome = step.patch.outcome();
-                let blocked = |physical: &alife_core::PhysicalActionOutcome| {
-                    matches!(
-                        physical.contact,
-                        alife_core::PhysicalContactKind::Blocked
-                            | alife_core::PhysicalContactKind::Collision
-                    )
+                    None
                 };
-                blocked(&outcome.physical)
-                    || outcome.joint.as_ref().is_some_and(|joint| {
-                        joint
-                            .channel_outcomes
-                            .iter()
-                            .any(|channel| blocked(&channel.physical))
-                    })
-                    || outcome
-                        .measured_physiology
-                        .is_some_and(|transition| transition.aversive_value() > 0.0)
-            });
-        let retained = if useful > 0 {
-            successful_snapshot
-        } else if difficult {
-            snapshot
-        } else {
-            None
-        };
-        let retained_id = retained.as_ref().map(|s| s.id);
-        if let Some(snapshot) = retained {
-            if useful > 0 {
-                successes.retain(lineage.world_seed, lineage.variation, snapshot);
-            } else {
-                failures.retain(lineage.world_seed, lineage.variation, snapshot);
-            }
-        }
-        let receipt = SimulatorAttemptReceipt {
-            lineage,
-            variation,
-            decisions: steps.len(),
-            world_ticks,
-            no_progress_polls,
-            stopped_for_sleep,
-            terminated,
-            train_rows: range.len(),
-            useful_successes: useful,
-            training_reward_sum: Some(reward_sum),
-            elapsed_seconds: attempt_started.elapsed().as_secs_f64(),
-            retained_snapshot: retained_id,
-        };
-        std::fs::write(
-            output.join(format!("attempt-{attempt:03}.json")),
-            serde_json::to_vec_pretty(&receipt)?,
+                let retained_id = retained.as_ref().map(|s| s.id);
+                if let Some(snapshot) = retained {
+                    if useful > 0 {
+                        successes.retain(lineage.world_seed, lineage.variation, snapshot);
+                    } else {
+                        failures.retain(lineage.world_seed, lineage.variation, snapshot);
+                    }
+                }
+                let receipt = SimulatorAttemptReceipt {
+                    lineage,
+                    variation,
+                    decisions: steps.len(),
+                    world_ticks,
+                    no_progress_polls,
+                    stopped_for_sleep,
+                    terminated,
+                    train_rows: range.len(),
+                    useful_successes: useful,
+                    training_reward_sum: Some(reward_sum),
+                    elapsed_seconds: attempt_started.elapsed().as_secs_f64(),
+                    retained_snapshot: retained_id,
+                };
+                write_attempt(output, attempt, &receipt)?;
+                receipts.push(receipt);
+                Ok(())
+            },
         )?;
-        receipts.push(receipt);
+        release_runtime(
+            runtime,
+            timing,
+            &format!("train-{attempt}/persistence_and_release"),
+            config.collection_wall_limit_seconds,
+        )?;
     }
     if windows.is_empty() {
         return Err("wall budget expired before any complete attempt".into());
     }
-    let collection_seconds = started.elapsed().as_secs_f64();
+    let collection_seconds = timing.elapsed().as_secs_f64();
     let update_started = Instant::now();
     let mut trainer = trainer.ok_or("missing actor")?;
     // One accumulation batch includes every attempt, including every failure,
     // before the first update. KL stopping therefore cannot omit later attempts.
-    let update = alife_training::train_recurrent_ppo_cohort(
-        &mut trainer,
-        &mut value,
-        windows.len(),
-        windows.len(),
-        |index| Ok(windows[index].clone()),
-        ppo,
-        policy,
-    )?;
-    if update.actor_optimizer_step <= actor.optimizer_step {
+    let update = timing.stage("actor_update", || {
+        Ok(alife_training::train_recurrent_ppo_cohort(
+            &mut trainer,
+            &mut value,
+            windows.len(),
+            windows.len(),
+            |index| Ok(windows[index].clone()),
+            ppo,
+            policy,
+        )?)
+    })?;
+    if Some(update.actor_optimizer_step) != actor.optimizer_step.checked_add(1) {
         return Err("all-attempt optimizer update was not applied".into());
     }
+    let final_value = timing.stage("critic_update", || {
     let mut residual = alife_training::FrozenCriticResidualExperiment::new(
         trainer.session(),
         &value.checkpoint(trainer.session())?,
@@ -573,7 +679,7 @@ pub fn run_simulator_rehearsal(
     let critic_after = residual.evaluate(trainer.session())?;
     let mut final_value = residual.checkpoint(trainer.session())?;
     final_value.last_updated_policy_version = Some(policy);
-    if final_value.optimizer_step <= value_checkpoint.optimizer_step {
+    if Some(final_value.optimizer_step) != value_checkpoint.optimizer_step.checked_add(1) {
         return Err("all-attempt residual critic update was not applied".into());
     }
     std::fs::write(
@@ -582,100 +688,138 @@ pub fn run_simulator_rehearsal(
             &serde_json::json!({"objective_version":1,"objective":"full_sampled_one_step_bellman_residual","feature_authority":"captured_production_GPU_after_inference","actor_GAE_unchanged":true,"loss_rows":critic_rows.len(),"bootstrap_is_loss_row":false,"initial_age":value_checkpoint.optimizer_step,"final_age":final_value.optimizer_step,"Adam_reset":false,"before":critic_before,"after":critic_after}),
         )?,
     )?;
-    let trained = trainer.export_candidate(asset.manifest().training_stage())?;
-    let next_phenotype = crate::foundation_archived_success_replay::compile_source(
-        trained.clone(),
-        config.seed,
-        inspection.founder_seed_base,
-    )?;
-    trainer.rebind_for_next_cohort(next_phenotype, trained.clone())?;
-    std::fs::write(
-        output.join("trained.alife-foundation"),
-        trained.encode_canonical()?,
-    )?;
-    std::fs::write(
-        output.join("actor-checkpoint.json"),
-        serde_json::to_vec(&trainer.checkpoint()?)?,
-    )?;
-    std::fs::write(
-        output.join("value-checkpoint.json"),
-        serde_json::to_vec(&final_value)?,
-    )?;
+    Ok(final_value)
+    })?;
+    let trained = timing.stage("export_and_optimizer_rebind", || {
+        let trained = trainer.export_candidate(asset.manifest().training_stage())?;
+        let next_phenotype = crate::foundation_archived_success_replay::compile_source(
+            trained.clone(),
+            config.seed,
+            inspection.founder_seed_base,
+        )?;
+        trainer.rebind_for_next_cohort(next_phenotype, trained.clone())?;
+        std::fs::write(
+            output.join("trained.alife-foundation"),
+            trained.encode_canonical()?,
+        )?;
+        std::fs::write(
+            output.join("actor-checkpoint.json"),
+            serde_json::to_vec(&trainer.checkpoint()?)?,
+        )?;
+        std::fs::write(
+            output.join("value-checkpoint.json"),
+            serde_json::to_vec(&final_value)?,
+        )?;
+        Ok(trained)
+    })?;
     let update_seconds = update_started.elapsed().as_secs_f64();
     let holdout_started = Instant::now();
     let mut holdouts = Vec::new();
     let mut next_cohort_checked = false;
     for (index, seed) in holdout_seeds.into_iter().enumerate() {
-        let (mut runtime, target, lineage, _) = fresh_runtime(
-            &device,
-            &trained,
-            inspection.founder_seed_base,
-            seed,
-            config.attempts as u64 + index as u64,
-            policy + 1,
-            sampling(seed, 0),
-            output,
-            RehearsalSource::Holdout,
-        )?;
-        let time = Instant::now();
-        let organism = learner(runtime.world())?;
-        let mut useful = 0;
-        let mut decisions = 0;
-        let mut world_ticks = 0;
-        let mut no_progress_polls = 0;
-        let mut terminated = false;
-        let mut stopped_for_sleep = false;
-        for _ in 0..config.decisions_per_attempt {
-            let unheld_before = unheld(runtime.world(), target);
-            let deadline =
-                time + std::time::Duration::from_secs(config.collection_wall_limit_seconds);
-            let Some(advanced) = progress_tick(&mut runtime, deadline, &mut no_progress_polls)?
-            else {
-                break;
-            };
-            world_ticks += advanced;
-            terminated = runtime.take_foundation_terminal_biology(organism).is_some();
-            let steps = runtime.take_foundation_training_steps();
-            if steps.is_empty() {
-                stopped_for_sleep = !terminated;
-                break;
-            }
-            for step in steps {
-                trained.validate_against(&step.before.phenotype)?;
-                if step.before.phenotype.as_ref() != trainer.phenotype() {
-                    return Err("exported next cohort graph differs from rebound actor".into());
+        timing.stage(format!("holdout-{index}"), || {
+            let (mut runtime, target, lineage, _) = fresh_runtime(
+                &device,
+                &trained,
+                inspection.founder_seed_base,
+                seed,
+                config.attempts as u64 + index as u64,
+                policy + 1,
+                sampling(seed, 0),
+                output,
+                RehearsalSource::Holdout,
+                Some(timing),
+            )?;
+            let time = Instant::now();
+            let organism = learner(runtime.world())?;
+            let mut useful = 0;
+            let mut decisions = 0;
+            let mut world_ticks = 0;
+            let mut no_progress_polls = 0;
+            let mut terminated = false;
+            let mut stopped_for_sleep = false;
+            for decision in 0..config.decisions_per_attempt {
+                let unheld_before = unheld(runtime.world(), target);
+                let deadline = timing.deadline(
+                    time + std::time::Duration::from_secs(config.collection_wall_limit_seconds),
+                );
+                let Some((advanced, terminal, steps)) =
+                    timing.stage(format!("holdout-{index}/decision-{decision}"), || {
+                        let Some(advanced) =
+                            progress_tick(&mut runtime, deadline, &mut no_progress_polls)?
+                        else {
+                            return Ok(None);
+                        };
+                        let terminal = runtime.take_foundation_terminal_biology(organism).is_some();
+                        let steps = runtime.take_foundation_training_steps();
+                        timing.record_decisions(steps.len(), true)?;
+                        Ok(Some((advanced, terminal, steps)))
+                    })?
+                else {
+                    break;
+                };
+                world_ticks += advanced;
+                terminated = terminal;
+                if steps.is_empty() {
+                    stopped_for_sleep = !terminated;
+                    break;
                 }
-                next_cohort_checked = true;
-                decisions += 1;
-                useful += usize::from(useful_success(
-                    &step,
-                    target,
-                    unheld_before,
-                    runtime.world(),
-                ));
+                if steps.len() > 1 {
+                    return Err("holdout captured more than one private learner".into());
+                }
+                for step in steps {
+                    trained.validate_against(&step.before.phenotype)?;
+                    if step.before.phenotype.as_ref() != trainer.phenotype() {
+                        return Err("exported next cohort graph differs from rebound actor".into());
+                    }
+                    next_cohort_checked = true;
+                    decisions += 1;
+                    useful += usize::from(useful_success(
+                        &step,
+                        target,
+                        unheld_before,
+                        runtime.world(),
+                    ));
+                }
+                if terminated {
+                    break;
+                }
             }
-            if terminated {
-                break;
-            }
-        }
-        holdouts.push(SimulatorAttemptReceipt {
-            lineage,
-            variation: None,
-            decisions,
-            world_ticks,
-            no_progress_polls,
-            stopped_for_sleep,
-            terminated,
-            train_rows: 0,
-            useful_successes: useful,
-            training_reward_sum: None,
-            elapsed_seconds: time.elapsed().as_secs_f64(),
-            retained_snapshot: None,
-        });
+            let receipt = SimulatorAttemptReceipt {
+                lineage,
+                variation: None,
+                decisions,
+                world_ticks,
+                no_progress_polls,
+                stopped_for_sleep,
+                terminated,
+                train_rows: 0,
+                useful_successes: useful,
+                training_reward_sum: None,
+                elapsed_seconds: time.elapsed().as_secs_f64(),
+                retained_snapshot: None,
+            };
+            std::fs::write(
+                output.join(format!("holdout-{index:03}.json")),
+                serde_json::to_vec_pretty(&receipt)?,
+            )?;
+            holdouts.push(receipt);
+            release_runtime(
+                runtime,
+                timing,
+                &format!("holdout-{index}/persistence_and_release"),
+                config.collection_wall_limit_seconds,
+            )?;
+            Ok(())
+        })?;
     }
     if !next_cohort_checked {
         return Err("exported next cohort produced no real decision".into());
     }
+    timing.stage("optimizer_device_release", || {
+        drop((trainer, value, device, store));
+        Ok(())
+    })?;
     let receipt = SimulatorRehearsalReceipt {
         schema: "alife.simulator-rehearsal.v1",
         config,
@@ -700,25 +844,50 @@ pub fn run_simulator_rehearsal(
         value_optimizer_before: value_checkpoint.optimizer_step,
         value_optimizer_after: final_value.optimizer_step,
         first_update_covers_all_trainable_attempts: true,
-        elapsed_seconds: started.elapsed().as_secs_f64(),
+        elapsed_seconds: timing.elapsed().as_secs_f64(),
         collection_stopped_for_budget: stopped,
         historical_freshness: "unknown",
         generalization_evidence:
             "within-run disjoint holdouts only; historical unseen-scene generalization unknown",
     };
-    std::fs::write(
-        output.join("rehearsal.json"),
-        serde_json::to_vec_pretty(&receipt)?,
-    )?;
-    // Publish last: an incomplete run has no admissible continuation marker.
-    continuation::publish(
-        output,
-        policy,
-        &receipt.source,
-        trainer.optimizer_step(),
-        final_value.optimizer_step,
-    )?;
     Ok(receipt)
+}
+
+fn write_attempt(output: &Path, attempt: usize, receipt: &SimulatorAttemptReceipt) -> Result<()> {
+    std::fs::write(
+        output.join(format!("attempt-{attempt:03}.json")),
+        serde_json::to_vec_pretty(receipt)?,
+    )?;
+    Ok(())
+}
+
+fn release_runtime(
+    mut runtime: GpuLiveBrainRuntime,
+    timing: &RunTiming,
+    name: &str,
+    fallback_seconds: u64,
+) -> Result<()> {
+    timing.stage(name, || {
+        let tick = runtime.world().tick();
+        let deadline =
+            timing.deadline(Instant::now() + std::time::Duration::from_secs(fallback_seconds));
+        while !runtime.persistence_idle_for_shutdown() {
+            if runtime.persistence_failed_for_shutdown() || Instant::now() >= deadline {
+                return Err(format!(
+                    "rehearsal persistence shutdown incomplete: {}",
+                    runtime.persistence_shutdown_diagnostics()
+                )
+                .into());
+            }
+            runtime.poll_persistence_for_shutdown()?;
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        if runtime.persistence_failed_for_shutdown() || runtime.world().tick() != tick {
+            return Err("rehearsal persistence shutdown failed or advanced world time".into());
+        }
+        drop(runtime);
+        Ok(())
+    })
 }
 
 fn sampling(seed: u64, attempt: u64) -> GpuTrainingSamplingConfig {
@@ -753,6 +922,7 @@ fn fresh_runtime(
     sampling: GpuTrainingSamplingConfig,
     output: &Path,
     source: RehearsalSource,
+    timing: Option<&RunTiming>,
 ) -> Result<(
     GpuLiveBrainRuntime,
     WorldEntityId,
@@ -764,23 +934,29 @@ fn fresh_runtime(
         seed,
         rollout,
     };
-    let (game, target) = fresh::prepare_scene(asset, &context)?;
+    let (game, target) = timing::optional_stage(timing, "fresh/scene_configuration", || {
+        fresh::prepare_scene(asset, &context)
+    })?;
     let creatures = game.creatures;
-    let staging = context.stage("GPU staging allocation", device.new_staging_like_live())?;
-    let mut runtime = context.stage(
-        "GPU resident construction",
-        GpuLiveBrainRuntime::new_profiled_foundation_training(
-            staging,
-            game.world,
-            seed,
-            BrainScaleTier::Standard2048,
-            asset.manifest().sensor_profile(),
-            alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
-            format!("simulator-rehearsal-{rollout}"),
-            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-            sampling,
-        ),
-    )?;
+    let mut runtime =
+        timing::optional_stage(timing, "fresh/resident_and_archive_construction", || {
+            let staging =
+                context.stage("GPU staging allocation", device.new_staging_like_live())?;
+            context.stage(
+                "GPU resident construction",
+                GpuLiveBrainRuntime::new_profiled_foundation_training(
+                    staging,
+                    game.world,
+                    seed,
+                    BrainScaleTier::Standard2048,
+                    asset.manifest().sensor_profile(),
+                    alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
+                    format!("simulator-rehearsal-{rollout}"),
+                    alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+                    sampling,
+                ),
+            )
+        })?;
     let mut creatures = creatures;
     for creature in &mut creatures {
         let biology = runtime
@@ -806,16 +982,22 @@ fn fresh_runtime(
             creatures,
         ),
     )?;
-    context.stage(
-        "initial durable snapshot",
-        attach_durable(
-            &mut runtime,
-            output,
-            &output.join("snapshot-assets"),
-            rollout,
-            base,
-            false,
-        ),
+    timing::optional_stage(
+        timing,
+        "fresh/initial_durable_capture_and_publication",
+        || {
+            context.stage(
+                "initial durable snapshot",
+                attach_durable(
+                    &mut runtime,
+                    output,
+                    &output.join("snapshot-assets"),
+                    rollout,
+                    base,
+                    false,
+                ),
+            )
+        },
     )?;
     let lineage = RehearsalLineage {
         rollout,
@@ -962,6 +1144,7 @@ mod tests {
             decisions_per_attempt: 8,
             burn_in: 2,
             collection_wall_limit_seconds: 60,
+            qualification_wall_limit_seconds: None,
             control_fresh: false,
         }
     }
@@ -984,6 +1167,87 @@ mod tests {
         );
         assert!(!output.exists());
     }
+    #[test]
+    fn qualification_cannot_expand_decisions_or_start_comparison() {
+        let mut qualify = config();
+        qualify.collection_wall_limit_seconds = 240;
+        qualify.qualification_wall_limit_seconds = Some(360);
+        qualify.validate().unwrap();
+        assert_eq!((qualify.attempts + 2) * qualify.decisions_per_attempt, 48);
+        for field in [
+            "attempts",
+            "decisions",
+            "burn",
+            "collection",
+            "total",
+            "control",
+        ] {
+            let mut changed = qualify.clone();
+            match field {
+                "attempts" => changed.attempts += 1,
+                "decisions" => changed.decisions_per_attempt += 1,
+                "burn" => changed.burn_in += 1,
+                "collection" => changed.collection_wall_limit_seconds += 1,
+                "total" => changed.qualification_wall_limit_seconds = Some(361),
+                _ => changed.control_fresh = true,
+            }
+            assert!(changed.validate().is_err(), "{field}");
+        }
+        let output = std::env::temp_dir().join(format!(
+            "alife-rehearsal-no-qualification-compare-{}",
+            std::process::id()
+        ));
+        assert!(
+            compare_simulator_rehearsal(&output.join("missing"), &output, qualify)
+                .unwrap_err()
+                .to_string()
+                .contains("cannot start a comparison")
+        );
+        assert!(!output.exists());
+    }
+
+    #[test]
+    fn zero_row_budget_exit_keeps_real_attempt_receipt() {
+        let output =
+            std::env::temp_dir().join(format!("alife-rehearsal-zero-rows-{}", std::process::id()));
+        std::fs::create_dir(&output).unwrap();
+        // Synthetic receipt-format fixture only; no behavioral evidence.
+        let receipt = SimulatorAttemptReceipt {
+            lineage: RehearsalLineage {
+                rollout: 0,
+                parent_rollout: None,
+                parent_snapshot: None,
+                world_seed: 71_001,
+                sampling_seed: 71_001,
+                policy_version: 7401,
+                foundation_digest: [1; 32],
+                source: RehearsalSource::Fresh,
+                variation: SceneVariation::Original,
+                historically_fresh: false,
+            },
+            variation: None,
+            decisions: 0,
+            train_rows: 0,
+            useful_successes: 0,
+            world_ticks: 0,
+            no_progress_polls: 0,
+            stopped_for_sleep: false,
+            terminated: false,
+            training_reward_sum: None,
+            elapsed_seconds: 9.5,
+            retained_snapshot: None,
+        };
+        write_attempt(&output, 0, &receipt).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(output.join("attempt-000.json")).unwrap())
+                .unwrap();
+        assert_eq!(saved["lineage"]["world_seed"], 71_001);
+        assert_eq!(saved["decisions"], 0);
+        assert_eq!(saved["train_rows"], 0);
+        assert!(saved["training_reward_sum"].is_null());
+        assert!(!output.join("rehearsal-continuation.json").exists());
+        std::fs::remove_dir_all(output).unwrap();
+    }
 }
 
 /// Matched decision/collection-time ceilings from the same immutable source.
@@ -995,6 +1259,9 @@ pub fn compare_simulator_rehearsal(
     mut config: SimulatorRehearsalConfig,
 ) -> Result<serde_json::Value> {
     config.validate()?;
+    if config.qualification_wall_limit_seconds.is_some() {
+        return Err("qualification cannot start a comparison".into());
+    }
     continuation::inspect(source, config.expected_source_policy)?;
     std::fs::create_dir(output)?;
     config.control_fresh = true;
@@ -1053,6 +1320,7 @@ mod gpu_tests {
             sampling,
             &output,
             RehearsalSource::Fresh,
+            None,
         )
         .unwrap();
         let mut resume_sampling = sampling;

@@ -69,11 +69,13 @@ commits to remove the experiment; source checkpoints are read-only.
 
 The parent owns hardware scheduling after group50's bounded test. The explicit
 `--qualify` CLI profile admits at most 48 decisions per invocation and cannot be
-combined with `--compare`. Its 15-second collection admission limit is soft;
-`docs/SIMULATOR_REHEARSAL_QUALIFICATION.md` requires serial execution, separate
-prebuilds and an operator-enforced hard stop of at most 60 seconds per execution
-(or the PC owner's smaller allowance). No hardware execution or Library transfer
-retry was performed here. Small qualification does not establish learning benefit.
+combined with `--compare`. The initial agent-selected 15-second collection and
+60-second process smoke bounds failed to admit a complete accepted-source attempt.
+The revised explicit qualification profile uses 240 seconds from entry for
+collection and 360 seconds overall, preserving all 48 decisions and single updates.
+See the qualification handoff for measured capture evidence, timestamp-derived
+planning rationale and limitations. No hardware retry or Library transfer was
+performed here. Small qualification does not establish learning benefit.
 
 Qualification follow-up checks: three `rehearse_n2048_care` binary tests passed;
 strict foundation-training all-target Clippy and the CLI build passed. Bounded-mode
@@ -208,3 +210,35 @@ blocking findings, including the assertion that persistence drain preserves worl
 time. The exact ignored fixture's executable compilation was pending at this
 source freeze checkpoint; its terminal evidence belongs in PR109 without another
 source change. Compilation does not establish Windows hardware qualification.
+
+## Qualification budget diagnosis — 2026-10-20
+
+Exact e21749e8 Windows continuity passed one test in 28.653 seconds. Accepted-source
+A then failed after 28.706 seconds before a complete attempt, with no update or
+continuation; B never ran. Its capture ledger measured 9.6569172 seconds for one
+exact capture. File timestamps suggest a roughly 120-second setup/capture estimate
+for four attempts; this estimate does not measure decision or optimizer cost.
+The parent authorized explicit 240-second collection / 360-second total planning
+allowances without changing attempts, holdouts, masks, source identity or Adam.
+
+New diagnostics persist stage timing and actual decision counts through failure,
+including zero-row attempt receipts. Completion finalization follows persistence
+drain and release of GPU/archive owners; a failed stage or expired allowance,
+including publication overrun, removes the continuation marker. R2 also identified
+an abrupt-stop edge between marker write and final timing: candidate validation
+now precedes marker publication, and qualification-source admission additionally
+requires completed in-budget timing with matching actual decision counts. A
+device-free package-format regression exercises the marker-left-but-unfinished
+case; these synthetic format tests do not claim neural execution. Default mode and
+comparison ceilings remain unchanged. Corrected-pin hardware A/B remains pending;
+no learned-benefit or unseen-generalization claim follows from this repair.
+
+Final repair source checks: the full foundation-training application library
+passed 486 tests with zero failures and five existing ignored timing tests,
+including all 22 simulator rehearsal tests and the real package-format
+interruption regressions. Eight lawful-world/policy/sequence tests, strict
+all-target foundation-training Clippy, boundaries, docs77/77, formatting and
+protected-path checks passed. Independent R2 cleared the interruption finding
+and found no remaining source blockers. Executable compilation and new-head
+hardware/CI evidence are reported separately in PR109; no PC run or new seed was
+launched from this source environment.
