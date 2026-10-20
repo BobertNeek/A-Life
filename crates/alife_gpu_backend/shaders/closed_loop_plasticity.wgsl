@@ -222,17 +222,17 @@ fn eligibility_at_outcome(staged:f32, reference_decay:f32, outcome:GpuOutcomeCre
   return staged * eligibility_decay_for_ticks(reference_decay, elapsed);
 }
 
-// Stabilize the effective weight only when this receptor receives credit.
-// Magnitude (not signed credit) keeps Oja contraction under aversive outcomes.
-// Retaining the effective target bounds expressed strength during learning;
-// ungated normalization instead teaches fast weights to cancel inherited and
-// consolidated strength even when the local third factor is zero.
+// Both terms follow this synapse's temporally credited eligibility. Receptor
+// activation alone must not cancel uncredited inherited/consolidated strength.
+// Credit magnitude keeps Oja contraction nonnegative for either outcome or
+// eligibility sign; persisted traces remain eligible on currently masked routes.
 fn fast_plasticity_delta(
   learning_rate:f32, normalization_rate:f32, alpha:f32,
   local_third_factor:f32, credited_eligibility:f32, post:f32, effective:f32,
 ) -> f32 {
-  return learning_rate*alpha*local_third_factor*credited_eligibility
-    - normalization_rate*abs(local_third_factor)*post*post*effective;
+  let signed_credit = local_third_factor*credited_eligibility;
+  return learning_rate*alpha*signed_credit
+    - normalization_rate*abs(signed_credit)*post*post*effective;
 }
 
 fn evaluate_fast_plasticity_synapse(

@@ -1,278 +1,344 @@
-# Credit-gated production Oja stabilization — 2026-10-20
+# Causally gated production Oja stabilization — 2026-10-20
 
-## Result and scope
+## Measured finding and final rule
 
-The waking production shader applied Oja contraction on every accepted outcome,
-including outcomes whose receptor-projected third factor was exactly zero.
-It left genetic/lifetime arrays intact but trained bounded fast weights to
-counteract their expressed strength. The correction multiplies that existing
-effective-weight normalization by the **magnitude** of local credit. It retains
-the normalization target, both rate controls, alpha placement, fast bounds,
-eligibility timing, transactional guards, and all sleep/replay operations.
+The original waking rule normalized effective strength without local outcome
+credit. The first PR correction gated that term by receptor credit magnitude,
+but still changed a synapse with **exactly zero credited eligibility**.
+The follow-up confirms that this reaches masked recurrent routes and unselected
+decoder families, including nonzero acquired fast/lifetime state.
 
-Isolated execution of the production WGSL helper and the original formula on
-SwiftShader passed 181 paired vectors. At 100,000 zero-credit outcomes, a
-representative alpha-1 decoder retained 0.00011920929 of its initial effective
-0.95 before the change and all 0.95 after it. An alpha-0.25 decoder reached its
-fast-clipping floor of 0.25 from 0.8 before the change and retained 0.8 after it.
-These are controlled shader results, not a trained founder or gameplay score.
+For genetic+lifetime .75, fast .2, alpha .25, post .5 and normalization .001,
+100,000 zero-eligibility outcomes gave these executed WGSL results:
 
-Source baseline: `bda3b65be5fa6f01865b850640adf2e8d01f4990` (fetched main).
-The primary implementation is
-`crates/alife_gpu_backend/shaders/closed_loop_plasticity.wgsl`.
-No checkpoint, learned asset, Adam history, CPU-backend file, digest contract,
-or qualification candidate is modified. PR #109 at `b7a67384` has no
-GPU-backend file overlap; PR #111 was observed at pinned `785d392c`.
-Repository/crate/docs AGENTS instructions were read. No `.agents/skills`
-directory exists in this checkout or the shared `/workspace/.agents` directory.
+| Receptor event | Projected m | Original E | Receptor-only PR E | Final E |
+|---|---:|---:|---:|---:|
+| Novelty 1 | .051282052 | .25 | .58062446 | .8 |
+| Frustration 1 | -.12820512 | .25 | .35900068 | .8 |
+| Pain 1 | -.25641024 | .25 | .25 | .8 |
 
-## Formula and actual gates
+The final rule follows the same per-synapse signed credit in both terms:
 
-Let `G` be genetic weight, `L` lifetime weight, `F` fast weight, `a` alpha,
-`p` postsynaptic activity, `e` credited eligibility, `m` local third factor,
-`eta` effective learning rate, and `lambda` effective normalization rate.
+~~~text
+effective = genetic + lifetime + alpha*fast
+q = projected_third_factor*credited_eligibility
+delta_fast = learning_rate*alpha*q
+           - normalization_rate*abs(q)*post*post*effective
+next_fast = clamp(fast + delta_fast, fast_min, fast_max)
+~~~
 
-```text
-E = G + L + a*F
-old_delta_F = eta*a*m*e - lambda*p*p*E
-new_delta_F = eta*a*m*e - lambda*abs(m)*p*p*E
-F_next = clamp(F + delta_F, receptor.fast_min, receptor.fast_max)
-```
+The implementation computes q first, as an f32 product, in
+fast_plasticity_delta in closed_loop_plasticity.wgsl. Rates, alpha placement,
+the effective-weight target, clamp, finite guards, bank transactions,
+eligibility capture/decay, sleep and replay remain unchanged.
 
-The evaluator now calls `fast_plasticity_delta`; it still loads current active
-banks, stages the unchanged lifetime value, and uses the same clamp. There is
-no save-format or arena-layout change and no history migration/reset.
+Zero m or zero credited eligibility gives an exact zero delta for valid finite
+inputs. Existing bounds remain enforced: an already out-of-bounds fast value
+can still be clamped. No trained history is reset or inferred backwards.
+Commits 2da160fe and dde4fa4f retain historical evidence for the earlier
+receptor-only law, not the final rule.
 
-* Credit is the signed dot product of eight outcome lanes and the heritable
-  receptor vector, divided by the vector's L1 norm and clamped to `[-1,1]`.
-  An all-zero receptor returns zero. Opposing nonzero lanes can also cancel.
-* Lanes are prediction residual, pain, homeostatic improvement, frustration,
-  novelty, social consequence, biochemical appetitive, biochemical aversive.
-  `OutcomeCreditPacket::with_biochemical_receptors` gates the last two by
-  measured improvement/aversive consequences. Baseline hormone tone alone is
-  not credit. No teacher/answer labels are introduced.
-* General default weights are `[.2,-1,1,-.5,.2,0,.5,-.5]` (L1=3.9).
-  Signed-choice action/cognitive/memory profiles omit prediction residual
-  (`[0,-1,1,-.5,.2,0,.5,-.5]`, L1=3.7). For example, isolated improvement
-  1 projects to +0.25641024 / +0.27027026, isolated pain 1 to the negative
-  counterparts, and improvement .01 to +0.0025641024 / +0.0027027025.
-  Equal pain and improvement with other lanes zero project to zero.
-* Compiler policies set inherited receptor rates. Fixed receptor rows have
-  zero learning/normalization/replay rates. Enabled procedural recurrent
-  routes use `mask_scale * .1`; the default TemporalPredictive→ActionPlanning
-  mask is .5. N2048 uses its section slow/fast policy (.25/1) and projection
-  scaling. Decoder rates use their explicit inherited head/family policy.
-* Current developmental modulation multiplies recurrent rates by
-  `1 + max(matching open critical-period bias)` and caps them at inherited
-  global ceilings, independently for learning, replay, normalization. Fixed
-  zero rates remain zero. Decoder rates bypass this transient multiplier.
-  The existing `developmental_plasticity` integration tests compare transport
-  against independently recompiled phenotype rates, including caps/overlaps.
-* Alpha is independently inherited and normalized to `[0,1]`; the default .25
-  becomes .125 on the default .5 mask. Some memory decoder rows use alpha 1.
-  It multiplies the learning term in **fast** space and fast expression again
-  in effective space, so the effective learning drive contains `a*a`.
-  Disabling both genome Oja/Hebbian flags compiles alpha to zero; these flags
-  are not separate runtime branches around the two terms in this shader.
-  Alpha zero suppresses waking fast expression/learning drive, not the
-  normalization term in fast-coefficient space. With nonzero local credit and
-  nonzero normalization rate, latent fast changes can still enter lifetime
-  weights during raw-coefficient sleep promotion. Only a zero inherited rate
-  row is fully delta-disabled; this separate existing alpha/sleep semantic is
-  not changed by the zero-credit fix.
-* Activity-route masks gate new recurrent coactivation, not the normalization
-  evaluator. A throttled route decays its old eligibility. Decoder eligibility
-  follows selected motor/head semantics. The plasticity pass still visits all
-  synapses after the sealed transaction passes identity/generation guards.
-  Zero eligibility alone therefore did not stop the old Oja term.
-* Eligibility is clamped to `[-1,1]` when accumulated; at outcome it is further
-  decayed by `reference_decay^(outcome_tick-origin_tick)`. Default reference
-  decay is .95 per .05-second simulation tick. Delayed outcomes attenuate the
-  learning drive; the Oja term itself has no elapsed-time multiplier. It runs
-  once per accepted outcome, not once per recurrent microstep or wall-clock
-  frame. Counts below mean committed outcomes under maintained activity.
+## Why this is a causal assignment defect here
 
-## Clamped and unclamped retention
+Classical Oja can intentionally change an inactive incoming weight:
+delta w = eta*(post*pre - post^2*w). That competition acts across inputs to
+an active postsynaptic output. Zero pre alone is not a universal mathematical
+reason to prohibit all homeostatic normalization.
 
-At zero projected credit, the original **unclipped** recurrence is
-`E_n = E_0 * (1-a*lambda*p*p)^n`. The fast coefficient is bounded; it is not
-an unbounded weight process. For nonnegative alpha and a stable monotone step,
-the effective trajectory stops at the nearest reachable endpoint of
-`[G+L+a*fast_min, G+L+a*fast_max]` if that interval excludes zero.
+The architecture also permits a bounded normalization/homeostatic term separate
+from eligibility in its reference equation. It does not mandate that every
+future normalization mechanism use q. This finding is specific to the current
+sealed-outcome evaluator:
 
-For `G+L=.75`, `F_0=.2`, `p=.5`, and bounds `[-2,2]`, the closed-form old
-effective values (including clipping) are:
+* Eligibility kernels distinguish current route participation, selected decoder
+  family/input, and persisted causal traces.
+* Plasticity visits all synapses and samples a neural target coordinate. It has
+  no selected-family or activity-mask gate of its own.
+* Receptor-wide novelty, frustration or pain could therefore counteract
+  expressed genetic/lifetime strength on a decoder family with no local credit,
+  merely because its associated neural coordinate remained active.
+* This is not evidence of deliberate incoming-weight competition restricted to
+  the active candidate output. It is an outcome-driven regularizer reaching
+  connections excluded by that outcome's local assignment.
 
-| Compiled coefficient class | alpha | lambda | E_0 | 1,000 | 10,000 | 100,000 |
-|---|---:|---:|---:|---:|---:|---:|
-| Ordinary decoder / N2048 fast | .25 | .001 | .8 | .751529 | .428201 | .25 |
-| Memory decoder | 1 | .001 | .95 | .739838 | .077956 | ~0 |
-| Procedural masked slow | .125 | .00005 | .775 | .773790 | .762985 | .662893 |
-| N2048 unmasked slow | .25 | .00025 | .8 | .787597 | .684275 | .25 |
-| N2048 masked slow | .125 | .000125 | .775 | .771979 | .745310 | .524391 |
-| N2048 masked fast | .125 | .0005 | .775 | .762985 | .662892 | .5 |
+For the project's causal three-factor update, this unwanted reach is a credit
+assignment leak. The final rule makes this event-driven stabilization follow
+per-synapse evidence. Existing neuron homeostasis and separately scheduled sleep
+remain. A future independent homeostat would need explicit semantics/evidence;
+this change does not outlaw that design.
 
-The new zero-credit result stays exactly `E_0` for every row and horizon when
-the initial fast coefficient is within its existing bounds. Old unclipped
-half-lives at `p=.5` are about 11,090 outcomes (ordinary decoder), 2,772
-(alpha-1 memory), and 443,614 (procedural slow). For the ordinary decoder,
-unclipped retained fractions at 1k/10k/100k are .939411/.535251/.001930;
-clipping instead stops retention at .25/.8 = 31.25% in this example.
-At `p=.1`, actual WGSL gives .798002/.780248/.623035 from .8 over those
-horizons. At `p=1`, it gives .623021/.25/.25. Negative base -.75 at `p=1`
-has the symmetric -.25 floor. Alpha zero leaves effective strength unchanged;
-zero inherited rates disable both old and new updates.
+## Actual gates, rates, and retained traces
 
-The compiled default inventory (seed 42, age tick 0, maturation .35,
-GroundedObjectSlotsV1) is
-also printed by the regression test. N512/N1024 have respectively 123/431
-enabled slow recurrent synapses and 431/1551 fixed ones, plus 984 alpha-.25
-and 96 alpha-1 decoder rows. N2048 has 2048 masked-slow, 1024 masked-fast,
-11008 unmasked-slow, 10496 unmasked-fast recurrent rows, and 4096 rows in
-each decoder alpha class. These are scaffold defaults; trained assets can
-express different genetics, rates, activity, and receptor profiles.
+Credit lanes are prediction residual, pain, homeostatic improvement,
+frustration, novelty, social consequence, biochemical appetitive and aversive.
+Projection divides the signed receptor dot product by receptor L1 norm, clamps
+to [-1,1], and returns zero for an all-zero receptor.
 
-## Why this retains stabilization
+General default weights are [.2,-1,1,-.5,.2,0,.5,-.5], L1 3.9.
+Signed-choice action/cognitive/memory profiles omit prediction residual,
+[0,-1,1,-.5,.2,0,.5,-.5], L1 3.7. Improvement/pain 1 project to
++/- .25641024 or +/- .27027026 respectively. Opposing lanes can cancel.
+Biochemical appetitive/aversive lanes are gated by measured consequences in
+OutcomeCreditPacket; baseline hormone tone alone is not reward.
 
-For constant `p,e,m` and nonzero alpha, define
-`h = a*lambda*abs(m)*p*p` and `d = eta*a*a*m*e`. Before clipping:
+Default compiler inventory (seed 42, age tick 0, maturation .35,
+GroundedObjectSlotsV1), printed by the tests:
 
-```text
+| Class/row | Count | alpha | eta | lambda |
+|---|---:|---:|---:|---:|
+| N512 decoder | 984 | .25 | .01 | .001 |
+| N512 memory decoder | 96 | 1 | .01 | .001 |
+| N512 enabled recurrent | 123 | .125 | .0005 | about .00005 |
+| N512 fixed recurrent | 431 | .25 | 0 | 0 |
+| N1024 decoder / memory | 984 / 96 | .25 / 1 | .01 | .001 |
+| N1024 enabled / fixed recurrent | 431 / 1551 | .125 / .25 | .0005 / 0 | about .00005 / 0 |
+| N2048 masked slow | 2048 | .125 | .00125 | .000125 |
+| N2048 masked fast | 1024 | .125 | .005 | .0005 |
+| N2048 unmasked slow | 11008 | .25 | .0025 | .00025 |
+| N2048 unmasked fast | 10496 | .25 | .01 | .001 |
+| N2048 decoder / memory | 4096 / 4096 | .25 / 1 | .01 | .001 |
+
+Procedural recurrent receptor scale includes .1 times the projection mask.
+The default TemporalPredictive-to-ActionPlanning mask is .5. N2048 uses section
+slow/fast scales and masks. Decoder policies have inherited head/family scales.
+Current critical periods multiply recurrent rates by 1+max(matching bias),
+capped independently at inherited learning/replay/normalization ceilings.
+Fixed zero rates stay zero; decoders bypass this transient multiplier.
+Existing compiler-oracle transport tests cover these interactions.
+
+Activity masks gate fresh coactivation, not old traces:
+
+~~~text
+enabled route: staged = clamp(reference_decay^elapsed*previous + pre*post,-1,1)
+masked route:  staged = reference_decay^elapsed*previous
+at outcome:    e = staged*reference_decay^(outcome_tick-origin_tick)
+~~~
+
+Default reference decay is .95 per .05-second simulation tick. An unselected
+decoder adds no fresh family-specific eligibility but retains/decays old
+eligibility. The final rule uses eligibility after outcome decay, rather than
+a current-mask gate. Masked routes with persisted credit can still learn;
+expired, canceled or absent traces cannot be revived into normalization by m.
+
+The isolated complete-kernel test uses actual compiled arena metadata/CSR
+indices, executes the unchanged recurrent/decoder eligibility kernels, then
+calls the actual plasticity evaluator. It checks 70 combinations of no event,
+novelty, pain, frustration and mixed credit against active/masked zero/tiny/
+signed eligibility, unselected decoders, persisted traces, 20-tick delayed
+trace reversals and 10,000-tick expired traces. Actual sampled post is asserted
+to equal .5. Device-read rates include recurrent alpha .125, eta .0005,
+lambda .000050000002 and decoder alpha .25, eta .01, lambda .001.
+
+Unselected decoder novelty with zero eligibility changes fast .2 to .19998918
+under the receptor-only control and leaves .2 in the final evaluator. Pain
+changes .2 to .19994594 in that control and leaves .2 now. A masked recurrent
+trace .4 stages to .38 and credits .32580248 after three outcome ticks; both
+signs still update appropriately. Nonzero lifetime .25 stays unchanged.
+These are isolated WGSL results, not production-backend hardware acceptance.
+
+## Five-rule comparison and chosen tradeoff
+
+Let K = eta*alpha/(lambda*post^2), with nonzero applicable factors.
+
+| Rule | Normalization factor | Unclipped equilibrium |
+|---|---|---|
+| Original | 1 | K*m*e |
+| First PR | abs(m) | sign(m)*K*e |
+| Exact-nonzero eligibility gate | abs(m) if e!=0, else 0 | same as first PR when e!=0 |
+| Common clock | abs(m*e), learning drive also multiplied by abs(e) | same as first PR when e!=0 |
+| **Final** | **abs(m*e), unchanged linear learning drive** | **sign(m*e)*K** |
+
+The exact-nonzero gate fixes literal zero but is discontinuous: arbitrarily
+small nonzero traces authorize almost full receptor-only contraction.
+The device comparison checks that it equals the first PR whenever e!=0.
+
+The common-clock alternative is continuous and preserves the earlier
+eligibility-dependent equilibrium, but changes the drive from m*e to
+m*e*abs(e). A trace delayed by d ticks already includes decay^d; this drive
+includes decay^(2*d). It weakens delayed/sparse learning a second time and can
+push an otherwise measurable update below f32 coefficient precision.
+
+The final rule interprets |q| as the amount of local evidence controlling speed.
+Consistent weak evidence may accumulate toward a strong association; an older
+or sparser trace does not itself instruct almost full-speed erasure of an
+established inherited response. This is a game-learning choice, not a claim
+that classical Oja's equilibrium is universally wrong.
+
+The cost is explicit: equilibrium no longer scales with |e| or |m|. Persistent
+biased tiny q can eventually reach a fast bound in real arithmetic. More
+default constant-input cases therefore end at a clamp. This is bounded but
+changes calibration and could overlearn persistent biased noise; no gameplay
+benefit is claimed. Preserving the earlier equilibrium instead requires the
+discontinuity, extra eligibility attenuation, or a differently designed
+normalization policy. Causal continuity and linear delayed credit are preferred
+for this unreleased runtime. Founder/rate calibration remains separate work.
+
+Fast-only normalization is not used. It could be made stable with bounds but
+changes the target by a genetic/lifetime-dependent offset and, if ungated,
+still forgets fast state without local evidence. Signed q is not used on
+normalization: that makes negative credit expansive before clipping.
+
+## Tiny sustained noise and time to a bound
+
+Executed f32 comparison: post=.5, genetic+lifetime=.75, initial fast=.2,
+novelty m=.051282052, one million outcomes. These are controlled exposures,
+not an observed founder activity distribution.
+
+| Coefficient / initial E | e | Exact-nonzero gate E | Final E |
+|---|---:|---:|---:|
+| Ordinary decoder / .8 | 0 | .8 | .8 |
+| Ordinary decoder / .8 | 1e-7 | .25 | .8 |
+| Ordinary decoder / .8 | 1e-6 | .25 | .8 |
+| Ordinary decoder / .8 | 1e-4 | .25 | .8037253 |
+| Alpha-1 memory / .95 | 1e-7 | .00232857 | .95 |
+| Alpha-1 memory / .95 | 1e-6 | .00236458 | .95 |
+| Alpha-1 memory / .95 | 1e-4 | .00632453 | .9947035 |
+| Procedural slow / .775 | 1e-6 | .71551454 | .775 |
+
+The same exposure is tested at post .1 and 1. Zero m/e retention is exact.
+Tiny positive credit can be below the ULP of a stored nonzero fast coefficient:
+this measured f32 stagnation is not an epsilon threshold added to the rule.
+
+For constant nonzero q, h=alpha*lambda*abs(q)*post^2 and
+E_n=E_star+(E_0-E_star)*(1-h)^n before clipping. If E_star is above endpoint U,
+the real-valued time to U is
+
+~~~text
+n = ceil(log((E_star-U)/(E_star-E_0)) / log1p(-h))
+~~~
+
+At e=1e-6, post=.5 and the table's novelty projection:
+
+| Default coefficients | E_star | Upper | Real-valued outcomes to upper |
+|---|---:|---:|---:|
+| Ordinary decoder | 10 | 1.25 | about 15,646,732,796 |
+| Alpha-1 memory | 40 | 2.75 | about 3,680,892,705 |
+| Procedural slow | 5 | 1 | about 682,966,696,648 |
+
+For ordinary decoder e=1e-7 / 1e-4 these become about 156.47 billion /
+156.47 million outcomes. The exact-nonzero gate instead reaches lower endpoint
+.25 in about 362,904 / 363,763 outcomes (362,912 at e=1e-6), despite positive
+eligibility and novelty. Its magnitude does not tend to zero with the trace.
+The huge final-rule counts are real-valued predictions, not claims f32 will
+actually reach that bound: the measured tiny updates stagnate in this initial
+state. This distinction matters for both learning capacity and noise.
+
+## Fixed points, reversal, and stability
+
+For constant q, before clipping:
+
+~~~text
 E_next = (1-h)*E + d
-E_star = sign(m)*eta*a*e/(lambda*p*p)       [m != 0, lambda*p*p != 0]
-```
+h = alpha*lambda*abs(q)*post^2
+d = eta*alpha^2*q
+E_star = sign(q)*eta*alpha/(lambda*post^2)
+~~~
 
-At `m=0`, both terms vanish. At `abs(m)=1`, the update is identical to the
-original rule. Small credit slows the entire step; it no longer leaves an
-unscaled cancellation term dominating a tiny learning drive. For `0<h<=1`,
-the map is a contraction toward `E_star`, and clipping is nonexpansive and
-selects the attainable endpoint if the fixed point is outside the fast range.
-Changing the sign of credit changes the drive, not the contraction sign.
-For founder tanh dynamics (`|p|<=1`) and validated alpha/rate/credit bounds,
-`0<=h<=1`. At `p=0` or `lambda=0`, there is no Oja contraction; the existing
-fast clamp still bounds learning. These are local fixed-activity guarantees,
-not a proof of convergence of arbitrary recurrent networks. Custom unbounded
-identity/ReLU activity can exceed this contraction regime; existing clamping
-and finite-value transaction guards remain, with no newly claimed global
-stability guarantee.
+For validated alpha, rates and |q|<=1 with default bounded tanh activity,
+0<=h<=1. The affine map is a nonnegative contraction for h>0. Clipping is
+nonexpansive and selects an attainable endpoint when E_star lies outside the
+fast interval. Negative outcome/eligibility changes the drive, not the
+contraction sign. Zero post/normalization removes contraction; fast clipping
+still bounds learning. Custom unbounded identity/ReLU activity can exceed
+this regime; existing clamping and finite guards remain. No global convergence
+theorem for the coupled recurrent organism is claimed.
 
-Using signed `m` on normalization would make punishment expansive
-(`1 + a*lambda*abs(m)*p*p`). Fast-only normalization would regulate the fast
-coefficient while leaving inherited/consolidated strength outside its target;
-it would change the effective fixed point by a base-dependent offset. It also
-would still decay existing fast knowledge at zero credit if left ungated.
-Keeping effective-weight Oja with magnitude gating is the narrower correction.
-Nonzero local credit with zero eligibility can still contract expressed
-strength: this intentionally retains Oja stabilization during locally credited
-events rather than adding a new eligibility/activity-route gate.
+Default eta=.01, lambda=.001, alpha=.25, post=.5 and e=.01 have E_star=+/-10:
+with genetic+lifetime=0, sustained credit ends at attainable +/- .5.
+The first PR instead approached +/- .1. This is an intentional difference.
 
-Actual paired WGSL learning outcomes for `G+L=0`, `F_0=.2`, `a=.25`,
-`eta=.01`, `lambda=.001`, `p=.5`, `e=.01`, 100k outcomes:
+Interior points are also tested: eta=.0001, lambda=.001, alpha=1, post=1,
+e=+/- .4, m=+/-1 approach E_star=+/- .1. Executed results include +.10000931
+and -.09999068 after 100k updates. Both signs of m/e, maximum contraction,
+fixed rates, alpha 0/.125/.25/1, zero activity and both fast bounds are covered.
 
-| Local credit | Old E | Corrected E | Meaning |
-|---|---:|---:|---|
-| +1 | .09989677 | .09989677 | Same positive fixed-point behavior |
-| -1 | -.09971043 | -.09971043 | Same stable negative learning |
-| +.01 | .001094576 | .052980233 | Moves toward +.1 at the smaller step rate |
-| -.01 | -.000901566 | .040900560 | Moves downward toward -.1 at the smaller step rate |
+A controlled two-phase reversal starts at E=.05, reaches +.5 with m=1,e=.4,
+then uses e=-.4*.95^20 for 10,000 further updates. Final E is -.40009335;
+the inverse-sign experiment ends at +.40009335. Common-clock controls remain
+at +.3342165 / -.3342165 over that second segment. Separate complete-kernel
+cases verify that opposite coactivation reverses a persisted trace and the
+actual outcome delay preserves its new sign.
 
-The exact real-valued fixed points are ±.1; f32 recurrences stagnate at a
-small distance from them. Stronger sustained drives reach the existing ±.5
-effective endpoints. Maximum `a=lambda=abs(m)=p=1` is covered as well.
+CPU mirror vectors: eta=.01, lambda=.001, alpha=.25, e=.4, post=.5,
+genetic+lifetime=.75, fast=.2 give fast deltas
+0, +.0000092, -.0000108, +.00092, -.00108
+for m=0,+.01,-.01,+1,-1. Device output includes raw deltas before clipping,
+distinguishing sub-ULP drives from coefficient stagnation.
 
-CPU mirror vectors, in fast space: `eta=.01, lambda=.001, a=.25, G+L=.75,
-F=.2, p=.5, e=.4` produce deltas `0, +.000008, -.000012, +.0008, -.0012`
-for `m=0,+.01,-.01,+1,-1`. Only the normalization magnitude gate changes.
+## Life, sleep, and preserved history
 
-## Life, sleep, and retained history
+Updates run per committed outcome, not per recurrent microstep/wall frame.
+Credited eligibility uses outcome chronology; there is no second elapsed-time
+learning-rate multiplier. Final normalization now shares per-synapse temporal
+exposure rather than outliving its trace.
 
-Waking applies the same normalization pressure repeatedly over the lifetime;
-the old decay is not reset by a quiet or zero-credit event. Sleep replay uses
-stored outcome projections and eligibility at its own developmental replay
-rate, adding bounded `replay_rate * alpha * replay_credit` to staged fast
-weights. It does not apply this waking Oja expression.
+Sleep replay still adds bounded replay_rate*alpha*replay_credit. Consolidation
+still promotes staging_rate*replayed_fast into lifetime (clamped), and multiplies
+fast by 1-fast_decay_rate. Defaults are .5, 4 and .5. Raw-fast promotion does
+not generally conserve effective strength when alpha!=1. Earlier cancellation
+can become actual lifetime change at sleep. This correction prevents new
+uncredited cancellation; it does not reverse acquired history.
 
-Consolidation separately promotes `staging_rate * replayed_fast` into lifetime
-weights (clamped to the lifetime limit), then multiplies fast by
-`1-fast_decay_rate`. Defaults are .5, 4, and .5. Disabled inherited receptor
-rows are preserved. This promotion operates in raw fast-coefficient space,
-so effective strength is not generally conserved when alpha differs from 1.
-No sleep formula is changed here.
+Alpha zero still suppresses waking fast expression/learning drive rather than
+normalization itself. Eligible nonzero q can alter latent fast state and later
+raw sleep promotion under that existing semantic. Born-fixed zero-rate rows
+remain delta-disabled. This separate alpha/sleep behavior is disclosed, not
+silently repaired by the causal-eligibility change.
 
-The old cancellation coefficient can therefore become actual lifetime change
-at sleep. For `G=.5,L=.25,F=-2,a=.25`, waking effective strength is .25;
-without replay, one default consolidation gives `L=-.75,F=-1,E=-.5`.
-This illustrates why retaining the raw immutable payload does not by itself
-protect expressed or subsequently consolidated knowledge. The fix prevents
-new zero-credit cancellation; it does not attempt to infer or reverse earlier
-learning. Accepted backups, learned payloads, and optimizer history stay intact.
+No accepted backup, learned payload, Adam history or checkpoint is reset,
+destroyed or replaced. No migration is required. Reserved CPU modules/tests/CLI,
+unrelated GPU digests, sensory/decoder/new_game work and pinned PR #111 remain
+untouched. PR #109 had no GPU file overlap at checked b7a67384. No external
+agent was contacted.
 
-## Validation and remaining evidence
+## Validation and evidence limits
 
-`oja_credit_stability` provides full production-module Naga parsing/validation,
-evaluator/helper wiring checks, independent closed-form clamped oracles,
-compiled default route inventories, profile projections, and an explicitly
-invoked isolated device test. The device test extracts the exact production
-helper text, executes it in WGSL, and runs the original formula as a paired
-control. It covers 181 cases, 1/1k/10k/100k outcomes, both signs, small credit,
-fixed routes, alpha 0/.125/.25/1, zero post, maximum contraction, and both fast
-clipping endpoints. One-step tolerance is 2e-7 effective units; long f32
-recurrences use 8e-4, with exact zero-credit retention asserted separately.
-The final executed maximum absolute oracle error was 0.0001192092764,
-dominated by the old alpha-1 cancellation trajectory's f32 stagnation near
-zero. All six focused tests passed, including the explicitly invoked device
-test. The readback loop uses `as_chunks::<2>()` to satisfy current strict
-Clippy; this does not alter the production shader or any test vector.
+The focused suite executes 299 vector cases against five WGSL rules, including
+million-step tiny-noise exposures. It validates full production WGSL, uses
+closed-form oracles, asserts exact zero-local-credit retention, and prints
+actual compiler/profile values. It also executes 70 complete eligibility/
+evaluator kernel cases from compiled arenas. All nine focused tests passed on
+SwiftShader Device (Subzero), CPU/Vulkan. This is isolated shader evidence;
+production software-adapter rejection is unchanged.
 
-```sh
-cargo test --locked -p alife_gpu_backend --test oja_credit_stability -- --nocapture
-# An isolated arithmetic test may explicitly use software Vulkan:
+One-step oracle tolerance is 2e-7; ordinary long recurrences use 8e-4.
+The million-step noise group uses .02 to expose accumulated f32 rounding and
+stagnation against real arithmetic; observed maximum deviation is about
+.00652859 (ordinary-case maximum .00017703). Exact zero m/e retention, finite
+bounds and exact-gate discontinuity
+are asserted separately. Category maxima are printed.
+
+Current focused checks: closed_loop_wgsl (16 passed), developmental_plasticity
+(3 passed), strict backend all-target Clippy, formatting and the hardware
+regression build. Physical production sealed-outcome execution remains Blocked
+by NeuralBackendUnavailable in this cloud; the existing PC owner coordinates
+hardware acceptance. No production rejection was bypassed.
+
+Historical full workspace validation at the preceding law passed compilation,
+1,941 tests across 216 targets (23 ignored), strict workspace Clippy, core
+boundaries and docs 77/77. That broad run is not final-q-law evidence and was
+not duplicated for this follow-up. New validation targets changed WGSL and
+actual eligibility consumers. The earlier symbol-heavy build exhausted disk;
+only session-created compiler artifacts were removed before the saved compact
+cloud settings completed its remaining gates.
+
+~~~sh
+cargo test --locked -p alife_gpu_backend --test closed_loop_wgsl --test developmental_plasticity
 VK_DRIVER_FILES=/usr/lib/chromium/vk_swiftshader_icd.json \
-  cargo test --locked -p alife_gpu_backend --test oja_credit_stability -- --ignored --nocapture
-cargo test --locked -p alife_gpu_backend --features gpu-tests \
-  --test closed_loop_fast_plasticity --no-run
-```
+  cargo test --locked -p alife_gpu_backend --test oja_credit_stability -- --include-ignored --nocapture
+cargo clippy --locked -p alife_gpu_backend --all-targets -- -D warnings
+cargo test --locked -p alife_gpu_backend --features gpu-tests --test closed_loop_fast_plasticity --no-run
+~~~
 
-The new `zero_projected_credit_commits_without_canceling_inherited_strength`
-integration test uses nonzero rates, insensitive receptors, real measured
-nutrition/sealed experiences, four normal transaction commits, unchanged
-fast/lifetime arrays, and cleared pending eligibility. It compiles. Execution
-in this saved cloud environment is **Blocked**: production returns
-`NeuralBackendUnavailable` because there is no supported physical GPU. The
-isolated device result identifies `SwiftShader Device (Subzero)`, Vulkan, CPU;
-it is not counted as a hardware production acceptance run. No PC run was used.
+Baseline: fetched main bda3b65be5fa6f01865b850640adf2e8d01f4990. This report
+corrects the earlier classification of zero-eligibility normalization.
+Gameplay improvement and empirical post-activity distributions on an accepted
+trained founder remain Unknown; this local defect does not require a perfect
+founder and does not establish global learning failure. Keep PR #112 draft
+pending parent review, CPU mirror/parity and final checks.
 
-Aggregate validation completed in the saved cloud environment:
-
-* `cargo fmt --all -- --check`: passed.
-* `cargo check --workspace --all-targets`: passed.
-* `cargo test --locked --workspace --all-targets --no-fail-fast`: passed,
-  1,941 tests across 216 completed targets, zero failures, 23 ignored.
-* Final focused `oja_credit_stability --include-ignored`: six passed,
-  including all 181 paired production/control WGSL vectors.
-* `cargo clippy --locked --workspace --all-targets -- -D warnings`: passed
-  after the test-only chunk API lint fix; the focused suite was rerun after
-  that edit. The broad workspace test run was not duplicated for this edit.
-* `scripts/check_core_boundaries.sh`: passed.
-* `scripts/docs_check.sh`: passed, 77/77 assertions.
-* `git diff --check`: passed.
-
-The first `scripts/check.sh --full` invocation passed formatting and workspace
-compilation, then exhausted the cloud disk while linking test binaries with
-debug symbols. Only compiler artifacts created during this task under
-`target/debug` were removed. The remaining gates used the saved cloud compact
-settings (`CARGO_INCREMENTAL=0`, dev/test debug symbols 0, two build jobs,
-`target/cloud-cpu`, one test thread). Debug assertions stayed enabled.
-No source, checkpoint, learned payload, or optimizer state was removed.
-The implementation source commit is `2da160fe2d82a70545d96537cad1c22308cffd4c`;
-the evidence/lint follow-up leaves the production shader identical to it.
-
-Gameplay retention/behavior improvement on an accepted trained founder remains Unknown;
-the demonstrated defect and its arithmetic correction do not require a perfect
-founder or establish global learning failure.
-
-Architecture trace: AOA-LEARN-001/006/007 (fast signed local learning),
-AOA-LEARN-002/004 (unchanged causal sealed credit), AOA-LEARN-005 (distinct
-learning/normalization rates and sleep schedule), AOA-FOUND-006 (the ordinary
-production rule is fixed), AOA-SLEEP-002/003/004 (unchanged consolidation,
-transaction, germline boundaries), AOA-PERSIST-001 (no acquired-state reset).
+Architecture trace: AOA-LEARN-001/006/007 (signed online learning),
+AOA-LEARN-002/003/004 (local causal assignment), AOA-LEARN-005 (distinct
+stabilization/consolidation), AOA-FOUND-006 (ordinary production law),
+AOA-SLEEP-002/003/004 (unchanged sleep/germline boundary),
+AOA-PERSIST-001 (preserved acquired history).
