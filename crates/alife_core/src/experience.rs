@@ -201,6 +201,7 @@ impl Validate for MemoryExpectancySnapshot {
 pub enum EvidenceKind {
     NeuralClosedLoopGpu,
     HeuristicBaseline,
+    NeuralClosedLoopCpu,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -264,6 +265,13 @@ pub enum PreActionBrainEvidence {
     HeuristicBaseline {
         baseline_schema_version: u16,
     },
+    NeuralClosedLoopCpu {
+        capacity_class_id: BrainClassId,
+        phenotype_hash: PhenotypeHash,
+        sensor_profile: SensorProfile,
+        base_digest: PerceptionBaseDigest,
+        frame_digest: PerceptionFrameDigest,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -286,6 +294,37 @@ pub struct PreActionSnapshot {
 }
 
 impl PreActionSnapshot {
+    /// The same causal perception contract with explicit CPU execution provenance.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_cpu_neural_frame(
+        sequence_id: ExperienceSequenceId,
+        capacity_class_id: BrainClassId,
+        phenotype_hash: PhenotypeHash,
+        genome_id: GenomeId,
+        genome_schema_version: u16,
+        development_state: DevelopmentState,
+        perception: PerceptionFrame,
+    ) -> Result<Self, ScaffoldContractError> {
+        let evidence = PreActionBrainEvidence::NeuralClosedLoopCpu {
+            capacity_class_id,
+            phenotype_hash,
+            sensor_profile: perception.sensor_profile(),
+            base_digest: perception.base_digest(),
+            frame_digest: perception.frame_digest(),
+        };
+        let mut snapshot = Self::from_neural_frame(
+            sequence_id,
+            capacity_class_id,
+            phenotype_hash,
+            genome_id,
+            genome_schema_version,
+            development_state,
+            perception,
+        )?;
+        snapshot.brain_evidence = evidence;
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
     pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
@@ -449,6 +488,7 @@ impl PreActionSnapshot {
     pub const fn evidence_kind(&self) -> EvidenceKind {
         match self.brain_evidence {
             PreActionBrainEvidence::NeuralClosedLoopGpu { .. } => EvidenceKind::NeuralClosedLoopGpu,
+            PreActionBrainEvidence::NeuralClosedLoopCpu { .. } => EvidenceKind::NeuralClosedLoopCpu,
             PreActionBrainEvidence::HeuristicBaseline { .. } => EvidenceKind::HeuristicBaseline,
         }
     }
@@ -456,6 +496,7 @@ impl PreActionSnapshot {
     pub const fn policy_backend(&self) -> PolicyBackend {
         match self.evidence_kind() {
             EvidenceKind::NeuralClosedLoopGpu => PolicyBackend::NeuralClosedLoopGpu,
+            EvidenceKind::NeuralClosedLoopCpu => PolicyBackend::NeuralClosedLoopCpu,
             EvidenceKind::HeuristicBaseline => PolicyBackend::HeuristicBaseline,
         }
     }
@@ -475,6 +516,9 @@ impl PreActionSnapshot {
     pub fn brain_class_id(&self) -> Result<BrainClassId, ScaffoldContractError> {
         match self.brain_evidence {
             PreActionBrainEvidence::NeuralClosedLoopGpu {
+                capacity_class_id, ..
+            }
+            | PreActionBrainEvidence::NeuralClosedLoopCpu {
                 capacity_class_id, ..
             } => Ok(capacity_class_id),
             PreActionBrainEvidence::HeuristicBaseline { .. } => {
@@ -519,6 +563,13 @@ impl Validate for PreActionSnapshot {
         }
         match self.brain_evidence {
             PreActionBrainEvidence::NeuralClosedLoopGpu {
+                capacity_class_id,
+                sensor_profile,
+                base_digest,
+                frame_digest,
+                ..
+            }
+            | PreActionBrainEvidence::NeuralClosedLoopCpu {
                 capacity_class_id,
                 sensor_profile,
                 base_digest,
@@ -582,6 +633,7 @@ pub struct NeuralDecisionEvidence {
 pub enum DecisionEvidence {
     NeuralClosedLoopGpu(NeuralDecisionEvidence),
     HeuristicBaseline(HeuristicDecisionEvidence),
+    NeuralClosedLoopCpu(NeuralDecisionEvidence),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -650,6 +702,32 @@ impl<'de> Deserialize<'de> for DecisionSnapshot {
 }
 
 impl DecisionSnapshot {
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_cpu_neural_selection(
+        sequence_id: ExperienceSequenceId,
+        phenotype_hash: PhenotypeHash,
+        dispatch_generation: u64,
+        active_activation_side: u8,
+        frame: &PerceptionFrame,
+        selection: NeuralActionSelection,
+        command: ActionCommand,
+    ) -> Result<Self, ScaffoldContractError> {
+        let mut snapshot = Self::from_neural_selection(
+            sequence_id,
+            phenotype_hash,
+            dispatch_generation,
+            active_activation_side,
+            frame,
+            selection,
+            command,
+        )?;
+        let DecisionEvidence::NeuralClosedLoopGpu(evidence) = snapshot.evidence else {
+            unreachable!()
+        };
+        snapshot.evidence = DecisionEvidence::NeuralClosedLoopCpu(evidence);
+        snapshot.validate_contract()?;
+        Ok(snapshot)
+    }
     pub const ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION;
     pub const V11_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION;
     pub const V12_ABI_VERSION: u16 = V12_EXPERIENCE_ABI_VERSION;
@@ -816,6 +894,7 @@ impl DecisionSnapshot {
     pub const fn evidence_kind(&self) -> EvidenceKind {
         match self.evidence {
             DecisionEvidence::NeuralClosedLoopGpu(_) => EvidenceKind::NeuralClosedLoopGpu,
+            DecisionEvidence::NeuralClosedLoopCpu(_) => EvidenceKind::NeuralClosedLoopCpu,
             DecisionEvidence::HeuristicBaseline(_) => EvidenceKind::HeuristicBaseline,
         }
     }
@@ -823,13 +902,15 @@ impl DecisionSnapshot {
     pub const fn policy_backend(&self) -> PolicyBackend {
         match self.evidence_kind() {
             EvidenceKind::NeuralClosedLoopGpu => PolicyBackend::NeuralClosedLoopGpu,
+            EvidenceKind::NeuralClosedLoopCpu => PolicyBackend::NeuralClosedLoopCpu,
             EvidenceKind::HeuristicBaseline => PolicyBackend::HeuristicBaseline,
         }
     }
 
     pub fn neural_evidence(&self) -> Result<&NeuralDecisionEvidence, ScaffoldContractError> {
         match &self.evidence {
-            DecisionEvidence::NeuralClosedLoopGpu(evidence) => Ok(evidence),
+            DecisionEvidence::NeuralClosedLoopGpu(evidence)
+            | DecisionEvidence::NeuralClosedLoopCpu(evidence) => Ok(evidence),
             DecisionEvidence::HeuristicBaseline(_) => {
                 Err(ScaffoldContractError::EvidenceKindMismatch)
             }
@@ -839,7 +920,7 @@ impl DecisionSnapshot {
     pub fn heuristic_evidence(&self) -> Result<&HeuristicDecisionEvidence, ScaffoldContractError> {
         match &self.evidence {
             DecisionEvidence::HeuristicBaseline(evidence) => Ok(evidence),
-            DecisionEvidence::NeuralClosedLoopGpu(_) => {
+            DecisionEvidence::NeuralClosedLoopGpu(_) | DecisionEvidence::NeuralClosedLoopCpu(_) => {
                 Err(ScaffoldContractError::EvidenceKindMismatch)
             }
         }
@@ -1027,7 +1108,8 @@ impl Validate for DecisionSnapshot {
                     validate_ranked_proposal(*proposal)?;
                 }
             }
-            DecisionEvidence::NeuralClosedLoopGpu(evidence) => {
+            DecisionEvidence::NeuralClosedLoopGpu(evidence)
+            | DecisionEvidence::NeuralClosedLoopCpu(evidence) => {
                 evidence.action_id.validate()?;
                 Confidence::new(evidence.confidence.raw())?;
                 if evidence.dispatch_generation == 0
@@ -2548,8 +2630,15 @@ fn validate_decision_binding(
                 base_digest,
                 frame_digest,
                 ..
+            }
+            | PreActionBrainEvidence::NeuralClosedLoopCpu {
+                phenotype_hash,
+                base_digest,
+                frame_digest,
+                ..
             },
-            DecisionEvidence::NeuralClosedLoopGpu(evidence),
+            DecisionEvidence::NeuralClosedLoopGpu(evidence)
+            | DecisionEvidence::NeuralClosedLoopCpu(evidence),
         ) => {
             let frame = pre_action.perception();
             let candidate = frame

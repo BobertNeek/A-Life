@@ -29,6 +29,8 @@ pub const PACKED_FLAG_HAS_SEMANTIC_CONTEXT: u32 = 1 << 5;
 pub const PACKED_FLAG_HAS_GAUSSIAN_CONTEXT: u32 = 1 << 6;
 pub const PACKED_FLAG_HAS_MOTOR_PAYLOAD: u32 = 1 << 7;
 pub const PACKED_FLAG_HAS_TEACHER_LESSON: u32 = 1 << 8;
+/// Explicit offline neural execution; old GPU frame bytes are unchanged.
+pub const PACKED_FLAG_CPU_NEURAL: u32 = 1 << 9;
 
 const PACKED_KNOWN_FLAGS: u32 = PACKED_FLAG_SUCCESS
     | PACKED_FLAG_HAS_TARGET_ENTITY
@@ -38,7 +40,8 @@ const PACKED_KNOWN_FLAGS: u32 = PACKED_FLAG_SUCCESS
     | PACKED_FLAG_HAS_SEMANTIC_CONTEXT
     | PACKED_FLAG_HAS_GAUSSIAN_CONTEXT
     | PACKED_FLAG_HAS_MOTOR_PAYLOAD
-    | PACKED_FLAG_HAS_TEACHER_LESSON;
+    | PACKED_FLAG_HAS_TEACHER_LESSON
+    | PACKED_FLAG_CPU_NEURAL;
 
 const SIDE_RECORD_FLAG_REJECTED: u32 = 1 << 0;
 const SIDE_RECORD_FLAG_CONTRADICTION: u32 = 1 << 1;
@@ -480,7 +483,9 @@ impl ExperiencePacker {
         let selected = decision.selected_action;
         let heuristic_pre = match pre.evidence_kind() {
             crate::EvidenceKind::HeuristicBaseline => Some(pre.heuristic_evidence()?),
-            crate::EvidenceKind::NeuralClosedLoopGpu => None,
+            crate::EvidenceKind::NeuralClosedLoopGpu | crate::EvidenceKind::NeuralClosedLoopCpu => {
+                None
+            }
         };
 
         let mut builder = SideBufferBuilder::new(self.max_side_buffer_records);
@@ -895,7 +900,9 @@ fn append_ranked_action_proposals(
 ) -> Result<(), ScaffoldContractError> {
     let evidence = match decision.evidence_kind() {
         crate::EvidenceKind::HeuristicBaseline => decision.heuristic_evidence()?,
-        crate::EvidenceKind::NeuralClosedLoopGpu => return Ok(()),
+        crate::EvidenceKind::NeuralClosedLoopGpu | crate::EvidenceKind::NeuralClosedLoopCpu => {
+            return Ok(())
+        }
     };
     for ranked in &evidence.ranked_top_proposals {
         builder.push(ranked_action_record(*ranked, 0)?)?;
@@ -930,7 +937,9 @@ fn append_arbitration_details(
 ) -> Result<(), ScaffoldContractError> {
     let trace = match decision.evidence_kind() {
         crate::EvidenceKind::HeuristicBaseline => &decision.heuristic_evidence()?.arbitration_trace,
-        crate::EvidenceKind::NeuralClosedLoopGpu => return Ok(()),
+        crate::EvidenceKind::NeuralClosedLoopGpu | crate::EvidenceKind::NeuralClosedLoopCpu => {
+            return Ok(())
+        }
     };
     builder.push(PackedSideBufferRecord::new(
         PackedSideBufferKind::ArbitrationDetail,
@@ -1059,7 +1068,9 @@ fn append_diagnostic_extras(
 ) -> Result<(), ScaffoldContractError> {
     let trace = match decision.evidence_kind() {
         crate::EvidenceKind::HeuristicBaseline => &decision.heuristic_evidence()?.arbitration_trace,
-        crate::EvidenceKind::NeuralClosedLoopGpu => return Ok(()),
+        crate::EvidenceKind::NeuralClosedLoopGpu | crate::EvidenceKind::NeuralClosedLoopCpu => {
+            return Ok(())
+        }
     };
     builder.push(PackedSideBufferRecord::new(
         PackedSideBufferKind::DiagnosticExtra,
@@ -1092,6 +1103,9 @@ fn build_flags(patch: &ExperiencePatch) -> u32 {
     let pre = view.pre_action();
 
     let mut flags = 0;
+    if pre.evidence_kind() == crate::EvidenceKind::NeuralClosedLoopCpu {
+        flags |= PACKED_FLAG_CPU_NEURAL;
+    }
     if outcome.success {
         flags |= PACKED_FLAG_SUCCESS;
     }

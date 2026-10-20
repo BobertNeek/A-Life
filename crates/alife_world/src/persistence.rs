@@ -432,11 +432,23 @@ pub struct BrainPolicyConfig {
 }
 
 impl BrainPolicyConfig {
+    /// Explicit offline mode. Version 1 remains the unchanged gameplay contract.
+    pub const fn offline_cpu_training() -> Self {
+        Self {
+            schema_version: 2,
+            policy: PolicyBackend::NeuralClosedLoopCpu,
+        }
+    }
     fn validate(self) -> Result<(), PersistenceError> {
-        if self.schema_version != BRAIN_POLICY_CONFIG_SCHEMA_VERSION {
+        let expected = if self.policy == PolicyBackend::NeuralClosedLoopCpu {
+            2
+        } else {
+            BRAIN_POLICY_CONFIG_SCHEMA_VERSION
+        };
+        if self.schema_version != expected {
             return Err(PersistenceError::SchemaVersion {
                 schema: "alife.brain_policy_config.v1",
-                expected: BRAIN_POLICY_CONFIG_SCHEMA_VERSION,
+                expected,
                 actual: self.schema_version,
             });
         }
@@ -809,6 +821,14 @@ impl RuntimeConfig {
             });
         }
         self.brain_policy.validate()?;
+        if self.brain_policy.policy == PolicyBackend::NeuralClosedLoopCpu
+            && self.features.gpu_backend_enabled
+        {
+            return Err(PersistenceError::InvalidConfig {
+                field: "brain_policy",
+                message: "offline CPU execution cannot request a GPU backend",
+            });
+        }
         if self.features.offline_tools_required {
             return Err(PersistenceError::InvalidConfig {
                 field: "features.offline_tools_required",

@@ -248,6 +248,7 @@ impl<'de> Deserialize<'de> for NeuromodulatorSample {
 /// Compact outcome credit derived exclusively from one sealed neural patch.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OutcomeCreditPacket {
+    policy_backend: crate::PolicyBackend,
     schema_version: u16,
     organism_id: OrganismId,
     phenotype_hash: PhenotypeHash,
@@ -265,7 +266,7 @@ pub struct OutcomeCreditPacket {
 }
 
 impl OutcomeCreditPacket {
-    /// Derive outcome credit from a validated, sealed GPU decision patch.
+    /// Derive credit while preserving its explicit neural execution domain.
     pub fn from_sealed_patch(patch: &ExperiencePatch) -> Result<Self, ScaffoldContractError> {
         patch
             .validate_contract()
@@ -279,6 +280,11 @@ impl OutcomeCreditPacket {
             .map_err(|_| ScaffoldContractError::LearningEvidenceMismatch)?;
         let pre_action_hash = match patch.pre_action().brain_evidence {
             PreActionBrainEvidence::NeuralClosedLoopGpu {
+                phenotype_hash,
+                frame_digest,
+                ..
+            }
+            | PreActionBrainEvidence::NeuralClosedLoopCpu {
                 phenotype_hash,
                 frame_digest,
                 ..
@@ -311,6 +317,7 @@ impl OutcomeCreditPacket {
             0.0,
         )?;
         Ok(Self {
+            policy_backend: patch.decision().policy_backend(),
             schema_version: SchemaVersions::CURRENT.learning.raw(),
             organism_id: patch.header().organism_id,
             phenotype_hash: evidence.phenotype_hash,
@@ -326,6 +333,10 @@ impl OutcomeCreditPacket {
             dispatch_generation: evidence.dispatch_generation,
             modulator,
         })
+    }
+
+    pub const fn policy_backend(&self) -> crate::PolicyBackend {
+        self.policy_backend
     }
 
     pub const fn schema_version(&self) -> u16 {

@@ -250,6 +250,7 @@ dependencies = [
  "naga 29.0.3",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror 2.0.18",
  "wgpu 29.0.3",
 ]

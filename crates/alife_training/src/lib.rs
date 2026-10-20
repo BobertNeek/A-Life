@@ -1,6 +1,7 @@
 //! Offline-only exact-graph WGSL foundation training.
 
 mod active_battery;
+mod backend_handoff;
 #[cfg(feature = "cpu-backend")]
 pub mod cpu;
 mod curriculum;
@@ -16,6 +17,7 @@ mod trainer;
 mod types;
 
 pub use active_battery::*;
+pub use backend_handoff::*;
 pub use curriculum::*;
 pub use era1_trials::*;
 pub use evolution::*;

@@ -4,10 +4,18 @@
 //! involved. Organism collection owns canonical biology and sealed outcomes;
 //! the trainer owns only genetic parameters, Adam state and detached replay.
 
+mod activity;
+mod cohort;
+mod host;
+mod input;
 mod objective;
 mod organism;
 mod replay;
 
+pub use activity::*;
+pub use cohort::*;
+pub use host::*;
+pub use input::*;
 pub use objective::*;
 pub use organism::*;
 

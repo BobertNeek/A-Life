@@ -36,43 +36,7 @@ pub(super) struct PreparedCpuFrame {
     pub memory_upload: GpuMemoryContextUpload,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-pub(super) struct CpuPreparationTiming {
-    pub episodic_retrieval_wall_ns: u64,
-    pub attention_context_wall_ns: u64,
-    pub topology_concept_wall_ns: u64,
-    pub gpu_upload_wall_ns: u64,
-    pub baseline_recall_wall_ns: u64,
-    pub baseline_context_wall_ns: u64,
-    pub baseline_attention_evidence_wall_ns: u64,
-    pub routed_recall_wall_ns: u64,
-    pub routed_context_wall_ns: u64,
-    pub cognitive_projection_wall_ns: u64,
-    pub routed_finalize_wall_ns: u64,
-    pub routed_validate_wall_ns: u64,
-}
-
-impl CpuPreparationTiming {
-    pub(super) fn accumulate(&mut self, other: &Self) {
-        macro_rules! add {
-            ($field:ident) => {
-                self.$field = self.$field.saturating_add(other.$field);
-            };
-        }
-        add!(episodic_retrieval_wall_ns);
-        add!(attention_context_wall_ns);
-        add!(topology_concept_wall_ns);
-        add!(gpu_upload_wall_ns);
-        add!(baseline_recall_wall_ns);
-        add!(baseline_context_wall_ns);
-        add!(baseline_attention_evidence_wall_ns);
-        add!(routed_recall_wall_ns);
-        add!(routed_context_wall_ns);
-        add!(cognitive_projection_wall_ns);
-        add!(routed_finalize_wall_ns);
-        add!(routed_validate_wall_ns);
-    }
-}
+pub(super) use alife_runtime::canonical_preparation::CanonicalPreparationTiming as CpuPreparationTiming;
 
 pub(super) struct CpuPreparationOutcome {
     pub approximate_cache:
@@ -109,158 +73,57 @@ pub(super) fn upload_error(error: GpuClosedLoopError) -> ScaffoldContractError {
 // select_focal_targets copies identities and salience from the same selected
 // indices, including hysteresis reordering. Tracked novelty was computed from
 // this job's immutable memory bank before selection; reuse those exact bits.
-fn selected_focal_novelty(attention: &AttentionFrame) -> f32 {
-    attention
-        .focal_targets
-        .first()
-        .zip(attention.salience_components.first())
-        .and_then(|(identity, salience)| {
-            matches!(identity, alife_core::StableFocusIdentity::TrackedObject(_))
-                .then_some(salience.novelty.raw())
-        })
-        .unwrap_or(0.0)
-}
-
 fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparationOutcome {
     if job.input.approximate_cache.is_some() {
         return super::approximate_cognition::prepare_row(job, measure);
     }
     let input = job.input;
-    let draft = &input.draft;
-    let receptor_effects = input.receptor_effects;
-    let tick_before = draft.tick();
-    let mut preparation_stage = "baseline recall";
-    let mut hysteresis = None;
-    let mut timing = CpuPreparationTiming::default();
-    let result = (|| {
-        let episodic_retrieval_started = measure.then(Instant::now);
-        let memory = job
-            .memory
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let topology = job
-            .topology
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let predictor = job
-            .predictor
-            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let sequence_id = input.sequence_id;
-        sequence_id.validate()?;
-        preparation_stage = "baseline recall";
-        let leaf_started = measure.then(Instant::now);
-        let prepared_recall = memory.recall_frame(draft)?;
-        let baseline_recall_ns = leaf_started.map_or(0, elapsed_ns);
-        let leaf_started = measure.then(Instant::now);
-        let baseline_context = cognitive_context_for_recall(
-            input.draft.organism_id(),
-            sequence_id,
-            &prepared_recall,
-            topology,
-        )?;
-        let baseline_context_ns = leaf_started.map_or(0, elapsed_ns);
-        preparation_stage = "baseline attention evidence";
-        let leaf_started = measure.then(Instant::now);
-        let baseline_prepared = prepared_recall.with_cognitive_context(baseline_context.clone())?;
-        let memory_evidence = baseline_prepared.attention_evidence_for_draft(draft)?;
-        if measure {
-            timing.baseline_recall_wall_ns = baseline_recall_ns;
-            timing.baseline_context_wall_ns = baseline_context_ns;
-            timing.baseline_attention_evidence_wall_ns = leaf_started.map_or(0, elapsed_ns);
-        }
-        timing.episodic_retrieval_wall_ns = timing
-            .episodic_retrieval_wall_ns
-            .saturating_add(episodic_retrieval_started.map_or(0, elapsed_ns));
-        let attention_context_started = measure.then(Instant::now);
-        let mut peripheral_summaries =
-            grounded_peripheral_summaries(draft.grounded_object_slots())?;
-        let topology_evidence = topology_evidence_for_draft(draft, topology)?;
-        let body_need = input
-            .homeostasis
-            .drives
-            .to_array()
-            .iter()
-            .copied()
-            .fold(0.0, f32::max);
-        apply_predecision_attention_evidence(
-            &mut peripheral_summaries,
-            body_need,
-            &memory_evidence,
-            &baseline_context,
-            &topology_evidence,
-            receptor_effects,
-        )?;
-        preparation_stage = "attention selection";
-        for summary in &mut peripheral_summaries {
-            if let alife_core::StableFocusIdentity::TrackedObject(id) = summary.identity {
-                summary.salience.novelty = NormalizedScalar::new(
-                    1.0 - memory.bank().object_familiarity(
-                        input.draft.organism_id(),
-                        id,
-                        memory.profile(),
-                    ),
-                )?;
-            }
-        }
-        let attention = select_focal_targets(
-            input.draft.organism_id(),
-            sequence_id,
-            tick_before,
-            &peripheral_summaries,
-            input.hysteresis,
-            input.policy,
-        )?;
-        hysteresis = Some(attention.hysteresis);
-        preparation_stage = "focal routing";
-        let routed_draft = route_focal_candidates(draft, &attention)?;
-        let novelty = selected_focal_novelty(&attention);
-        let routed_draft = routed_draft.with_remembered_novelty(novelty)?;
-        timing.attention_context_wall_ns = timing
-            .attention_context_wall_ns
-            .saturating_add(attention_context_started.map_or(0, elapsed_ns));
-        let topology_concept_started = measure.then(Instant::now);
-        preparation_stage = "routed recall";
-        let leaf_started = measure.then(Instant::now);
-        let routed_recall = memory.recall_frame(&routed_draft)?;
-        let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
-        let leaf_started = measure.then(Instant::now);
-        let cognitive_context = cognitive_context_for_recall(
-            input.draft.organism_id(),
-            sequence_id,
-            &routed_recall,
-            topology,
-        )?;
-        let cognitive_context = cognitive_context_with_attention(cognitive_context, attention)?;
-        let routed_context_ns = leaf_started.map_or(0, elapsed_ns);
-        preparation_stage = "cognitive projection";
-        let leaf_started = measure.then(Instant::now);
-        let cognitive_projection = cognitive_projection_for_draft(
-            &routed_draft,
-            &routed_recall,
-            sequence_id,
-            predictor,
-            &topology_evidence,
-        )?;
-        let cognitive_context =
-            cognitive_context_with_projection(cognitive_context, cognitive_projection)?;
-        let cognitive_projection_ns = leaf_started.map_or(0, elapsed_ns);
-        preparation_stage = "routed finalization";
-        let leaf_started = measure.then(Instant::now);
-        let prepared_recall = routed_recall.with_cognitive_context(cognitive_context)?;
-        let (frame, memory_recall) = prepared_recall.finalize(routed_draft)?;
-        let routed_finalize_ns = leaf_started.map_or(0, elapsed_ns);
-        let leaf_started = measure.then(Instant::now);
-        memory_recall.validate_for_frame(&frame)?;
-        if measure {
-            timing.routed_recall_wall_ns = routed_recall_ns;
-            timing.routed_context_wall_ns = routed_context_ns;
-            timing.cognitive_projection_wall_ns = cognitive_projection_ns;
-            timing.routed_finalize_wall_ns = routed_finalize_ns;
-            timing.routed_validate_wall_ns = leaf_started.map_or(0, elapsed_ns);
-        }
-        timing.topology_concept_wall_ns = timing
-            .topology_concept_wall_ns
-            .saturating_add(topology_concept_started.map_or(0, elapsed_ns));
-        let gpu_upload_started = measure.then(Instant::now);
-        preparation_stage = "GPU memory upload";
+    let shared = alife_runtime::canonical_preparation::CanonicalPreparationInput {
+        draft: input.draft.clone(),
+        sequence_id: input.sequence_id,
+        homeostasis: input.homeostasis,
+        hysteresis: input.hysteresis,
+        policy: input.policy,
+        neural_receptors: input.neural_receptors.clone(),
+        receptor_effects: input.receptor_effects,
+    };
+    let Some(memory) = job.memory else {
+        return CpuPreparationOutcome {
+            approximate_cache: None,
+            result: Err(ScaffoldContractError::BrainOwnershipMismatch),
+            stage: "baseline recall",
+            hysteresis: None,
+            timing: Default::default(),
+        };
+    };
+    let Some(topology) = job.topology else {
+        return CpuPreparationOutcome {
+            approximate_cache: None,
+            result: Err(ScaffoldContractError::BrainOwnershipMismatch),
+            stage: "baseline recall",
+            hysteresis: None,
+            timing: Default::default(),
+        };
+    };
+    let Some(predictor) = job.predictor else {
+        return CpuPreparationOutcome {
+            approximate_cache: None,
+            result: Err(ScaffoldContractError::BrainOwnershipMismatch),
+            stage: "baseline recall",
+            hysteresis: None,
+            timing: Default::default(),
+        };
+    };
+    let outcome = alife_runtime::canonical_preparation::prepare_canonical_frame(
+        &shared, memory, topology, predictor, measure,
+    );
+    let mut timing = outcome.timing;
+    let mut stage = outcome.stage;
+    let result = outcome.result.and_then(|prepared| {
+        let frame = prepared.frame;
+        let memory_recall = prepared.memory_recall;
+        let started = measure.then(Instant::now);
+        stage = "GPU memory upload";
         let slot = job
             .slot
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
@@ -273,22 +136,22 @@ fn prepare_cpu_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPreparation
             slot,
         )
         .map_err(upload_error)?
-        .bind_neural_receptor_effects(receptor_effects)
+        .bind_neural_receptor_effects(input.receptor_effects)
         .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
         timing.gpu_upload_wall_ns = timing
             .gpu_upload_wall_ns
-            .saturating_add(gpu_upload_started.map_or(0, elapsed_ns));
+            .saturating_add(started.map_or(0, elapsed_ns));
         Ok(PreparedCpuFrame {
             frame,
             memory_recall,
             memory_upload,
         })
-    })();
+    });
     CpuPreparationOutcome {
         approximate_cache: None,
         result,
-        stage: preparation_stage,
-        hysteresis,
+        stage,
+        hysteresis: outcome.hysteresis,
         timing,
     }
 }

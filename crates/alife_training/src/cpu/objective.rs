@@ -284,7 +284,7 @@ impl CpuValueHead {
         finite(&[value])?;
         Ok(value)
     }
-    fn proposal(
+    pub(super) fn proposal(
         &self,
         gradients: &[f32],
         config: AdamWConfig,
@@ -334,6 +334,17 @@ impl CpuValueHead {
         coefficient: f32,
         policy: u64,
     ) -> Result<f32, TrainingError> {
+        let (loss, gradients) = self.residual_gradients(features, rows, coefficient)?;
+        let next = self.proposal(&gradients, config, policy)?;
+        *self = next;
+        Ok(loss)
+    }
+    pub(super) fn residual_gradients(
+        &self,
+        features: &[Vec<f32>],
+        rows: &[CriticResidualRow],
+        coefficient: f32,
+    ) -> Result<(f32, Vec<f32>), TrainingError> {
         if rows.is_empty() || !coefficient.is_finite() || coefficient <= 0. {
             return Err(invalid());
         }
@@ -367,14 +378,13 @@ impl CpuValueHead {
             }
         }
         finite(&[loss])?;
-        let next = self.proposal(&gradients, config, policy)?;
-        *self = next;
-        Ok(loss)
+        finite(&gradients)?;
+        Ok((loss, gradients))
     }
 }
 
 type WindowEvaluation = (Vec<Vec<f32>>, Vec<CpuPpoObjective>, Vec<Vec<f32>>);
-fn evaluate_window(
+pub(super) fn evaluate_window(
     trainer: &CpuFoundationTrainer,
     window: &PpoTrainingWindow,
     config: PpoConfig,

@@ -1,101 +1,164 @@
-# Native CPU training backend: numerical stage
+# Native CPU foundation training backend
 
-This is a dated implementation/evidence report, not architecture authority.
-It covers the explicit `alife_training/cpu-backend` feature. Gameplay keeps its
-existing GPU execution path; no automatic fallback or live CPU shadow is added.
+Dated implementation/evidence report, updated 2026-10-20. This report covers
+PR110 on `feat/cpu-foundation-backend`; it is not architecture authority.
+The user's explicit CPU/cloud authorization applies to this opt-in offline
+backend. Normal gameplay retains its GPU default and rejects CPU policy saves.
 
-The feature executes the compiled sparse graph directly in Rust without device
-creation or a Vulkan ICD. It does not invoke the legacy CPU reference controller.
-`CpuFoundationTrainer` owns founder weights and Adam state outside every
-`CpuOrganismState`. `FoundationReplayBackend` supplies the common host replay
-boundary for CPU and GPU implementations. Adjoint rows exclude burn-in.
+## Executable boundary
 
-## Implemented numerical boundary
+`alife_training/cpu-backend` executes the compiled N2048 sparse graph directly
+in Rust. It creates no graphics device and needs no Vulkan ICD. It does not call
+the legacy simplified CPU reference controller or software Vulkan. Founder
+weights and optimizers remain outside private organism state.
 
-- Sparse recurrent routes, cadence and activity masks; detached lifetime plus
-  alpha-times-fast offsets; structural edges; target-indexed nonlinear dendrites;
-  receptor projection gain and threshold; intrinsic activation/leak; activity
-  EMA and metabolic homeostasis.
-- Candidate, bounded memory and cognitive decoder channels, innate bias, sparse
-  BPTT with detached burn-in, and six-step recurrent speech supervision.
-- Joint representative/six-channel PPO likelihood, exact conditional entropy
-  and its coupling derivative, clipping, receipt temperature, and optional
-  imitation marginalization. Legal masks are caller evidence, never inferred
-  from action success. One batch version is checked before updates; stale
-  cohorts are rejected. Archived demonstrations are not admitted as on-policy
-  PPO rollouts.
-- Memory-bounded, sample-weighted microbatch accumulation with one actor/value
-  update per effective batch. The critic supports both detached return fitting
-  and the native full sampled Bellman residual derivative through current and
-  actual next features, including the bias derivative.
-- Native `FoundationTrainerCheckpoint` schema 2 and
-  `PpoValueHeadCheckpoint` restoration/export. Global and per-weight ages remain
-  `u32`; frozen coordinates retain their weights, moments and ages. Founder
-  rebind validates all non-genetic graph/ABI coordinates before preserving the
-  optimizer across an exported/recompiled cohort. Updates preflight all
-  coordinates before committing.
-- Private recurrent/somatic state, elapsed-tick eligibility, joint-selection
-  deduplication, receptor-projected Hebbian/Oja waking updates and developmental
-  ceilings. Pending credit binds organism, phenotype, sequence, frame, action,
-  feature digest, dispatch, side and normalized joint motor selection. Only a
-  sealed patch with measured physiology and canonical receptor data can supply
-  credit. Zero-microstep collection is explicitly rejected until an inactive
-  activation-bank checkpoint is implemented; zero-step detached replay remains
-  supported.
+```sh
+cargo run --locked -p alife_training --features cpu-backend \
+  --bin train_cpu_foundation -- \
+  --previous /path/to/sealed-native-or-cpu-cycle \
+  --output /path/to/new-output --seed EXPLICIT_NEW_SEED --ticks 64
+```
 
-## Validation
+`--fixture` replaces `--previous` only for deterministic development evidence;
+its fixture label propagates to descendants. The CLI uses a new homogeneous
+cohort with the inherited founder and retains the old individual archive. It
+never claims a terminal GPU individual restore. A CPU cohort's own full private
+checkpoint can be restored under its collection policy. Heterogeneous compiler
+graphs require per-row compilation and are rejected at this boundary. The
+separate group50 worker owns population placement/vectorized execution.
 
-Run on a machine without a GPU/ICD:
+Seed allocation remains caller-owned. The CPU receipt records historical
+freshness as **Unknown** and preserves the complete source receipt and exact
+source hashes. It does not reserve seeds or claim accepted mixed-care ancestry.
+The source must be a completed native handoff (`next-cohort-admitted`) or a
+completed CPU handoff (`complete-fresh-cohort-cpu`), with matching asset, full
+checkpoints, objective versions and ages. Specialized critic-correction source
+packages still require their existing continuity admission; this CLI does not
+bypass that admission or repair/reset an optimizer.
+
+## Native computation and canonical collection
+
+- Sparse recurrent routes, cadence, activity masks, detached lifetime plus
+  alpha-times-fast offsets, structural edges, nonlinear dendrites, receptor
+  projection/threshold effects, intrinsic leak/activation, EMA and metabolic
+  state follow the production shader equations.
+- Candidate/memory/cognitive decoder channels, native joint sampling and
+  six-step speech decoding use actual canonical perception and legality.
+  Shared frame preparation, attention, context and construction development
+  are extracted without changing the GPU helper bodies. GPU uploads remain
+  in their existing wrapper.
+- The collector runs ordinary world motor/biology transactions, neural and
+  recognized social emissions, successor prediction, language grounding,
+  memory/topology updates and sealed measured physiology. Distinct CPU neural
+  evidence survives credit and packed logging; GPU credit rejects CPU patches.
+- Elapsed-tick eligibility, selected-candidate deduplication, receptor-projected
+  Hebbian/Oja updates and developmental ceilings update private somatic state.
+  CPU organism schema2 preserves active and inactive activation banks, including
+  lower-level zero-step collection eligibility. Production ATP policy has a
+  two-step minimum. The host uses its exact native route pruning, work counts
+  and Q24/Q16 affordability, with neutral hardware pressure. Unaffordable work
+  enters canonical recovery sleep; it never forces extra neural steps.
+- Native sleep control, bounded replay, structural discovery, consolidation,
+  fast/lifetime promotion and actual sleep work are causal. Waking resumes only
+  after the normal phase/physiology boundary. Complete checkpoints bind world,
+  biology, both neural banks, lifetime/fast weights, traces, sidecar metadata,
+  memory compaction/staging, predictor, sleep, language, sequence and RNG state.
+  Failed steps roll back the whole private/world transaction.
+- PPO uses joint representative/six-channel likelihood, exact conditional
+  entropy, clipping and receipt temperature. GAE follows actual transitions,
+  death and sleep gaps; unobserved final successors are not invented. Burn-in
+  has no actor loss. Bounded microbatch tapes accumulate sample-weighted BPTT.
+  The linear critic uses the full sampled Bellman residual derivative through
+  current/actual next features and bias, with native Adam.
+- `FoundationTrainerCheckpoint` and `PpoValueHeadCheckpoint` retain all weights,
+  moments and exact integer ages. Frozen coordinates remain unchanged. Fresh
+  founder rebind validates all non-genetic graph/ABI coordinates. Neither actor
+  nor critic is reset at continuation or export.
+
+## Portable GPU return seam
+
+`FoundationTrainingHandoffV1` is available without the CPU feature. It contains
+exact native compiler inputs, canonical candidate asset, full actor/value
+checkpoints, policy version, objective versions 2/1, execution origin and explicit
+fresh-cohort continuation. `validate()` / `admit()` are device-free.
+`into_gpu_training_session()` restores the existing real native GPU Training
+session and both optimizers. CPU decisions are never relabeled GPU decisions.
+The exported `.alife-foundation` uses the existing gameplay asset codec.
+
+The CLI writes `training-handoff.json`, `trained.alife-foundation`,
+`actor-checkpoint.json`, `value-checkpoint.json` and `cpu-cycle.json`.
+The CPU receipt has `complete=true`, `mode=native_cpu_fresh_cohort`,
+`receipt_filename=cpu-cycle.json`, `backend=native-cpu`, exact output SHA256s,
+original `source_receipt`, and `seed_provenance.source_sha256` plus
+`seed_provenance.native_source_receipt`. The ancestry pin set uses the actual
+source receipt filename and the three native model files; all consumed source
+bytes, including phase/handoff files, are separately retained and rehashed.
+
+Group50's read-only source/admission reader must explicitly recognize this
+receipt filename/domain and validate the typed handoff and its SHA256 before
+import. Its latest-known-lane ancestry check must follow the preserved receipt
+chain. That narrow integration belongs to the group50 owner; the current CPU
+branch does not change its hardware candidate or fabricate `cycle.json`.
+Real hardware execution of the GPU import remains **Unknown** on this CPU host.
+
+## Validation and measured work
 
 ```sh
 VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --lib cpu::
-VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test checkpoint_validation --test blocked_legacy_pipelines -- --nocapture
-cargo clippy --locked -p alife_training --features cpu-backend --lib --test cpu_backend -- -D warnings
+VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation --test blocked_legacy_pipelines -- --nocapture
+cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff -- -D warnings
+cargo check --locked -p alife_training --features cpu-backend,gpu-tests --test cpu_backend --test backend_handoff
 ```
 
-The deterministic N2048 fixtures check recurrence formulas, finite-difference
-recurrent/decoder/speech gradients, detached burn-in, zero-step replay, joint PPO
-probabilities/entropy gradients, imitation, residual critic Adam, private state,
-and native checkpoints at actor age 16,684 and critic age 19,800. Integer-age
-coverage includes 16,777,217 and overflow rejection. The test suite emits actual
-CPU wall time for a complete numerical PPO batch, including useful accepted
-optimizer updates. Its `canonical_valid_decisions` is explicitly zero: fixture
-rows do not certify organism behavior or production throughput.
+Tests cover recurrence/plasticity formulas, finite-difference recurrent/decoder/
+speech and PPO entropy gradients, forced probabilities, masks, burn-in, private
+isolation, tamper rejection, sleep-to-wake, minimum ATP work and unaffordable
+sleep, full residual critic Adam, native asset return and exact checkpoints at
+actor age 16684 and critic age 19800. Coverage includes age 16777217 and overflow
+rejection. CPU CLI tests run with an invalid ICD path, continue learned state
+without resets, preserve immutable source bytes and reject incomplete output.
+The GPU differential/import tests are compiled here, not executed on llvmpipe.
+Independent source review cleared the numerical and canonical integration;
+fixes bind all private sidecars/RNG and use exact executed work counters.
 
-The opt-in `cpu-backend,gpu-tests` test compares the same replay/gradient fixture
-against required hardware with absolute/relative tolerances. It is compiled in
-CPU CI, but hardware execution remains Unknown until a real-GPU receipt exists.
-No llvmpipe or CPU-backed Vulkan adapter is accepted as CPU-backend evidence.
+Unoptimized cloud fixtures on AMD EPYC 9V74, four-core quota, 16 GiB RAM, no GPU:
+five sealed canonical decisions plus a serialized exact restore completed in
+1.187505 s. A separate seven-decision trajectory produced six real training rows,
+advancing actor 16684→16685 and critic 19800→19801 in 0.114456 s of update work.
+The final executable 12-tick fixture collected 12 valid canonical decisions
+and 11 rows in 0.991735 s (update 0.292100 s); its continuation collected another
+12 decisions in 0.952347 s (update 0.276023 s), preserving ages 2→4.
+[Structured fixture results](20261020-native-cpu-fixture-results.json) pin the
+exact receipts and native outputs.
+These bounded fixture measurements do not establish a production speedup or
+accepted-policy behavior. Updated exact-head CI is recorded on PR110.
 
-Local cloud validation passed 13 CPU integration tests, 5 direct plasticity/state
-unit tests and 4 existing checkpoint/gate regressions, strict Clippy, hardware-test
-source compilation and 77 documentation assertions. An unoptimized numerical
-batch of four PPO rows performed one actor and one critic update in 0.066875797
-seconds on `native-cpu`, x86_64, Rust-reported parallelism 4. Canonical valid
-decisions were zero. This records numerical work and wall time only.
+Core evidence/packed compatibility regressions pass 28 tests. CPU policy config
+and gameplay boundary tests enforce the explicit offline mode. Documentation
+checks pass 77/77. Existing legacy training/evaluation gates remain blocked.
 
-## Remaining integration: Blocked, not a completed CPU training cycle
+## Accepted policy qualification: Blocked
 
-The canonical collector and headless training CLI still need an explicit CPU
-closed-loop evidence variant and a shared canonical host. Core sealed neural
-evidence currently names `NeuralClosedLoopGpu`. This feature does not label CPU
-decisions as GPU decisions or bypass `require_canonical_training_biology`.
-The existing legacy evaluators must continue failing before device/world
-mutation. Biology, memory, cognitive context, sleep/consolidation, native full
-organism persistence and source-package admission must remain causal in the
-collector integration; this numerical stage does not replace those mechanisms.
+The pinned Library package
+`alife-policy7400-accepted-checkpoint-57files-20261019.zip` was requested through
+the supported materializer, initially and once more under the authorized bounded
+retry. Both returned no workspace path; downloading each returned URL failed
+with `Tunnel connection failed: 403 Forbidden`. No bytes were materialized,
+no payload hash was verified, and no accepted source was trained or changed.
+No alternative executor/service or additional download retry was attempted.
 
-The accepted policy7400 package has not been supplied in this environment. Its
-32,768 actor weights, actor age 16,684 and critic age 19,800 have not been loaded,
-reset, synthesized, or changed. Exact accepted-package continuation and useful
-canonical-decision throughput remain Unknown. No speedup claim is made.
+The accepted policy's 32768 actor weights and actor/value ages 16684/19800 remain
+unmodified. Actual accepted-package CPU continuation, latest-known-lane group50
+admission and terminal GPU individual restore are **Unknown**, pending source
+access and their respective qualification. Integer-age fixtures are numerical
+regressions, not substitutes for the unavailable package.
 
 ## Requirement trace
 
 | Requirement | Scope/evidence |
 | --- | --- |
-| AOA-ADM-007, AOA-TIME-006 | Explicit offline CPU placement; honest CPU receipt; gameplay unchanged. |
-| AOA-BRAIN-006/007/009/011/014 | Recurrent/somatic/dynamic sparse equations and gradient/formula checks with tolerances. |
-| AOA-LEARN-002/003/005/010 | Bound joint eligibility, sealed receptor credit, distinct waking/plasticity state; canonical collector integration remains Blocked. |
-| AOA-AUTH-003, AOA-INV-009 | One organism-owned biology path is required; no independent synthetic physiology is introduced or certified. |
-| AOA-PERSIST-002/004 | Native optimizer checkpoints preserve integer ages and moments; full accepted organism-package continuation remains Unknown. |
+| AOA-ADM-007, AOA-TIME-006 | Explicit offline CPU placement and receipt; GPU gameplay default/boundary retained. |
+| AOA-BRAIN-006/007/009/011/014 | Native sparse/recurrent/somatic equations, gradients and formula tolerances. |
+| AOA-LEARN-002/003/005/010 | Sealed CPU physiology/receptor credit, private plasticity, actual PPO/residual critic and sleep replay. |
+| AOA-AUTH-003, AOA-INV-009 | Ordinary organism-owned world biology; score-free enumeration; no synthetic physiology in training. |
+| AOA-PERSIST-002/004 | Exact native weights/moments/integer ages and full CPU private archive; accepted package/hardware restore qualification Unknown. |

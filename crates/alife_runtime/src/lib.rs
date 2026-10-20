@@ -1,5 +1,6 @@
 //! Shared GPU-authoritative brain runtime boundary.
 
+pub mod canonical_preparation;
 mod checkpoint_assets;
 mod session;
 mod sleep_scheduler;

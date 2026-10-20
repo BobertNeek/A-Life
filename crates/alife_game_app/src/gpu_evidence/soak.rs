@@ -2311,6 +2311,7 @@ fn policy_raw(policy: PolicyBackend) -> u8 {
     match policy {
         PolicyBackend::NeuralClosedLoopGpu => 1,
         PolicyBackend::HeuristicBaseline => 2,
+        PolicyBackend::NeuralClosedLoopCpu => 3,
     }
 }
 

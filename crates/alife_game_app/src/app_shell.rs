@@ -160,8 +160,20 @@ impl AppStartupSummary {
 pub fn run_headless_app_shell_smoke(
     launch: &AppShellLaunchConfig,
 ) -> Result<AppStartupSummary, GameAppShellError> {
+    if launch.brain_policy == PolicyBackend::NeuralClosedLoopCpu {
+        return Err(GameAppShellError::NeuralBackendUnavailable {
+            message:
+                "CPU neural execution is available only through explicit offline training hosts"
+                    .into(),
+        });
+    }
     let config = RuntimeConfig::from_json_file(&launch.config_path)?;
     config.validate()?;
+    if config.brain_policy.policy == PolicyBackend::NeuralClosedLoopCpu {
+        return Err(GameAppShellError::NeuralBackendUnavailable {
+            message: "CPU training configurations cannot launch gameplay".into(),
+        });
+    }
     let manifest = AssetManifest::from_json_file(&launch.asset_manifest_path)?;
     manifest.validate_with_root(&launch.asset_root)?;
 

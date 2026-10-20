@@ -18,6 +18,8 @@ pub struct CpuOrganismCheckpoint {
     pub organism_id: OrganismId,
     pub phenotype_hash: PhenotypeHash,
     pub neural: TrainingInitialState,
+    /// Opposite ping-pong bank, used by native eligibility even at zero steps.
+    pub inactive_activations: Vec<f32>,
     pub lifetime: Vec<f32>,
     pub fast: Vec<f32>,
     pub eligibility: Vec<f32>,
@@ -38,6 +40,7 @@ pub struct CpuDecisionBinding {
     pub active_activation_side: u8,
     pub joint_selection: JointActionSelectionV1,
 }
+#[derive(Clone)]
 struct Pending {
     tick: u64,
     context: TrainingReplayTick,
@@ -48,6 +51,7 @@ struct Pending {
 }
 /// Private somatic weights and recurrent state. Each collector row owns one
 /// instance; the founder optimizer is passed read-only during decisions.
+#[derive(Clone)]
 pub struct CpuOrganismState {
     checkpoint: CpuOrganismCheckpoint,
     pending: Option<Pending>,
@@ -69,9 +73,10 @@ impl CpuOrganismState {
         Self::from_checkpoint(
             p,
             CpuOrganismCheckpoint {
-                schema_version: 1,
+                schema_version: 2,
                 organism_id: id,
                 phenotype_hash: p.phenotype_hash(),
+                inactive_activations: vec![0.; p.neuron_count() as usize],
                 neural: initial,
                 lifetime: vec![0.; count],
                 fast: vec![0.; count],
@@ -91,10 +96,11 @@ impl CpuOrganismState {
         checkpoint.organism_id.validate()?;
         let n = p.neuron_count() as usize;
         let count = p.synapses().len();
-        if checkpoint.schema_version != 1
+        if checkpoint.schema_version != 2
             || checkpoint.phenotype_hash != p.phenotype_hash()
             || checkpoint.active_activation_side > 1
             || checkpoint.neural.activations.len() != n
+            || checkpoint.inactive_activations.len() != n
             || checkpoint.neural.activity_ema.len() != n
             || checkpoint.neural.metabolic_load.len() != n
             || checkpoint.lifetime.len() != count
@@ -118,6 +124,7 @@ impl CpuOrganismState {
         }
         for xs in [
             &checkpoint.neural.activations,
+            &checkpoint.inactive_activations,
             &checkpoint.neural.activity_ema,
             &checkpoint.neural.metabolic_load,
             &checkpoint.lifetime,
@@ -171,8 +178,7 @@ impl CpuOrganismState {
         effects.validate_contract()?;
         let tick = effects.source_tick.raw();
         let p = founder.phenotype();
-        if context.microstep_count == 0
-            || self.pending.is_some()
+        if self.pending.is_some()
             || founder
                 .weights()
                 .iter()
@@ -202,13 +208,18 @@ impl CpuOrganismState {
         };
         q.validate_for(p)?;
         let tape = founder.forward(&q)?;
-        let pre = tape.a[context.microstep_count.saturating_sub(1) as usize].clone();
+        let pre = if context.microstep_count == 0 {
+            self.checkpoint.inactive_activations.clone()
+        } else {
+            tape.a[context.microstep_count as usize - 1].clone()
+        };
         let logits = tape.evaluation.candidate_logits[0].clone();
         let generation = self
             .checkpoint
             .dispatch_generation
             .checked_add(1)
             .ok_or_else(invalid)?;
+        self.checkpoint.inactive_activations = pre.clone();
         self.checkpoint.neural = TrainingInitialState {
             activations: tape.evaluation.final_activations[0].clone(),
             activity_ema: tape.evaluation.final_activity_ema[0].clone(),
@@ -340,6 +351,9 @@ impl CpuOrganismState {
             return Err(invalid());
         }
         let credit = OutcomeCreditPacket::from_sealed_patch(patch)?;
+        if credit.policy_backend() != alife_core::PolicyBackend::NeuralClosedLoopCpu {
+            return Err(invalid());
+        }
         let pending = self.pending.as_ref().ok_or_else(invalid)?;
         let staged = pending.staged.as_ref().ok_or_else(invalid)?;
         let binding = pending.binding.as_ref().ok_or_else(invalid)?;
@@ -407,6 +421,83 @@ impl CpuOrganismState {
         next.last_outcome_tick = Some(credit.outcome_tick().raw());
         self.checkpoint = next;
         self.pending = None;
+        Ok(())
+    }
+    /// Synchronous version of the native bounded replay/stage/reset transaction.
+    /// The enclosing host commits its world and all sidecars atomically.
+    pub fn consolidate_sleep(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        evidence: &alife_core::sleep::SleepReplayEvidence,
+        development: &DevelopmentState,
+        parameters: &PlasticityGenomeParameters,
+    ) -> Result<(), TrainingError> {
+        if self.pending.is_some()
+            || self.checkpoint.phenotype_hash != founder.phenotype().phenotype_hash()
+        {
+            return Err(invalid());
+        }
+        evidence.validate_contract()?;
+        let p = founder.phenotype();
+        evidence.batch.validate_contract(
+            p.replay_capture_plan().event_capacity(),
+            p.replay_capture_plan().sample_capacity(),
+            p.synapses().len() as u32,
+        )?;
+        if evidence
+            .prediction_targets
+            .iter()
+            .any(|t| t.organism_id != self.checkpoint.organism_id)
+            || evidence
+                .batch
+                .synapse_spans
+                .iter()
+                .map(|s| s.local_synapse_id)
+                .ne(p.replay_capture_plan().global_synapse_ids().iter().copied())
+        {
+            return Err(invalid());
+        }
+        let mut developmental = alife_gpu_backend::GpuDevelopmentalPlasticity::default();
+        developmental.update(p, development, parameters)?;
+        let words = developmental.words();
+        let mut next = self.checkpoint.clone();
+        for span in &evidence.batch.synapse_spans {
+            let i = span.local_synapse_id as usize;
+            let s = &p.synapses()[i];
+            let r = &p.plasticity_receptors()[s.receptor_index() as usize];
+            let mut credit = 0.;
+            for sample in &evidence.batch.eligibility_samples
+                [span.sample_start as usize..(span.sample_start + span.sample_count) as usize]
+            {
+                credit += f32::from(sample.eligibility_q15) / 32767.
+                    * r.receptor_profile().project(
+                        &evidence.batch.events[sample.event_index as usize]
+                            .modulator
+                            .frame(),
+                    )?;
+            }
+            let rate = if matches!(s.kind(), CompiledSynapseKind::Recurrent) && words[0] != 0 {
+                (r.sleep_replay_rate() * f32::from_bits(words[4 + s.route_index() as usize]))
+                    .min(f32::from_bits(words[2]))
+            } else {
+                r.sleep_replay_rate()
+            };
+            let (min, max) = r.fast_weight_bounds();
+            next.fast[i] = (next.fast[i] + rate * s.alpha() * credit).clamp(min, max);
+        }
+        let plan = p.sleep_consolidation_plan();
+        for (i, s) in p.synapses().iter().enumerate() {
+            if p.plasticity_receptors()[s.receptor_index() as usize].is_delta_enabled() {
+                next.lifetime[i] = (next.lifetime[i] + plan.staging_rate() * next.fast[i])
+                    .clamp(-plan.weight_limit(), plan.weight_limit());
+                next.fast[i] *= 1. - plan.fast_decay_rate();
+            }
+        }
+        next.eligibility.fill(0.);
+        next.weight_generation = next.weight_generation.checked_add(1).ok_or_else(invalid)?;
+        finite(&next.fast)?;
+        finite(&next.lifetime)?;
+        self.checkpoint = next;
         Ok(())
     }
 }
@@ -489,6 +580,7 @@ mod tests {
         founder: &CpuFoundationTrainer,
         vocal: bool,
         receipt: bool,
+        microsteps: u32,
     ) -> CpuOrganismState {
         let p = founder.phenotype();
         let n = p.neuron_count() as usize;
@@ -502,13 +594,14 @@ mod tests {
         state.checkpoint.last_decision_tick = Some(5);
         state.checkpoint.last_outcome_tick = Some(5);
         state.checkpoint.eligibility.fill(0.4);
+        state.checkpoint.inactive_activations.fill(-0.3);
         let mut routes = vec![true; p.projections().len()];
         routes[p.synapses()[0].route_index() as usize] = false;
         let context = TrainingReplayTick {
             encoded_inputs: vec![0.2; n],
             projection_gain: 1.,
             local_threshold_shift: 0.,
-            microstep_count: 1,
+            microstep_count: microsteps,
             enabled_routes: routes,
             effective_weight_offsets: vec![0.; p.synapses().len()],
             structural_synapses: vec![],
@@ -575,7 +668,7 @@ mod tests {
     fn actual_staging_matches_elapsed_traces_route_masks_and_selected_decoders() {
         let (founder, _, _) = fixture();
         let p = founder.phenotype();
-        let mut state = staged_fixture(&founder, false, true);
+        let mut state = staged_fixture(&founder, false, true, 1);
         let pending = state.pending.as_ref().unwrap();
         let staged = pending.staged.as_ref().unwrap();
         for (i, s) in p.synapses().iter().enumerate().take(256) {
@@ -599,11 +692,54 @@ mod tests {
         assert!(state.advance(&founder, context, &effects()).is_err());
     }
     #[test]
+    fn zero_step_collection_preserves_both_banks_and_native_eligibility_input() {
+        let (founder, _, _) = fixture();
+        let p = founder.phenotype();
+        let state = staged_fixture(&founder, false, true, 0);
+        assert_eq!(state.checkpoint.active_activation_side, 0);
+        assert!(state.neural_state().activations.iter().all(|v| *v == 0.1));
+        assert!(state
+            .checkpoint
+            .inactive_activations
+            .iter()
+            .all(|v| *v == -0.3));
+        assert!(state.neural_state().activity_ema.iter().all(|v| *v == 0.2));
+        assert!(state
+            .neural_state()
+            .metabolic_load
+            .iter()
+            .all(|v| *v == 0.03));
+        let pending = state.pending.as_ref().unwrap();
+        let staged = pending.staged.as_ref().unwrap();
+        for (i, s) in p
+            .synapses()
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| matches!(s.kind(), CompiledSynapseKind::Recurrent))
+        {
+            let receptor = &p.plasticity_receptors()[s.receptor_index() as usize];
+            let decayed = 0.4 * receptor.eligibility_decay().powi(3);
+            let expected = if pending.context.enabled_routes[s.route_index() as usize] {
+                (decayed - 0.3 * 0.1).clamp(-1., 1.)
+            } else {
+                decayed
+            };
+            assert!((staged[i] - expected).abs() < 2e-6);
+        }
+        let mut completed = state.checkpoint.clone();
+        completed.last_decision_tick = Some(8);
+        completed.last_outcome_tick = Some(9);
+        let bytes = serde_json::to_vec(&completed).unwrap();
+        let restored =
+            CpuOrganismState::from_checkpoint(p, serde_json::from_slice(&bytes).unwrap()).unwrap();
+        assert_eq!(restored.checkpoint().unwrap(), completed);
+    }
+    #[test]
     fn speech_eligibility_requires_both_vocal_selection_and_payload_receipt() {
         let (founder, _, _) = fixture();
         let p = founder.phenotype();
         for (vocal, receipt) in [(false, true), (true, false), (true, true)] {
-            let state = staged_fixture(&founder, vocal, receipt);
+            let state = staged_fixture(&founder, vocal, receipt, 1);
             let staged = state.pending.as_ref().unwrap().staged.as_ref().unwrap();
             for (i,s) in p.synapses().iter().enumerate().filter(|(_,s)|matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==DecoderHeadKind::SpeechPayload)) {
                 let r=&p.plasticity_receptors()[s.receptor_index() as usize];let local=if vocal&&receipt {state.neural_state().activations[s.source() as usize]*state.neural_state().activations[s.target() as usize]} else {0.};
@@ -724,7 +860,7 @@ mod tests {
     #[test]
     fn rejected_ungrounded_credit_keeps_pending_and_all_private_state() {
         let (founder, genome, development) = fixture();
-        let mut state = staged_fixture(&founder, false, false);
+        let mut state = staged_fixture(&founder, false, false, 1);
         let before = state.checkpoint.clone();
         let pending = state.pending.as_ref().unwrap().staged.clone();
         let actor = founder.checkpoint();
