@@ -26,6 +26,23 @@ struct GroupPhase<'a> {
 }
 
 impl GroupProgress {
+    fn emit(&self, event: &str, mut fields: serde_json::Value) {
+        use std::io::Write;
+        fields["kind"] = serde_json::json!("group50_progress");
+        fields["event"] = serde_json::json!(event);
+        fields["elapsed_seconds"] = serde_json::json!(self.started.elapsed().as_secs_f64());
+        let mut stderr = std::io::stderr().lock();
+        let _ = writeln!(stderr, "{fields}");
+        let _ = stderr.flush();
+    }
+
+    fn counts(&self, phase: &str, counts: serde_json::Value) {
+        self.emit(
+            "progress",
+            serde_json::json!({"phase":phase,"counts":counts}),
+        );
+    }
+
     fn begin(&self, name: impl Into<String>) -> GroupPhase<'_> {
         let id = self.next_phase.get();
         self.next_phase.set(id + 1);
@@ -42,17 +59,11 @@ impl GroupProgress {
 
 impl GroupPhase<'_> {
     fn emit(&self, event: &str) {
-        use std::io::Write;
-        let mut stderr = std::io::stderr().lock();
-        let _ = writeln!(
-            stderr,
-            "{}",
-            serde_json::json!({"kind":"group50_progress","event":event,
-                "phase":self.name,"phase_id":self.id,
-                "elapsed_seconds":self.progress.started.elapsed().as_secs_f64(),
-                "phase_seconds":self.started.elapsed().as_secs_f64()})
+        self.progress.emit(
+            event,
+            serde_json::json!({"phase":self.name,"phase_id":self.id,
+                "phase_seconds":self.started.elapsed().as_secs_f64()}),
         );
-        let _ = stderr.flush();
     }
 
     fn complete(self) {
@@ -657,6 +668,7 @@ fn run_owned(
     let mut verified_replay_boundaries = 0u64;
     let mut stalled = Instant::now();
     let mut collector_tick_phase = None;
+    let mut collected_rows = 0usize;
     loop {
         let rows = captured.len();
         max_batch_rows = max_batch_rows.max(rows);
@@ -718,6 +730,16 @@ fn run_owned(
                     &step.after_inference,
                 )?);
             life.references.push(life.writer.append(&step)?);
+            collected_rows += 1;
+            progress.counts(
+                "collection_row",
+                serde_json::json!({
+                "organism_id":life.id.raw(),"organism_rows":life.references.len(),
+                "organism_row_target":request.decisions_per_organism+1,
+                "captured_rows_total":collected_rows,
+                "maximum_captured_rows":50*(request.decisions_per_organism+1),
+                "decision_tick":step.frame.tick().raw()}),
+            );
         }
         for life in lives.values_mut() {
             // Once the real next decision is captured, this trajectory is a
@@ -803,7 +825,7 @@ fn run_owned(
     let mut all_spans = Vec::new();
     let mut peak_replay_bytes = 0;
     let mut critic_checkpoint = None;
-    for life in lives.into_values() {
+    for (life_index, life) in lives.into_values().enumerate() {
         let phase = progress.begin(format!("replay_prepare organism={}", life.id.raw()));
         let rows = life
             .references
@@ -960,6 +982,12 @@ fn run_owned(
         batches.push(batch);
         life_vec.push(life);
         phase.complete();
+        progress.counts(
+            "replay_prepare",
+            serde_json::json!({
+            "lives_complete":life_index+1,"lives_total":50,
+            "windows_planned":all_spans.len()}),
+        );
     }
     replay_phase.complete();
     // Interleave individuals before effective batches; every window still keeps
@@ -969,12 +997,37 @@ fn run_owned(
     let actor_age = trainer.optimizer_step();
     let update_started = Instant::now();
     let phase = progress.begin("actor_update");
+    let mut actor_windows_loaded = 0usize;
+    let mut actor_window_phase: Option<GroupPhase<'_>> = None;
     let update = train_recurrent_ppo_cohort(
         &mut trainer,
         &mut value,
         all_spans.len(),
         50,
         |index| {
+            if let Some(previous) = actor_window_phase.take() {
+                previous.complete();
+                progress.counts(
+                    "actor_windows",
+                    serde_json::json!({
+                    "windows_completed":actor_windows_loaded,
+                    "maximum_window_calls":all_spans.len()*(config.epochs as usize+1)}),
+                );
+            }
+            actor_windows_loaded += 1;
+            progress.counts(
+                "actor_windows",
+                serde_json::json!({
+                "windows_started":actor_windows_loaded,"window_index":index,
+                "pass_index":(actor_windows_loaded-1)/all_spans.len(),
+                "windows_per_pass":all_spans.len(),
+                "maximum_window_calls":all_spans.len()*(config.epochs as usize+1)}),
+            );
+            // The next load (or cohort return) proves that this window's opaque
+            // trainer work returned. Do not add polls or infer an Adam commit.
+            actor_window_phase = Some(progress.begin(format!(
+                "actor_window_until_next_load_or_return index={index} call={actor_windows_loaded}"
+            )));
             let span = all_spans[index];
             let replay = load(
                 &life_vec[span.life],
@@ -1000,6 +1053,17 @@ fn run_owned(
         },
         policy_version,
     )?;
+    if let Some(last) = actor_window_phase.take() {
+        last.complete();
+    }
+    progress.counts(
+        "actor_update",
+        serde_json::json!({
+        "windows_completed":actor_windows_loaded,"completed_epochs":update.completed_epochs,
+        "actor_optimizer_step":update.actor_optimizer_step,
+        "actor_optimizer_updates":update.actor_optimizer_step-actor_age,
+        "stopped_for_kl":update.stopped_for_kl}),
+    );
     phase.complete();
     let phase = progress.begin("critic_update");
     let mut critic_checkpoint = critic_checkpoint.ok_or("group lacks restored value head")?;
@@ -1007,10 +1071,12 @@ fn run_owned(
     // One central value checkpoint/Adam history traverses all lives, including
     // failures, in bounded windows; no bootstrap ever points to another life.
     let mut critic_updates = 0u64;
-    for _ in 0..update
+    let critic_epochs = update
         .completed_epochs
-        .max(u32::from(update.actor_optimizer_step > actor_age))
-    {
+        .max(u32::from(update.actor_optimizer_step > actor_age));
+    let critic_total_updates =
+        batches.iter().map(|b| b.len().div_ceil(256)).sum::<usize>() * critic_epochs as usize;
+    for epoch in 0..critic_epochs {
         for (life, batch) in life_vec.iter().zip(&batches) {
             for start in (0..batch.len()).step_by(256) {
                 let end = (start + 256).min(batch.len());
@@ -1018,6 +1084,14 @@ fn run_owned(
                 let feature_end = (end
                     + usize::from(transitions.last().unwrap().boundary != PpoBoundary::Terminated))
                 .min(life.features.len());
+                progress.counts("critic_update", serde_json::json!({
+                    "completed_updates":critic_updates,"total_updates":critic_total_updates,
+                    "active_organism_id":life.id.raw(),"epoch_index":epoch,
+                    "loss_row_start":start,"value_optimizer_step":critic_checkpoint.optimizer_step}));
+                let critic_phase = progress.begin(format!(
+                    "critic_window_update organism={} epoch={epoch} start={start}",
+                    life.id.raw()
+                ));
                 let (next, _) = critic_residual::train(
                     trainer.session(),
                     critic_checkpoint,
@@ -1029,6 +1103,13 @@ fn run_owned(
                 )?;
                 critic_checkpoint = next;
                 critic_updates += 1;
+                critic_phase.complete();
+                progress.counts(
+                    "critic_update",
+                    serde_json::json!({
+                    "completed_updates":critic_updates,"total_updates":critic_total_updates,
+                    "value_optimizer_step":critic_checkpoint.optimizer_step}),
+                );
             }
         }
     }
