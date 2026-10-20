@@ -174,3 +174,37 @@ GPU-enabled test-source checking and both CLI builds were pending at this source
 freeze checkpoint; their terminal evidence belongs in PR109 without a new source pin.
 No third local workspace aggregate, PC retry or GPU execution was started.
 New-head hosted CI and coordinated mechanical qualification remain pending.
+
+## Fixture output ownership repair — 2026-10-20
+
+The PC's single 910078f8 continuity execution completed the setup, restore,
+frame/logit/probability, physiology, replay and canonical-world assertions, then
+failed at `remove_dir_all` with Windows sharing violation 32. It exited 101 after
+28.663 seconds: overall zero passed and one failed. Both native source admissions
+passed objective2/policy7400 with full Adam 16684/19800, and the PC reported all
+1,635 immutable protected hashes matching. A/B and diagnostic seeds never ran.
+
+The fixture attempted removal while both runtime-owned `LineageLibrary` SQLite
+connections were live. The asset store is path-only. No production ownership
+defect is established. The test now uses existing persistence shutdown polling
+to reach idle, fails on persistence errors/timeouts, and explicitly consumes and
+drops both runtimes, store and device before strict deletion. All preceding
+assertions and five neural decisions remain. One entry deadline covers progress
+and teardown within the existing 60-second window; no budget is extended.
+
+Device-free coverage uses two real archive connections and a drop-order witness
+that catches delete-before-release even on POSIX. A second case requires the
+original cleanup I/O failure to propagate after resource release. Hardware lock
+ownership was not measured from the cloud; full Windows qualification remains
+pending the parent's existing PC coordination. No unchanged retry, new hardware
+task, accepted-state edit, Library retry or production runtime change was made.
+
+Cleanup repair checks: all 12 rehearsal tests passed, including both new lifecycle
+regressions. Strict foundation-training all-target Clippy and GPU-enabled test
+source checking passed; the latter reports the same pre-existing unused helper
+warning outside the changed files. Core boundaries, docs (77/77), formatting and
+protected-path checks passed. Independent R2 source/lifecycle review found no
+blocking findings, including the assertion that persistence drain preserves world
+time. The exact ignored fixture's executable compilation was pending at this
+source freeze checkpoint; its terminal evidence belongs in PR109 without another
+source change. Compilation does not establish Windows hardware qualification.

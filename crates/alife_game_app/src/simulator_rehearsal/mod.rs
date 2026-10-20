@@ -12,6 +12,8 @@ use alife_training::{
 use alife_world::{AssetManifest, HeadlessWorld};
 
 mod continuation;
+#[cfg(test)]
+mod fixture_output;
 mod fresh;
 mod snapshots;
 use snapshots::*;
@@ -1032,6 +1034,7 @@ mod gpu_tests {
     #[test]
     #[ignore = "requires an explicitly coordinated supported hardware GPU session"]
     fn exact_restore_preserves_private_context_and_next_real_consequence() {
+        let deadline = Instant::now() + std::time::Duration::from_secs(60);
         let output =
             std::env::temp_dir().join(format!("alife-simulator-restore-{}", std::process::id()));
         std::fs::create_dir(&output).unwrap();
@@ -1055,13 +1058,9 @@ mod gpu_tests {
         let mut resume_sampling = sampling;
         for _ in 0..3 {
             let mut waits = 0;
-            progress_tick(
-                &mut original,
-                Instant::now() + std::time::Duration::from_secs(60),
-                &mut waits,
-            )
-            .unwrap()
-            .unwrap();
+            progress_tick(&mut original, deadline, &mut waits)
+                .unwrap()
+                .unwrap();
             let steps = original.take_foundation_training_steps();
             assert_eq!(steps.len(), 1);
             resume_sampling.counter = steps[0].behavior.sampling.counter.checked_add(1).unwrap();
@@ -1093,20 +1092,12 @@ mod gpu_tests {
             restored.world().canonical_signature_digest().unwrap()
         );
         let mut waits = 0;
-        progress_tick(
-            &mut original,
-            Instant::now() + std::time::Duration::from_secs(60),
-            &mut waits,
-        )
-        .unwrap()
-        .unwrap();
-        progress_tick(
-            &mut restored,
-            Instant::now() + std::time::Duration::from_secs(60),
-            &mut waits,
-        )
-        .unwrap()
-        .unwrap();
+        progress_tick(&mut original, deadline, &mut waits)
+            .unwrap()
+            .unwrap();
+        progress_tick(&mut restored, deadline, &mut waits)
+            .unwrap()
+            .unwrap();
         let expected = original.take_foundation_training_steps();
         let actual = restored.take_foundation_training_steps();
         assert_eq!(expected.len(), 1);
@@ -1131,7 +1122,30 @@ mod gpu_tests {
             original.world().canonical_signature_digest().unwrap(),
             restored.world().canonical_signature_digest().unwrap()
         );
-        std::fs::remove_dir_all(output).unwrap();
+        // Shutdown is persistence-only: do not execute another neural/world tick.
+        // Reach idle so exact-checkpoint workers cannot outlive their runtime.
+        for runtime in [&mut restored, &mut original] {
+            let tick = runtime.world().tick();
+            while !runtime.persistence_idle_for_shutdown() {
+                assert!(
+                    Instant::now() < deadline,
+                    "fixture persistence shutdown timed out: {}",
+                    runtime.persistence_shutdown_diagnostics()
+                );
+                runtime.poll_persistence_for_shutdown().unwrap();
+                assert!(
+                    !runtime.persistence_failed_for_shutdown(),
+                    "fixture persistence shutdown failed: {}",
+                    runtime.persistence_shutdown_diagnostics()
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            assert_eq!(runtime.world().tick(), tick, "shutdown advanced world time");
+        }
+        // Each runtime still owns an open lineage.db connection until dropped.
+        // Windows denies deleting that database while either connection is live.
+        fixture_output::remove_after_releasing(&output, (restored, original, store, device))
+            .expect("remove fixture output after runtime/archive shutdown");
     }
 }
 

@@ -5,6 +5,11 @@ pin is published. The 491defda candidate failed initial runtime construction in
 the continuity fixture before any neural decision. Its build/CI passes do not
 qualify a repaired pin; use the replacement head recorded in PR109. Do not retry
 the unchanged failed fixture or reuse its source-bound evidence for the repair.
+The subsequent 910078f8 fixture completed its preceding continuity assertions but
+failed Windows output cleanup with live archive owners. Its overall result was
+still zero passed and one failed. The fixture now drains persistence and releases
+both runtimes before strict deletion, within the same 60-second execution window.
+The replacement pin still requires a complete hardware pass.
 This handoff does not start a workload. Use only the resource window confirmed by
 that owner. Do not run the default 600-second mode or `--compare` while Minecraft
 is active. If the agreed short window is unavailable, leave qualification pending.
