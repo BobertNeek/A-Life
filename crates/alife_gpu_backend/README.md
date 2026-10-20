@@ -20,7 +20,7 @@ Only the matching sealed `ExperiencePatch` can apply three-factor credit and
 atomically swap the inactive fast-weight and eligibility banks. Reward, pain,
 homeostatic improvement, frustration, and novelty are validated provenance;
 the bounded neuromodulator value is multiplied by the compiled receptor plan,
-and Oja homeostatic normalization is gated by `clamp(abs(local_third_factor * credited_eligibility), 0.0, 1.0)`
+and Oja homeostatic normalization is gated by `abs(local_third_factor * credited_eligibility)`
 so zero-credit ordinary activity preserves `genetic + lifetime` weights.
 The resulting `H_fast` affects the next encounter before sleep.
 
