@@ -802,12 +802,18 @@ fn fresh_builtin_foundations_prefer_nearer_identical_observations() {
     let profile = SensorProfile::GroundedObjectSlotsV1;
     for capacity in [BrainCapacityClass::n512(), BrainCapacityClass::n2048()] {
         for seed in [41, 96001, 96002] {
+            let source = if capacity.id() == BrainCapacityClass::N512_ID {
+                FoundationWeightAsset::builtin_nano512_v1(profile).unwrap()
+            } else {
+                FoundationWeightAsset::builtin_n2048_v1(profile).unwrap()
+            };
+            let manifest = source.manifest();
             let creature = CreatureGenome::early_mammal_founder(
                 seed,
                 FoundationGeneticIdentity::new(
-                    0x004E_3531_325F_5631,
-                    1,
-                    0x4E35_3132_5F00_FA11,
+                    manifest.foundation_id().raw(),
+                    u16::try_from(manifest.foundation_version().raw()).unwrap(),
+                    manifest.compatibility_family_id().raw(),
                     capacity.id(),
                 )
                 .unwrap(),
@@ -816,13 +822,11 @@ fn fresh_builtin_foundations_prefer_nearer_identical_observations() {
             .express()
             .unwrap();
             let brain = if capacity.id() == BrainCapacityClass::N512_ID {
-                let source = FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
                 N512FounderFoundationProjection::compile(&creature, profile, &source)
                     .unwrap()
                     .compiled_phenotype()
                     .clone()
             } else {
-                let source = FoundationWeightAsset::builtin_n2048_v1(profile).unwrap();
                 let genome = &creature.brain_genome;
                 let development = DevelopmentState::new(
                     genome.id,
