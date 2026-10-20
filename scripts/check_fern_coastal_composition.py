@@ -23,8 +23,10 @@ HISTORICAL_PROFILE = Path('scripts/fern-coastal-composition-profile.json')
 HISTORICAL_PROFILE_SHA256 = '6bc1ed02fc8805bd8613717267c50b0a784b031b8fcefa485200d1506c15cb52'
 PROFILE = Path('scripts/fern-coastal-preview-rotation-profile.json')
 PROFILE_SHA256 = '54636cd97fab71ce79b523210f40a1d620f5fb3983388c623a6c6b62294c27dc'
-MAIN_INTEGRATION = Path('scripts/fern-coastal-main-integration-profile.json')
-MAIN_INTEGRATION_SHA256 = 'ebbdbeba4c652e2b4aad897cd1d228506a80155b574a0081a328640e1da7c4a3'
+HISTORICAL_MAIN_INTEGRATION = Path('scripts/fern-coastal-main-integration-profile.json')
+HISTORICAL_MAIN_INTEGRATION_SHA256 = 'ebbdbeba4c652e2b4aad897cd1d228506a80155b574a0081a328640e1da7c4a3'
+MAIN_INTEGRATION = Path('scripts/fern-coastal-group50-ci-integration-profile.json')
+MAIN_INTEGRATION_SHA256 = '72b6d10627c5b11bd5c8936e4b4f4c1ea7c870be70a17138dcf511c878ce5474'
 FROZEN = {
     HISTORICAL_PROFILE.as_posix(): HISTORICAL_PROFILE_SHA256,
     fern.PROFILE.as_posix(): fern.PROFILE_SHA256,
@@ -76,7 +78,11 @@ def load_main_integration(root):
     assert coastal.sha(raw) == MAIN_INTEGRATION_SHA256, 'Fixed main integration profile changed'
     integration = json.loads(raw)
     assert set(integration) == {'profile', 'base_commit', 'base_tree', 'historical_profile',
-                                'workflow_transition', 'integration_test'}, 'Integration profile inventory changed'
+                                'predecessor_integration', 'workflow_transition', 'integration_test'}, 'Integration profile inventory changed'
+    assert integration['predecessor_integration'] == {
+        'path': HISTORICAL_MAIN_INTEGRATION.as_posix(),
+        'sha256': HISTORICAL_MAIN_INTEGRATION_SHA256}, 'Historical integration pin changed'
+    coastal.validate_source(root, HISTORICAL_MAIN_INTEGRATION, HISTORICAL_MAIN_INTEGRATION_SHA256)
     assert integration['historical_profile'] == {
         'path': PROFILE.as_posix(), 'sha256': PROFILE_SHA256}, 'Integration historical profile changed'
     transition = integration['workflow_transition']
