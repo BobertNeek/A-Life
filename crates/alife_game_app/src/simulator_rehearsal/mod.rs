@@ -95,7 +95,10 @@ pub struct SimulatorRehearsalReceipt {
     pub holdouts: Vec<SimulatorAttemptReceipt>,
     pub success_pool_size: usize,
     pub difficult_failure_pool_size: usize,
+    /// Completed explicit rehearsal GPU save exports, including setup and holdouts.
     pub snapshot_captures: usize,
+    /// Serialized pool snapshots; decision zero reuses the verified setup export.
+    pub pool_snapshots: usize,
     pub snapshot_seconds: f64,
     pub snapshot_asset_bytes: u64,
     pub collection_seconds: f64,
@@ -206,7 +209,7 @@ fn run_with_resources(
     let mut receipts = Vec::new();
     let mut trainer = None;
     let mut value = PpoTrainingState::from_checkpoint(value_checkpoint.clone())?;
-    let mut capture_count = 0;
+    let mut pool_snapshot_count = 0;
     let mut invalid_variations = 0;
     let mut stopped = false;
     let ppo = PpoConfig {
@@ -231,7 +234,7 @@ fn run_with_resources(
             _ => None,
         };
         let sampling = sampling(seed, attempt as u64);
-        let (mut runtime, target, lineage, variation) =
+        let (mut runtime, target, lineage, variation, setup_save) =
             timing.stage(format!("train-{attempt}/runtime_setup"), || {
                 let prepared = if let Some(parent) = parent {
                     parent.lineage.require_policy(policy, digest)?;
@@ -260,16 +263,17 @@ fn run_with_resources(
                             let mut base = parent.save.clone();
                             base.save_id = format!("simulator-rehearsal-{attempt}");
                             base.replace_headless_world_snapshot(runtime.world())?;
-                            timing.stage("branch/initial_durable_capture", || {
-                                attach_durable(
-                                    &mut runtime,
-                                    output,
-                                    &checkpoint_root,
-                                    attempt as u64,
-                                    base,
-                                    true,
-                                )
-                            })?;
+                            let setup_save =
+                                timing.stage("branch/initial_durable_capture", || {
+                                    attach_durable(
+                                        &mut runtime,
+                                        output,
+                                        &checkpoint_root,
+                                        attempt as u64,
+                                        base,
+                                        true,
+                                    )
+                                })?;
                             let lineage = RehearsalLineage {
                                 rollout: attempt as u64,
                                 parent_rollout: Some(parent.lineage.rollout),
@@ -282,7 +286,7 @@ fn run_with_resources(
                                 variation: variant,
                                 historically_fresh: false,
                             };
-                            (runtime, target, lineage, Some(applied))
+                            (runtime, target, lineage, Some(applied), setup_save)
                         }
                         Err(_) => {
                             invalid_variations += 1;
@@ -316,6 +320,7 @@ fn run_with_resources(
                 };
                 Ok(prepared)
             })?;
+        let mut setup_save = Some(setup_save);
         lineage.validate()?;
         let organism = learner(runtime.world())?;
         let organism_phenotype = runtime
@@ -342,27 +347,36 @@ fn run_with_resources(
             // Captures precede observed successes and contain the learned state
             // acquired in all preceding ticks. No success is manufactured.
             if decision.is_multiple_of(8)
-                && capture_count < 128
+                && pool_snapshot_count < 128
                 && can_capture(output, &checkpoint_root, 2)?
             {
                 snapshot = Some(Arc::new(timing.stage(
                     format!("train-{attempt}/capture-{decision}"),
                     || {
-                        capture(
-                            &mut runtime,
+                        let save = save_for_pool_snapshot(
+                            &mut setup_save,
+                            decision,
+                            runtime.world().tick(),
+                            || capture_exact(&mut runtime, output, &checkpoint_root),
+                        )?;
+                        snapshot_from_save(
+                            save,
                             &store,
-                            capture_count as u64,
+                            pool_snapshot_count as u64,
                             target,
                             lineage.clone(),
                             output,
                         )
                     },
                 )?));
-                capture_count += 1;
+                pool_snapshot_count += 1;
                 if directory_bytes(&checkpoint_root)? > 512 * 1024 * 1024 {
                     return Err("snapshot asset budget exceeded".into());
                 }
             }
+            // A skipped pool admission must not leave setup state available
+            // after the simulator is allowed to progress.
+            drop(setup_save.take());
             let unheld_before = unheld(runtime.world(), target);
             let deadline = timing.collection_deadline();
             let Some((advanced, terminal, mut captured)) =
@@ -718,7 +732,7 @@ fn run_with_resources(
     let mut next_cohort_checked = false;
     for (index, seed) in holdout_seeds.into_iter().enumerate() {
         timing.stage(format!("holdout-{index}"), || {
-            let (mut runtime, target, lineage, _) = fresh_runtime(
+            let (mut runtime, target, lineage, _, _) = fresh_runtime(
                 &device,
                 &trained,
                 inspection.founder_seed_base,
@@ -830,6 +844,7 @@ fn run_with_resources(
         success_pool_size: successes.len(),
         difficult_failure_pool_size: failures.len(),
         snapshot_captures: capture_ledger(output)?.completed,
+        pool_snapshots: pool_snapshot_count,
         snapshot_seconds: capture_ledger(output)?.elapsed_seconds,
         snapshot_asset_bytes: directory_bytes(&checkpoint_root)?,
         collection_seconds,
@@ -928,6 +943,7 @@ fn fresh_runtime(
     WorldEntityId,
     RehearsalLineage,
     Option<AppliedSceneVariation>,
+    alife_world::PortableSaveFile,
 )> {
     let context = fresh::SetupContext {
         founder,
@@ -982,7 +998,7 @@ fn fresh_runtime(
             creatures,
         ),
     )?;
-    timing::optional_stage(
+    let setup_save = timing::optional_stage(
         timing,
         "fresh/initial_durable_capture_and_publication",
         || {
@@ -1011,7 +1027,7 @@ fn fresh_runtime(
         variation: SceneVariation::Original,
         historically_fresh: false,
     };
-    Ok((runtime, target, lineage, None))
+    Ok((runtime, target, lineage, None, setup_save))
 }
 fn biological_reward(
     step: &FoundationTrainingStep,
@@ -1298,10 +1314,44 @@ pub fn compare_simulator_rehearsal(
 #[cfg(all(test, feature = "gpu-tests"))]
 mod gpu_tests {
     use super::*;
+    #[allow(clippy::too_many_arguments)]
+    fn assert_setup_matches_immediate_recapture(
+        runtime: &mut GpuLiveBrainRuntime,
+        save: alife_world::PortableSaveFile,
+        store: &GpuCheckpointAssetStore,
+        id: u64,
+        target: WorldEntityId,
+        lineage: RehearsalLineage,
+        output: &Path,
+    ) {
+        let before = capture_ledger(output).unwrap();
+        let mut setup = Some(save);
+        let selected = save_for_pool_snapshot(&mut setup, 0, runtime.world().tick(), || {
+            panic!("setup snapshot exported again")
+        })
+        .unwrap();
+        let reused =
+            snapshot_from_save(selected, store, id, target, lineage.clone(), output).unwrap();
+        assert!(setup.is_none());
+        assert_eq!(capture_ledger(output).unwrap(), before);
+        // The former decision-zero path, used only as an equivalence oracle.
+        let recaptured = capture(runtime, store, id + 1, target, lineage, output).unwrap();
+        assert_eq!(reused.save, recaptured.save);
+        assert_eq!(
+            reused.world.canonical_signature_digest().unwrap(),
+            recaptured.world.canonical_signature_digest().unwrap()
+        );
+        assert_eq!(
+            capture_ledger(output).unwrap().completed,
+            before.completed + 1
+        );
+    }
     #[test]
     #[ignore = "requires an explicitly coordinated supported hardware GPU session"]
     fn exact_restore_preserves_private_context_and_next_real_consequence() {
-        let deadline = Instant::now() + std::time::Duration::from_secs(60);
+        // Two equivalence-only exports add ~19s to the prior ~29s fixture.
+        // 90s is an allowance, not a measured completion time.
+        let deadline = Instant::now() + std::time::Duration::from_secs(90);
         let output =
             std::env::temp_dir().join(format!("alife-simulator-restore-{}", std::process::id()));
         std::fs::create_dir(&output).unwrap();
@@ -1310,7 +1360,7 @@ mod gpu_tests {
             GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
         let asset = crate::initial_n2048_care_asset(77_777).unwrap();
         let sampling = sampling(99_001, 0);
-        let (mut original, target, lineage, _) = fresh_runtime(
+        let (mut original, target, lineage, _, setup_save) = fresh_runtime(
             &device,
             &asset,
             77_777,
@@ -1323,6 +1373,16 @@ mod gpu_tests {
             None,
         )
         .unwrap();
+        let store = GpuCheckpointAssetStore::new(output.join("snapshot-assets")).unwrap();
+        assert_setup_matches_immediate_recapture(
+            &mut original,
+            setup_save,
+            &store,
+            0,
+            target,
+            lineage.clone(),
+            &output,
+        );
         let mut resume_sampling = sampling;
         for _ in 0..3 {
             let mut waits = 0;
@@ -1333,8 +1393,12 @@ mod gpu_tests {
             assert_eq!(steps.len(), 1);
             resume_sampling.counter = steps[0].behavior.sampling.counter.checked_add(1).unwrap();
         }
-        let store = GpuCheckpointAssetStore::new(output.join("snapshot-assets")).unwrap();
-        let snapshot = capture(&mut original, &store, 0, target, lineage, &output).unwrap();
+        let before_later_capture = capture_ledger(&output).unwrap().completed;
+        let snapshot = capture(&mut original, &store, 2, target, lineage, &output).unwrap();
+        assert_eq!(
+            capture_ledger(&output).unwrap().completed,
+            before_later_capture + 1
+        );
         let states = snapshot
             .save
             .creatures
@@ -1354,7 +1418,17 @@ mod gpu_tests {
         .unwrap();
         let mut base = snapshot.save.clone();
         base.save_id = "simulator-rehearsal-1".into();
-        attach_durable(&mut restored, &output, store.root(), 1, base, true).unwrap();
+        let restored_setup =
+            attach_durable(&mut restored, &output, store.root(), 1, base, true).unwrap();
+        assert_setup_matches_immediate_recapture(
+            &mut restored,
+            restored_setup,
+            &store,
+            3,
+            target,
+            snapshot.lineage.clone(),
+            &output,
+        );
         assert_eq!(
             original.world().canonical_signature_digest().unwrap(),
             restored.world().canonical_signature_digest().unwrap()

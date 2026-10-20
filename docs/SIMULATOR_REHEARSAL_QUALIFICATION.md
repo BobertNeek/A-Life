@@ -79,7 +79,11 @@ Atomic GPU calls, filesystem work and driver teardown cannot be preempted by an
 in-process clock. Use an operator-enforced **360-second safety stop** per update
 invocation, or a smaller actual resource-window limit coordinated by the owner;
 record the external measured process time and any stop. The independent five-
-decision continuity fixture retains its existing 60-second bound. A timeout,
+decision continuity fixture now has a 90-second allowance: it additionally compares
+the reused setup save with the former immediate recapture on fresh and restored
+runtimes. Two equivalence-only exports add an estimated ~19 seconds to the prior
+~29-second fixture; this is a planning estimate, not a measured completion time.
+It preserves the three-tick learned-context prefix and matched next consequence. A timeout,
 zero trainable rows, zero selected continuity tests or partial output is **not a
 pass**. Stop and return the measured failure; never retry automatically or reuse
 a consumed seed. Compile separately, with no concurrent training job or paid

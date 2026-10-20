@@ -70,6 +70,21 @@ atomic operation. Update and holdout costs are reported separately. Snapshot
 assets have a 512 MiB ceiling with conservative per-capture headroom; ordinary
 replay uses the existing host/disk ceilings.
 
+The setup path returns its exact save only after durable publication, reopen
+validation and rebind. Decision zero consumes that save for the pool snapshot;
+serialization still validates assets, restores the world and records the same
+BLAKE3 lineage. No simulator progress occurs between setup and that consumption.
+Unused setup state is discarded before the first tick, and later eight-decision
+boundaries still export current GPU state. No live runtime/device cache is added.
+
+`pool_snapshots` counts serialized pool IDs separately from `snapshot_captures`
+and `snapshot-capture-ledger.json`, which count actual explicit GPU save exports
+(including setup and holdouts). With full attempts and every requested capture
+admitted, qualification needs 6 exports instead of 10, with 4 pool snapshots;
+default mode needs 66 instead of 82, with 64 pool snapshots. These are source-
+derived counts, not measured runs or speedups. A previous capture measured
+9.6569 seconds; multiplying it by removed exports does not measure saved time.
+
 For the parent's short hardware qualification, append `--qualify`: four attempts
 of eight decisions and two eight-decision holdouts. Collection admits work for
 240 seconds from source entry, including setup/captures; a separate 360-second
