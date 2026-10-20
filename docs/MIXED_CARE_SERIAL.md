@@ -25,8 +25,9 @@ AOA-EVO-003); no runtime teaching policy is added.
 
 ## Explicit history/import contract
 
-Every plan requires a complete operator-reconciled `mixed-care-seed-history`
-document. This is an explicit input contract, **not an automatic migration**:
+By default, every plan requires a complete operator-reconciled
+`mixed-care-seed-history` document. This is an explicit input contract,
+**not an automatic migration**:
 
 ```json
 {
@@ -65,11 +66,81 @@ intervals. It reads and pins those bytes without modifying the Grab ledger.
 A Grab ledger alone is not universal history; the complete mixed-care attestation
 must cover other/custom/Eat launchers as well. Changed import bytes stop resume.
 
-**Real historical ledger data was unavailable for this implementation.** Tests
-use synthetic histories only. They do not reconcile policy7400's real history.
-The accepted policy7400 package, original receipts, 663 unused reserved seeds and
-eight older uncredited consumed seeds remain untouched. Real use remains blocked
-on an evidence-backed complete history supplied by its owner.
+### Explicit known-exclusions policy
+
+Checkpoint integrity and historical seed freshness are separate questions. Native
+full actor/value/Adam admission and the sealed source chain establish checkpoint
+integrity; they do not require universal historical numeric seed novelty. Missing
+older seed records leave that novelty **Unknown**, even when the checkpoint and
+both optimizer histories are intact. Numeric seed novelty also differs from normal
+sampler/layout distribution overlap. This runner retains uint64 seed identities;
+it neither reduces exclusions modulo 2^32 nor allocates random seeds.
+
+An operator may explicitly select `--seed-admission known-exclusions` **when
+creating a new plan**. The history must keep every known exclusion and add these
+fields to the source-bound document above (placeholders are not runnable evidence):
+
+```json
+{
+  "complete": false,
+  "seed_admission": {"policy": "known-exclusions", "historical_freshness": "unknown"},
+  "missing_history": "<explain which older records are missing and why numeric freshness cannot be established>",
+  "recovery_reconciliation": {
+    "accepted_checkpoint_authoritative": true,
+    "known_inflight_attempts_reconciled_or_excluded": true,
+    "no_known_detached_later_accepted_chain": true,
+    "prior_ledger_runs_sha256": "<run_mixed_care_serial.object_hash(prior_ledger_runs)>",
+    "explanation": "<describe reconciliation and cite the evidence supporting these bounded assertions>",
+    "evidence": [{"path": "<absolute evidence file>", "sha256": "<exact-byte SHA-256>"}]
+  }
+}
+```
+
+Both explanations require 40–4096 characters and at least six words. At least one
+evidence file is required, and its bytes are checked on admission and resume.
+Cited files must be retained immutable evidence snapshots; the live mixed ledger
+cannot be an evidence file because this protocol legitimately changes it.
+These syntax and byte checks cannot establish the truth of an operator's account.
+The attestation is evidence-backed operator testimony, not proof of completeness
+or authority to ignore surviving state, and not an automatic recovery mechanism.
+Its source binding is the outer `source_sha256`, checked against the selected
+predecessor. Its ledger binding is the canonical `object_hash` of the entire
+surviving ledger's `runs` list at adoption (use `object_hash([])` if none exists).
+The selected checkpoint must be authoritative, known partial/in-flight attempts
+must have been reconciled or excluded, and no known detached later accepted chain
+may be ignored. Missing older evidence remains uncertain; exclusions give no
+invented learning credit to uncredited attempts.
+
+Before reserving a new allocation, prior runs must have no pending attempts;
+reconcile those through their original saved runs. The runner verifies prior
+source lineage and accepted bytes and rejects late seals in abandoned outputs.
+On resume, the adoption digest covers the **prior runs**, excluding the current
+run that legitimately advances the live ledger. Prior checks still run, followed
+by ordinary reconciliation of the current run. Missing, unsealed or changed
+outputs cannot gain acceptance through this attestation, and no dispatched seed
+can be retried. An abandoned output acquiring a seal remains a manual conflict.
+All known consumed/reserved ranges, whole unused allocations, recovered exclusions,
+and assessment seeds remain exclusions, including exact-byte Grab imports.
+Exclusive ownership, atomic acceptance, pinned executables, source lineage and
+full native checkpoint admission apply in both policies.
+
+New plans persist `seed_admission` in `plan.json`; the ledger embeds that plan and
+the original history, and derived `schedule.json` repeats the selected policy and
+honest freshness status. Strict mode uses
+`{"policy":"strict","historical_freshness":"operator-attested-complete"}`;
+strict history metadata may be omitted for compatibility. The policy/freshness
+pair and `complete` must agree. Legacy plans without metadata always mean strict
+and are never rewritten or retagged. Neither `--start` nor `--resume` accepts a
+policy flag, even one matching the saved mode. There is no fallback after strict
+history rejection, and an existing plan cannot be converted to this policy.
+
+**This implementation uses synthetic fixtures only.** The real policy7400 package,
+both optimizer histories, original receipts, 663 unused reserved seeds, eight
+uncredited attempts, additional recovered exclusions and 16 assessment seeds are
+untouched. No real history has been edited, migrated, imported or reserved, and
+neither policy has been activated against real data. Real use is a distinct
+operator decision requiring actual evidence and authorization. This change does
+not establish thousands of proven-new examples or approve training/evaluation.
 
 ## Executable example schedule (not an approved training dose)
 
