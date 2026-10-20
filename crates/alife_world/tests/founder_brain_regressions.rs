@@ -743,7 +743,10 @@ fn combined_hunger_and_danger_use_measured_cues_and_actual_movement() {
                     0.0
                 };
                 assert!((avoid_cue - expected_avoid_cue).abs() < 1e-5);
-                assert!((approach_cue - if contact { 0.0 } else { 1.0 }).abs() < 1e-5);
+                // Argon's neutral noncontact scale is 0.75; unavailable
+                // distant chemistry must not become privileged taste input.
+                let expected_approach_cue = if contact { 0.0 } else { (0.75 - 0.4) / 0.6 };
+                assert!((approach_cue - expected_approach_cue).abs() < 1e-5);
                 assert_eq!(
                     frame.grounded_object_slots()[0].chemical[0],
                     if contact { chemical } else { 0.0 }
