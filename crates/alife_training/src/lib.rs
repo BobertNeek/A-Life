@@ -48,3 +48,5 @@ pub(crate) fn require_canonical_training_biology(
 ) -> Result<(), TrainingError> {
     Err(TrainingError::CanonicalBiologyUnavailable { pipeline })
 }
+
+pub mod rehearsal;

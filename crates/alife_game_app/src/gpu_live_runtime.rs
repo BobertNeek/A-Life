@@ -6496,6 +6496,70 @@ impl GpuLiveBrainRuntime {
         manifest: &AssetManifest,
         checkpoints: &[GpuBrainSaveState],
     ) -> Result<Self, GameAppShellError> {
+        Self::restore_with_checkpoint_options(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            store,
+            manifest,
+            checkpoints,
+            GpuLiveRuntimeConstructionOptions::production(),
+        )
+    }
+
+    /// Restores a sealed simulator branch for new on-policy training attempts.
+    /// All cognitive/biological state follows the ordinary exact restore path.
+    #[cfg(feature = "foundation-training")]
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_foundation_rehearsal(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        store: &GpuCheckpointAssetStore,
+        manifest: &AssetManifest,
+        checkpoints: &[GpuBrainSaveState],
+        sampling: alife_gpu_backend::GpuTrainingSamplingConfig,
+    ) -> Result<Self, GameAppShellError> {
+        sampling.validate()?;
+        if sampling.demonstrator.is_some()
+            || checkpoints
+                .iter()
+                .any(|state| state.pending_eligibility.is_some())
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
+        let mut options = GpuLiveRuntimeConstructionOptions::production();
+        options.training_sampling = Some(sampling);
+        options.audited_cognition = true;
+        Self::restore_with_checkpoint_options(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            store,
+            manifest,
+            checkpoints,
+            options,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn restore_with_checkpoint_options(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        store: &GpuCheckpointAssetStore,
+        manifest: &AssetManifest,
+        checkpoints: &[GpuBrainSaveState],
+        options: GpuLiveRuntimeConstructionOptions,
+    ) -> Result<Self, GameAppShellError> {
+        #[cfg(feature = "foundation-training")]
+        let training = options.training_sampling.is_some();
+        #[cfg(not(feature = "foundation-training"))]
+        let training = false;
         if deterministic_seed == 0 || brain_class.neuron_count().is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
@@ -6550,10 +6614,10 @@ impl GpuLiveBrainRuntime {
         let mut runtime = Self {
             semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
                 deterministic_seed,
-                false,
+                training,
             )?,
             #[cfg(feature = "foundation-training")]
-            training_sampling: None,
+            training_sampling: options.training_sampling,
             #[cfg(feature = "foundation-training")]
             training_demonstrator: None,
             #[cfg(feature = "foundation-training")]
@@ -6562,7 +6626,14 @@ impl GpuLiveBrainRuntime {
             recent_foundation_activity: BTreeMap::new(),
             #[cfg(feature = "foundation-training")]
             last_foundation_terminal_biology: BTreeMap::new(),
-            backend: GpuAuthoritativeSession::new(backend, GpuSessionConsumerKind::Gameplay),
+            backend: GpuAuthoritativeSession::new(
+                backend,
+                if training {
+                    GpuSessionConsumerKind::Training
+                } else {
+                    GpuSessionConsumerKind::Gameplay
+                },
+            ),
             handles: BTreeMap::new(),
             residents: BTreeMap::new(),
             appearances: CreatureAppearanceCache::default(),
@@ -6588,7 +6659,7 @@ impl GpuLiveBrainRuntime {
             deterministic_seed,
             brain_class,
             sensor_profile,
-            audited_cognition: false,
+            audited_cognition: options.audited_cognition,
             homeostatic_parameters: HomeostaticParameters::reference(),
             cognitive_work_cost_policy: GpuLiveRuntimeConstructionOptions::production()
                 .cognitive_work_cost_policy,
@@ -9011,6 +9082,22 @@ impl GpuLiveBrainRuntime {
             }
         }
         telemetry
+    }
+
+    #[cfg(all(test, feature = "foundation-training"))]
+    pub(crate) fn validate_foundation_birth_for_test(
+        world: &HeadlessWorld,
+        sensor_profile: SensorProfile,
+        organism_id: OrganismId,
+    ) -> Result<(), GameAppShellError> {
+        let (_, resident) = Self::compile_birth(
+            world,
+            BrainScaleTier::Standard2048,
+            sensor_profile,
+            organism_id,
+        )?;
+        archive_foundation_asset_bytes(&resident)?;
+        Ok(())
     }
 
     fn compile_birth(

@@ -30,6 +30,7 @@ mod comparison_identity;
 pub(crate) mod diagnostics;
 pub use comparison_identity::FoundationProbeComparisonIdentityV1;
 mod food_outcome;
+mod initial_asset;
 mod lesson_trace;
 mod play_assessment;
 mod recovery;
@@ -490,20 +491,10 @@ fn foundation_replay_sequence_with_upload(
     Ok(sequence)
 }
 
-/// Native canonical N2048 coordinates, never relabelled legacy migrated weights.
+/// Native canonical N2048 coordinates and the expressed newborn's inherited ABI.
+/// Existing admitted checkpoints never pass through this bootstrap factory.
 pub fn initial_n2048_care_asset(seed: u64) -> Result<FoundationWeightAsset> {
-    let capacity = BrainCapacityClass::n2048();
-    let genome = BrainGenome::scaffold(seed, capacity.id());
-    let development = DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0)?);
-    let native = PhenotypeCompiler::compile_testing_procedural_baseline(
-        &genome,
-        &capacity,
-        &development,
-        SensorProfile::GroundedTerrainVisionV1,
-    )?;
-    Ok(FoundationWeightAsset::from_phenotype_for_genetic_birth(
-        &native,
-    )?)
+    initial_asset::for_canonical_founder(seed)
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
