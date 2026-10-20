@@ -213,40 +213,30 @@ fn pruning_uses_weight_addresses_when_packed_indices_are_reordered() {
 }
 
 #[test]
-fn strengthen_and_weaken_adjust_only_lifetime_layer() {
+fn projection_only_strength_edits_stay_deferred_and_preserve_all_weight_layers() {
     let schema = recompaction_schema();
     let upload =
         GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
-    for (kind, grows) in [
-        (StructuralEditKind::Strengthen, true),
-        (StructuralEditKind::Weaken, false),
-    ] {
+    for kind in [StructuralEditKind::Strengthen, StructuralEditKind::Weaken] {
+        // The candidate estimates one synapse but carries no synapse address;
+        // neither of the two live learned connections may be changed.
         let plan = GpuRecompactionPlan::from_sleep_batch(
             &schema,
             &structural_batch(kind),
             GpuAutophagyPolicy::reference(),
         )
         .unwrap();
-        assert_eq!(plan.diagnostics.edits_accepted, 1);
-        assert_eq!(plan.diagnostics.unsupported_edit_kinds, 0);
+        assert_eq!(
+            plan.edit_entries[0].status,
+            alife_gpu_backend::GpuStructuralEditStatus::UnsupportedDeferred
+        );
+        assert_eq!(plan.diagnostics.edits_accepted, 0);
+        assert_eq!(plan.diagnostics.unsupported_edit_kinds, 1);
         let output = plan.rebuild_scratch_upload(&upload).unwrap();
-        let compacted = &output.compacted_upload;
-        assert_eq!(compacted.genetic_fixed_q, upload.genetic_fixed_q);
-        assert_eq!(compacted.alpha_q16, upload.alpha_q16);
-        assert_eq!(compacted.h_operational_q, upload.h_operational_q);
-        assert_eq!(compacted.h_shadow_q, upload.h_shadow_q);
-        assert_eq!(output.diagnostics.strength_adjusted_entries, 2);
-        for index in 0..upload.lifetime_consolidated_q.len() {
-            let before = upload.lifetime_consolidated_q[index];
-            let after = compacted.lifetime_consolidated_q[index];
-            if upload.genetic_fixed_q[index] == 0 {
-                assert_eq!(after, before, "zero synapses stay untouched");
-            } else if grows {
-                assert!(after > before);
-            } else {
-                assert!(after < before);
-            }
-        }
+        assert_eq!(
+            output.compacted_upload.encoded_bytes(),
+            upload.encoded_bytes()
+        );
     }
 }
 

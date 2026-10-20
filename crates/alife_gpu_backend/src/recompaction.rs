@@ -87,8 +87,6 @@ pub struct GpuStructuralEditPlanEntry {
     pub kind: StructuralEditKind,
     pub reason: StructuralEditReason,
     pub status: GpuStructuralEditStatus,
-    /// Salience × confidence in Q16 (0..=65535); scales Strengthen/Weaken.
-    pub strength_q16: u32,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -104,7 +102,6 @@ pub struct GpuRecompactionDiagnostics {
     pub routing_mask_coherence_failures: u32,
     pub byproduct_decay_events: u32,
     pub brain_atp_recovery_signal_q16: u32,
-    pub strength_adjusted_entries: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,10 +215,6 @@ impl GpuRecompactionPlan {
         };
         let mut edit_entries = Vec::with_capacity(batch.candidates().len());
         for candidate in batch.candidates() {
-            let strength_q16 = ((candidate.salience.raw() * candidate.confidence.raw())
-                .clamp(0.0, 1.0)
-                * f32::from(u16::MAX))
-            .round() as u32;
             let Some(projection_index) = schema
                 .projections
                 .iter()
@@ -235,23 +228,20 @@ impl GpuRecompactionPlan {
                     kind: candidate.kind,
                     reason: candidate.reason,
                     status: GpuStructuralEditStatus::RejectedInvalidReference,
-                    strength_q16,
                 });
                 continue;
             };
 
             let status = match candidate.kind {
                 StructuralEditKind::PruneMarker
-                | StructuralEditKind::Strengthen
-                | StructuralEditKind::Weaken
                 | StructuralEditKind::Consolidate
                 | StructuralEditKind::RecompactionHint => {
                     diagnostics.edits_accepted = diagnostics.edits_accepted.saturating_add(1);
                     GpuStructuralEditStatus::Accepted
                 }
-                // De novo synapses need source/target coordinates, which the
-                // candidate contract does not carry yet.
-                StructuralEditKind::SynaptogenesisCandidate => {
+                StructuralEditKind::Strengthen
+                | StructuralEditKind::Weaken
+                | StructuralEditKind::SynaptogenesisCandidate => {
                     diagnostics.edits_rejected = diagnostics.edits_rejected.saturating_add(1);
                     diagnostics.unsupported_edit_kinds =
                         diagnostics.unsupported_edit_kinds.saturating_add(1);
@@ -265,7 +255,6 @@ impl GpuRecompactionPlan {
                 kind: candidate.kind,
                 reason: candidate.reason,
                 status,
-                strength_q16,
             });
         }
         edit_entries.sort_by_key(|entry| {
@@ -301,21 +290,6 @@ impl GpuRecompactionPlan {
                 entry.status == GpuStructuralEditStatus::Accepted
                     && entry.kind == StructuralEditKind::PruneMarker
             });
-        let mut projection_strength_q16 = std::collections::BTreeMap::<u32, i64>::new();
-        for entry in &self.edit_entries {
-            if entry.status != GpuStructuralEditStatus::Accepted {
-                continue;
-            }
-            let signed = match entry.kind {
-                StructuralEditKind::Strengthen => i64::from(entry.strength_q16),
-                StructuralEditKind::Weaken => -i64::from(entry.strength_q16),
-                _ => continue,
-            };
-            let net = projection_strength_q16
-                .entry(entry.projection_index)
-                .or_insert(0);
-            *net = (*net + signed).clamp(-i64::from(u16::MAX), i64::from(u16::MAX));
-        }
 
         let mut compacted = active_upload.clone();
         let mut old_to_new = vec![None; active_upload.packed_indices.len()];
@@ -369,34 +343,6 @@ impl GpuRecompactionPlan {
                     &mut h_operational_q,
                     &mut h_shadow_q,
                 )?;
-                let net_q16 = projection_strength_q16
-                    .get(&tile.projection_index)
-                    .copied()
-                    .unwrap_or(0);
-                if net_q16 != 0 {
-                    if let Some(lifetime) = lifetime_consolidated_q.last_mut() {
-                        let genetic = *genetic_fixed_q.last().unwrap_or(&0);
-                        let alpha = *alpha_q16.last().unwrap_or(&0);
-                        let h_operational = *h_operational_q.last().unwrap_or(&0);
-                        let alpha_h = round_div_i64(
-                            i64::from(alpha) * i64::from(h_operational),
-                            i64::from(u16::MAX),
-                        )?;
-                        let effective =
-                            i64::from(genetic) + i64::from(*lifetime) + i64::from(alpha_h);
-                        // Step = effective × net × 1/8: strengthening grows
-                        // |w| along its sign, weakening shrinks it toward zero.
-                        let delta =
-                            i64::from(round_div_i64(effective * net_q16, i64::from(u16::MAX) * 8)?);
-                        if delta != 0 {
-                            *lifetime = (i64::from(*lifetime) + delta)
-                                .clamp(i64::from(i16::MIN), i64::from(i16::MAX))
-                                as i16;
-                            diagnostics.strength_adjusted_entries =
-                                diagnostics.strength_adjusted_entries.saturating_add(1);
-                        }
-                    }
-                }
                 tile_synapse_count = tile_synapse_count.saturating_add(1);
                 diagnostics.preserved_entries = diagnostics.preserved_entries.saturating_add(1);
             }

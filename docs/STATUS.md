@@ -6,7 +6,7 @@ The older capability matrix below is a historical baseline, not a fresh HEAD val
 ## Current care and training work
 
 - **Signed Decoders & World-Model-to-Motor Tracts**: `ProjectionType::MotorProposal` (`TemporalPredictive -> ActionPlanning`) and `ActionCandidate` / `SpeechPayload` decoders support signed (excitatory and inhibitory) weights in both phenotype compilation and GPU foundation training, with negative default distance weights so closer candidates score higher by default.
-- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Manipulate`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), decoupled from `GRAB` (`CandidateActionFamily::Contact`).
+- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Interact`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), decoupled from `GRAB` (`CandidateActionFamily::Contact`).
 - **Credit-Gated Waking Oja Normalization**: Waking fast-weight homeostatic decay in `closed_loop_plasticity.wgsl` is gated by `clamp(abs(local_third_factor * credited_eligibility), 0.0, 1.0)` so unrewarded activity does not erase inherited or sleep-consolidated weights.
 - **Valence-Aware Innate Priors & Newborn Nociception**: `Approach` innate non-contact cues respect chemical/recalled valence (`0.0` for known hazards, `1.0` for food, `0.75` neutral), `Avoid` includes a non-contact spatial retreat fallback, and newborn nociception is enabled unconditionally.
 - **Batched Multi-Creature GPU Training Capture**: Foundation training captures mutable GPU state across all resident organisms in two batched submissions per tick (`capture_training_state_batch`) with fast `zstd` replay streaming.
