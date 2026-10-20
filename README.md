@@ -1,8 +1,8 @@
 # A-Life
 
-A-Life is a Rust, Bevy, wgpu, and WGSL artificial-life research project. It is building persistent embodied organisms whose neural policy runs on the GPU and whose actions remain subject to an authoritative world.
+A-Life is a Rust, Bevy, wgpu, and WGSL artificial-life game and research project building persistent embodied organisms whose neural policy runs on the GPU and whose actions remain subject to an authoritative world.
 
-The current product boundary is narrower than the ambition. `production-voxel` starts and ticks a GPU-authoritative cognition loop. The visible scene starts from the selected save, then projects live authoritative creature positions, adds newborns, and applies runtime retirement events. Fresh rendered lifecycle proof and the full player loop remain open.
+`production-voxel` starts and ticks a GPU-authoritative cognition loop. The visible scene starts from the selected save, then projects live authoritative creature positions, adds newborns, and applies runtime retirement events.
 
 ## Run the current voxel frontend
 
@@ -18,7 +18,7 @@ Start a fresh game with one creature:
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_production_voxel_frontend.ps1 -NewGame -Population 1
 ```
 
-New Game creates a current-format creature and save. The launcher chooses a fresh seed; pass `-Seed` to choose one explicitly. Existing save files are preserved. Without `-NewGame`, the selected manifest must point to a supported save; the bundled development-era `tiny_save.json` lacks current biochemical data and cannot be loaded.
+New Game creates a current-format creature and save. The launcher chooses a fresh seed; pass `-Seed` to choose one explicitly. Existing save files are preserved.
 
 Check an existing save's manifest, assets, and GPU setup without opening a window (`-DryRun` does not exercise New Game):
 
@@ -43,17 +43,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 ## What exists today
 
 - World perception, unscored candidate generation, action validation, outcomes, and sealed experience are implemented.
-- WGSL selection, learning, memory, topology, sleep, and checkpoint paths are implemented in the GPU runtime.
+- WGSL selection, signed action/speech decoding, credit-gated fast plasticity, episodic memory, topology, sleep consolidation, and batched training state capture are implemented in the GPU runtime.
 - The production shell constructs and ticks that runtime.
-- The voxel UI provides camera, selection, inspector, speech, save, load, pause, speed, and overlays.
+- The voxel UI provides camera, selection, care dock, inspector, naming, speech, save, load, pause, speed, and overlays.
 - The renderer projects tick-bound runtime transforms, births, and retirement events without owning simulation truth.
-- The production graphics path uses one layered-grid terrain renderer and one lighting authority. Overlay geometry is created on demand.
-- EI0 passed a bounded source-bound exit gate. EI1 produced a complete source-bound corpus but remains `Blocked`.
-- This is a research alpha, not a release-ready autonomous simulation.
-
-Read [current status](docs/STATUS.md) before treating a feature as integrated or proven.
-Read the [v2.0 controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md)
-before treating any current implementation choice as a permanent requirement.
+- Read [current status](docs/STATUS.md) before treating a feature as integrated or proven.
+- Read the [v2.0 controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) before treating any current implementation choice as a permanent requirement.
 
 ## Project map
 
@@ -68,8 +63,7 @@ before treating any current implementation choice as a permanent requirement.
 
 ## Current implementation boundaries
 
-These boundaries describe the current codebase. They do not amend or narrow
-the v2.0 architecture.
+These boundaries describe the current codebase. They do not amend or narrow the v2.0 architecture.
 
 - Production neural execution is GPU-authoritative WGSL. There is no automatic CPU neural fallback or live CPU parity shadow.
 - The world owns legality, targets, action execution, and outcomes.
@@ -78,7 +72,3 @@ the v2.0 architecture.
 - Missing evidence is `Unknown` or `Blocked`, never a pass.
 
 Use the PowerShell wrappers in `scripts/` on Windows. They route shell checks through Git Bash rather than WSL.
-
-Retired renderer assets and milestone smoke/report code are preserved under
-`archive/legacy_true25d` and `archive/legacy_app_milestones`. Nothing under
-`archive/` is compiled, packaged, or treated as current product guidance.

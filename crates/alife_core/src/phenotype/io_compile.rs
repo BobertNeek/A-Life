@@ -282,12 +282,17 @@ pub(super) fn compile_decoders(
                     input_lane,
                     motor_index,
                 );
-                let weight = genetic_weight(
+                let magnitude = genetic_weight(
                     genome.genetic_prior_seed,
                     route_index,
                     neuron,
                     u32::from(input_lane),
                 );
+                let weight = if input_lane == 2 {
+                    -magnitude
+                } else {
+                    magnitude
+                };
                 let alpha = super::topology_compile::decoder_alpha(genome, motor.start, neuron);
                 synapses.push(CompiledSynapse::new(
                     neuron,
@@ -457,15 +462,21 @@ fn compile_n2048_decoders(
                     input_lane,
                     motor_index,
                 );
+                let magnitude = genetic_weight(
+                    genome.genetic_prior_seed,
+                    action_route_index,
+                    neuron,
+                    u32::from(input_lane),
+                );
+                let weight = if input_lane == 2 {
+                    -magnitude
+                } else {
+                    magnitude
+                };
                 synapses.push(CompiledSynapse::new(
                     neuron,
                     neuron,
-                    genetic_weight(
-                        genome.genetic_prior_seed,
-                        action_route_index,
-                        neuron,
-                        u32::from(input_lane),
-                    ),
+                    weight,
                     super::topology_compile::decoder_alpha(genome, motor.start, neuron),
                     action_route_index,
                     CompiledSynapseKind::Decoder(coordinate),
@@ -840,10 +851,33 @@ mod innate_priority_tests {
         let mut hazard = rock;
         hazard.0[15] = -0.8;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);
+        let mut distant_hazard = rock;
+        distant_hazard.0[1] = 1.0;
+        distant_hazard.0[2] = 0.6;
+        distant_hazard.0[15] = 0.0;
+        distant_hazard.0[18] = 0.0;
+        assert!(
+            avoid.innate_contribution(drives, distant_hazard) > 0.0,
+            "Avoid must remain active outside contact when object-slot chemical lanes are zeroed"
+        );
         assert_eq!(avoid.innate_contribution(drives, food), 0.0);
         drives.pain = 0.0;
         drives.temperature_stress = 0.98;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);
+        let procedural = crate::PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &BrainCapacityClass::n2048(),
+            &DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap()),
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        assert!(procedural.synapses().iter().any(|synapse| {
+            matches!(
+                synapse.kind(),
+                CompiledSynapseKind::Decoder(coord)
+                    if coord.head() == DecoderHeadKind::ActionCandidate && coord.input_lane() == 2
+            ) && synapse.genetic_weight() < 0.0
+        }));
         genome.innate_priority.reflex_strength = 0.0;
         assert_eq!(
             family(&genome, CandidateActionFamily::Avoid).innate_contribution(drives, rock),

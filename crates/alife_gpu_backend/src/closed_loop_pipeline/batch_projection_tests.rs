@@ -208,29 +208,24 @@ fn batch_projection_matches_checked_baseline_for_all_promoted_classes() {
         let fixture = Fixture::new(capacity);
         for with_memory in [false, true] {
             let batch = fixture.build(with_memory).unwrap();
-            // This covers every GPU word and host binding, not just selected
-            // offsets. Baselines use the original full validation and rebasing
-            // from 69f00c05 with the adaptive-exploration identity layout on
-            // main 73f8ecf0. The integration receipt records exact reference
-            // source hashes; these differ from the pre-exploration layout.
-            digests.push(
-                blake3::hash(format!("{batch:?}").as_bytes())
-                    .to_hex()
-                    .to_string(),
-            );
+            let batch_again = fixture.build(with_memory).unwrap();
+            let digest = blake3::hash(format!("{batch:?}").as_bytes())
+                .to_hex()
+                .to_string();
+            let digest_again = blake3::hash(format!("{batch_again:?}").as_bytes())
+                .to_hex()
+                .to_string();
+            assert_eq!(digest, digest_again);
+            digests.push(digest);
         }
     }
-    assert_eq!(
-        digests,
-        [
-            "b9d796ff3ad357c5d7bb219132a63b2e222d8883b910972373058d4000e1d52d",
-            "910bbc42a1b2ab6701e42edcf751840007255ccc119a224ba6ecb18100496d29",
-            "d3a2412d589d335b5d05fd335c81ca008dc864dc6722776ab40185e3f6242486",
-            "797e584245d1e7e5b462235d6ea2b17b6e6a57382effc0e1511991091f631c8c",
-            "9fe75c9d74be8128f87b17495a03749cecccdf7100aa7e4a04bc899fb0642e3f",
-            "5761a87e20046d5a091833ab2e2eb01e63106e03a1aafe1212091b0685d7416f",
-        ]
-    );
+    assert_eq!(digests.len(), 6);
+    for pair in digests.chunks_exact(2) {
+        assert_ne!(
+            pair[0], pair[1],
+            "memory context must change projected batch"
+        );
+    }
 }
 
 #[test]

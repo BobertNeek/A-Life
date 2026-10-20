@@ -240,8 +240,9 @@ fn compile_inner(
                     crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
                         composed = -0.000_1;
                     }
-                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                        if composed < 0.0 =>
+                    crate::ProjectionType::Homeostatic
+                        if matches!(synapse.kind(), super::CompiledSynapseKind::Recurrent)
+                            && composed < 0.0 =>
                     {
                         composed = 0.000_1;
                     }
@@ -298,8 +299,9 @@ fn compile_inner(
                     crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
                         composed = -0.000_1;
                     }
-                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                        if composed < 0.0 =>
+                    crate::ProjectionType::Homeostatic
+                        if matches!(synapse.kind(), super::CompiledSynapseKind::Recurrent)
+                            && composed < 0.0 =>
                     {
                         composed = 0.000_1;
                     }

@@ -102,7 +102,6 @@ require_text docs/ROADMAP.md 'Live GPU-to-voxel projection' 'first roadmap phase
 require_text docs/ROADMAP.md 'Autonomous production lifecycle' 'lifecycle roadmap phase'
 require_text docs/DEVELOPMENT.md 'scripts/docs_check.ps1' 'Windows docs gate'
 require_text docs/DEVELOPMENT.md 'source-bound physical-adapter evidence' 'hardware evidence rule'
-require_text docs/DEVELOPMENT.md 'archive/legacy_app_milestones' 'legacy app milestone archive'
 require_text crates/alife_game_app/README.md 'validate-production-assets' 'current game-app validator'
 forbid_text crates/alife_game_app/README.md 'headless-smoke' 'removed game-app command'
 forbid_text crates/alife_game_app/README.md 'gpu-product-smoke' 'removed game-app command'

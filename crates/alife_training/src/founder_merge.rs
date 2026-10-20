@@ -114,9 +114,11 @@ pub fn merge_founder_branches(
                 .projections()
                 .get(usize::from(synapse.route_index()))
                 .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-            if match projection.projection_type() {
-                ProjectionType::LateralInhibition => merged >= 0.0,
-                ProjectionType::Homeostatic | ProjectionType::MotorProposal => merged < 0.0,
+            if match (synapse.kind(), projection.projection_type()) {
+                (_, ProjectionType::LateralInhibition) => merged >= 0.0,
+                (alife_core::CompiledSynapseKind::Recurrent, ProjectionType::Homeostatic) => {
+                    merged < 0.0
+                }
                 _ => false,
             } {
                 return Err(ScaffoldContractError::PhenotypeCompile);

@@ -30,8 +30,7 @@ Rules:
   post-seal GPU learning is rejected. Ordinary play updates diagnostic topology
   every ten ticks or on a significant outcome; foundation training and audited
   diagnostics observe every patch. Sidecars supply evidence without selecting actions or aborting
-  candidate arbitration. See `docs/performance/20261013-approximate-cognition-runtime.md`
-  for the authorized live approximation and checkpoint boundaries.
+  candidate arbitration.
 - Update one fixed-size passive-statistics record per resident tick and archive
   that typed record before GPU retirement; never scan unbounded life history.
 - Use `docs/ROADMAP.md` for product sequencing and exit gates. Do not infer

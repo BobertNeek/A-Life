@@ -819,8 +819,9 @@ impl BrainPhenotype {
                     crate::ProjectionType::LateralInhibition if synapse.genetic_weight() >= 0.0 => {
                         return Err(ScaffoldContractError::PhenotypeCompile)
                     }
-                    crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                        if synapse.genetic_weight() < 0.0 =>
+                    crate::ProjectionType::Homeostatic
+                        if matches!(synapse.kind(), CompiledSynapseKind::Recurrent)
+                            && synapse.genetic_weight() < 0.0 =>
                     {
                         return Err(ScaffoldContractError::PhenotypeCompile)
                     }

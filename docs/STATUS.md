@@ -5,19 +5,13 @@ The older capability matrix below is a historical baseline, not a fresh HEAD val
 
 ## Current care and training work
 
-The [core game-loop plan](core-game-loop-plan-2026-09-20.md) tracks current
-player-facing work. The [N2048 operator guide](n2048-training-operator.md) records
-the September 24 four-lesson teacher corpus, warm-up, and teacher-free handoffs.
-These establish bounded training integration; held-out learned care remains open.
-The obstacle handoff still recorded blocked decisions and no meal. See the
-[training regimen](n2048-care-training-regimen-2026-09-21.md) for acceptance criteria.
+- **Signed Decoders & World-Model-to-Motor Tracts**: `ProjectionType::MotorProposal` (`TemporalPredictive -> ActionPlanning`) and `ActionCandidate` / `SpeechPayload` decoders support signed (excitatory and inhibitory) weights in both phenotype compilation and GPU foundation training, with negative default distance weights so closer candidates score higher by default.
+- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Manipulate`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), decoupled from `GRAB` (`CandidateActionFamily::Contact`).
+- **Credit-Gated Waking Oja Normalization**: Waking fast-weight homeostatic decay in `closed_loop_plasticity.wgsl` is gated by `clamp(abs(local_third_factor * credited_eligibility), 0.0, 1.0)` so unrewarded activity does not erase inherited or sleep-consolidated weights.
+- **Valence-Aware Innate Priors & Newborn Nociception**: `Approach` innate non-contact cues respect chemical/recalled valence (`0.0` for known hazards, `1.0` for food, `0.75` neutral), `Avoid` includes a non-contact spatial retreat fallback, and newborn nociception is enabled unconditionally.
+- **Batched Multi-Creature GPU Training Capture**: Foundation training captures mutable GPU state across all resident organisms in two batched submissions per tick (`capture_training_state_batch`) with fast `zstd` replay streaming.
 
-The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner` (including its
-reproduction-intent helper), and `Era1TrialRunner` remain **Blocked** on canonical
-organism biology and receptor-gated learning integration. Their constructors now
-report this blocker before GPU initialization. This does not block the separate
-foundation trainer or the production organism loop. See the
-[September 30 commit-review validation](reviews/2026-09-30-validated-cleanup.md).
+The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner`, and `Era1TrialRunner` remain **Blocked** on canonical organism biology and receptor-gated learning integration. This does not block the foundation trainer or the production organism loop.
 
 ## Honest headline
 

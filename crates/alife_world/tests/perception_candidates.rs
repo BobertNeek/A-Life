@@ -475,7 +475,7 @@ fn every_retained_object_gets_the_same_six_mechanical_operations() {
         (
             HeadlessActionIds::PLAY,
             ActionKind::Interact,
-            CandidateActionFamily::Contact,
+            CandidateActionFamily::Other,
         ),
     ];
 

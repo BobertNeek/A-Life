@@ -105,7 +105,8 @@ impl CandidateActionFamily {
                 | (Self::Contact | Self::Ingest, ActionKind::Interact)
                 | (
                     Self::Other,
-                    ActionKind::Hold
+                    ActionKind::Interact
+                        | ActionKind::Hold
                         | ActionKind::Gesture
                         | ActionKind::Vocalize
                         | ActionKind::Write
@@ -1009,8 +1010,10 @@ fn validate_frame_base(
                             .get(usize::from(slot_index))
                             .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
                         let mut observed_features = candidate.features;
-                        if candidate.family == CandidateActionFamily::Contact
-                            && candidate.kind == ActionKind::Interact
+                        if matches!(
+                            candidate.family,
+                            CandidateActionFamily::Contact | CandidateActionFamily::Other
+                        ) && candidate.kind == ActionKind::Interact
                             && observed_features.0[CONTACT_ACTIVATION_FEATURE_LANE] == 1.0
                         {
                             observed_features.0[CONTACT_ACTIVATION_FEATURE_LANE] = 0.0;

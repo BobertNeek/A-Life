@@ -366,8 +366,7 @@ fn projections_routes_and_global_budgets_are_exact_partitions() {
                 alife_core::ProjectionType::LateralInhibition => {
                     assert!(synapse.genetic_weight() < 0.0)
                 }
-                alife_core::ProjectionType::Homeostatic
-                | alife_core::ProjectionType::MotorProposal => {
+                alife_core::ProjectionType::Homeostatic => {
                     assert!(synapse.genetic_weight() >= 0.0)
                 }
                 _ => {}

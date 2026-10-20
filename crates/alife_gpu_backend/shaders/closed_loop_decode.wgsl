@@ -47,16 +47,30 @@ fn innate_family_contribution(
   var cue = 1.0;
   let cue_code = (family.reserved0 >> 16u) & 0xffu;
   if (cue_code != 0u) {
-    var feature = 0.0;
+    let contact = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 18u]);
+    let bearing_sin = bitcast<f32>(frame_payload_words[candidate_record.feature_offset]);
+    let bearing_cos = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 1u]);
+    let noncontact_bearing = (1.0 - contact) * clamp(abs(bearing_sin) + abs(bearing_cos), 0.0, 1.0);
+    var signal = 0.0;
     if (cue_code == 25u) {
-      let contact = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 18u]);
-      let bearing_sin = bitcast<f32>(frame_payload_words[candidate_record.feature_offset]);
-      let bearing_cos = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 1u]);
-      feature = (1.0 - contact) * clamp(abs(bearing_sin) + abs(bearing_cos), 0.0, 1.0);
+      let chem = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 15u]);
+      var valence_scale = 0.75;
+      if (chem < -0.2) {
+        valence_scale = 0.0;
+      } else if (chem > 0.2) {
+        valence_scale = 1.0;
+      }
+      let scaled_bearing = noncontact_bearing * valence_scale;
+      signal = select(scaled_bearing, -scaled_bearing, (family.reserved0 & 0x02000000u) != 0u);
     } else {
-      feature = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + cue_code - 1u]);
+      let feature = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + cue_code - 1u]);
+      let inverted = (family.reserved0 & 0x02000000u) != 0u;
+      if (inverted && cue_code == 16u && contact == 0.0 && feature == 0.0) {
+        signal = 0.55 * noncontact_bearing;
+      } else {
+        signal = select(feature, -feature, inverted);
+      }
     }
-    let signal = select(feature, -feature, (family.reserved0 & 0x02000000u) != 0u);
     cue = clamp((signal - 0.4) / 0.6, 0.0, 1.0);
   }
   var reach = 1.0;

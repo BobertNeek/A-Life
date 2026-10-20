@@ -154,6 +154,7 @@ fn create_new_game_inner(
             0.5,
         )?;
         calibrate_inherited_founder_biochemistry(&mut genome)?;
+        enable_inherited_newborn_nociception(&mut genome)?;
         if let Some(candidate) = candidate {
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
             enable_inherited_newborn_nociception(&mut genome)?;

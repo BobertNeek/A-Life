@@ -4865,9 +4865,27 @@ impl GpuClosedLoopBackend {
         handle: GpuBrainHandle,
         tick: alife_core::Tick,
     ) -> Result<crate::training_rollout::GpuTrainingStateSnapshot, ScaffoldContractError> {
+        let mut batch = self.capture_training_state_batch(&[(handle, tick)])?;
+        batch
+            .pop()
+            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)
+    }
+
+    #[cfg(feature = "training-rollout")]
+    pub fn capture_training_state_batch(
+        &mut self,
+        requests: &[(GpuBrainHandle, alife_core::Tick)],
+    ) -> Result<Vec<crate::training_rollout::GpuTrainingStateSnapshot>, ScaffoldContractError> {
+        if requests.is_empty() {
+            return Ok(Vec::new());
+        }
         self.ensure_ready()?;
-        self.validate_handle_backend(handle)?;
-        let (mut snapshot, ranges) = {
+        for (handle, _) in requests {
+            self.validate_handle_backend(*handle)?;
+        }
+        let mut snapshots = Vec::with_capacity(requests.len());
+        let mut slot_ranges = Vec::with_capacity(requests.len());
+        for &(handle, tick) in requests {
             let bucket = self
                 .class_buckets
                 .get_mut(&handle.class_id.raw())
@@ -4880,133 +4898,139 @@ impl GpuClosedLoopBackend {
             let resident = bucket.slots[handle.slot as usize]
                 .as_mut()
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-            (
-                crate::training_rollout::GpuTrainingStateSnapshot {
+            snapshots.push(crate::training_rollout::GpuTrainingStateSnapshot {
+                handle,
+                tick: tick.raw(),
+                logical_dispatch_generation: resident.logical_dispatch_generation,
+                active_activation_side: side,
+                active_weight_generation: resident.active_weight_generation,
+                active_weight_bank: resident.active_weight_bank,
+                phenotype: shared_training_phenotype(
+                    &mut resident.training_phenotype,
                     handle,
-                    tick: tick.raw(),
-                    logical_dispatch_generation: resident.logical_dispatch_generation,
-                    active_activation_side: side,
-                    active_weight_generation: resident.active_weight_generation,
-                    active_weight_bank: resident.active_weight_bank,
-                    phenotype: shared_training_phenotype(
-                        &mut resident.training_phenotype,
-                        handle,
-                        &resident.phenotype,
-                    ),
-                    brain_slot: resident.brain_slot.clone(),
-                    v11: resident.v11.checkpoint(),
-                    mutable_word_base: resident.ranges.mutable_state_words.start,
-                    mutable_words: Vec::new(),
-                    structural_synapses: Vec::new(),
-                },
-                resident.ranges.clone(),
-            )
-        };
-        snapshot.mutable_words = self.read_slot_mutable_words(handle, &ranges)?;
-        let inherited = snapshot.phenotype.synapses().len();
-        let live = snapshot.brain_slot.record().synapse_count as usize;
-        if live > inherited {
-            let key = (
-                handle.class_id.raw(),
-                handle.slot,
-                handle.generation,
-                handle.organism_id.raw(),
-            );
-            if let Some(cached) = self.training_structural_cache.get(&key) {
-                if cached.slot == snapshot.brain_slot
-                    && cached.structural == snapshot.v11.structural
-                {
-                    snapshot.structural_synapses = cached.synapses.clone();
-                    return Ok(snapshot);
-                }
-            }
-            let bucket = self
-                .class_buckets
-                .get(&handle.class_id.raw())
-                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
-                .bucket_for_handle(handle)?;
-            let plan = crate::closed_loop_sleep::read_gpu_words(
-                &self.device,
-                &self.queue,
-                bucket.buffers.neural_buffers()[2],
-                ranges.layout.target_offset_words.start
-                    ..ranges.layout.route_index_words.start
-                        + snapshot.brain_slot.record().recurrent_synapse_count,
-                "training-structural-plan-readback",
-                None,
-            )?;
-            let weights = crate::closed_loop_sleep::read_gpu_words(
-                &self.device,
-                &self.queue,
-                bucket.buffers.neural_buffers()[3],
-                ranges.layout.genetic_weight_words.start
-                    ..ranges.layout.alpha_words.start + snapshot.brain_slot.record().synapse_count,
-                "training-structural-weight-readback",
-                None,
-            )?;
-            let plan_base = ranges.layout.target_offset_words.start;
-            let weight_base = ranges.layout.genetic_weight_words.start;
-            let recurrent = snapshot.brain_slot.record().recurrent_synapse_count;
-            for target in 0..snapshot.brain_slot.record().neuron_count {
-                let offset = |word: u32| -> Result<usize, ScaffoldContractError> {
-                    usize::try_from(word - plan_base)
-                        .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)
-                };
-                let begin = *plan
-                    .get(offset(ranges.layout.target_offset_words.start + target)?)
-                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                let end = *plan
-                    .get(offset(
-                        ranges.layout.target_offset_words.start + target + 1,
-                    )?)
-                    .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                if end > recurrent || begin > end {
-                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
-                }
-                for cursor in begin..end {
-                    let alpha = *weights
-                        .get((ranges.layout.alpha_words.start + cursor - weight_base) as usize)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                    if alpha != (-0.0_f32).to_bits() {
+                    &resident.phenotype,
+                ),
+                brain_slot: resident.brain_slot.clone(),
+                v11: resident.v11.checkpoint(),
+                mutable_word_base: resident.ranges.mutable_state_words.start,
+                mutable_words: Vec::new(),
+                structural_synapses: Vec::new(),
+            });
+            slot_ranges.push((handle, resident.ranges.clone()));
+        }
+        let mutable_words_batch = self.read_slots_mutable_words_batch(&slot_ranges)?;
+        for ((snapshot, (handle, ranges)), mutable_words) in snapshots
+            .iter_mut()
+            .zip(slot_ranges)
+            .zip(mutable_words_batch)
+        {
+            snapshot.mutable_words = mutable_words;
+            let inherited = snapshot.phenotype.synapses().len();
+            let live = snapshot.brain_slot.record().synapse_count as usize;
+            if live > inherited {
+                let key = (
+                    handle.class_id.raw(),
+                    handle.slot,
+                    handle.generation,
+                    handle.organism_id.raw(),
+                );
+                if let Some(cached) = self.training_structural_cache.get(&key) {
+                    if cached.slot == snapshot.brain_slot
+                        && cached.structural == snapshot.v11.structural
+                    {
+                        snapshot.structural_synapses = cached.synapses.clone();
                         continue;
                     }
-                    let source = *plan
-                        .get(offset(ranges.layout.source_index_words.start + cursor)?)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                    let route = *plan
-                        .get(offset(ranges.layout.route_index_words.start + cursor)?)
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                    let genetic = *weights
-                        .get(
-                            (ranges.layout.genetic_weight_words.start + cursor - weight_base)
-                                as usize,
-                        )
-                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-                    snapshot.structural_synapses.push(
-                        crate::training_rollout::GpuTrainingStructuralSynapse {
-                            slot_index: cursor,
-                            source,
-                            target,
-                            route,
-                            genetic_weight: f32::from_bits(genetic),
-                            alpha: f32::from_bits(alpha),
-                        },
-                    );
                 }
+                let bucket = self
+                    .class_buckets
+                    .get(&handle.class_id.raw())
+                    .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                    .bucket_for_handle(handle)?;
+                let plan = crate::closed_loop_sleep::read_gpu_words(
+                    &self.device,
+                    &self.queue,
+                    bucket.buffers.neural_buffers()[2],
+                    ranges.layout.target_offset_words.start
+                        ..ranges.layout.route_index_words.start
+                            + snapshot.brain_slot.record().recurrent_synapse_count,
+                    "training-structural-plan-readback",
+                    None,
+                )?;
+                let weights = crate::closed_loop_sleep::read_gpu_words(
+                    &self.device,
+                    &self.queue,
+                    bucket.buffers.neural_buffers()[3],
+                    ranges.layout.genetic_weight_words.start
+                        ..ranges.layout.alpha_words.start
+                            + snapshot.brain_slot.record().synapse_count,
+                    "training-structural-weight-readback",
+                    None,
+                )?;
+                let plan_base = ranges.layout.target_offset_words.start;
+                let weight_base = ranges.layout.genetic_weight_words.start;
+                let recurrent = snapshot.brain_slot.record().recurrent_synapse_count;
+                for target in 0..snapshot.brain_slot.record().neuron_count {
+                    let offset = |word: u32| -> Result<usize, ScaffoldContractError> {
+                        usize::try_from(word - plan_base)
+                            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)
+                    };
+                    let begin = *plan
+                        .get(offset(ranges.layout.target_offset_words.start + target)?)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    let end = *plan
+                        .get(offset(
+                            ranges.layout.target_offset_words.start + target + 1,
+                        )?)
+                        .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                    if end > recurrent || begin > end {
+                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    }
+                    for cursor in begin..end {
+                        let alpha = *weights
+                            .get((ranges.layout.alpha_words.start + cursor - weight_base) as usize)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                        if alpha != (-0.0_f32).to_bits() {
+                            continue;
+                        }
+                        let source = *plan
+                            .get(offset(ranges.layout.source_index_words.start + cursor)?)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                        let route = *plan
+                            .get(offset(ranges.layout.route_index_words.start + cursor)?)
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                        let genetic = *weights
+                            .get(
+                                (ranges.layout.genetic_weight_words.start + cursor - weight_base)
+                                    as usize,
+                            )
+                            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+                        snapshot.structural_synapses.push(
+                            crate::training_rollout::GpuTrainingStructuralSynapse {
+                                slot_index: cursor,
+                                source,
+                                target,
+                                route,
+                                genetic_weight: f32::from_bits(genetic),
+                                alpha: f32::from_bits(alpha),
+                            },
+                        );
+                    }
+                }
+                if snapshot.structural_synapses.len() != live - inherited {
+                    return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                }
+                self.training_structural_cache.insert(
+                    key,
+                    TrainingStructuralCache {
+                        slot: snapshot.brain_slot.clone(),
+                        structural: snapshot.v11.structural.clone(),
+                        synapses: snapshot.structural_synapses.clone(),
+                    },
+                );
             }
-            if snapshot.structural_synapses.len() != live - inherited {
-                return Err(ScaffoldContractError::NeuralBackendUnavailable);
-            }
-            self.training_structural_cache.insert(
-                key,
-                TrainingStructuralCache {
-                    slot: snapshot.brain_slot.clone(),
-                    structural: snapshot.v11.structural.clone(),
-                    synapses: snapshot.structural_synapses.clone(),
-                },
-            );
         }
-        Ok(snapshot)
+        Ok(snapshots)
     }
 
     /// Explicit training request; ordinary ticks use bounded game exploration.
@@ -5429,19 +5453,7 @@ impl GpuClosedLoopBackend {
             .buffers
             .record_mutable_slot_reset(&mut encoder, upload.ranges())
             .map_err(map_gpu_contract_error)?;
-        let submission = self.queue.submit(Some(encoder.finish()));
-        if self
-            .device
-            .poll(wgpu::PollType::Wait {
-                submission_index: Some(submission),
-                timeout: None,
-            })
-            .is_err()
-            || self.device_lost.load(Ordering::Acquire)
-        {
-            self.mark_device_lost();
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
-        }
+        let _reset_submission = self.queue.submit(Some(encoder.finish()));
         bucket
             .buffers
             .write_mutable_slot_upload(&self.queue, &upload)

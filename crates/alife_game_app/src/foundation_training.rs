@@ -1352,7 +1352,8 @@ fn vocabulary_reception_choice(
         Some(1..=5 | 14..=18) => Family::Inspect,
         Some(7) => Family::Avoid,
         Some(8) => Family::Ingest,
-        Some(9 | 13) => Family::Contact,
+        Some(9) => Family::Contact,
+        Some(13) => Family::Other,
         Some(10 | 12) => Family::Rest,
         Some(11) => Family::Ingest,
         Some(6) => Family::Approach,
@@ -1407,7 +1408,7 @@ fn vocabulary_reception_choice(
     if word == Some(9) && frame.sensory().channels.tactile_contact[2] > 0.5 {
         return frame.candidates().iter().find(|c| c.family == Family::Idle);
     }
-    if matches!(family, Family::Ingest | Family::Contact) && !at_contact {
+    if matches!(family, Family::Ingest | Family::Contact | Family::Other) && !at_contact {
         return frame
             .candidates()
             .iter()
@@ -2098,7 +2099,8 @@ fn run_foundation_training_pilot_with_request(
                 Some(6) => alife_core::CandidateActionFamily::Approach,
                 Some(7) => alife_core::CandidateActionFamily::Avoid,
                 Some(8 | 11) => alife_core::CandidateActionFamily::Ingest,
-                Some(9 | 13) => alife_core::CandidateActionFamily::Contact,
+                Some(9) => alife_core::CandidateActionFamily::Contact,
+                Some(13) => alife_core::CandidateActionFamily::Other,
                 Some(10 | 12) => alife_core::CandidateActionFamily::Rest,
                 _ => alife_core::CandidateActionFamily::Idle,
             };
@@ -2870,7 +2872,8 @@ pub(crate) fn close_foundation_navigation_gate(
                     6 => alife_core::CandidateActionFamily::Approach,
                     7 => alife_core::CandidateActionFamily::Avoid,
                     8 | 11 => alife_core::CandidateActionFamily::Ingest,
-                    9 | 13 => alife_core::CandidateActionFamily::Contact,
+                    9 => alife_core::CandidateActionFamily::Contact,
+                    13 => alife_core::CandidateActionFamily::Other,
                     _ => alife_core::CandidateActionFamily::Rest,
                 };
                 patch.decision().neural_evidence().ok().is_some_and(|e| {
@@ -4220,9 +4223,16 @@ impl FoundationReplayWriter {
     }
 
     pub fn append(&mut self, step: &FoundationTrainingStep) -> Result<FoundationReplayRecordRef> {
-        if step.before.phenotype.as_ref() != &self.phenotype
-            || step.after_inference.phenotype.as_ref() != &self.phenotype
-        {
+        let same_before = std::ptr::eq(step.before.phenotype.as_ref(), &self.phenotype)
+            || (step.before.phenotype.phenotype_hash() == self.phenotype.phenotype_hash()
+                && step.before.phenotype.as_ref() == &self.phenotype);
+        let same_after =
+            (std::sync::Arc::ptr_eq(&step.before.phenotype, &step.after_inference.phenotype)
+                && same_before)
+                || (step.after_inference.phenotype.phenotype_hash()
+                    == self.phenotype.phenotype_hash()
+                    && step.after_inference.phenotype.as_ref() == &self.phenotype);
+        if !same_before || !same_after {
             return Err("frozen genetic actor changed within a replay life".into());
         }
         // Reserve conversion's temporary float arrays, candidate/patch copies,
@@ -4427,11 +4437,10 @@ fn write_replay_record(
             hasher: blake3::Hasher::new(),
             bytes: 0,
         };
-        let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 3)?;
+        let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 1)?;
         bincode::serde::encode_into_std_write(record, &mut encoder, bincode::config::standard())?;
         encoder.finish()?;
         writer.flush()?;
-        writer.inner.get_ref().sync_all()?;
         reference.encoded_bytes = writer.bytes;
         reference.digest = *writer.hasher.finalize().as_bytes();
         drop(writer);

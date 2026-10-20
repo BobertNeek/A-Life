@@ -117,7 +117,7 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
                 (
                     HeadlessActionIds::PLAY,
                     ActionKind::Interact,
-                    CandidateActionFamily::Contact,
+                    CandidateActionFamily::Other,
                     0.2,
                 ),
             ] {
@@ -323,7 +323,7 @@ impl GroundedCandidateEnumerator {
                 (
                     HeadlessActionIds::PLAY,
                     ActionKind::Interact,
-                    CandidateActionFamily::Contact,
+                    CandidateActionFamily::Other,
                     0.2,
                 ),
             ] {

@@ -1963,9 +1963,9 @@ fn pack_metadata_and_layout(
                 u32::from(coordinate.input_lane()),
             ),
         };
-        let sign_policy = match projection.projection_type() {
-            ProjectionType::LateralInhibition => 1,
-            ProjectionType::Homeostatic | ProjectionType::MotorProposal => 2,
+        let sign_policy = match (synapse.kind(), projection.projection_type()) {
+            (_, ProjectionType::LateralInhibition) => 1,
+            (CompiledSynapseKind::Recurrent, ProjectionType::Homeostatic) => 2,
             _ => 0,
         };
         meta.extend_from_slice(&[

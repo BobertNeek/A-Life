@@ -254,8 +254,10 @@ fn evaluate_fast_plasticity_synapse(
   let credited_eligibility = eligibility_at_outcome(staging_eligibility, receptor.eligibility_decay, outcome);
   let local_third_factor = project_third_factor(receptor,outcome);
   let effective = genetic + lifetime + alpha*fast;
-  let delta = learning_rate*alpha*local_third_factor*credited_eligibility
-    - normalization_rate*post*post*effective;
+  let credit_drive = local_third_factor*credited_eligibility;
+  let normalization_gate = clamp(abs(credit_drive), 0.0, 1.0);
+  let delta = learning_rate*alpha*credit_drive
+    - normalization_rate*normalization_gate*post*post*effective;
   let next_fast = clamp(fast+delta,fast_min,fast_max);
   let guard =
       plasticity_guard_bit(0u, !finite_plasticity(staging_eligibility))

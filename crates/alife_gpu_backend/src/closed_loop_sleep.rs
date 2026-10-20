@@ -920,6 +920,103 @@ impl GpuClosedLoopBackend {
         )
     }
 
+    #[cfg(feature = "training-rollout")]
+    pub(crate) fn read_slots_mutable_words_batch(
+        &self,
+        requests: &[(GpuBrainHandle, GpuFixedSlotRanges)],
+    ) -> Result<Vec<Vec<u32>>, ScaffoldContractError> {
+        if requests.is_empty() {
+            return Ok(Vec::new());
+        }
+        if requests.len() == 1 {
+            return Ok(vec![
+                self.read_slot_mutable_words(requests[0].0, &requests[0].1)?
+            ]);
+        }
+        let mut total_bytes = 0_u64;
+        let mut copies = Vec::with_capacity(requests.len());
+        for (handle, ranges) in requests {
+            let bucket = self
+                .class_buckets
+                .get(&handle.class_id().raw())
+                .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+                .bucket_for_handle(*handle)?;
+            let count = ranges
+                .mutable_state_words
+                .end
+                .checked_sub(ranges.mutable_state_words.start)
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            if count == 0 {
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            let size = u64::from(count) * 4;
+            let dst_offset = total_bytes;
+            total_bytes = total_bytes
+                .checked_add(size)
+                .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
+            copies.push((
+                bucket.buffers.neural_buffers()[6],
+                u64::from(ranges.mutable_state_words.start) * 4,
+                dst_offset,
+                size,
+            ));
+        }
+        let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("closed-loop-training-mutable-batch-readback"),
+            size: total_bytes,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("closed-loop-training-mutable-batch-readback"),
+            });
+        for (source, src_offset, dst_offset, size) in &copies {
+            encoder.copy_buffer_to_buffer(source, *src_offset, &readback, *dst_offset, *size);
+        }
+        let command = encoder.finish();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        command.map_buffer_on_submit(
+            &readback,
+            wgpu::MapMode::Read,
+            0..total_bytes,
+            move |result| {
+                let _ = sender.send(result);
+            },
+        );
+        let submission = self.queue.submit(Some(command));
+        let poll_started = Instant::now();
+        let poll_failed = self
+            .device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
+            .is_err();
+        let poll_wait_ns = u64::try_from(poll_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let receive_started = Instant::now();
+        let receive_failed = receiver.recv().ok().and_then(Result::ok).is_none();
+        let map_receive_wait_ns =
+            u64::try_from(receive_started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        self.mutable_slot_readback_counters
+            .record(total_bytes, poll_wait_ns, map_receive_wait_ns);
+        if poll_failed || receive_failed {
+            readback.unmap();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        let mapped = readback.slice(..total_bytes).get_mapped_range();
+        let mut results = Vec::with_capacity(copies.len());
+        for (_, _, dst_offset, size) in copies {
+            let start = dst_offset as usize;
+            let end = (dst_offset + size) as usize;
+            results.push(bytemuck::cast_slice::<u8, u32>(&mapped[start..end]).to_vec());
+        }
+        drop(mapped);
+        readback.unmap();
+        Ok(results)
+    }
+
     #[cfg(feature = "gpu-tests")]
     pub fn read_immutable_genetic_weights_for_test(
         &mut self,
