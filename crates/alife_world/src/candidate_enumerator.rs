@@ -26,18 +26,8 @@ pub const CANDIDATE_FEATURE_AFFORDANCE_COUNT: usize = 10;
 pub const CANDIDATE_FEATURE_CONTACT_LANE: usize = 16;
 pub const CANDIDATE_FEATURE_EVIDENCE_LANE: usize = 17;
 pub const CANDIDATE_FEATURE_RESERVED_START_LANE: usize = 18;
-// Same Contact head, distinct motor operation. The feature describes the
-// attempted action, never a hidden object kind or successful outcome.
-fn interaction_features(
-    mut features: CandidateFeatureVector,
-    action: alife_core::ActionId,
-) -> CandidateFeatureVector {
-    if action == HeadlessActionIds::PLAY {
-        features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE] = 1.0;
-    }
-    features
-}
-
+// Activation and gripping use separate existing readout families. All 24 object
+// features keep their physical meanings, including angular speed in lane 20.
 const INTRINSIC_CANDIDATE_COUNT: usize = 3;
 const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 6;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
@@ -117,7 +107,7 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
                 (
                     HeadlessActionIds::PLAY,
                     ActionKind::Interact,
-                    CandidateActionFamily::Contact,
+                    CandidateActionFamily::Other,
                     0.2,
                 ),
             ] {
@@ -129,7 +119,7 @@ impl CandidateEnumerator for HeadlessCandidateEnumerator {
                     family,
                     observation,
                     target,
-                    interaction_features(features, action_id),
+                    features,
                     Confidence::new(1.0)?,
                     NormalizedScalar::new(effort)?,
                     DurationTicks::new(1),
@@ -323,7 +313,7 @@ impl GroundedCandidateEnumerator {
                 (
                     HeadlessActionIds::PLAY,
                     ActionKind::Interact,
-                    CandidateActionFamily::Contact,
+                    CandidateActionFamily::Other,
                     0.2,
                 ),
             ] {
@@ -335,7 +325,7 @@ impl GroundedCandidateEnumerator {
                     family,
                     observation,
                     target,
-                    interaction_features(features, action_id),
+                    features,
                     slot.confidence,
                     NormalizedScalar::new(effort)?,
                     DurationTicks::new(1),

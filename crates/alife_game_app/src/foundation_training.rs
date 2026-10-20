@@ -1352,7 +1352,8 @@ fn vocabulary_reception_choice(
         Some(1..=5 | 14..=18) => Family::Inspect,
         Some(7) => Family::Avoid,
         Some(8) => Family::Ingest,
-        Some(9 | 13) => Family::Contact,
+        Some(9) => Family::Contact,
+        Some(13) => Family::Other,
         Some(10 | 12) => Family::Rest,
         Some(11) => Family::Ingest,
         Some(6) => Family::Approach,
@@ -1407,7 +1408,7 @@ fn vocabulary_reception_choice(
     if word == Some(9) && frame.sensory().channels.tactile_contact[2] > 0.5 {
         return frame.candidates().iter().find(|c| c.family == Family::Idle);
     }
-    if matches!(family, Family::Ingest | Family::Contact) && !at_contact {
+    if matches!(word, Some(8 | 9 | 11 | 13)) && !at_contact {
         return frame
             .candidates()
             .iter()
@@ -2098,7 +2099,8 @@ fn run_foundation_training_pilot_with_request(
                 Some(6) => alife_core::CandidateActionFamily::Approach,
                 Some(7) => alife_core::CandidateActionFamily::Avoid,
                 Some(8 | 11) => alife_core::CandidateActionFamily::Ingest,
-                Some(9 | 13) => alife_core::CandidateActionFamily::Contact,
+                Some(9) => alife_core::CandidateActionFamily::Contact,
+                Some(13) => alife_core::CandidateActionFamily::Other,
                 Some(10 | 12) => alife_core::CandidateActionFamily::Rest,
                 _ => alife_core::CandidateActionFamily::Idle,
             };
@@ -2870,7 +2872,8 @@ pub(crate) fn close_foundation_navigation_gate(
                     6 => alife_core::CandidateActionFamily::Approach,
                     7 => alife_core::CandidateActionFamily::Avoid,
                     8 | 11 => alife_core::CandidateActionFamily::Ingest,
-                    9 | 13 => alife_core::CandidateActionFamily::Contact,
+                    9 => alife_core::CandidateActionFamily::Contact,
+                    13 => alife_core::CandidateActionFamily::Other,
                     _ => alife_core::CandidateActionFamily::Rest,
                 };
                 patch.decision().neural_evidence().ok().is_some_and(|e| {
@@ -4591,6 +4594,68 @@ mod held_food_lesson_tests {
         Intensity, JointPhysicalOutcome, MotorChannel, MotorCommandBundle, PhysicalContactKind,
         PostActionOutcome, SignedValence, Vec3f,
     };
+
+    #[test]
+    fn play_vocabulary_uses_activation_family_and_preserves_reach_and_replay_identity() {
+        use alife_core::{
+            CandidateActionFamily as Family, HomeostaticSnapshot, OrganismId, SensorProfile,
+        };
+        for (distance, expected_action, expected_family) in [
+            (
+                4.0,
+                alife_world::HeadlessActionIds::APPROACH,
+                Family::Approach,
+            ),
+            (0.1, alife_world::HeadlessActionIds::PLAY, Family::Other),
+        ] {
+            let mut world = alife_world::HeadlessScenarioBuilder::new(96004)
+                .agent("subject", OrganismId(1), Vec3f::ZERO)
+                .build()
+                .unwrap();
+            let position = Vec3f::new(distance, 0.0, 0.0);
+            let target = world.spawn_toy("fixed", position, false).unwrap();
+            let frame = world
+                .perception_frame(
+                    OrganismId(1),
+                    Tick::ZERO,
+                    SensorProfile::GroundedTerrainVisionV1,
+                    HomeostaticSnapshot::baseline(Tick::ZERO),
+                )
+                .unwrap();
+            let choice =
+                vocabulary_reception_choice(&frame, Some(13), Some(target), Some(position))
+                    .unwrap();
+            assert_eq!(choice.action_id, expected_action);
+            assert_eq!(choice.family, expected_family);
+            assert_eq!(
+                choice.kind,
+                if distance > 1.0 {
+                    alife_core::ActionKind::Move
+                } else {
+                    alife_core::ActionKind::Interact
+                }
+            );
+            if distance < 1.0 {
+                let grip =
+                    vocabulary_reception_choice(&frame, Some(9), Some(target), Some(position))
+                        .unwrap();
+                assert_eq!(grip.action_id, alife_world::HeadlessActionIds::GRAB);
+                assert_eq!(grip.family, Family::Contact);
+                let mut decoder_inputs = [0.0; 54];
+                decoder_inputs[..24].copy_from_slice(&choice.features.0);
+                let replay = alife_training::TrainingReplayCandidate {
+                    family: choice.family,
+                    decoder_inputs,
+                    innate_bias: 0.0,
+                };
+                let restored: alife_training::TrainingReplayCandidate =
+                    serde_json::from_slice(&serde_json::to_vec(&replay).unwrap()).unwrap();
+                assert_eq!(restored, replay);
+                assert_eq!(restored.family, Family::Other);
+                assert_eq!(&restored.decoder_inputs[..24], &choice.features.0);
+            }
+        }
+    }
 
     pub(super) fn unconfigured(seed: u64) -> alife_world::HeadlessWorld {
         let asset = initial_n2048_care_asset(seed).unwrap();

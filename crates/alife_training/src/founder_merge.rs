@@ -109,7 +109,9 @@ pub fn merge_founder_branches(
         if !merged.is_finite() {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
-        if merged.to_bits() != base.to_bits() {
+        if synapse.kind() == alife_core::CompiledSynapseKind::Recurrent
+            && merged.to_bits() != base.to_bits()
+        {
             let projection = phenotype
                 .projections()
                 .get(usize::from(synapse.route_index()))

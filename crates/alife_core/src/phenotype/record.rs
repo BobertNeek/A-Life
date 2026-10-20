@@ -820,7 +820,8 @@ impl BrainPhenotype {
                         return Err(ScaffoldContractError::PhenotypeCompile)
                     }
                     crate::ProjectionType::Homeostatic | crate::ProjectionType::MotorProposal
-                        if synapse.genetic_weight() < 0.0 =>
+                        if synapse.kind() == CompiledSynapseKind::Recurrent
+                            && synapse.genetic_weight() < 0.0 =>
                     {
                         return Err(ScaffoldContractError::PhenotypeCompile)
                     }
