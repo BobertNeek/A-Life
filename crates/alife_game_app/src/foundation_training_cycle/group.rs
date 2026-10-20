@@ -11,6 +11,55 @@ mod checkpoint_tests;
 
 pub const FOUNDATION_TRAINING_GROUP_SIZE: usize = 50;
 
+// Diagnostic only: each completed pair measures host wall time, including any
+// driver work/waits in the enclosed call. Never adds GPU polls or changes state.
+struct GroupProgress {
+    started: Instant,
+    next_phase: std::cell::Cell<u64>,
+}
+
+struct GroupPhase<'a> {
+    progress: &'a GroupProgress,
+    id: u64,
+    name: String,
+    started: Instant,
+}
+
+impl GroupProgress {
+    fn begin(&self, name: impl Into<String>) -> GroupPhase<'_> {
+        let id = self.next_phase.get();
+        self.next_phase.set(id + 1);
+        let phase = GroupPhase {
+            progress: self,
+            id,
+            name: name.into(),
+            started: Instant::now(),
+        };
+        phase.emit("begin");
+        phase
+    }
+}
+
+impl GroupPhase<'_> {
+    fn emit(&self, event: &str) {
+        use std::io::Write;
+        let mut stderr = std::io::stderr().lock();
+        let _ = writeln!(
+            stderr,
+            "{}",
+            serde_json::json!({"kind":"group50_progress","event":event,
+                "phase":self.name,"phase_id":self.id,
+                "elapsed_seconds":self.progress.started.elapsed().as_secs_f64(),
+                "phase_seconds":self.started.elapsed().as_secs_f64()})
+        );
+        let _ = stderr.flush();
+    }
+
+    fn complete(self) {
+        self.emit("complete");
+    }
+}
+
 pub struct FoundationGroupRequest<'a> {
     pub previous: &'a Path,
     pub output: &'a Path,
@@ -383,6 +432,11 @@ fn run_owned(
         ..
     } = admitted;
     let started = Instant::now();
+    let progress = GroupProgress {
+        started,
+        next_phase: std::cell::Cell::new(0),
+    };
+    let setup_phase = progress.begin("source_copy_and_world_setup");
     let budget = FoundationReplayBudget {
         host_limit_bytes: request.replay_host_limit_bytes,
     };
@@ -457,7 +511,11 @@ fn run_owned(
             "position":game.world.entity(f.world_entity_id).map(|e|e.position.to_array())})).collect::<Vec<_>>(),"age_death_disabled":true}),
         )?,
     )?;
+    setup_phase.complete();
+    let phase = progress.begin("live_backend_create");
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    phase.complete();
+    let phase = progress.begin("live_runtime_create");
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
         game.world,
@@ -469,6 +527,8 @@ fn run_owned(
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
         cycle_sampling_config(request.seed, policy_version, request.sampling_temperature)?,
     )?;
+    phase.complete();
+    let phase = progress.begin("initial_checkpoint_prepare");
     let asset_root = output.join("world-assets");
     std::fs::create_dir(&asset_root)?;
     let save_path = output.join("world.json");
@@ -485,17 +545,29 @@ fn run_owned(
         game.creatures,
     )?;
     base.validate_with_asset_root(&asset_root)?;
+    phase.complete();
+    let phase = progress.begin("initial_boundary_attach");
     runtime.attach_durable_checkpoint_boundary(&save_path, &asset_root, base)?;
+    phase.complete();
+    let phase = progress.begin("initial_checkpoint_capture");
     let exact = runtime.capture_portable_checkpoint()?;
+    phase.complete();
+    let phase = progress.begin("initial_snapshot_publish");
     let published = GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
     if published.save != exact {
         return Err("group exact initial save changed".into());
     }
+    phase.complete();
+    let phase = progress.begin("durable_boundary_rebind");
     runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
+    phase.complete();
     runtime.set_performance_measurement_enabled(true);
     let collection_started = Instant::now();
+    let phase = progress.begin("first_runtime_tick");
     runtime.tick()?;
+    phase.complete();
     let mut batch_available_seconds = collection_started.elapsed().as_secs_f64();
+    let phase = progress.begin("first_capture_check");
     let first = runtime.take_foundation_training_steps();
     if first.len() != 50 {
         return Err(format!(
@@ -505,7 +577,11 @@ fn run_owned(
         .into());
     }
     let phenotype = first[0].before.phenotype.as_ref().clone();
+    phase.complete();
+    let phase = progress.begin("trainer_staging_create");
     let staging = runtime.new_staging_like_live()?;
+    phase.complete();
+    let phase = progress.begin("initial_trainer_memory_check");
     let adapter_limits = staging.offline_training_device_queue()?.0.limits();
     let limits = ReplayDeviceLimits {
         peak: request.replay_device_limit_bytes,
@@ -520,6 +596,8 @@ fn run_owned(
     {
         return Err("initial trainer exceeds replay allocation or adapter binding limit".into());
     }
+    phase.complete();
+    let phase = progress.begin("trainer_create");
     let mut trainer = FoundationTrainer::from_session(
         alife_runtime::GpuAuthoritativeSession::new(
             staging,
@@ -530,8 +608,12 @@ fn run_owned(
         actor.stage_mask.clone(),
         actor.config,
     )?;
+    phase.complete();
+    let phase = progress.begin("actor_checkpoint_restore");
     trainer.restore_checkpoint(&actor)?;
+    phase.complete();
 
+    let phase = progress.begin("replay_writers_create");
     let checkpoint_bytes = initial_actor_checkpoint_bytes(Some(&actor), || {
         Ok(serde_json::to_vec(&trainer.checkpoint()?)?)
     })?;
@@ -565,6 +647,8 @@ fn run_owned(
             ))
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
+    phase.complete();
+    let collection_phase = progress.begin("collection");
     let mut captured = first;
     let mut neural_work = alife_core::BrainWorkCounters::default();
     let mut max_batch_rows = 0;
@@ -572,6 +656,7 @@ fn run_owned(
     let mut batch_histogram = BTreeMap::<usize, u64>::new();
     let mut verified_replay_boundaries = 0u64;
     let mut stalled = Instant::now();
+    let mut collector_tick_phase = None;
     loop {
         let rows = captured.len();
         max_batch_rows = max_batch_rows.max(rows);
@@ -593,7 +678,13 @@ fn run_owned(
                 .last()
                 .is_some_and(|r| r.tick + 1 != step.frame.tick().raw());
             if life.references.is_empty() || new_segment {
+                let phase = progress.begin(format!(
+                    "replay_boundary_verify organism={} row={}",
+                    life.id.raw(),
+                    life.references.len()
+                ));
                 verify_foundation_replay_step(&mut trainer, &step)?;
+                phase.complete();
                 verified_replay_boundaries += 1;
             }
             if new_segment {
@@ -680,6 +771,13 @@ fn run_owned(
             return Err("group reached bounded world-tick limit".into());
         }
         budget.check_additional(256 * 1024 * 1024)?;
+        // Keep one phase open across no-progress polls until this tick advances.
+        collector_tick_phase.get_or_insert_with(|| {
+            progress.begin(format!(
+                "collector_tick_until_progress world_tick={}",
+                tick.raw()
+            ))
+        });
         runtime.tick_outcome()?;
         batch_available_seconds = collection_started.elapsed().as_secs_f64();
         if runtime.world().tick() == tick {
@@ -689,10 +787,15 @@ fn run_owned(
             }
         } else {
             stalled = Instant::now();
+            if let Some(phase) = collector_tick_phase.take() {
+                phase.complete();
+            }
         }
         captured = runtime.take_foundation_training_steps();
     }
+    collection_phase.complete();
     let collection_seconds = collection_started.elapsed().as_secs_f64();
+    let replay_phase = progress.begin("value_restore_and_replay_prepare");
     let runtime_metrics = runtime.performance_metrics();
     let mut value = PpoTrainingState::from_checkpoint(old_value.clone())?;
     let mut batches = Vec::new();
@@ -701,6 +804,7 @@ fn run_owned(
     let mut peak_replay_bytes = 0;
     let mut critic_checkpoint = None;
     for life in lives.into_values() {
+        let phase = progress.begin(format!("replay_prepare organism={}", life.id.raw()));
         let rows = life
             .references
             .len()
@@ -855,13 +959,16 @@ fn run_owned(
         all_spans.extend(planned);
         batches.push(batch);
         life_vec.push(life);
+        phase.complete();
     }
+    replay_phase.complete();
     // Interleave individuals before effective batches; every window still keeps
     // its exact private recurrent, chemistry, action, lifetime and sequence masks.
     all_spans.sort_by_key(|s| (s.start, s.life));
     let config = cycle_ppo_config(request.sampling_temperature)?;
     let actor_age = trainer.optimizer_step();
     let update_started = Instant::now();
+    let phase = progress.begin("actor_update");
     let update = train_recurrent_ppo_cohort(
         &mut trainer,
         &mut value,
@@ -893,6 +1000,8 @@ fn run_owned(
         },
         policy_version,
     )?;
+    phase.complete();
+    let phase = progress.begin("critic_update");
     let mut critic_checkpoint = critic_checkpoint.ok_or("group lacks restored value head")?;
     // The accepted critic objective uses frozen actual production next features.
     // One central value checkpoint/Adam history traverses all lives, including
@@ -926,7 +1035,9 @@ fn run_owned(
     if update.actor_optimizer_step == actor_age || critic_updates == 0 {
         return Err("group completed without accepted actor/value updates".into());
     }
+    phase.complete();
     let update_seconds = update_started.elapsed().as_secs_f64();
+    let phase = progress.begin("candidate_export");
     let trained = trainer.export_candidate(TrainingStageManifest::new(
         1,
         1,
@@ -936,6 +1047,8 @@ fn run_owned(
         output.join("trained.alife-foundation"),
         trained.encode_canonical()?,
     )?;
+    phase.complete();
+    let phase = progress.begin("next_world_and_staging_create");
     let mut next_config = alife_world::CanonicalNewGameConfig::phase3(request.seed, 1)?;
     next_config.brain_class = BrainScaleTier::Standard2048;
     next_config.founder_seed_base = founder_seed_base;
@@ -943,8 +1056,11 @@ fn run_owned(
     let mut next_game =
         alife_world::create_canonical_new_game_with_n2048_candidate(&next_config, &trained)?;
     crate::foundation_training::ground_foundation_training_world(&mut next_game.world)?;
+    let next_staging = runtime.new_staging_like_live()?;
+    phase.complete();
+    let phase = progress.begin("next_runtime_create");
     let mut next = GpuLiveBrainRuntime::new_profiled_foundation_training(
-        runtime.new_staging_like_live()?,
+        next_staging,
         next_game.world,
         request.seed,
         BrainScaleTier::Standard2048,
@@ -960,19 +1076,27 @@ fn run_owned(
             request.sampling_temperature,
         )?,
     )?;
+    phase.complete();
+    let phase = progress.begin("next_runtime_tick_and_capture_check");
     next.tick()?;
     let next_steps = next.take_foundation_training_steps();
     if next_steps.len() != 1 {
         return Err("exported group policy did not produce native next-cohort decision".into());
     }
+    phase.complete();
+    let phase = progress.begin("next_cohort_optimizer_rebind");
     trainer.rebind_for_next_cohort(
         next_steps[0].before.phenotype.as_ref().clone(),
         trained.clone(),
     )?;
+    phase.complete();
+    let phase = progress.begin("updated_checkpoints_write");
     let actor_bytes = serde_json::to_vec(&trainer.checkpoint()?)?;
     let value_bytes = serde_json::to_vec(&critic_checkpoint)?;
     std::fs::write(output.join("actor-checkpoint.json"), &actor_bytes)?;
     std::fs::write(output.join("value-checkpoint.json"), &value_bytes)?;
+    phase.complete();
+    let phase = progress.begin("final_receipt_write");
     let decisions = batches.iter().map(PpoBatch::len).sum::<usize>();
     let (actor_admitted_rows, actor_row_exposures) = admitted_actor_rows(
         &all_spans,
@@ -1017,6 +1141,7 @@ fn run_owned(
         output.join("group50.json"),
         serde_json::to_vec_pretty(&receipt)?,
     )?;
+    phase.complete();
     Ok(receipt)
 }
 
