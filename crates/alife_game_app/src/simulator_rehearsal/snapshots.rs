@@ -17,7 +17,7 @@ pub(super) fn attach_durable(
     rollout: u64,
     base: alife_world::PortableSaveFile,
     attach_archive: bool,
-) -> Result<()> {
+) -> Result<alife_world::PortableSaveFile> {
     let path = output.join(format!("world-{rollout:03}.json"));
     runtime.attach_durable_checkpoint_boundary(&path, assets, base)?;
     if attach_archive {
@@ -32,8 +32,30 @@ pub(super) fn attach_durable(
         return Err("rehearsal durable publication changed exact state".into());
     }
     runtime.rebind_durable_checkpoint_boundary(&path, assets, &exact)?;
-    Ok(())
+    Ok(exact)
 }
+
+/// Private to the adjacent setup -> decision-zero seam. This is not a cache:
+/// the save is consumed once, and any later selection must export current state.
+pub(super) fn save_for_pool_snapshot(
+    setup: &mut Option<alife_world::PortableSaveFile>,
+    decision: usize,
+    live_tick: alife_core::Tick,
+    export: impl FnOnce() -> Result<alife_world::PortableSaveFile>,
+) -> Result<alife_world::PortableSaveFile> {
+    let setup = setup.take();
+    if decision == 0 {
+        let save = setup.ok_or("decision-zero setup save already consumed")?;
+        if save.world.tick != live_tick {
+            return Err("setup save cannot be reused after simulator progress".into());
+        }
+        Ok(save)
+    } else {
+        export()
+    }
+}
+
+#[cfg(all(test, feature = "gpu-tests"))]
 pub(super) fn capture(
     runtime: &mut GpuLiveBrainRuntime,
     store: &GpuCheckpointAssetStore,
@@ -44,8 +66,20 @@ pub(super) fn capture(
 ) -> Result<Snapshot> {
     learner(runtime.world())?;
     let save = capture_exact(runtime, output, store.root())?;
+    snapshot_from_save(save, store, id, target, lineage, output)
+}
+
+pub(super) fn snapshot_from_save(
+    save: alife_world::PortableSaveFile,
+    store: &GpuCheckpointAssetStore,
+    id: u64,
+    target: WorldEntityId,
+    lineage: RehearsalLineage,
+    output: &Path,
+) -> Result<Snapshot> {
     save.validate_with_asset_root(store.root())?;
     let world = save.restore_headless_world()?;
+    learner(&world)?;
     // Match the canonical on-disk save serializer; the inline-text helper has a separate 64 KiB display limit.
     let bytes = serde_json::to_vec_pretty(&save)?;
     if bytes.len() > 64 * 1024 * 1024 {
@@ -83,7 +117,7 @@ pub(super) fn directory_bytes(root: &Path) -> Result<u64> {
     }
     Ok(bytes)
 }
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) struct CaptureLedger {
     pub(super) attempted: usize,
     pub(super) completed: usize,
@@ -102,7 +136,7 @@ pub(super) fn can_capture(output: &Path, assets: &Path, reserve: usize) -> Resul
     Ok(ledger.attempted + reserve < 192
         && directory_bytes(assets)? + (reserve as u64 + 1) * 64 * 1024 * 1024 <= 512 * 1024 * 1024)
 }
-fn capture_exact(
+pub(super) fn capture_exact(
     runtime: &mut GpuLiveBrainRuntime,
     output: &Path,
     assets: &Path,
@@ -134,6 +168,158 @@ fn capture_exact(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scene() -> (alife_world::PortableSaveFile, WorldEntityId) {
+        // Device-free serializer fixture; no claim about GPU/private-state equality.
+        let asset = crate::initial_n2048_care_asset(77_777).unwrap();
+        let (mut game, target) = fresh::prepare_scene(
+            &asset,
+            &fresh::SetupContext {
+                founder: 77_777,
+                seed: 99_001,
+                rollout: 0,
+            },
+        )
+        .unwrap();
+        for creature in &mut game.creatures {
+            let biology = game
+                .world
+                .organism_registry()
+                .get(creature.organism_id)
+                .unwrap()
+                .biochemistry();
+            creature.development_tick = biology.development.last_update_tick;
+            creature.mind.tick = biology.tick;
+            creature.mind.homeostasis = biology.homeostasis;
+        }
+        let save = alife_world::PortableSaveFile::from_headless_world(
+            "setup-snapshot-fixture",
+            &game.world,
+            alife_world::RuntimeConfig::deterministic_default(
+                game.world.seed(),
+                BrainScaleTier::Standard2048,
+            ),
+            AssetManifest::empty(),
+            game.creatures,
+        )
+        .unwrap();
+        (save, target)
+    }
+
+    #[test]
+    fn setup_is_consumed_once_and_later_boundaries_export_current_state() {
+        let (save, _) = scene();
+        let mut setup = Some(save.clone());
+        let first = save_for_pool_snapshot(&mut setup, 0, save.world.tick, || {
+            panic!("redundant GPU export")
+        })
+        .unwrap();
+        assert_eq!(first, save);
+        assert!(setup.is_none());
+        assert!(
+            save_for_pool_snapshot(&mut setup, 0, save.world.tick, || panic!(
+                "missing setup must fail"
+            ))
+            .is_err()
+        );
+        let mut exports = 0;
+        for decision in [8, 16, 24] {
+            // Even a leftover setup save (e.g. a skipped pool admission at zero)
+            // must not be reused at a later boundary.
+            setup = Some(save.clone());
+            save_for_pool_snapshot(
+                &mut setup,
+                decision,
+                alife_core::Tick(decision as u64),
+                || {
+                    exports += 1;
+                    Ok(save.clone())
+                },
+            )
+            .unwrap();
+            assert!(setup.is_none());
+        }
+        assert_eq!(exports, 3);
+        let error = save_for_pool_snapshot(&mut setup, 32, alife_core::Tick(32), || {
+            Err("export failed".into())
+        })
+        .unwrap_err();
+        assert_eq!(error.to_string(), "export failed");
+        setup = Some(save.clone());
+        assert!(save_for_pool_snapshot(
+            &mut setup,
+            0,
+            alife_core::Tick(save.world.tick.raw() + 1),
+            || panic!("stale setup must fail")
+        )
+        .is_err());
+        assert!(setup.is_none());
+    }
+
+    #[test]
+    fn pool_publication_keeps_save_hash_lineage_and_asset_validation_without_an_export() {
+        let (mut save, target) = scene();
+        let output =
+            std::env::temp_dir().join(format!("alife-rehearsal-pool-{}", std::process::id()));
+        std::fs::create_dir(&output).unwrap();
+        let assets = output.join("assets");
+        std::fs::create_dir(&assets).unwrap();
+        let store = GpuCheckpointAssetStore::new(&assets).unwrap();
+        std::fs::write(assets.join("marker"), b"preserved").unwrap();
+        save.assets
+            .entries
+            .push(alife_world::persistence::AssetManifestEntry {
+                asset_id: "marker".into(),
+                kind: alife_world::persistence::AssetKind::Other,
+                relative_path: "marker".into(),
+                digest: alife_world::PortableAssetDigest::for_bytes(b"preserved"),
+                presence: alife_world::persistence::AssetPresence::Required,
+                schema_version: 1,
+                size_bytes: Some(9),
+                provenance: None,
+            });
+        let lineage = RehearsalLineage {
+            rollout: 0,
+            parent_rollout: None,
+            parent_snapshot: None,
+            world_seed: save.world.seed,
+            sampling_seed: 71_001,
+            policy_version: 7401,
+            foundation_digest: [1; 32],
+            source: RehearsalSource::Fresh,
+            variation: SceneVariation::Original,
+            historically_fresh: false,
+        };
+        let snapshot =
+            snapshot_from_save(save.clone(), &store, 7, target, lineage.clone(), &output).unwrap();
+        assert_eq!(snapshot.save, save);
+        assert_eq!(snapshot.lineage, lineage);
+        let encoded = std::fs::read(output.join("snapshot-007.json")).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<alife_world::PortableSaveFile>(&encoded).unwrap(),
+            save
+        );
+        let recorded: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(output.join("snapshot-007-lineage.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(recorded["snapshot"], 7);
+        assert_eq!(
+            recorded["file_blake3"],
+            blake3::hash(&encoded).to_hex().to_string()
+        );
+        assert_eq!(recorded["lineage"], serde_json::to_value(lineage).unwrap());
+        assert_eq!(
+            recorded["world_digest"],
+            serde_json::to_value(snapshot.world.canonical_signature_digest().unwrap()).unwrap()
+        );
+        assert_eq!(capture_ledger(&output).unwrap().attempted, 0);
+        assert!(!output.join("snapshot-capture-ledger.json").exists());
+        std::fs::write(assets.join("marker"), b"corrupted").unwrap();
+        assert!(snapshot_from_save(save, &store, 8, target, snapshot.lineage, &output).is_err());
+        assert!(!output.join("snapshot-008.json").exists());
+        std::fs::remove_dir_all(output).unwrap();
+    }
     #[test]
     fn every_capture_class_shares_the_same_ceiling_and_holdout_reservation() {
         let output =
