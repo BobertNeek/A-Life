@@ -2,7 +2,10 @@
 
 - Mode: 2, implementation with a focused contract and independent review.
 - Review class actual: R2, read-only implementation and follow-up review.
-- Source implementation: `8813166353a450a5738fc0009655a8995e704a66`.
+- Baseline implementation: `8813166353a450a5738fc0009655a8995e704a66`.
+- Merged freshness PR108 (`bda3b65be5fa6f01865b850640adf2e8d01f4990`)
+  as `59f8eab5a5345ab3f98eb15df32c476adf4414bf`, then aligned admission with
+  its immutable history/recovery contract and surviving mixed-care lineage.
 - Spec status: CPU contracts validated; hardware qualification deferred.
 - Result: published draft PR111; no real-GPU qualification or speedup claim.
 - Loop recipe / judge rubric: none.
@@ -22,8 +25,8 @@
 ## Checks
 
 Run in the cloud, using the selected environment's Cargo configuration. No PC or
-paid provisioning was used. Final implementation source was unchanged during these
-checks; the subsequent commit only records verification/operator documentation.
+paid provisioning was used. The broad suites below passed on the baseline source.
+After merging PR108, affected group/recovery, compile and lint checks were rerun.
 
 | Command | Result |
 |---|---|
@@ -38,6 +41,16 @@ checks; the subsequent commit only records verification/operator documentation.
 | `bash scripts/docs_check.sh` | Pass77/77 |
 | `git diff --check` | Pass |
 
+Postmerge integration checks, on the final admission implementation:
+
+| Command | Result |
+|---|---|
+| `python -B -m unittest discover -s scripts -p test_mixed_care_food_night.py -v` | Pass88 |
+| `cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group::` | Pass15 |
+| `cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings` | Pass |
+| `cargo check --locked -p alife_game_app --features foundation-training,gpu-tests --test group50_gpu` | Pass; compilation only |
+| Formatting, core boundaries, docs and diff checks | Pass; docs77/77 |
+
 ## Review and limits
 
 R2 review identified and verified fixes for native source/history exclusions,
@@ -45,7 +58,14 @@ post-quota death handling, legacy coordinate grounding, conservative device scra
 budgeting, complete original-package validation, GPU-test feature gating and the
 ordering of initial trainer memory admission. A final delta review of read-only
 source validation, initial per-organism replay comparisons, native output
-readmission and handoff documentation reported no findings. Open P0/P1/P2/P3
+readmission and handoff documentation reported no findings. Integration review
+identified and verified the mixed-care latest-predecessor guard for both modes,
+including acceptance of hash-bound group descendants. Tests reject older sources,
+missing/mismatched immutable metadata, changed recovery evidence and changed ledger
+bindings; direct latest predecessors and two group descendant links pass.
+The reused Python functions perform reads/hashes only, with bytecode writes
+suppressed; history bytes and absolute paths are bound before any reservation.
+Final integration review reported no findings. Open P0/P1/P2/P3
 findings: none. Artifact lint: pass; no unresolved clarification markers.
 
 The cloud exposes no GPU device. The hardware smoke, fifty-row recurrence/private

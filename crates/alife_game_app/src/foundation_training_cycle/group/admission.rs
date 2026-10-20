@@ -11,6 +11,85 @@ pub(super) fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+// Reuse the accepted read-only recovery reconciliation, including its Python
+// canonical ledger hashing and surviving accepted/abandoned attempt checks.
+// This calls no plan/reservation/runner function and suppresses bytecode writes.
+fn mixed_lane_admission(
+    history: &Path,
+    lane: &Path,
+    previous: &Path,
+    history_sha256: &str,
+    known: bool,
+) -> Result<()> {
+    let root = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()?;
+    if !root.status.success() {
+        return Err("mixed-lane admission requires the qualified source checkout".into());
+    }
+    let root = PathBuf::from(std::str::from_utf8(&root.stdout)?.trim());
+    if !root.join("scripts/run_mixed_care_serial.py").is_file() {
+        return Err("mixed-lane admission requires the accepted recovery validator".into());
+    }
+    let output = std::process::Command::new("python")
+        .args([
+            "-B",
+            "-c",
+            r#"
+import pathlib, sys
+sys.path.insert(0, str(pathlib.Path.cwd() / "scripts"))
+import run_mixed_care_serial as mixed
+document, digest = mixed.load(pathlib.Path(sys.argv[1]))
+mixed.require(digest == sys.argv[3], "group history changed during recovery validation")
+ledger = pathlib.Path(sys.argv[2]) / mixed.LEDGER
+if sys.argv[5] == "known-exclusions":
+    mixed.recovery_attestation(document, ledger)
+runs = mixed.read_ledger(ledger)["runs"] if ledger.exists() else []
+if sys.argv[5] == "known-exclusions":
+    mixed.reconcile_prior_runs(document, runs)
+if runs:
+    prior = runs[-1]
+    mixed.require(not any(a["status"] == "pending" for a in prior["attempts"]),
+                  "prior mixed attempt is uncertain; reconcile it before group allocation")
+    accepted = [a for a in prior["attempts"] if a["status"] == "accepted"]
+    latest = pathlib.Path(accepted[-1]["directory"] if accepted else prior["plan"]["source"]).resolve()
+    expected = accepted[-1]["sha256"] if accepted else prior["plan"]["source_sha256"]
+    expected = {name: expected[name] for name in mixed.FILES}
+    previous = pathlib.Path(sys.argv[4])
+    matches = previous.resolve() == latest and document["source_sha256"] == expected
+    if not matches and (previous / "group50.json").is_file():
+        native, digest = mixed.load(previous / "group50.json")
+        mixed.require(digest == document["source_sha256"].get("group50.json"), "group ancestry root changed")
+        for _ in range(64):
+            mixed.require(native.get("complete") is True and native.get("mode") == "group50_shared_habitat"
+                          and native.get("population") == 50, "invalid group ancestry receipt")
+            provenance = native.get("seed_provenance", {})
+            if provenance.get("source_sha256") == expected:
+                matches = True
+                break
+            native = provenance.get("native_source_receipt", {})
+            if "seed_provenance" not in native:
+                break
+    mixed.require(matches, "group source does not descend from the latest surviving mixed checkpoint")
+"#,
+        ])
+        .arg(history.canonicalize()?)
+        .arg(std::path::absolute(lane)?)
+        .arg(history_sha256)
+        .arg(previous.canonicalize()?)
+        .arg(if known { "known-exclusions" } else { "strict" })
+        .current_dir(root)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "mixed-lane recovery/lineage admission failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(())
+}
+
 // Reject duplicate keys at every depth; an overwritten exclusion is a safety
 // failure, even when another JSON reader would silently accept the last value.
 struct Unique(Value);
@@ -204,15 +283,28 @@ pub(super) fn admit(
     known_exclusions: bool,
 ) -> Result<Value> {
     let (bytes, document) = read(history)?;
+    let selected = json!({"policy":if known_exclusions {"known-exclusions"} else {"strict"},
+        "historical_freshness":if known_exclusions {"unknown"} else {"operator-attested-complete"}});
+    let recorded = document.get("seed_admission").cloned().unwrap_or_else(
+        || json!({"policy":"strict","historical_freshness":"operator-attested-complete"}),
+    );
     if document["kind"] != "mixed-care-seed-history"
         || document["schema"] != 1
         || document["evidence"]
             .as_str()
             .is_none_or(|s| s.trim().is_empty())
         || (!known_exclusions && document["complete"] != true)
-        || (known_exclusions && !document["complete"].is_boolean())
+        || (known_exclusions && document["complete"] != false)
+        || recorded != selected
     {
         return Err("strict admission requires complete attested seed history; incomplete history requires explicit known-exclusions".into());
+    }
+    let lane = output
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    if known_exclusions || lane.join(".mixed-care-seed-reservations.json").exists() {
+        mixed_lane_admission(history, lane, previous, &hash(&bytes), known_exclusions)?;
     }
     let source_name = if previous.join("group50.json").is_file() {
         "group50.json"
@@ -290,8 +382,7 @@ pub(super) fn admit(
     }
     Ok(
         json!({"schema":1,"world_seed":seed,"source_sha256":source_hashes,
-        "seed_admission":{"policy":if known_exclusions {"known-exclusions"} else {"strict"},
-            "historical_freshness":if known_exclusions {"unknown"} else {"operator_attested_complete"}},
+        "seed_admission":selected,
         "historical_retry":false,"native_source_receipt":native,"evidence":records,"history_sha256":hash(&bytes)}),
     )
 }
@@ -342,6 +433,9 @@ mod admission_tests {
             let lane = root.join("lane");
             std::fs::create_dir_all(&source).unwrap();
             std::fs::create_dir(&lane).unwrap();
+            let recovery = root.join("immutable-recovery-evidence.txt");
+            let recovery_bytes = b"Synthetic CPU admission fixture; no real checkpoint or historical freshness is asserted.";
+            std::fs::write(&recovery, recovery_bytes).unwrap();
             let mut hashes = serde_json::Map::new();
             for (name, bytes) in [
                 (
@@ -356,6 +450,13 @@ mod admission_tests {
                 hashes.insert(name.into(), json!(hash(bytes)));
             }
             let document = json!({"schema":1,"kind":"mixed-care-seed-history","complete":false,
+                "seed_admission":{"policy":"known-exclusions","historical_freshness":"unknown"},
+                "missing_history":"Synthetic older fixture history is absent and its completeness remains explicitly unknown.",
+                "recovery_reconciliation":{"accepted_checkpoint_authoritative":true,
+                    "known_inflight_attempts_reconciled_or_excluded":true,"no_known_detached_later_accepted_chain":true,
+                    "prior_ledger_runs_sha256":hash(b"[]"),
+                    "explanation":"This synthetic fixture cites preserved evidence and has no prior mixed ledger runs.",
+                    "evidence":[{"path":recovery,"sha256":hash(recovery_bytes)}]},
                 "evidence":"preserved recovery evidence; historical completeness remains unknown","source_sha256":hashes,
                 "consumed_seed_ranges":[[100,100]],"reserved_seed_ranges":[[120,130]],"assessment_seeds":[140],"imports":[]});
             let history = root.join("history.json");
@@ -387,9 +488,152 @@ mod admission_tests {
         assert_eq!(accepted["evidence"][0]["document"], f.document);
         f.document["complete"] = json!(true);
         f.write();
+        assert!(f.admit(200, true).is_err());
+        assert!(f.admit(200, false).is_err());
+        f.document.as_object_mut().unwrap().remove("seed_admission");
+        f.write();
         assert!(f.admit(200, false).is_ok());
+        f.document["complete"] = json!(false);
+        f.document["seed_admission"] =
+            json!({"policy":"known-exclusions","historical_freshness":"unknown"});
+        f.write();
         for seed in [100, 125, 140, 252] {
             assert!(f.admit(seed, true).is_err());
+        }
+    }
+    #[test]
+    fn known_exclusions_require_immutable_metadata_and_real_recovery_bindings() {
+        let mut f = Fixture::new();
+        let original = f.document.clone();
+        for field in [
+            "seed_admission",
+            "missing_history",
+            "recovery_reconciliation",
+        ] {
+            f.document = original.clone();
+            f.document.as_object_mut().unwrap().remove(field);
+            f.write();
+            assert!(f.admit(200, true).is_err(), "missing {field}");
+        }
+        f.document = original.clone();
+        f.document["recovery_reconciliation"]["prior_ledger_runs_sha256"] = json!("0".repeat(64));
+        f.write();
+        assert!(f.admit(200, true).is_err());
+        f.document = original;
+        f.write();
+        let evidence = Path::new(
+            f.document["recovery_reconciliation"]["evidence"][0]["path"]
+                .as_str()
+                .unwrap(),
+        );
+        std::fs::write(evidence, b"changed recovery snapshot").unwrap();
+        assert!(f.admit(200, true).is_err());
+    }
+    #[test]
+    fn surviving_mixed_tail_rejects_old_source_and_accepts_bound_group_descendants() {
+        let mut f = Fixture::new();
+        let status = std::process::Command::new("python").args(["-B", "-c", r#"
+import pathlib, sys, json, shutil
+sys.path.insert(0, str(pathlib.Path.cwd() / "scripts"))
+import run_mixed_care_serial as mixed
+root, history = map(pathlib.Path, sys.argv[1:])
+document, _ = mixed.load(history)
+source, lane = root / "source", root / "lane"
+run_output = lane / "mixed-run"
+later = run_output / "attempt-00000"
+later.mkdir(parents=True)
+for name in mixed.FILES:
+    shutil.copyfile(source / name, later / name)
+receipt = {"seed": 101}
+(later / "cycle.json").write_text(json.dumps(receipt))
+(later / "initial.alife-foundation").write_bytes(b"synthetic original")
+plan = {"source": str(source), "source_sha256": document["source_sha256"], "seed_range": [101, 101],
+        "seed_admission": document["seed_admission"]}
+attempt = {"seed": 101, "slot": 0, "status": "accepted", "previous": str(source), "directory": str(later),
+           "receipt": receipt, "sha256": {**mixed.file_hashes(later), "initial.alife-foundation": mixed.host.sha256(later / "initial.alife-foundation")}}
+run = {"output": str(run_output), "plan": plan, "plan_sha256": mixed.object_hash(plan),
+       "history_import": {"complete": False, "seed_admission": document["seed_admission"]}, "attempts": [attempt]}
+ledger = lane / mixed.LEDGER
+ledger.write_text(json.dumps({"schema": 1, "kind": "mixed-care-seed-ledger", "excluded_seed_ranges": [[101, 101]],
+                              "assessment_seeds": [], "runs": [run]}))
+document["recovery_reconciliation"]["prior_ledger_runs_sha256"] = mixed.object_hash([run])
+document["imports"] = [{"path": str(ledger), "sha256": mixed.host.sha256(ledger)}]
+history.write_text(json.dumps(document))
+"#]).arg(&f.root).arg(&f.history).current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).status().unwrap();
+        assert!(status.success());
+        f.document = read(&f.history).unwrap().1;
+        assert!(f
+            .admit(200, true)
+            .unwrap_err()
+            .to_string()
+            .contains("latest surviving"));
+        let known = f.document.clone();
+        f.document["complete"] = json!(true);
+        f.document["seed_admission"] =
+            json!({"policy":"strict","historical_freshness":"operator-attested-complete"});
+        f.write();
+        assert!(f
+            .admit(200, false)
+            .unwrap_err()
+            .to_string()
+            .contains("latest surviving"));
+        f.document = known;
+        let hashes = |path: &Path| -> Value {
+            let receipt = if path.join("group50.json").exists() {
+                "group50.json"
+            } else {
+                "cycle.json"
+            };
+            Value::Object(
+                [
+                    receipt,
+                    "trained.alife-foundation",
+                    "actor-checkpoint.json",
+                    "value-checkpoint.json",
+                ]
+                .into_iter()
+                .map(|name| {
+                    (
+                        name.into(),
+                        json!(hash(&std::fs::read(path.join(name)).unwrap())),
+                    )
+                })
+                .collect(),
+            )
+        };
+        f.source = f.output.parent().unwrap().join("mixed-run/attempt-00000");
+        f.document["source_sha256"] = hashes(&f.source);
+        f.document["consumed_seed_ranges"] = json!([[100, 101]]);
+        f.write();
+        assert!(f.admit(200, true).is_ok());
+        // Two actual receipt links prove later group continuations remain valid.
+        for seed in [102, 103] {
+            let next = f.root.join(format!("group-{seed}"));
+            std::fs::create_dir(&next).unwrap();
+            for name in [
+                "trained.alife-foundation",
+                "actor-checkpoint.json",
+                "value-checkpoint.json",
+            ] {
+                std::fs::copy(f.source.join(name), next.join(name)).unwrap();
+            }
+            let native = if f.source.join("group50.json").exists() {
+                "group50.json"
+            } else {
+                "cycle.json"
+            };
+            let receipt = json!({"schema":1,"complete":true,"mode":"group50_shared_habitat","population":50,"seed":seed,
+                "seed_provenance":{"source_sha256":hashes(&f.source),"native_source_receipt":read(&f.source.join(native)).unwrap().1}});
+            std::fs::write(
+                next.join("group50.json"),
+                serde_json::to_vec(&receipt).unwrap(),
+            )
+            .unwrap();
+            f.source = next;
+            f.document["source_sha256"] = hashes(&f.source);
+            f.document["consumed_seed_ranges"] = json!([[100, seed]]);
+            f.write();
+            assert!(f.admit(200, true).is_ok());
         }
     }
     #[test]
