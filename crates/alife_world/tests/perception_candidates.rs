@@ -475,7 +475,7 @@ fn every_retained_object_gets_the_same_six_mechanical_operations() {
         (
             HeadlessActionIds::PLAY,
             ActionKind::Interact,
-            CandidateActionFamily::Contact,
+            CandidateActionFamily::Other,
         ),
     ];
 
@@ -499,15 +499,10 @@ fn every_retained_object_gets_the_same_six_mechanical_operations() {
             expected
         );
         assert_eq!(
-            family_group[4].features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE],
-            0.0,
-            "GRAB must remain a distinct Contact operation"
+            family_group[4].features, family_group[5].features,
+            "action identity must preserve the same physical observation"
         );
-        assert_eq!(
-            family_group[5].features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE],
-            1.0,
-            "PLAY must carry its unscored activation descriptor"
-        );
+        assert_ne!(family_group[4].family, family_group[5].family);
     }
 }
 

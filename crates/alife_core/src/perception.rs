@@ -16,8 +16,9 @@ use crate::{
 };
 
 pub const CANDIDATE_FEATURE_COUNT: usize = 24;
-/// Contact operation: 0 grips/releases, 1 activates. This describes attempted
-/// motor use, never whether the target is a toy or whether it will succeed.
+/// Historical Play flag location. Current object candidates preserve angular
+/// speed in this lane and distinguish activation through the Other family.
+/// Retained as a source-level alias for callers describing old evidence.
 pub const CONTACT_ACTIVATION_FEATURE_LANE: usize = 20;
 pub const MAX_ACTION_CANDIDATES: usize = 32;
 
@@ -107,7 +108,8 @@ impl CandidateActionFamily {
                 | (Self::Contact | Self::Ingest, ActionKind::Interact)
                 | (
                     Self::Other,
-                    ActionKind::Hold
+                    ActionKind::Interact
+                        | ActionKind::Hold
                         | ActionKind::Gesture
                         | ActionKind::Vocalize
                         | ActionKind::Write
@@ -1010,14 +1012,7 @@ fn validate_frame_base(
                         let slot = grounded_object_slots
                             .get(usize::from(slot_index))
                             .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
-                        let mut observed_features = candidate.features;
-                        if candidate.family == CandidateActionFamily::Contact
-                            && candidate.kind == ActionKind::Interact
-                            && observed_features.0[CONTACT_ACTIVATION_FEATURE_LANE] == 1.0
-                        {
-                            observed_features.0[CONTACT_ACTIVATION_FEATURE_LANE] = 0.0;
-                        }
-                        if observed_features != slot.candidate_features()? {
+                        if candidate.features != slot.candidate_features()? {
                             return Err(ScaffoldContractError::InvalidPerceptionFrame);
                         }
                     }

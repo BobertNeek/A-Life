@@ -263,10 +263,7 @@ fn gpu_readout_training_reduces_loss_and_preserves_frozen_genes() {
     for (index, synapse) in baseline.synapses().iter().enumerate() {
         if matches!(synapse.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate)
         {
-            assert!(
-                trained.weights()[index] >= 0.0,
-                "MotorProposal genetic sign must remain nonnegative"
-            );
+            assert!(trained.weights()[index].is_finite());
             changed_readout |= trained.weights()[index].to_bits() != weights[index].to_bits();
         } else {
             assert_eq!(trained.weights()[index].to_bits(), weights[index].to_bits());

@@ -56,7 +56,17 @@ fn innate_family_contribution(
     } else {
       feature = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + cue_code - 1u]);
     }
-    let signal = select(feature, -feature, (family.reserved0 & 0x02000000u) != 0u);
+    var signal = select(feature, -feature, (family.reserved0 & 0x02000000u) != 0u);
+    // Bound contact chemistry keeps its original meaning. Before contact,
+    // danger urgency can instead withdraw from actually observed geometry.
+    if (family.family_raw == 4u && cue_code == 16u
+        && (family.reserved0 & 0x02000000u) != 0u
+        && (family.reserved0 & 0x01000000u) == 0u
+        && bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 18u]) == 0.0) {
+      let bearing_sin = bitcast<f32>(frame_payload_words[candidate_record.feature_offset]);
+      let bearing_cos = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 1u]);
+      signal = clamp(abs(bearing_sin) + abs(bearing_cos), 0.0, 1.0);
+    }
     cue = clamp((signal - 0.4) / 0.6, 0.0, 1.0);
   }
   var reach = 1.0;
