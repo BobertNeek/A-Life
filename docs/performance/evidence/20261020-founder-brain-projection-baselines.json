@@ -504,6 +504,48 @@
         "reextracted_near_score": 0.56954074,
         "distance_derivative": -0.06998621
       }
+    ],
+    "canonical_identity_repeat": {
+      "source_head": "475990e491c1f847971ff2db79a6b097112d3cf2",
+      "all_18_score_and_derivative_rows_match_recorded_after": true
+    },
+    "motor_activation_ranges": [
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "minimum": 0.01309287,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "minimum": 0.01306367,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "minimum": 0.01308094,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "minimum": -0.00029584,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "minimum": -0.00029584,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "minimum": -0.00025242,
+        "maximum": 0.03882172
+      }
     ]
   },
   "combined_urgency_reproduction": {
@@ -707,5 +749,68 @@
         "ingest_prior": 2.39424
       }
     ]
+  },
+  "final_validation": {
+    "code_head": "3276d43c7b52b157bd053060bbbd2e6ce9070576",
+    "production_head": "12ed5a054b53d91db1f100e034bbbbbda32cc8b3",
+    "cloud_only": true,
+    "physical_gpu_qualified": false,
+    "commands": {
+      "workspace_full": {
+        "command": "bash scripts/check.sh --full",
+        "status": "passed",
+        "passed": 1949,
+        "failed": 0,
+        "ignored": 22,
+        "test_binaries": 217,
+        "cloud_log": "/tmp/alife-full-check-final.log",
+        "log_sha256": "41be46becc01a87e0ca1ce38c3b35936e160089b041115bb2f22a0786d96cb16"
+      },
+      "checkpoint_continuity": {
+        "command": "cargo test --locked -p alife_gpu_backend --all-targets --features training-rollout",
+        "status": "passed",
+        "passed": 220,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 27,
+        "cloud_log": "/tmp/alife-checkpoint-continuity-builtin-final.log",
+        "log_sha256": "df7ca057a1e4ff52445229a666ba98879cdf82ee8f4c80c04506f3d4fb9f29e8"
+      },
+      "canonical_behavior": {
+        "command": "cargo test --locked -p alife_world --test founder_brain_regressions -- --nocapture",
+        "status": "passed",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 1,
+        "cloud_log": "/tmp/alife-followup-behavior-canonical.log",
+        "log_sha256": "85a91c6a610b78ce158bc9468bac235aa18c9696394bce3454eafd301c1b557c"
+      },
+      "foundation_projection_policy": {
+        "command": "cargo test --locked -p alife_core --test signed_decoder_foundations --test decoder_lifetime_rate_policy --test n512_curated_founder_compatibility",
+        "status": "passed",
+        "passed": 23,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 3,
+        "cloud_log": "/tmp/alife-foundation-followup.log",
+        "log_sha256": "a1796cc62113f594a405b9588a696df0aac4f501c275fe875af428013bab4f6e"
+      },
+      "phenotype_compiler": {
+        "command": "cargo test --locked -p alife_core --test phenotype_compiler",
+        "status": "passed",
+        "passed": 50,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 1,
+        "cloud_log": "/tmp/alife-route-sign-fixture-final.log",
+        "log_sha256": "557c00fa5b222fd5db1dae8b8be4be3899449c58842b91cf0a2ae6feef85c4b6"
+      }
+    },
+    "core_boundaries": "passed",
+    "docs_assertions": "77/77",
+    "workspace_format_check": "passed",
+    "workspace_check": "passed",
+    "workspace_clippy_warnings_denied": "passed"
   }
 }

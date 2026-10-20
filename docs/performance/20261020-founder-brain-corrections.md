@@ -174,22 +174,50 @@ The relevant architecture requirements are `AOA-INV-001`, `AOA-SENSE-001`,
 these narrow implementation corrections; long-term learning and physical GPU
 behavior remain unqualified here.
 
+## Coordination scope
+
+The base remains fetched main `bda3b65`. At the overlap check, rehearsal #109
+was `b7a67384075223be24e5375a7fd3bfe96995042f`, published CPU #110 was
+`8e480e029cf04a4201ccfa81e4b191f0cd8a3469`, and group #111's audit head was
+`52559f55a564475233db940c1fbda2b5069e2dd7`. The group qualification binary
+remains independently pinned to `785d392c926f50bff2354f954c8029bc82221214`.
+No candidate asset or qualification binary was modified.
+
+There is no changed-file overlap with those published #109/#110 heads. The
+reserved CPU perception interface was reported before the narrow core validator
+change; CPU collector, runtime, evidence, learning and persistence interfaces
+were left untouched. CPU integration must consume the revised decoder semantics.
+With #111, shared files are `trainer.rs` (its allocation helpers versus this
+branch's Adam sign metadata/test) and `new_game.rs` (its group admission versus
+this branch's common newborn floor). Their changed hunks do not overlap. The
+vocabulary correction is confined to `foundation_training.rs` and was reported
+before editing. Existing CPU/group/rehearsal behavior is not imported or rewritten.
+
 ## Validation
 
-Verified CPU checks include seven founder/integration tests, 20 candidate tests,
-the vocabulary/replay test, the social-memory ordering regression, four signed
-foundation tests (including the actual retained Nano file and signed speech),
-nine Nano projection compatibility tests, ten decoder lifetime-rate policy tests,
-28 training unit tests, and the exact checkpoint-continuity command at commit
-1a06ead: 220 tests
-across 27 binaries, including all 84 backend library tests. Static boundaries
-and all 77 documentation assertions also pass. The final builtin correction is undergoing the complete workspace and
-checkpoint-continuity commands; the PR records their final receipts. The first
-workspace pass identified three stale procedural phenotype goldens in the
-lifetime-rate fixture. Their genome-byte hashes still match; the phenotype
-baselines were explicitly renewed for the intended distance signs, with original
-and corrected hashes retained in the evidence JSON. No lifetime-rate policy or
-production batch builder was changed. Physical GPU behavior is Unknown.
+At code head `3276d43c7b52b157bd053060bbbd2e6ce9070576` (production correction
+`12ed5a054b53d91db1f100e034bbbbbda32cc8b3`), `bash scripts/check.sh --full`
+passes formatting, workspace/all-target checking, 1949 tests across
+217 test binaries (22 ignored), workspace/all-target
+Clippy with warnings denied, core boundaries, and all 77 documentation assertions.
+The exact checkpoint-continuity command independently passes 220 tests
+across 27 binaries, including all 84 backend library tests.
+
+Focused checks pass seven founder/integration tests, four signed/exact/private
+foundation tests, nine Nano projection compatibility tests, ten decoder lifetime
+rate-policy tests, and all 50 phenotype compiler tests. Earlier focused checks
+also pass 20 candidate tests, the vocabulary/replay test, the social-memory
+ordering regression, and 28 training unit tests. The canonical builtin identities
+reproduce all 18 recorded corrected score/derivative rows exactly. Full command
+receipts, counts and cloud-log SHA256 digests are retained in the evidence JSON.
+Physical GPU behavior is Unknown.
+
+Two obsolete fixture assumptions were corrected: procedural phenotype goldens
+include the intended distance signs while unchanged genome-byte hashes retain
+their original provenance; route-sign assertions apply to recurrent biological
+pathways while preserving all budget/wiring assertions. The original and renewed
+phenotype hashes remain in the evidence JSON. No lifetime-rate policy or
+production batch builder was changed.
 
 The six batch golden changes were reproduced against `bda3b65` in a separate
 Cargo target, after rejecting a shared-target reference that linked current
