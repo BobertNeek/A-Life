@@ -2,8 +2,13 @@
 
 Dated implementation/evidence report, updated 2026-10-20. This report covers
 PR110 on `feat/cpu-foundation-backend`; it is not architecture authority.
-The user's explicit CPU/cloud authorization applies to this opt-in offline
-backend. Normal gameplay retains its GPU default and rejects CPU policy saves.
+The user's 19 October 2026, 23:17:19 UTC instruction authorized “create a cpu
+backend that we can offload some training to the cloud with” alongside larger
+groups. The root and crate guardrails now record this explicit offline scope.
+AOA-ADM-007 makes processor placement an implementation mechanism and
+AOA-TIME-006 describes GPU placement as a reference mechanism. The controlling
+architecture is unchanged. Normal gameplay retains its GPU default and rejects
+CPU policy saves.
 
 ## Executable boundary
 
@@ -19,6 +24,34 @@ cargo run --locked -p alife_training --features cpu-backend \
   --output /path/to/new-output --seed EXPLICIT_NEW_SEED --ticks 64
 ```
 
+A serial `cycle.json` directory must first pass the existing native serial,
+terrain and critic-correction continuity verifier and export a hash-bound typed
+package. The export command reads the original directory without changing it:
+
+```sh
+cargo run --locked -p alife_game_app --features foundation-training \
+  --bin export_native_training_handoff -- /path/to/sealed-serial /path/to/new-portable
+```
+
+Use `/path/to/new-portable` as the CPU command's `--previous`. Its
+`native-training-handoff.json` pins the original cycle, asset and complete
+actor/value checkpoint bytes, plus `training-handoff.json`. A missing binding or
+changed finite moments, ages, stage mask or critic parameters fails before CPU
+trainer/world/output construction. Native correction proof is checked at export;
+the typed package retains the actual corrected critic age without rewriting the
+historical cycle receipt or resetting either optimizer. The package declares
+biological objective2 / residual critic objective1 and fresh-cohort continuation.
+CPU and group50 sources retain their existing sealed hash/receipt checks.
+
+The export is the trust boundary for ordinary historical serial checkpoints:
+the existing native verifier checks their declared continuity but cannot
+retroactively authenticate finite moment/mask edits made before export when the
+old receipt carried no checkpoint hashes. The portable binding protects the exact
+selected state after export. Declared critic-correction packages additionally
+retain their existing full source/target snapshot proof. Export output cannot
+reside inside either source tree, including through parent-directory symlinks.
+This is integrity/continuity evidence, not accepted-policy or GPU qualification.
+
 `--fixture` replaces `--previous` only for deterministic development evidence;
 its fixture label propagates to descendants. The CLI uses a new homogeneous
 cohort with the inherited founder and retains the old individual archive. It
@@ -32,9 +65,8 @@ freshness as **Unknown** and preserves the complete source receipt and exact
 source hashes. It does not reserve seeds or claim accepted mixed-care ancestry.
 The source must be a completed native handoff (`next-cohort-admitted`) or a
 completed CPU handoff (`complete-fresh-cohort-cpu`), or complete group50 native receipt, with matching asset, full
-checkpoints, objective versions and ages. Specialized critic-correction source
-packages still require their existing continuity admission; this CLI does not
-bypass that admission or repair/reset an optimizer.
+checkpoints, objective versions and ages. Specialized critic-correction sources pass that existing native admission at
+portable export; this CLI does not bypass it or repair/reset an optimizer.
 
 ## Native computation and canonical collection
 

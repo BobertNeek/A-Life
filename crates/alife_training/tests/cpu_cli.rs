@@ -167,3 +167,154 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
     assert!(!rejected.exists());
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn serial_source_requires_native_binding_and_rejects_finite_checkpoint_tampering() {
+    use alife_training::{FoundationSerialHandoffBindingV1, SERIAL_HANDOFF_SOURCE_FILES};
+    use sha2::{Digest, Sha256};
+    let sha = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let root = std::env::temp_dir().join(format!(
+        "alife-serial-cpu-admission-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let first = root.join("cpu-fixture");
+    let output = run(&[
+        "--fixture",
+        "--output",
+        text(&first),
+        "--seed",
+        "898001",
+        "--ticks",
+        "4",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // Synthetic portable serial boundary; native exporter/correction verification
+    // is tested in alife_game_app without requiring GPU execution.
+    let serial = root.join("serial");
+    fs::create_dir(&serial).unwrap();
+    for name in [
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+    ] {
+        fs::copy(first.join(name), serial.join(name)).unwrap();
+    }
+    let mut receipt: serde_json::Value =
+        serde_json::from_slice(&fs::read(first.join("cpu-cycle.json")).unwrap()).unwrap();
+    receipt["next_cohort_tick_captured"] = true.into();
+    receipt["next_cohort_optimizer_rebound"] = true.into();
+    fs::write(
+        serial.join("cycle.json"),
+        serde_json::to_vec(&receipt).unwrap(),
+    )
+    .unwrap();
+    fs::write(serial.join("phase.txt"), "next-cohort-admitted").unwrap();
+    let rejected = root.join("missing-binding");
+    let output = run(&[
+        "--previous",
+        text(&serial),
+        "--output",
+        text(&rejected),
+        "--seed",
+        "898002",
+        "--ticks",
+        "4",
+    ]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("validated portable handoff"));
+    assert!(!rejected.exists());
+    let mut handoff: alife_training::FoundationTrainingHandoffV1 =
+        serde_json::from_slice(&fs::read(first.join("training-handoff.json")).unwrap()).unwrap();
+    handoff.origin = alife_training::FoundationTrainingBackendV1::NativeGpu;
+    let handoff_bytes = serde_json::to_vec(&handoff).unwrap();
+    fs::write(serial.join("training-handoff.json"), &handoff_bytes).unwrap();
+    let source_sha256 = SERIAL_HANDOFF_SOURCE_FILES
+        .into_iter()
+        .map(|name| (name.to_owned(), sha(&fs::read(serial.join(name)).unwrap())))
+        .collect();
+    let binding = FoundationSerialHandoffBindingV1 {
+        schema_version: 1,
+        native_serial_continuity_validated: true,
+        source_sha256,
+        training_handoff_sha256: sha(&handoff_bytes),
+    };
+    fs::write(
+        serial.join("native-training-handoff.json"),
+        serde_json::to_vec(&binding).unwrap(),
+    )
+    .unwrap();
+    for (index, (name, field)) in [
+        ("actor-checkpoint.json", "first_moment"),
+        ("actor-checkpoint.json", "update_ages"),
+        ("actor-checkpoint.json", "stage_mask"),
+        ("value-checkpoint.json", "parameters"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let path = serial.join(name);
+        let original = fs::read(&path).unwrap();
+        let mut changed: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        match field {
+            "stage_mask" => changed[field]["words"][0] = 0.into(),
+            "update_ages" => changed[field][0] = 1.into(),
+            _ => changed[field][0] = (changed[field][0].as_f64().unwrap() + 0.125).into(),
+        }
+        let changed_bytes = serde_json::to_vec(&changed).unwrap();
+        fs::write(&path, &changed_bytes).unwrap();
+        let rejected = root.join(format!("rejected-{index}"));
+        let output = run(&[
+            "--previous",
+            text(&serial),
+            "--output",
+            text(&rejected),
+            "--seed",
+            "898002",
+            "--ticks",
+            "4",
+        ]);
+        assert!(!output.status.success(), "tampered {field} was admitted");
+        assert!(!rejected.exists());
+        assert_eq!(fs::read(&path).unwrap(), changed_bytes);
+        fs::write(&path, original).unwrap();
+    }
+    let accepted = root.join("accepted");
+    let output = run(&[
+        "--previous",
+        text(&serial),
+        "--output",
+        text(&accepted),
+        "--seed",
+        "898002",
+        "--ticks",
+        "4",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let continued: serde_json::Value =
+        serde_json::from_slice(&fs::read(accepted.join("cpu-cycle.json")).unwrap()).unwrap();
+    assert_eq!(
+        continued["initial_actor_optimizer_step"],
+        handoff.actor.optimizer_step
+    );
+    assert_eq!(
+        continued["initial_value_optimizer_step"],
+        handoff.value.optimizer_step
+    );
+    assert_eq!(
+        fs::read(serial.join("training-handoff.json")).unwrap(),
+        handoff_bytes
+    );
+    fs::remove_dir_all(root).unwrap();
+}

@@ -3,8 +3,10 @@
 use alife_core::*;
 use alife_runtime::canonical_preparation::foundation_construction_development;
 use alife_training::{
-    cpu::*, AdamWConfig, FoundationTrainerCheckpoint, FoundationTrainingBackendV1,
-    FoundationTrainingHandoffV1, PpoConfig, PpoValueHeadCheckpoint, StageTrainableMask,
+    cpu::*, AdamWConfig, FoundationSerialHandoffBindingV1, FoundationTrainerCheckpoint,
+    FoundationTrainingBackendV1, FoundationTrainingHandoffV1, PpoConfig, PpoValueHeadCheckpoint,
+    StageTrainableMask, SERIAL_HANDOFF_BINDING_FILE, SERIAL_HANDOFF_FILE,
+    SERIAL_HANDOFF_SOURCE_FILES,
 };
 use alife_world::*;
 use serde_json::{json, Value};
@@ -206,10 +208,49 @@ fn main() -> Result<()> {
             source_hashes.insert(name.to_string(), hash(&bytes));
             source_bytes.insert(name.to_string(), bytes);
         }
+        let serial_handoff = if receipt_name == "cycle.json" {
+            let binding_bytes = fs::read(previous.join(SERIAL_HANDOFF_BINDING_FILE)).map_err(|_| "serial source requires a validated portable handoff; run export_native_training_handoff SOURCE NEW_OUTPUT with the native verifier first")?;
+            let handoff_bytes = fs::read(previous.join(SERIAL_HANDOFF_FILE))?;
+            let binding: FoundationSerialHandoffBindingV1 = serde_json::from_slice(&binding_bytes)?;
+            let pinned = SERIAL_HANDOFF_SOURCE_FILES
+                .into_iter()
+                .map(|name| (name.to_owned(), hash(&source_bytes[name])))
+                .collect();
+            binding.validate(&pinned, &hash(&handoff_bytes))?;
+            let handoff: FoundationTrainingHandoffV1 = serde_json::from_slice(&handoff_bytes)?;
+            handoff.validate()?;
+            if handoff.origin != FoundationTrainingBackendV1::NativeGpu
+                || serde_json::from_slice::<FoundationTrainerCheckpoint>(
+                    &source_bytes["actor-checkpoint.json"],
+                )? != handoff.actor
+                || serde_json::from_slice::<PpoValueHeadCheckpoint>(
+                    &source_bytes["value-checkpoint.json"],
+                )? != handoff.value
+                || handoff
+                    .compiler_inputs
+                    .n2048_candidate_asset()
+                    .ok_or("missing serial handoff asset")?
+                    .encode_canonical()?
+                    != source_bytes["trained.alife-foundation"]
+            {
+                return Err("serial source differs from its validated typed handoff".into());
+            }
+            for (name, bytes) in [
+                (SERIAL_HANDOFF_BINDING_FILE, binding_bytes),
+                (SERIAL_HANDOFF_FILE, handoff_bytes),
+            ] {
+                source_hashes.insert(name.into(), hash(&bytes));
+                source_bytes.insert(name.into(), bytes);
+            }
+            Some(handoff)
+        } else {
+            None
+        };
         let receipt: Value = serde_json::from_slice(&source_bytes[receipt_name])?;
-        if receipt["biological_objective_version"].as_u64() != Some(2)
-            || receipt["critic_objective_version"].as_u64() != Some(1)
-            || receipt["objective_state_reset"].as_bool() != Some(false)
+        if serial_handoff.is_none()
+            && (receipt["biological_objective_version"].as_u64() != Some(2)
+                || receipt["critic_objective_version"].as_u64() != Some(1)
+                || receipt["objective_state_reset"].as_bool() != Some(false))
         {
             return Err("source must retain biological objective2, full residual critic objective1, and objective_state_reset=false".into());
         }
@@ -276,7 +317,9 @@ fn main() -> Result<()> {
         }
         let asset =
             FoundationWeightAsset::decode_canonical(&source_bytes["trained.alife-foundation"])?;
-        if receipt["new_asset_digest"].as_str() != Some(asset_digest(&asset).as_str()) {
+        if serial_handoff.is_none()
+            && receipt["new_asset_digest"].as_str() != Some(asset_digest(&asset).as_str())
+        {
             return Err("source asset differs from its native receipt".into());
         }
         let seed = receipt["seed"].as_u64().ok_or("source seed is missing")?;
@@ -298,6 +341,12 @@ fn main() -> Result<()> {
         let version = receipt["policy_version"]
             .as_u64()
             .ok_or("source policy version is missing")?;
+        if serial_handoff
+            .as_ref()
+            .is_some_and(|h| h.policy_version != version)
+        {
+            return Err("serial policy version differs from validated handoff".into());
+        }
         let actor: FoundationTrainerCheckpoint =
             serde_json::from_slice(&source_bytes["actor-checkpoint.json"])?;
         let value: PpoValueHeadCheckpoint =
@@ -305,8 +354,10 @@ fn main() -> Result<()> {
         if value.last_updated_policy_version != Some(version) {
             return Err("source critic belongs to another policy version".into());
         }
-        if receipt["actor_optimizer_step"].as_u64() != Some(u64::from(actor.optimizer_step))
-            || receipt["value_optimizer_step"].as_u64() != Some(u64::from(value.optimizer_step))
+        if serial_handoff.is_none()
+            && (receipt["actor_optimizer_step"].as_u64() != Some(u64::from(actor.optimizer_step))
+                || receipt["value_optimizer_step"].as_u64()
+                    != Some(u64::from(value.optimizer_step)))
         {
             return Err("source optimizer ages differ from native receipt".into());
         }
@@ -494,7 +545,10 @@ fn main() -> Result<()> {
     let ancestry_hashes = source_hashes
         .iter()
         .filter(|(name, _)| {
-            name.as_str() != "phase.txt" && name.as_str() != "training-handoff.json"
+            !matches!(
+                name.as_str(),
+                "phase.txt" | SERIAL_HANDOFF_FILE | SERIAL_HANDOFF_BINDING_FILE
+            )
         })
         .map(|(name, hash)| (name.clone(), hash.clone()))
         .collect::<BTreeMap<_, _>>();

@@ -137,3 +137,50 @@ impl FoundationTrainingHandoffV1 {
         Ok((trainer, PpoTrainingState::from_checkpoint(admitted.value)?))
     }
 }
+
+pub const SERIAL_HANDOFF_BINDING_FILE: &str = "native-training-handoff.json";
+pub const SERIAL_HANDOFF_FILE: &str = "training-handoff.json";
+pub const SERIAL_HANDOFF_SOURCE_FILES: [&str; 4] = [
+    "cycle.json",
+    "trained.alife-foundation",
+    "actor-checkpoint.json",
+    "value-checkpoint.json",
+];
+/// Portable boundary emitted only after native serial continuity admission.
+/// Pins the complete native checkpoints, including moments, ages and stage mask.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FoundationSerialHandoffBindingV1 {
+    pub schema_version: u16,
+    pub native_serial_continuity_validated: bool,
+    pub source_sha256: std::collections::BTreeMap<String, String>,
+    pub training_handoff_sha256: String,
+}
+impl FoundationSerialHandoffBindingV1 {
+    pub fn validate(
+        &self,
+        actual_source_sha256: &std::collections::BTreeMap<String, String>,
+        actual_handoff_sha256: &str,
+    ) -> Result<(), TrainingError> {
+        let valid_hash = |value: &str| {
+            value.len() == 64
+                && value
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        };
+        if self.schema_version != 1
+            || !self.native_serial_continuity_validated
+            || self.source_sha256.len() != SERIAL_HANDOFF_SOURCE_FILES.len()
+            || SERIAL_HANDOFF_SOURCE_FILES
+                .iter()
+                .any(|name| !self.source_sha256.contains_key(*name))
+            || self.source_sha256.values().any(|v| !valid_hash(v))
+            || !valid_hash(&self.training_handoff_sha256)
+            || self.source_sha256 != *actual_source_sha256
+            || self.training_handoff_sha256 != actual_handoff_sha256
+        {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
+        }
+        Ok(())
+    }
+}

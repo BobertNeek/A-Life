@@ -11,11 +11,15 @@ It is not a claim that every feature is integrated or proven. See
 
 ## Production authority
 
-- Neural policy: GPU-authoritative WGSL.
+- Gameplay neural policy: GPU-authoritative WGSL.
 - Perception, candidates, legality, targets, execution, and outcomes: `alife_world`.
 - Scheduling and translation: `alife_game_app`.
 - Presentation: read-only projection.
-- CPU neural helpers: reference, test, or developer use only.
+- Gameplay CPU neural helpers: reference, test, or developer use only.
+- Explicit offline CPU cloud training: opt-in `alife_training/cpu-backend`, with
+  canonical biology, distinct sealed CPU evidence and native optimizer handoffs.
+  Approved 19 October 2026; see the [backend report](performance/20261019-native-cpu-training-backend.md).
+  GPU hardware and accepted-source qualification require their own evidence.
 - GPU unavailable: typed unavailable result, never silent CPU substitution.
 
 ## Grounded terrain sight

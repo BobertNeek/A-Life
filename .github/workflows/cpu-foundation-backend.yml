@@ -40,6 +40,8 @@ jobs:
           cargo test --locked -p alife_core --test cpu_neural_evidence --test experience_neural_decision --test packed_experience_logging
           cargo test --locked -p alife_world --test cpu_policy_config
           cargo test --locked -p alife_game_app --features foundation-training --test cpu_policy_boundary
+          cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::portable_handoff
+          cargo check --locked -p alife_game_app --features foundation-training --bin export_native_training_handoff
       - name: Strict CPU source review
         run: cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff -- -D warnings
       - name: Compile hardware differential test without requesting an adapter

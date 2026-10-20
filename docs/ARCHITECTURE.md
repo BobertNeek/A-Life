@@ -24,7 +24,12 @@ world perception + unscored legal candidates
 ```
 
 - `alife_world` owns perception facts, legality, candidate construction, action execution, outcomes, ecology, speech events, persistence, and world identity.
-- `alife_gpu_backend` owns production neural state and WGSL execution.
+- `alife_gpu_backend` owns gameplay neural state and WGSL execution.
+- The approved offline CPU cloud trainer in `alife_training/cpu-backend` executes
+  native graph/learning semantics in an explicit CPU evidence domain. This placement
+  follows AOA-ADM-007 and AOA-TIME-006; gameplay GPU authority remains unchanged.
+  Native handoffs preserve weights, moments and exact integer ages; qualification
+  limits are recorded in the [CPU backend report](performance/20261019-native-cpu-training-backend.md).
 - `alife_game_app` schedules the live loop and translates authoritative state into player-facing surfaces.
 - Renderers and UI never own simulation truth.
 

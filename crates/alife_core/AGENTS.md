@@ -13,9 +13,11 @@ Rules:
 - Do not reintroduce a fixed global 2048-neuron brain invariant.
 - `Standard2048` may appear only as one `BrainScaleTier` reference class.
 - Prefer explicit versioned structs for cross-layer contracts.
-- Production neural execution is GPU-authoritative WGSL; do not add a live CPU
+- Production gameplay neural execution is GPU-authoritative WGSL; do not add a live CPU
   shadow, parity gate, or automatic CPU neural fallback.
-- Keep pure CPU neural helpers test-only or developer-only.
+- Keep CPU neural helpers in this crate test-only or developer-only. The authorized
+  offline CPU training implementation belongs in `alife_training`; shared contracts
+  must retain distinct CPU/GPU evidence domains.
 - World code enumerates unscored candidates and remains authoritative for
   legality and outcomes.
 - Promote only N512, N1024, and N2048 until larger tiers pass the documented
