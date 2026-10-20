@@ -207,3 +207,51 @@ running `4cca46b4` build before building the integrated source, retain source/ca
 paths, and use observed phase progress plus resource headroom instead of repeating
 the old120-second timeout. The consumed seed202610174119 and accepted policy7400
 packages/Adam remain immutable. No PC command or new task was issued here.
+
+## Qualified predecessor and current-main integration
+
+The coordinated Windows RTX3050/Vulkan receipt qualifies source
+`617063b85f45cdcd657744fe3e94902d11b6e23c`, tree
+`344f3f8e68cae2f64024703ee2d565856ad810b8`. Its50-by16 run exited successfully
+after180.721 seconds, with28 focused Windows CPU contracts, native input admissions,
+output readmission,850 replay records,800 valid learning decisions and50 private
+replay comparisons passing. Actor/value Adam advanced by2/100 updates; export and
+next-cohort rebind passed. There were1700 snapshots in34 readback submissions,
+one replay data sync and one durable commit. Protected-state checks matched.
+These observations establish neither a comparative speedup nor learning benefit.
+The separate batch-versus-single GPU fixture was not run for that receipt.
+
+Current main `37de3cc299728d1914e575e5dd6ebfa2ddea1e56` includes PR113's changed
+founder/decoder semantics, which the predecessor receipt predates. PR111 now
+integrates that main at `90a8b86a473e826a6a344ad7d6b0553cf75b1fc3`; PR114 merges
+this updated parent. No conflict resolution or new neural implementation was
+needed. The three shared files retain group admission and memory planning alongside
+the common newborn floor, signed decoder/Adam metadata, exact private-foundation
+replacement and Play/Grab vocabulary/replay identity. All22 other main-change
+blobs are retained exactly. The capture, cohort persistence and staged-tick source
+from the qualified predecessor is byte-retained outside the vocabulary merge.
+
+PR112's head is not an ancestor. All five paths changed by that branch remain
+byte-identical to main or absent; its unapproved plasticity implementation is not
+part of this stack. The pinned CI workflow and historical art profiles are retained.
+PR114 is the complete integration candidate for main; PR111 remains draft while
+the combined source is qualified. An independent merge of the predecessor is not
+covered by the combined candidate's future hardware receipt.
+
+The old receipt must not be relabelled as qualification of the integrated source.
+The existing PC owner must run the fifty-row batch-versus-single readback fixture
+and bounded native50-by16 handoff contract against the final integrated source,
+with measured resource headroom and separate qualification outputs. Retention and
+training-benefit experiments remain optional follow-ups, not implementation merge
+requirements. Accepted checkpoint/optimizer files are not replaced by qualification
+outputs. Only exact-head checks and the matching hardware contracts can close the
+integration gate.
+
+Focused independent R2 integration review at `858a48a7` found no blocking source
+issues. It independently confirmed the22 main blobs,13 retained batch-successor
+crate blobs, exclusion of all PR112 paths, signed decoder/private-weight/integer-age
+contracts and clean merge. Formatting, architecture boundaries, documentation77/77,
+both art audits and three historical-pin integration tests pass on the combined
+tree. The final source's CPU/compile/CI results are recorded on PR114; retargeting
+the PR alone is not evidence that any check ran. The integrated source still needs
+both explicit GPU contracts before the hardware gate can close.
