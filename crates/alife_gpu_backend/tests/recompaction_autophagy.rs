@@ -192,6 +192,41 @@ fn pruning_autophagy_remaps_zero_effective_synapse() {
 }
 
 #[test]
+fn strengthen_and_weaken_adjust_only_lifetime_layer() {
+    let schema = recompaction_schema();
+    let upload =
+        GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
+    for (kind, grows) in [
+        (StructuralEditKind::Strengthen, true),
+        (StructuralEditKind::Weaken, false),
+    ] {
+        let plan = GpuRecompactionPlan::from_sleep_batch(
+            &schema,
+            &structural_batch(kind),
+            GpuAutophagyPolicy::reference(),
+        )
+        .unwrap();
+        assert_eq!(plan.diagnostics.edits_accepted, 1);
+        assert_eq!(plan.diagnostics.unsupported_edit_kinds, 0);
+        let output = plan.rebuild_scratch_upload(&upload).unwrap();
+        let compacted = &output.compacted_upload;
+        assert_eq!(compacted.genetic_fixed_q, upload.genetic_fixed_q);
+        assert_eq!(output.diagnostics.strength_adjusted_entries, 2);
+        for index in 0..upload.lifetime_consolidated_q.len() {
+            let before = upload.lifetime_consolidated_q[index];
+            let after = compacted.lifetime_consolidated_q[index];
+            if upload.genetic_fixed_q[index] == 0 {
+                assert_eq!(after, before, "zero synapses stay untouched");
+            } else if grows {
+                assert!(after > before);
+            } else {
+                assert!(after < before);
+            }
+        }
+    }
+}
+
+#[test]
 fn double_buffer_swap_is_all_or_nothing_at_sleep_boundary() {
     let schema = recompaction_schema();
     let active =

@@ -815,17 +815,12 @@ impl BrainPhenotype {
                 {
                     return Err(ScaffoldContractError::PhenotypeCompile);
                 }
-                match projection.projection_type() {
-                    crate::ProjectionType::LateralInhibition if synapse.genetic_weight() >= 0.0 => {
-                        return Err(ScaffoldContractError::PhenotypeCompile)
-                    }
-                    crate::ProjectionType::Homeostatic
-                        if matches!(synapse.kind(), CompiledSynapseKind::Recurrent)
-                            && synapse.genetic_weight() < 0.0 =>
-                    {
-                        return Err(ScaffoldContractError::PhenotypeCompile)
-                    }
-                    _ => {}
+                if matches!(
+                    projection.projection_type(),
+                    crate::ProjectionType::LateralInhibition
+                ) && synapse.genetic_weight() >= 0.0
+                {
+                    return Err(ScaffoldContractError::PhenotypeCompile);
                 }
                 match synapse.kind() {
                     CompiledSynapseKind::Recurrent => {

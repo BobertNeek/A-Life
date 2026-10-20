@@ -236,17 +236,12 @@ fn compile_inner(
                     .ok_or(ScaffoldContractError::PhenotypeCompile)?;
                 let delta = genome_weight_delta(overlay_seed, global_index as u32);
                 let mut composed = *weight + delta;
-                match projection.projection_type() {
-                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
-                        composed = -0.000_1;
-                    }
-                    crate::ProjectionType::Homeostatic
-                        if matches!(synapse.kind(), super::CompiledSynapseKind::Recurrent)
-                            && composed < 0.0 =>
-                    {
-                        composed = 0.000_1;
-                    }
-                    _ => {}
+                if matches!(
+                    projection.projection_type(),
+                    crate::ProjectionType::LateralInhibition
+                ) && composed >= 0.0
+                {
+                    composed = -0.000_1;
                 }
                 synapse.set_genetic_weight(composed);
             }
@@ -295,17 +290,12 @@ fn compile_inner(
                 } else {
                     *weight + delta
                 };
-                match projection.projection_type() {
-                    crate::ProjectionType::LateralInhibition if composed >= 0.0 => {
-                        composed = -0.000_1;
-                    }
-                    crate::ProjectionType::Homeostatic
-                        if matches!(synapse.kind(), super::CompiledSynapseKind::Recurrent)
-                            && composed < 0.0 =>
-                    {
-                        composed = 0.000_1;
-                    }
-                    _ => {}
+                if matches!(
+                    projection.projection_type(),
+                    crate::ProjectionType::LateralInhibition
+                ) && composed >= 0.0
+                {
+                    composed = -0.000_1;
                 }
                 if exact_candidate && composed.to_bits() != weight.to_bits() {
                     return Err(ScaffoldContractError::PhenotypeCompile);

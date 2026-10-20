@@ -367,7 +367,7 @@ fn projections_routes_and_global_budgets_are_exact_partitions() {
                     assert!(synapse.genetic_weight() < 0.0)
                 }
                 alife_core::ProjectionType::Homeostatic => {
-                    assert!(synapse.genetic_weight() >= 0.0)
+                    assert!(synapse.genetic_weight().is_finite())
                 }
                 _ => {}
             }

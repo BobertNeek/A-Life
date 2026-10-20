@@ -291,6 +291,50 @@ impl PartialEq for GeneticValidationCache {
     }
 }
 
+// Process-local memo of the last biochemistry digest, keyed by the exact
+// (Copy) state it was computed from. A changed state misses and recomputes, so
+// validation still detects drift; repeated checks within a tick skip the JSON.
+#[derive(Debug, Default)]
+struct BiochemistryDigestMemo(std::sync::Mutex<Option<(BiochemistryState, [u64; 4])>>);
+
+impl BiochemistryDigestMemo {
+    fn digest(&self, state: &BiochemistryState) -> Result<[u64; 4], ScaffoldContractError> {
+        if let Ok(guard) = self.0.lock() {
+            if let Some((cached, digest)) = guard.as_ref() {
+                if cached == state && same_float_bits(cached, state) {
+                    return Ok(*digest);
+                }
+            }
+        }
+        let digest = body_biochemistry_digest(state)?;
+        if let Ok(mut guard) = self.0.lock() {
+            *guard = Some((*state, digest));
+        }
+        Ok(digest)
+    }
+}
+
+// `PartialEq` treats 0.0 == -0.0, which serialize differently; guard the
+// observable body scalars bitwise as a cheap extra check.
+fn same_float_bits(a: &BiochemistryState, b: &BiochemistryState) -> bool {
+    a.body.energy.to_bits() == b.body.energy.to_bits()
+        && a.body.health.to_bits() == b.body.health.to_bits()
+        && a.body.injury.to_bits() == b.body.injury.to_bits()
+}
+
+impl Clone for BiochemistryDigestMemo {
+    fn clone(&self) -> Self {
+        let value = self.0.lock().ok().and_then(|guard| *guard);
+        Self(std::sync::Mutex::new(value))
+    }
+}
+
+impl PartialEq for BiochemistryDigestMemo {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldOrganismRecord {
     organism_id: OrganismId,
@@ -299,6 +343,8 @@ pub struct WorldOrganismRecord {
     phenotype: CreaturePhenotype,
     #[serde(skip)]
     genetic_validation: GeneticValidationCache,
+    #[serde(skip)]
+    biochemistry_digest_memo: BiochemistryDigestMemo,
     biochemistry: BiochemistryState,
     state_graph: OrganismSubsystemStateGraph,
     embodiment: EmbodimentState,
@@ -461,6 +507,7 @@ impl WorldOrganismRecord {
             genome,
             phenotype,
             genetic_validation: GeneticValidationCache::default(),
+            biochemistry_digest_memo: BiochemistryDigestMemo::default(),
             biochemistry,
             state_graph: OrganismSubsystemStateGraph {
                 organism_id,
@@ -548,7 +595,7 @@ impl WorldOrganismRecord {
             || self.state_graph.embodiment.revision != self.embodiment.revision()
             || self.state_graph.embodiment.causal_tick != self.embodiment.source_tick()
             || self.state_graph.body_biochemistry.content_digest
-                != body_biochemistry_digest(&self.biochemistry)?
+                != self.biochemistry_digest_memo.digest(&self.biochemistry)?
             || self.state_graph.embodiment.content_digest != embodiment_digest(&self.embodiment)?
             || self.state_graph.genetics_development.content_digest != genetics_digest
             || self.state_graph.lifecycle_persistence.content_digest
@@ -770,7 +817,7 @@ impl WorldOrganismRecord {
     }
 
     fn advance_body_state_ref(&mut self) -> Result<(), ScaffoldContractError> {
-        let content_digest = body_biochemistry_digest(&self.biochemistry)?;
+        let content_digest = self.biochemistry_digest_memo.digest(&self.biochemistry)?;
         self.state_graph.transaction_revision = self
             .state_graph
             .transaction_revision
