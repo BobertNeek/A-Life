@@ -78,6 +78,41 @@ execution remains with the qualification owner. References:
 [Rust canonicalization](https://doc.rust-lang.org/std/fs/fn.canonicalize.html),
 [Python path identity](https://docs.python.org/3/library/pathlib.html#pathlib.Path.samefile).
 
+The exact-head Broadleaf CI failures on `785d392c` were deterministic: the four
+group50 test/compile workflow lines changed the current CI SHA256, while the plant
+audit still pinned the earlier workflow. A failed-job retry of that source would
+fail again. The follow-up adds a new CI-only integration profile and validates the
+unchanged October17 integration profile as its pinned predecessor. No historical
+profile, art, workflow, Rust, training or GPU source is rewritten by that follow-up.
+Both plant/shipping audits and all74 composition,4 preview-rotation and3 integration
+tests pass locally. The parent authorized publication of this audit-only successor;
+the PC qualification candidate remains pinned to
+`785d392c926f50bff2354f954c8029bc82221214`. This does not relabel the existing
+binary as built from the audit successor. The replay writer reads checkout HEAD,
+so the qualification checkout should retain that actual runtime source stamp.
+
+Byte-identity receipt against that runtime commit: every other tracked path has
+the same Git mode and blob. The content manifests below use path-sorted UTF-8 JSON
+arrays `[path, git_mode, byte_count, content_sha256]`, compact separators and
+`ensure_ascii=true`; each digest is identical for the baseline and successor.
+Only the checker, new integration profile and this verification note differ.
+
+| Unchanged scope | Files | Bytes | Content-manifest SHA256 |
+| --- | ---: | ---: | --- |
+| All other tracked paths | 1508 | 141250765 | `f209484fc9b464184999d64612f3227315a8fc7ec6a2949d57088fb3c4f88ff5` |
+| All Rust files | 659 | 16437373 | `bb62401bea4fdd02a993801c159312f49bb97beac05f415218221fe2ef2c5ac2` |
+| GPU backend and all shader files | 91 | 2412871 | `83ed410e456042943ee03fd784e1c248876378962ac2f4cb92f8c26f02d71082` |
+| All asset-directory files | 270 | 86425518 | `adf4ddf81bf9ecc4020b4940cca6528add618edaa6deb78e95730af69d407833` |
+| All workflow files | 9 | 44861 | `58f56de064e1ef24a54e3470ea262524e4e89847836d9367f2b1969b479a04b0` |
+
+The unchanged workflow itself has SHA256
+`815c3ad05b83457f9708aa0ab128ec05d9d18ae51c0cda43c89ddadcd8d7e808`.
+The unchanged October17 predecessor integration profile retains SHA256
+`ebbdbeba4c652e2b4aad897cd1d228506a80155b574a0081a328640e1da7c4a3`.
+The new profile has SHA256
+`72b6d10627c5b11bd5c8936e4b4f4c1ea7c870be70a17138dcf511c878ce5474`.
+A focused independent R2 review found no blockers or weakened source pins.
+
 The cloud exposes no GPU device. The hardware smoke, fifty-row recurrence/private
 state checks, frozen old-policy GPU comparison, central update/export/rebind and
 throughput measurement have not run. No seed was allocated. The accepted private
