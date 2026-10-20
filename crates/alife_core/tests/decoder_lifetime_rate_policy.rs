@@ -1,5 +1,6 @@
-//! Opt-in lifetime decoder rates; golden defaults were measured from the fresh
-//! exact PR40 d1ee947fad980d4adcdfd08cb85b0068a73aef80 core.
+//! Opt-in lifetime decoder rates. Genome goldens retain PR40
+//! d1ee947fad980d4adcdfd08cb85b0068a73aef80 provenance; phenotype goldens include
+//! the deliberate ActionCandidate distance-sign correction (2026-10-20).
 use alife_core::{
     BrainCapacityClass, BrainGenome, BrainPhenotype, CandidateActionFamily as Family,
     CompiledSynapseKind, CreatureGenome, CriticalPeriod, DecoderHeadKind as Head,
@@ -67,23 +68,24 @@ fn assert_same_wiring(left: &BrainPhenotype, right: &BrainPhenotype) {
 }
 
 #[test]
-fn omitted_policy_preserves_exact_base_genome_bytes_and_compiled_identity() {
-    // BLAKE3 of complete serialized genomes/phenotypes from the exact-base core.
+fn omitted_policy_preserves_genome_bytes_and_current_procedural_identity() {
+    // BLAKE3 of complete serialized genomes and current procedural phenotypes.
+    // Original phenotype hashes are recorded in the dated correction evidence.
     let golden = [
         (
             1,
             "d238399cc2cd79d7d6980ffb360dfbd5f268bdbc2186c465face7413e60f024f",
-            "26d3cde262c7c45c6334e4ae12b361a8377fca8aa81942ab327c1ae0f223948d",
+            "30f5c96778bda49ae8058f1ca5231e6a0cbd838618913d1142384b3f2ef63167",
         ),
         (
             2,
             "0564e1f1bcb16865754bf73608737e3bc0336edbe7e1bb9bb115a71df85d7836",
-            "e9c7282e216d8c620e976a7a0a0396fc29bbddfa79e9ba07c9a095af33381230",
+            "929da867f579aee09cd86068f0b0260f24a4ca10aaf145ac3d41ca17279d89f1",
         ),
         (
             3,
             "3c854e88e4cf7d822efc9f7e79a9d0a447b7537b74f48f8685466c3c9ebdc699",
-            "301c60dc1911b8552c2b87b3fcee88b8b28afc78305dced18abb0ca440ffa256",
+            "e4be396d6aee937f7afa77782db0c74be610a3b014a46a9ae1d6783fe7eb5da0",
         ),
     ];
     for (capacity, (raw, genome_hash, phenotype_hash)) in BrainCapacityClass::production_classes()
@@ -104,12 +106,8 @@ fn omitted_policy_preserves_exact_base_genome_bytes_and_compiled_identity() {
         let restored: BrainGenome = serde_json::from_slice(&wire).unwrap();
         assert_eq!(restored, genome);
         let phenotype = compile(&inputs(restored, false));
-        assert_eq!(
-            blake3::hash(&serde_json::to_vec(&phenotype).unwrap())
-                .to_hex()
-                .as_str(),
-            phenotype_hash
-        );
+        let actual = blake3::hash(&serde_json::to_vec(&phenotype).unwrap()).to_hex();
+        assert_eq!(actual.as_str(), phenotype_hash);
     }
 }
 

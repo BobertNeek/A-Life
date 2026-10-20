@@ -362,12 +362,16 @@ fn projections_routes_and_global_budgets_are_exact_partitions() {
         for synapse in slice {
             assert!(source_region.contains_neuron(synapse.source()));
             assert!(target_region.contains_neuron(synapse.target()));
-            match projection.projection_type() {
-                alife_core::ProjectionType::LateralInhibition => {
+            // Route signs constrain recurrent biology, not mathematical readouts.
+            match (synapse.kind(), projection.projection_type()) {
+                (CompiledSynapseKind::Recurrent, alife_core::ProjectionType::LateralInhibition) => {
                     assert!(synapse.genetic_weight() < 0.0)
                 }
-                alife_core::ProjectionType::Homeostatic
-                | alife_core::ProjectionType::MotorProposal => {
+                (
+                    CompiledSynapseKind::Recurrent,
+                    alife_core::ProjectionType::Homeostatic
+                    | alife_core::ProjectionType::MotorProposal,
+                ) => {
                     assert!(synapse.genetic_weight() >= 0.0)
                 }
                 _ => {}

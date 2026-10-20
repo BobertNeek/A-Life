@@ -1,0 +1,816 @@
+{
+  "schema": 1,
+  "kind": "founder-brain-batch-projection-baselines",
+  "reference_source_commit": "bda3b65be5fa6f01865b850640adf2e8d01f4990",
+  "current_production_source_commit": "048491b368983218ed01116daa987fc943c402ef",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "reference_cargo_target": "/workspace/alife-brain-baseline/target/source-bda3b65",
+  "reference_checked_original_goldens": true,
+  "current_checked_unmodified_and_historical_identity_goldens": true,
+  "production_batch_builder_changed": false,
+  "fixture": {
+    "seed": 41,
+    "maturation": 0.35,
+    "sensor_profile": "PrivilegedAffordanceV1",
+    "rows": 2,
+    "memory_modes": [
+      false,
+      true
+    ]
+  },
+  "phenotype_comparison": [
+    {
+      "capacity_class_id": 1,
+      "distance_readouts_sign_flipped": 41,
+      "only_other_changed_field": "phenotype_hash",
+      "reference_phenotype_hash": [
+        15075114828262994755,
+        5507592439955987275,
+        3366023582124133264,
+        14842536590363460520
+      ],
+      "current_phenotype_hash": [
+        7848059478073678924,
+        15608303946237645003,
+        17701303196383934143,
+        16807571934931066434
+      ],
+      "reference_phenotype_sha256": "44444955c0fe1ea1def6f6dd4d291699d0f384863d0c441feacf70e76bf1ee37",
+      "current_phenotype_sha256": "632273c398fc11fdfe95bc02668426eb10c67ae5592709bbfb3e1083a04746a4"
+    },
+    {
+      "capacity_class_id": 2,
+      "distance_readouts_sign_flipped": 41,
+      "only_other_changed_field": "phenotype_hash",
+      "reference_phenotype_hash": [
+        1652205911559800484,
+        11312991541417378003,
+        11261446632914708169,
+        14695924940370161802
+      ],
+      "current_phenotype_hash": [
+        5670876030224617222,
+        18001243158484089989,
+        16025706546295739128,
+        16943323786702956949
+      ],
+      "reference_phenotype_sha256": "883213f7d26eeae8f8d207c46c53d3c997dcf8802004b95429c0a7b44e5a5385",
+      "current_phenotype_sha256": "b73677f62fa4993799b416dce1e75290b225eda97f7cff02697ff6c0c0a2fd97"
+    },
+    {
+      "capacity_class_id": 3,
+      "distance_readouts_sign_flipped": 128,
+      "only_other_changed_field": "phenotype_hash",
+      "reference_phenotype_hash": [
+        3264266154932733233,
+        16294123225339539021,
+        8202200548510239215,
+        3962289649696015551
+      ],
+      "current_phenotype_hash": [
+        5891603915783672093,
+        4629327752100204009,
+        16207129431567782143,
+        12542613021007779233
+      ],
+      "reference_phenotype_sha256": "1ae2b0801ae240a29e8a781ddebabc8751f89fa7f65b627ce8c541b67960828e",
+      "current_phenotype_sha256": "54d3b8d066c64f966c1f6c94d0993ae46b6e3c7616474d411ccb3d47427192ed"
+    }
+  ],
+  "projection_comparison": [
+    {
+      "capacity_class_id": 1,
+      "memory": false,
+      "reference_complete_debug_blake3": "b9d796ff3ad357c5d7bb219132a63b2e222d8883b910972373058d4000e1d52d",
+      "current_complete_debug_blake3": "186d816e21036ba42d0d605c4b62685fb84e5c9732dbf8f2c386e09fe0e41bf7",
+      "reference_pretty_debug_sha256": "3ff9169422e33bbb6ad93e4b51535cd44e78f28c29348bdac70ea119effb0c9a",
+      "current_pretty_debug_sha256": "d123b7275e958d9cb8d49e7892a4ddd1875cb33673ccdac591e214f60b2ed414"
+    },
+    {
+      "capacity_class_id": 1,
+      "memory": true,
+      "reference_complete_debug_blake3": "910bbc42a1b2ab6701e42edcf751840007255ccc119a224ba6ecb18100496d29",
+      "current_complete_debug_blake3": "45ca2827344938004a5c2909731176a2fe5328674f215adbbcc3a0147e271569",
+      "reference_pretty_debug_sha256": "4b51b105536c16f56818634e072bcbe9c6e1860b965a16ed435b30b2acec50fc",
+      "current_pretty_debug_sha256": "cea722642976af0d822d2f2c9f529dce4e84ae2530ba5833ec05e98f0f3802c8"
+    },
+    {
+      "capacity_class_id": 2,
+      "memory": false,
+      "reference_complete_debug_blake3": "d3a2412d589d335b5d05fd335c81ca008dc864dc6722776ab40185e3f6242486",
+      "current_complete_debug_blake3": "af4cb3a15979341238589652a264ffea6ac40b8d1f753eecf8d3d07c708b70ad",
+      "reference_pretty_debug_sha256": "effdbc3ac33824372eb4d708f86c4907dd2609b28b07ede140a90a9eaec653ec",
+      "current_pretty_debug_sha256": "4e14ac0256889d5c6f784159100d58c8cde6db95fee52011c30361f68cebcef3"
+    },
+    {
+      "capacity_class_id": 2,
+      "memory": true,
+      "reference_complete_debug_blake3": "797e584245d1e7e5b462235d6ea2b17b6e6a57382effc0e1511991091f631c8c",
+      "current_complete_debug_blake3": "d42d23f475503dc71f9c0a6a08b9c58873d6f0a19cb6b0967294aadca39c601b",
+      "reference_pretty_debug_sha256": "6bbaf2cdc7ff9c68aa8b7bbf53996a1a605c5dfccf96c1071daabe1bda41ff0c",
+      "current_pretty_debug_sha256": "bc7bd13a064d5316d7861ce8b1eb724d88eab5149cc87e6c5c111c813d84e514"
+    },
+    {
+      "capacity_class_id": 3,
+      "memory": false,
+      "reference_complete_debug_blake3": "9fe75c9d74be8128f87b17495a03749cecccdf7100aa7e4a04bc899fb0642e3f",
+      "current_complete_debug_blake3": "668ce5b85dfa31318dca5e65a247766d17943169df8f3067d21fc8ef8c016a5f",
+      "reference_pretty_debug_sha256": "82376751eef28573c7f40864dcfc3d21130bd02a7c6d1d72d24dd7b7f2c09fe0",
+      "current_pretty_debug_sha256": "c2b2596702f7d03ed8129ecc6cb034b42ae3b802c8543555a3155d23ba2d51c0"
+    },
+    {
+      "capacity_class_id": 3,
+      "memory": true,
+      "reference_complete_debug_blake3": "5761a87e20046d5a091833ab2e2eb01e63106e03a1aafe1212091b0685d7416f",
+      "current_complete_debug_blake3": "5f92238d0d85723846e268b75f7b47a2daa0d764671311432a5c6fcc7129597a",
+      "reference_pretty_debug_sha256": "dc627fcb255b57b2f14706602c271e6943697b1885b339474d03c5b9401ec49e",
+      "current_pretty_debug_sha256": "d3a17ed98406dfaaf033f5ceea2c54814930ba2a0c7d0a239e67f34ede2145b5"
+    }
+  ],
+  "only_projection_differences": [
+    "pending phenotype hashes, including their frame-payload copies",
+    "phenotype-bound route schedule digests, including dispatch-header copies",
+    "derived scheduled-work checksums, including dispatch-header copies"
+  ],
+  "continuity_passed_tests": 220,
+  "physical_gpu_qualification": "Unknown",
+  "decoder_lifetime_rate_policy_rebaseline": {
+    "source_test": "crates/alife_core/tests/decoder_lifetime_rate_policy.rs",
+    "genome_seed": "0xDEC0_0001",
+    "maturation": 0.35,
+    "profile": "GroundedTerrainVisionV1",
+    "original_source": "d1ee947fad980d4adcdfd08cb85b0068a73aef80",
+    "reason": "Deliberate procedural ActionCandidate lane-2 coefficient signs; unchanged genome-byte goldens and lifetime-rate policy semantics.",
+    "phenotype_json_blake3": [
+      {
+        "class": 1,
+        "original": "26d3cde262c7c45c6334e4ae12b361a8377fca8aa81942ab327c1ae0f223948d",
+        "corrected": "30f5c96778bda49ae8058f1ca5231e6a0cbd838618913d1142384b3f2ef63167"
+      },
+      {
+        "class": 2,
+        "original": "e9c7282e216d8c620e976a7a0a0396fc29bbddfa79e9ba07c9a095af33381230",
+        "corrected": "929da867f579aee09cd86068f0b0260f24a4ca10aaf145ac3d41ca17279d89f1"
+      },
+      {
+        "class": 3,
+        "original": "301c60dc1911b8552c2b87b3fcee88b8b28afc78305dced18abb0ca440ffa256",
+        "corrected": "e4be396d6aee937f7afa77782db0c74be610a3b014a46a9ae1d6783fe7eb5da0"
+      }
+    ]
+  },
+  "fresh_builtin_distance_reproduction": {
+    "before_source_commit": "1a06ead280a56fc9d501254c32f22ac2ea8f9349",
+    "corrected_construction_git_blob": "e1a655b458c0262f5a8b628242b0d2e2259b1da8",
+    "profile": "GroundedObjectSlotsV1",
+    "maturation": 1.0,
+    "physical_distance": [
+      2.0,
+      4.0
+    ],
+    "feature_distance": [
+      0.25,
+      0.5
+    ],
+    "paths": [
+      "N512FounderFoundationProjection::compile",
+      "PhenotypeCompiler::compile_from_foundation_asset + builtin_n2048_v1"
+    ],
+    "learned_candidates_rewritten": false,
+    "before": [
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.1988627,
+        "far_score": 0.20448889,
+        "reextracted_near_score": 0.1988627,
+        "distance_derivative": 0.02250469
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.21410543,
+        "far_score": 0.21971564,
+        "reextracted_near_score": 0.21410543,
+        "distance_derivative": 0.02244079
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.16396455,
+        "far_score": 0.16852842,
+        "reextracted_near_score": 0.16396455,
+        "distance_derivative": 0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.19880736,
+        "far_score": 0.20444784,
+        "reextracted_near_score": 0.19880736,
+        "distance_derivative": 0.02256182
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.21415485,
+        "far_score": 0.21977197,
+        "reextracted_near_score": 0.21415485,
+        "distance_derivative": 0.02246837
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.16390769,
+        "far_score": 0.16847156,
+        "reextracted_near_score": 0.16390769,
+        "distance_derivative": 0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.19869065,
+        "far_score": 0.20429504,
+        "reextracted_near_score": 0.19869065,
+        "distance_derivative": 0.02241746
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.21410879,
+        "far_score": 0.21968324,
+        "reextracted_near_score": 0.21410879,
+        "distance_derivative": 0.02229781
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.16386461,
+        "far_score": 0.16842847,
+        "reextracted_near_score": 0.16386461,
+        "distance_derivative": 0.01825543
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.41790268,
+        "far_score": 0.42924777,
+        "reextracted_near_score": 0.41790268,
+        "distance_derivative": 0.04538035
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.39956039,
+        "far_score": 0.41306096,
+        "reextracted_near_score": 0.39956039,
+        "distance_derivative": 0.05400238
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.60522103,
+        "far_score": 0.62273133,
+        "reextracted_near_score": 0.60522103,
+        "distance_derivative": 0.07004125
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.41776395,
+        "far_score": 0.42912489,
+        "reextracted_near_score": 0.41776395,
+        "distance_derivative": 0.04544378
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.39971998,
+        "far_score": 0.41326037,
+        "reextracted_near_score": 0.39971998,
+        "distance_derivative": 0.05416156
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.60462123,
+        "far_score": 0.62211829,
+        "reextracted_near_score": 0.60462123,
+        "distance_derivative": 0.06998822
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.41770399,
+        "far_score": 0.42907467,
+        "reextracted_near_score": 0.41770399,
+        "distance_derivative": 0.0454829
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.43215105,
+        "far_score": 0.44674376,
+        "reextracted_near_score": 0.43215105,
+        "distance_derivative": 0.05837084
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.60453379,
+        "far_score": 0.62203038,
+        "reextracted_near_score": 0.60453379,
+        "distance_derivative": 0.06998621
+      }
+    ],
+    "after": [
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.18761037,
+        "far_score": 0.18198419,
+        "reextracted_near_score": 0.18761037,
+        "distance_derivative": -0.02250469
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.202885,
+        "far_score": 0.1972748,
+        "reextracted_near_score": 0.202885,
+        "distance_derivative": -0.02244079
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.15483683,
+        "far_score": 0.150273,
+        "reextracted_near_score": 0.15483683,
+        "distance_derivative": -0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.18752646,
+        "far_score": 0.18188599,
+        "reextracted_near_score": 0.18752646,
+        "distance_derivative": -0.02256182
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.20292066,
+        "far_score": 0.19730356,
+        "reextracted_near_score": 0.20292066,
+        "distance_derivative": -0.02246837
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.15477999,
+        "far_score": 0.15021613,
+        "reextracted_near_score": 0.15477999,
+        "distance_derivative": -0.01825543
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.18748194,
+        "far_score": 0.18187755,
+        "reextracted_near_score": 0.18748194,
+        "distance_derivative": -0.02241746
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.2029599,
+        "far_score": 0.19738545,
+        "reextracted_near_score": 0.2029599,
+        "distance_derivative": -0.02229781
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.15473689,
+        "far_score": 0.15017305,
+        "reextracted_near_score": 0.15473689,
+        "distance_derivative": -0.01825543
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Approach",
+        "near_score": 0.3952125,
+        "far_score": 0.38386741,
+        "reextracted_near_score": 0.3952125,
+        "distance_derivative": -0.04538035
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Avoid",
+        "near_score": 0.37255919,
+        "far_score": 0.35905856,
+        "reextracted_near_score": 0.37255919,
+        "distance_derivative": -0.05400238
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "family": "Contact",
+        "near_score": 0.57020044,
+        "far_score": 0.55269015,
+        "reextracted_near_score": 0.57020044,
+        "distance_derivative": -0.07004125
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Approach",
+        "near_score": 0.39504209,
+        "far_score": 0.38368118,
+        "reextracted_near_score": 0.39504209,
+        "distance_derivative": -0.04544378
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Avoid",
+        "near_score": 0.37263918,
+        "far_score": 0.35909876,
+        "reextracted_near_score": 0.37263918,
+        "distance_derivative": -0.05416156
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "family": "Contact",
+        "near_score": 0.56962705,
+        "far_score": 0.55212998,
+        "reextracted_near_score": 0.56962705,
+        "distance_derivative": -0.06998822
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Approach",
+        "near_score": 0.39496258,
+        "far_score": 0.38359183,
+        "reextracted_near_score": 0.39496258,
+        "distance_derivative": -0.0454829
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Avoid",
+        "near_score": 0.40296569,
+        "far_score": 0.38837305,
+        "reextracted_near_score": 0.40296569,
+        "distance_derivative": -0.05837084
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "family": "Contact",
+        "near_score": 0.56954074,
+        "far_score": 0.55204421,
+        "reextracted_near_score": 0.56954074,
+        "distance_derivative": -0.06998621
+      }
+    ],
+    "canonical_identity_repeat": {
+      "source_head": "475990e491c1f847971ff2db79a6b097112d3cf2",
+      "all_18_score_and_derivative_rows_match_recorded_after": true
+    },
+    "motor_activation_ranges": [
+      {
+        "capacity_class_id": 1,
+        "seed": 41,
+        "minimum": 0.01309287,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96001,
+        "minimum": 0.01306367,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 1,
+        "seed": 96002,
+        "minimum": 0.01308094,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 41,
+        "minimum": -0.00029584,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96001,
+        "minimum": -0.00029584,
+        "maximum": 0.03383609
+      },
+      {
+        "capacity_class_id": 3,
+        "seed": 96002,
+        "minimum": -0.00025242,
+        "maximum": 0.03882172
+      }
+    ]
+  },
+  "combined_urgency_reproduction": {
+    "seed": 96001,
+    "capacity_class_id": 1,
+    "construction": "procedural",
+    "profile": "GroundedTerrainVisionV1",
+    "hunger": 0.98,
+    "selected_danger_drive": 0.98,
+    "rows": [
+      {
+        "danger": "fear",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "fear",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "fear",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "fear",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "pain",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "temperature",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      },
+      {
+        "danger": "all",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "all",
+        "physical_distance": 4.0,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 1.0,
+        "avoid_cue": 1.0,
+        "approach_score": 2.039561,
+        "avoid_score": 3.163879,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "all",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": -0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.833333,
+        "approach_score": 0.13755,
+        "avoid_score": 2.669944,
+        "selected_movement": "Avoid",
+        "executed_dx": -0.1,
+        "ingest_prior": 0.0
+      },
+      {
+        "danger": "all",
+        "physical_distance": 0.1,
+        "hidden_source_chemical": 0.9,
+        "approach_cue": 0.0,
+        "avoid_cue": 0.0,
+        "approach_score": 0.165141,
+        "avoid_score": 0.153626,
+        "selected_movement": "Approach",
+        "executed_dx": 0.1,
+        "ingest_prior": 2.39424
+      }
+    ]
+  },
+  "final_validation": {
+    "code_head": "3276d43c7b52b157bd053060bbbd2e6ce9070576",
+    "production_head": "12ed5a054b53d91db1f100e034bbbbbda32cc8b3",
+    "cloud_only": true,
+    "physical_gpu_qualified": false,
+    "commands": {
+      "workspace_full": {
+        "command": "bash scripts/check.sh --full",
+        "status": "passed",
+        "passed": 1949,
+        "failed": 0,
+        "ignored": 22,
+        "test_binaries": 217,
+        "cloud_log": "/tmp/alife-full-check-final.log",
+        "log_sha256": "41be46becc01a87e0ca1ce38c3b35936e160089b041115bb2f22a0786d96cb16"
+      },
+      "checkpoint_continuity": {
+        "command": "cargo test --locked -p alife_gpu_backend --all-targets --features training-rollout",
+        "status": "passed",
+        "passed": 220,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 27,
+        "cloud_log": "/tmp/alife-checkpoint-continuity-builtin-final.log",
+        "log_sha256": "df7ca057a1e4ff52445229a666ba98879cdf82ee8f4c80c04506f3d4fb9f29e8"
+      },
+      "canonical_behavior": {
+        "command": "cargo test --locked -p alife_world --test founder_brain_regressions -- --nocapture",
+        "status": "passed",
+        "passed": 7,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 1,
+        "cloud_log": "/tmp/alife-followup-behavior-canonical.log",
+        "log_sha256": "85a91c6a610b78ce158bc9468bac235aa18c9696394bce3454eafd301c1b557c"
+      },
+      "foundation_projection_policy": {
+        "command": "cargo test --locked -p alife_core --test signed_decoder_foundations --test decoder_lifetime_rate_policy --test n512_curated_founder_compatibility",
+        "status": "passed",
+        "passed": 23,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 3,
+        "cloud_log": "/tmp/alife-foundation-followup.log",
+        "log_sha256": "a1796cc62113f594a405b9588a696df0aac4f501c275fe875af428013bab4f6e"
+      },
+      "phenotype_compiler": {
+        "command": "cargo test --locked -p alife_core --test phenotype_compiler",
+        "status": "passed",
+        "passed": 50,
+        "failed": 0,
+        "ignored": 0,
+        "test_binaries": 1,
+        "cloud_log": "/tmp/alife-route-sign-fixture-final.log",
+        "log_sha256": "557c00fa5b222fd5db1dae8b8be4be3899449c58842b91cf0a2ae6feef85c4b6"
+      }
+    },
+    "core_boundaries": "passed",
+    "docs_assertions": "77/77",
+    "workspace_format_check": "passed",
+    "workspace_check": "passed",
+    "workspace_clippy_warnings_denied": "passed"
+  }
+}
