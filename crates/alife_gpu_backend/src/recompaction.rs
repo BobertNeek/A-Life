@@ -312,7 +312,10 @@ impl GpuRecompactionPlan {
                 .enumerate()
                 .filter(|(_, synapse)| synapse.tile_metadata_index as usize == tile_index)
             {
-                if prune_enabled && self.synapse_is_autophagic_prune(active_upload, old_index)? {
+                if prune_enabled
+                    && self
+                        .synapse_is_autophagic_prune(active_upload, synapse.weight_index as usize)?
+                {
                     diagnostics.pruned_entries = diagnostics.pruned_entries.saturating_add(1);
                     autophagy_markers.push(GpuAutophagyMarker {
                         old_weight_index: synapse.weight_index,

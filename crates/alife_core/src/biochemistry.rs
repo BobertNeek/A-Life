@@ -909,6 +909,21 @@ impl BiochemistryState {
                 event.mating_opportunity,
                 phenotype,
             )?
+        } else if event.mating_opportunity > 0.0 || self.reproduction.mating_opportunity > 0.0 {
+            // A mate encountered between cadence boundaries must not be
+            // discarded: partners born on different ticks never share a
+            // boundary. Keep the strongest opportunity for this window, but
+            // recheck changing physiology without moving the freshness tick.
+            ReproductionReadiness::derive(
+                self.reproduction.last_update_tick,
+                body,
+                &homeostasis,
+                development,
+                event
+                    .mating_opportunity
+                    .max(self.reproduction.mating_opportunity),
+                phenotype,
+            )?
         } else {
             self.reproduction
         };

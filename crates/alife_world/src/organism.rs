@@ -1466,6 +1466,58 @@ mod tests {
     use alife_core::{BrainCapacityClass, FoundationGeneticIdentity, LineageId};
 
     #[test]
+    fn biochemistry_digest_preserves_signed_zero_round_trip() {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_31FF,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome.clone(),
+            genome.express().unwrap(),
+            Tick(10_000),
+        )
+        .unwrap();
+        let mut registry = WorldOrganismRegistry::default();
+        registry.insert(record).unwrap();
+        registry
+            .get(OrganismId(1))
+            .unwrap()
+            .validate_contract()
+            .unwrap();
+        registry
+            .with_biology_mut(OrganismId(1), |state| {
+                state.reproduction.mating_opportunity = -0.0;
+                Ok(())
+            })
+            .unwrap();
+        let record = registry.get(OrganismId(1)).unwrap();
+        assert_eq!(
+            record
+                .biochemistry()
+                .reproduction
+                .mating_opportunity
+                .to_bits(),
+            (-0.0_f32).to_bits()
+        );
+        record.validate_contract().unwrap();
+        let wire = serde_json::to_vec(record).unwrap();
+        let restored: WorldOrganismRecord = serde_json::from_slice(&wire).unwrap();
+        assert_eq!(
+            restored
+                .biochemistry()
+                .reproduction
+                .mating_opportunity
+                .to_bits(),
+            (-0.0_f32).to_bits()
+        );
+        restored.validate_contract().unwrap();
+        assert_eq!(restored.state_graph(), record.state_graph());
+    }
+
+    #[test]
     fn immutable_genetic_validation_preserves_restore_and_mutable_guards() {
         let genome = CreatureGenome::early_mammal_founder(
             0xE10_3204,

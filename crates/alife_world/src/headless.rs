@@ -11224,7 +11224,7 @@ mod task_4_3a2_tests {
     }
 
     #[test]
-    fn nearby_ready_parents_born_one_tick_apart_conceive_after_offset_refreshes() {
+    fn nearby_ready_parents_born_one_tick_apart_conceive_from_fresh_latched_opportunity() {
         let (mut world, first_boundary) = prepared_world_with_birth_ticks(
             Vec3f::new(0.5, 0.0, 0.0),
             COMPATIBILITY_FAMILY_ID,
@@ -11236,7 +11236,10 @@ mod task_4_3a2_tests {
         let expected_child_id = OrganismId(world.next_organism_id);
 
         assert_eq!(world.try_advance_tick().unwrap(), first_boundary);
-        assert_eq!(world.organism_registry().iter().count(), 2);
+        // The paternal snapshot is still fresh, and its encountered mate is
+        // latched. It need not wait for its own offset cadence boundary.
+        assert_eq!(world.organism_registry().iter().count(), 3);
+        assert!(world.organism_registry().get(expected_child_id).is_some());
         assert_eq!(
             world
                 .organism_registry()

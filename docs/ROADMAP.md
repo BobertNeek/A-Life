@@ -4,7 +4,7 @@ Updated 14 October 2026. The immediate priority is the persistent creature game
 described in section 1.1 of the controlling v2.0 architecture: care, useful
 learning, and save/load first; breeding and practical breed promotion next.
 
-The [core game loop delivery plan](core-game-loop-plan-2026-09-20.md) contains the
+The [core game loop delivery plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/core-game-loop-plan-2026-09-20.md) contains the
 current sequence, source findings, Docking Station lessons, and exit criteria.
 It also sets the minimum-test rule: use the smallest relevant existing check,
 combine acceptance into one evolving play scenario, and expand only for a
@@ -70,7 +70,7 @@ Exit gate:
 - explicit named breed promotion retains a useful skill in a fresh descendant,
   clears personal records, and leaves the source individual unchanged.
 
-Follow the [approved promotion scope](reviews/2026-09-11-breed-promotion-scope.md).
+Follow the [approved promotion scope](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-breed-promotion-scope.md).
 Ordinary mating must not silently copy an acquired adult mind.
 
 ## 4. Advance EI1 research separately
@@ -143,11 +143,11 @@ Remaining measurement-led work:
 - [ ] Preserve care/learning/sleep/lifecycle and fresh-process save/load in one
   evolving ordinary play scenario; retain Unknown for missing source-bound proof
 
-The [historical optimization plan](performance/20261001-fifty-creature-optimization-plan.md)
+The [historical optimization plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/20261001-fifty-creature-optimization-plan.md)
 preserves cost arithmetic, alternatives and falsification criteria with an
-explicit current consolidation context. The [bounded experiment blueprints](deep-planning-experiments-2026-10-01.md)
+explicit current consolidation context. The [bounded experiment blueprints](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/deep-planning-experiments-2026-10-01.md)
 retain matched memory and learning screens as conditional follow-ups; they do
-not launch a training campaign. The [dated skill review](reviews/2026-10-01-deep-planning-skill.md)
+not launch a training campaign. The [dated skill review](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-10-01-deep-planning-skill.md)
 records the reusable method. Historical work packages do not reopen the
 integrated seams or change architecture authority and the release gate.
 

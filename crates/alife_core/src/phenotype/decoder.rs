@@ -92,24 +92,30 @@ impl CandidateDecoderFamilyPlan {
             .map(|(_, value)| *value)
             .fold(0.0_f32, f32::max);
         let cue = self.innate_cue_lane.map_or(1.0, |lane| {
+            let noncontact_bearing = (1.0 - features.0[18])
+                * (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0);
             let signal = if lane == INNATE_NONCONTACT_CUE {
-                // Body-forward proposals have no object contact; the no-motion
-                // candidate has neither bearing nor contact and gets no prior.
-                (1.0 - features.0[18]) * (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0)
+                let chem = features.0[15];
+                let valence_scale = if chem < -0.2 {
+                    0.0
+                } else if chem > 0.2 {
+                    1.0
+                } else {
+                    0.75
+                };
+                noncontact_bearing * valence_scale
             } else {
                 features.0[usize::from(lane)]
             };
-            // Object chemistry is unavailable before contact. Preserve the
-            // existing cue metadata (and bound foundation hashes), but ground
-            // danger-driven withdrawal in observed bearing at that boundary.
-            // This cannot identify which distant object is hazardous.
+            // Before contact chemistry is unavailable; reviewed avoidance uses
+            // observed geometry while preserving the original cue metadata.
             let signal = if self.family == CandidateActionFamily::Avoid
                 && lane == 15
                 && self.innate_cue_inverted
                 && !self.innate_requires_reach
                 && features.0[18] == 0.0
             {
-                (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0)
+                noncontact_bearing
             } else if self.innate_cue_inverted {
                 -signal
             } else {

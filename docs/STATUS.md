@@ -5,19 +5,13 @@ The older capability matrix below is a historical baseline, not a fresh HEAD val
 
 ## Current care and training work
 
-The [core game-loop plan](core-game-loop-plan-2026-09-20.md) tracks current
-player-facing work. The [N2048 operator guide](n2048-training-operator.md) records
-the September 24 four-lesson teacher corpus, warm-up, and teacher-free handoffs.
-These establish bounded training integration; held-out learned care remains open.
-The obstacle handoff still recorded blocked decisions and no meal. See the
-[training regimen](n2048-care-training-regimen-2026-09-21.md) for acceptance criteria.
+- **Signed Decoders**: `ActionCandidate` and `SpeechPayload` mathematical readouts support signed weights in compilation and foundation training. Recurrent pathways retain their inherited route-sign rules; fresh builtin distance readouts prefer nearer equivalent observations.
+- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Interact`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), separate from `GRAB` (`CandidateActionFamily::Contact`).
+- **Credit-Gated Waking Oja Normalization**: Waking normalization scales with `abs(local_third_factor * credited_eligibility)`; zero causal credit leaves the fast-weight contribution unchanged.
+- **Grounded Priors and Newborn Nociception**: Distant `GroundedTerrainVisionV1` objects supply contact-gated chemical lanes, so Approach uses the neutral 0.75 geometry scale there. Recalled target valence enters through the separate learned-memory decoder, not the innate function. Legacy `GroundedObjectSlotsV1` chemistry and fractional-contact behavior retain their existing semantics. Avoid keeps its noncontact spatial fallback; newborn pain remains enabled. These mechanisms do not establish correct learned hazard avoidance under combined drives.
+- **Batched Multi-Creature GPU Training Capture**: `capture_training_states` captures each cohort before and after inference through bounded staging packets, with streamed `zstd` cohort replay.
 
-The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner` (including its
-reproduction-intent helper), and `Era1TrialRunner` remain **Blocked** on canonical
-organism biology and receptor-gated learning integration. Their constructors now
-report this blocker before GPU initialization. This does not block the separate
-foundation trainer or the production organism loop. See the
-[September 30 commit-review validation](reviews/2026-09-30-validated-cleanup.md).
+The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner`, and `Era1TrialRunner` remain **Blocked** on canonical organism biology and receptor-gated learning integration. This does not block the foundation trainer or the production organism loop.
 
 ## Honest headline
 

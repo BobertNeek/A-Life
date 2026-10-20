@@ -797,6 +797,27 @@ mod innate_priority_tests {
     };
 
     #[test]
+    fn noncontact_approach_cue_is_bounded_and_never_indexes_a_feature_lane() {
+        let genome = BrainGenome::scaffold(0x5A7E_0001, BrainCapacityClass::N2048_ID);
+        let (mask, gain, cue, invert, reach) =
+            innate_priority_for_family(&genome, CandidateActionFamily::Approach);
+        assert_eq!(cue, Some(super::super::decoder::INNATE_NONCONTACT_CUE));
+        let family = CandidateDecoderFamilyPlan::new(CandidateActionFamily::Approach, 0.0, 0, 0)
+            .with_innate_priority(mask, gain, cue, invert, reach);
+        let drives = DriveSnapshot {
+            hunger: 1.0,
+            ..DriveSnapshot::baseline()
+        };
+        let mut physical = CandidateFeatureVector::zero();
+        assert_eq!(family.innate_contribution(drives, physical), 0.0);
+        physical.0[1] = 1.0;
+        let observed = family.innate_contribution(drives, physical);
+        assert!(observed > 0.0 && observed.is_finite());
+        physical.0[18] = 1.0;
+        assert_eq!(family.innate_contribution(drives, physical), 0.0);
+    }
+
+    #[test]
     fn inherited_survival_path_uses_real_drives_and_food_cue() {
         let mut genome = BrainGenome::scaffold(0x5A7E_0001, BrainCapacityClass::N2048_ID);
         let layout = N2048FoundationLayoutV1::lobe_layout();

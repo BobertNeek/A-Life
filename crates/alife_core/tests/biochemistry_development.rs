@@ -541,3 +541,75 @@ fn body_compatibility_projections_validate_for_newborns_and_legacy_migrations() 
         round_trip.validate_contract().unwrap();
     }
 }
+
+#[test]
+fn mating_opportunity_between_cadence_boundaries_is_latched_without_refreshing_tick() {
+    let phenotype = phenotype();
+    let state = BiochemistryState::new(&phenotype, Tick(4_080)).unwrap();
+    let encountered = state
+        .advance(
+            Tick(4_081),
+            BodyEventDelta {
+                mating_opportunity: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert_eq!(encountered.reproduction.mating_opportunity, 1.0);
+    assert!(encountered.reproduction.ready);
+    assert_eq!(
+        encountered.reproduction.last_update_tick,
+        state.reproduction.last_update_tick
+    );
+    let later = encountered
+        .advance(Tick(4_082), BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    assert_eq!(later.reproduction.mating_opportunity, 1.0);
+    assert_eq!(
+        later.reproduction.last_update_tick,
+        state.reproduction.last_update_tick
+    );
+    let boundary = later
+        .advance(Tick(4_200), BodyEventDelta::zero(), &phenotype)
+        .unwrap();
+    assert_eq!(boundary.reproduction.mating_opportunity, 0.0);
+    assert_eq!(boundary.reproduction.last_update_tick, Tick(4_200));
+}
+
+#[test]
+fn latched_mate_rechecks_readiness_after_energy_recovers() {
+    let phenotype = phenotype();
+    let mut state = BiochemistryState::new(&phenotype, Tick(4_080)).unwrap();
+    state.body.set_energy(0.34).unwrap();
+    let encountered = state
+        .advance(
+            Tick(4_081),
+            BodyEventDelta {
+                mating_opportunity: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert!(!encountered.reproduction.energy_sufficient);
+    assert!(!encountered.reproduction.ready);
+    let recovered = encountered
+        .advance(
+            Tick(4_082),
+            BodyEventDelta {
+                nutrition: 1.0,
+                mating_opportunity: 1.0,
+                ..BodyEventDelta::zero()
+            },
+            &phenotype,
+        )
+        .unwrap();
+    assert!(recovered.body.energy >= 0.35);
+    assert!(recovered.reproduction.energy_sufficient);
+    assert!(recovered.is_reproduction_ready_at(Tick(4_082), Tick(4_082), &phenotype));
+    assert_eq!(
+        recovered.reproduction.last_update_tick,
+        encountered.reproduction.last_update_tick
+    );
+}

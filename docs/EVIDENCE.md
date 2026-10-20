@@ -84,22 +84,22 @@ Prohibited inference: receipt count proves positive learning, transfer, control 
 
 ## Current care and training records
 
-The [core game-loop plan](core-game-loop-plan-2026-09-20.md),
-[training regimen](n2048-care-training-regimen-2026-09-21.md), and
-[operator guide](n2048-training-operator.md) record the recent bounded checks.
+The [core game-loop plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/core-game-loop-plan-2026-09-20.md),
+[training regimen](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-care-training-regimen-2026-09-21.md), and
+[operator guide](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-training-operator.md) record the recent bounded checks.
 Teacher demonstrations, warm-up completion, and successful PPO handoffs do not
 establish held-out learning, retention, or autonomous care. Raw `target/` paths in
 those records refer to the originating machine and are not committed artifacts.
 
 ## Retained design and review context
 
-- [October 1 CPU preparation measurements](performance/20261001-cpu-preparation.md):
+- [October 1 CPU preparation measurements](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/20261001-cpu-preparation.md):
   source-bound synthetic comparisons, retained samples and reproduction inputs.
-- [October 1 cloud candidate validation](reviews/2026-10-01-cloud-validation.md):
+- [October 1 cloud candidate validation](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-10-01-cloud-validation.md):
   current CPU/compiler results, earlier failures and unrun hardware checks.
-- [Exact-population checkpoint decision](performance/exact-population-checkpoint-design.md):
+- [Exact-population checkpoint decision](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/exact-population-checkpoint-design.md):
   historical transaction and failure rationale.
-- [Recovered review outcomes](reviews/2026-09-11-recovered-review-outcomes.md):
+- [Recovered review outcomes](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-recovered-review-outcomes.md):
   closed campaign dispositions and two unresolved design questions; static review only.
 
 ## Open product evidence

@@ -192,6 +192,55 @@ fn pruning_autophagy_remaps_zero_effective_synapse() {
 }
 
 #[test]
+fn pruning_uses_weight_addresses_when_packed_indices_are_reordered() {
+    let schema = recompaction_schema();
+    let mut upload =
+        GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
+    upload.packed_indices.swap(0, 1);
+    let plan = GpuRecompactionPlan::from_sleep_batch(
+        &schema,
+        &structural_batch(StructuralEditKind::PruneMarker),
+        GpuAutophagyPolicy::reference(),
+    )
+    .unwrap();
+    let output = plan.rebuild_scratch_upload(&upload).unwrap();
+    assert_eq!(output.remap.old_to_new, vec![None, Some(0), Some(1)]);
+    assert_eq!(output.autophagy_markers[0].old_weight_index, 1);
+    assert_eq!(
+        output.compacted_upload.genetic_fixed_q,
+        vec![upload.genetic_fixed_q[0], upload.genetic_fixed_q[2]]
+    );
+}
+
+#[test]
+fn projection_only_strength_edits_stay_deferred_and_preserve_all_weight_layers() {
+    let schema = recompaction_schema();
+    let upload =
+        GpuUploadBuffers::from_cpu_schema(&schema, GpuFixedPointPolicy::reference()).unwrap();
+    for kind in [StructuralEditKind::Strengthen, StructuralEditKind::Weaken] {
+        // The candidate estimates one synapse but carries no synapse address;
+        // neither of the two live learned connections may be changed.
+        let plan = GpuRecompactionPlan::from_sleep_batch(
+            &schema,
+            &structural_batch(kind),
+            GpuAutophagyPolicy::reference(),
+        )
+        .unwrap();
+        assert_eq!(
+            plan.edit_entries[0].status,
+            alife_gpu_backend::GpuStructuralEditStatus::UnsupportedDeferred
+        );
+        assert_eq!(plan.diagnostics.edits_accepted, 0);
+        assert_eq!(plan.diagnostics.unsupported_edit_kinds, 1);
+        let output = plan.rebuild_scratch_upload(&upload).unwrap();
+        assert_eq!(
+            output.compacted_upload.encoded_bytes(),
+            upload.encoded_bytes()
+        );
+    }
+}
+
+#[test]
 fn double_buffer_swap_is_all_or_nothing_at_sleep_boundary() {
     let schema = recompaction_schema();
     let active =

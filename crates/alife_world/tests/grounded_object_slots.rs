@@ -604,3 +604,52 @@ fn grounded_physical_state_participates_in_the_world_determinism_signature() {
 fn tracked_object_id_zero_remains_reserved() {
     assert_eq!(TrackedObjectId(0).raw(), 0);
 }
+
+#[test]
+fn play_preserves_angular_speed_and_rejects_unobserved_feature_overrides() {
+    let (mut world, _, _) = two_physical_object_fixture();
+    let original = grounded_draft(&mut world, Tick::new(5));
+    for angular_speed in [0.0, 0.6, 1.0] {
+        let mut slots = original.grounded_object_slots().to_vec();
+        slots[0].proprioception[1] = angular_speed;
+        let mut candidates = original.candidates().to_vec();
+        for candidate in &mut candidates {
+            if candidate.observation == alife_core::CandidateObservationRef::ObjectSlot(0) {
+                candidate.features = slots[0].candidate_features().unwrap();
+            }
+        }
+        let build = |candidates| {
+            alife_core::PerceptionFrameDraft::new(
+                ORGANISM,
+                original.tick(),
+                original.sensor_profile(),
+                original.sensory().clone(),
+                original.body(),
+                *original.homeostasis(),
+                candidates,
+                original.profile_provenance(),
+                slots.clone(),
+            )
+        };
+        let frame = build(candidates.clone()).unwrap();
+        let play = frame
+            .candidates()
+            .iter()
+            .find(|c| {
+                c.action_id == HeadlessActionIds::PLAY
+                    && c.observation == alife_core::CandidateObservationRef::ObjectSlot(0)
+            })
+            .unwrap();
+        assert_eq!(play.family, CandidateActionFamily::Other);
+        assert_eq!(play.features.0[20], angular_speed);
+        let play = candidates
+            .iter_mut()
+            .find(|c| {
+                c.action_id == HeadlessActionIds::PLAY
+                    && c.observation == alife_core::CandidateObservationRef::ObjectSlot(0)
+            })
+            .unwrap();
+        play.features.0[20] = if angular_speed == 1.0 { 0.0 } else { 1.0 };
+        assert!(build(candidates).is_err());
+    }
+}

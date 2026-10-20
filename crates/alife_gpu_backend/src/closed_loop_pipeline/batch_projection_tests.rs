@@ -194,148 +194,81 @@ impl Fixture {
 }
 
 #[test]
-fn batch_projection_matches_checked_baseline_for_all_promoted_classes() {
-    eprintln!(
-        "batch projection debug_assertions={}",
-        cfg!(debug_assertions)
-    );
-    let mut digests = Vec::new();
-    let mut historical_identity_digests = Vec::new();
-    // Captured from bda3b65 in an isolated target; see the dated regression
-    // report. Keep the original complete-batch ABI baseline alongside the new
-    // source identities rather than dropping its continuity assertion.
-    const REFERENCE_PHENOTYPE_HASHES: [[u32; 8]; 3] = [
-        [
-            2664887107, 3509948688, 3342080843, 1282336292, 773376912, 783713437, 3394896808,
-            3455797347,
-        ],
-        [
-            3595732644, 384684165, 1026457811, 2634011102, 65431241, 2622009868, 4103155850,
-            3421661662,
-        ],
-        [
-            3910698289, 760021189, 1422798413, 3793771198, 376932847, 1909723633, 2069267647,
-            922542449,
-        ],
-    ];
-    const REFERENCE_ROUTE_DIGESTS: [[u32; 8]; 3] = [
-        [
-            4194306929, 3484779083, 4177044150, 1242111385, 534541692, 1126396524, 2500368454,
-            4154923371,
-        ],
-        [
-            438662544, 3861307522, 2122399095, 752310412, 2009616001, 312602141, 4027000711,
-            3713831290,
-        ],
-        [
-            1922980004, 2640863847, 566181392, 2632416073, 766149202, 2210073123, 2117151536,
-            1760693197,
-        ],
-    ];
-    for (class_index, capacity) in [
-        BrainCapacityClass::n512(),
-        BrainCapacityClass::n1024(),
-        BrainCapacityClass::n2048(),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+fn batch_projection_preserves_perception_words_and_row_bindings_for_all_promoted_classes() {
+    for capacity in BrainCapacityClass::production_classes() {
         let fixture = Fixture::new(capacity);
-        if let Some(directory) = std::env::var_os("ALIFE_BATCH_PROJECTION_EVIDENCE_DIR") {
-            let directory = std::path::PathBuf::from(directory);
-            std::fs::create_dir_all(&directory).unwrap();
-            std::fs::write(
-                directory.join(format!("class-{}-phenotype.json", capacity.id().raw())),
-                serde_json::to_vec_pretty(&fixture.phenotype).unwrap(),
-            )
-            .unwrap();
-        }
         for with_memory in [false, true] {
-            let mut batch = fixture.build(with_memory).unwrap();
-            if let Some(directory) = std::env::var_os("ALIFE_BATCH_PROJECTION_EVIDENCE_DIR") {
-                let directory = std::path::PathBuf::from(directory);
-                std::fs::create_dir_all(&directory).unwrap();
-                std::fs::write(
-                    directory.join(format!(
-                        "class-{}-memory-{with_memory}.txt",
-                        capacity.id().raw()
-                    )),
-                    format!("{batch:#?}"),
+            let batch = fixture.build(with_memory).unwrap();
+            assert_eq!(batch.row_count(), 2);
+            assert_eq!(batch.bucket_ownership_token, 11);
+            assert_eq!(batch.authority_nonce, 13);
+            assert_eq!(&batch.frame_payload_words[..37], &[0; 37]);
+            for row in 0..2 {
+                let frame = &fixture.frames[row];
+                let slot = &fixture.slots[row];
+                let header = &batch.headers[row];
+                let mut local =
+                    GpuPerceptionUpload::try_from_frame(frame, slot, row as u32).unwrap();
+                local
+                    .rebase(
+                        (row * GPU_ACTIVE_DISPATCH_ROW_WORDS) as u32,
+                        header.sensory_offset,
+                    )
+                    .unwrap();
+                assert_eq!(header.slot, local.header.slot);
+                assert_eq!(header.slot_generation, local.header.slot_generation);
+                assert_eq!(header.candidate_offset, local.header.candidate_offset);
+                assert_eq!(header.dispatch_generation_lo, 1);
+                assert_eq!(header.dispatch_generation_hi, 0);
+                assert_eq!(
+                    header.microstep_count,
+                    u32::from(fixture.decisions[row].microsteps)
+                );
+                // Independent single-frame encoder covers all sensory/candidate
+                // words. Batch-only candidate digests precede private context.
+                let prefix = local.frame_payload_words.len() - 256;
+                let start = header.sensory_offset as usize;
+                assert_eq!(
+                    &batch.frame_payload_words[start..start + prefix],
+                    &local.frame_payload_words[..prefix]
+                );
+                let digest_end = start + prefix + frame.candidates().len() * 4;
+                assert_eq!(
+                    &batch.frame_payload_words[digest_end..digest_end + 256],
+                    &local.frame_payload_words[prefix..]
+                );
+                for (index, candidate) in local.candidates.iter().enumerate() {
+                    let offset =
+                        header.candidate_offset as usize + index * GPU_CANDIDATE_RECORD_WORDS;
+                    assert_eq!(
+                        &batch.dispatch_header_words[offset..offset + GPU_CANDIDATE_RECORD_WORDS],
+                        candidate.words()
+                    );
+                    let digest = split_u64x2(frame.candidates()[index].feature_digest().unwrap().0);
+                    let offset = start + prefix + index * 4;
+                    assert_eq!(&batch.frame_payload_words[offset..offset + 4], &digest);
+                }
+                let pending = &batch.pending_templates[row];
+                let learning = &batch.learning_headers[row];
+                let offset = learning.outcome_offset as usize;
+                assert_eq!(
+                    &batch.frame_payload_words
+                        [offset..offset + crate::GPU_PENDING_ELIGIBILITY_WORDS],
+                    pending.words()
+                );
+                assert_eq!(pending.phenotype_hash, slot.identity().phenotype_hash);
+                let activity = GpuActivityDispatchHeader::try_from_decision(
+                    &fixture.decisions[row],
+                    &fixture.phenotype,
+                    capacity.execution(),
+                    slot,
                 )
                 .unwrap();
+                assert_eq!(batch.activity_headers[row].words(), activity.words());
+                assert_eq!(batch.memory_context_bindings[row].is_some(), with_memory);
             }
-            // This covers every GPU word and host binding, not just selected
-            // offsets. Baselines use the original full validation and rebasing
-            // from 69f00c05 with the adaptive-exploration identity layout on
-            // main 73f8ecf0. The integration receipt records exact reference
-            // source hashes; these differ from the pre-exploration layout.
-            digests.push(
-                blake3::hash(format!("{batch:?}").as_bytes())
-                    .to_hex()
-                    .to_string(),
-            );
-            // Only the phenotype identity, its bound route digest, and the
-            // derived work checksum changed. Repack their exact historical
-            // values for a second full-word comparison; the actual batch above
-            // is still checked in its entirety with its current identities.
-            for row in 0..batch.row_count() {
-                batch.pending_templates[row].phenotype_hash =
-                    REFERENCE_PHENOTYPE_HASHES[class_index];
-                let pending_start = batch.learning_headers[row].outcome_offset as usize;
-                let pending_words = batch.pending_templates[row].words();
-                batch.frame_payload_words[pending_start..pending_start + pending_words.len()]
-                    .copy_from_slice(pending_words);
-                let activity_words: &mut [u32] = bytemuck::cast_slice_mut(std::slice::from_mut(
-                    &mut batch.activity_headers[row],
-                ));
-                activity_words[16..24].copy_from_slice(&REFERENCE_ROUTE_DIGESTS[class_index]);
-                let learning = &mut batch.learning_headers[row];
-                learning.scheduled_work_checksum = batch.activity_headers[row]
-                    .scheduled_work_checksum(
-                        learning.scheduled_tile_visits,
-                        learning.scheduled_synapse_ops,
-                    );
-                let learning_start =
-                    row * GPU_ACTIVE_DISPATCH_ROW_WORDS + GPU_PERCEPTION_DISPATCH_ROW_WORDS;
-                batch.dispatch_header_words
-                    [learning_start..learning_start + GPU_LEARNING_HEADER_WORDS]
-                    .copy_from_slice(learning.words());
-                let activity_start = learning_start
-                    + GPU_LEARNING_HEADER_WORDS
-                    + crate::GPU_MEMORY_CONTEXT_HEADER_WORDS;
-                batch.dispatch_header_words
-                    [activity_start..activity_start + crate::GPU_ACTIVITY_DISPATCH_HEADER_WORDS]
-                    .copy_from_slice(batch.activity_headers[row].words());
-            }
-            historical_identity_digests.push(
-                blake3::hash(format!("{batch:?}").as_bytes())
-                    .to_hex()
-                    .to_string(),
-            );
         }
     }
-    assert_eq!(
-        historical_identity_digests,
-        [
-            "b9d796ff3ad357c5d7bb219132a63b2e222d8883b910972373058d4000e1d52d",
-            "910bbc42a1b2ab6701e42edcf751840007255ccc119a224ba6ecb18100496d29",
-            "d3a2412d589d335b5d05fd335c81ca008dc864dc6722776ab40185e3f6242486",
-            "797e584245d1e7e5b462235d6ea2b17b6e6a57382effc0e1511991091f631c8c",
-            "9fe75c9d74be8128f87b17495a03749cecccdf7100aa7e4a04bc899fb0642e3f",
-            "5761a87e20046d5a091833ab2e2eb01e63106e03a1aafe1212091b0685d7416f",
-        ]
-    );
-    assert_eq!(
-        digests,
-        [
-            "186d816e21036ba42d0d605c4b62685fb84e5c9732dbf8f2c386e09fe0e41bf7",
-            "45ca2827344938004a5c2909731176a2fe5328674f215adbbcc3a0147e271569",
-            "af4cb3a15979341238589652a264ffea6ac40b8d1f753eecf8d3d07c708b70ad",
-            "d42d23f475503dc71f9c0a6a08b9c58873d6f0a19cb6b0967294aadca39c601b",
-            "668ce5b85dfa31318dca5e65a247766d17943169df8f3067d21fc8ef8c016a5f",
-            "5f92238d0d85723846e268b75f7b47a2daa0d764671311432a5c6fcc7129597a",
-        ]
-    );
 }
 
 #[test]
