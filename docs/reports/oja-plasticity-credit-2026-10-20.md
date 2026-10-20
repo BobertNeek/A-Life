@@ -74,6 +74,12 @@ no save-format or arena-layout change and no history migration/reset.
   in effective space, so the effective learning drive contains `a*a`.
   Disabling both genome Oja/Hebbian flags compiles alpha to zero; these flags
   are not separate runtime branches around the two terms in this shader.
+  Alpha zero suppresses waking fast expression/learning drive, not the
+  normalization term in fast-coefficient space. With nonzero local credit and
+  nonzero normalization rate, latent fast changes can still enter lifetime
+  weights during raw-coefficient sleep promotion. Only a zero inherited rate
+  row is fully delta-disabled; this separate existing alpha/sleep semantic is
+  not changed by the zero-credit fix.
 * Activity-route masks gate new recurrent coactivation, not the normalization
   evaluator. A throttled route decays its old eligibility. Decoder eligibility
   follows selected motor/head semantics. The plasticity pass still visits all
@@ -212,6 +218,11 @@ control. It covers 181 cases, 1/1k/10k/100k outcomes, both signs, small credit,
 fixed routes, alpha 0/.125/.25/1, zero post, maximum contraction, and both fast
 clipping endpoints. One-step tolerance is 2e-7 effective units; long f32
 recurrences use 8e-4, with exact zero-credit retention asserted separately.
+The final executed maximum absolute oracle error was 0.0001192092764,
+dominated by the old alpha-1 cancellation trajectory's f32 stagnation near
+zero. All six focused tests passed, including the explicitly invoked device
+test. The readback loop uses `as_chunks::<2>()` to satisfy current strict
+Clippy; this does not alter the production shader or any test vector.
 
 ```sh
 cargo test --locked -p alife_gpu_backend --test oja_credit_stability -- --nocapture
@@ -231,8 +242,32 @@ in this saved cloud environment is **Blocked**: production returns
 isolated device result identifies `SwiftShader Device (Subzero)`, Vulkan, CPU;
 it is not counted as a hardware production acceptance run. No PC run was used.
 
-Aggregate validation results will be recorded after completion. Gameplay
-retention/behavior improvement on an accepted trained founder remains Unknown;
+Aggregate validation completed in the saved cloud environment:
+
+* `cargo fmt --all -- --check`: passed.
+* `cargo check --workspace --all-targets`: passed.
+* `cargo test --locked --workspace --all-targets --no-fail-fast`: passed,
+  1,941 tests across 216 completed targets, zero failures, 23 ignored.
+* Final focused `oja_credit_stability --include-ignored`: six passed,
+  including all 181 paired production/control WGSL vectors.
+* `cargo clippy --locked --workspace --all-targets -- -D warnings`: passed
+  after the test-only chunk API lint fix; the focused suite was rerun after
+  that edit. The broad workspace test run was not duplicated for this edit.
+* `scripts/check_core_boundaries.sh`: passed.
+* `scripts/docs_check.sh`: passed, 77/77 assertions.
+* `git diff --check`: passed.
+
+The first `scripts/check.sh --full` invocation passed formatting and workspace
+compilation, then exhausted the cloud disk while linking test binaries with
+debug symbols. Only compiler artifacts created during this task under
+`target/debug` were removed. The remaining gates used the saved cloud compact
+settings (`CARGO_INCREMENTAL=0`, dev/test debug symbols 0, two build jobs,
+`target/cloud-cpu`, one test thread). Debug assertions stayed enabled.
+No source, checkpoint, learned payload, or optimizer state was removed.
+The implementation source commit is `2da160fe2d82a70545d96537cad1c22308cffd4c`;
+the evidence/lint follow-up leaves the production shader identical to it.
+
+Gameplay retention/behavior improvement on an accepted trained founder remains Unknown;
 the demonstrated defect and its arithmetic correction do not require a perfect
 founder or establish global learning failure.
 

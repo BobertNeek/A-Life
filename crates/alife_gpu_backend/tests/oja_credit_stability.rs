@@ -416,8 +416,10 @@ fn production_wgsl_retention_and_sustained_learning_match_closed_form() {
         receiver.recv().unwrap().unwrap();
         let mapped = readback.slice(..).get_mapped_range();
         let values: &[f32] = bytemuck::cast_slice(&mapped);
+        let (results, remainder) = values.as_chunks::<2>();
+        assert!(remainder.is_empty());
         let mut max_abs_error = 0.0_f64;
-        for (case, result) in cases.iter().zip(values.chunks_exact(2)) {
+        for (case, result) in cases.iter().zip(results) {
             for (actual, legacy) in [(result[0], false), (result[1], true)] {
                 let oracle = expected(case, legacy);
                 max_abs_error = max_abs_error.max((f64::from(actual) - oracle).abs());
