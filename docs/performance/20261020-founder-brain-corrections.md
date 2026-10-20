@@ -148,5 +148,41 @@ behavior remain unqualified here.
 
 ## Validation
 
-Focused reproduction, compatibility, aggregate Rust, static boundary, and
-documentation checks are recorded with the PR. Physical GPU behavior is Unknown.
+Verified CPU checks include five founder/integration tests, 20 candidate tests,
+the vocabulary/replay test, the social-memory ordering regression, three signed
+foundation tests (including the actual retained Nano file and signed speech),
+28 training unit tests, and the exact checkpoint-continuity command: 220 tests
+across 27 binaries, including all 84 backend library tests. Static boundaries
+and all 77 documentation assertions also pass. The PR records final workspace,
+formatting, check, test, Clippy, and CI receipts. Physical GPU behavior is Unknown.
+
+The six batch golden changes were reproduced against `bda3b65` in a separate
+Cargo target, after rejecting a shared-target reference that linked current
+code. The actual reference passes all six original goldens and has positive
+distance coefficients. Full phenotype JSON comparison verifies that only 41,
+41, and 128 ActionCandidate lane-2 sign bits change in the N512, N1024, and N2048
+fixtures, respectively, plus their phenotype hashes. The batch builder is
+unchanged. Its only output differences are those identities, the bound route
+digests, and their derived scheduled-work checksums, including serialized copies.
+
+The test retains the original six complete-batch digests after restoring those
+recorded historical identity fields and repacking their checksums and duplicate
+payloads. It additionally asserts six complete, unmodified current-batch digests.
+Neither comparison omits fields. Exact hashes and phenotype evidence digests
+are retained in the [baseline receipt](evidence/20261020-founder-brain-projection-baselines.json).
+
+Reproduction commands (no `gpu-tests`, window, or physical adapter request):
+
+```sh
+cargo test --locked -p alife_core --test signed_decoder_foundations
+cargo test --locked -p alife_world --test founder_brain_regressions --test perception_candidates
+cargo test --locked -p alife_training --lib
+cargo test --locked -p alife_game_app --features foundation-training --lib play_vocabulary_uses_activation_family_and_preserves_reach_and_replay_identity
+cargo test --locked -p alife_gpu_backend --all-targets --features training-rollout
+bash scripts/check.sh --full
+```
+
+Set `ALIFE_BATCH_PROJECTION_EVIDENCE_DIR` to an ignored artifact directory when
+running the batch projection test to retain its full phenotype JSON and batch
+projections. Reference and changed worktrees must use separate Cargo target
+directories; verify the compiled distance signs before interpreting a reference.

@@ -281,6 +281,10 @@ fn batch_projection_matches_checked_baseline_for_all_promoted_classes() {
             for row in 0..batch.row_count() {
                 batch.pending_templates[row].phenotype_hash =
                     REFERENCE_PHENOTYPE_HASHES[class_index];
+                let pending_start = batch.learning_headers[row].outcome_offset as usize;
+                let pending_words = batch.pending_templates[row].words();
+                batch.frame_payload_words[pending_start..pending_start + pending_words.len()]
+                    .copy_from_slice(pending_words);
                 let activity_words: &mut [u32] = bytemuck::cast_slice_mut(std::slice::from_mut(
                     &mut batch.activity_headers[row],
                 ));

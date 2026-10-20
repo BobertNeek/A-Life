@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "kind": "founder-brain-batch-projection-baselines",
+  "reference_source_commit": "bda3b65be5fa6f01865b850640adf2e8d01f4990",
+  "current_production_source_commit": "048491b368983218ed01116daa987fc943c402ef",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "reference_cargo_target": "/workspace/alife-brain-baseline/target/source-bda3b65",
+  "reference_checked_original_goldens": true,
+  "current_checked_unmodified_and_historical_identity_goldens": true,
+  "production_batch_builder_changed": false,
+  "fixture": {
+    "seed": 41,
+    "maturation": 0.35,
+    "sensor_profile": "PrivilegedAffordanceV1",
+    "rows": 2,
+    "memory_modes": [
+      false,
+      true
+    ]
+  },
+  "phenotype_comparison": [
+    {
+      "capacity_class_id": 1,
+      "distance_readouts_sign_flipped": 41,
+      "only_other_changed_field": "phenotype_hash",
+      "reference_phenotype_hash": [
+        15075114828262994755,
+        5507592439955987275,
+        3366023582124133264,
+        14842536590363460520
+      ],
+      "current_phenotype_hash": [
+        7848059478073678924,
+        15608303946237645003,
+        17701303196383934143,
+        16807571934931066434
+      ],
+      "reference_phenotype_sha256": "44444955c0fe1ea1def6f6dd4d291699d0f384863d0c441feacf70e76bf1ee37",
+      "current_phenotype_sha256": "632273c398fc11fdfe95bc02668426eb10c67ae5592709bbfb3e1083a04746a4"
+    },
+    {
+      "capacity_class_id": 2,
+      "distance_readouts_sign_flipped": 41,
+      "only_other_changed_field": "phenotype_hash",
+      "reference_phenotype_hash": [
+        1652205911559800484,
+        11312991541417378003,
+        11261446632914708169,
+        14695924940370161802
+      ],
+      "current_phenotype_hash": [
+        5670876030224617222,
+        18001243158484089989,
+        16025706546295739128,
+        16943323786702956949
+      ],
+      "reference_phenotype_sha256": "883213f7d26eeae8f8d207c46c53d3c997dcf8802004b95429c0a7b44e5a5385",
+      "current_phenotype_sha256": "b73677f62fa4993799b416dce1e75290b225eda97f7cff02697ff6c0c0a2fd97"
+    },
+    {
+      "capacity_class_id": 3,
+      "distance_readouts_sign_flipped": 128,
+      "only_other_changed_field": "phenotype_hash",
+      "reference_phenotype_hash": [
+        3264266154932733233,
+        16294123225339539021,
+        8202200548510239215,
+        3962289649696015551
+      ],
+      "current_phenotype_hash": [
+        5891603915783672093,
+        4629327752100204009,
+        16207129431567782143,
+        12542613021007779233
+      ],
+      "reference_phenotype_sha256": "1ae2b0801ae240a29e8a781ddebabc8751f89fa7f65b627ce8c541b67960828e",
+      "current_phenotype_sha256": "54d3b8d066c64f966c1f6c94d0993ae46b6e3c7616474d411ccb3d47427192ed"
+    }
+  ],
+  "projection_comparison": [
+    {
+      "capacity_class_id": 1,
+      "memory": false,
+      "reference_complete_debug_blake3": "b9d796ff3ad357c5d7bb219132a63b2e222d8883b910972373058d4000e1d52d",
+      "current_complete_debug_blake3": "186d816e21036ba42d0d605c4b62685fb84e5c9732dbf8f2c386e09fe0e41bf7",
+      "reference_pretty_debug_sha256": "3ff9169422e33bbb6ad93e4b51535cd44e78f28c29348bdac70ea119effb0c9a",
+      "current_pretty_debug_sha256": "d123b7275e958d9cb8d49e7892a4ddd1875cb33673ccdac591e214f60b2ed414"
+    },
+    {
+      "capacity_class_id": 1,
+      "memory": true,
+      "reference_complete_debug_blake3": "910bbc42a1b2ab6701e42edcf751840007255ccc119a224ba6ecb18100496d29",
+      "current_complete_debug_blake3": "45ca2827344938004a5c2909731176a2fe5328674f215adbbcc3a0147e271569",
+      "reference_pretty_debug_sha256": "4b51b105536c16f56818634e072bcbe9c6e1860b965a16ed435b30b2acec50fc",
+      "current_pretty_debug_sha256": "cea722642976af0d822d2f2c9f529dce4e84ae2530ba5833ec05e98f0f3802c8"
+    },
+    {
+      "capacity_class_id": 2,
+      "memory": false,
+      "reference_complete_debug_blake3": "d3a2412d589d335b5d05fd335c81ca008dc864dc6722776ab40185e3f6242486",
+      "current_complete_debug_blake3": "af4cb3a15979341238589652a264ffea6ac40b8d1f753eecf8d3d07c708b70ad",
+      "reference_pretty_debug_sha256": "effdbc3ac33824372eb4d708f86c4907dd2609b28b07ede140a90a9eaec653ec",
+      "current_pretty_debug_sha256": "4e14ac0256889d5c6f784159100d58c8cde6db95fee52011c30361f68cebcef3"
+    },
+    {
+      "capacity_class_id": 2,
+      "memory": true,
+      "reference_complete_debug_blake3": "797e584245d1e7e5b462235d6ea2b17b6e6a57382effc0e1511991091f631c8c",
+      "current_complete_debug_blake3": "d42d23f475503dc71f9c0a6a08b9c58873d6f0a19cb6b0967294aadca39c601b",
+      "reference_pretty_debug_sha256": "6bbaf2cdc7ff9c68aa8b7bbf53996a1a605c5dfccf96c1071daabe1bda41ff0c",
+      "current_pretty_debug_sha256": "bc7bd13a064d5316d7861ce8b1eb724d88eab5149cc87e6c5c111c813d84e514"
+    },
+    {
+      "capacity_class_id": 3,
+      "memory": false,
+      "reference_complete_debug_blake3": "9fe75c9d74be8128f87b17495a03749cecccdf7100aa7e4a04bc899fb0642e3f",
+      "current_complete_debug_blake3": "668ce5b85dfa31318dca5e65a247766d17943169df8f3067d21fc8ef8c016a5f",
+      "reference_pretty_debug_sha256": "82376751eef28573c7f40864dcfc3d21130bd02a7c6d1d72d24dd7b7f2c09fe0",
+      "current_pretty_debug_sha256": "c2b2596702f7d03ed8129ecc6cb034b42ae3b802c8543555a3155d23ba2d51c0"
+    },
+    {
+      "capacity_class_id": 3,
+      "memory": true,
+      "reference_complete_debug_blake3": "5761a87e20046d5a091833ab2e2eb01e63106e03a1aafe1212091b0685d7416f",
+      "current_complete_debug_blake3": "5f92238d0d85723846e268b75f7b47a2daa0d764671311432a5c6fcc7129597a",
+      "reference_pretty_debug_sha256": "dc627fcb255b57b2f14706602c271e6943697b1885b339474d03c5b9401ec49e",
+      "current_pretty_debug_sha256": "d3a17ed98406dfaaf033f5ceea2c54814930ba2a0c7d0a239e67f34ede2145b5"
+    }
+  ],
+  "only_projection_differences": [
+    "pending phenotype hashes, including their frame-payload copies",
+    "phenotype-bound route schedule digests, including dispatch-header copies",
+    "derived scheduled-work checksums, including dispatch-header copies"
+  ],
+  "continuity_passed_tests": 220,
+  "physical_gpu_qualification": "Unknown"
+}
