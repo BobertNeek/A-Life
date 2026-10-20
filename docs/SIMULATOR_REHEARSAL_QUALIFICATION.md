@@ -1,8 +1,10 @@
 # Short simulator rehearsal qualification handoff
 
 Owner: the parent coordinates the existing PC owner after the integrated source
-pin is published. Current-main integration supersedes the old b7a67384 candidate;
-do not reuse its source-bound qualification evidence for the new pin.
+pin is published. The 491defda candidate failed initial runtime construction in
+the continuity fixture before any neural decision. Its build/CI passes do not
+qualify a repaired pin; use the replacement head recorded in PR109. Do not retry
+the unchanged failed fixture or reuse its source-bound evidence for the repair.
 This handoff does not start a workload. Use only the resource window confirmed by
 that owner. Do not run the default 600-second mode or `--compare` while Minecraft
 is active. If the agreed short window is unavailable, leave qualification pending.
@@ -68,6 +70,8 @@ part of this handoff.
    next sensory frame/logits/probability, canonical physiology and replay context
    at the same sampling counter. It is a mechanical continuity check, not an
    accepted-policy7400 learning or promotion result.
+   The seed asset must come from the shared canonical expressed-founder factory;
+   raw scaffold metadata cannot substitute for its strict decoder contract.
 4. Only after continuity passes and the PC owner confirms the next window, use a
    new output directory and an explicitly recorded diagnostic seed:
 

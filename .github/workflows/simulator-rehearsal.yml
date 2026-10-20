@@ -56,6 +56,10 @@ jobs:
         run: cargo test --locked -p alife_training --lib rehearsal
       - name: Exact source ancestry, package integrity and budget boundaries
         run: cargo test --locked -p alife_game_app --features foundation-training --lib simulator_rehearsal
+      - name: Canonical founder bootstrap and strict decoder contracts
+        run: |
+          cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::initial_asset
+          cargo test --locked -p alife_game_app --features foundation-training --lib graph_comparison_allows_new_weights_but_preserves_every_other_contract
       - name: Bounded CLI admission
         run: cargo test --locked -p alife_game_app --features foundation-training --bin rehearse_n2048_care
       - name: Compile continuity fixture without GPU execution

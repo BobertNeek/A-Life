@@ -125,3 +125,52 @@ than delivery of this opt-in experiment. CPU/common admission and ordinary care
 resume are separate work. The parent coordinates the existing PC owner and owns
 eventual merge/post-merge checks; no duplicate PC or external review job was
 launched here.
+
+## Initial runtime construction repair — 2026-10-20
+
+The PC's exact continuity fixture on 491defda failed at initial `fresh_runtime`
+construction with `Core(PhenotypeCompile)`, before any tick or restore assertion.
+The reported run exited 101 in 8.1445 seconds, zero passed and one failed. Both
+native policy7400 admissions passed and all 1,573 protected hashes matched. A/B
+never ran. Hosted exact-tree workspace checks had 1,958 passed, zero failed and
+22 ignored; those checks did not execute this ignored hardware fixture.
+
+A device-free regression using founder77777 and scene99001 reproduced the same
+error in the existing production resident compiler after scene preparation. The
+shared bootstrap factory had compiled a raw scaffold, whose food-attraction
+constant differs from diploid founder expression by one floating-point ULP. The
+resulting innate decoder gain changes its strict action-decoder digest. The
+repair constructs canonical New Game with a provisional token, then compiles the
+actual expressed genome using the existing normalized construction development.
+No decoder/phenotype validation is relaxed, and no admitted asset is transformed.
+New procedural bootstrap weights intentionally use the expressed conception-seed
+genome rather than the old raw scaffold seed. Historical bootstraps are not
+reproducible by treating this repair as their original generator.
+
+The accepted-source runner reads its exact inspected asset and original founder
+seed; it never calls the procedural bootstrap factory. Native source admission
+already recompiles that expressed founder and validates the actor binding. New
+device-free coverage also exercises the runner's actual prepared-scene route
+with an inspected synthetic native package and verifies unchanged source bytes.
+That fixture is not evidence about the private policy7400 bytes or optimizer ages.
+Hardware restore and accepted-source A/B remain pending parent coordination.
+
+The compiled core/world diagnostic measured raw food-attraction bits
+`0x3f147ae1` and expressed bits `0x3f147ae2` for the exact failing seeds. The
+negative regression also confirms the decoder digest differs while layout and
+persistent address-map digests remain equal.
+
+Repair validation: the broad foundation-training application run had 473 passed,
+one stale raw-scaffold graph-test setup failure and five ignored. That isolated
+test setup now uses the existing canonical source compiler; its unchanged graph
+preservation/tamper assertions passed on rerun. Final focused checks passed one
+graph test, ten rehearsal tests, three bootstrap tests, 36 training-library tests
+and three CLI tests. Strict all-target foundation-training Clippy, full core
+boundaries, docs (77/77), formatting, whitespace, protected-path and workflow
+YAML/command checks passed. R2 source, graph-test and workflow reviews found no
+blocking findings. The workflow now runs the bootstrap and graph regressions.
+
+GPU-enabled test-source checking and both CLI builds were pending at this source
+freeze checkpoint; their terminal evidence belongs in PR109 without a new source pin.
+No third local workspace aggregate, PC retry or GPU execution was started.
+New-head hosted CI and coordinated mechanical qualification remain pending.

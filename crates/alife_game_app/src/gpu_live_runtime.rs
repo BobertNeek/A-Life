@@ -9084,6 +9084,22 @@ impl GpuLiveBrainRuntime {
         telemetry
     }
 
+    #[cfg(all(test, feature = "foundation-training"))]
+    pub(crate) fn validate_foundation_birth_for_test(
+        world: &HeadlessWorld,
+        sensor_profile: SensorProfile,
+        organism_id: OrganismId,
+    ) -> Result<(), GameAppShellError> {
+        let (_, resident) = Self::compile_birth(
+            world,
+            BrainScaleTier::Standard2048,
+            sensor_profile,
+            organism_id,
+        )?;
+        archive_foundation_asset_bytes(&resident)?;
+        Ok(())
+    }
+
     fn compile_birth(
         world: &HeadlessWorld,
         brain_class: BrainScaleTier,

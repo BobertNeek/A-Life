@@ -45,6 +45,17 @@ Requires the training runtime restore constructor, a hardware GPU supported by t
 canonical runtime, and a verified native objective2 source checkpoint (or an exact
 simulator continuation produced by this runner). No CPU fallback is selected.
 
+Fresh scenes use the inspected source asset and its original founder seed. The
+seeded continuity fixture uses the shared procedural bootstrap factory, which
+first constructs a canonical newborn and then compiles its expressed genome.
+A raw scaffold is only a provisional New Game construction token: its decoder
+ABI can differ from inherited founder expression. Admitted checkpoint assets are
+never passed through that factory or rebound to new metadata. Scene preparation
+and production resident admission have device-free regressions; setup errors
+identify the stage, founder, scene and rollout while retaining the original cause.
+New procedural bootstrap weights and metadata now derive from the expressed
+conception-seed genome, so they can differ from historical raw-scaffold bootstraps.
+
 ```sh
 cargo run -p alife_game_app --features foundation-training --bin rehearse_n2048_care -- \
   SOURCE_CYCLE NEW_OUTPUT EXPECTED_SOURCE_POLICY SEED

@@ -12,6 +12,7 @@ use alife_training::{
 use alife_world::{AssetManifest, HeadlessWorld};
 
 mod continuation;
+mod fresh;
 mod snapshots;
 use snapshots::*;
 
@@ -756,31 +757,27 @@ fn fresh_runtime(
     RehearsalLineage,
     Option<AppliedSceneVariation>,
 )> {
-    let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
-    config.brain_class = BrainScaleTier::Standard2048;
-    config.founder_seed_base = founder;
-    config.sensor_profile = asset.manifest().sensor_profile();
-    let mut game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, asset)?;
-    crate::foundation_training::ground_foundation_training_world(&mut game.world)?;
-    let scenario = crate::configure_foundation_scenario(
-        &mut game.world,
+    let context = fresh::SetupContext {
+        founder,
         seed,
-        Some(crate::FoundationTeacherLesson::GrabFood),
-        None,
-        true,
-    )?;
-    let target = scenario.food;
+        rollout,
+    };
+    let (game, target) = fresh::prepare_scene(asset, &context)?;
     let creatures = game.creatures;
-    let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
-        device.new_staging_like_live()?,
-        game.world,
-        seed,
-        BrainScaleTier::Standard2048,
-        config.sensor_profile,
-        alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
-        format!("simulator-rehearsal-{rollout}"),
-        alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
-        sampling,
+    let staging = context.stage("GPU staging allocation", device.new_staging_like_live())?;
+    let mut runtime = context.stage(
+        "GPU resident construction",
+        GpuLiveBrainRuntime::new_profiled_foundation_training(
+            staging,
+            game.world,
+            seed,
+            BrainScaleTier::Standard2048,
+            asset.manifest().sensor_profile(),
+            alife_archive::LineageLibraryConfig::profile_default(output.join("lineage")),
+            format!("simulator-rehearsal-{rollout}"),
+            alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
+            sampling,
+        ),
     )?;
     let mut creatures = creatures;
     for creature in &mut creatures {
@@ -797,20 +794,26 @@ fn fresh_runtime(
     let mut runtime_config =
         alife_world::RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048);
     runtime_config.features.gpu_backend_enabled = true;
-    let base = alife_world::PortableSaveFile::from_headless_world(
-        format!("simulator-rehearsal-{rollout}"),
-        runtime.world(),
-        runtime_config,
-        AssetManifest::empty(),
-        creatures,
+    let base = context.stage(
+        "portable base construction",
+        alife_world::PortableSaveFile::from_headless_world(
+            format!("simulator-rehearsal-{rollout}"),
+            runtime.world(),
+            runtime_config,
+            AssetManifest::empty(),
+            creatures,
+        ),
     )?;
-    attach_durable(
-        &mut runtime,
-        output,
-        &output.join("snapshot-assets"),
-        rollout,
-        base,
-        false,
+    context.stage(
+        "initial durable snapshot",
+        attach_durable(
+            &mut runtime,
+            output,
+            &output.join("snapshot-assets"),
+            rollout,
+            base,
+            false,
+        ),
     )?;
     let lineage = RehearsalLineage {
         rollout,

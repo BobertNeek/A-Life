@@ -1241,20 +1241,7 @@ pub(crate) mod tests {
     fn graph_comparison_allows_new_weights_but_preserves_every_other_contract() {
         let founder = 539363617;
         let asset = crate::initial_n2048_care_asset(founder).unwrap();
-        let genome =
-            alife_core::BrainGenome::scaffold(founder, alife_core::BrainCapacityClass::N2048_ID);
-        let development = alife_core::DevelopmentState::new(
-            genome.id,
-            alife_core::Tick::ZERO,
-            alife_core::NormalizedScalar::new(1.0).unwrap(),
-        );
-        let old = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
-            genome.clone(),
-            development.clone(),
-            asset.clone(),
-        )
-        .unwrap()
-        .0;
+        let old = compile_source(asset.clone(), founder, founder).unwrap();
         let mut weights = asset.weights().to_vec();
         weights[1024] += 0.001;
         let next_asset = FoundationWeightAsset::from_trained_weights(
@@ -1263,13 +1250,7 @@ pub(crate) mod tests {
             alife_core::TrainingStageManifest::new(1, 1, 1),
         )
         .unwrap();
-        let next = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
-            genome,
-            development,
-            next_asset,
-        )
-        .unwrap()
-        .0;
+        let next = compile_source(next_asset, founder, founder).unwrap();
         assert_ne!(old.phenotype_hash(), next.phenotype_hash());
         let before = graph_without_weights(&old).unwrap();
         let mut after = graph_without_weights(&next).unwrap();
