@@ -47,7 +47,7 @@ fn args() -> Result<Args> {
     while let Some(key) = iter.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("train_cpu_foundation (--previous NATIVE_OR_CPU_DIRECTORY | --fixture) --output NEW_DIRECTORY --seed EXPLICIT_SEED [--ticks 64] [--temperature 1]\n\nRuns fresh-cohort foundation continuation with canonical world biology, sealed CPU evidence, bounded sparse BPTT/PPO and full residual critic Adam. Source files are read only. Seed freshness/allocation is caller-owned and recorded as unknown. Individual state is archived separately under its collection policy; this command does not claim a GPU terminal-individual restore.");
+                println!("train_cpu_foundation (--previous NATIVE_TRAINING_DIRECTORY | --fixture) --output NEW_DIRECTORY --seed EXPLICIT_SEED [--ticks 64] [--temperature 1]\n\nRuns fresh-cohort foundation continuation with canonical world biology, sealed CPU evidence, bounded sparse BPTT/PPO and full residual critic Adam. Source files are read only. Seed freshness/allocation is caller-owned and recorded as unknown. Individual state is archived separately under its collection policy; this command does not claim a GPU terminal-individual restore.");
                 std::process::exit(0);
             }
             "--fixture" => fixture = true,
@@ -148,6 +148,22 @@ fn fixture_asset(seed: u64) -> Result<FoundationWeightAsset> {
         TrainingStageManifest::new(1, 1, 1),
     )?)
 }
+fn fixture_ancestry(mut receipt: &Value) -> Result<bool> {
+    for _ in 0..64 {
+        if receipt["fixture"] == true {
+            return Ok(true);
+        }
+        match receipt
+            .get("seed_provenance")
+            .and_then(|p| p.get("native_source_receipt"))
+            .filter(|r| r.is_object())
+        {
+            Some(previous) => receipt = previous,
+            None => return Ok(false),
+        }
+    }
+    Err("source receipt ancestry exceeds64 links".into())
+}
 fn main() -> Result<()> {
     let args = args()?;
     let all_started = Instant::now();
@@ -158,17 +174,22 @@ fn main() -> Result<()> {
     ) = &args.previous
     {
         let previous = previous.canonicalize()?;
-        let receipt_name = if previous.join("cpu-cycle.json").is_file() {
-            "cpu-cycle.json"
-        } else {
-            "cycle.json"
+        let receipt_names = ["cycle.json", "cpu-cycle.json", "group50.json"]
+            .into_iter()
+            .filter(|name| previous.join(name).is_file())
+            .collect::<Vec<_>>();
+        let receipt_name = match receipt_names.as_slice() {
+            [name] => *name,
+            _ => return Err("source requires exactly one native training receipt domain".into()),
         };
         let expected_phase = if receipt_name == "cpu-cycle.json" {
             "complete-fresh-cohort-cpu"
         } else {
             "next-cohort-admitted"
         };
-        if fs::read_to_string(previous.join("phase.txt"))?.trim() != expected_phase {
+        if receipt_name != "group50.json"
+            && fs::read_to_string(previous.join("phase.txt"))?.trim() != expected_phase
+        {
             return Err("previous source has no completed sealed-cohort marker".into());
         }
         for name in [
@@ -178,6 +199,9 @@ fn main() -> Result<()> {
             "actor-checkpoint.json",
             "value-checkpoint.json",
         ] {
+            if name == "phase.txt" && receipt_name == "group50.json" {
+                continue;
+            }
             let bytes = fs::read(previous.join(name))?;
             source_hashes.insert(name.to_string(), hash(&bytes));
             source_bytes.insert(name.to_string(), bytes);
@@ -237,6 +261,19 @@ fn main() -> Result<()> {
             source_hashes.insert("training-handoff.json".into(), hash(&bytes));
             source_bytes.insert("training-handoff.json".into(), bytes);
         }
+        if receipt_name == "group50.json"
+            && (receipt["schema"] != 1
+                || receipt["complete"] != true
+                || receipt["mode"] != "group50_shared_habitat"
+                || receipt["population"] != 50
+                || receipt["next_cohort_optimizer_rebound"] != true
+                || receipt["actor_checkpoint_sha256"]
+                    != hash(&source_bytes["actor-checkpoint.json"])
+                || receipt["value_checkpoint_sha256"]
+                    != hash(&source_bytes["value-checkpoint.json"]))
+        {
+            return Err("group source is not a sealed exact native handoff".into());
+        }
         let asset =
             FoundationWeightAsset::decode_canonical(&source_bytes["trained.alife-foundation"])?;
         if receipt["new_asset_digest"].as_str() != Some(asset_digest(&asset).as_str()) {
@@ -284,6 +321,12 @@ fn main() -> Result<()> {
     } else {
         (fixture_asset(args.seed)?, args.seed, 0, None, None, None)
     };
+    let fixture = args.fixture
+        || source_receipt
+            .as_ref()
+            .map(fixture_ancestry)
+            .transpose()?
+            .unwrap_or(false);
     let (game, p, inputs) = compile_game(args.seed, founder_seed, &asset)?;
     let profile = p.sensor_profile();
     let mut trainer = if let Some(actor) = actor {
@@ -455,10 +498,10 @@ fn main() -> Result<()> {
         })
         .map(|(name, hash)| (name.clone(), hash.clone()))
         .collect::<BTreeMap<_, _>>();
-    let receipt = json!({"schema_version":1,"complete":true,"mode":"native_cpu_fresh_cohort","receipt_filename":"cpu-cycle.json","handoff_filename":"training-handoff.json","native_output_sha256":output_hashes,"backend":"native-cpu","continuation_kind":"fresh-cohort-foundation-continuation","fixture":args.fixture || source_receipt.as_ref().and_then(|r|r["fixture"].as_bool()).unwrap_or(false),
+    let receipt = json!({"schema_version":1,"complete":true,"mode":"native_cpu_fresh_cohort","receipt_filename":"cpu-cycle.json","handoff_filename":"training-handoff.json","native_output_sha256":output_hashes,"backend":"native-cpu","continuation_kind":"fresh-cohort-foundation-continuation","fixture":fixture,
   "biological_objective_version":2,"critic_objective_version":1,"objective_state_reset":false,"source_policy_version":source_version,"policy_version":version,
   "seed":args.seed,"founder_seed_base":founder_seed,"sensor_profile":profile,"sampling_temperature":args.temperature,
-  "seed_admission":{"allocation":"explicit-caller","historical_freshness":"unknown"},"source_native_sha256":source_hashes,"source_receipt":source_receipt,
+  "seed_admission":{"allocation":"explicit-caller","historical_freshness":"unknown"},"source_native_sha256":source_hashes,
   "seed_provenance":{"source_sha256":ancestry_hashes,"native_source_receipt":source_receipt,"seed_admission":{"allocation":"explicit-caller","historical_freshness":"unknown"}},
   "old_asset_digest":asset_digest(&asset),"new_asset_digest":asset_digest(&trained),"initial_actor_optimizer_step":before_actor.optimizer_step,"initial_value_optimizer_step":before_value.optimizer_step,
   "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint().optimizer_step,"completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,

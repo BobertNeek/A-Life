@@ -362,14 +362,16 @@ impl CpuFoundationTrainer {
             let projection = self.phenotype.projections()
                 [self.phenotype.synapses()[i].route_index() as usize]
                 .projection_type();
-            next.weights[i] = match projection {
-                alife_core::ProjectionType::LateralInhibition if w >= 0. => -0.0001,
-                alife_core::ProjectionType::Homeostatic
-                | alife_core::ProjectionType::MotorProposal
-                    if w < 0. =>
-                {
-                    0.0001
-                }
+            next.weights[i] = match (self.phenotype.synapses()[i].kind(), projection) {
+                (
+                    alife_core::CompiledSynapseKind::Recurrent,
+                    alife_core::ProjectionType::LateralInhibition,
+                ) if w >= 0. => -0.0001,
+                (
+                    alife_core::CompiledSynapseKind::Recurrent,
+                    alife_core::ProjectionType::Homeostatic
+                    | alife_core::ProjectionType::MotorProposal,
+                ) if w < 0. => 0.0001,
                 _ => w,
             };
             next.first_moment[i] = m;

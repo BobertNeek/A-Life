@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
 #[cfg(test)]
 mod checkpoint_tests;
+mod cpu_handoff;
 
 pub const FOUNDATION_TRAINING_GROUP_SIZE: usize = 50;
 
@@ -162,6 +163,9 @@ fn admitted_actor_rows(spans: &[Span], updates: u32, lives: usize) -> (Vec<usize
 }
 
 fn group_source(previous: &Path) -> Result<SealedCycleContinuation> {
+    if admission::source_name(previous)? == "cpu-cycle.json" {
+        return cpu_handoff::source(previous);
+    }
     if !previous.join("group50.json").is_file() {
         let source = load_cycle_continuation(previous, None)?;
         let receipt: FoundationCycleReceipt =
@@ -272,6 +276,8 @@ pub fn validate_foundation_training_group_source(previous: &Path) -> Result<serd
     let source = group_source(previous)?;
     Ok(
         serde_json::json!({"schema":1,"native_checkpoint_valid":true,
+        "source_receipt_filename":admission::source_name(previous)?,
+        "source_execution_domain":if admission::source_name(previous)? == "cpu-cycle.json" {"native-cpu"} else {"native-gpu"},
         "next_policy_version":source.policy_version,
         "biological_objective_version":BIOLOGICAL_OBJECTIVE_VERSION,
         "critic_objective_version":critic_residual::OBJECTIVE_VERSION,
@@ -461,7 +467,8 @@ fn run_owned(
         let entry = entry?;
         if entry.file_type()?.is_file()
             && (entry.path().extension().is_some_and(|e| e == "json")
-                || entry.file_name() == "trained.alife-foundation")
+                || entry.file_name() == "trained.alife-foundation"
+                || entry.file_name() == "phase.txt")
         {
             std::fs::copy(
                 entry.path(),
@@ -479,7 +486,7 @@ fn run_owned(
             return Err("source changed between admission and immutable copy".into());
         }
     }
-    let copied = group_source(request.previous)?;
+    let copied = group_source(&output.join("source-receipts"))?;
     if copied.asset != asset
         || copied.actor != actor
         || copied.value != old_value

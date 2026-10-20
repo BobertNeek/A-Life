@@ -778,3 +778,69 @@ fn cpu_differential_matches_required_hardware_sparse_replay_and_gradients() {
         near(*c, *g, 3e-5, 8e-4);
     }
 }
+
+#[test]
+fn native_signed_decoder_adam_keeps_negative_coefficients() {
+    let capacity = BrainCapacityClass::n2048();
+    let genome = BrainGenome::scaffold(0x7A11, capacity.id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+    let p = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::GroundedObjectSlotsV1,
+    )
+    .unwrap();
+    let mut weights = p
+        .synapses()
+        .iter()
+        .map(|s| s.genetic_weight())
+        .collect::<Vec<_>>();
+    let selected = p
+        .synapses()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| match s.kind() {
+            CompiledSynapseKind::Decoder(c)
+                if matches!(
+                    c.head(),
+                    DecoderHeadKind::ActionCandidate | DecoderHeadKind::SpeechPayload
+                ) =>
+            {
+                Some(i)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(!selected.is_empty());
+    for &i in &selected {
+        weights[i] = -0.3;
+    }
+    let asset = FoundationWeightAsset::from_trained_weights(
+        &p,
+        weights,
+        alife_core::TrainingStageManifest::new(1, 1, 1),
+    )
+    .unwrap();
+    let genome = BrainGenome::scaffold(0x7A11, BrainCapacityClass::n2048().id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+    let (signed, _) =
+        PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset.clone())
+            .unwrap();
+    let mut trainer = trainer(&signed, &asset);
+    trainer
+        .apply_gradients(&vec![0.; signed.synapses().len()])
+        .unwrap();
+    for i in selected {
+        assert!(trainer.weights()[i] < 0.);
+    }
+    let exported = trainer
+        .export_candidate(alife_core::TrainingStageManifest::new(1, 1, 1))
+        .unwrap();
+    let genome = BrainGenome::scaffold(0x7A11, BrainCapacityClass::n2048().id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+    PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, exported).unwrap();
+}

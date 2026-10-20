@@ -31,7 +31,7 @@ Seed allocation remains caller-owned. The CPU receipt records historical
 freshness as **Unknown** and preserves the complete source receipt and exact
 source hashes. It does not reserve seeds or claim accepted mixed-care ancestry.
 The source must be a completed native handoff (`next-cohort-admitted`) or a
-completed CPU handoff (`complete-fresh-cohort-cpu`), with matching asset, full
+completed CPU handoff (`complete-fresh-cohort-cpu`), or complete group50 native receipt, with matching asset, full
 checkpoints, objective versions and ages. Specialized critic-correction source
 packages still require their existing continuity admission; this CLI does not
 bypass that admission or repair/reset an optimizer.
@@ -89,16 +89,21 @@ The CLI writes `training-handoff.json`, `trained.alife-foundation`,
 `actor-checkpoint.json`, `value-checkpoint.json` and `cpu-cycle.json`.
 The CPU receipt has `complete=true`, `mode=native_cpu_fresh_cohort`,
 `receipt_filename=cpu-cycle.json`, `backend=native-cpu`, exact output SHA256s,
-original `source_receipt`, and `seed_provenance.source_sha256` plus
+the original receipt once under `seed_provenance.native_source_receipt`, and `seed_provenance.source_sha256` plus
 `seed_provenance.native_source_receipt`. The ancestry pin set uses the actual
 source receipt filename and the three native model files; all consumed source
 bytes, including phase/handoff files, are separately retained and rehashed.
 
-Group50's read-only source/admission reader must explicitly recognize this
-receipt filename/domain and validate the typed handoff and its SHA256 before
-import. Its latest-known-lane ancestry check must follow the preserved receipt
-chain. That narrow integration belongs to the group50 owner; the current CPU
-branch does not change its hardware candidate or fabricate `cycle.json`.
+Group50's existing read-only source/admission reader recognizes this receipt
+filename/domain and validates the typed handoff, native checkpoints and SHA256s
+before any reservation or device access. Immutable source copies include the CPU
+phase marker and are themselves validated. Latest-known-lane admission verifies
+intermediate receipt pins and compares the native terminal receipt with the exact
+surviving mixed checkpoint; older roots and edited intermediate links are rejected.
+Historical freshness remains Unknown under known-exclusions. CPU continuation also
+accepts exact complete group50 native output, preserving weights, moments, ages and
+fixture ancestry in either direction. These are source-admission changes; group
+population, collection kernels and GPU evidence domains retain their existing path.
 Real hardware execution of the GPU import remains **Unknown** on this CPU host.
 
 ## Validation and measured work
@@ -123,13 +128,15 @@ fixes bind all private sidecars/RNG and use exact executed work counters.
 
 Unoptimized cloud fixtures on AMD EPYC 9V74, four-core quota, 16 GiB RAM, no GPU:
 five sealed canonical decisions plus a serialized exact restore completed in
-1.187505 s. A separate seven-decision trajectory produced six real training rows,
-advancing actor 16684→16685 and critic 19800→19801 in 0.114456 s of update work.
-The final executable 12-tick fixture collected 12 valid canonical decisions
+1.002632 s after integrating current founder/group50 main. A separate seven-decision
+trajectory produced six real training rows, advancing actor 16684→16685 and critic
+19800→19801 in 0.120602 s of update work.
+The earlier executable 12-tick fixture at integration commit b21d266d collected 12 valid canonical decisions
 and 11 rows in 0.991735 s (update 0.292100 s); its continuation collected another
 12 decisions in 0.952347 s (update 0.276023 s), preserving ages 2→4.
 [Structured fixture results](20261020-native-cpu-fixture-results.json) pin the
-exact receipts and native outputs.
+earlier receipts and native outputs. These executable timings precede the current
+founder corrections; current-main throughput is not inferred from them.
 These bounded fixture measurements do not establish a production speedup or
 accepted-policy behavior. Updated exact-head CI is recorded on PR110.
 
@@ -151,7 +158,11 @@ The accepted policy's 32768 actor weights and actor/value ages 16684/19800 remai
 unmodified. Actual accepted-package CPU continuation, latest-known-lane group50
 admission and terminal GPU individual restore are **Unknown**, pending source
 access and their respective qualification. Integer-age fixtures are numerical
-regressions, not substitutes for the unavailable package.
+regressions, not substitutes for the unavailable package. PR113 founder corrections
+are included: CPU Adam applies inherited sign restrictions only to recurrent
+synapses, preserving signed action/speech readouts. PR112's credit-weighted Oja
+change remains unmerged at this report revision; CPU waking plasticity follows the
+current production shader and must follow that merge before new qualification.
 
 ## Requirement trace
 
