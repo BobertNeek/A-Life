@@ -6,6 +6,11 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
+name = "export_native_training_handoff"
+path = "src/bin/export_native_training_handoff.rs"
+required-features = ["foundation-training"]
+
+[[bin]]
 name = "train_n2048_care"
 path = "src/bin/train_n2048_care.rs"
 required-features = ["foundation-training"]

@@ -24,14 +24,17 @@ fn edit(path: &Path, change: impl FnOnce(&mut serde_json::Value)) {
 }
 
 pub(crate) fn fixture() -> Fixture {
-    fixture_with_residual(None)
+    fixture_with_residual(None, 0)
 }
 
 pub(crate) fn residual_fixture() -> Fixture {
-    fixture_with_residual(Some(b"{\"optimizer_updates\":2}"))
+    fixture_with_residual(Some(b"{\"optimizer_updates\":2}"), 0)
 }
 
-fn fixture_with_residual(residual: Option<&[u8]>) -> Fixture {
+pub(crate) fn full_residual_correction_fixture() -> Fixture {
+    fixture_with_residual(Some(b"{\"optimizer_updates\":2}"), 1)
+}
+fn fixture_with_residual(residual: Option<&[u8]>, critic_objective: u16) -> Fixture {
     let source = crate::foundation_archived_success_replay::tests::checkpoint_fixture(5124);
     let root = source.with_file_name(format!(
         "{}-correction",
@@ -41,6 +44,11 @@ fn fixture_with_residual(residual: Option<&[u8]>) -> Fixture {
     let preserved = root.join("source");
     std::fs::rename(source, &preserved).unwrap();
     let source = preserved;
+    if critic_objective == 1 {
+        edit(&source.join("cycle.json"), |data| {
+            data["critic_objective_version"] = 1.into();
+        });
+    }
     if let Some(bytes) = residual {
         std::fs::write(source.join(RESIDUAL_UPDATE), bytes).unwrap();
         edit(&source.join("cycle.json"), |data| {

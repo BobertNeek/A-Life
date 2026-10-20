@@ -66,6 +66,9 @@ impl TryFrom<&OutcomeCreditPacket> for GpuOutcomeCreditRecord {
     type Error = ScaffoldContractError;
 
     fn try_from(packet: &OutcomeCreditPacket) -> Result<Self, Self::Error> {
+        if packet.policy_backend() != alife_core::PolicyBackend::NeuralClosedLoopGpu {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
         validate_outcome_credit_schema(packet)?;
         packet.organism_id().validate()?;
         packet.sequence_id().validate()?;

@@ -154,3 +154,103 @@ fn partial_group_handoffs_and_changed_value_bytes_are_rejected() {
     std::fs::write(source.0.join("value-checkpoint.json"), b"{}").unwrap();
     assert!(group_source(&source.0).is_err());
 }
+
+fn cpu_fixture() -> (
+    Source,
+    alife_training::FoundationTrainerCheckpoint,
+    alife_training::PpoValueHeadCheckpoint,
+) {
+    let (source, actor, value) = fixture();
+    let asset = FoundationWeightAsset::decode_canonical(
+        &std::fs::read(source.0.join("trained.alife-foundation")).unwrap(),
+    )
+    .unwrap();
+    let seed = 872_991;
+    let founder_seed = 539_363_617;
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+    config.founder_seed_base = founder_seed;
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.sensor_profile = asset.manifest().sensor_profile();
+    let game =
+        alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+    let record = game.world.organism_registry().iter().next().unwrap();
+    let genome = record.phenotype().brain_genome.clone();
+    let development = crate::gpu_live_runtime::foundation_construction_development(
+        &genome,
+        &alife_core::BrainCapacityClass::n2048(),
+        &record
+            .phenotype()
+            .development_state_at(alife_core::Tick::ZERO)
+            .unwrap(),
+    )
+    .unwrap();
+    let (_, inputs) = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        asset.clone(),
+    )
+    .unwrap();
+    let handoff = alife_training::FoundationTrainingHandoffV1::new(
+        alife_training::FoundationTrainingBackendV1::NativeCpu,
+        7,
+        inputs,
+        actor.clone(),
+        value.clone(),
+    )
+    .unwrap();
+    let bytes = serde_json::to_vec(&handoff).unwrap();
+    std::fs::write(source.0.join("training-handoff.json"), bytes).unwrap();
+    let hashes = [
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+        "training-handoff.json",
+    ]
+    .into_iter()
+    .map(|name| {
+        (
+            name,
+            admission::hash(&std::fs::read(source.0.join(name)).unwrap()),
+        )
+    })
+    .collect::<BTreeMap<_, _>>();
+    let receipt = serde_json::json!({"schema_version":1,"complete":true,"mode":"native_cpu_fresh_cohort","backend":"native-cpu","receipt_filename":"cpu-cycle.json","handoff_filename":"training-handoff.json","seed":seed,"founder_seed_base":founder_seed,"policy_version":7,"biological_objective_version":2,"critic_objective_version":1,"objective_state_reset":false,"new_asset_digest":digest(&asset),"actor_optimizer_step":actor.optimizer_step,"value_optimizer_step":value.optimizer_step,"native_output_sha256":hashes});
+    std::fs::remove_file(source.0.join("group50.json")).unwrap();
+    std::fs::write(
+        source.0.join("cpu-cycle.json"),
+        serde_json::to_vec(&receipt).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(source.0.join("phase.txt"), "complete-fresh-cohort-cpu").unwrap();
+    (source, actor, value)
+}
+#[test]
+fn cpu_native_source_import_preserves_full_state_and_execution_domain_without_gpu() {
+    let (source, actor, value) = cpu_fixture();
+    let loaded = group_source(&source.0).unwrap();
+    assert_eq!(loaded.actor, actor);
+    assert_eq!(loaded.value, value);
+    assert_eq!(loaded.policy_version, 8);
+    let report = validate_foundation_training_group_source(&source.0).unwrap();
+    assert_eq!(report["source_receipt_filename"], "cpu-cycle.json");
+    assert_eq!(report["source_execution_domain"], "native-cpu");
+    assert_eq!(report["seed_reserved"], false);
+    std::fs::write(source.0.join("phase.txt"), "collecting-canonical-cpu").unwrap();
+    assert!(group_source(&source.0).is_err());
+}
+#[test]
+fn cpu_source_rejects_changed_checkpoint_hash_and_ambiguous_receipt() {
+    let (source, _, _) = cpu_fixture();
+    let path = source.0.join("actor-checkpoint.json");
+    let mut actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    actor.first_moment[0] += 0.1;
+    std::fs::write(&path, serde_json::to_vec(&actor).unwrap()).unwrap();
+    assert!(group_source(&source.0).is_err());
+    std::fs::write(source.0.join("cycle.json"), b"{}").unwrap();
+    assert!(group_source(&source.0)
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("ambiguous"));
+}

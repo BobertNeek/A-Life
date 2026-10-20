@@ -381,6 +381,14 @@ pub(crate) fn compile_source(
     seed: u64,
     founder: u64,
 ) -> Result<BrainPhenotype> {
+    Ok(compile_source_with_inputs(asset, seed, founder)?.0)
+}
+
+pub(crate) fn compile_source_with_inputs(
+    asset: FoundationWeightAsset,
+    seed: u64,
+    founder: u64,
+) -> Result<(BrainPhenotype, alife_core::PhenotypeCompilerInputs)> {
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = founder;
@@ -405,8 +413,7 @@ pub(crate) fn compile_source(
             genome,
             development,
             asset,
-        )?
-        .0,
+        )?,
     )
 }
 

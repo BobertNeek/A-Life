@@ -12,6 +12,8 @@ alife_runtime = { path = "../alife_runtime", features = ["training-rollout"] }
 alife_world = { path = "../alife_world" }
 bytemuck.workspace = true
 serde.workspace = true
+serde_json = { workspace = true, optional = true }
+sha2 = { version = "=0.10.9", optional = true }
 thiserror.workspace = true
 wgpu.workspace = true
 
@@ -21,4 +23,10 @@ serde_json.workspace = true
 
 [features]
 default = []
+cpu-backend = ["dep:serde_json", "dep:sha2"]
 gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]
+
+[[bin]]
+name = "train_cpu_foundation"
+path = "src/bin/train_cpu_foundation.rs"
+required-features = ["cpu-backend"]

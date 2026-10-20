@@ -43,12 +43,19 @@ Changes to them require an authorized task that covers the affected behavior.
   Use scalable brain classes and sparse class-bucketed storage.
 - The internal SLM is a private subconscious semantic prior. External teachers
   teach through ordinary perception.
-- Production neural execution is GPU-authoritative WGSL. Do not add a live CPU
-  shadow, parity gate, or automatic CPU neural fallback.
+- Production gameplay neural execution remains GPU-authoritative WGSL. Do not add
+  a live CPU shadow, parity gate, or automatic CPU neural fallback.
+- Explicit offline CPU cloud training is authorized (19 October 2026, 23:17 UTC).
+  Keep it opt-in in `alife_training`, executing the actual compiled neural and
+  learning semantics with distinct sealed CPU evidence. Preserve learned weights,
+  private state boundaries and exact integer optimizer ages across native handoffs.
+  Report measured work and qualification limits; offline CPU output is not GPU
+  hardware evidence. See `docs/performance/20261019-native-cpu-training-backend.md`.
 - Promote only N512, N1024, and N2048 until larger tiers pass their documented
   causal and performance gates.
 - Player, creature, and teacher speech enters as spatial perception. Neural
-  `Vocalize` payload selection remains GPU-authoritative.
+  `Vocalize` payload selection remains GPU-authoritative during gameplay;
+  the explicit offline CPU backend seals its own CPU neural evidence.
 
 ## Windows commands
 

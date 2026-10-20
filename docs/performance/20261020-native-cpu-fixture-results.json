@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "deterministic-canonical-cpu-fixture",
+  "date_utc": "2026-10-20",
+  "profile": "unoptimized",
+  "graphics_device_created": false,
+  "vulkan_icd_filename": "/no-vulkan-icd.json",
+  "accepted_policy_package_loaded": false,
+  "speedup_claimed": false,
+  "command": "train_cpu_foundation (--fixture | --previous FIRST) --output NEW --seed EXPLICIT --ticks 12 --temperature 0.9",
+  "runs": [
+    {
+      "run": "first",
+      "cpu_cycle_sha256": "35da504fa9ba1419e44e5bcf2ed035ca1d869385de5274c2dca2b3d96cbbbdae",
+      "schema_version": 1,
+      "backend": "native-cpu",
+      "continuation_kind": "fresh-cohort-foundation-continuation",
+      "fixture": true,
+      "biological_objective_version": 2,
+      "critic_objective_version": 1,
+      "objective_state_reset": false,
+      "seed": 799981,
+      "founder_seed_base": 799981,
+      "source_policy_version": 0,
+      "policy_version": 1,
+      "initial_actor_optimizer_step": 0,
+      "actor_optimizer_step": 2,
+      "initial_value_optimizer_step": 0,
+      "value_optimizer_step": 2,
+      "canonical_valid_decisions": 12,
+      "training_rows": 11,
+      "collection_seconds": 0.991735199,
+      "update_seconds": 0.292099556,
+      "elapsed_seconds": 3.116568266,
+      "completed_epochs": 2,
+      "stopped_for_kl": false,
+      "hardware": {
+        "architecture": "x86_64",
+        "backend": "native-cpu",
+        "logical_parallelism": 4
+      },
+      "seed_admission": {
+        "allocation": "explicit-caller",
+        "historical_freshness": "unknown"
+      },
+      "native_output_sha256": {
+        "actor-checkpoint.json": "6725416acfe9aff26a2942033eba9845914748076ca6dba245eae94032594fb7",
+        "trained.alife-foundation": "4d1e83a2db583e85d293ad205e4498a4732bdaf057038316ff5a2af3957ddc23",
+        "training-handoff.json": "19c7ab803cf7e216b08426ae80a276f09d1eb2ac08a76d326874ff6149f16ad6",
+        "value-checkpoint.json": "c10972c5077cd4ee46ff7f196d7138494c85e99c172e89664718de36941f5ba8"
+      },
+      "terminal_gpu_individual_restore_proven": false
+    },
+    {
+      "run": "continuation",
+      "cpu_cycle_sha256": "87e69e67aa9c1df66fdd9be0d983f4ee22c64116397d8c02f45360b885b98e78",
+      "schema_version": 1,
+      "backend": "native-cpu",
+      "continuation_kind": "fresh-cohort-foundation-continuation",
+      "fixture": true,
+      "biological_objective_version": 2,
+      "critic_objective_version": 1,
+      "objective_state_reset": false,
+      "seed": 799982,
+      "founder_seed_base": 799981,
+      "source_policy_version": 1,
+      "policy_version": 2,
+      "initial_actor_optimizer_step": 2,
+      "actor_optimizer_step": 4,
+      "initial_value_optimizer_step": 2,
+      "value_optimizer_step": 4,
+      "canonical_valid_decisions": 12,
+      "training_rows": 11,
+      "collection_seconds": 0.952347452,
+      "update_seconds": 0.276023111,
+      "elapsed_seconds": 3.7018433809999998,
+      "completed_epochs": 2,
+      "stopped_for_kl": false,
+      "hardware": {
+        "architecture": "x86_64",
+        "backend": "native-cpu",
+        "logical_parallelism": 4
+      },
+      "seed_admission": {
+        "allocation": "explicit-caller",
+        "historical_freshness": "unknown"
+      },
+      "native_output_sha256": {
+        "actor-checkpoint.json": "0f0a32a451d6db9da923cd98ab78202255701af435c516abdb0a4f57d67c8a3e",
+        "trained.alife-foundation": "f48013c9b95fbf2e28453af44d7fa3276c00750889c205799472b20b295bbfe8",
+        "training-handoff.json": "3afd3d9b3f9be7b24094d471cede1b4562f894bf17cdbe9a4fae246deab4c0fe",
+        "value-checkpoint.json": "63722a7d1069e0e74b3e497a42d69389c9a13dcecb7bef035e5b7b13b1f61b11"
+      },
+      "terminal_gpu_individual_restore_proven": false
+    }
+  ]
+}

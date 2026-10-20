@@ -56,6 +56,8 @@ pub enum PolicyBackend {
     #[default]
     NeuralClosedLoopGpu,
     HeuristicBaseline,
+    /// Explicit offline neural execution; never an automatic gameplay fallback.
+    NeuralClosedLoopCpu,
 }
 
 impl PolicyBackend {

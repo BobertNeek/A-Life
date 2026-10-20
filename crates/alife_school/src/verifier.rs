@@ -228,7 +228,7 @@ fn selected_action_came_from_arbitration(patch: &ExperiencePatch) -> bool {
                     .is_none(),
             }
         }
-        EvidenceKind::NeuralClosedLoopGpu => {
+        EvidenceKind::NeuralClosedLoopGpu | EvidenceKind::NeuralClosedLoopCpu => {
             let Ok(evidence) = decision.neural_evidence() else {
                 return false;
             };

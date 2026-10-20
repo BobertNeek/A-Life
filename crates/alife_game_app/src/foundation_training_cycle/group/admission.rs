@@ -7,8 +7,113 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// The receipt name is part of the exact source hash contract; ambiguity is an error.
+pub(super) fn source_name(previous: &Path) -> Result<&'static str> {
+    let names = ["cycle.json", "group50.json", "cpu-cycle.json"]
+        .into_iter()
+        .filter(|name| previous.join(name).is_file())
+        .collect::<Vec<_>>();
+    match names.as_slice() {
+        [name] => Ok(*name),
+        [] => Err("source has no native training receipt".into()),
+        _ => Err("source has ambiguous training receipt domains".into()),
+    }
+}
+
 pub(super) fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Return only ancestry links whose embedded receipt matches its pinned bytes.
+/// Existing native writers use serde JSON pretty/compact, optionally newline.
+/// Exact retained source bytes also admit other source formatting at the root.
+fn verified_source_links(previous: &Path) -> Result<Value> {
+    let receipt_name = source_name(previous)?;
+    if receipt_name == "cycle.json" {
+        return Ok(Value::Null);
+    }
+    let (_, mut native) = read(&previous.join(receipt_name))?;
+
+    for depth in 0..64 {
+        let group = native["complete"] == true
+            && native["mode"] == "group50_shared_habitat"
+            && native["population"] == 50;
+        let cpu = native["complete"] == true
+            && native["mode"] == "native_cpu_fresh_cohort"
+            && native["backend"] == "native-cpu"
+            && native["receipt_filename"] == "cpu-cycle.json"
+            && native["objective_state_reset"] == false
+            && native["biological_objective_version"] == 2
+            && native["critic_objective_version"] == 1;
+        if !group && !cpu {
+            return Err("invalid training ancestry receipt".into());
+        }
+        let provenance = &native["seed_provenance"];
+        let map = provenance["source_sha256"]
+            .as_object()
+            .ok_or("missing training ancestry hashes")?;
+        let names = ["cycle.json", "group50.json", "cpu-cycle.json"]
+            .into_iter()
+            .filter(|name| map.contains_key(*name))
+            .collect::<Vec<_>>();
+        if names.len() != 1
+            || map.len() != 4
+            || [
+                "trained.alife-foundation",
+                "actor-checkpoint.json",
+                "value-checkpoint.json",
+            ]
+            .iter()
+            .any(|name| !map.contains_key(*name))
+        {
+            return Err("invalid native ancestry pin set".into());
+        }
+        let name = names[0];
+        let child = &provenance["native_source_receipt"];
+        let expected = map[name]
+            .as_str()
+            .ok_or("missing pinned ancestry receipt hash")?;
+        // The terminal native receipt uses a typed field order. Its exact raw
+        // hash and parsed content are checked against the surviving mixed file
+        // once Python resolves that file; no byte reconstruction is needed.
+        if name == "cycle.json" {
+            return Ok(
+                json!({"pin_set_sha256":hash(&serde_json::to_vec(map)?), "terminal_native_receipt":child}),
+            );
+        }
+        let mut verified = false;
+        if depth == 0 {
+            let retained = previous
+                .join(if cpu {
+                    "source-native"
+                } else {
+                    "source-receipts"
+                })
+                .join(name);
+            if retained.is_file() {
+                let (bytes, document) = read(&retained)?;
+                verified = hash(&bytes) == expected && document == *child;
+                if !verified {
+                    return Err("retained training ancestry receipt changed".into());
+                }
+            }
+        }
+        if !verified {
+            for mut bytes in [
+                serde_json::to_vec(child)?,
+                serde_json::to_vec_pretty(child)?,
+            ] {
+                verified |= hash(&bytes) == expected;
+                bytes.push(b'\n');
+                verified |= hash(&bytes) == expected;
+            }
+        }
+        if !verified {
+            return Err("embedded training receipt differs from pinned source hash".into());
+        }
+        native = child.clone();
+    }
+    Err("training ancestry exceeds64 links".into())
 }
 
 // Reuse the accepted read-only recovery reconciliation, including its Python
@@ -31,12 +136,16 @@ fn mixed_lane_admission(
     if !root.join("scripts/run_mixed_care_serial.py").is_file() {
         return Err("mixed-lane admission requires the accepted recovery validator".into());
     }
+    let verified_links = match verified_source_links(previous) {
+        Ok(link) => json!({"link":link,"error":null}),
+        Err(error) => json!({"link":null,"error":error.to_string()}),
+    };
     let output = std::process::Command::new("python")
         .args([
             "-B",
             "-c",
             r#"
-import pathlib, sys
+import pathlib, sys, json, hashlib
 sys.path.insert(0, str(pathlib.Path.cwd() / "scripts"))
 import run_mixed_care_serial as mixed
 document, digest = mixed.load(pathlib.Path(sys.argv[1]))
@@ -59,19 +168,15 @@ if runs:
     # Rust canonicalization uses the Windows extended-length namespace. Compare
     # filesystem identity so ordinary and verbatim spellings share one lineage.
     matches = document["source_sha256"] == expected and previous.samefile(latest)
-    if not matches and (previous / "group50.json").is_file():
-        native, digest = mixed.load(previous / "group50.json")
-        mixed.require(digest == document["source_sha256"].get("group50.json"), "group ancestry root changed")
-        for _ in range(64):
-            mixed.require(native.get("complete") is True and native.get("mode") == "group50_shared_habitat"
-                          and native.get("population") == 50, "invalid group ancestry receipt")
-            provenance = native.get("seed_provenance", {})
-            if provenance.get("source_sha256") == expected:
-                matches = True
-                break
-            native = provenance.get("native_source_receipt", {})
-            if "seed_provenance" not in native:
-                break
+    if not matches:
+        expected_link = hashlib.sha256(json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        proof = json.loads(sys.argv[6])
+        mixed.require(proof["error"] is None, proof["error"] or "invalid training ancestry")
+        link = proof["link"] or {}
+        latest_receipt, latest_receipt_hash = mixed.inspector_io.load_json(latest / "cycle.json", mixed.seeds.MAX_DOCUMENT_BYTES)
+        matches = (link.get("pin_set_sha256") == expected_link
+                   and latest_receipt_hash == expected["cycle.json"]
+                   and link.get("terminal_native_receipt") == latest_receipt)
     mixed.require(matches, "group source does not descend from the latest surviving mixed checkpoint")
 "#,
         ])
@@ -80,6 +185,7 @@ if runs:
         .arg(history_sha256)
         .arg(previous.canonicalize()?)
         .arg(if known { "known-exclusions" } else { "strict" })
+        .arg(serde_json::to_string(&verified_links)?)
         .current_dir(root)
         .output()?;
     if !output.status.success() {
@@ -155,7 +261,7 @@ impl<'de> serde::Deserialize<'de> for Unique {
         deserializer.deserialize_any(Visitor)
     }
 }
-fn read(path: &Path) -> Result<(Vec<u8>, Value)> {
+pub(super) fn read(path: &Path) -> Result<(Vec<u8>, Value)> {
     use std::io::Read;
     let mut bytes = Vec::new();
     std::fs::File::open(path)?
@@ -308,11 +414,7 @@ pub(super) fn admit(
     if known_exclusions || lane.join(".mixed-care-seed-reservations.json").exists() {
         mixed_lane_admission(history, lane, previous, &hash(&bytes), known_exclusions)?;
     }
-    let source_name = if previous.join("group50.json").is_file() {
-        "group50.json"
-    } else {
-        "cycle.json"
-    };
+    let source_name = source_name(previous)?;
     let (_, native) = read(&previous.join(source_name))?;
     let source_seed = native["seed"]
         .as_u64()
@@ -546,8 +648,8 @@ later = run_output / "attempt-00000"
 later.mkdir(parents=True)
 for name in mixed.FILES:
     shutil.copyfile(source / name, later / name)
-receipt = {"seed": 101}
-(later / "cycle.json").write_text(json.dumps(receipt))
+receipt = {"seed": 101, "struct_declared_first": True, "policy_version": 7}
+(later / "cycle.json").write_text(json.dumps(receipt, indent=2))
 (later / "initial.alife-foundation").write_bytes(b"synthetic original")
 plan = {"source": str(source), "source_sha256": document["source_sha256"], "seed_range": [101, 101],
         "seed_admission": document["seed_admission"]}
@@ -564,11 +666,8 @@ history.write_text(json.dumps(document))
 "#]).arg(&f.root).arg(&f.history).current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).status().unwrap();
         assert!(status.success());
         f.document = read(&f.history).unwrap().1;
-        assert!(f
-            .admit(200, true)
-            .unwrap_err()
-            .to_string()
-            .contains("latest surviving"));
+        let denial = f.admit(200, true).unwrap_err().to_string();
+        assert!(denial.contains("latest surviving"), "{denial}");
         let known = f.document.clone();
         f.document["complete"] = json!(true);
         f.document["seed_admission"] =
@@ -579,13 +678,9 @@ history.write_text(json.dumps(document))
             .unwrap_err()
             .to_string()
             .contains("latest surviving"));
-        f.document = known;
+        f.document = known.clone();
         let hashes = |path: &Path| -> Value {
-            let receipt = if path.join("group50.json").exists() {
-                "group50.json"
-            } else {
-                "cycle.json"
-            };
+            let receipt = source_name(path).unwrap();
             Value::Object(
                 [
                     receipt,
@@ -608,8 +703,8 @@ history.write_text(json.dumps(document))
         f.document["consumed_seed_ranges"] = json!([[100, 101]]);
         f.write();
         assert!(f.admit(200, true).is_ok());
-        // Two actual receipt links prove later group continuations remain valid.
-        for seed in [102, 103] {
+        // Cross-domain receipt links retain the exact latest accepted native root.
+        for (seed, cpu) in [(102, true), (103, false), (104, true)] {
             let next = f.root.join(format!("group-{seed}"));
             std::fs::create_dir(&next).unwrap();
             for name in [
@@ -619,15 +714,24 @@ history.write_text(json.dumps(document))
             ] {
                 std::fs::copy(f.source.join(name), next.join(name)).unwrap();
             }
-            let native = if f.source.join("group50.json").exists() {
-                "group50.json"
-            } else {
-                "cycle.json"
-            };
-            let receipt = json!({"schema":1,"complete":true,"mode":"group50_shared_habitat","population":50,"seed":seed,
+            let native = source_name(&f.source).unwrap();
+            let mut receipt = json!({"schema":1,"complete":true,"mode":"group50_shared_habitat","population":50,"seed":seed,
                 "seed_provenance":{"source_sha256":hashes(&f.source),"native_source_receipt":read(&f.source.join(native)).unwrap().1}});
+            let receipt_name = if cpu {
+                "cpu-cycle.json"
+            } else {
+                "group50.json"
+            };
+            if cpu {
+                receipt["mode"] = json!("native_cpu_fresh_cohort");
+                receipt["backend"] = json!("native-cpu");
+                receipt["receipt_filename"] = json!("cpu-cycle.json");
+                receipt["objective_state_reset"] = json!(false);
+                receipt["biological_objective_version"] = json!(2);
+                receipt["critic_objective_version"] = json!(1);
+            }
             std::fs::write(
-                next.join("group50.json"),
+                next.join(receipt_name),
                 serde_json::to_vec(&receipt).unwrap(),
             )
             .unwrap();
@@ -635,8 +739,48 @@ history.write_text(json.dumps(document))
             f.document["source_sha256"] = hashes(&f.source);
             f.document["consumed_seed_ranges"] = json!([[100, seed]]);
             f.write();
-            assert!(f.admit(200, true).is_ok());
+            let admitted = f.admit(200, true).unwrap();
+            assert_eq!(
+                admitted["seed_admission"]["historical_freshness"],
+                "unknown"
+            );
         }
+        // Changing an embedded intermediate cannot manufacture a new lineage,
+        // even after the caller pins the changed root receipt in its history.
+        let receipt_name = source_name(&f.source).unwrap();
+        let good_receipt = read(&f.source.join(receipt_name)).unwrap().1;
+        let mut changed = good_receipt.clone();
+        changed["seed_provenance"]["native_source_receipt"]["seed"] = json!(999);
+        std::fs::write(
+            f.source.join(receipt_name),
+            serde_json::to_vec(&changed).unwrap(),
+        )
+        .unwrap();
+        f.document["source_sha256"] = hashes(&f.source);
+        f.write();
+        assert!(f
+            .admit(200, true)
+            .unwrap_err()
+            .to_string()
+            .contains("pinned source hash"));
+        std::fs::write(
+            f.source.join(receipt_name),
+            serde_json::to_vec(&good_receipt).unwrap(),
+        )
+        .unwrap();
+        // An exact-byte history for an older root must not become a descendant.
+        let receipt_name = source_name(&f.source).unwrap();
+        let mut receipt = read(&f.source.join(receipt_name)).unwrap().1;
+        receipt["seed_provenance"]["source_sha256"] = known["source_sha256"].clone();
+        receipt["seed_provenance"]["native_source_receipt"] = json!({"seed":100});
+        std::fs::write(
+            f.source.join(receipt_name),
+            serde_json::to_vec(&receipt).unwrap(),
+        )
+        .unwrap();
+        f.document["source_sha256"] = hashes(&f.source);
+        f.write();
+        assert!(f.admit(200, true).is_err());
     }
     #[test]
     fn source_seed_and_inherited_exclusions_are_required_even_in_a_new_lane() {

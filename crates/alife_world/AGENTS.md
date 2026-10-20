@@ -18,6 +18,7 @@ Rules:
 - Do not let neural outputs bypass world validation.
 - Player, creature, and teacher speech are spatial world perception.
 - `Vocalize` is an unscored opportunity whose payload is selected by the GPU
-  brain.
+  brain during gameplay. Explicit offline CPU training uses its sealed CPU neural
+  selection; world validation and spatial speech perception remain authoritative.
 - Death archiving completes before GPU retirement and despawn.
 - Implement reviewed world behavior through focused modules and stable contracts.
