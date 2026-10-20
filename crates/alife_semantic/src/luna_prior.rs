@@ -492,6 +492,7 @@ impl PrivateRunDirectory {
                 "alife-codex-prior-{}-{now}-{id}",
                 std::process::id()
             ));
+            #[cfg_attr(not(unix), allow(unused_mut))]
             let mut builder = fs::DirBuilder::new();
             #[cfg(unix)]
             {
