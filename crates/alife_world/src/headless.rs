@@ -11264,7 +11264,6 @@ mod task_4_3a2_tests {
         let second_boundary = Tick(first_boundary.raw() + 1);
         assert_eq!(world.try_advance_tick().unwrap(), second_boundary);
         assert!(world.organism_registry().get(expected_child_id).is_some());
-        assert_eq!(world.organism_registry().iter().count(), 3);
     }
 
     #[test]

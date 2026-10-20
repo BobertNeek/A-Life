@@ -5,11 +5,11 @@ The older capability matrix below is a historical baseline, not a fresh HEAD val
 
 ## Current care and training work
 
-- **Signed Decoders & World-Model-to-Motor Tracts**: `ProjectionType::MotorProposal` (`TemporalPredictive -> ActionPlanning`) and `ActionCandidate` / `SpeechPayload` decoders support signed (excitatory and inhibitory) weights in both phenotype compilation and GPU foundation training, with negative default distance weights so closer candidates score higher by default.
-- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Interact`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), decoupled from `GRAB` (`CandidateActionFamily::Contact`).
-- **Credit-Gated Waking Oja Normalization**: Waking fast-weight homeostatic decay in `closed_loop_plasticity.wgsl` is gated by `clamp(abs(local_third_factor * credited_eligibility), 0.0, 1.0)` so unrewarded activity does not erase inherited or sleep-consolidated weights.
-- **Valence-Aware Innate Priors & Newborn Nociception**: `Approach` innate non-contact cues respect chemical/recalled valence (`0.0` for known hazards, `1.0` for food, `0.75` neutral), `Avoid` includes a non-contact spatial retreat fallback, and newborn nociception is enabled unconditionally.
-- **Batched Multi-Creature GPU Training Capture**: Foundation training captures mutable GPU state across all resident organisms in two batched submissions per tick (`capture_training_state_batch`) with fast `zstd` replay streaming.
+- **Signed Decoders**: `ActionCandidate` and `SpeechPayload` mathematical readouts support signed weights in compilation and foundation training. Recurrent pathways retain their inherited route-sign rules; fresh builtin distance readouts prefer nearer equivalent observations.
+- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Interact`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), separate from `GRAB` (`CandidateActionFamily::Contact`).
+- **Credit-Gated Waking Oja Normalization**: Waking normalization scales with `abs(local_third_factor * credited_eligibility)`; zero causal credit leaves the fast-weight contribution unchanged.
+- **Grounded Priors and Newborn Nociception**: Distant `GroundedTerrainVisionV1` objects supply contact-gated chemical lanes, so Approach uses the neutral 0.75 geometry scale there. Recalled target valence enters through the separate learned-memory decoder, not the innate function. Legacy `GroundedObjectSlotsV1` chemistry and fractional-contact behavior retain their existing semantics. Avoid keeps its noncontact spatial fallback; newborn pain remains enabled. These mechanisms do not establish correct learned hazard avoidance under combined drives.
+- **Batched Multi-Creature GPU Training Capture**: `capture_training_states` captures each cohort before and after inference through bounded staging packets, with streamed `zstd` cohort replay.
 
 The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner`, and `Era1TrialRunner` remain **Blocked** on canonical organism biology and receptor-gated learning integration. This does not block the foundation trainer or the production organism loop.
 
