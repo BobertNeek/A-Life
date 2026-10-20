@@ -625,7 +625,7 @@ fn play_preserves_angular_speed_and_rejects_unobserved_feature_overrides() {
                 original.sensor_profile(),
                 original.sensory().clone(),
                 original.body(),
-                original.homeostasis().clone(),
+                *original.homeostasis(),
                 candidates,
                 original.profile_provenance(),
                 slots.clone(),
