@@ -17,8 +17,9 @@ These are CPU source/arithmetic and physical-world tests, not GPU acceptance.
 
 - **Distant avoidance:** production `GroundedTerrainVisionV1` contact calibration
   zeros source-specific chemistry and temperature. The old Avoid prior read
-  negative chemistry anyway, giving zero distant prior. Now it uses observed
-  bearing magnitude under fear, pain, or temperature urgency. For seed 96001,
+  negative chemistry anyway, giving zero distant prior. It now falls back to
+  observed bearing magnitude before contact under fear, pain, or temperature
+  urgency; at contact it retains the original chemical cue. For seed 96001,
   pain .98 and a visible object four units away, the prior changes from 0 to
   3.071232. Decoded Avoid beats Approach and the executed retreat increases
   separation; hunger reverses the decoded preference and approach reduces
@@ -34,7 +35,9 @@ These are CPU source/arithmetic and physical-world tests, not GPU acceptance.
   Approach/Avoid/Grab distance derivatives are negative for three founder seeds
   in each class, including N2048. Tests compare the analytic sum of
   `motor * weight` with a finite difference and trace `motor * distance` weight
-  derivatives. Positive recurrent MotorProposal/Homeostatic weights and the
+  derivatives. A separately re-extracted near snapshot and recurrent evaluation
+  also prefer proximity after upstream sensory changes. Positive recurrent
+  MotorProposal/Homeostatic weights and the
   +.05 motor bias remain intact.
 - **Readout identity:** Play formerly overwrote angular-speed lane 20 with 1.
   At angular speed 1 it has the same Contact family and features as Grab, so
@@ -50,24 +53,43 @@ These are CPU source/arithmetic and physical-world tests, not GPU acceptance.
   readout fitter and founder branch merger also permit signed decoder weights.
   No recurrent sign rule is relaxed. Exact candidate regressions retain a
   −.375 distance coefficient, preserve every other supplied weight bit, and
-  reject negative recurrent excitation.
+  reject negative recurrent excitation. SpeechPayload is also a mathematical
+  readout on MotorProposal: signed speech coefficients are covered by exact
+  foundation admission and Adam metadata, not constrained as recurrent excitation.
 - **Ordinary Nano newborn pain:** ordinary New Game omitted the damage-emitter
   expression floor already applied to experimental Nano and Standard founders.
   Real damage .15 previously caused injury .040590316 with pain 0. Applying the
   same inherited floor to all New Game founders gives pain .120000005 while
   biochemical developmental expression remains 0; additional nutrition does
   not mature its chemistry. A real ordinary-world collision gives damage .12
-  and pain .096. Quiet newborns remain pain-free. Stored organisms are not
+  and pain .096. This single collision does not cross the existing .55 emergency
+  threshold. Quiet newborns remain pain-free. Stored organisms are not
   reinitialized.
 
 ## Compatibility and limits
 
+The grounding layout is `[bearing sine, bearing cosine, distance, ...]`:
+distance is lane 2, not lane 1. N2048 has 16 candidate motors per family and
+24 candidate features, giving 3,072 ActionCandidate and 1,024 SpeechPayload
+synapses. The synthetic curriculum really clamps selected-family encoded inputs
+to +.75 in movement, survival, and speech mechanics stages, and supervises the
+selected family's 16 motor targets to +.75. Its 24 synthetic candidate features
+share `action_sign`, with ±.8 candidate targets. This is a positive synthetic
+supervision bias, not evidence that all live motors are positive or that family
+identity is lost. Other content/speech targets can be signed. This correction
+does not rewrite the curriculum or overwrite learned coefficients; signed
+per-family and speech readouts remain available to learning.
+
 No save, foundation, perception, decoder-width, address-map, or optimizer schema
 is changed. Raw distance remains lane 2; physical features remain in their
-original lanes. Cue code 24 (uploaded as 25) retains its Approach meaning:
-`(1-contact) * clamp(abs(bearing_sin)+abs(bearing_cos),0,1)`. Avoid additionally
-accepts this code and uses the bearing factor without the contact multiplier.
-The ordinary WGSL and core validation agree. The legacy object-slot profile's
+original lanes. Cue code 24 (uploaded as 25) retains its original Approach-only
+meaning: `(1-contact) * clamp(abs(bearing_sin)+abs(bearing_cos),0,1)`. Avoid
+retains its original bound metadata: chemical lane 15, inversion enabled, no
+reach requirement. Only when contact lane 18 equals zero does this exact Avoid
+configuration use bearing magnitude instead of unavailable chemical valence.
+The ordinary WGSL and core arithmetic agree. This preserves foundation decoder
+hashes; the actual retained Nano package, which failed admission with the first
+cue-plan proposal, is regression-tested against the final implementation. The legacy object-slot profile's
 unrestricted chemistry is retained; the corrected non-leaking reproduction uses
 the production terrain-vision profile.
 
@@ -81,12 +103,42 @@ bias and require further learning or separately qualified replacement.
 Play's move to Other changes its readout coordinates and memory-family context.
 Older Play learning does not automatically transfer from Contact. Old Play
 replay frames carrying the overwritten physical lane are not silently converted.
-Compiler-produced prior/phenotype hashes can change; historical source-bound
-evidence remains evidence for its original source. This patch supplies no
-automatic migration of old exact runtime snapshots or qualification of old
-policies under the new semantics. Continuing a source-bound experiment requires
-its normal source admission and behavioral requalification, preserving its
-complete accepted checkpoint and optimizer history.
+Foundation prior metadata and its bound hashes are preserved. Fresh procedural
+phenotype hashes change with their distance coefficients; no automatic migration
+of old exact procedural runtime snapshots is supplied. Historical source-bound
+evidence remains evidence for its original source, and old policies are not
+qualified under the changed Play and non-contact Avoid semantics. Continuing a
+source-bound experiment requires its normal source admission and behavioral
+requalification, preserving its complete accepted checkpoint and optimizer
+history.
+
+The concrete Other-family opportunities in the current world enumerator are
+targetless Vocalize and no-posture Hold, plus object Play after this correction.
+Vocalize has intrinsic lane 22 and basis lane 23; Hold has lane 21 and basis lane
+23. Both have zero bearing. Play retains the observed object's nonzero bearing
+and all physical descriptors. Gesture and Write are also ABI-compatible with
+Other but are not generated as object opportunities here. A future additional
+object operation sharing Other would need its own distinguishable encoding.
+The separate N2048 speech-payload head has a distinct decoder-head tag and is
+executed only for a selected Vocalize kind, not for arbitrary Other candidates.
+
+Motor channel routing uses ActionKind: Interact/Write are manipulation,
+Vocalize is vocal, and Hold/Rest/Inspect are posture. Tests select simultaneous
+Other-family Play, Vocalize and Hold through the real factorized bundle builder,
+validate the joint receipt, round-trip Play's decision family, and execute a
+real manipulation activation with Completed phase and positive play stimulation.
+Memory queries retain Other plus the actual Play ActionId; Other's existing
+memory index additionally partitions by ActionId. Historical Contact records
+retain Contact and are not relabelled to Play's new family.
+
+The vocabulary teacher and both action evaluators map token 13 to Other while
+token 9 stays Contact. The teacher still approaches before contact and chooses
+the explicit Play primitive at contact; a CPU fixture covers these choices and
+the replay candidate's family/physical-feature round-trip. Grab demonstrations,
+reproduction contact checks, and social-recognition Contact criteria retain
+their existing acquisition/contact meanings. No family is used to route Play
+into vocal output or posture. These software tests do not qualify on-policy GPU
+activation or transfer of old Play learning.
 
 The relevant architecture requirements are `AOA-INV-001`, `AOA-SENSE-001`,
 `AOA-WORLD-001/003`, `AOA-DEV-001/003`, `AOA-BIO-006/007/015`,

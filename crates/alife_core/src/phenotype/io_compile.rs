@@ -690,7 +690,7 @@ fn innate_priority_for_family(
         CandidateActionFamily::Approach => (
             HUNGER,
             16.0 * reflex * genes.food_attraction,
-            Some(super::decoder::INNATE_SPATIAL_CUE),
+            Some(super::decoder::INNATE_NONCONTACT_CUE),
             false,
             false,
         ),
@@ -701,13 +701,13 @@ fn innate_priority_for_family(
             false,
             true,
         ),
-        // Danger urgency primes retreat from observed geometry. Distant
-        // source chemistry is unavailable; this does not identify a hazard.
+        // Preserve the bound contact-chemistry contract. The decoder uses
+        // observed bearing as a fallback only when contact is absent.
         CandidateActionFamily::Avoid => (
             DANGER,
             24.0 * reflex * genes.hazard_aversion,
-            Some(super::decoder::INNATE_SPATIAL_CUE),
-            false,
+            Some(OBJECT_CHEMICAL_CUE),
+            true,
             false,
         ),
         CandidateActionFamily::Idle
@@ -854,11 +854,9 @@ mod innate_priority_tests {
         let mut hazard = rock;
         hazard.0[15] = -0.8;
         hazard.0[1] = 1.0;
+        hazard.0[18] = 1.0;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);
-        assert_eq!(
-            avoid.innate_contribution(drives, food),
-            avoid.innate_contribution(drives, hazard)
-        );
+        assert_eq!(avoid.innate_contribution(drives, food), 0.0);
         drives.pain = 0.0;
         drives.temperature_stress = 0.98;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);

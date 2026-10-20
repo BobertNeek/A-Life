@@ -2570,7 +2570,29 @@ mod tests {
             SensorProfile::GroundedTerrainVisionV1,
         )
         .unwrap();
+        let mut weights: Vec<_> = phenotype
+            .synapses()
+            .iter()
+            .map(|s| s.genetic_weight())
+            .collect();
+        let speech = phenotype.synapses().iter().position(|s| matches!(s.kind(),
+            CompiledSynapseKind::Decoder(c) if c.head() == alife_core::DecoderHeadKind::SpeechPayload)).unwrap();
+        weights[speech] = -0.25;
+        let asset = FoundationWeightAsset::from_trained_weights(
+            &phenotype,
+            weights,
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        let (phenotype, _) =
+            PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset)
+                .unwrap();
         let (metadata, layout) = pack_metadata_and_layout(&phenotype, None).unwrap();
+        assert_eq!(
+            metadata[layout.synapse_records as usize + speech * 8 + 7],
+            0
+        );
+        assert_eq!(phenotype.synapses()[speech].genetic_weight(), -0.25);
         let mut signed_distance_readouts = 0;
         let mut excitatory_routes = 0;
         let mut inhibitory_routes = 0;

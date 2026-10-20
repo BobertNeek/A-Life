@@ -1,6 +1,22 @@
 use alife_core::*;
 
 #[test]
+fn retained_nano_founder_asset_remains_canonically_admissible_without_rewriting() {
+    let bytes = include_bytes!(
+        "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
+    );
+    let asset = FoundationWeightAsset::decode_canonical(bytes)
+        .expect("retained candidate must remain admissible");
+    assert_eq!(asset.encode_canonical().unwrap(), bytes);
+    let (compiled, _) = PhenotypeCompiler::compile_nano512_readout_candidate(&asset).unwrap();
+    assert!(compiled
+        .synapses()
+        .iter()
+        .zip(asset.weights())
+        .all(|(s, w)| s.genetic_weight().to_bits() == w.to_bits()));
+}
+
+#[test]
 fn legacy_nano_candidate_keeps_signed_readouts_and_every_frozen_weight() {
     let profile = SensorProfile::GroundedObjectSlotsV1;
     let source = FoundationWeightAsset::builtin_nano512_v1(profile).unwrap();
@@ -55,6 +71,17 @@ fn exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negativ
     let index = procedural.synapses().iter().position(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::ActionCandidate && c.input_lane() == 2)).unwrap();
     weights[index] = -0.375;
     weights[index + 1] = 0.625;
+    let speech = procedural
+        .synapses()
+        .iter()
+        .position(|s| {
+            matches!(s.kind(),
+        CompiledSynapseKind::Decoder(c) if c.head() == DecoderHeadKind::SpeechPayload)
+        })
+        .unwrap();
+    weights[speech] = -0.25;
+    weights[speech + 1] = 0.5;
+
     let asset = FoundationWeightAsset::from_trained_weights(
         &procedural,
         weights.clone(),
@@ -71,6 +98,10 @@ fn exact_n2048_foundation_preserves_negative_decoder_weights_and_rejects_negativ
     assert_eq!(
         compiled.synapses()[index].genetic_weight().to_bits(),
         (-0.375_f32).to_bits()
+    );
+    assert_eq!(
+        compiled.synapses()[speech].genetic_weight().to_bits(),
+        (-0.25_f32).to_bits()
     );
     assert!(compiled
         .synapses()

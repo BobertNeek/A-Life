@@ -31,7 +31,8 @@ geometry rule, without object-kind recognition or action scoring
 
 Terrain-vision object chemistry and temperature remain contact observations;
 anonymous bilateral smell is separate. Under danger urgency the inherited Avoid
-readout uses observed bearing, without identifying which object is hazardous.
+readout uses observed bearing before contact, without identifying which object
+is hazardous; contact retains the chemical cue.
 Hunger still primes non-contact investigation and contact/reach-gated tasting.
 Fresh procedural candidate distance coefficients are negative. Trained
 foundations replace them with their stored signed coefficients; recurrent

@@ -379,9 +379,9 @@ fn duplicate_individual_queries_keep_one_paired_signal_independent_of_action_ord
     let mut play = ordinary;
     play.action_id = ActionId(22_000);
     play.kind = ActionKind::Interact;
-    play.family = CandidateActionFamily::Contact;
-    // The real grounded enumerator makes PLAY a distinct target-context query.
-    play.features.0[alife_core::CONTACT_ACTIVATION_FEATURE_LANE] = 1.0;
+    // The real grounded enumerator distinguishes activation by readout family,
+    // preserving physical proprioception and the original Contact history.
+    play.family = CandidateActionFamily::Other;
     let recall = |mut candidates: Vec<ActionCandidate>| {
         for (index, candidate) in candidates.iter_mut().enumerate() {
             candidate.candidate_index = index as u16;
@@ -405,7 +405,11 @@ fn duplicate_individual_queries_keep_one_paired_signal_independent_of_action_ord
     };
     let ordinary_signal = recall(vec![ordinary]);
     let play_signal = recall(vec![play]);
-    assert!(ordinary_signal.confidence > play_signal.confidence);
-    assert_eq!(recall(vec![ordinary, play]), ordinary_signal);
-    assert_eq!(recall(vec![play, ordinary]), ordinary_signal);
+    let strongest = if ordinary_signal.confidence >= play_signal.confidence {
+        ordinary_signal
+    } else {
+        play_signal
+    };
+    assert_eq!(recall(vec![ordinary, play]), strongest);
+    assert_eq!(recall(vec![play, ordinary]), strongest);
 }

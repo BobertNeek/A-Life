@@ -13,9 +13,9 @@ use super::{BrainPhenotype, CompiledSynapseKind, DecoderHeadKind, MemoryChannelP
 const DECODER_SCHEMA_VERSION: u16 = 1;
 const DECODER_DOMAIN: &[u8] = b"alife.phenotype.candidate-decoder.v1";
 const FAMILY_COUNT: usize = 8;
-/// Compiler cue code for observed bearing: Approach also requires non-contact.
+/// Compiler cue code for the complement of physically observed contact.
 /// It uses the existing cue word without adding a feature or synapse address.
-pub(super) const INNATE_SPATIAL_CUE: u8 = CANDIDATE_FEATURE_COUNT as u8;
+pub(super) const INNATE_NONCONTACT_CUE: u8 = CANDIDATE_FEATURE_COUNT as u8;
 
 fn is_zero_u32(value: &u32) -> bool {
     *value == 0
@@ -92,19 +92,25 @@ impl CandidateDecoderFamilyPlan {
             .map(|(_, value)| *value)
             .fold(0.0_f32, f32::max);
         let cue = self.innate_cue_lane.map_or(1.0, |lane| {
-            let signal = if lane == INNATE_SPATIAL_CUE {
+            let signal = if lane == INNATE_NONCONTACT_CUE {
                 // Body-forward proposals have no object contact; the no-motion
                 // candidate has neither bearing nor contact and gets no prior.
-                let bearing = (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0);
-                if self.family == CandidateActionFamily::Approach {
-                    (1.0 - features.0[18]) * bearing
-                } else {
-                    bearing
-                }
+                (1.0 - features.0[18]) * (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0)
             } else {
                 features.0[usize::from(lane)]
             };
-            let signal = if self.innate_cue_inverted {
+            // Object chemistry is unavailable before contact. Preserve the
+            // existing cue metadata (and bound foundation hashes), but ground
+            // danger-driven withdrawal in observed bearing at that boundary.
+            // This cannot identify which distant object is hazardous.
+            let signal = if self.family == CandidateActionFamily::Avoid
+                && lane == 15
+                && self.innate_cue_inverted
+                && !self.innate_requires_reach
+                && features.0[18] == 0.0
+            {
+                (features.0[0].abs() + features.0[1].abs()).clamp(0.0, 1.0)
+            } else if self.innate_cue_inverted {
                 -signal
             } else {
                 signal
@@ -339,12 +345,10 @@ impl CandidateDecoderPlan {
                 || row.innate_gain.abs() > 128.0
                 || row
                     .innate_cue_lane
-                    .is_some_and(|lane| lane > INNATE_SPATIAL_CUE)
-                || (row.innate_cue_lane == Some(INNATE_SPATIAL_CUE)
-                    && (!matches!(
-                        row.family,
-                        CandidateActionFamily::Approach | CandidateActionFamily::Avoid
-                    ) || row.innate_cue_inverted
+                    .is_some_and(|lane| lane > INNATE_NONCONTACT_CUE)
+                || (row.innate_cue_lane == Some(INNATE_NONCONTACT_CUE)
+                    && (row.family != CandidateActionFamily::Approach
+                        || row.innate_cue_inverted
                         || row.innate_requires_reach))
                 || (row.innate_cue_inverted && row.innate_cue_lane.is_none())
                 || (row.innate_drive_mask == 0

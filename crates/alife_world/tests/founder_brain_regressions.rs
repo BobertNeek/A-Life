@@ -287,6 +287,10 @@ fn distant_visible_objects_support_urgency_driven_approach_and_avoid_without_che
     let prior = family.innate_contribution(danger, avoid.features);
     println!("distant Avoid prior={prior} chemical={:?}", slot.chemical);
     assert!(prior > 0.0, "danger must permit avoidance before contact");
+    assert_eq!(
+        family.innate_contribution(DriveSnapshot::baseline(), avoid.features),
+        0.0
+    );
     let motor = fresh_activations(&brain, &frame);
     let select_move = |frame: &PerceptionFrameDraft, motor: &[f32], drives| {
         frame
@@ -367,6 +371,14 @@ fn distant_visible_objects_support_urgency_driven_approach_and_avoid_without_che
         candidate(&changed, HeadlessActionIds::FLEE, target).features,
         avoid.features
     );
+    assert_eq!(
+        family.innate_contribution(
+            danger,
+            candidate(&changed, HeadlessActionIds::FLEE, target).features
+        ),
+        prior,
+        "unavailable object valence cannot influence the danger cue"
+    );
     let ingest =
         &brain.candidate_decoder().families()[CandidateActionFamily::Ingest.raw() as usize];
     let distant_eat = candidate(&frame, HeadlessActionIds::EAT, target);
@@ -380,11 +392,37 @@ fn distant_visible_objects_support_urgency_driven_approach_and_avoid_without_che
     let contact = draft(&mut control, hungry);
     assert_eq!(contact.grounded_object_slots()[0].contact, 1.0);
     assert_eq!(contact.grounded_object_slots()[0].chemical, props.chemical);
+    assert_eq!(
+        family.innate_contribution(
+            danger,
+            candidate(&contact, HeadlessActionIds::FLEE, target).features
+        ),
+        0.0,
+        "contact must retain the original positive chemical cue interpretation"
+    );
     assert!(
         ingest.innate_contribution(
             hungry,
             candidate(&contact, HeadlessActionIds::EAT, target).features
         ) > 0.0
+    );
+    props.chemical[0] = -0.9;
+    control
+        .set_grounded_physical_properties(target, props)
+        .unwrap();
+    let bitter_contact = draft(&mut control, danger);
+    assert!(
+        family.innate_contribution(
+            danger,
+            candidate(&bitter_contact, HeadlessActionIds::FLEE, target).features
+        ) > 0.0
+    );
+    assert_eq!(
+        ingest.innate_contribution(
+            hungry,
+            candidate(&bitter_contact, HeadlessActionIds::EAT, target).features
+        ),
+        0.0
     );
 }
 
@@ -457,6 +495,134 @@ fn play_and_grab_keep_all_physical_features_and_have_distinct_readouts() {
         "distinct Play={play_score} Grab={grab_score} angular={}",
         play.features.0[20]
     );
+}
+
+#[test]
+fn play_other_stays_manipulation_in_joint_commands_memory_and_decision_history() {
+    let mut world = HeadlessScenarioBuilder::new(96003)
+        .agent("subject", SUBJECT, Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let entity = world.entity_id("subject").unwrap();
+    let genome = CreatureGenome::early_mammal_founder(
+        96003,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    world
+        .register_organism_record(
+            WorldOrganismRecord::newborn(SUBJECT, entity, genome, phenotype, Tick::ZERO).unwrap(),
+        )
+        .unwrap();
+    let toy = world
+        .spawn_toy("fixed", Vec3f::new(0.1, 0.0, 0.0), false)
+        .unwrap();
+    let draft = draft(&mut world, DriveSnapshot::baseline());
+    let play = candidate(&draft, HeadlessActionIds::PLAY, toy);
+    let grab = candidate(&draft, HeadlessActionIds::GRAB, toy);
+    let vocal = *draft
+        .candidates()
+        .iter()
+        .find(|c| c.kind == ActionKind::Vocalize)
+        .unwrap();
+    let posture = *draft
+        .candidates()
+        .iter()
+        .find(|c| c.action_id == HeadlessActionIds::NO_POSTURE)
+        .unwrap();
+    assert_eq!(play.family, CandidateActionFamily::Other);
+    assert_eq!(play.kind, ActionKind::Interact);
+    for other in [vocal, posture] {
+        assert_eq!(other.family, CandidateActionFamily::Other);
+        assert_ne!(other.features, play.features);
+    }
+    let query = MemoryQueryEncoderV2::encode_candidate(&draft, &play).unwrap();
+    let grip_query = MemoryQueryEncoderV2::encode_candidate(&draft, &grab).unwrap();
+    assert_eq!(query.action_family(), CandidateActionFamily::Other);
+    assert_eq!(grip_query.action_family(), CandidateActionFamily::Contact);
+    assert_ne!(query.features(), grip_query.features());
+    let frame = draft.finalize(PerceptionContextBlock::empty()).unwrap();
+    let command = play
+        .to_command(SUBJECT, Confidence::new(1.0).unwrap())
+        .unwrap();
+    let mut slots = [0; 6];
+    slots[2] = play.candidate_index + 1;
+    slots[3] = vocal.candidate_index + 1;
+    slots[4] = posture.candidate_index + 1;
+    let bundle = factorized_motor_bundle_for_candidates(
+        SUBJECT,
+        ExperienceSequenceId(1),
+        Tick::ZERO,
+        &frame,
+        slots,
+        &[
+            MotorChannel::Manipulation,
+            MotorChannel::Vocal,
+            MotorChannel::Posture,
+        ],
+        &command,
+        play.candidate_index,
+        None,
+        false,
+    )
+    .unwrap();
+    assert!(
+        bundle
+            .channels
+            .iter()
+            .any(|c| c.channel == MotorChannel::Manipulation
+                && c.primitive == HeadlessActionIds::PLAY)
+    );
+    assert!(bundle
+        .channels
+        .iter()
+        .any(|c| c.channel == MotorChannel::Vocal && c.primitive == vocal.action_id));
+    assert!(bundle
+        .channels
+        .iter()
+        .any(|c| c.channel == MotorChannel::Posture && c.primitive == posture.action_id));
+    JointActionSelectionV1::new(slots, &bundle)
+        .unwrap()
+        .validate_bundle(&bundle)
+        .unwrap();
+    let brain = brain(96003, &BrainCapacityClass::n512());
+    let decision = DecisionSnapshot::from_neural_selection(
+        ExperienceSequenceId(1),
+        brain.phenotype_hash(),
+        1,
+        0,
+        &frame,
+        NeuralActionSelection {
+            candidate_index: play.candidate_index,
+            logit: 1.0,
+            confidence: Confidence::new(1.0).unwrap(),
+            active_tiles: 1,
+            active_synapses: 1,
+        },
+        command,
+    )
+    .unwrap();
+    let restored: DecisionSnapshot =
+        serde_json::from_slice(&serde_json::to_vec(&decision).unwrap()).unwrap();
+    assert_eq!(restored, decision);
+    assert_eq!(
+        restored.neural_evidence().unwrap().action_family,
+        CandidateActionFamily::Other
+    );
+    assert_eq!(restored.selected_action.action_id, HeadlessActionIds::PLAY);
+    let receipt = world
+        .apply_registered_motor_bundle(&bundle, entity)
+        .unwrap();
+    let activation = receipt
+        .channel_receipts
+        .iter()
+        .find(|r| r.command.channel == MotorChannel::Manipulation)
+        .unwrap();
+    assert_eq!(activation.command.primitive, HeadlessActionIds::PLAY);
+    assert_eq!(activation.phase, ActionPhase::Completed);
+    assert!(activation.play_stimulation > 0.0);
+    assert_eq!(activation.physical.target_entity, Some(toy));
 }
 
 #[test]

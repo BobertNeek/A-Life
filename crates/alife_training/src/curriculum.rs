@@ -28,6 +28,59 @@ pub enum FoundationCurriculumStage {
     HeldOutGeneralization,
 }
 
+#[cfg(test)]
+mod supervision_contract_tests {
+    use super::*;
+    use alife_core::{
+        BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
+        SensorProfile, Tick,
+    };
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn candidate_family_supervision_is_positive_for_the_actual_sixteen_unit_basis() {
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(41, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let family = CandidateActionFamily::Approach;
+        let actual_sources: BTreeSet<_> = phenotype
+            .synapses()
+            .iter()
+            .filter_map(|s| {
+                matches!(s.kind(), CompiledSynapseKind::Decoder(c)
+                if c.head() == DecoderHeadKind::ActionCandidate && c.family() == family)
+                .then_some(s.source())
+            })
+            .collect();
+        assert_eq!(actual_sources.len(), 16);
+        assert_eq!(alife_core::CANDIDATE_FEATURE_COUNT, 24);
+        for content_sign in [-1.0, 1.0] {
+            let tick = build_tick(
+                &phenotype,
+                FoundationCurriculumStage::MovementAndEating,
+                0,
+                1.0,
+                content_sign,
+                &mut SplitMix64::new(41),
+            )
+            .unwrap();
+            for source in &actual_sources {
+                assert_eq!(tick.target_activations()[*source as usize], 0.75);
+                assert_eq!(tick.target_weights()[*source as usize], 1.0);
+                assert_eq!(tick.encoded_inputs()[*source as usize], 0.75);
+            }
+        }
+    }
+}
+
 impl FoundationCurriculumStage {
     pub const ALL: [Self; 9] = [
         Self::GroundedPerception,
