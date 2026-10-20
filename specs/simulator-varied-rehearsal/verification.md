@@ -8,6 +8,8 @@ discount, mandatory capture accounting, archive attachment ordering, next-policy
 optimizer rebind and the hardware test's sampling counter.
 
 Initial source: fetched main dd79fb026da86c7b4e2b1a6b60176a365a38507c.
+Freshness main bda3b65be5fa6f01865b850640adf2e8d01f4990 was merged at a safe
+checkpoint; protected freshness paths have no diff against that main.
 Protected freshness paths were not edited. No accepted training checkpoint,
 source artifact, actor/value weights or Adam histories were modified by validation.
 No PC access, GPU workload, paid provisioning or learned world model was used.
@@ -22,12 +24,24 @@ No PC access, GPU workload, paid provisioning or learned world model was used.
   partitioning, sequence masks and delayed-terminal timing.
 - `bash scripts/check_core_boundaries.sh --static`: passed.
 - `bash scripts/docs_check.sh`: 77/77 assertions passed.
-- Format and whitespace checks passed.
+- `cargo test -p alife_game_app --features foundation-training --lib simulator_rehearsal`:
+  five passed, including exact source-byte binding, continuation mismatches,
+  NoProgress accounting, shared capture ceilings and fail-before-device admission.
+  Repeated successfully after merging current main.
+- `cargo check -p alife_game_app --features gpu-runtime --lib`: passed with
+  training mode disabled.
+- `cargo check -p alife_game_app --features foundation-training,gpu-tests --tests`:
+  passed; hardware tests were compiled, not run. One existing unused test-helper
+  warning was reported outside the changed files.
+- `cargo build -p alife_game_app --features foundation-training --bin rehearse_n2048_care`:
+  passed. The resulting CLI passed usage, missing-source, invalid-budget and
+  comparison-admission smoke checks with no output/device work.
+- `cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings`:
+  passed after an equivalent conditional-style fix.
+- Format and whitespace checks passed. Core/docs checks repeated successfully
+  after merging current main.
 
 ## Evidence still required
-
-The app-level targeted regressions, non-training runtime compile and post-rebase
-checks are being completed before the final implementation commit.
 
 Hardware exact-restore continuity, complete source-to-update-to-continuation runs,
 and matched discovery/retention comparisons remain **Unknown**. The cloud has no
@@ -39,7 +53,11 @@ next replay sequence using the same sampling counter.
 
 The source implementation and its CPU tests do not establish learning gains,
 throughput gains, founder promotion or historical unseen-scene generalization.
-The PR remains draft while that explicit end-to-end acceptance evidence is pending.
+The PR remains draft and has not been merged while that explicit end-to-end
+acceptance evidence is pending. This is an evidence/resource blocker, not an
+authorization denial. The final-head remote CI results must also be checked
+before any future merge. Automated Jules reviews reported unknown/incomplete
+and were not counted as successful reviews.
 
 Risk/rollback: the ordinary restore entry point preserves its prior options; the
 new mode is selected only by the training-only constructor. Revert the rehearsal

@@ -268,20 +268,21 @@ pub fn run_simulator_rehearsal(
             }
             // Captures precede observed successes and contain the learned state
             // acquired in all preceding ticks. No success is manufactured.
-            if decision.is_multiple_of(8) {
-                if capture_count < 128 && can_capture(output, &checkpoint_root, 2)? {
-                    snapshot = Some(Arc::new(capture(
-                        &mut runtime,
-                        &store,
-                        capture_count as u64,
-                        target,
-                        lineage.clone(),
-                        output,
-                    )?));
-                    capture_count += 1;
-                    if directory_bytes(&checkpoint_root)? > 512 * 1024 * 1024 {
-                        return Err("snapshot asset budget exceeded".into());
-                    }
+            if decision.is_multiple_of(8)
+                && capture_count < 128
+                && can_capture(output, &checkpoint_root, 2)?
+            {
+                snapshot = Some(Arc::new(capture(
+                    &mut runtime,
+                    &store,
+                    capture_count as u64,
+                    target,
+                    lineage.clone(),
+                    output,
+                )?));
+                capture_count += 1;
+                if directory_bytes(&checkpoint_root)? > 512 * 1024 * 1024 {
+                    return Err("snapshot asset budget exceeded".into());
                 }
             }
             let unheld_before = unheld(runtime.world(), target);
