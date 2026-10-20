@@ -12,6 +12,9 @@ pub(crate) const TRAINING_PAYLOAD_TAG: u32 = 0x8000_0000;
 pub struct GpuTrainingStateSnapshot {
     pub handle: crate::GpuBrainHandle,
     pub tick: u64,
+    /// Admission uses the next nonzero dispatch label, so the first committed
+    /// dispatch can retain this value. Activity cursors/receipts establish work;
+    /// later dispatches advance the label. This is not a completed-work count.
     pub logical_dispatch_generation: u64,
     pub active_activation_side: u8,
     pub active_weight_generation: u64,

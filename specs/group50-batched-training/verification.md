@@ -255,3 +255,46 @@ both art audits and three historical-pin integration tests pass on the combined
 tree. The final source's CPU/compile/CI results are recorded on PR114; retargeting
 the PR alone is not evidence that any check ran. The integrated source still needs
 both explicit GPU contracts before the hardware gate can close.
+
+## First-dispatch capture contract correction
+
+The integrated source `b157b89e770d4766aeb90daba7966eda8c39c384` passed exact-head
+CI but failed the coordinated real-adapter capture fixture. Its strict
+`post.logical_dispatch_generation > pre.logical_dispatch_generation` assertion
+incorrectly assumed admission represented completed work. The native group fixture
+did not run after that failure, and no new training seed was reserved.
+
+Source tracing and independent R2 causal review confirm the existing convention:
+admission uses the next nonzero dispatch label, first commit can retain it, and
+the activity cursor plus matching dispatch/work receipts prove completed inference.
+Replay already permits that initial equality; checkpoint restore raises the next
+dispatch beyond its saved label. No production generation, replay or persistence
+change is required.
+
+The correction keeps fifty hardware rows and runs two fresh tick batches. It checks
+initial label/cursor/work absence, first commit at label `1`, cursor `2` and completed
+count `1`, later commit at label `2`, cursor `3` and completed count `2`, exact
+owner/frame/sampling/weight bindings, and
+matching eligibility discard without a dispatch/cursor/count advance. Four
+boundaries retain batch-versus-single equality and immutable private copies. Two
+additional batch captures check all post-discard labels without fifty extra maps
+per round. Numeric diagnostics identify each round, organism, label, receipt,
+cursor and completed count. Aggregate fixture metrics are six captures/300 rows;
+these are test operations, not a training throughput measurement.
+
+The prior `617063b8` success and `b157b89e` failed capture remain source-labelled.
+Both corrected-source hardware contracts remain required before PR114 can leave
+draft or merge. No PC commands, additional PC tasks or accepted native checkpoint/
+optimizer mutations were performed for this correction.
+
+Independent R2 implementation and final cost-delta review found no blockers. The
+focused cloud CPU checks pass: 31 tests, with one explicitly ignored codec timing
+benchmark. They cover capture packet order/bounds, training sampling/shader
+contracts, durable cohort recovery, seed provenance, exact native optimizer ages
+and private replay/sequence boundaries. These checks do not execute neural GPU
+work or qualify the corrected hardware fixture.
+
+Both explicit GPU fixtures compile without execution. Strict GPU-library/capture
+fixture Clippy, formatting, architecture boundaries, diff lint and all 77
+documentation assertions pass after the final cost correction. Hardware execution
+remains with the existing coordinated owner and must use the published exact pin.
