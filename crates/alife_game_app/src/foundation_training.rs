@@ -20,6 +20,12 @@ use alife_training::{
 use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+mod cohort_replay;
+pub(crate) use cohort_replay::CohortReplayWriter;
+pub use cohort_replay::{
+    inspect_foundation_cohort_replay, FoundationCohortReplayCommit, FoundationCohortReplayLocation,
+    FoundationCohortReplayRecovery,
+};
 mod comparison_identity;
 pub(crate) mod diagnostics;
 pub use comparison_identity::FoundationProbeComparisonIdentityV1;
@@ -4147,6 +4153,8 @@ mod replay_patch_json {
 /// Keep these small references in the life manifest, not full GPU captures.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FoundationReplayRecordRef {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cohort: Option<FoundationCohortReplayLocation>,
     pub record_index: u64,
     pub segment: u64,
     pub tick: u64,
@@ -4223,6 +4231,27 @@ impl FoundationReplayWriter {
     }
 
     pub fn append(&mut self, step: &FoundationTrainingStep) -> Result<FoundationReplayRecordRef> {
+        let directory = self.directory.clone();
+        self.append_with(step, |record| write_replay_record(&directory, record))
+    }
+
+    pub(crate) fn append_cohort(
+        &mut self,
+        step: &FoundationTrainingStep,
+        cohort: &mut cohort_replay::CohortReplayWriter,
+    ) -> Result<FoundationReplayRecordRef> {
+        let result = self.append_with(step, |record| cohort.append(record));
+        if result.is_err() {
+            cohort.poison();
+        }
+        result
+    }
+
+    fn append_with(
+        &mut self,
+        step: &FoundationTrainingStep,
+        write: impl FnOnce(&FoundationReplayRecord) -> Result<FoundationReplayRecordRef>,
+    ) -> Result<FoundationReplayRecordRef> {
         if step.before.phenotype.as_ref() != &self.phenotype
             || step.after_inference.phenotype.as_ref() != &self.phenotype
         {
@@ -4267,13 +4296,15 @@ impl FoundationReplayWriter {
         if self.written_bytes >= FOUNDATION_REPLAY_DISK_LIMIT_BYTES {
             return Err("compact replay reached its 4 GiB disk ceiling".into());
         }
-        let reference = write_replay_record(&self.directory, &record)?;
+        let reference = write(&record)?;
         let next_bytes = self
             .written_bytes
             .checked_add(reference.encoded_bytes)
             .ok_or_else(invalid)?;
         if next_bytes > FOUNDATION_REPLAY_DISK_LIMIT_BYTES {
-            std::fs::remove_file(self.directory.join(reference.file_name()))?;
+            if reference.cohort.is_none() {
+                std::fs::remove_file(self.directory.join(reference.file_name()))?;
+            }
             return Err("compact replay would exceed its 4 GiB disk ceiling".into());
         }
         self.previous = Some((record.tick, after, step.after_inference.brain_slot.clone()));
@@ -4403,12 +4434,28 @@ impl<W: std::io::Write> std::io::Write for ReplayDigestWriter<W> {
         self.inner.flush()
     }
 }
+fn encode_replay_record<W: std::io::Write>(
+    out: &mut W,
+    record: &FoundationReplayRecord,
+) -> Result<(u64, [u8; 32])> {
+    let mut writer = ReplayDigestWriter {
+        inner: out,
+        hasher: blake3::Hasher::new(),
+        bytes: 0,
+    };
+    let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 3)?;
+    bincode::serde::encode_into_std_write(record, &mut encoder, bincode::config::standard())?;
+    encoder.finish()?;
+    Ok((writer.bytes, *writer.hasher.finalize().as_bytes()))
+}
+
 fn write_replay_record(
     directory: &Path,
     record: &FoundationReplayRecord,
 ) -> Result<FoundationReplayRecordRef> {
     use std::io::Write;
     let mut reference = FoundationReplayRecordRef {
+        cohort: None,
         record_index: record.record_index,
         segment: record.segment,
         tick: record.tick,
@@ -4425,24 +4472,18 @@ fn write_replay_record(
         .create_new(true)
         .open(&temporary)?;
     let result = (|| -> Result<_> {
-        let mut writer = ReplayDigestWriter {
-            inner: std::io::BufWriter::with_capacity(64 * 1024, file),
-            hasher: blake3::Hasher::new(),
-            bytes: 0,
-        };
-        let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 3)?;
-        bincode::serde::encode_into_std_write(record, &mut encoder, bincode::config::standard())?;
-        encoder.finish()?;
+        let mut writer = std::io::BufWriter::with_capacity(64 * 1024, file);
+        let (bytes, digest) = encode_replay_record(&mut writer, record)?;
         writer.flush()?;
-        writer.inner.get_ref().sync_all()?;
-        reference.encoded_bytes = writer.bytes;
-        reference.digest = *writer.hasher.finalize().as_bytes();
+        writer.get_ref().sync_all()?;
+        reference.encoded_bytes = bytes;
+        reference.digest = digest;
         drop(writer);
         std::fs::rename(&temporary, &destination)?;
         Ok(reference)
     })();
     if result.is_err() {
-        let _ = std::fs::remove_file(&temporary);
+        let _ = std::fs::remove_file(temporary);
     }
     result
 }
@@ -4479,6 +4520,32 @@ pub fn load_foundation_replay_record(
     phenotype: &alife_core::BrainPhenotype,
     budget: FoundationReplayBudget,
 ) -> Result<FoundationReplayRecord> {
+    let mut cohort = if reference.cohort.is_some() {
+        Some(cohort_replay::CohortReplayReader::open(
+            directory.parent().ok_or("missing cohort parent")?,
+            expected,
+        )?)
+    } else {
+        None
+    };
+    load_foundation_replay_record_with_cohort(
+        directory,
+        reference,
+        expected,
+        phenotype,
+        budget,
+        cohort.as_mut(),
+    )
+}
+
+fn load_foundation_replay_record_with_cohort(
+    directory: &Path,
+    reference: &FoundationReplayRecordRef,
+    expected: &FoundationReplaySource,
+    phenotype: &alife_core::BrainPhenotype,
+    budget: FoundationReplayBudget,
+    cohort: Option<&mut cohort_replay::CohortReplayReader>,
+) -> Result<FoundationReplayRecord> {
     use std::io::Read;
     if reference.encoded_bytes == 0
         || reference.encoded_bytes > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES
@@ -4494,18 +4561,28 @@ pub fn load_foundation_replay_record(
             .and_then(|n| n.checked_add(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES))
             .ok_or_else(invalid)?,
     )?;
-    let file = std::fs::File::open(directory.join(reference.file_name()))?;
-    if file.metadata()?.len() != reference.encoded_bytes {
-        return Err("replay file length mismatch".into());
-    }
-    let bytes = read_verified_replay_bytes(file, reference.encoded_bytes, &reference.digest)?;
+    let bytes = if reference.cohort.is_some() {
+        cohort
+            .ok_or("cohort reference requires its sealed index")?
+            .read(reference)?
+    } else {
+        let file = std::fs::File::open(directory.join(reference.file_name()))?;
+        if file.metadata()?.len() != reference.encoded_bytes {
+            return Err("replay file length mismatch".into());
+        }
+        read_verified_replay_bytes(file, reference.encoded_bytes, &reference.digest)?
+    };
     let decoder = zstd::stream::read::Decoder::new(bytes.as_slice())?;
     let record: FoundationReplayRecord = bincode::serde::decode_from_std_read(
         &mut decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1),
         bincode::config::standard().with_limit::<268435456>(),
     )?;
     record.validate(expected, phenotype)?;
-    if record.record_index != reference.record_index
+    if reference
+        .cohort
+        .as_ref()
+        .is_some_and(|location| location.organism_id != record.organism_id)
+        || record.record_index != reference.record_index
         || record.segment != reference.segment
         || record.tick != reference.tick
     {
@@ -4545,13 +4622,28 @@ pub fn load_foundation_replay_window(
         sum.checked_add(r.encoded_bytes).ok_or_else(invalid)
     })?;
     budget.check_additional(total.checked_mul(8).ok_or_else(invalid)?)?;
+    let mut cohort = if references[0].cohort.is_some() {
+        Some(cohort_replay::CohortReplayReader::open(
+            directory.parent().ok_or("missing cohort parent")?,
+            expected,
+        )?)
+    } else {
+        None
+    };
+    if references
+        .iter()
+        .any(|r| r.cohort.is_some() != cohort.is_some())
+    {
+        return Err("replay window mixes cohort and standalone storage".into());
+    }
     let mut records = references.iter();
-    let first = load_foundation_replay_record(
+    let first = load_foundation_replay_record_with_cohort(
         directory,
         records.next().ok_or_else(invalid)?,
         expected,
         phenotype,
         budget,
+        cohort.as_mut(),
     )?;
     let mut window = FoundationReplayWindow {
         sequence: first.sequence,
@@ -4570,8 +4662,14 @@ pub fn load_foundation_replay_window(
         {
             return Err("replay window crosses a gap or segment boundary".into());
         }
-        let record =
-            load_foundation_replay_record(directory, reference, expected, phenotype, budget)?;
+        let record = load_foundation_replay_record_with_cohort(
+            directory,
+            reference,
+            expected,
+            phenotype,
+            budget,
+            cohort.as_mut(),
+        )?;
         previous.validate_next(&record.before)?;
         window.sequence.ticks.extend(record.sequence.ticks);
         window.behavior.push(record.behavior);

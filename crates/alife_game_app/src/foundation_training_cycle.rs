@@ -35,6 +35,8 @@ fn default_sampling_temperature() -> f32 {
 }
 
 mod critic_residual;
+mod group;
+pub use group::*;
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
