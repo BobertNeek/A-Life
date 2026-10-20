@@ -52,7 +52,8 @@ fn innate_family_contribution(
       let contact = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 18u]);
       let bearing_sin = bitcast<f32>(frame_payload_words[candidate_record.feature_offset]);
       let bearing_cos = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + 1u]);
-      feature = (1.0 - contact) * clamp(abs(bearing_sin) + abs(bearing_cos), 0.0, 1.0);
+      let bearing = clamp(abs(bearing_sin) + abs(bearing_cos), 0.0, 1.0);
+      feature = select(bearing, (1.0 - contact) * bearing, family.family_raw == 3u);
     } else {
       feature = bitcast<f32>(frame_payload_words[candidate_record.feature_offset + cue_code - 1u]);
     }
@@ -101,7 +102,7 @@ fn decode_candidates(@builtin(global_invocation_id) gid:vec3<u32>) {
     && (family.reserved0 & 0xfc00fe00u) == 0u
     && ((family.reserved0 >> 16u) & 0xffu) <= decoder.feature_count + 1u
     && (((family.reserved0 >> 16u) & 0xffu) != 25u
-      || (family.family_raw == 3u && (family.reserved0 & 0x03000000u) == 0u))
+      || ((family.family_raw == 3u || family.family_raw == 4u) && (family.reserved0 & 0x03000000u) == 0u))
     && finite_decode(bitcast<f32>(family.reserved1))
     && family.decoder_synapse_start >= brain.recurrent_synapse_count
     && span_within(family.decoder_synapse_start, family.decoder_synapse_count, brain.synapse_count)

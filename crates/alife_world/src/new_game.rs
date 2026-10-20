@@ -154,13 +154,12 @@ fn create_new_game_inner(
             0.5,
         )?;
         calibrate_inherited_founder_biochemistry(&mut genome)?;
+        enable_inherited_newborn_nociception(&mut genome)?;
         if let Some(candidate) = candidate {
             genome = genome.with_nano512_action_credit_candidate(candidate.clone())?;
-            enable_inherited_newborn_nociception(&mut genome)?;
         }
         if config.brain_class == BrainScaleTier::Standard2048 {
             genome = genome.with_n2048_foundation_candidate(foundation.clone())?;
-            enable_inherited_newborn_nociception(&mut genome)?;
         }
         let phenotype = genome.express()?;
         let world_entity_id = world.spawn_social_agent(&world_label, organism_id, position, 0.0)?;

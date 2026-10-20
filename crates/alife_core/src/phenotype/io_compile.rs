@@ -282,7 +282,7 @@ pub(super) fn compile_decoders(
                     input_lane,
                     motor_index,
                 );
-                let weight = genetic_weight(
+                let weight = candidate_decoder_weight(
                     genome.genetic_prior_seed,
                     route_index,
                     neuron,
@@ -460,7 +460,7 @@ fn compile_n2048_decoders(
                 synapses.push(CompiledSynapse::new(
                     neuron,
                     neuron,
-                    genetic_weight(
+                    candidate_decoder_weight(
                         genome.genetic_prior_seed,
                         action_route_index,
                         neuron,
@@ -690,7 +690,7 @@ fn innate_priority_for_family(
         CandidateActionFamily::Approach => (
             HUNGER,
             16.0 * reflex * genes.food_attraction,
-            Some(super::decoder::INNATE_NONCONTACT_CUE),
+            Some(super::decoder::INNATE_SPATIAL_CUE),
             false,
             false,
         ),
@@ -701,11 +701,13 @@ fn innate_priority_for_family(
             false,
             true,
         ),
+        // Danger urgency primes retreat from observed geometry. Distant
+        // source chemistry is unavailable; this does not identify a hazard.
         CandidateActionFamily::Avoid => (
             DANGER,
             24.0 * reflex * genes.hazard_aversion,
-            Some(OBJECT_CHEMICAL_CUE),
-            true,
+            Some(super::decoder::INNATE_SPATIAL_CUE),
+            false,
             false,
         ),
         CandidateActionFamily::Idle
@@ -718,6 +720,18 @@ fn innate_priority_for_family(
         (0, 0.0, None, false, false)
     } else {
         (mask, gain, cue, invert, reach)
+    }
+}
+
+// Candidate distance keeps its physical V1 meaning. Fresh readouts penalize
+// distance instead of rewarding it through positive motor activations. These
+// are mathematical readouts, not sign-constrained recurrent excitation.
+fn candidate_decoder_weight(seed: u64, route: u16, source: u32, lane: u32) -> f32 {
+    let magnitude = genetic_weight(seed, route, source, lane);
+    if lane == 2 {
+        -magnitude
+    } else {
+        magnitude
     }
 }
 
@@ -839,8 +853,12 @@ mod innate_priority_tests {
         drives.pain = 0.98;
         let mut hazard = rock;
         hazard.0[15] = -0.8;
+        hazard.0[1] = 1.0;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);
-        assert_eq!(avoid.innate_contribution(drives, food), 0.0);
+        assert_eq!(
+            avoid.innate_contribution(drives, food),
+            avoid.innate_contribution(drives, hazard)
+        );
         drives.pain = 0.0;
         drives.temperature_stress = 0.98;
         assert!(avoid.innate_contribution(drives, hazard) > 0.0);
