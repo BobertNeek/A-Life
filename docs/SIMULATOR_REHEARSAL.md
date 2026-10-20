@@ -59,6 +59,13 @@ atomic operation. Update and holdout costs are reported separately. Snapshot
 assets have a 512 MiB ceiling with conservative per-capture headroom; ordinary
 replay uses the existing host/disk ceilings.
 
+For the parent's short hardware qualification, append `--qualify`: four attempts
+of eight decisions, two eight-decision holdouts, and 15 seconds of collection
+admission. This is not a whole-process wall cap. Follow the serial execution and
+external hard-stop instructions in
+[Short qualification handoff](SIMULATOR_REHEARSAL_QUALIFICATION.md); do not run the
+default comparison during the PC's Minecraft workload.
+
 Append `--control-fresh` for newly constructed scenes only. Append `--compare` to
 run that control and varied rehearsal from the same source, with the same
 configured ceilings and disjoint within-run holdouts. `comparison.json` reports
@@ -87,8 +94,10 @@ CPU tests exercise actual canonical world branching/metabolism, near-food geomet
 invalid-state rejection, pool diversity, policy-version rejection, seed partitioning
 and sequence masks. They do not certify neural gameplay. GPU restore continuity,
 end-to-end source continuation and matched learning comparisons require a supported
-hardware session. The cloud environment has no hardware GPU; no PC/GPU workload or
-paid provisioning is authorized by this document.
+hardware session. The private policy7400 Library identity exists and the PC
+verified the upload/manifest. Cloud consumer byte validation is blocked by proxy
+CONNECT 403. The cloud has no hardware GPU. The parent owns coordination of any
+short PC execution; this document starts no workload or provisioning.
 
 Relevant controlling requirements: AOA-INV-009 (same causal step), AOA-BIO-026
 (measured biology), AOA-CTX-002 (canonical interoception), AOA-FOUND-004 (world

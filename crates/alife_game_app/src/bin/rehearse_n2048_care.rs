@@ -1,24 +1,53 @@
 //! Explicit offline tool, never linked into the ordinary game executable.
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
+use alife_game_app::simulator_rehearsal::SimulatorRehearsalConfig;
+use std::path::PathBuf;
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+struct Request {
+    source: PathBuf,
+    output: PathBuf,
+    config: SimulatorRehearsalConfig,
+    compare: bool,
+}
+
+fn parse_request(args: &[String]) -> Result<Request> {
     if args.len() < 4
         || args.len() > 5
-        || (args.len() == 5 && !matches!(args[4].as_str(), "--control-fresh" | "--compare"))
+        || (args.len() == 5
+            && !matches!(
+                args[4].as_str(),
+                "--control-fresh" | "--compare" | "--qualify"
+            ))
     {
-        return Err("usage: rehearse_n2048_care SOURCE_CYCLE NEW_OUTPUT EXPECTED_SOURCE_POLICY SEED [--control-fresh|--compare]".into());
+        return Err("usage: rehearse_n2048_care SOURCE_CYCLE NEW_OUTPUT EXPECTED_SOURCE_POLICY SEED [--control-fresh|--compare|--qualify]".into());
     }
-    let source = std::path::PathBuf::from(&args[0]);
-    let output = std::path::PathBuf::from(&args[1]);
-    let config = alife_game_app::simulator_rehearsal::SimulatorRehearsalConfig {
+    let qualify = args.get(4).is_some_and(|flag| flag == "--qualify");
+    let config = SimulatorRehearsalConfig {
         expected_source_policy: args[2].parse()?,
         seed: args[3].parse()?,
-        attempts: 16,
-        decisions_per_attempt: 32,
+        attempts: if qualify { 4 } else { 16 },
+        decisions_per_attempt: if qualify { 8 } else { 32 },
         burn_in: 2,
-        collection_wall_limit_seconds: 600,
+        collection_wall_limit_seconds: if qualify { 15 } else { 600 },
         control_fresh: args.get(4).is_some_and(|flag| flag == "--control-fresh"),
     };
-    let compare = args.get(4).is_some_and(|flag| flag == "--compare");
+    config.validate()?;
+    Ok(Request {
+        source: PathBuf::from(&args[0]),
+        output: PathBuf::from(&args[1]),
+        config,
+        compare: args.get(4).is_some_and(|flag| flag == "--compare"),
+    })
+}
+
+fn main() -> Result<()> {
+    let Request {
+        source,
+        output,
+        config,
+        compare,
+    } = parse_request(&std::env::args().skip(1).collect::<Vec<_>>())?;
     let receipt = std::thread::Builder::new()
         .name("simulator-rehearsal".into())
         .stack_size(32 * 1024 * 1024)
@@ -40,4 +69,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|_| "rehearsal worker panicked")??;
     println!("{}", serde_json::to_string_pretty(&receipt)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn parse(args: &[&str]) -> Result<Request> {
+        parse_request(&args.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>())
+    }
+    #[test]
+    fn qualification_is_small_and_cannot_start_a_comparison() {
+        let request = parse(&["source", "output", "7400", "700001", "--qualify"]).unwrap();
+        assert_eq!(request.config.attempts, 4);
+        assert_eq!(request.config.decisions_per_attempt, 8);
+        assert_eq!(request.config.burn_in, 2);
+        assert_eq!(request.config.collection_wall_limit_seconds, 15);
+        assert!(!request.config.control_fresh);
+        assert!(!request.compare);
+        assert!(parse(&[
+            "source",
+            "output",
+            "7400",
+            "700001",
+            "--qualify",
+            "--compare"
+        ])
+        .is_err());
+    }
+    #[test]
+    fn ordinary_modes_keep_the_existing_limits_and_explicit_selection() {
+        let request = parse(&["source", "output", "7400", "700001"]).unwrap();
+        assert_eq!(request.config.attempts, 16);
+        assert_eq!(request.config.decisions_per_attempt, 32);
+        assert_eq!(request.config.collection_wall_limit_seconds, 600);
+        assert!(!request.compare);
+        let control = parse(&["source", "output", "7400", "700001", "--control-fresh"]).unwrap();
+        assert!(control.config.control_fresh);
+        assert!(!control.compare);
+        assert!(
+            parse(&["source", "output", "7400", "700001", "--compare"])
+                .unwrap()
+                .compare
+        );
+    }
+    #[test]
+    fn invalid_options_and_overflow_fail_at_admission() {
+        for args in [
+            &[][..],
+            &["source", "output", "7400"][..],
+            &["source", "output", "7400", "0"][..],
+            &["source", "output", "7400", "700001", "--unknown"][..],
+            &[
+                "source",
+                "output",
+                "18446744073709551615",
+                "700001",
+                "--qualify",
+            ][..],
+        ] {
+            assert!(parse(args).is_err());
+        }
+    }
 }
