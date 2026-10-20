@@ -21,6 +21,85 @@ use alife_gpu_backend::{GpuClosedLoopBackend, GpuOutcomeCreditRecord};
 
 const GPU_LEARNING_TOLERANCE: f32 = 1.0e-5;
 
+#[test]
+fn zero_projected_credit_commits_without_canceling_inherited_strength() {
+    let capacity = BrainCapacityClass::n512();
+    // Nonzero Oja and learning rates, but a receptor insensitive to this
+    // outcome's lanes. This exercises a real sealed-outcome transaction.
+    let parameters = PlasticityGenomeParameters::try_new(
+        0.95,
+        0.01,
+        0.001,
+        0.25,
+        alife_core::PlasticityReceptorProfile::try_new([0.0; 8]).unwrap(),
+        -2.0,
+        2.0,
+        0.5,
+        4.0,
+        0.5,
+    )
+    .unwrap();
+    let genome = BrainGenome::scaffold(42, capacity.id())
+        .with_plasticity_parameters(parameters)
+        .unwrap();
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+    let phenotype = PhenotypeCompiler::compile(
+        &genome,
+        &capacity,
+        &development,
+        SensorProfile::PrivilegedAffordanceV1,
+    )
+    .unwrap();
+    assert!(phenotype
+        .plasticity_receptors()
+        .iter()
+        .any(|row| row.normalization_rate() > 0.0));
+    assert!(phenotype
+        .synapses()
+        .iter()
+        .any(|synapse| synapse.genetic_weight() != 0.0));
+    let organism = alife_core::OrganismId(4_301);
+    let mut backend =
+        GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
+            .unwrap();
+    let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+    let physiology = support::test_physiology(organism.raw(), &phenotype).unwrap();
+    let before = backend.plasticity_probe_for_test(handle).unwrap();
+    for sequence in 1..=4 {
+        let source = support::perception_frame_for_profile_at_tick(
+            organism.raw(),
+            2_000 + sequence * 2,
+            SensorProfile::PrivilegedAffordanceV1,
+            true,
+            2,
+        );
+        let (frame, tick) =
+            support::tick_with_receptors(&mut backend, handle, &phenotype, &physiology, &source)
+                .unwrap();
+        let (patch, receptors) = sealed_measured_event(
+            handle,
+            &phenotype,
+            &genome,
+            &development,
+            &physiology,
+            &frame,
+            &tick,
+            sequence,
+            nutrition_event(),
+        );
+        let receipt = backend
+            .apply_sealed_outcome(handle, &patch, &receptors)
+            .unwrap();
+        assert_eq!(receipt.fast_weights_changed, 0);
+        assert_eq!(receipt.max_abs_delta, 0.0);
+        assert!(backend.pending_eligibility(handle).unwrap().is_none());
+        let after = backend.plasticity_probe_for_test(handle).unwrap();
+        assert_eq!(after.active_fast, before.active_fast);
+        assert_eq!(after.active_lifetime, before.active_lifetime);
+    }
+}
+
 fn r12_pending_fixture() -> (
     GpuClosedLoopBackend,
     alife_gpu_backend::GpuBrainHandle,
