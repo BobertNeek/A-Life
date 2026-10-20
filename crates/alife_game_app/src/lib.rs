@@ -290,3 +290,6 @@ pub mod bevy_shell;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "foundation-training")]
+pub mod simulator_rehearsal;

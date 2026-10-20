@@ -276,7 +276,7 @@ pub fn perturb_rehearsal_world(
     let dx = food.position.x - agent.position.x;
     let dz = food.position.z - agent.position.z;
     let norm = dx.hypot(dz);
-    if !norm.is_finite() || norm < 0.5 {
+    if !norm.is_finite() || norm < 0.1 {
         return Err("food direction is too short to vary safely");
     }
     let forward = (dx / norm, dz / norm);
@@ -288,8 +288,8 @@ pub fn perturb_rehearsal_world(
         SceneVariation::Original => {}
         SceneVariation::FoodLeft | SceneVariation::FoodRight | SceneVariation::FoodFarther => {
             let (lateral, farther) = match variation {
-                SceneVariation::FoodLeft => (1.0, 0.0),
-                SceneVariation::FoodRight => (-1.0, 0.0),
+                SceneVariation::FoodLeft => (agent.radius + food.radius + 0.35, 0.0),
+                SceneVariation::FoodRight => (-(agent.radius + food.radius + 0.35), 0.0),
                 _ => (0.0, 1.5),
             };
             after = Vec3f::new(
@@ -313,9 +313,9 @@ pub fn perturb_rehearsal_world(
                 -1.0
             };
             let position = Vec3f::new(
-                agent.position.x + dx * 0.5 + side.0 * sign * 0.6,
+                agent.position.x + dx * 0.5 + side.0 * sign * (agent.radius + 0.5),
                 agent.position.y,
-                agent.position.z + dz * 0.5 + side.1 * sign * 0.6,
+                agent.position.z + dz * 0.5 + side.1 * sign * (agent.radius + 0.5),
             );
             validate_placement(world, target, position, 0.25)?;
             // Also exclude the target: an obstacle may not enclose the food.
@@ -478,6 +478,46 @@ mod world_tests {
         }
     }
     #[test]
+    fn actual_near_grab_geometry_supports_all_five_variations() {
+        let (mut world, organism, original) = scene();
+        let agent = world
+            .entity(
+                world
+                    .organism_registry()
+                    .get(organism)
+                    .unwrap()
+                    .world_entity_id(),
+            )
+            .unwrap()
+            .clone();
+        world.editor_remove_object(original).unwrap();
+        let target = world
+            .editor_spawn_object(WorldEditorSpawnSpec {
+                label: "near-food".into(),
+                kind: WorldObjectKind::Food,
+                organism_id: None,
+                position: Vec3f::new(agent.position.x + 0.5, agent.position.y, agent.position.z),
+                nutrition: 0.5,
+                hazard_pain: 0.0,
+                radius: 0.45,
+                token_id: None,
+            })
+            .unwrap();
+        for variant in [
+            SceneVariation::FoodLeft,
+            SceneVariation::FoodRight,
+            SceneVariation::FoodFarther,
+            SceneVariation::ObstacleLeft,
+            SceneVariation::ObstacleRight,
+        ] {
+            let (child, _) = perturb_rehearsal_world(&world, organism, target, variant).unwrap();
+            assert_ne!(
+                child.canonical_signature_digest().unwrap(),
+                world.canonical_signature_digest().unwrap()
+            );
+        }
+    }
+    #[test]
     fn invalid_placements_and_nonfood_fail_without_mutating_parent() {
         let (mut world, organism, target) = scene();
         let food = world.entity(target).unwrap().position;
@@ -508,5 +548,45 @@ mod world_tests {
         assert_eq!(world.canonical_signature_digest().unwrap(), digest);
         assert!(validate_placement(&world, target, Vec3f::new(f32::NAN, 0.0, 0.0), 0.1).is_err());
         assert!(validate_placement(&world, target, Vec3f::new(513.0, 0.0, 0.0), 0.1).is_err());
+    }
+}
+
+/// Timing for an action followed by possibly later canonical terminal biology.
+/// The terminal tail is discounted from the action outcome, while GAE sees the
+/// complete decision-to-death interval, matching ordinary collection semantics.
+pub fn terminal_credit_timing(
+    decision: u64,
+    outcome: u64,
+    terminal: u64,
+    half_life: f32,
+) -> Result<(f32, f32), &'static str> {
+    if outcome <= decision || terminal < outcome || !half_life.is_finite() || half_life <= 0.0 {
+        return Err("invalid terminal credit timing");
+    }
+    let elapsed = (terminal - decision) as f32 / 20.0;
+    let gap_seconds = (terminal - outcome) as f64 / 20.0;
+    let discount = (-std::f64::consts::LN_2 * gap_seconds / f64::from(half_life)).exp() as f32;
+    Ok((elapsed, discount))
+}
+#[cfg(test)]
+mod timing_tests {
+    use super::*;
+    #[test]
+    fn delayed_death_changes_credit_discount_and_elapsed_time() {
+        assert_eq!(
+            terminal_credit_timing(10, 11, 11, 1.0).unwrap(),
+            (0.05, 1.0)
+        );
+        let (elapsed, discount) = terminal_credit_timing(10, 11, 31, 1.0).unwrap();
+        assert!((elapsed - 1.05).abs() < 1e-6);
+        assert!((discount - 0.5).abs() < 1e-6);
+        for (decision, outcome, terminal, half) in [
+            (10, 10, 11, 1.0),
+            (10, 11, 10, 1.0),
+            (10, 11, 12, 0.0),
+            (10, 11, 12, f32::NAN),
+        ] {
+            assert!(terminal_credit_timing(decision, outcome, terminal, half).is_err());
+        }
     }
 }
