@@ -182,5 +182,28 @@ timing benchmark remains ignored. The fifty-row real-GPU single-vs-batch fixture
 and the complete N2048 group50 handoff fixture both compile with explicit GPU-test
 features; neither executed. Strict Clippy passed for the game library/group binary
 and for the GPU library/differential fixture. Formatting, diff lint and docs77/77
-passed. No workflows were changed or manually dispatched. Publication remains a
-draft successor, with broad CI/review jobs skipped as requested.
+passed. That first publication changed no workflows and skipped broad CI/review
+jobs as requested.
+
+## Integrated source and focused CI follow-up
+
+The successor now integrates PR111's exact `52559f55` dependency without modifying
+its branch. Current main was fetched explicitly and remained `bda3b65b`; it is
+already an ancestor. The unchanged pinned `ci.yml` and historical art profiles are
+verified against the PR111 dependency. The combined plant audit, shipping art audit,
+three integration tests, boundaries and77 documentation checks pass after integration.
+
+The new unpinned `group50-training.yml` registers the28 focused CPU contracts,
+both GPU fixture compilations and scoped strict source checks. Its dedicated
+`group50-ci/**` push path avoids duplicate broad jobs; it also discovers relevant
+main PRs/pushes after integration. This job cannot qualify GPU behavior.
+The native hardware fixture now accepts an explicit seed admission selection,
+defaulting to strict and rejecting unknown values before execution. It asserts
+exact policy/freshness provenance in the cohort and all fifty episodes. This
+changes no seed admission rules or immutable history.
+
+The existing PC task remains the sole hardware owner. It must reconcile the
+running `4cca46b4` build before building the integrated source, retain source/cache
+paths, and use observed phase progress plus resource headroom instead of repeating
+the old120-second timeout. The consumed seed202610174119 and accepted policy7400
+packages/Adam remain immutable. No PC command or new task was issued here.

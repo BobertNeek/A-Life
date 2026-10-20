@@ -4,6 +4,18 @@
 #[test]
 #[ignore = "requires an explicitly coordinated GPU and admitted native source/history"]
 fn fifty_private_organisms_complete_native_training_and_optimizer_handoff() {
+    // Explicit fixture selection, subject to the same immutable history check as
+    // the CLI. Missing configuration stays strict; rejection never falls back.
+    let known_exclusions = match std::env::var("ALIFE_GROUP50_SEED_ADMISSION") {
+        Err(std::env::VarError::NotPresent) => false,
+        Ok(policy) if policy == "strict" => false,
+        Ok(policy) if policy == "known-exclusions" => true,
+        _ => panic!("ALIFE_GROUP50_SEED_ADMISSION must be strict or known-exclusions"),
+    };
+    let expected_admission = serde_json::json!({
+        "policy": if known_exclusions { "known-exclusions" } else { "strict" },
+        "historical_freshness": if known_exclusions { "unknown" } else { "operator-attested-complete" },
+    });
     let source = std::path::PathBuf::from(
         std::env::var_os("ALIFE_GROUP50_SOURCE").expect("set ALIFE_GROUP50_SOURCE"),
     );
@@ -25,7 +37,7 @@ fn fifty_private_organisms_complete_native_training_and_optimizer_handoff() {
             seed_history: &history,
             seed,
             decisions_per_organism: 16,
-            known_exclusions: false,
+            known_exclusions,
             replay_device_limit_bytes: 512 * 1024 * 1024,
             replay_host_limit_bytes: 8 * 1024 * 1024 * 1024,
             sampling_temperature: 1.0,
@@ -35,6 +47,13 @@ fn fifty_private_organisms_complete_native_training_and_optimizer_handoff() {
     assert_eq!(receipt["population"], 50);
     assert_eq!(receipt["max_collector_batch_rows"], 50);
     assert_eq!(receipt["episodes"].as_array().unwrap().len(), 50);
+    assert_eq!(
+        receipt["seed_provenance"]["seed_admission"],
+        expected_admission
+    );
+    for episode in receipt["episodes"].as_array().unwrap() {
+        assert_eq!(episode["seed_admission"], expected_admission);
+    }
     assert!(receipt["distinct_initial_sensory_states"].as_u64().unwrap() > 1);
     assert!(receipt["verified_replay_boundaries"].as_u64().unwrap() >= 50);
     assert!(receipt["actor_optimizer_updates"].as_u64().unwrap() > 0);
