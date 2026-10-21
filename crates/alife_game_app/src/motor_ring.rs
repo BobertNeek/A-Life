@@ -341,6 +341,7 @@ fn score_bar(score: f32) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::live_brain_bridge::proposal;
 
     #[test]
     fn channel_uses_the_selected_proposal_when_action_ids_repeat() {

@@ -421,15 +421,6 @@ fn bounded01(value: f32) -> Result<f32, ScaffoldContractError> {
     NormalizedScalar::new(value.clamp(0.0, 1.0)).map(|bounded| bounded.raw())
 }
 
-pub(crate) fn wrap_degrees(value: f32) -> f32 {
-    let wrapped = value.rem_euclid(360.0);
-    if wrapped == 360.0 {
-        0.0
-    } else {
-        wrapped
-    }
-}
-
 fn validate_rgba(rgba: [f32; 4]) -> Result<(), ScaffoldContractError> {
     for channel in rgba {
         NormalizedScalar::new(channel)?;

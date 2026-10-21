@@ -8,11 +8,11 @@ mod prelude {
 
     pub(crate) use alife_core::{
         heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId,
-        ActionKind, ActionProposal, ActionTarget, BrainScaleTier, BrainTickInput, BrainTickStatus,
-        Confidence, ContractDiagnostic, CreatureMind, DurationTicks, ExperiencePatch,
-        HomeostaticSnapshot, Intensity, NeuralProjectionSchema, NormalizedScalar, OrganismId,
-        PhysicalContactKind, PolicyBackend, ReferenceActionFailure, ScaffoldContractError,
-        SleepPhase, Tick, Validate, Vec3f, WorldEntityId,
+        ActionKind, ActionProposal, ActionTarget, BrainTickInput, BrainTickStatus, Confidence,
+        ContractDiagnostic, CreatureMind, DurationTicks, ExperiencePatch, HomeostaticSnapshot,
+        Intensity, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
+        PolicyBackend, ReferenceActionFailure, ScaffoldContractError, SleepPhase, Tick, Validate,
+        Vec3f, WorldEntityId,
     };
     pub(crate) use alife_world::persistence::{
         AssetManifest, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
@@ -23,9 +23,8 @@ mod prelude {
     };
     pub(crate) use alife_world::{
         CreatureAppearanceGenome, CreatureWorldAnchor, EcologyMetrics, EcologyZoneId,
-        HeadlessActionIds, HeadlessBrainHarness, HeadlessScenarioBuilder, HeadlessSensoryReport,
-        HeadlessWorld, PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZone,
-        TerrainZoneKind, WorldEditorSpawnSpec, WorldObjectKind,
+        HeadlessActionIds, HeadlessBrainHarness, HeadlessSensoryReport, HeadlessWorld,
+        PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZoneKind, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;
@@ -82,7 +81,6 @@ mod creature_part_pose;
 pub use creature_part_pose::*;
 
 mod live_brain_bridge;
-pub(crate) use live_brain_bridge::proposal;
 pub use live_brain_bridge::*;
 
 #[cfg(feature = "gpu-runtime")]
