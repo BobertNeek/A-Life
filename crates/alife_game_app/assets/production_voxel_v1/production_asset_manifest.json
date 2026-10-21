@@ -1059,13 +1059,6 @@
     }
   ],
   "generated_art_target": "target/generated_art/production_voxel_v1",
-  "loader": {
-    "crate_name": "bevy_asset_loader",
-    "crate_version": "0.26.0",
-    "missing_asset_policy": "clear-error-or-generated-fallback",
-    "production_feature": "production-assets",
-    "runtime_dependency": true
-  },
   "pack_id": "production-voxel-v1",
   "schema": "alife.fvr07.production_asset_manifest.v1",
   "schema_version": 1,

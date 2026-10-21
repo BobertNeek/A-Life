@@ -8,6 +8,8 @@ use alife_game_app::{
 use alife_game_app::{
     run_production_voxel_frontend_dry_run, ProductionAppState, FVR01_PRODUCTION_FRONTEND_SCHEMA,
 };
+#[cfg(feature = "gpu-runtime")]
+use alife_world::FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA;
 
 #[cfg(feature = "gpu-runtime")]
 #[path = "support/current_production_launch.rs"]
@@ -155,6 +157,7 @@ fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
     let mut launch = fixture.launch.clone();
     launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
     launch.population = Some(30);
+    launch.dry_run = true;
     let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
     assert_eq!(
         summary.profile_id,
@@ -168,6 +171,22 @@ fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
         "MinimumSettings30x30"
     );
     assert!(summary.profile_budget.hard_floor);
+    assert_eq!(
+        summary.save_metadata.voxel_backend_schema.as_deref(),
+        Some(FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA)
+    );
+    assert!(summary.save_metadata.voxel_visible_chunk_signatures > 0);
+    assert!(summary.save_metadata.voxel_materialized_chunks > 0);
+    assert!(summary.save_metadata.voxel_resource_hazard_refs > 0);
+    assert!(
+        summary.save_metadata.voxel_stable_selection_refs >= summary.save_metadata.creature_count
+    );
+    assert!(
+        summary.save_metadata.voxel_dirty_region_count
+            <= summary.save_metadata.voxel_visible_chunk_signatures
+    );
+    assert!(summary.save_metadata.voxel_roundtrip_signatures_match);
+    assert!(summary.save_metadata.no_renderer_tokens_in_voxel_save);
 }
 
 #[test]

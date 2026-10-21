@@ -33,10 +33,6 @@ pub fn current_fixture_workspace() -> tempfile::TempDir {
     let p34_relative = "crates/alife_world/tests/fixtures/p34";
     let p34 = root.path().join(p34_relative);
     copy_tree(&source.join(p34_relative), &p34);
-    copy_tree(
-        &source.join("content/fixtures/g16"),
-        &root.path().join("content/fixtures/g16"),
-    );
 
     let config = RuntimeConfig::from_json_file(p34.join("tiny_config.json")).unwrap();
     let organism_id = OrganismId(1);

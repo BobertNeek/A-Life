@@ -5,10 +5,9 @@ PR110 on `feat/cpu-foundation-backend`; it is not architecture authority.
 The user's 19 October 2026, 23:17:19 UTC instruction authorized “create a cpu
 backend that we can offload some training to the cloud with” alongside larger
 groups. The root and crate guardrails now record this explicit offline scope.
-AOA-ADM-007 makes processor placement an implementation mechanism and
-AOA-TIME-006 describes GPU placement as a reference mechanism. The design
-reference is unchanged. Normal gameplay retains its GPU default and rejects
-CPU policy saves.
+Processor placement is an implementation choice; AOA-TIME-006 describes GPU
+placement as a reference mechanism. This offline backend preserves the normal
+gameplay GPU default and rejects CPU policy saves.
 
 ## Executable boundary
 
@@ -146,7 +145,7 @@ Real hardware execution of the GPU import remains **Unknown** on this CPU host.
 
 ```sh
 VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --lib cpu::
-VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation --test blocked_legacy_pipelines -- --nocapture
+VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation -- --nocapture
 cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff -- -D warnings
 cargo check --locked -p alife_training --features cpu-backend,gpu-tests --test cpu_backend --test backend_handoff
 ```
@@ -204,7 +203,7 @@ current production shader and must follow that merge before new qualification.
 
 | Requirement | Scope/evidence |
 | --- | --- |
-| AOA-ADM-007, AOA-TIME-006 | Explicit offline CPU placement and receipt; GPU gameplay default/boundary retained. |
+| AOA-TIME-006 | Explicit offline CPU execution; GPU gameplay default/boundary retained. |
 | AOA-BRAIN-006/007/009/011/014 | Native sparse/recurrent/somatic equations, gradients and formula tolerances. |
 | AOA-LEARN-002/003/005/010 | Sealed CPU physiology/receptor credit, private plasticity, actual PPO/residual critic and sleep replay. |
 | AOA-AUTH-003, AOA-INV-009 | Ordinary organism-owned world biology; score-free enumeration; no synthetic physiology in training. |

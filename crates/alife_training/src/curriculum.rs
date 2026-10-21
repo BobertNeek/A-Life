@@ -94,6 +94,16 @@ impl FoundationCurriculumStage {
         Self::HeldOutGeneralization,
     ];
 
+    pub(crate) const fn is_language_stage(self) -> bool {
+        matches!(
+            self,
+            Self::SpeechMechanics
+                | Self::LiveVocabularyGrounding
+                | Self::SelfReporting
+                | Self::HeldOutGeneralization
+        )
+    }
+
     pub const fn ordinal(self) -> u16 {
         match self {
             Self::GroundedPerception => 1,
@@ -437,7 +447,7 @@ fn build_tick(
         &mut target_weights,
     )?;
     supervise_candidate_motor_sources(phenotype, family, 0.75, &mut targets, &mut target_weights)?;
-    if is_language_stage(stage) {
+    if stage.is_language_stage() {
         supervise_speech_source_neurons(
             phenotype,
             content_sign * 0.75,
@@ -458,7 +468,7 @@ fn build_tick(
         1.0,
     )?;
     let tick = TrainingTick::try_new(inputs, targets, target_weights, Some(candidate))?;
-    if is_language_stage(stage) {
+    if stage.is_language_stage() {
         tick.with_speech_target(SpeechTrainingTarget::try_new(
             (rng.next_u64() % 18) as u16,
             content_sign * 0.8,
@@ -689,16 +699,6 @@ fn supervise_lobe(
 }
 
 struct SplitMix64(u64);
-
-const fn is_language_stage(stage: FoundationCurriculumStage) -> bool {
-    matches!(
-        stage,
-        FoundationCurriculumStage::SpeechMechanics
-            | FoundationCurriculumStage::LiveVocabularyGrounding
-            | FoundationCurriculumStage::SelfReporting
-            | FoundationCurriculumStage::HeldOutGeneralization
-    )
-}
 
 impl SplitMix64 {
     const fn new(seed: u64) -> Self {

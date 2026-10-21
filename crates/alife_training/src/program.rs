@@ -123,7 +123,7 @@ impl N2048FoundationProgram {
                     maximum_regression.max((locked.success_rate - replay.success_rate).max(0.0));
             }
         }
-        let language = is_language_stage(stage).then_some(LanguageStageMetrics {
+        let language = stage.is_language_stage().then_some(LanguageStageMetrics {
             paired_exposures: current.episodes,
             grounding_accuracy: current.success_rate,
             false_grounding_rate: current.false_positive_rate,
@@ -239,16 +239,6 @@ struct EvaluationAccumulator {
     mean_loss: f32,
     success_rate: f32,
     false_positive_rate: f32,
-}
-
-const fn is_language_stage(stage: FoundationCurriculumStage) -> bool {
-    matches!(
-        stage,
-        FoundationCurriculumStage::SpeechMechanics
-            | FoundationCurriculumStage::LiveVocabularyGrounding
-            | FoundationCurriculumStage::SelfReporting
-            | FoundationCurriculumStage::HeldOutGeneralization
-    )
 }
 
 const fn training_sequence_seed(base_seed: u64, optimizer_step: u32) -> u64 {

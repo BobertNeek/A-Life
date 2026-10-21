@@ -21,7 +21,7 @@ on:
       - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
       - "crates/alife_training/**"
   push:
-    branches: ["main", "codex/**"]
+    branches: ["main"]
     paths:
       - ".gitattributes"
       - ".github/workflows/windows-training-artifact.yml"

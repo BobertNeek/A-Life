@@ -73,40 +73,27 @@ Exit gate:
 Follow the [approved promotion scope](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-breed-promotion-scope.md).
 Ordinary mating must not silently copy an acquired adult mind.
 
-## 4. Advance EI1 research separately
+## 4. Investigate learning questions separately
 
-Treat the retained `Blocked` corpus as diagnosis, not promotion.
-
-This research promotion gate does not block repairing a small interaction or
-establishing the first playable care loop. Gameplay progress does not itself
-promote EI1.
-
-Exit gate:
-
-- the exact source, tree, adapter, backend, config, and corpus are bound;
-- intact scores are positive;
-- treatment is not worse than control in every required cell;
-- every minimum control margin passes;
-- required plateau windows are complete and valid;
-- the causal zstd sidecar streams successfully and matches every promoted receipt;
-- focused gates contain no EI1 ignores.
-
-If measured ability still fails, retain `Blocked` and improve the training design rather than relabelling the evidence.
+The historical EI1 experiment produced a source-bound `Blocked` result; its
+reports remain linked in [Evidence](EVIDENCE.md). Investigate a specific learning
+problem with a relevant comparison and later unprompted behavior. Preserve learned
+state and report failures honestly. An old campaign's score cells, plateau windows,
+or review eligibility do not gate a gameplay fix or the first playable care loop.
 
 ## 5. Scale by measurement when larger profiles are the target
 
-Keep brain class and population capacity as separate decisions.
+Keep brain class and population capacity as separate decisions. Measure the
+ordinary play session and the workload being supported: useful cognitive work,
+learning, frame/tick latency, CPU/GPU memory, and save/load continuity on the actual
+hardware. Check lifecycle, sleep, and retained individual state when a change could
+affect them.
 
-Measure the initial supported population in the ordinary play session. Broad
-population studies are separate work, not a prerequisite for the care milestone.
-
-Exit gate for each production class and population profile:
-
-- complete causal, learning, sleep, restore, memory, topology, and rollback evidence;
-- measured p95 tick and VRAM use on the named adapter/backend;
-- populations 1, 10, 50, 100, 250, and 500 measured for both sensor profiles where required;
-- admission, throttling, save migration, soak, and replay gates pass;
-- N4096 remains research-only until its own equivalence and rollback gate passes.
+Select representative classes, populations, sensor profiles, and scene conditions
+for the performance question. There is no mandatory six-population/two-profile
+promotion matrix for every class or unrelated gameplay change. Larger population
+studies and research brain growth are separate work; they do not block the care
+milestone. Advertise only the support and performance actually exercised.
 
 ### Current performance follow-up: 50 individuals at 20 FPS
 
@@ -149,7 +136,7 @@ explicit current consolidation context. The [bounded experiment blueprints](http
 retain matched memory and learning screens as conditional follow-ups; they do
 not launch a training campaign. The [dated skill review](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-10-01-deep-planning-skill.md)
 records the reusable method. Historical work packages do not reopen the
-integrated seams or change architecture authority and the release gate.
+integrated seams or add new prerequisites to ordinary gameplay work.
 
 ## 6. Release gate
 

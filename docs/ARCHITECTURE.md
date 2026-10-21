@@ -21,9 +21,9 @@ world perception + unscored legal candidates
 
 - `alife_world` owns perception facts, legality, candidate construction, action execution, outcomes, ecology, speech events, persistence, and world identity.
 - `alife_gpu_backend` owns gameplay neural state and WGSL execution.
-- The approved offline CPU cloud trainer in `alife_training/cpu-backend` executes
-  native graph/learning semantics in an explicit CPU evidence domain. This placement
-  follows AOA-ADM-007 and AOA-TIME-006; gameplay GPU authority remains unchanged.
+- The opt-in offline CPU trainer in `alife_training/cpu-backend` executes native
+  graph and learning semantics. Its results identify CPU execution separately
+  from the gameplay GPU path.
   Native handoffs preserve weights, moments and exact integer ages; qualification
   limits are recorded in the [CPU backend report](performance/20261019-native-cpu-training-backend.md).
 - `alife_game_app` schedules the live loop and translates authoritative state into player-facing surfaces.
@@ -35,14 +35,14 @@ world perception + unscored legal candidates
 | --- | --- |
 | `alife_core` | Engine-neutral ABI, genomes, phenotypes, foundations, capacity, memory, language, and reference helpers |
 | `alife_world` | Authoritative world, ecology, perception, candidates, actions, outcomes, speech, persistence, and voxel snapshot data |
-| `alife_gpu_backend` | GPU buffers, WGSL pipelines, selection, plasticity, memory, topology, sleep, and closed-loop runtime |
+| `alife_gpu_backend` | GPU buffers, WGSL neural execution, plasticity, sleep, and state capture |
 | `alife_runtime` | Shared GPU session and checkpoint authority |
 | `alife_archive` | Immutable birth/life manifests, content-addressed assets, lineage, and learned checkpoints |
 | `alife_school` | Teacher, curriculum, nursery, readiness, and verification contracts |
 | `alife_semantic` | Private local SLM prior and bounded speech translation |
 | `alife_training` | Offline training, evaluation, and evolution tools |
 | `alife_bevy_adapter` | Bevy-facing identity and integration helpers |
-| `alife_tools` | Developer tools and durable machine-readable reports |
+| `alife_tools` | Developer asset tools, persistence validators, and GPU diagnostics |
 | `alife_game_app` | CLI, headless smokes, production Bevy shell, GPU live runtime, controls, and voxel presentation |
 
 ## Neural tick

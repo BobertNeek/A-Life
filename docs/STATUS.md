@@ -85,7 +85,10 @@ EI1 retained 2,640 source-bound descendant receipts and 52,800 GPU dispatches on
 - `ControlNotWorseForEveryCell`;
 - `ControlMarginBelowMinimum`.
 
-Plateau status is `Unknown`; review eligibility and larger-brain authorization are false.
+The historical report recorded plateau `Unknown` and its internal review-eligibility
+and larger-brain-authorization fields as false. Those fields describe that old
+experiment; they are not present user permissions or gates on gameplay changes.
+The reports remain linked from [Evidence](EVIDENCE.md).
 
 ## Scale
 

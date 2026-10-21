@@ -1204,9 +1204,9 @@ The architecture must be inspectable at several levels without letting diagnosti
 
 **[AOA-OBS-004 | INVARIANT]** Telemetry, presentation, reports, and debug snapshots are read-only derived views tied to authoritative versions and ticks.
 
-**[AOA-OBS-005 | CAPABILITY]** Every external SLM/teacher call, assimilation operation, migration, structural change, save migration, and evaluation run has provenance and cost receipts.
+**[AOA-OBS-005 | REFERENCE MECHANISM]** Use bounded diagnostics to explain material external assistance, state transformations, and measured costs. Reuse existing logs and identifiers; ordinary work does not require a new receipt schema, report, or tracking system for every event.
 
-**[AOA-OBS-006 | INVARIANT]** Comments and reports may not describe a live required mechanism as diagnostic-only, optional, or deferred unless the architecture itself says so.
+**[AOA-OBS-006 | INVARIANT]** Documentation describes the behavior actually implemented and exercised, including relevant limits. Do not claim an absent mechanism works or relabel a failed observation as a pass. Deferred research and optional methods do not become gameplay prerequisites through this document.
 
 ## 40. Failure, recovery, and transaction safety
 

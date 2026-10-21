@@ -3,7 +3,7 @@
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::*;
 use alife_world::{grounded_peripheral_summaries, HeadlessWorld};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 pub fn cognitive_memory_context_for_recall(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
@@ -354,6 +354,7 @@ pub fn cognitive_projection_for_draft(
     }
 
     let forecast_available = predictor.has_acquired_state();
+    let mut object_priors = BTreeMap::<TrackedObjectId, f32>::new();
     let mut candidates = Vec::with_capacity(draft.candidates().len());
     for (index, candidate) in draft.candidates().iter().enumerate() {
         let expected_index =
@@ -373,6 +374,10 @@ pub fn cognitive_projection_for_draft(
         let prior_residual = NormalizedScalar::new(
             target_prior_residual(&memory_candidates[index])?.clamp(0.0, 1.0),
         )?;
+        if let Some(id) = tracked_object_id {
+            let object_prior = object_priors.entry(id).or_default();
+            *object_prior = object_prior.max(prior_residual.raw());
+        }
         let command = candidate.to_command(draft.organism_id(), candidate.sensor_confidence)?;
         let hypothetical_bundle =
             alife_core::arbitrate_gpu_selected_command_into_factorized_bundle(
@@ -399,24 +404,11 @@ pub fn cognitive_projection_for_draft(
         });
     }
 
-    let mut tracked_objects = BTreeSet::new();
-    for candidate in draft.candidates() {
-        if let Some(tracked_object_id) = tracked_object_id_for_candidate(draft, candidate)? {
-            tracked_objects.insert(tracked_object_id);
-        }
-    }
-    let mut objects = Vec::with_capacity(tracked_objects.len());
-    for tracked_object_id in tracked_objects {
+    let mut objects = Vec::with_capacity(object_priors.len());
+    for (tracked_object_id, prior_residual) in object_priors {
         let (concept_match, gap_match) = *topology_evidence
             .get(&tracked_object_id)
             .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
-        let mut prior_residual: f32 = 0.0;
-        for (index, candidate) in draft.candidates().iter().enumerate() {
-            if tracked_object_id_for_candidate(draft, candidate)? == Some(tracked_object_id) {
-                prior_residual =
-                    prior_residual.max(target_prior_residual(&memory_candidates[index])?);
-            }
-        }
         objects.push(alife_core::cognitive_context::CognitiveObjectEvidence {
             tracked_object_id,
             concept_match,

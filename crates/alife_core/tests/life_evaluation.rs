@@ -1,14 +1,14 @@
 use alife_core::{
     heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
-    ActionProposal, ActionTarget, ActiveChallengeKind, BodySnapshot, BrainClassSpec, BrainGenome,
-    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
-    Confidence, DevelopmentState, DurationTicks, EnvironmentalRegime, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, HeardToken, HomeostaticDelta,
-    HomeostaticSnapshot, LobeKind, MetricReading, NormalizedScalar, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PassiveMetricKind, PerceptionFrame, PhysicalActionOutcome,
-    PhysicalContactKind, Pose, PostActionOutcome, SensorProfile, SensorProfileProvenance,
-    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, UtteranceId,
-    UtteranceSourceKind, Velocity, WeightSplitContract, WorldEntityId, ACTIVE_CHALLENGE_COUNT,
+    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
+    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+    DevelopmentState, DurationTicks, EnvironmentalRegime, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, HeardToken, HomeostaticDelta, HomeostaticSnapshot, LobeKind,
+    MetricReading, NormalizedScalar, OrganismId, PassiveLifeEvent, PassiveLifeStatistics,
+    PassiveMetricKind, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose,
+    PostActionOutcome, SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels,
+    SensorySnapshot, SignedValence, Tick, UtteranceId, UtteranceSourceKind, Velocity,
+    WeightSplitContract, WorldEntityId,
 };
 
 fn finalized_patch(
@@ -242,18 +242,6 @@ fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
     );
     let restored: PassiveLifeStatistics = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(restored, statistics);
-}
-
-#[test]
-fn active_battery_contains_the_exact_fifteen_challenges() {
-    assert_eq!(ACTIVE_CHALLENGE_COUNT, 15);
-    assert_eq!(ActiveChallengeKind::ALL.len(), ACTIVE_CHALLENGE_COUNT);
-    let mut unique = ActiveChallengeKind::ALL.to_vec();
-    unique.sort_by_key(|challenge| challenge.raw());
-    unique.dedup();
-    assert_eq!(unique.len(), ACTIVE_CHALLENGE_COUNT);
-    assert_eq!(ActiveChallengeKind::VisibleRewardNavigation.raw(), 1);
-    assert_eq!(ActiveChallengeKind::SlmDisabledDialectTransfer.raw(), 15);
 }
 
 #[test]

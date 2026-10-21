@@ -1,28 +1,19 @@
-use std::{process::Command, time::Duration};
+use std::process::Command;
 
 use alife_core::{
-    BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, BrainScaleTier, LobeKind, SchemaKind,
-    SchemaVersions, SensorProfile,
+    BrainActivityPolicyV1, BrainCapacityClass, BrainClassId, SchemaKind, SchemaVersions,
+    SensorProfile,
 };
 use alife_game_app::{
     compile_gpu_closed_loop_benchmark_phenotype, GpuClosedLoopBenchmarkTrialOptions,
 };
-use alife_gpu_backend::{
-    GpuAdmissionReceipt, GpuPerformanceTargetStatus, GpuRuntimeBackendConfig,
-    GpuRuntimeBackendKind, GpuRuntimeBudget, GpuRuntimeProfile, GpuTierPopulation,
-};
+use alife_gpu_backend::{GpuAdmissionReceipt, GpuRuntimeBudget, GpuRuntimeProfile};
 use alife_tools::benchmark::gpu_closed_loop::{
-    adapter_identity_digest, canonical_performance_targets_v1, is_lower_hex_oid,
-    load_performance_targets, nearest_rank_p95, timestamp_ticks_to_ns,
-    GpuBenchmarkEnvironmentReceipt, GpuBenchmarkStatus, GpuClosedLoopBenchmarkManifest,
-    GpuClosedLoopBenchmarkProtocolV1, GpuClosedLoopBenchmarkRow, GpuPerformanceTargetRowV1,
-    GpuPerformanceTargetsV1, GPU_BENCHMARK_UNAVAILABLE_ADMISSION,
+    adapter_identity_digest, canonical_performance_targets_v1, is_lower_hex_oid, nearest_rank_p95,
+    timestamp_ticks_to_ns, GpuBenchmarkEnvironmentReceipt, GpuBenchmarkStatus,
+    GpuClosedLoopBenchmarkManifest, GpuClosedLoopBenchmarkProtocolV1, GpuClosedLoopBenchmarkRow,
+    GpuPerformanceTargetRowV1, GpuPerformanceTargetsV1, GPU_BENCHMARK_UNAVAILABLE_ADMISSION,
     GPU_BENCHMARK_UNAVAILABLE_NO_ADAPTER, GPU_BENCHMARK_UNAVAILABLE_REQUIRED_CAPABILITY,
-};
-use alife_tools::benchmark::{
-    BenchmarkHarness, BenchmarkHarnessConfig, BenchmarkMetricKind, BenchmarkTier,
-    ComputeBudgetPolicy, GpuRuntimeBenchmarkBridge, ResidencyClass, TargetProfile,
-    UpdateRatePolicy,
 };
 use alife_world::GpuBackendProvenanceSave;
 
@@ -228,59 +219,23 @@ fn benchmark_cli_validates_canonical_manifest_without_requiring_targets_flag() {
 }
 
 #[test]
-fn gpu_closed_loop_target_matrix_is_exact_and_sorted() {
-    let protocol = GpuClosedLoopBenchmarkProtocolV1::canonical();
-    assert_eq!(protocol.warmup_ticks, 256);
-    assert_eq!(protocol.measured_ticks, 1_024);
-    assert_eq!(protocol.base_seed, 4_404);
-    assert_eq!(protocol.timestamp_scope_raw, 2);
-    assert_ne!(protocol.protocol_digest, [0; 4]);
+fn benchmark_accepts_selected_rows_and_custom_budgets() {
+    let (mut targets, mut manifest) = benchmark_manifest_fixture();
+    targets.rows[0].target_p95_ns += 1;
+    targets.seal_digest().unwrap();
+    targets.validate().unwrap();
+    manifest.rows.truncate(1);
+    manifest.rows[0].target_p95_ns = targets.rows[0].target_p95_ns;
+    manifest.rows[0].seal_digest().unwrap();
+    manifest.seal_digest().unwrap();
+    manifest.validate(&targets).unwrap();
 
-    let targets = canonical_performance_targets_v1();
-    assert_eq!(targets.rows.len(), 36);
-    assert!(targets.rows.windows(2).all(|pair| pair[0] < pair[1]));
-    assert!(targets.rows.iter().all(|row| row.target_p95_ns > 0));
-}
-
-#[test]
-fn target_matrix_covers_the_corrected_full_causal_workload() {
-    let targets = canonical_performance_targets_v1();
-    let populations = [1_u32, 10, 50, 100, 250, 500];
-    let expected_ms = [
-        (
-            BrainCapacityClass::N512_ID.raw(),
-            [4_u64, 8, 16, 32, 80, 160],
-        ),
-        (
-            BrainCapacityClass::N1024_ID.raw(),
-            [6_u64, 12, 32, 64, 160, 320],
-        ),
-        (
-            BrainCapacityClass::N2048_ID.raw(),
-            [8_u64, 16, 64, 128, 320, 640],
-        ),
-    ];
-    for (class_id_raw, class_targets) in expected_ms {
-        for profile in [
-            SensorProfile::PrivilegedAffordanceV1,
-            SensorProfile::GroundedObjectSlotsV1,
-        ] {
-            let actual = populations.map(|population| {
-                targets
-                    .rows
-                    .iter()
-                    .find(|row| {
-                        row.class_id_raw == class_id_raw
-                            && row.sensor_profile_id_raw == profile.raw()
-                            && row.population == population
-                    })
-                    .expect("canonical target row exists")
-                    .target_p95_ns
-                    / 1_000_000
-            });
-            assert_eq!(actual, class_targets);
-        }
-    }
+    targets.rows.truncate(1);
+    targets.seal_digest().unwrap();
+    manifest.validate(&targets).unwrap();
+    targets.rows.push(targets.rows[0]);
+    targets.seal_digest().unwrap();
+    assert!(targets.validate().is_err());
 }
 
 #[test]
@@ -346,33 +301,6 @@ fn gpu_timestamp_conversion_is_checked_q24_round_half_up() {
         nearest_rank_p95(&mut ordered).unwrap(),
         nearest_rank_p95(&mut permuted).unwrap()
     );
-}
-
-#[test]
-fn gpu_benchmark_status_is_explicit() {
-    assert_ne!(GpuBenchmarkStatus::Completed, GpuBenchmarkStatus::Missed);
-    assert_ne!(
-        GpuBenchmarkStatus::Missed,
-        GpuBenchmarkStatus::Unavailable { reason_code: 1 }
-    );
-}
-
-#[test]
-fn checked_in_gpu_targets_are_the_exact_canonical_matrix() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../configs/gpu_closed_loop_performance_targets_v1.json");
-    let loaded = load_performance_targets(path).unwrap();
-    assert_eq!(loaded, canonical_performance_targets_v1());
-
-    let mut missing = loaded.clone();
-    missing.rows.pop();
-    missing.seal_digest().unwrap();
-    assert!(missing.validate().is_err());
-
-    let mut duplicate = loaded;
-    duplicate.rows[35] = duplicate.rows[34];
-    duplicate.seal_digest().unwrap();
-    assert!(duplicate.validate().is_err());
 }
 
 #[test]
@@ -528,7 +456,7 @@ fn missed_status_is_derived_only_from_an_executed_over_target_row() {
 }
 
 #[test]
-fn benchmark_manifest_rejects_missing_duplicate_tampered_and_mixed_adapter_rows() {
+fn benchmark_manifest_rejects_duplicate_tampered_and_mixed_adapter_rows() {
     let (targets, valid) = benchmark_manifest_fixture();
 
     let mut duplicate = valid.clone();
@@ -559,208 +487,4 @@ fn benchmark_manifest_rejects_missing_duplicate_tampered_and_mixed_adapter_rows(
     assert!(is_lower_hex_oid(&"a".repeat(40)));
     assert!(!is_lower_hex_oid(&"A".repeat(40)));
     assert!(!is_lower_hex_oid(&"a".repeat(39)));
-}
-
-#[test]
-fn benchmark_tiers_cover_required_population_counts_and_manual_upper_tiers() {
-    let tiers = BenchmarkTier::required_tiers();
-    assert_eq!(
-        tiers.iter().map(|tier| tier.population).collect::<Vec<_>>(),
-        [1, 10, 30, 50, 100, 250, 500]
-    );
-    assert!(tiers
-        .iter()
-        .filter(|tier| tier.expected_slow_cpu_only)
-        .all(|tier| tier.population >= 50));
-    assert!(tiers
-        .iter()
-        .filter(|tier| !tier.expected_slow_cpu_only)
-        .all(|tier| tier.population <= 30));
-}
-
-#[test]
-fn compute_budget_policy_keeps_essential_lobes_and_decimates_nonessential_first() {
-    let policy = ComputeBudgetPolicy::for_tier(BrainScaleTier::Standard2048).unwrap();
-    assert!(policy
-        .essential_lobes
-        .contains(&LobeKind::PerceptualIntegration));
-    assert!(policy.essential_lobes.contains(&LobeKind::ActionPlanning));
-    assert!(policy
-        .nonessential_lobes
-        .contains(&LobeKind::MultimodalAssociation));
-    assert!(policy.throttling.nonessential_decimation_threshold > 0.0);
-    assert!(
-        policy.throttling.nonessential_decimation_threshold
-            < policy.throttling.warm_cadence_threshold
-    );
-    assert!(policy.fallback_update_frequency_hz > 0.0);
-    assert!(policy.active_synapse_budget > 0);
-    assert!(policy.active_tile_budget > 0);
-}
-
-#[test]
-fn update_rates_are_configurable_by_residency_and_keep_hot_motor_at_60_hz() {
-    let rates = UpdateRatePolicy::v1_defaults();
-    assert_eq!(
-        rates.rate_hz(ResidencyClass::Hot, TargetProfile::SensoryMotor),
-        60.0
-    );
-    assert_eq!(
-        rates.rate_hz(ResidencyClass::Hot, TargetProfile::ActionArbitration),
-        60.0
-    );
-    assert!(
-        rates.rate_hz(ResidencyClass::Warm, TargetProfile::MemoryExpectancy)
-            < rates.rate_hz(ResidencyClass::Hot, TargetProfile::MemoryExpectancy)
-    );
-
-    let adjusted = rates.with_rate_hz(ResidencyClass::Warm, TargetProfile::OnlinePlasticity, 3.0);
-    assert_eq!(
-        adjusted.rate_hz(ResidencyClass::Warm, TargetProfile::OnlinePlasticity),
-        3.0
-    );
-}
-
-#[test]
-fn benchmark_metric_manifest_names_all_p20_metrics() {
-    assert_eq!(
-        BenchmarkMetricKind::ALL,
-        [
-            BenchmarkMetricKind::TickTime,
-            BenchmarkMetricKind::MemoryUsageEstimate,
-            BenchmarkMetricKind::PatchThroughput,
-            BenchmarkMetricKind::MemoryTopologyUpdateTime,
-            BenchmarkMetricKind::NeuralProjectionTime,
-            BenchmarkMetricKind::SleepConsolidationTime,
-            BenchmarkMetricKind::ScenarioSuccessRate,
-        ]
-    );
-}
-
-#[test]
-fn benchmark_tiers_smoke_runs_tier_1_and_10_without_bevy_or_gpu() {
-    let report = BenchmarkHarness::run(
-        BenchmarkHarnessConfig::smoke()
-            .with_tiers([BenchmarkTier::new(1), BenchmarkTier::new(10)])
-            .with_iteration_count(1),
-    )
-    .unwrap();
-
-    assert_eq!(report.runs.len(), 2);
-    assert!(report
-        .runs
-        .iter()
-        .all(|run| run.metrics.scenario_attempts == run.metrics.scenario_successes));
-    assert!(report
-        .runs
-        .iter()
-        .all(|run| run.metrics.patch_throughput_per_second > 0.0));
-    assert!(report
-        .runs
-        .iter()
-        .all(|run| run.metrics.tick_time > Duration::ZERO));
-    assert!(report
-        .runs
-        .iter()
-        .all(|run| run.metrics.memory_usage_estimate_bytes > 0));
-    assert!(!report.requires_bevy);
-    assert!(!report.requires_gpu);
-}
-
-#[test]
-fn benchmark_report_generator_writes_markdown_under_target_artifacts() {
-    let report = BenchmarkHarness::run(
-        BenchmarkHarnessConfig::smoke()
-            .with_tiers([BenchmarkTier::new(1)])
-            .with_iteration_count(1),
-    )
-    .unwrap();
-    let output_dir = std::env::temp_dir().join("alife_p20_benchmark_report_test");
-    let path = report.write_markdown(&output_dir).unwrap();
-    let markdown = std::fs::read_to_string(&path).unwrap();
-
-    assert!(path.ends_with("benchmark_tiers.md"));
-    assert!(markdown.contains("# A-Life benchmark tiers report"));
-    assert!(markdown.contains("| 1 |"));
-    assert!(markdown.contains("deterministic host baseline"));
-    assert!(markdown.contains("Manual expected-slow tiers"));
-}
-
-#[test]
-fn gpu_runtime_bridge_reuses_p20_smoke_without_fabricating_gpu_results() {
-    let cpu_report = BenchmarkHarness::run(
-        BenchmarkHarnessConfig::smoke()
-            .with_tiers([BenchmarkTier::new(1), BenchmarkTier::new(10)])
-            .with_iteration_count(1),
-    )
-    .unwrap();
-    let backend = GpuRuntimeBackendConfig::request(GpuRuntimeBackendKind::GpuAuthoritative)
-        .with_hardware_available(true)
-        .select_backend()
-        .unwrap();
-    let gpu_report = GpuRuntimeBenchmarkBridge::from_cpu_smoke(
-        &cpu_report,
-        backend,
-        "P29 CI smoke: no GPU hardware performance run",
-    )
-    .unwrap();
-
-    assert_eq!(
-        gpu_report.backend.selected,
-        GpuRuntimeBackendKind::GpuAuthoritative
-    );
-    assert!(gpu_report.backend.authoritative);
-    assert!(gpu_report.feature_flags.contains(&"p20-smoke".to_string()));
-    assert_eq!(
-        gpu_report
-            .measurements
-            .iter()
-            .map(|measurement| measurement.population)
-            .collect::<Vec<_>>(),
-        [
-            GpuTierPopulation::One,
-            GpuTierPopulation::Ten,
-            GpuTierPopulation::Thirty,
-            GpuTierPopulation::Fifty,
-            GpuTierPopulation::OneHundred,
-            GpuTierPopulation::TwoHundredFifty,
-            GpuTierPopulation::FiveHundred,
-        ]
-    );
-    assert!(gpu_report.measurements[0].tick_time_ms.is_some());
-    assert!(gpu_report.measurements[1].tick_time_ms.is_some());
-    assert!(gpu_report.measurements[2].tick_time_ms.is_none());
-    assert!(gpu_report
-        .measurements
-        .iter()
-        .all(|measurement| measurement.gpu_neural_time_ms.is_none()));
-    assert!(gpu_report
-        .measurements
-        .iter()
-        .all(|measurement| measurement.target_60_fps == GpuPerformanceTargetStatus::Unknown));
-}
-
-#[test]
-#[ignore = "manual CPU-only expected-slow benchmark tiers; use --ignored --nocapture"]
-fn manual_expected_slow_cpu_tiers_run_without_bevy_or_gpu() {
-    let report = BenchmarkHarness::run(
-        BenchmarkHarnessConfig::smoke()
-            .with_tiers([
-                BenchmarkTier::new(50),
-                BenchmarkTier::new(100),
-                BenchmarkTier::new(250),
-                BenchmarkTier::new(500),
-            ])
-            .with_iteration_count(1),
-    )
-    .unwrap();
-
-    assert_eq!(report.runs.len(), 4);
-    assert!(report.runs.iter().all(|run| run.manual_expected_slow));
-    assert!(report
-        .runs
-        .iter()
-        .all(|run| run.metrics.scenario_attempts == u32::from(run.tier.population)));
-    assert!(!report.requires_bevy);
-    assert!(!report.requires_gpu);
 }

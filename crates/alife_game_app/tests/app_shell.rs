@@ -3,10 +3,12 @@ use std::path::PathBuf;
 use alife_core::PolicyBackend;
 use alife_game_app::{
     load_geneforge_creature_part_catalog, resolve_creature_part_display_sources,
-    run_headless_app_shell_smoke, run_lifecycle_lineage_smoke, AppShellLaunchConfig,
-    DoubleBufferedGraphicalScheduler, GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode,
-    LifecycleSaveState, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
-    RuntimePlaybackState,
+    run_headless_app_shell_smoke, AppShellLaunchConfig, DoubleBufferedGraphicalScheduler,
+    GpuBrainAuthorityTelemetry, GraphicalBrainPolicyMode, ProductionFrontendProfileId,
+    ProductionVoxelLaunchConfig, RuntimePlaybackState,
+};
+use alife_world::{
+    CreatureAppearanceGenome, CreaturePartFamilyId, CreaturePartSlotKey, CreaturePartSources,
 };
 
 #[test]
@@ -144,101 +146,82 @@ fn production_developer_overlay_is_opt_in() {
 }
 
 #[test]
-fn lifecycle_lineage_birth_inherits_and_mutates_appearance_genes() {
-    let summary = run_lifecycle_lineage_smoke().unwrap();
-    let birth = &summary.lineage_records[0];
-    let offspring = summary
-        .creatures
-        .iter()
-        .find(|creature| creature.genome_id == birth.offspring_genome_id)
-        .expect("G09 smoke should create one offspring");
-    let parents = birth
-        .parent_genome_ids
-        .iter()
-        .map(|parent_genome| {
-            summary
-                .creatures
-                .iter()
-                .find(|creature| creature.genome_id == *parent_genome)
-                .expect("parent genome should stay visible in lifecycle summary")
-        })
-        .collect::<Vec<_>>();
+fn offspring_appearance_inherits_and_mutates_compatible_parts() {
+    let mut parent_a = CreatureAppearanceGenome::founder_for_species(0, 101);
+    parent_a.part_sources = CreaturePartSources {
+        head: CreaturePartFamilyId(8),
+        torso: CreaturePartFamilyId(11),
+        arms: CreaturePartFamilyId(9),
+        legs: CreaturePartFamilyId(10),
+        tail: CreaturePartFamilyId(11),
+    };
+    let mut parent_b = CreatureAppearanceGenome::founder_for_species(1, 202);
+    parent_b.part_sources = CreaturePartSources {
+        head: CreaturePartFamilyId(11),
+        torso: CreaturePartFamilyId(11),
+        arms: CreaturePartFamilyId(10),
+        legs: CreaturePartFamilyId(8),
+        tail: CreaturePartFamilyId(9),
+    };
+    let mut child = CreatureAppearanceGenome::offspring_from_parents(parent_a, parent_b, 303);
+    assert!(child.inherited_from(parent_a, parent_b));
 
-    let part_catalog = load_geneforge_creature_part_catalog().unwrap();
+    let catalog = load_geneforge_creature_part_catalog().unwrap();
+    child.part_sources = alife_game_app::mutate_creature_part_sources(
+        child.part_sources,
+        child.mutation_count,
+        303,
+        &catalog,
+    )
+    .unwrap()
+    .sources;
+    child.validate().unwrap();
+
+    assert_eq!(child.part_sources.torso, CreaturePartFamilyId(11));
     assert!(alife_game_app::part_sources_are_ordinary_compatible(
-        &offspring.appearance.part_sources,
-        &part_catalog
+        &child.part_sources,
+        &catalog
     ));
-    assert!(
-        offspring.appearance.part_sources.torso == parents[0].appearance.part_sources.torso
-            || offspring.appearance.part_sources.torso == parents[1].appearance.part_sources.torso,
-        "the inherited torso remains the assembly compatibility frame"
-    );
-    for ((slot, child_family), (_, parent_a_family), (_, parent_b_family)) in offspring
-        .appearance
+    for ((slot, child_family), (_, parent_a_family), (_, parent_b_family)) in child
         .part_sources
         .iter_slots()
         .into_iter()
-        .zip(parents[0].appearance.part_sources.iter_slots())
-        .zip(parents[1].appearance.part_sources.iter_slots())
+        .zip(parent_a.part_sources.iter_slots())
+        .zip(parent_b.part_sources.iter_slots())
         .map(|((child, parent_a), parent_b)| (child, parent_a, parent_b))
     {
         if child_family != parent_a_family && child_family != parent_b_family {
-            assert_ne!(
-                slot,
-                alife_world::CreaturePartSlotKey::Torso,
-                "catalog normalization may only substitute attached parts"
-            );
+            assert_ne!(slot, CreaturePartSlotKey::Torso);
         }
+        assert!(child_family.0 <= 11);
     }
-    assert!(
-        offspring.appearance.mutation_count
-            > parents[0]
-                .appearance
-                .mutation_count
-                .max(parents[1].appearance.mutation_count),
-        "offspring appearance should allow simple mutation across generations"
-    );
-    assert_ne!(
-        offspring.appearance.signature_line(),
-        parents[0].appearance.signature_line()
-    );
-    assert_ne!(
-        offspring.appearance.signature_line(),
-        parents[1].appearance.signature_line()
-    );
+    assert!(child.mutation_count > parent_a.mutation_count.max(parent_b.mutation_count));
+    assert_ne!(child.signature_line(), parent_a.signature_line());
+    assert_ne!(child.signature_line(), parent_b.signature_line());
 }
 
 #[test]
 fn display_resolution_keeps_unknown_saved_part_id_byte_for_byte() {
-    let summary = run_lifecycle_lineage_smoke().unwrap();
-    let mut save = LifecycleSaveState::from_summary(&summary).unwrap();
-    save.records[0].appearance.part_sources.head = alife_world::CreaturePartFamilyId(999);
-    let before = save.to_json_string_pretty().unwrap();
+    let mut appearance = CreatureAppearanceGenome::founder_for_species(0, 73);
+    appearance.part_sources.head = CreaturePartFamilyId(999);
+    let before = serde_json::to_vec(&appearance).unwrap();
 
     let display = resolve_creature_part_display_sources(
-        save.records[0].appearance.part_sources,
+        appearance.part_sources,
         &load_geneforge_creature_part_catalog().unwrap(),
     )
     .unwrap();
 
     assert!(display.warning.is_some());
-    assert_eq!(display.saved_sources.head.0, 999);
-    assert_eq!(save.to_json_string_pretty().unwrap(), before);
+    assert_eq!(display.saved_sources.head, CreaturePartFamilyId(999));
     assert_eq!(
-        LifecycleSaveState::from_json_str(&before).unwrap().records[0]
-            .appearance
-            .part_sources
-            .head
-            .0,
-        999
+        display.displayed_sources.head,
+        display.displayed_sources.torso
     );
-
-    for family in 8..=11 {
-        save.records[0].appearance.part_sources =
-            alife_world::CreaturePartSources::coherent(alife_world::CreaturePartFamilyId(family));
-        let json = save.to_json_string_pretty().unwrap();
-        let roundtrip = LifecycleSaveState::from_json_str(&json).unwrap();
-        assert_eq!(roundtrip.records[0].appearance.part_sources.torso.0, family);
-    }
+    assert!(display.display_only);
+    assert!(display.warning.unwrap().visible_message().contains("999"));
+    assert_eq!(serde_json::to_vec(&appearance).unwrap(), before);
+    let roundtrip: CreatureAppearanceGenome = serde_json::from_slice(&before).unwrap();
+    assert_eq!(roundtrip.part_sources.head, CreaturePartFamilyId(999));
+    assert_eq!(serde_json::to_vec(&roundtrip).unwrap(), before);
 }

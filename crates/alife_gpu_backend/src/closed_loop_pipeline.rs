@@ -3046,25 +3046,6 @@ impl GpuClosedLoopPipelines {
         })
     }
 
-    pub(crate) fn discard_pending_eligibility(
-        &mut self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        buffers: &GpuFixedClassArenaBuffers,
-        slot: &GpuBrainSlot,
-        pending: &GpuPendingEligibilityRecord,
-        expected_transaction_generation: u64,
-    ) -> Result<GpuEligibilityDiscardRecord, GpuClosedLoopError> {
-        self.discard_pending_eligibility_impl(
-            device,
-            queue,
-            buffers,
-            slot,
-            pending,
-            expected_transaction_generation,
-        )
-    }
-
     #[cfg(feature = "gpu-tests")]
     pub fn discard_pending_eligibility_for_hardware_diagnostic(
         &mut self,
@@ -3075,7 +3056,7 @@ impl GpuClosedLoopPipelines {
         pending: &GpuPendingEligibilityRecord,
         expected_transaction_generation: u64,
     ) -> Result<GpuEligibilityDiscardRecord, GpuClosedLoopError> {
-        self.discard_pending_eligibility_impl(
+        self.discard_pending_eligibility(
             device,
             queue,
             buffers,
@@ -3085,7 +3066,7 @@ impl GpuClosedLoopPipelines {
         )
     }
 
-    fn discard_pending_eligibility_impl(
+    pub(crate) fn discard_pending_eligibility(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,

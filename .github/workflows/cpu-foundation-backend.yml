@@ -2,7 +2,7 @@ name: CPU foundation backend
 
 on:
   push:
-    branches: ["main", "feat/cpu-foundation-backend", "codex/**"]
+    branches: ["main"]
     paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", ".github/workflows/cpu-foundation-backend.yml"]
   pull_request:
     branches: ["main"]

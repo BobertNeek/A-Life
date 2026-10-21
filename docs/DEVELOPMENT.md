@@ -49,31 +49,30 @@ cargo test --workspace --all-features --all-targets
 
 Record the relevant commands and results with the change. Keep generated outputs under ignored `target/artifacts/` paths.
 
-## Focused content and persistence checks
+## Focused persistence and asset checks
 
 ```powershell
 cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34
-cargo run -p alife_tools --bin g16_content_authoring -- validate-pack content/fixtures/g16/content_pack_manifest.json
 cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants
 ```
 
 Optional GPU demonstrations remain manual. A typed GPU unavailability result is a failure state, not permission to substitute a reference brain.
 
-## GPU gates
+## GPU measurements
 
-GPU claims require a physical adapter/backend receipt:
+Use the real device diagnostic for the workload being investigated:
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_gpu_closed_loop_gates.ps1
-cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
+```text
+cargo run -p alife_tools --bin benchmark_tiers -- --backend gpu-closed-loop --targets TARGETS.json --classes CLASSES --sensor-profiles PROFILES --populations POPULATIONS --base-seed SEED --output OUTPUT.json
 ```
 
-Rules:
-- require source-bound physical-adapter evidence for every hardware claim;
-- do not count CPU, noop, fallback, preflight, or schema-only paths as GPU passes;
-- bind commit, tree, adapter, backend, arguments, monotonic timing, exit code, and output digests;
-- treat unavailable hardware or incomplete evidence as `Unknown` or `Blocked`.
+The command also supports `--write-canonical-targets PATH` and `--validate PATH`.
+Choose classes and population rows relevant to the question; a target file is a
+comparison input, not a requirement to rerun an entire promotion matrix. Record
+the source, hardware, configuration, and observed result. CPU fixtures, estimates,
+and preflight do not establish GPU timing or learned behavior. Keep unavailable
+hardware and unmeasured behavior explicit.
 
 ## Architecture boundaries
 

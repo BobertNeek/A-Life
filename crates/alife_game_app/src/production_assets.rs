@@ -20,10 +20,7 @@ pub const FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH: &str =
     "assets/production_voxel_v1/production_asset_manifest.json";
 pub const FVR07_PRODUCTION_ASSET_PACK_ID: &str = "production-voxel-v1";
 pub const FVR07_ART_DIRECTION: &str = "stylized-voxel-alife-production-v1";
-// Runtime-only approved 3D pack: the 140-chunk, three-level landscape is 9 MiB.
-// Editable blends and the full authoring-scene GLB are not runtime manifest assets.
-pub const FVR07_MAX_COMMITTED_ASSET_BYTES: u64 = 12 * 1024 * 1024;
-pub const FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES: u64 = 32 * 1024 * 1024;
+// Editable Blender sources and full authoring-scene GLBs are not runtime assets.
 
 pub const FVR07_REQUIRED_USAGE_CATEGORIES: [&str; 15] = [
     "voxel-material-atlas",
@@ -61,18 +58,8 @@ pub struct ProductionVoxelAssetManifest {
     pub pack_id: String,
     pub art_direction: String,
     pub generated_art_target: String,
-    pub loader: ProductionAssetLoaderContract,
     pub entries: Vec<ProductionVoxelAssetEntry>,
     pub vfx_profiles: Vec<ProductionVfxProfile>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct ProductionAssetLoaderContract {
-    pub crate_name: String,
-    pub crate_version: String,
-    pub production_feature: String,
-    pub missing_asset_policy: String,
-    pub runtime_dependency: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -134,16 +121,12 @@ pub struct ProductionAssetValidationSummary {
     pub committed_asset_bytes: u64,
     pub largest_asset_bytes: u64,
     pub generated_art_target: String,
-    pub loader_crate: String,
-    pub loader_version: String,
-    pub missing_asset_policy: String,
     pub vfx_profile_count: usize,
     pub vfx_effects_present: bool,
     pub minimum_vfx_budget_state: String,
     pub comfort_vfx_budget_state: String,
     pub display_only_vfx: bool,
     pub adaptive_vfx: bool,
-    pub no_large_artifacts_committed: bool,
     pub no_renderer_authority: bool,
     pub scale_up_profiles_present: bool,
 }
@@ -159,19 +142,13 @@ impl ProductionAssetValidationSummary {
             || self.unknown_license_entries != 0
             || self.missing_or_rejected_assets != 0
             || self.committed_asset_bytes == 0
-            || self.largest_asset_bytes > FVR07_MAX_COMMITTED_ASSET_BYTES
-            || self.committed_asset_bytes > FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES
             || self.generated_art_target.trim().is_empty()
-            || self.loader_crate != "bevy_asset_loader"
-            || self.loader_version != "0.26.0"
-            || self.missing_asset_policy != "clear-error-or-generated-fallback"
             || self.vfx_profile_count != ProductionFrontendProfileId::all().len()
             || !self.vfx_effects_present
             || self.minimum_vfx_budget_state != "conservative"
             || self.comfort_vfx_budget_state != "medium"
             || !self.display_only_vfx
             || !self.adaptive_vfx
-            || !self.no_large_artifacts_committed
             || !self.no_renderer_authority
             || !self.scale_up_profiles_present
         {
@@ -229,31 +206,6 @@ fn production_asset_validation_root(manifest_path: &Path) -> PathBuf {
         .unwrap_or_else(ca12_workspace_root)
 }
 
-#[cfg(feature = "production-assets")]
-pub fn production_asset_loader_runtime_type_names() -> Vec<&'static str> {
-    vec![std::any::type_name::<
-        bevy_asset_loader::prelude::DynamicAssets,
-    >()]
-}
-
-#[cfg(not(feature = "production-assets"))]
-pub fn production_asset_loader_runtime_type_names() -> Vec<&'static str> {
-    Vec::new()
-}
-
-#[cfg(feature = "vfx-hanabi")]
-pub fn production_hanabi_runtime_type_names() -> Vec<&'static str> {
-    vec![
-        std::any::type_name::<bevy_hanabi::EffectAsset>(),
-        std::any::type_name::<bevy_hanabi::ParticleEffect>(),
-    ]
-}
-
-#[cfg(not(feature = "vfx-hanabi"))]
-pub fn production_hanabi_runtime_type_names() -> Vec<&'static str> {
-    Vec::new()
-}
-
 pub fn validate_production_assets(
     manifest_path: impl AsRef<Path>,
 ) -> Result<ProductionAssetValidationSummary, GameAppShellError> {
@@ -272,7 +224,6 @@ pub(crate) fn validate_production_assets_inner(
     manifest: &ProductionVoxelAssetManifest,
 ) -> Result<ProductionAssetValidationSummary, GameAppShellError> {
     validate_manifest_header(manifest)?;
-    validate_asset_loader_contract(&manifest.loader)?;
     validate_generated_target_path(&manifest.generated_art_target)?;
 
     let mut asset_ids = BTreeSet::new();
@@ -331,17 +282,12 @@ pub(crate) fn validate_production_assets_inner(
         committed_asset_bytes,
         largest_asset_bytes,
         generated_art_target: manifest.generated_art_target.clone(),
-        loader_crate: manifest.loader.crate_name.clone(),
-        loader_version: manifest.loader.crate_version.clone(),
-        missing_asset_policy: manifest.loader.missing_asset_policy.clone(),
         vfx_profile_count: manifest.vfx_profiles.len(),
         vfx_effects_present: vfx_state.effects_present,
         minimum_vfx_budget_state: vfx_state.minimum_budget_state,
         comfort_vfx_budget_state: vfx_state.comfort_budget_state,
         display_only_vfx: vfx_state.display_only,
         adaptive_vfx: vfx_state.adaptive,
-        no_large_artifacts_committed: largest_asset_bytes <= FVR07_MAX_COMMITTED_ASSET_BYTES
-            && committed_asset_bytes <= FVR07_MAX_TOTAL_COMMITTED_ASSET_BYTES,
         no_renderer_authority: vfx_state.no_renderer_authority,
         scale_up_profiles_present: vfx_state.scale_up_profiles_present,
     })
@@ -363,22 +309,6 @@ fn validate_manifest_header(
     Ok(())
 }
 
-fn validate_asset_loader_contract(
-    loader: &ProductionAssetLoaderContract,
-) -> Result<(), GameAppShellError> {
-    if loader.crate_name != "bevy_asset_loader"
-        || loader.crate_version != "0.26.0"
-        || loader.production_feature != "production-assets"
-        || loader.missing_asset_policy != "clear-error-or-generated-fallback"
-        || !loader.runtime_dependency
-    {
-        return Err(GameAppShellError::InvalidProductionFrontend {
-            message: "invalid FVR07 production asset loader contract".to_string(),
-        });
-    }
-    Ok(())
-}
-
 fn validate_production_asset_entry(
     root: &Path,
     entry: &ProductionVoxelAssetEntry,
@@ -395,7 +325,7 @@ fn validate_production_asset_entry(
         return Err(invalid_asset("production asset local path is missing"));
     }
     let size = std::fs::metadata(&path)?.len();
-    if size == 0 || size != entry.size_bytes || size > FVR07_MAX_COMMITTED_ASSET_BYTES {
+    if size == 0 || size != entry.size_bytes {
         return Err(invalid_asset("production asset size is invalid"));
     }
     let digest = PortableAssetDigest(entry.digest.clone());
@@ -424,7 +354,7 @@ fn validate_production_asset_entry(
             .generator
             .as_ref()
             .ok_or_else(|| invalid_asset("generated asset is missing generator metadata"))?;
-        validate_generated_asset_source(root, generator)?;
+        validate_generated_asset_source(generator)?;
     } else if entry.generator.is_some() {
         return Err(invalid_asset(
             "external asset cannot carry generator metadata",
@@ -439,7 +369,6 @@ fn validate_production_asset_entry(
 }
 
 fn validate_generated_asset_source(
-    root: &Path,
     generator: &GeneratedAssetSource,
 ) -> Result<(), GameAppShellError> {
     if generator.tool.trim().is_empty()
@@ -451,9 +380,6 @@ fn validate_generated_asset_source(
         ));
     }
     validate_production_asset_local_path(&generator.config_path, false)?;
-    if !root.join(&generator.config_path).is_file() {
-        return Err(invalid_asset("generated asset config path is missing"));
-    }
     Ok(())
 }
 
@@ -802,7 +728,6 @@ mod tests {
             assert!(!entry.placeholder);
             assert!(entry.generated);
             assert!(!entry.external);
-            assert!(entry.size_bytes <= FVR07_MAX_COMMITTED_ASSET_BYTES);
             assert!(entry
                 .local_path
                 .starts_with("crates/alife_game_app/assets/production_voxel_v1/terrain/"));

@@ -45,10 +45,9 @@ P27 adds the hierarchical active-mask contract used by phenotype packing:
 - counters track skipped supertiles, skipped microtiles, active tiles, active
   synapses, routing descriptors evaluated, and mask boundary failures.
 
-Dispatch-level culling is deliberately deferred. P27 establishes shader
-early-exit and host-side mask packing first; P29 owns runtime performance tiers.
-Active gameplay exposes only compact selection and learning receipts. Bulk
-diagnostics and export staging remain boundary-scoped.
+The routing code provides shader early-exit and host-side mask packing. Compact
+selection and learning results support the live loop; bulk diagnostic and exact
+state captures use explicit transaction boundaries.
 
 ## P28 sleep/offline recompaction
 
@@ -68,40 +67,25 @@ sleep/offline boundaries:
 - stages a double-buffer replacement that can either be rejected while keeping
   the old active upload or atomically swapped at a sleep/offline boundary.
 
-The P28 WGSL file is a contract stub only. It does not implement dynamic GPU
-allocation or shader-side recompaction. Active gameplay APIs still cannot
-require per-synapse, weight, or bulk neural readback; P29 owns runtime
-performance-tier integration.
+The P28 WGSL file is a contract stub, not dynamic GPU allocation or shader-side
+recompaction. This developer contract does not by itself demonstrate a production
+sleep or performance feature.
 
-## GPU-required neural runtime and no-readback boundary
+## Gameplay runtime and state capture
 
-`NeuralClosedLoopGpu` requires a validated adapter and the seven-binding
-closed-loop heap layout. Hardware or device failure returns the typed neural
-backend-unavailable result and stops learned actions. `HeuristicBaseline` is an
-explicit, separately selected comparison policy; it is never an error fallback.
+Gameplay requires a validated GPU adapter and the closed-loop heap layout.
+Hardware or device failure returns an unavailable result and stops learned
+actions. Explicitly selected comparison policies are separate from the gameplay
+neural path and do not act as device-error fallbacks.
 
-Runtime boundary rules:
+The actual runtime owns generation-checked slots, bounded selection results,
+learning transactions, and exact state capture. Bulk capture and restore preserve
+private state and occur at sealed boundaries for persistence, diagnostics, and
+training; they do not create a CPU neural shadow. See
+[`closed_loop_runtime.rs`](src/closed_loop_runtime.rs) and
+[`closed_loop_exact_capture.rs`](src/closed_loop_exact_capture.rs).
 
-- active gameplay may stage compact selection and learning receipts only.
-- active gameplay does not expose bulk neural, per-synapse, per-lobe, or weight
-  readback.
-- diagnostics/export readbacks are allowed only at frame, sleep, manual
-  validation, or performance-report boundaries.
-- P27/P28 diagnostic counters are not product active-gameplay neural authority APIs.
-
-The throttling policy protects sensory, metabolic, motor, and homeostatic lobes
-first. When GPU neural timing exceeds budget, non-essential association,
-lexicon, memory, and working-memory lobes decimate before sensory/motor cadence
-is reduced.
-
-Performance-report commands:
-
-```powershell
-cargo run -p alife_tools --bin benchmark_tiers -- --gpu-runtime
-cargo run -p alife_tools --bin benchmark_tiers -- --all --gpu-runtime
-```
-
-Reports record the exact adapter, class, phenotype, payload, commit/tree, and
-status. Missing measurements remain `Unknown`; historical CPU diagnostic data
-cannot satisfy a GPU neural performance gate. The production closed-loop
-pipelines use exactly seven storage-buffer bindings per shader stage.
+The real GPU diagnostic supports selected classes, sensor profiles, populations,
+and custom targets. See [Development](../../docs/DEVELOPMENT.md#gpu-measurements)
+for its current command. Record observed device work and report missing
+measurements explicitly; CPU estimates are not GPU timing.

@@ -2072,45 +2072,45 @@ fn pack_metadata_and_layout(
         .checked_mul(neurons)
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
     let inputs = 0;
-    let targets = as_u32_u64(ticks * neurons)?;
-    let target_weights = as_u32_u64(ticks * neurons * 2)?;
-    let candidate_records = as_u32_u64(ticks * neurons * 3)?;
+    let targets = as_u32(ticks * neurons)?;
+    let target_weights = as_u32(ticks * neurons * 2)?;
+    let candidate_records = as_u32(ticks * neurons * 3)?;
     let base_training_words = ticks
         .checked_mul(neurons * 3 + CANDIDATE_RECORD_WORDS as u64 * candidate_capacity)
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
     let activations = 0;
-    let metabolic = as_u32_u64(state_count)?;
-    let activity_ema = as_u32_u64(state_count * 2)?;
+    let metabolic = as_u32(state_count)?;
+    let activity_ema = as_u32(state_count * 2)?;
     let state_words = state_count * 3;
     let activation_gradients = 0;
-    let metabolic_gradients = as_u32_u64(state_count)?;
-    let deltas = as_u32_u64(state_count * 2)?;
-    let weight_gradients = as_u32_u64(state_count * 2 + total_steps * neurons)?;
+    let metabolic_gradients = as_u32(state_count)?;
+    let deltas = as_u32(state_count * 2)?;
+    let weight_gradients = as_u32(state_count * 2 + total_steps * neurons)?;
     let base_gradient_words = state_count
         .checked_mul(2)
         .and_then(|value| value.checked_add(total_steps * neurons))
         .and_then(|value| value.checked_add(synapse_count as u64))
         .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-    let adjoints = as_u32_u64(base_gradient_words)?;
-    let accumulated_weights = as_u32_u64(base_gradient_words + ticks * candidate_capacity)?;
+    let adjoints = as_u32(base_gradient_words)?;
+    let accumulated_weights = as_u32(base_gradient_words + ticks * candidate_capacity)?;
     let gradient_words = u64::from(accumulated_weights) + synapse_count as u64 + ticks * 192;
     let candidate_logits = 0;
-    let speech_logits = as_u32_u64(ticks * candidate_capacity)?;
+    let speech_logits = as_u32(ticks * candidate_capacity)?;
     let metrics =
-        as_u32_u64(ticks * candidate_capacity + ticks * if replay.is_some() { 192 } else { 1 })?;
+        as_u32(ticks * candidate_capacity + ticks * if replay.is_some() { 192 } else { 1 })?;
     let memory_raw = metrics + 4;
-    let cognitive_raw = memory_raw + as_u32_u64(ticks * candidate_capacity)?;
+    let cognitive_raw = memory_raw + as_u32(ticks * candidate_capacity)?;
     let output_words = u64::from(cognitive_raw) + ticks * candidate_capacity;
-    let context = as_u32_u64(base_training_words)?;
+    let context = as_u32(base_training_words)?;
     let route_count = as_u32(phenotype.projections().len())?;
-    let initial = as_u32_u64(
+    let initial = as_u32(
         base_training_words
             + ticks
                 * (4 + u64::from(route_count)
                     + synapse_count as u64
                     + (alife_core::MAX_STRUCTURAL_EDGES as u64) * 5),
     )?;
-    let replay_speech_targets = as_u32_u64(u64::from(initial) + neurons * 3)?;
+    let replay_speech_targets = as_u32(u64::from(initial) + neurons * 3)?;
     let training_words = u64::from(replay_speech_targets) + ticks * 384;
     let (
         dendritic_offsets,
@@ -2583,14 +2583,9 @@ fn zero_buffer(
     })
 }
 
-fn as_u32(value: usize) -> Result<u32, TrainingError> {
-    u32::try_from(value)
-        .map_err(|_| ScaffoldContractError::PhenotypeCompile)
-        .map_err(Into::into)
-}
-
-fn as_u32_u64(value: u64) -> Result<u32, TrainingError> {
-    u32::try_from(value)
+fn as_u32(value: impl TryInto<u32>) -> Result<u32, TrainingError> {
+    value
+        .try_into()
         .map_err(|_| ScaffoldContractError::PhenotypeCompile)
         .map_err(Into::into)
 }

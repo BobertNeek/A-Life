@@ -107,20 +107,6 @@ fn p34_fixture_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/p34")
 }
 
-#[test]
-fn historical_p34_save_fails_closed_without_authoritative_organism_state() {
-    let error =
-        PortableSaveFile::from_json_file(p34_fixture_root().join("tiny_save.json")).unwrap_err();
-    assert!(matches!(
-        error,
-        PersistenceError::ArchitectureMigration(
-            alife_core::ArchitectureMigrationError::MissingAuthoritativeState {
-                field: "genetic_biochemical_graph"
-            }
-        )
-    ));
-}
-
 fn path_ends_with(path: &Path, suffix: &str) -> bool {
     path.to_string_lossy().replace('\\', "/").ends_with(suffix)
 }

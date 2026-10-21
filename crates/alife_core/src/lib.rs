@@ -20,7 +20,6 @@ pub mod cognitive_work;
 pub mod dendritic;
 pub mod diagnostics;
 pub mod embodiment;
-pub mod era1_evaluation;
 pub mod error;
 pub mod evaluation;
 pub mod evidence_digest;
@@ -152,16 +151,10 @@ pub use embodiment::{
     SensorPortDescriptor, EMBODIMENT_STATE_SCHEMA_VERSION, MAX_BODY_SCHEMA_VALUES,
     MAX_EMBODIMENT_PORTS,
 };
-pub use era1_evaluation::{
-    Era1Ability, Era1AssistanceKind, Era1Control, Era1EvidencePartition, Era1MatchedComparison,
-    Era1PlateauWindow, Era1TrialIdentity, Era1TrialReceipt, ERA1_ABILITY_COUNT, ERA1_CONTROL_COUNT,
-    ERA1_EVALUATION_SCHEMA_VERSION,
-};
 pub use error::ScaffoldContractError;
 pub use evaluation::{
-    ActiveBatteryReceipt, ActiveChallengeKind, ActiveChallengeResult, EnvironmentalRegime,
-    MetricReading, PassiveLifeEvent, PassiveLifeStatistics, PassiveMetricKind,
-    ACTIVE_BATTERY_SCHEMA_VERSION, ACTIVE_CHALLENGE_COUNT, PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION,
+    EnvironmentalRegime, MetricReading, PassiveLifeEvent, PassiveLifeStatistics, PassiveMetricKind,
+    PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION,
 };
 pub use evidence_digest::{
     lobe_layout_evidence_digest, projection_plan_evidence_digest, synapse_payload_evidence_digest,

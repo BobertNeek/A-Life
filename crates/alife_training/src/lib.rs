@@ -1,32 +1,24 @@
 //! Offline-only exact-graph WGSL foundation training.
 
-mod active_battery;
 mod backend_handoff;
 #[cfg(feature = "cpu-backend")]
 pub mod cpu;
 mod curriculum;
-mod era1_trials;
-mod evolution;
 mod founder_demonstrations;
 mod founder_merge;
 mod founder_readout;
 mod ppo;
 mod program;
-mod ranking;
 mod trainer;
 mod types;
 
-pub use active_battery::*;
 pub use backend_handoff::*;
 pub use curriculum::*;
-pub use era1_trials::*;
-pub use evolution::*;
 pub use founder_demonstrations::*;
 pub use founder_merge::*;
 pub use founder_readout::*;
 pub use ppo::*;
 pub use program::*;
-pub use ranking::*;
 pub use trainer::FoundationTrainer;
 pub use types::*;
 

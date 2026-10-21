@@ -1,4 +1,4 @@
-//! Real-hardware gate for candidate-conditioned memory in the production GPU loop.
+//! Real-hardware learning and candidate-conditioned memory checks for the production GPU loop.
 #![cfg(feature = "gpu-tests")]
 
 use std::collections::BTreeMap;
@@ -26,6 +26,7 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
     let summaries = runtime.tick().unwrap();
     let summary = &summaries[0];
     let patch = &runtime.sealed_patches()[0];
+    let learning = runtime.last_learning_receipts()[0];
     let recall = &runtime.last_memory_recall_receipts()[0];
     let update = runtime.last_memory_update_receipts()[0];
     let topology = runtime.last_topology_observations()[0]
@@ -45,6 +46,8 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
     assert_eq!(update.sealed_sequence_id, patch.header().sequence_id);
     assert_eq!(update.input_generation, recall.input_generation);
     assert_eq!(update.output_generation, recall.input_generation + 1);
+    assert_eq!(summary.learning_updates, 1);
+    assert_eq!(learning.sequence_id, patch.header().sequence_id);
     assert_eq!(summary.memory_updates, 1);
     assert_eq!(summary.topology_updates, 1);
     assert_eq!(topology.sealed_sequence_id, patch.header().sequence_id);
@@ -65,6 +68,10 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
             LiveBrainCausalStage::UpdateLogs,
         ]
     );
+
+    let telemetry = runtime.authority_telemetry();
+    assert_eq!(telemetry.learning_updates, 1);
+    assert_eq!(telemetry.last_learning_delta, learning.max_abs_delta);
 
     runtime.tick().unwrap();
     assert_eq!(runtime.last_memory_recall_receipts()[0].input_generation, 1);

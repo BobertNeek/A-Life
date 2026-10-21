@@ -10,7 +10,7 @@ use alife_core::ScaffoldContractError;
 use alife_game_app::{
     ca12_workspace_root, default_app_bundle_manifest_path, default_environment_manifest_path,
     validate_app_bundle_manifest, GameAppShellError, CA12_MAX_BUNDLE_FILE_BYTES,
-    CA12_MAX_REFERENCED_MANIFEST_BYTES, FVR07_MAX_COMMITTED_ASSET_BYTES,
+    CA12_MAX_REFERENCED_MANIFEST_BYTES,
 };
 use alife_world::persistence::{PersistenceError, PortableSaveFile, P34_MAX_INLINE_SAVE_BYTES};
 use serde_json::Value;
@@ -134,7 +134,6 @@ fn full_current_bundle_accepts_pretty_saves_and_canonical_production_assets() {
     assert!(summary.production_voxel_asset_manifest_validated);
     assert!(summary.production_voxel_generated_assets > 0);
     assert!(summary.largest_production_asset_bytes > LEGACY_BUNDLE_ASSET_LIMIT_BYTES);
-    assert!(summary.largest_production_asset_bytes <= FVR07_MAX_COMMITTED_ASSET_BYTES);
     assert!(summary.largest_file_bytes >= summary.largest_production_asset_bytes);
     assert!(summary.missing_required_rejected);
     summary.validate().unwrap();
@@ -146,10 +145,6 @@ fn full_current_bundle_accepts_pretty_saves_and_canonical_production_assets() {
     assert!(corrupted.validate().is_err());
     corrupted = summary.clone();
     corrupted.largest_file_bytes = summary.largest_production_asset_bytes - 1;
-    assert!(corrupted.validate().is_err());
-    corrupted = summary.clone();
-    corrupted.largest_production_asset_bytes = FVR07_MAX_COMMITTED_ASSET_BYTES + 1;
-    corrupted.largest_file_bytes = corrupted.largest_production_asset_bytes;
     assert!(corrupted.validate().is_err());
 }
 

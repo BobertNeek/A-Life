@@ -7,26 +7,6 @@ use alife_core::{
 use alife_core::{Confidence, DurationTicks};
 
 #[test]
-fn standard2048_is_one_scalable_reference_tier() {
-    let nano = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
-    let standard = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
-    let large = BrainClassSpec::for_tier(BrainScaleTier::Large4096);
-
-    assert_eq!(nano.neuron_count, 512);
-    assert_eq!(standard.neuron_count, 2048);
-    assert_eq!(large.neuron_count, 4096);
-    assert!(standard.neuron_count > nano.neuron_count);
-    assert!(large.neuron_count > standard.neuron_count);
-
-    for spec in [nano, standard, large] {
-        spec.validate().expect("reference tier should be valid");
-        assert_eq!(spec.neuron_count % 128, 0);
-        assert_eq!(spec.lobe_layout.total_neurons(), spec.neuron_count);
-        assert!(spec.lobe_layout.regions_are_aligned(16));
-    }
-}
-
-#[test]
 fn founder_homologues_cannot_be_disabled() {
     assert_eq!(
         LobeLayout::with_disabled_lobe(

@@ -376,7 +376,6 @@ impl GpuClosedLoopBenchmarkManifest {
         if self.schema_version != GPU_CLOSED_LOOP_BENCHMARK_SCHEMA
             || !is_lower_hex_oid(&self.git_commit)
             || !is_lower_hex_oid(&self.source_tree_digest)
-            || self.rows.len() != targets.rows.len()
             || self.rows.is_empty()
             || self.manifest_digest != self.recompute_manifest_digest()?
         {
@@ -401,11 +400,16 @@ impl GpuClosedLoopBenchmarkManifest {
 
         let mut keys = BTreeSet::new();
         let mut observed_identity = None;
-        for (row, target) in self.rows.iter().zip(&targets.rows) {
-            if !keys.insert(row.key()) || row.key() != target.key() {
-                return Err(GpuBenchmarkError::Contract(
-                    "benchmark rows are missing, duplicated, or unsorted",
-                ));
+        for row in &self.rows {
+            let target = targets
+                .rows
+                .iter()
+                .find(|target| target.key() == row.key())
+                .ok_or(GpuBenchmarkError::Contract(
+                    "benchmark row has no matching target",
+                ))?;
+            if !keys.insert(row.key()) {
+                return Err(GpuBenchmarkError::Contract("benchmark rows are duplicated"));
             }
             row.validate(&self.protocol, target)?;
             if let Some(adapter) = &row.environment.adapter {
@@ -467,15 +471,28 @@ impl GpuPerformanceTargetsV1 {
     }
 
     pub fn validate(&self) -> Result<(), GpuBenchmarkError> {
-        let canonical = canonical_performance_targets_v1();
         if self.schema_version != GPU_CLOSED_LOOP_BENCHMARK_SCHEMA
             || self.protocol_digest != GpuClosedLoopBenchmarkProtocolV1::canonical().protocol_digest
-            || self.rows != canonical.rows
+            || self.rows.is_empty()
             || self.targets_digest != self.recompute_digest()?
         {
             return Err(GpuBenchmarkError::Contract(
-                "performance targets are not the exact v1 matrix",
+                "performance target header or digest is invalid",
             ));
+        }
+        let mut keys = BTreeSet::new();
+        for row in &self.rows {
+            BrainCapacityClass::production_for_id(BrainClassId(row.class_id_raw))?;
+            SensorProfile::try_from_raw(row.sensor_profile_id_raw)?;
+            if row.population == 0
+                || row.population > 500
+                || row.target_p95_ns == 0
+                || !keys.insert(row.key())
+            {
+                return Err(GpuBenchmarkError::Contract(
+                    "invalid or duplicate performance target",
+                ));
+            }
         }
         Ok(())
     }

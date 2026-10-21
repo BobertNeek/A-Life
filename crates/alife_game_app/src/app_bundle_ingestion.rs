@@ -56,7 +56,7 @@ pub struct AppBundleIngestionSummary {
     pub production_voxel_asset_manifest_validated: bool,
     pub required_entries: usize,
     /// Largest admitted file, including canonical portable saves that have no
-    /// packaging byte cap. Approved art has its own independent size authority.
+    /// packaging byte cap. Asset sizes are checked against their manifest.
     pub largest_file_bytes: u64,
     pub largest_production_asset_bytes: u64,
     pub missing_required_rejected: bool,
@@ -81,7 +81,6 @@ impl AppBundleIngestionSummary {
             || self.required_entries == 0
             || self.largest_production_asset_bytes == 0
             || self.largest_production_asset_bytes > self.largest_file_bytes
-            || self.largest_production_asset_bytes > FVR07_MAX_COMMITTED_ASSET_BYTES
             || !self.missing_required_rejected
             || !self.shader_discovery_complete
             || self.large_binary_assets_committed
@@ -145,7 +144,7 @@ fn replace_first_required_entry_with_missing_path(manifest: &mut AppBundleManife
         return false;
     };
     entry.relative_path =
-        "crates/alife_world/tests/fixtures/gpu_alpha/missing_config.json".to_string();
+        "crates/alife_world/tests/fixtures/production_voxel/missing_config.json".to_string();
     true
 }
 

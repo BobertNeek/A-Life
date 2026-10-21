@@ -60,6 +60,25 @@ fn gpu_closed_loop_slice_a_receipt_is_authoritative() {
     assert!(receipt.active_synapses > 0);
     assert!(receipt.replay.passed);
     assert!(receipt.replay.max_abs_error <= receipt.replay.tolerance);
+    let encoded = serde_json::to_vec(&receipt).unwrap();
+    let decoded: alife_game_app::GpuSliceAAcceptanceReceipt =
+        serde_json::from_slice(&encoded).unwrap();
+
+    assert_eq!(decoded, receipt);
+    decoded.validate_in_memory().unwrap();
+
+    let mut digest_tamper = decoded.clone();
+    digest_tamper.header.artifact_digest[0] ^= 1;
+    assert!(digest_tamper.validate_in_memory().is_err());
+
+    let mut trace_tamper = decoded.clone();
+    trace_tamper.selection_trace[0].candidate_index ^= 1;
+    trace_tamper.header.artifact_digest = trace_tamper.recompute_artifact_digest().unwrap();
+    assert!(trace_tamper.validate_in_memory().is_err());
+
+    let mut non_finite = decoded;
+    non_finite.replay.max_abs_error = f32::NAN;
+    assert!(non_finite.recompute_artifact_digest().is_err());
 }
 
 #[test]
@@ -81,31 +100,6 @@ fn gpu_closed_loop_slice_a_sustains_sixty_four_neural_ticks() {
         assert_eq!(receipt.sealed_patch_count, 64);
         assert_eq!(receipt.selection_trace.len(), 64);
     }
-}
-
-#[test]
-#[cfg(feature = "gpu-tests")]
-fn gpu_closed_loop_slice_a_receipt_round_trips_and_rejects_tampering() {
-    let receipt = run_gpu_closed_loop_acceptance(test_options()).unwrap();
-    let encoded = serde_json::to_vec(&receipt).unwrap();
-    let decoded: alife_game_app::GpuSliceAAcceptanceReceipt =
-        serde_json::from_slice(&encoded).unwrap();
-
-    assert_eq!(decoded, receipt);
-    decoded.validate_in_memory().unwrap();
-
-    let mut digest_tamper = decoded.clone();
-    digest_tamper.header.artifact_digest[0] ^= 1;
-    assert!(digest_tamper.validate_in_memory().is_err());
-
-    let mut trace_tamper = decoded.clone();
-    trace_tamper.selection_trace[0].candidate_index ^= 1;
-    trace_tamper.header.artifact_digest = trace_tamper.recompute_artifact_digest().unwrap();
-    assert!(trace_tamper.validate_in_memory().is_err());
-
-    let mut non_finite = decoded;
-    non_finite.replay.max_abs_error = f32::NAN;
-    assert!(non_finite.recompute_artifact_digest().is_err());
 }
 
 #[test]

@@ -23,7 +23,7 @@ const SYNAPSE_PAYLOAD_DOMAIN: &[u8] = b"alife.gpu.evidence.synapse-payload.v1";
 const PLASTICITY_NONE_DOMAIN: &[u8] = b"alife.gpu.evidence.plasticity-plan.none.v1";
 const REPLAY_CAPTURE_NONE_DOMAIN: &[u8] = b"alife.gpu.evidence.replay-capture.none.v1";
 
-/// Versioned benchmark protocol identity shared by evidence producers and promotion ingestion.
+/// Sampling identity shared by GPU benchmark producers and readers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GpuClosedLoopBenchmarkProtocolV1 {

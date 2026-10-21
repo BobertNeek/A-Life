@@ -3,11 +3,11 @@ use alife_core::{
     EnvironmentStreamEntry, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry,
     HeardToken, OrganismId, ScaffoldContractError, SchemaKind, SemanticContextRef,
     SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion, SensoryChannels,
-    SensorySnapshot, SensorySnapshotFromAdapter, SensorySnapshotSource, SocialAgentSnapshot,
-    TeacherPerceptionChannel, Tick, Validate, Vec3f, VocalizedToken, WorldEntityId,
-    MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
-    SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
-    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    SensorySnapshot, SocialAgentSnapshot, TeacherPerceptionChannel, Tick, Validate, Vec3f,
+    VocalizedToken, WorldEntityId, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS,
+    MAX_SOCIAL_AGENTS, SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT,
+    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 use alife_core::{Confidence, NormalizedScalar, SignedValence};
 
@@ -241,47 +241,4 @@ fn social_and_language_context_use_stable_ids_and_perception_markers() {
         snapshot.validate_contract(),
         Err(ScaffoldContractError::InvalidId)
     );
-}
-
-#[test]
-fn sensory_conversion_interfaces_are_adapter_implemented_only() {
-    struct AdapterFrame;
-    struct AdapterSource;
-
-    impl SensorySnapshotFromAdapter<AdapterFrame> for SensorySnapshot {
-        fn sensory_from_adapter(value: AdapterFrame) -> Result<Self, ScaffoldContractError> {
-            let _ = value;
-            SensorySnapshot::new(
-                OrganismId(1),
-                Tick(10),
-                Vec3f::ZERO,
-                valid_channels(),
-                ContextStreams::default(),
-            )
-        }
-    }
-
-    impl SensorySnapshotSource for AdapterSource {
-        fn sensory_snapshot(
-            &self,
-            organism_id: OrganismId,
-            tick: Tick,
-        ) -> Result<SensorySnapshot, ScaffoldContractError> {
-            SensorySnapshot::new(
-                organism_id,
-                tick,
-                Vec3f::ZERO,
-                valid_channels(),
-                ContextStreams::default(),
-            )
-        }
-    }
-
-    let converted = SensorySnapshot::sensory_from_adapter(AdapterFrame).unwrap();
-    let sourced = AdapterSource
-        .sensory_snapshot(OrganismId(5), Tick(12))
-        .unwrap();
-
-    assert_eq!(converted.organism_id, OrganismId(1));
-    assert_eq!(sourced.organism_id, OrganismId(5));
 }

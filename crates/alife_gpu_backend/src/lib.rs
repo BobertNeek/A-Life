@@ -66,12 +66,9 @@ pub use routing_masks::{
 };
 pub use runtime::{
     probe_local_wgpu_runtime, probe_local_wgpu_runtime_for_graphics_backend,
-    probe_local_wgpu_runtime_with_backends, required_storage_buffers, GpuPerformanceTargetStatus,
-    GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBackendStatus, GpuRuntimeBoundary,
-    GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeHardwareProbe,
-    GpuRuntimeReadbackGuard, GpuRuntimeThrottleDecision, GpuRuntimeThrottlingPolicy,
-    GpuRuntimeTimingBudget, GpuRuntimeTimingSample, GpuThrottleLevel, GpuThrottleReason,
-    GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
+    probe_local_wgpu_runtime_with_backends, required_storage_buffers, GpuRuntimeBackendConfig,
+    GpuRuntimeBackendKind, GpuRuntimeBackendStatus, GpuRuntimeHardwareProbe,
+    P29_RUNTIME_SCHEMA_VERSION,
 };
 pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
 

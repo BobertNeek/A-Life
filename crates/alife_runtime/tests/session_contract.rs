@@ -1,7 +1,6 @@
 use alife_core::{BrainCheckpointMode, ScaffoldContractError, Tick};
 use alife_runtime::{
-    DurableGpuCheckpointRef, GpuAuthoritativeSession, GpuSessionAuthority, GpuSessionConsumerKind,
-    GpuSessionFailStopCause,
+    DurableGpuCheckpointRef, GpuSessionAuthority, GpuSessionConsumerKind, GpuSessionFailStopCause,
 };
 
 #[test]
@@ -85,12 +84,4 @@ fn durable_checkpoint_permit_owns_the_exact_prevalidated_reference() {
         authority.prevalidate_durable_checkpoint(regression),
         Err(ScaffoldContractError::BrainActivitySequenceMismatch)
     );
-}
-
-#[test]
-fn shared_session_is_the_backend_owner_type() {
-    let _constructor: fn(
-        alife_gpu_backend::GpuClosedLoopBackend,
-        GpuSessionConsumerKind,
-    ) -> GpuAuthoritativeSession = GpuAuthoritativeSession::new;
 }

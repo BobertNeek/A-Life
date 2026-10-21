@@ -1725,12 +1725,13 @@ mod tests {
         ));
     }
 
-    fn gpu_alpha_fixture_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/gpu_alpha")
+    fn production_fixture_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../alife_world/tests/fixtures/production_voxel")
     }
 
-    fn gpu_alpha_save() -> PortableSaveFile {
-        crate::tests::fixtures::current_scene_save(&gpu_alpha_fixture_root(), 30)
+    fn production_scene_save() -> PortableSaveFile {
+        crate::tests::fixtures::current_scene_save(&production_fixture_root(), 30)
     }
 
     struct Fvr05LaunchFixture {
@@ -1762,7 +1763,7 @@ mod tests {
         // Load a current existing population of fresh founders; this does not
         // use or extend the bounded Phase 3 New Game cohort API.
         let config =
-            RuntimeConfig::from_json_file(gpu_alpha_fixture_root().join("tiny_config.json"))
+            RuntimeConfig::from_json_file(production_fixture_root().join("tiny_config.json"))
                 .unwrap();
         let save = untrained_population_fixture::untrained_population_save(config, 30);
         save.validate_with_asset_root(&root).unwrap();
@@ -1802,7 +1803,7 @@ mod tests {
 
     #[test]
     fn fvr06_launch_file_boundary_restores_current_owned_untrained_founders() {
-        let source_root = gpu_alpha_fixture_root();
+        let source_root = production_fixture_root();
         let source_paths = [
             "tiny_save.json",
             "tiny_config.json",
@@ -2245,8 +2246,8 @@ mod tests {
 
     #[test]
     fn fvr04_population_view_preserves_real_save_state_and_voxel_anchors() {
-        let root = gpu_alpha_fixture_root();
-        let save = gpu_alpha_save();
+        let root = production_fixture_root();
+        let save = production_scene_save();
         let production = production_voxel_save_with_population(
             &save,
             &root,
@@ -2320,7 +2321,7 @@ mod tests {
 
     #[test]
     fn fvr05_population_restore_has_complete_organism_bindings() {
-        let root = gpu_alpha_fixture_root();
+        let root = production_fixture_root();
         let mut config =
             RuntimeConfig::deterministic_default(4242, alife_core::BrainScaleTier::Nano512);
         config.features.gpu_backend_enabled = true;
@@ -2427,7 +2428,7 @@ mod tests {
 
     #[test]
     fn fvr04_population_view_supports_owned_one_and_500_without_renderer_tokens() {
-        let root = gpu_alpha_fixture_root();
+        let root = production_fixture_root();
         let save = crate::tests::fixtures::current_scene_save(&root, 1);
         let one = production_voxel_save_with_population(
             &save,
@@ -2475,8 +2476,8 @@ mod tests {
 
     #[test]
     fn fvr04_save_roundtrip_preserves_selected_creature_and_visible_signature() {
-        let root = gpu_alpha_fixture_root();
-        let save = gpu_alpha_save();
+        let root = production_fixture_root();
+        let save = production_scene_save();
         let production = production_voxel_save_with_population(
             &save,
             &root,
@@ -2514,8 +2515,8 @@ mod tests {
 
     #[test]
     fn production_population_preserves_saved_appearance_genes() {
-        let root = gpu_alpha_fixture_root();
-        let mut save = gpu_alpha_save();
+        let root = production_fixture_root();
+        let mut save = production_scene_save();
         let preserved = CreatureAppearanceGenome::offspring_from_parents(
             CreatureAppearanceGenome::founder_for_species(4, 11),
             CreatureAppearanceGenome::founder_for_species(9, 17),

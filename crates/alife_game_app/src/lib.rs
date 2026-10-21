@@ -113,9 +113,6 @@ pub use founder_import::*;
 mod camera_inspector;
 pub use camera_inspector::*;
 
-mod survival_loop;
-pub use survival_loop::*;
-
 mod ecology_loop;
 pub use ecology_loop::*;
 
@@ -225,23 +222,8 @@ pub use double_buffered_scheduler::*;
 mod motor_ring;
 pub use motor_ring::*;
 
-mod graphical_ecology;
-pub use graphical_ecology::*;
-
 mod production_assets;
 pub use production_assets::*;
-
-mod population_social;
-pub use population_social::*;
-
-mod lifecycle_lineage;
-pub use lifecycle_lineage::*;
-
-mod school_mode;
-pub use school_mode::*;
-
-mod gpu_product_telemetry;
-pub use gpu_product_telemetry::*;
 
 mod gpu_authority_telemetry;
 pub use gpu_authority_telemetry::*;
@@ -256,16 +238,8 @@ mod gpu_evidence;
 #[cfg(feature = "gpu-runtime")]
 pub use gpu_evidence::*;
 
-#[cfg(feature = "gpu-runtime")]
-mod gpu_closed_loop_promotion;
-#[cfg(feature = "gpu-runtime")]
-pub use gpu_closed_loop_promotion::*;
-
 mod world_editor;
 pub use world_editor::*;
-
-mod save_load_ux;
-pub use save_load_ux::*;
 
 #[cfg(feature = "bevy-app")]
 pub mod bevy_shell;

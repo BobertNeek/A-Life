@@ -55,15 +55,29 @@ fn n512_genetic_birth_asset_is_bootstrap_and_canonical() {
 
 #[test]
 fn checked_n512_assets_are_present_and_canonically_decodable() {
-    for file_name in [
-        "n512-v1-privileged.alife-foundation",
-        "n512-v1-grounded.alife-foundation",
+    for (profile, file_name) in [
+        (
+            SensorProfile::PrivilegedAffordanceV1,
+            "n512-v1-privileged.alife-foundation",
+        ),
+        (
+            SensorProfile::GroundedObjectSlotsV1,
+            "n512-v1-grounded.alife-foundation",
+        ),
     ] {
         let path = asset_path(file_name);
         assert!(path.exists(), "checked Nano512 asset is missing: {path:?}");
         let bytes = fs::read(&path).unwrap();
         let asset = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
         assert_eq!(asset.encode_canonical().unwrap(), bytes);
+        assert_eq!(
+            FoundationWeightAsset::builtin_nano512_v1(profile)
+                .unwrap()
+                .encode_canonical()
+                .unwrap(),
+            bytes,
+            "{file_name}"
+        );
         assert_ne!(asset.digest().bytes(), &[0; 32]);
         assert!(asset.asset_ref().weight_count() > 0);
         assert_eq!(asset.manifest().training_stage().completed_stage_count(), 0);

@@ -21,9 +21,14 @@ The long-term experience is an observable digital ecology. The player should be 
 
 The world describes what can be perceived and which unscored actions are legal. It validates the GPU-selected action, applies the outcome, and seals the experience. Rendering, UI, teachers, semantic providers, and tools only project or translate that truth.
 
-### Organisms learn on the GPU
+### One organism across compute backends
 
-Production neural encoding, recurrent dynamics, selection, plasticity, memory, topology, sleep, and consolidation belong to WGSL pipelines. CPU neural helpers remain reference, test, or developer tools. They are not a hidden production policy.
+Gameplay neural execution uses GPU-authoritative WGSL. Irregular memory and
+topology sidecars, world simulation, persistence, and teaching can run on the CPU
+without becoming a second neural policy. Opt-in offline CPU training executes the
+same compiled neural and learning semantics and preserves learned state; it is
+reported separately from gameplay GPU execution. Choose placement for actual
+correctness and measured efficiency rather than making every subsystem a shader.
 
 ### Inheritance is biological, not magical
 
@@ -39,7 +44,7 @@ An external teacher acts through the same visible and audible world as everyone 
 
 ### Evidence grows with the claim
 
-A contract can be implemented without being integrated. An integrated feature can remain invisible. A visible feature can remain unproven. Promotion and release claims require causal receipts from the exact source, adapter, backend, and rendered path in question.
+A contract can be implemented without being integrated. An integrated feature can remain invisible. A visible feature can remain unproven. Describe what was exercised and what remains unknown. Hardware, learning, and release claims need relevant observations from the actual path; ordinary fixes do not need a new receipt framework.
 
 ## Near-term product
 
@@ -54,9 +59,7 @@ The next credible product is not general intelligence. It is a small, honest art
 ## Non-goals
 
 - No claim of AGI, consciousness, sentience, or human-equivalent cognition.
-- No Unity, C#, or HLSL production stack.
 - No CPU neural fallback presented as GPU success.
 - No fixed global `Standard2048` brain shape.
-- No N4096 production promotion without separate causal, restore, equivalence, and budget evidence.
 - No hidden teacher or SLM channel that writes organism cognition.
 - No release claim based only on screenshots, UI surfaces, benchmark targets, or preflight receipts.

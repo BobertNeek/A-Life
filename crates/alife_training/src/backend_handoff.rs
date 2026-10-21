@@ -98,6 +98,10 @@ impl FoundationTrainingHandoffV1 {
         Ok(handoff)
     }
     pub fn validate(&self) -> Result<(), TrainingError> {
+        self.validated_phenotype().map(|_| ())
+    }
+
+    fn validated_phenotype(&self) -> Result<BrainPhenotype, TrainingError> {
         let invalid = || TrainingError::Contract(ScaffoldContractError::InvalidDecisionEvidence);
         if self.schema_version != 1
             || self.policy_version == 0
@@ -127,14 +131,10 @@ impl FoundationTrainingHandoffV1 {
         {
             return Err(invalid());
         }
-        Ok(())
+        Ok(phenotype)
     }
     pub fn admit(self) -> Result<AdmittedFoundationTrainingHandoff, TrainingError> {
-        self.validate()?;
-        let phenotype = PhenotypeCompiler::compile_validated(
-            &self.compiler_inputs,
-            &BrainCapacityClass::n2048(),
-        )?;
+        let phenotype = self.validated_phenotype()?;
         let foundation = self
             .compiler_inputs
             .n2048_candidate_asset()
