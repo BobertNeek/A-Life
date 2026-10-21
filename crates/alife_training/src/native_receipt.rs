@@ -113,10 +113,8 @@ fn depth(bytes: &[u8]) -> io::Result<usize> {
                         ));
                     }
                 }
-                b'}' | b']' => {
-                    if containers.pop() != Some(if byte == b'}' { b'{' } else { b'[' }) {
-                        return Err(invalid("invalid JSON containers"));
-                    }
+                b'}' | b']' if containers.pop() != Some(if byte == b'}' { b'{' } else { b'[' }) => {
+                    return Err(invalid("invalid JSON containers"));
                 }
                 _ => (),
             }
