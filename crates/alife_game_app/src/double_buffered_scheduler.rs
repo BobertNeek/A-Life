@@ -197,7 +197,7 @@ impl DoubleBufferedGraphicalScheduler {
         self.validate()?;
         self.fixed_tick_index = self.fixed_tick_index.saturating_add(u64::from(count));
         self.ticks_executed = self.ticks_executed.saturating_add(u64::from(count));
-        if count % 2 != 0 {
+        if !count.is_multiple_of(2) {
             self.front_buffer = self.front_buffer.swapped();
             self.back_buffer = self.back_buffer.swapped();
         }
@@ -315,8 +315,10 @@ mod tests {
 
     #[test]
     fn recording_a_large_tick_batch_preserves_buffer_parity_and_saturates_counters() {
-        let mut scheduler = DoubleBufferedGraphicalScheduler::default();
-        scheduler.fixed_tick_index = u64::MAX - 1;
+        let mut scheduler = DoubleBufferedGraphicalScheduler {
+            fixed_tick_index: u64::MAX - 1,
+            ..DoubleBufferedGraphicalScheduler::default()
+        };
 
         scheduler.record_executed_ticks(u32::MAX).unwrap();
 

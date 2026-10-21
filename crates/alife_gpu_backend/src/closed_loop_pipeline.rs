@@ -1979,6 +1979,10 @@ impl GpuClosedLoopPipelines {
         Ok(())
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "The submission flag distinguishes preflight rejection from uncertain GPU publication."
+    )]
     pub(crate) fn dispatch_sleep_commit(
         &self,
         device: &wgpu::Device,

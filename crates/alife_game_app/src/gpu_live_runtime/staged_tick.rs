@@ -331,7 +331,6 @@ impl GpuLiveBrainRuntime {
                     cycle_id,
                     transition: None,
                     consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
-                    selected_action: None,
                     motor_eligible: motor_eligible(phase_before),
                     sleep_work_units: 0,
                     phase_receipt: SleepPhaseReceipt {

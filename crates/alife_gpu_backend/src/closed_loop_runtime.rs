@@ -790,7 +790,7 @@ pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
 }
 
 impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
-    const fn from_gpu_error(
+    fn from_gpu_error(
         error: GpuClosedLoopError,
         class_id: u16,
         chunk_index: usize,

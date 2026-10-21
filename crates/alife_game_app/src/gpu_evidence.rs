@@ -429,7 +429,7 @@ pub fn load_gpu_slice_a_evidence(
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidatedGpuEvidence {
-    SliceA(GpuSliceAAcceptanceReceipt),
+    SliceA(Box<GpuSliceAAcceptanceReceipt>),
     SliceD(Box<GpuClosedLoopSoakReceipt>),
 }
 
@@ -475,7 +475,9 @@ pub fn validate_gpu_evidence_file(
     input: impl AsRef<Path>,
 ) -> Result<ValidatedGpuEvidence, GpuEvidenceError> {
     match slice_raw {
-        GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input).map(ValidatedGpuEvidence::SliceA),
+        GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input)
+            .map(Box::new)
+            .map(ValidatedGpuEvidence::SliceA),
         GPU_SLICE_D_RAW => load_gpu_slice_d_evidence(input)
             .map(Box::new)
             .map(ValidatedGpuEvidence::SliceD),

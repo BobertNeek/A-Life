@@ -1,4 +1,6 @@
 //! GPU-authoritative live cognition for the explicit neural policy.
+#[cfg(test)]
+use alife_core::MotorChannel;
 use alife_runtime::canonical_preparation::*;
 
 // Crate-private reset, presentation, and performance entrypoints below have
@@ -87,16 +89,16 @@ use alife_core::{
     FoundationWeightApplication, FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot,
     JointMotorCondition, LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId,
     MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt,
-    MemorySidecarState, MemoryUpdateReceipt, MotorChannel, MotorCommandBundle,
-    N512FounderFoundationProjection, NeuralActionSelection, NeuralEmission, NeuralEmissionClass,
-    NeuralEmissionFrame, NeuralReceptorEffects, NeuralReceptorFrame, NormalizedScalar, OrganismId,
-    PassiveLifeEvent, PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft,
-    PhenotypeCompiler, PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot,
-    PredictionTargetReceipt, PreparedMemoryRecall, ScaffoldContractError, SensorProfile,
-    SensorProfileIdentity, SensoryAbiVersion, SignedValence, SleepConsolidationConfig,
-    SleepConsolidator, SleepPhase, SleepState, SleepTransition, Tick, TopologicalMapConfig,
-    TopologyObservationReceipt, TopologySidecar, UtteranceSourceKind, Validate, Vec3f,
-    WorldEntityId, LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
+    MemorySidecarState, MemoryUpdateReceipt, MotorCommandBundle, N512FounderFoundationProjection,
+    NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
+    NeuralReceptorEffects, NeuralReceptorFrame, NormalizedScalar, OrganismId, PassiveLifeEvent,
+    PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
+    PhenotypeCompilerInputs, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
+    PreparedMemoryRecall, ScaffoldContractError, SensorProfile, SensorProfileIdentity,
+    SensoryAbiVersion, SignedValence, SleepConsolidationConfig, SleepConsolidator, SleepPhase,
+    SleepState, SleepTransition, Tick, TopologicalMapConfig, TopologyObservationReceipt,
+    TopologySidecar, UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
+    LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
 };
 #[cfg(test)]
 use alife_core::{
@@ -7974,6 +7976,7 @@ impl GpuLiveBrainRuntime {
         Ok(summaries)
     }
 
+    #[cfg(feature = "bevy-app")]
     pub(crate) fn replace_habitat_authority(
         &mut self,
         authority: alife_world::HabitatAuthority,
@@ -9265,10 +9268,12 @@ impl GpuLiveBrainRuntime {
         self.world.tick()
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_completed_dispatch_count(&self) -> u64 {
         self.backend.completed_dispatch_count()
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_sleep_state(
         &self,
         organism_id: OrganismId,
@@ -9303,10 +9308,12 @@ impl GpuLiveBrainRuntime {
 
     /// Offline challenge-world mutation between sealed ticks. This cannot
     /// mutate candidates or outcomes during an active neural transaction.
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_world_mut(&mut self) -> &mut HeadlessWorld {
         &mut self.world
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_memory_sidecar(
         &self,
         organism_id: OrganismId,
@@ -9314,6 +9321,7 @@ impl GpuLiveBrainRuntime {
         self.memories.get(&organism_id.raw())
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_topology_sidecar(
         &self,
         organism_id: OrganismId,

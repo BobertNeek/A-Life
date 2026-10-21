@@ -1,7 +1,6 @@
 //! Application launch state and shared errors.
 
 use crate::prelude::*;
-use crate::*;
 
 #[derive(Debug, Error)]
 pub enum GameAppShellError {
