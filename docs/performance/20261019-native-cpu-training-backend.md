@@ -1,7 +1,9 @@
 # Native CPU foundation training backend
 
-Dated implementation/evidence report, updated 2026-10-20. This report covers
-[PR #110](https://github.com/BobertNeek/A-Life/pull/110) on its recorded source.
+Dated implementation/evidence report, updated 2026-10-21. This report covers
+[PR #110](https://github.com/BobertNeek/A-Life/pull/110) and the care bridge in
+[PR #118](https://github.com/BobertNeek/A-Life/pull/118). Historical measurements
+retain their recorded source scope.
 The user's 19 October 2026, 23:17:19 UTC instruction authorized “create a cpu
 backend that we can offload some training to the cloud with” alongside larger
 groups. This offline backend preserves the normal gameplay GPU default and

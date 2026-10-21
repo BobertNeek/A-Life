@@ -130,6 +130,18 @@ class CpuScheduleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 cpu.mixed.schedule_rows(plan['schedule'])
 
+    def test_windows_resume_paths_accept_verbatim_drive_unc_and_missing_attempts(self):
+        spellings = [(r'C:\Lane\episode-00000', r'\\?\C:\Lane\episode-00000'),
+                     (r'c:\lane\episode-00000', r'\\?\C:\Lane\episode-00000'),
+                     (r'\\server\share\Lane\episode-00000', r'\\?\UNC\server\share\Lane\episode-00000')]
+        key = cpu.path_key
+        with patch.object(cpu.os.path, 'samefile', side_effect=FileNotFoundError), \
+             patch.object(cpu, 'path_key', side_effect=lambda p: key(p, windows=True)):
+            for ordinary, verbatim in spellings:
+                self.assertTrue(cpu.same_path(ordinary, verbatim))
+                self.assertFalse(cpu.same_path(ordinary, verbatim + '-different'))
+        self.assertNotEqual(key('/lane/Episode', windows=False), key('/lane/episode', windows=False))
+
 
 if __name__ == '__main__':
     unittest.main()

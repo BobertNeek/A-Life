@@ -8,6 +8,7 @@ promotion. Failed/interrupted seeds remain excluded and are never retried.
 import argparse
 import json
 import math
+import ntpath
 import os
 from pathlib import Path
 import subprocess
@@ -32,6 +33,27 @@ def pins(source):
 
 def read(path):
     return mixed.inspector_io.load_json(path, seeds.MAX_DOCUMENT_BYTES)[0]
+
+
+def path_key(path, *, windows=None):
+    """Compare absent attempt paths too, without conflating POSIX case."""
+    windows = os.name == "nt" if windows is None else windows
+    path = os.fspath(path)
+    if windows:
+        path = ntpath.normpath(path)
+        if path[:8].lower() == "\\\\?\\unc\\":
+            path = "\\\\" + path[8:]
+        elif path.startswith("\\\\?\\"):
+            path = path[4:]
+        return ntpath.normcase(ntpath.abspath(path))
+    return os.path.normcase(os.path.abspath(path))
+
+
+def same_path(left, right):
+    try:
+        return os.path.samefile(left, right)
+    except OSError:
+        return path_key(left) == path_key(right)
 
 
 def command(binary, *args):
@@ -86,7 +108,7 @@ def episode_history(plan, previous, attempts, lane):
                                                [[a["seed"], a["seed"]] for a in attempts] +
                                                [[source_seed, source_seed]])
     ledger_path = lane / LEDGER
-    doc["imports"] = [item for item in doc["imports"] if Path(item["path"]).resolve() != ledger_path]
+    doc["imports"] = [item for item in doc["imports"] if not same_path(item["path"], ledger_path)]
     if ledger_path.exists():
         doc["imports"].append({"path": str(ledger_path), "sha256": mixed.host.sha256(ledger_path)})
     return doc
@@ -122,7 +144,7 @@ def execute(plan):
     slot = 0
     for index, attempt in enumerate(attempts):
         require(slot < len(rows) and attempt["seed"] == plan["seed_range"][0] + index and
-                attempt["output"] == str(lane / f"episode-{index:05d}") and
+                same_path(attempt["output"], lane / f"episode-{index:05d}") and
                 attempt["source_sha256"] == pins(previous) and
                 attempt["lesson"] == rows[slot]["lesson"] and attempt["decisions"] == rows[slot]["decisions"],
                 "saved CPU attempt does not match explicit schedule/lineage")
@@ -188,7 +210,7 @@ def main():
                                       args.known_exclusions)), "resume uses only --resume LANE --run")
         lane = args.resume.resolve(strict=True)
         plan = read(lane / PLAN)
-        require(plan["lane"] == str(lane), "saved lane identity changed")
+        require(same_path(plan["lane"], lane), "saved lane identity changed")
     else:
         require(all((args.binary, args.previous, args.lane, args.seed_history, args.schedule, args.seeds)),
                 "new plan requires binary, source, lane, history, schedule and explicit seeds")
