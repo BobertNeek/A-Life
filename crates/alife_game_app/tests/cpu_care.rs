@@ -458,11 +458,16 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
     ]);
     assert_eq!(third["seed_admission"]["historical_freshness"], "unknown");
     assert_eq!(third["seed_admission"]["policy"], "known-exclusions");
-    let lineage = alife_training::native_receipt::Lineage::load(&third, &third_output).unwrap();
+    let (_, sealed_third) =
+        alife_training::native_receipt::read(&third_output.join("cpu-cycle.json")).unwrap();
+    let lineage =
+        alife_training::native_receipt::Lineage::load(&sealed_third, &third_output).unwrap();
     assert_eq!(lineage.frames.len(), 3);
-    assert_eq!(lineage.frames[0], third);
-    assert_eq!(lineage.frames[1], legacy);
-    assert_eq!(lineage.frames[2], first);
+    for (frame, directory) in lineage.frames.iter().zip([&third_output, &output, &source]) {
+        let (_, sealed) =
+            alife_training::native_receipt::read(&directory.join("cpu-cycle.json")).unwrap();
+        assert_eq!(frame, &sealed);
+    }
     for predecessor in [&output, &source] {
         let blob = third_output
             .join("source-lineage")
