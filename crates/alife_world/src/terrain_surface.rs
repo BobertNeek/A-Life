@@ -124,6 +124,57 @@ mod tests {
             .unwrap();
         assert!((-500.0..=-490.0).contains(&hit.x));
         assert!(hit.y.abs() < 0.001);
+        let hit = surface
+            .ray_hit(
+                Vec3f::new(-1310.7981, 0.0, 0.25),
+                Vec3f::new(dx, -(1.0 - dx * dx).sqrt(), 0.0),
+                5000.0,
+            )
+            .unwrap();
+        assert!(surface.height(hit.x, hit.z).is_some());
+    }
+    #[test]
+    fn rounded_mesh_boundary_supports_player_placement_and_restore() {
+        let lo = 650.5266_f32;
+        let spacing = 4.2522902_f32;
+        let hi = lo + spacing;
+        let terrain = crate::WorldTerrain::new(
+            crate::TerrainData {
+                width: 2,
+                depth: 2,
+                origin_x: lo,
+                origin_z: lo,
+                spacing,
+                heights: vec![2.0; 4],
+                obstacles: Vec::new(),
+                water_level: None,
+            },
+            Default::default(),
+        )
+        .unwrap();
+        for (x, z) in [(lo, lo), (hi, lo), (lo, hi), (hi, hi)] {
+            assert_eq!(terrain.surface().sample(x, z), Some((2.0, [0.0; 2])));
+        }
+        for outside in [lo.next_down(), hi.next_up(), f32::NAN, f32::INFINITY] {
+            assert!(terrain.surface().sample(outside, lo).is_none());
+            assert!(terrain.surface().sample(lo, outside).is_none());
+        }
+        let mut world = HeadlessScenarioBuilder::new(17)
+            .agent("walker", OrganismId(1), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        world
+            .enable_terrain_for_new_game(terrain, Vec3f::new(lo, 0.0, lo))
+            .unwrap();
+        let id = world.entity_id("walker").unwrap();
+        world.begin_player_hold(id).unwrap();
+        world.move_player_hold(Vec3f::new(hi, 0.0, hi)).unwrap();
+        let mut restored = HeadlessWorld::from_save_state(&world.save_state()).unwrap();
+        restored.release_player_hold().unwrap();
+        assert_eq!(
+            restored.entity(id).unwrap().position,
+            Vec3f::new(hi, 2.0, hi)
+        );
     }
     #[test]
     fn island_actual_move_updates_authoritative_height_and_displacement() {
@@ -235,17 +286,20 @@ impl TerrainSurface {
     }
     /// Height and surface gradient on the exact near-mesh triangle diagonal.
     pub fn sample(&self, x: f32, z: f32) -> Option<(f32, [f32; 2])> {
-        let u = (x - self.origin_x) / self.spacing;
-        let v = (z - self.origin_z) / self.spacing;
-        if !u.is_finite()
-            || !v.is_finite()
-            || u < 0.0
-            || v < 0.0
-            || u > (self.width - 1) as f32
-            || v > (self.depth - 1) as f32
+        let max_u = (self.width - 1) as f32;
+        let max_v = (self.depth - 1) as f32;
+        if !x.is_finite()
+            || !z.is_finite()
+            || x < self.origin_x
+            || z < self.origin_z
+            || x > self.origin_x + max_u * self.spacing
+            || z > self.origin_z + max_v * self.spacing
         {
             return None;
         }
+        // A real mesh edge can normalize slightly beyond its last grid index.
+        let u = ((x - self.origin_x) / self.spacing).clamp(0.0, max_u);
+        let v = ((z - self.origin_z) / self.spacing).clamp(0.0, max_v);
         Some(self.sample_grid(u, v))
     }
     fn sample_grid(&self, u: f32, v: f32) -> (f32, [f32; 2]) {
@@ -344,19 +398,11 @@ impl TerrainSurface {
         // overview camera must honor its requested ray range, not a 2 km cap.
         let mut enter: f32 = 0.0;
         let mut exit = max_distance;
+        let max_x = self.origin_x + (self.width - 1) as f32 * self.spacing;
+        let max_z = self.origin_z + (self.depth - 1) as f32 * self.spacing;
         for (o, d, lo, hi) in [
-            (
-                origin.x,
-                direction.x,
-                self.origin_x,
-                self.origin_x + (self.width - 1) as f32 * self.spacing,
-            ),
-            (
-                origin.z,
-                direction.z,
-                self.origin_z,
-                self.origin_z + (self.depth - 1) as f32 * self.spacing,
-            ),
+            (origin.x, direction.x, self.origin_x, max_x),
+            (origin.z, direction.z, self.origin_z, max_z),
         ] {
             if d == 0.0 {
                 if o < lo || o > hi {
@@ -374,9 +420,9 @@ impl TerrainSurface {
         }
         let point = |t: f32| {
             Vec3f::new(
-                origin.x + direction.x * t,
+                (origin.x + direction.x * t).clamp(self.origin_x, max_x),
                 origin.y + direction.y * t,
-                origin.z + direction.z * t,
+                (origin.z + direction.z * t).clamp(self.origin_z, max_z),
             )
         };
         // The height gap is linear between grid edges and triangle diagonals.
