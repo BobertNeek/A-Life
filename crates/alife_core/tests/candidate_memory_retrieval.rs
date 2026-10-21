@@ -1087,6 +1087,20 @@ fn legacy_diagnostic_and_candidate_memory_modes_cannot_mix() {
 }
 
 #[test]
+fn legacy_memory_id_overflow_rejects_without_mutating_loaded_state() {
+    let mut wire = serde_json::to_value(empty_bank()).unwrap();
+    wire["next_memory_id"] = serde_json::json!(u64::MAX);
+    let mut bank: MemoryBank = serde_json::from_value(wire).unwrap();
+    let before = serde_json::to_vec(&bank).unwrap();
+    assert_eq!(
+        bank.insert_from_patch(&poisoned_cyan_ingest_patch())
+            .unwrap_err(),
+        ScaffoldContractError::ScalarOutOfRange
+    );
+    assert_eq!(serde_json::to_vec(&bank).unwrap(), before);
+}
+
+#[test]
 fn deserialization_rejects_a_mixed_legacy_and_candidate_bank() {
     let patch = poisoned_cyan_ingest_patch();
     let mut candidate_bank = empty_bank();
@@ -1182,16 +1196,13 @@ fn bounded_index_reports_eligible_records_above_the_similarity_search_cap() {
 }
 
 #[test]
-fn million_record_capacity_index_keeps_similarity_work_bounded() {
-    let config =
-        MemoryBankConfig::new(1_000_000, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+fn sparse_large_memory_ids_survive_index_rebuild() {
+    let config = MemoryBankConfig::new(80, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
     let mut bank = MemoryBank::new(config).unwrap();
     bank.observe_sealed_patch(&poisoned_cyan_ingest_patch())
         .unwrap();
 
-    // Exercise the production persistence/index rebuild path with a stable ID
-    // near the configured million-record ceiling; no test-only lookup path is
-    // involved in recall.
+    // Stable memory IDs can exceed the number of retained records.
     let mut wire = serde_json::to_value(&bank).unwrap();
     let store = wire
         .get_mut("candidate_store")
@@ -1658,6 +1669,69 @@ fn repeated_candidate_recall_is_isolated_between_organisms_and_calls() {
     }
 }
 
+fn routine_movement_patch(bank: &MemoryBank, sequence: u64) -> ExperiencePatch {
+    observation_patch(
+        bank,
+        sequence,
+        sequence * 2,
+        slot(0, 10_000 + sequence, 0.4, [0.0, 0.8, 0.9]),
+        CandidateActionFamily::Approach,
+        0.0,
+        0.0,
+        |outcome| {
+            outcome.physical.contact = PhysicalContactKind::Moved;
+            outcome.physical.energy_cost = NormalizedScalar::new(0.08).unwrap();
+            outcome.homeostatic_delta = HomeostaticDelta {
+                drives: DriveDelta {
+                    brain_atp: -0.04,
+                    curiosity: 0.01,
+                    ..DriveDelta::zero()
+                },
+                hormones: EndocrineDelta::zero(),
+            };
+            outcome.energy_delta = SignedValence::new(-0.04).unwrap();
+            outcome.prediction_error = NormalizedScalar::new(0.08).unwrap();
+        },
+    )
+}
+
+#[test]
+fn empty_portable_bank_preserves_ignored_sequence_and_rejects_replay() {
+    let config = MemoryBankConfig::new(8, 64, 4, 0.72, Confidence::new(0.0).unwrap()).unwrap();
+    for runtime in [false, true] {
+        let mut sidecar = grounded_sidecar(config);
+        let patch = routine_movement_patch(sidecar.bank(), 1);
+        let receipt = if runtime {
+            sidecar.observe_sealed_patch_runtime(&patch)
+        } else {
+            sidecar.observe_sealed_patch(&patch)
+        }
+        .unwrap();
+        assert_eq!(
+            receipt.kind,
+            alife_core::MemoryUpdateKind::IgnoredLowInformation
+        );
+        assert!(sidecar.bank().is_empty());
+        let asset = sidecar.export_active_bank().unwrap();
+        assert!(asset.records.is_empty());
+        assert_eq!(asset.last_observed_sequence_id_raw, 1);
+        let mut restored = MemorySidecarState::restore_portable(
+            sidecar.profile(),
+            *sidecar.compaction_checkpoint(),
+            asset.clone(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(restored.latest_durable_sequence_raw(), 1);
+        assert_eq!(restored.export_active_bank().unwrap(), asset);
+        assert_eq!(
+            restored.observe_sealed_patch(&patch).unwrap_err(),
+            ScaffoldContractError::MemoryReplayRejected
+        );
+        assert_eq!(restored.export_active_bank().unwrap(), asset);
+    }
+}
+
 #[test]
 fn boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded() {
     let mut bank = empty_bank();
@@ -1666,31 +1740,7 @@ fn boring_ticks_do_not_fill_or_refresh_memory_and_remain_replay_guarded() {
     let retained = serde_json::to_value(&bank).unwrap()["candidate_store"]["records"].clone();
     let mut last = None;
     for sequence in 2..=300 {
-        let patch = observation_patch(
-            &bank,
-            sequence,
-            sequence * 2,
-            slot(0, 10_000 + sequence, 0.4, [0.0, 0.8, 0.9]),
-            CandidateActionFamily::Approach,
-            0.0,
-            0.0,
-            |outcome| {
-                // Actual world routine movement profile, not a perfectly zero
-                // synthetic tick: movement cost alone is not an event.
-                outcome.physical.contact = PhysicalContactKind::Moved;
-                outcome.physical.energy_cost = NormalizedScalar::new(0.08).unwrap();
-                outcome.homeostatic_delta = HomeostaticDelta {
-                    drives: DriveDelta {
-                        brain_atp: -0.04,
-                        curiosity: 0.01,
-                        ..DriveDelta::zero()
-                    },
-                    hormones: EndocrineDelta::zero(),
-                };
-                outcome.energy_delta = SignedValence::new(-0.04).unwrap();
-                outcome.prediction_error = NormalizedScalar::new(0.08).unwrap();
-            },
-        );
+        let patch = routine_movement_patch(&bank, sequence);
         let receipt = bank.observe_sealed_patch(&patch).unwrap();
         assert_eq!(
             receipt.kind,

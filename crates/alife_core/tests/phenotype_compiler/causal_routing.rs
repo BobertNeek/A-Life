@@ -1,7 +1,7 @@
 //! Causal genome compilation and routing validation.
 
 #[cfg(test)]
-mod task3_causal_genome_and_routing_red_tests {
+mod causal_genome_and_routing_tests {
     use std::collections::BTreeSet;
 
     use alife_core::{
@@ -517,7 +517,7 @@ mod task3_causal_genome_and_routing_red_tests {
                 mutate: add_noncanonical_route_key,
             },
             InvalidGenomeCase {
-                name: "structural growth in Slice A",
+                name: "unsupported procedural structural growth",
                 mutate: enable_structural_growth,
             },
             InvalidGenomeCase {
@@ -849,7 +849,7 @@ mod task3_causal_genome_and_routing_red_tests {
     }
 
     #[test]
-    fn slice_a_compiles_only_zero_delay_routes_and_rejects_tampering() {
+    fn compiled_routes_use_zero_delay_and_reject_tampering() {
         let (genome, development) = fixture();
         let phenotype = compile_ok(&genome, &development);
         assert!(!phenotype.projections().is_empty());

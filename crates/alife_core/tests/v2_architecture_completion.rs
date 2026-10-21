@@ -88,6 +88,15 @@ fn embodiment_calibration_advances_independently_of_cognitive_state() {
         .replace_calibration(Tick::new(2), vec![0.1; 25], vec![0.2; 11], vec![0.0; 16])
         .is_err());
     assert_eq!(embodiment.source_tick(), Tick::new(1));
+
+    let mut wire = serde_json::to_value(&embodiment).unwrap();
+    wire["revision"] = serde_json::Value::from(u64::MAX);
+    let mut exhausted: EmbodimentState = serde_json::from_value(wire).unwrap();
+    let original = exhausted.clone();
+    assert!(exhausted
+        .replace_calibration(Tick::new(2), vec![0.1; 26], vec![0.2; 11], vec![-0.1; 16])
+        .is_err());
+    assert_eq!(exhausted, original);
 }
 
 #[test]

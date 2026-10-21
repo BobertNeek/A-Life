@@ -1,8 +1,6 @@
 //! GPU adapter admission and device probing.
 
-use alife_core::ScaffoldContractError;
-
-use crate::GPU_CLOSED_LOOP_STORAGE_BINDINGS;
+use crate::closed_loop_runtime::{required_device_features, required_device_limits};
 
 pub const P29_RUNTIME_SCHEMA_VERSION: u16 = 1;
 
@@ -95,86 +93,6 @@ impl GpuRuntimeHardwareProbe {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuRuntimeBackendStatus {
-    pub schema_version: u16,
-    pub requested: GpuRuntimeBackendKind,
-    pub selected: GpuRuntimeBackendKind,
-    pub authoritative: bool,
-    pub unavailable_reason: Option<&'static str>,
-    pub no_active_gameplay_readback: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuRuntimeBackendConfig {
-    pub requested: GpuRuntimeBackendKind,
-    pub gpu_feature_enabled: bool,
-    pub hardware_available: bool,
-    pub validation_passed: bool,
-}
-
-impl Default for GpuRuntimeBackendConfig {
-    fn default() -> Self {
-        Self {
-            requested: GpuRuntimeBackendKind::GpuAuthoritative,
-            gpu_feature_enabled: true,
-            hardware_available: false,
-            validation_passed: true,
-        }
-    }
-}
-
-impl GpuRuntimeBackendConfig {
-    pub fn request(requested: GpuRuntimeBackendKind) -> Self {
-        Self {
-            requested,
-            ..Self::default()
-        }
-    }
-
-    pub const fn with_gpu_feature_enabled(mut self, gpu_feature_enabled: bool) -> Self {
-        self.gpu_feature_enabled = gpu_feature_enabled;
-        self
-    }
-
-    pub const fn with_hardware_available(mut self, hardware_available: bool) -> Self {
-        self.hardware_available = hardware_available;
-        self
-    }
-
-    pub const fn with_validation_passed(mut self, validation_passed: bool) -> Self {
-        self.validation_passed = validation_passed;
-        self
-    }
-
-    pub fn select_backend(self) -> Result<GpuRuntimeBackendStatus, ScaffoldContractError> {
-        if !self.gpu_feature_enabled {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        if !self.hardware_available {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        if !self.validation_passed {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-
-        Ok(GpuRuntimeBackendStatus {
-            schema_version: P29_RUNTIME_SCHEMA_VERSION,
-            requested: self.requested,
-            selected: self.requested,
-            authoritative: true,
-            unavailable_reason: None,
-            no_active_gameplay_readback: true,
-        })
-    }
-}
-
-pub fn probe_local_wgpu_runtime(
-    requested_backend: GpuRuntimeBackendKind,
-) -> GpuRuntimeHardwareProbe {
-    probe_local_wgpu_runtime_with_backends(requested_backend, None)
-}
-
 pub fn probe_local_wgpu_runtime_for_graphics_backend(
     requested_backend: GpuRuntimeBackendKind,
     graphics_backend: &str,
@@ -185,13 +103,6 @@ pub fn probe_local_wgpu_runtime_for_graphics_backend(
         "auto" | "existing" | "" => None,
         _ => None,
     };
-    probe_local_wgpu_runtime_with_backends(requested_backend, backends)
-}
-
-pub fn probe_local_wgpu_runtime_with_backends(
-    requested_backend: GpuRuntimeBackendKind,
-    backends: Option<wgpu::Backends>,
-) -> GpuRuntimeHardwareProbe {
     pollster::block_on(probe_local_wgpu_runtime_async(requested_backend, backends))
 }
 
@@ -225,31 +136,23 @@ async fn probe_local_wgpu_runtime_async(
 
     let info = adapter.get_info();
     let limits = adapter.limits();
-    let required_storage_buffers = required_storage_buffers(requested_backend);
-    if limits.max_storage_buffers_per_shader_stage < required_storage_buffers {
-        let exposed_storage_buffers = limits.max_storage_buffers_per_shader_stage;
+    if let Some(error) =
+        adapter_admission_error(info.device_type, info.backend, adapter.features(), &limits)
+    {
         return GpuRuntimeHardwareProbe::from_adapter(
             requested_backend,
             info,
             limits,
             false,
-            Some(format!(
-                "adapter exposes {} storage buffers per shader stage, but {:?} requires {}",
-                exposed_storage_buffers, requested_backend, required_storage_buffers
-            )),
+            Some(error),
         );
     }
-
-    let mut required_limits = wgpu::Limits::downlevel_defaults();
-    required_limits.max_storage_buffers_per_shader_stage = required_limits
-        .max_storage_buffers_per_shader_stage
-        .max(required_storage_buffers);
 
     match adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("alife-local-gpu-runtime-probe-device"),
-            required_features: wgpu::Features::empty(),
-            required_limits,
+            required_features: required_device_features(),
+            required_limits: required_device_limits(),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
@@ -269,8 +172,55 @@ async fn probe_local_wgpu_runtime_async(
     }
 }
 
-pub const fn required_storage_buffers(backend: GpuRuntimeBackendKind) -> u32 {
-    match backend {
-        GpuRuntimeBackendKind::GpuAuthoritative => GPU_CLOSED_LOOP_STORAGE_BINDINGS,
+pub fn required_storage_buffers(_backend: GpuRuntimeBackendKind) -> u32 {
+    required_device_limits().max_storage_buffers_per_shader_stage
+}
+
+fn adapter_admission_error(
+    device_type: wgpu::DeviceType,
+    backend: wgpu::Backend,
+    features: wgpu::Features,
+    limits: &wgpu::Limits,
+) -> Option<String> {
+    if device_type == wgpu::DeviceType::Cpu || backend == wgpu::Backend::Noop {
+        return Some("gameplay requires a hardware GPU adapter".into());
+    }
+    if !features.contains(required_device_features()) {
+        return Some("adapter does not support the timestamp queries required by gameplay".into());
+    }
+    let required = required_device_limits();
+    if !required.check_limits(limits) {
+        return Some(format!(
+            "adapter limits do not meet gameplay requirements (storage buffers per stage: {} required, {} available)",
+            required.max_storage_buffers_per_shader_stage,
+            limits.max_storage_buffers_per_shader_stage,
+        ));
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_admits_only_devices_that_meet_gameplay_requirements() {
+        let limits = required_device_limits();
+        let hardware = wgpu::DeviceType::DiscreteGpu;
+        let backend = wgpu::Backend::Vulkan;
+        let features = required_device_features();
+        assert!(adapter_admission_error(hardware, backend, features, &limits).is_none());
+        assert!(
+            adapter_admission_error(wgpu::DeviceType::Cpu, backend, features, &limits).is_some()
+        );
+        assert!(
+            adapter_admission_error(hardware, wgpu::Backend::Noop, features, &limits).is_some()
+        );
+        assert!(
+            adapter_admission_error(hardware, backend, wgpu::Features::empty(), &limits).is_some()
+        );
+        let mut insufficient = limits;
+        insufficient.max_storage_buffers_per_shader_stage -= 1;
+        assert!(adapter_admission_error(hardware, backend, features, &insufficient).is_some());
     }
 }

@@ -55,7 +55,6 @@ impl NeuronDynamics {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        ActivationFunction::try_from_raw(self.activation.raw())?;
         Ok(())
     }
 
@@ -255,10 +254,6 @@ impl CompiledSynapse {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        if let CompiledSynapseKind::Decoder(coordinate) = self.kind {
-            DecoderHeadKind::try_from_raw(coordinate.head.raw())?;
-            CandidateActionFamily::try_from_raw(coordinate.family.raw())?;
-        }
         Ok(())
     }
 }
@@ -387,12 +382,6 @@ impl CompiledProjection {
         }
     }
     pub(super) fn validate_local(&self) -> Result<(), ScaffoldContractError> {
-        LobeKind::try_from_raw(self.source_lobe.raw())?;
-        LobeKind::try_from_raw(self.target_lobe.raw())?;
-        ProjectionType::try_from_raw(self.projection_type.raw())?;
-        ActiveTilePolicy::try_from_raw(self.active_tile_policy.raw())?;
-        UpdateCadence::try_from_raw(self.update_cadence.raw())?;
-        BiologicalPriority::try_from_raw(self.priority.raw())?;
         if self.delay_microsteps != 0 || self.synapse_start.checked_add(self.synapse_len).is_none()
         {
             return Err(ScaffoldContractError::PhenotypeCompile);

@@ -194,21 +194,19 @@ impl DoubleBufferedGraphicalScheduler {
     }
 
     pub fn record_executed_ticks(&mut self, count: u32) -> Result<(), GameAppShellError> {
-        if count == 0 {
-            self.validate()?;
-            return Ok(());
-        }
-        for _ in 0..count {
-            self.fixed_tick_index = self.fixed_tick_index.saturating_add(1);
-            self.ticks_executed = self.ticks_executed.saturating_add(1);
+        self.validate()?;
+        self.fixed_tick_index = self.fixed_tick_index.saturating_add(u64::from(count));
+        self.ticks_executed = self.ticks_executed.saturating_add(u64::from(count));
+        if count % 2 != 0 {
             self.front_buffer = self.front_buffer.swapped();
             self.back_buffer = self.back_buffer.swapped();
         }
-        self.validate()
+        Ok(())
     }
 
     pub fn preserve_unspent_planned_ticks(&mut self, count: u32) -> Result<(), GameAppShellError> {
-        let tick_micros = self.config.fixed_tick_micros().max(1);
+        self.validate()?;
+        let tick_micros = self.config.fixed_tick_micros();
         self.accumulator_micros = self
             .accumulator_micros
             .saturating_add(tick_micros.saturating_mul(u64::from(count)))
@@ -313,5 +311,33 @@ mod tests {
         };
 
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn recording_a_large_tick_batch_preserves_buffer_parity_and_saturates_counters() {
+        let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+        scheduler.fixed_tick_index = u64::MAX - 1;
+
+        scheduler.record_executed_ticks(u32::MAX).unwrap();
+
+        assert_eq!(scheduler.fixed_tick_index, u64::MAX);
+        assert_eq!(scheduler.ticks_executed, u64::from(u32::MAX));
+        assert_eq!(scheduler.front_buffer, Ca13TickBuffer::B);
+        assert_eq!(scheduler.back_buffer, Ca13TickBuffer::A);
+        scheduler.record_executed_ticks(2).unwrap();
+        assert_eq!(scheduler.front_buffer, Ca13TickBuffer::B);
+        assert_eq!(scheduler.ticks_executed, u64::from(u32::MAX) + 2);
+    }
+
+    #[test]
+    fn invalid_config_rejects_deferred_and_executed_ticks_without_mutation() {
+        let mut scheduler = DoubleBufferedGraphicalScheduler::default();
+        scheduler.config.fixed_tick_hz = 0;
+        let before = scheduler.clone();
+
+        assert!(scheduler.preserve_unspent_planned_ticks(1).is_err());
+        assert_eq!(scheduler, before);
+        assert!(scheduler.record_executed_ticks(1).is_err());
+        assert_eq!(scheduler, before);
     }
 }

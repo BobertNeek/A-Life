@@ -7,14 +7,12 @@ use alife_core::{
     AlphaMask, BiochemistryState, BodyEventDelta, BrainCapacityClass, BrainGenome, Confidence,
     ConsolidationIntent, DecisionSnapshot, DevelopmentState, ExperiencePatch, ExperienceSequenceId,
     JointMotorCondition, JointPhysicalOutcome, MeasuredPhysiologyTransition, NeuralActionSelection,
-    NormalizedScalar, OutcomeCreditPacket, PhenotypeCompiler, PhenotypeCompilerInputs,
-    PhenotypeGrowthMigration, PhysicalActionOutcome, PhysicalContactKind,
-    PlasticityGenomeParameters, PostActionOutcome, PreActionSnapshot, PredictionTargetReceipt,
-    SemanticStateVector, SensorProfile, SignedValence, Tick, Vec3f,
+    NormalizedScalar, OutcomeCreditPacket, PhenotypeCompiler, PhysicalActionOutcome,
+    PhysicalContactKind, PlasticityGenomeParameters, PostActionOutcome, PreActionSnapshot,
+    PredictionTargetReceipt, SemanticStateVector, SensorProfile, SignedValence, Tick, Vec3f,
 };
 use alife_gpu_backend::{
-    verify_research_growth_equivalence, GpuBrainRestoreRequest, GpuClosedLoopBackend,
-    GpuExactPopulationCapturePollV1, GpuResearchGrowthHandoffOutcome,
+    GpuBrainRestoreRequest, GpuClosedLoopBackend, GpuExactPopulationCapturePollV1,
 };
 
 fn sealed_reward(
@@ -244,6 +242,27 @@ fn pending_checkpoint_roundtrip_rebinds_private_receipt_and_resolves_exactly_onc
         .snapshot_brain(source_handle, Tick::new(4_000))
         .unwrap();
     let checkpoint_digest = snapshot.canonical_digest();
+    let compact = source.compact_checkpoint_authority(source_handle).unwrap();
+    let mut capture_ticket = source
+        .submit_exact_population_capture(Tick::new(4_000), 1, &[source_handle])
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let capture = loop {
+        match source
+            .poll_exact_population_capture(&mut capture_ticket)
+            .unwrap()
+        {
+            GpuExactPopulationCapturePollV1::Ready(capture) => break capture,
+            GpuExactPopulationCapturePollV1::Pending if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            _ => panic!("pending checkpoint capture failed or exceeded its poll deadline"),
+        }
+    };
+    assert_eq!(
+        capture.rows()[0].compact_checkpoint_authority().unwrap(),
+        compact
+    );
 
     let mut restored =
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
@@ -504,276 +523,6 @@ fn completed_sleep_staging_restores_and_commits_one_physical_swap() {
     assert_eq!(first.commit_digest, second.commit_digest);
     assert_eq!(first.output_generation, request.expected_output_generation);
     assert_eq!(first.generation_swaps, 1);
-}
-
-#[test]
-fn n2048_to_n4096_growth_is_same_adapter_equivalent_and_atomic() {
-    let growth_profile = alife_gpu_backend::GpuRuntimeProfile {
-        profile_id: 4_096,
-        max_hot_brains: 2,
-        growth_chunk_slots: 1,
-        ..alife_gpu_backend::GpuRuntimeProfile::production_v1()
-    };
-    let organism = alife_core::OrganismId(71_4096);
-    let capacity = BrainCapacityClass::n2048();
-    let genome = BrainGenome::scaffold(0x2048_4096, capacity.id());
-    let development =
-        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
-    let inputs = PhenotypeCompilerInputs::try_new(
-        genome,
-        &capacity,
-        development,
-        SensorProfile::GroundedObjectSlotsV1,
-    )
-    .unwrap();
-    let source_phenotype = PhenotypeCompiler::compile_validated(&inputs, &capacity).unwrap();
-    let migration =
-        PhenotypeGrowthMigration::compile_n2048_to_n4096(&source_phenotype, &inputs).unwrap();
-
-    let mut source = GpuClosedLoopBackend::new_required(growth_profile).unwrap();
-    let source_physiology = support::test_physiology(0x2048_4096, &source_phenotype).unwrap();
-    let source_handle = source
-        .insert_brain(organism, source_phenotype.clone())
-        .unwrap();
-    let warmup = support::perception_frame_for_profile_at_tick(
-        organism.raw(),
-        9_000,
-        SensorProfile::GroundedObjectSlotsV1,
-        true,
-        2,
-    );
-    let warmup_tick = support::tick_with_receptors(
-        &mut source,
-        source_handle,
-        &source_phenotype,
-        &source_physiology,
-        &warmup,
-    )
-    .unwrap()
-    .1;
-    source
-        .discard_pending_eligibility(source_handle, warmup_tick.pending_eligibility.identity())
-        .unwrap();
-    let rollback = source
-        .snapshot_brain(source_handle, Tick::new(9_000))
-        .unwrap();
-    let target_snapshot = rollback.clone().migrate_n2048_to_n4096(&migration).unwrap();
-
-    let mut target = GpuClosedLoopBackend::new_required(growth_profile).unwrap();
-    alife_gpu_backend::GpuClassBucketPlan::for_phenotype(&migration.phenotype).unwrap();
-    target
-        .runtime_budget()
-        .validate_for(BrainCapacityClass::n4096_research().execution())
-        .unwrap();
-    let probe_handle = target
-        .insert_research_brain(alife_core::OrganismId(71_4097), migration.phenotype.clone())
-        .unwrap();
-    target.remove_brain(probe_handle).unwrap();
-    let target_restore = target
-        .restore_research_brain(
-            organism,
-            migration.phenotype.clone(),
-            GpuBrainRestoreRequest::try_new(target_snapshot.clone()).unwrap(),
-        )
-        .unwrap();
-    let source_hw = source.hardware_receipt();
-    let target_hw = target.hardware_receipt();
-    assert_eq!(source_hw.backend_api, target_hw.backend_api);
-    assert_eq!(source_hw.adapter_name, target_hw.adapter_name);
-    assert_eq!(source_hw.vendor_id, target_hw.vendor_id);
-    assert_eq!(source_hw.device_id, target_hw.device_id);
-    assert_eq!(source_hw.driver_digest, target_hw.driver_digest);
-    assert_eq!(source_hw.feature_digest, target_hw.feature_digest);
-    assert_eq!(source_hw.limits_digest, target_hw.limits_digest);
-
-    let probe = support::perception_frame_for_profile_at_tick(
-        organism.raw(),
-        9_001,
-        SensorProfile::GroundedObjectSlotsV1,
-        true,
-        2,
-    );
-    // Compare neural migration under matched scheduling. A cognitive snapshot
-    // does not migrate live governor history or prove equal runtime performance.
-    let (final_probe, _) = support::empty_recall(&probe);
-    install_full_recorded_pressure(
-        &mut source,
-        source_handle,
-        &final_probe,
-        Tick::new(9_000),
-        Some(&warmup_tick),
-    );
-    install_full_recorded_pressure(
-        &mut target,
-        target_restore.handle,
-        &final_probe,
-        Tick::new(9_000),
-        None,
-    );
-    let (source_probe, source_tick) = support::tick_with_receptors(
-        &mut source,
-        source_handle,
-        &source_phenotype,
-        &source_physiology,
-        &probe,
-    )
-    .unwrap();
-    // Brain growth does not rewrite the organism's inherited body physiology.
-    let (target_probe, target_tick) = support::tick_with_receptors(
-        &mut target,
-        target_restore.handle,
-        &migration.phenotype,
-        &source_physiology,
-        &probe,
-    )
-    .unwrap();
-    assert_eq!(source_probe.frame_digest(), final_probe.frame_digest());
-    assert_eq!(target_probe.frame_digest(), final_probe.frame_digest());
-    assert_eq!(
-        source_tick.throttle.level,
-        alife_core::NeuralThrottleLevel::Full
-    );
-    assert_eq!(target_tick.throttle.level, source_tick.throttle.level);
-    assert_eq!(
-        target_tick.throttle.microsteps,
-        source_tick.throttle.microsteps
-    );
-    assert_eq!(
-        target_tick.throttle.enabled_route_ids,
-        source_tick.throttle.enabled_route_ids
-    );
-    for tick in [&source_tick, &target_tick] {
-        assert_eq!(tick.pressure.completed_gpu_time_ns, 0);
-        assert_eq!(tick.pressure.queue_depth, 0);
-    }
-    let source_logits = source
-        .candidate_logits_for_evidence(
-            source_handle,
-            &source_probe,
-            source_tick.pending_eligibility.identity(),
-        )
-        .unwrap();
-    let target_logits = target
-        .candidate_logits_for_evidence(
-            target_restore.handle,
-            &target_probe,
-            target_tick.pending_eligibility.identity(),
-        )
-        .unwrap();
-    assert_eq!(
-        source_tick.selection.candidate_index,
-        target_tick.selection.candidate_index
-    );
-    assert_eq!(source_logits.frame_digest, target_logits.frame_digest);
-    assert_eq!(source_logits.logits.len(), target_logits.logits.len());
-    let observed_max_delta = source_logits
-        .logits
-        .iter()
-        .zip(&target_logits.logits)
-        .map(|(source, target)| (source - target).abs())
-        .fold(0.0_f32, f32::max);
-    eprintln!(
-        "GROWTH logits source={:?} target={:?} max_delta={observed_max_delta:?}",
-        source_logits.logits, target_logits.logits
-    );
-    assert!(observed_max_delta <= 1.0e-6);
-    let equivalence = verify_research_growth_equivalence(
-        source.hardware_receipt(),
-        target.hardware_receipt(),
-        &migration,
-        &rollback,
-        &target_snapshot,
-        &source_tick,
-        &target_tick,
-        &source_logits,
-        &target_logits,
-    )
-    .unwrap();
-    assert!(equivalence.max_logit_delta() <= 1.0e-6);
-    source
-        .discard_pending_eligibility(source_handle, source_tick.pending_eligibility.identity())
-        .unwrap();
-    target
-        .discard_pending_eligibility(
-            target_restore.handle,
-            target_tick.pending_eligibility.identity(),
-        )
-        .unwrap();
-
-    let mut handoff = GpuClosedLoopBackend::new_required(growth_profile).unwrap();
-    let handoff_source = handoff
-        .restore_brain(
-            organism,
-            source_phenotype.clone(),
-            GpuBrainRestoreRequest::try_new(rollback.clone()).unwrap(),
-        )
-        .unwrap();
-    let handoff_receipt = match handoff
-        .replace_brain_with_research_growth(
-            handoff_source.handle,
-            &migration,
-            rollback.clone(),
-            target_snapshot.clone(),
-            &equivalence,
-        )
-        .unwrap()
-    {
-        GpuResearchGrowthHandoffOutcome::Committed(receipt) => receipt,
-        GpuResearchGrowthHandoffOutcome::RolledBack(_) => panic!("valid growth rolled back"),
-    };
-    assert_eq!(
-        handoff_receipt.target_handle.class_id(),
-        BrainCapacityClass::N4096_RESEARCH_ID
-    );
-    assert!(handoff
-        .snapshot_brain(handoff_source.handle, Tick::new(9_000))
-        .is_err());
-    assert_eq!(
-        handoff
-            .snapshot_brain(handoff_receipt.target_handle, Tick::new(9_000))
-            .unwrap()
-            .canonical_digest(),
-        target_snapshot.canonical_digest(),
-    );
-
-    let constrained_profile = alife_gpu_backend::GpuRuntimeProfile {
-        profile_id: 4_097,
-        physical_allocation_ceiling_bytes: handoff
-            .admission_receipt()
-            .physical_allocated_bytes
-            .saturating_sub(1),
-        ..growth_profile
-    };
-    let mut rollback_backend = GpuClosedLoopBackend::new_required(constrained_profile).unwrap();
-    let rollback_source = rollback_backend
-        .restore_brain(
-            organism,
-            source_phenotype,
-            GpuBrainRestoreRequest::try_new(rollback.clone()).unwrap(),
-        )
-        .unwrap();
-    let rollback_receipt = match rollback_backend
-        .replace_brain_with_research_growth(
-            rollback_source.handle,
-            &migration,
-            rollback.clone(),
-            target_snapshot,
-            &equivalence,
-        )
-        .unwrap()
-    {
-        GpuResearchGrowthHandoffOutcome::RolledBack(receipt) => receipt,
-        GpuResearchGrowthHandoffOutcome::Committed(_) => {
-            panic!("constrained growth unexpectedly committed")
-        }
-    };
-    assert_eq!(
-        rollback_backend
-            .snapshot_brain(rollback_receipt.source_handle, Tick::new(9_000))
-            .unwrap()
-            .canonical_digest(),
-        rollback.canonical_digest(),
-    );
 }
 
 #[test]

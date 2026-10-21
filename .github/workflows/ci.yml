@@ -113,14 +113,14 @@ jobs:
 
       - name: Check
         id: check
-        run: cargo check --workspace --all-targets
+        run: cargo check --locked --workspace --all-targets
 
       - name: Test
-        run: cargo test --workspace --all-targets --no-fail-fast
+        run: cargo test --locked --workspace --all-targets --no-fail-fast
 
       - name: Clippy
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Core boundaries
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}

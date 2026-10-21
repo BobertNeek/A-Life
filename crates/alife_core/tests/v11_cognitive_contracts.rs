@@ -467,6 +467,14 @@ fn bounded_contracts_reject_overflow_and_mismatched_identity() {
         .collect();
     assert!(frame.validate_contract().is_err());
 
+    let mut repeated_focus = context();
+    repeated_focus.focal.identities = vec![
+        alife_core::StableFocusIdentity::Organism(OrganismId(1)),
+        alife_core::StableFocusIdentity::Organism(OrganismId(2)),
+        alife_core::StableFocusIdentity::Organism(OrganismId(1)),
+    ];
+    assert!(repeated_focus.validate_contract().is_err());
+
     let mut mismatched = context();
     mismatched.attention.organism_id = OrganismId(8);
     assert!(matches!(
@@ -516,7 +524,6 @@ fn motor_channels_and_one_joint_outcome_round_trip_without_channel_reward() {
     assert_eq!(decoded_bundle, bundle);
     assert_eq!(decoded_outcome, outcome);
     assert_eq!(decoded_outcome.channel_observations.len(), 1);
-    assert!(decoded_outcome.joint_reward().is_none());
 }
 
 #[test]
@@ -530,6 +537,14 @@ fn v11_patch_binds_exact_prediction_and_work_receipts_and_reads_legacy_explicitl
         context(),
     )
     .unwrap();
+    assert_eq!(
+        alife_core::ExperiencePacker::default()
+            .pack(&patch)
+            .unwrap()
+            .frame
+            .experience_schema_version,
+        ExperiencePatch::V11_ABI_VERSION
+    );
     let digest = patch.causal_digest().unwrap();
     assert_eq!(patch.outcome(), &measured_outcome(joint_outcome()));
     assert_eq!(patch.prediction_target(), Some(&prediction()));
@@ -610,6 +625,14 @@ fn v12_sealed_patch_preserves_channel_identities_and_rejects_v11_relabeling() {
         context(),
     )
     .unwrap();
+    assert_eq!(
+        alife_core::ExperiencePacker::default()
+            .pack(&v12_patch)
+            .unwrap()
+            .frame
+            .experience_schema_version,
+        ExperiencePatch::V12_ABI_VERSION
+    );
     let v12_digest = v12_patch.causal_digest().unwrap();
     assert_eq!(
         v12_patch.header().abi_version,

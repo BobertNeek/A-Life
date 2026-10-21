@@ -108,7 +108,7 @@ impl ExactCognitiveCheckpointState {
                 ScaffoldContractError::BrainOwnershipMismatch,
             ));
         }
-        validate_predictor(&self.predictor)?;
+        self.predictor.validate_contract()?;
         if let Some(bundle) = &self.selected_motor_bundle {
             bundle.validate_contract()?;
             if bundle.organism_id != self.organism_id || bundle.tick != self.checkpoint_tick {
@@ -196,22 +196,11 @@ impl DurableFounderCognitiveState {
             });
         }
         self.source_organism_id.validate()?;
-        validate_predictor(&self.predictor)?;
+        self.predictor.validate_contract()?;
         validate_dendritic_branches(&self.dendritic_branches)?;
         validate_structural_plasticity(&self.structural_plasticity)?;
         Ok(())
     }
-}
-
-fn validate_predictor(predictor: &GroundedSuccessorPredictor) -> Result<(), PersistenceError> {
-    predictor.validate_contract()?;
-    let encoded = serde_json::to_vec(predictor)?;
-    let decoded: GroundedSuccessorPredictor = serde_json::from_slice(&encoded)?;
-    decoded.validate_contract()?;
-    if decoded != *predictor {
-        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
-    }
-    Ok(())
 }
 
 fn validate_dendritic_branches(branches: &DendriticBranchSet) -> Result<(), PersistenceError> {

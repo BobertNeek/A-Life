@@ -64,7 +64,7 @@ Hardware checks use an available resource window. Report GPU unavailability as s
 Use the real device diagnostic for the workload being investigated:
 
 ```text
-cargo run -p alife_tools --bin benchmark_tiers -- --backend gpu-closed-loop --targets TARGETS.json --classes CLASSES --sensor-profiles PROFILES --populations POPULATIONS --base-seed SEED --output OUTPUT.json
+cargo run -p alife_tools --bin benchmark_tiers -- --backend gpu-closed-loop --targets TARGETS.json --classes CLASSES --sensor-profiles PROFILES --populations POPULATIONS --base-seed 4404 --output OUTPUT.json
 ```
 
 The command also supports `--write-canonical-targets PATH` and `--validate PATH`.

@@ -424,10 +424,6 @@ impl BrainChromosome {
                 BrainCapacityClass::production_for_id(class_id)?;
                 Ok(class_id)
             }
-            DiscreteExpression::Codominant(left, right) if left == right => {
-                BrainCapacityClass::production_for_id(left)?;
-                Ok(left)
-            }
             DiscreteExpression::Codominant(_, _) => {
                 Err(ScaffoldContractError::IncompatibleGeneticClass)
             }

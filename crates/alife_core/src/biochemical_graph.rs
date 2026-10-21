@@ -1417,7 +1417,7 @@ impl BiochemicalGraphState {
                         * emitter.gain
                         * developmental_expression.max(emitter.developmental_expression_floor)
                         * release_count as f32,
-                )?;
+                );
             }
         }
         let neural_evaluations = if let Some(frame) = neural {
@@ -1438,7 +1438,7 @@ impl BiochemicalGraphState {
                     &mut next,
                     *target_index,
                     response * neuroemitter.gain * developmental_expression,
-                )?;
+                );
             }
             phenotype.neuroemitters.len() as u32
         } else {
@@ -1751,11 +1751,10 @@ fn apply_delta(
     state: &mut BiochemicalGraphState,
     index: usize,
     delta: f32,
-) -> Result<(), ScaffoldContractError> {
+) {
     let row = phenotype.species[index];
     state.concentrations[index] =
         (state.concentrations[index] + delta).clamp(row.minimum, row.maximum);
-    Ok(())
 }
 
 fn receptor_group_signal(

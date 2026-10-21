@@ -8,8 +8,6 @@ use alife_game_app::{
 
 const VALIDATE_PRODUCTION_ASSETS_COMMAND: &str = "validate-production-assets";
 const GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND: &str = "gpu-closed-loop-acceptance";
-const GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND: &str = "gpu-learning-sleep-acceptance";
-const GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND: &str = "gpu-memory-grounding-acceptance";
 const GPU_CLOSED_LOOP_SOAK_COMMAND: &str = "gpu-closed-loop-soak";
 const GPU_EVIDENCE_VALIDATE_COMMAND: &str = "gpu-evidence-validate";
 
@@ -17,17 +15,6 @@ const GPU_EVIDENCE_VALIDATE_COMMAND: &str = "gpu-evidence-validate";
 struct GpuAcceptanceCli {
     options: alife_game_app::GpuClosedLoopAcceptanceOptions,
     output: PathBuf,
-}
-
-#[cfg(feature = "gpu-runtime")]
-struct GpuLearningSleepCli {
-    options: alife_game_app::GpuLearningSleepAcceptanceOptions,
-    output: PathBuf,
-}
-
-#[cfg(feature = "gpu-runtime")]
-struct GpuMemoryGroundingCli {
-    options: alife_game_app::GpuMemoryGroundingAcceptanceOptions,
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -86,84 +73,6 @@ fn run(args: Vec<String>) -> Result<(), String> {
         {
             return Err(format!(
                 "{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} requires --features gpu-runtime"
-            ));
-        }
-    }
-    if command == GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND {
-        if rest
-            .iter()
-            .any(|argument| argument == "--help" || argument == "-h")
-        {
-            println!("{}", help());
-            return Ok(());
-        }
-        #[cfg(feature = "gpu-runtime")]
-        {
-            let parsed = parse_gpu_learning_sleep(rest)?;
-            let receipt = alife_game_app::run_and_write_gpu_learning_sleep_acceptance(
-                parsed.options,
-                &parsed.output,
-            )
-            .map_err(|error| error.to_string())?;
-            println!(
-                "Slice B GPU evidence class={} backend={} adapter={} reward_delta={} pain_delta={} replay_delta={} swaps={} artifact={} commit={} tree={}",
-                receipt.capacity_class,
-                receipt.backend_api,
-                receipt.adapter_name,
-                receipt.reward_target_delta,
-                receipt.pain_avoidance_delta,
-                receipt.replay_vs_zero_sample_post_wake_delta,
-                receipt.restore.actual_remaining_swaps,
-                parsed.output.display(),
-                receipt.header.git_commit,
-                receipt.header.source_tree_digest,
-            );
-            return Ok(());
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            return Err(format!(
-                "{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} requires --features gpu-runtime"
-            ));
-        }
-    }
-    if command == GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND {
-        if rest
-            .iter()
-            .any(|argument| argument == "--help" || argument == "-h")
-        {
-            println!("{}", help());
-            return Ok(());
-        }
-        #[cfg(feature = "gpu-runtime")]
-        {
-            let parsed = parse_gpu_memory_grounding(rest)?;
-            let artifact_path = parsed
-                .options
-                .artifact_path()
-                .map_err(|error| error.to_string())?;
-            let receipt =
-                alife_game_app::run_and_write_gpu_memory_grounding_acceptance(parsed.options)
-                    .map_err(|error| error.to_string())?;
-            println!(
-                "Slice C GPU evidence class={} profile={} backend={} adapter={} ticks={} selections={} readback_bytes={} artifact={} commit={} tree={}",
-                receipt.capacity_class_slug,
-                receipt.sensor_profile.profile_id.raw(),
-                receipt.hardware.backend_api,
-                receipt.hardware.adapter_name,
-                receipt.completed_ticks,
-                receipt.gpu_selection_count,
-                receipt.compact_readback_bytes,
-                artifact_path.display(),
-                receipt.header.common.git_commit,
-                receipt.header.common.source_tree_digest,
-            );
-            return Ok(());
-        }
-        #[cfg(not(feature = "gpu-runtime"))]
-        {
-            return Err(format!(
-                "{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} requires --features gpu-runtime"
             ));
         }
     }
@@ -281,7 +190,7 @@ fn production_asset_validation_receipt() -> Result<String, String> {
     let summary = validate_production_assets(default_production_asset_manifest_path())
         .map_err(|error| error.to_string())?;
     Ok(format!(
-        "FVR07 production assets schema={} version={} pack={} manifest={} assets={} generated={} external={} final_art={} placeholder_final={} unknown_license={} rejected={} committed_bytes={} largest={} generated_target={} signature={}",
+        "FVR07 production assets schema={} version={} pack={} manifest={} assets={} generated={} external={} final_art={} committed_bytes={} largest={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.pack_id,
@@ -290,12 +199,8 @@ fn production_asset_validation_receipt() -> Result<String, String> {
         summary.generated_assets,
         summary.external_assets,
         summary.final_art_entries,
-        summary.placeholder_final_entries,
-        summary.unknown_license_entries,
-        summary.missing_or_rejected_assets,
         summary.committed_asset_bytes,
         summary.largest_asset_bytes,
-        summary.generated_art_target,
         summary.signature_line(),
     ))
 }
@@ -549,121 +454,6 @@ fn parse_gpu_acceptance(args: &[String]) -> Result<GpuAcceptanceCli, String> {
     })
 }
 
-#[cfg(feature = "gpu-runtime")]
-fn parse_gpu_learning_sleep(args: &[String]) -> Result<GpuLearningSleepCli, String> {
-    let mut capacity = None;
-    let mut seed = None;
-    let mut output = None;
-    let mut index = 0;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        match flag {
-            "--class" => {
-                set_once(
-                    &mut capacity,
-                    match value(args, index, flag)? {
-                        "n512" => alife_core::BrainCapacityClass::n512(),
-                        "n1024" => alife_core::BrainCapacityClass::n1024(),
-                        "n2048" => alife_core::BrainCapacityClass::n2048(),
-                        _ => return Err("--class must be n512, n1024, or n2048".to_string()),
-                    },
-                    flag,
-                )?;
-                index += 2;
-            }
-            "--seed" => {
-                let parsed = value(args, index, flag)?
-                    .parse::<u64>()
-                    .map_err(|_| "--seed must be an unsigned integer".to_string())?;
-                set_once(&mut seed, parsed, flag)?;
-                index += 2;
-            }
-            "--output" => {
-                set_once(&mut output, PathBuf::from(value(args, index, flag)?), flag)?;
-                index += 2;
-            }
-            unknown => return Err(format!("unknown GPU learning/sleep option: {unknown}")),
-        }
-    }
-    Ok(GpuLearningSleepCli {
-        options: alife_game_app::GpuLearningSleepAcceptanceOptions {
-            capacity: capacity.ok_or_else(|| "--class is required".to_string())?,
-            deterministic_seed: seed.ok_or_else(|| "--seed is required".to_string())?,
-        },
-        output: output.ok_or_else(|| "--output is required".to_string())?,
-    })
-}
-
-#[cfg(feature = "gpu-runtime")]
-fn parse_gpu_memory_grounding(args: &[String]) -> Result<GpuMemoryGroundingCli, String> {
-    let mut capacity = None;
-    let mut ticks = None;
-    let mut seed = None;
-    let mut sensor_profile = None;
-    let mut index = 0;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        match flag {
-            "--class" => {
-                set_once(
-                    &mut capacity,
-                    match value(args, index, flag)? {
-                        "n512" => alife_core::BrainCapacityClass::n512(),
-                        "n1024" => alife_core::BrainCapacityClass::n1024(),
-                        "n2048" => alife_core::BrainCapacityClass::n2048(),
-                        _ => return Err("--class must be n512, n1024, or n2048".to_string()),
-                    },
-                    flag,
-                )?;
-                index += 2;
-            }
-            "--ticks" => {
-                let parsed = value(args, index, flag)?
-                    .parse::<u64>()
-                    .map_err(|_| "--ticks must be an unsigned integer".to_string())?;
-                set_once(&mut ticks, parsed, flag)?;
-                index += 2;
-            }
-            "--seed" => {
-                let parsed = value(args, index, flag)?
-                    .parse::<u64>()
-                    .map_err(|_| "--seed must be an unsigned integer".to_string())?;
-                set_once(&mut seed, parsed, flag)?;
-                index += 2;
-            }
-            "--sensor-profile" => {
-                let parsed = match value(args, index, flag)? {
-                    "grounded-object-slots-v1" => alife_core::SensorProfile::GroundedObjectSlotsV1,
-                    "privileged-affordance-v1" => alife_core::SensorProfile::PrivilegedAffordanceV1,
-                    _ => {
-                        return Err(
-                            "--sensor-profile must be grounded-object-slots-v1 or privileged-affordance-v1"
-                                .to_string(),
-                        );
-                    }
-                };
-                set_once(&mut sensor_profile, parsed, flag)?;
-                index += 2;
-            }
-            unknown => return Err(format!("unknown GPU memory/grounding option: {unknown}")),
-        }
-    }
-    let parsed = GpuMemoryGroundingCli {
-        options: alife_game_app::GpuMemoryGroundingAcceptanceOptions {
-            capacity: capacity.ok_or_else(|| "--class is required".to_string())?,
-            requested_ticks: ticks.ok_or_else(|| "--ticks is required".to_string())?,
-            deterministic_seed: seed.ok_or_else(|| "--seed is required".to_string())?,
-            sensor_profile: sensor_profile
-                .ok_or_else(|| "--sensor-profile is required".to_string())?,
-        },
-    };
-    parsed
-        .options
-        .artifact_path()
-        .map_err(|error| error.to_string())?;
-    Ok(parsed)
-}
-
 #[cfg(feature = "gpu-tests")]
 fn parse_gpu_closed_loop_soak(args: &[String]) -> Result<GpuClosedLoopSoakCli, String> {
     let mut capacity = None;
@@ -754,10 +544,8 @@ fn parse_gpu_evidence_validation(args: &[String]) -> Result<(u16, PathBuf), Stri
             "--slice" => {
                 let parsed = match value(args, index, flag)? {
                     "a" => alife_game_app::GPU_SLICE_A_RAW,
-                    "b" => alife_game_app::GPU_SLICE_B_RAW,
-                    "c" => alife_game_app::GPU_SLICE_C_RAW,
                     "d" => alife_game_app::GPU_SLICE_D_RAW,
-                    _ => return Err("--slice must be a, b, c, or d".to_string()),
+                    _ => return Err("--slice must be a or d".to_string()),
                 };
                 set_once(&mut slice, parsed, flag)?;
                 index += 2;
@@ -801,7 +589,7 @@ fn run_graphical(
 
 fn help() -> String {
     format!(
-        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N [--founder builtin-nano512|scaled-choice-nociceptive-v1|n2048:<path>] [--disable-age-death|--enable-age-death]] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--run-mode 1x|max|headless-max] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --seed N --output PATH\n{GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks 64|10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|b|c|d --input PATH\nNew Game disables age-only death by default; --enable-age-death restores the age cap. Loading keeps the saved setting.\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
+        "{PRODUCTION_VOXEL_COMMAND} [--manifest PATH] [--scenario ID] [--new-game --seed N [--founder builtin-nano512|scaled-choice-nociceptive-v1|n2048:<path>] [--disable-age-death|--enable-age-death]] [--profile PROFILE] [--population N] [--resolution WIDTHxHEIGHT] [--brain-policy gpu-required] [--graphics-backend vulkan] [--require-gpu] [--ui-settings PATH] [--developer-overlay] [--run-mode 1x|max|headless-max] [--record-performance] [--smoke-seconds N] [--dry-run]\n{VALIDATE_PRODUCTION_ASSETS_COMMAND}\n{GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND} --class n512|n1024|n2048 --ticks N --seed N --sensor-profile privileged-affordance-v1 --output PATH\n{GPU_CLOSED_LOOP_SOAK_COMMAND} --class n512|n1024|n2048 --ticks 10240 --seed N --sensor-profile privileged-affordance-v1|grounded-object-slots-v1 --output PATH\n{GPU_EVIDENCE_VALIDATE_COMMAND} --slice a|d --input PATH\nNew Game disables age-only death by default; --enable-age-death restores the age cap. Loading keeps the saved setting.\nprofiles: MinimumSettings30x30, MinSpecComfort1080p, Balanced1080p, HighSpecScaleUp, ResearchScale"
     )
 }
 
@@ -875,7 +663,7 @@ mod tests {
     fn production_asset_validation_command_remains_available() {
         let receipt = production_asset_validation_receipt().unwrap();
         assert!(receipt.starts_with("FVR07 production assets"));
-        assert!(receipt.contains("unknown_license=0"));
+        assert!(receipt.contains("assets="));
         assert!(help().contains(VALIDATE_PRODUCTION_ASSETS_COMMAND));
     }
 
@@ -908,167 +696,6 @@ mod tests {
             .ends_with("gpu-closed-loop-slice-a-n2048.json"));
         assert!(help().contains(GPU_CLOSED_LOOP_ACCEPTANCE_COMMAND));
         assert!(help().contains(GPU_EVIDENCE_VALIDATE_COMMAND));
-    }
-
-    #[cfg(feature = "gpu-runtime")]
-    #[test]
-    fn parse_gpu_learning_sleep_cli_requires_exact_class_seed_and_output() {
-        let args = [
-            "--class",
-            "n2048",
-            "--seed",
-            "4202",
-            "--output",
-            "target/artifacts/gpu-learning-sleep-slice-b-n2048.json",
-        ]
-        .map(str::to_string);
-        let parsed = parse_gpu_learning_sleep(&args).unwrap();
-
-        assert_eq!(
-            parsed.options.capacity,
-            alife_core::BrainCapacityClass::n2048()
-        );
-        assert_eq!(parsed.options.deterministic_seed, 4_202);
-        assert!(parsed
-            .output
-            .ends_with("gpu-learning-sleep-slice-b-n2048.json"));
-        assert!(parse_gpu_learning_sleep(&args[..4]).is_err());
-        assert!(parse_gpu_learning_sleep(
-            &[
-                "--class",
-                "n4096",
-                "--seed",
-                "4202",
-                "--output",
-                "receipt.json",
-            ]
-            .map(str::to_string),
-        )
-        .is_err());
-        assert!(help().contains(GPU_LEARNING_SLEEP_ACCEPTANCE_COMMAND));
-    }
-
-    #[cfg(feature = "gpu-runtime")]
-    #[test]
-    fn parse_gpu_memory_grounding_cli_derives_profile_qualified_artifacts() {
-        let grounded_args = [
-            "--class",
-            "n512",
-            "--ticks",
-            "10240",
-            "--seed",
-            "4303",
-            "--sensor-profile",
-            "grounded-object-slots-v1",
-        ]
-        .map(str::to_string);
-        let grounded = parse_gpu_memory_grounding(&grounded_args).unwrap();
-
-        assert_eq!(
-            grounded.options.capacity,
-            alife_core::BrainCapacityClass::n512()
-        );
-        assert_eq!(grounded.options.requested_ticks, 10_240);
-        assert_eq!(grounded.options.deterministic_seed, 4_303);
-        assert_eq!(
-            grounded.options.sensor_profile,
-            alife_core::SensorProfile::GroundedObjectSlotsV1
-        );
-        assert!(grounded
-            .options
-            .artifact_path()
-            .unwrap()
-            .ends_with("gpu-memory-grounding-slice-c-grounded-object-slots-v1-n512.json"));
-
-        let privileged_args = [
-            "--class",
-            "n2048",
-            "--ticks",
-            "64",
-            "--seed",
-            "4303",
-            "--sensor-profile",
-            "privileged-affordance-v1",
-        ]
-        .map(str::to_string);
-        let privileged = parse_gpu_memory_grounding(&privileged_args).unwrap();
-        assert_eq!(privileged.options.requested_ticks, 64);
-        assert_eq!(
-            privileged.options.sensor_profile,
-            alife_core::SensorProfile::PrivilegedAffordanceV1
-        );
-        assert!(privileged
-            .options
-            .artifact_path()
-            .unwrap()
-            .ends_with("gpu-memory-grounding-slice-c-privileged-affordance-v1-n2048.json"));
-        assert!(help().contains(GPU_MEMORY_GROUNDING_ACCEPTANCE_COMMAND));
-    }
-
-    #[cfg(feature = "gpu-runtime")]
-    #[test]
-    fn parse_gpu_memory_grounding_cli_rejects_incomplete_or_invalid_contracts() {
-        let valid = [
-            "--class",
-            "n1024",
-            "--ticks",
-            "10240",
-            "--seed",
-            "4303",
-            "--sensor-profile",
-            "grounded-object-slots-v1",
-        ]
-        .map(str::to_string);
-
-        assert!(parse_gpu_memory_grounding(&valid[..6]).is_err());
-        assert!(parse_gpu_memory_grounding(
-            &[
-                "--class",
-                "n4096",
-                "--ticks",
-                "10240",
-                "--seed",
-                "4303",
-                "--sensor-profile",
-                "grounded-object-slots-v1",
-            ]
-            .map(str::to_string),
-        )
-        .is_err());
-        assert!(parse_gpu_memory_grounding(
-            &[
-                "--class",
-                "n512",
-                "--ticks",
-                "64",
-                "--seed",
-                "4303",
-                "--sensor-profile",
-                "grounded-object-slots-v1",
-            ]
-            .map(str::to_string),
-        )
-        .is_err());
-        assert!(parse_gpu_memory_grounding(
-            &[
-                "--class",
-                "n512",
-                "--ticks",
-                "10240",
-                "--seed",
-                "4303",
-                "--sensor-profile",
-                "unknown-profile",
-            ]
-            .map(str::to_string),
-        )
-        .is_err());
-        let mut duplicate = valid.to_vec();
-        duplicate.extend(["--seed".to_string(), "4304".to_string()]);
-        assert!(parse_gpu_memory_grounding(&duplicate).is_err());
-        let mut output_override = valid.to_vec();
-        output_override.extend(["--output".to_string(), "receipt.json".to_string()]);
-        assert!(parse_gpu_memory_grounding(&output_override).is_err());
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -1119,28 +746,22 @@ mod tests {
     fn parse_gpu_evidence_validation_accepts_all_reviewed_slices_only_with_input() {
         let args = [
             "--slice",
-            "b",
+            "a",
             "--input",
-            "target/artifacts/gpu-learning-sleep-slice-b-n512.json",
+            "target/artifacts/gpu-closed-loop-slice-a-n512.json",
         ]
         .map(str::to_string);
         let (slice, input) = parse_gpu_evidence_validation(&args).unwrap();
 
-        assert_eq!(slice, alife_game_app::GPU_SLICE_B_RAW);
-        assert!(input.ends_with("gpu-learning-sleep-slice-b-n512.json"));
+        assert_eq!(slice, alife_game_app::GPU_SLICE_A_RAW);
+        assert!(input.ends_with("gpu-closed-loop-slice-a-n512.json"));
         assert!(parse_gpu_evidence_validation(&args[..2]).is_err());
-        let (slice_c, input_c) = parse_gpu_evidence_validation(
-            &["--slice", "c", "--input", "receipt.json"].map(str::to_string),
-        )
-        .unwrap();
-        assert_eq!(slice_c, alife_game_app::GPU_SLICE_C_RAW);
-        assert!(input_c.ends_with("receipt.json"));
         let (slice_d, input_d) = parse_gpu_evidence_validation(
             &["--slice", "d", "--input", "soak.json"].map(str::to_string),
         )
         .unwrap();
         assert_eq!(slice_d, alife_game_app::GPU_SLICE_D_RAW);
         assert!(input_d.ends_with("soak.json"));
-        assert!(help().contains("--slice a|b|c|d"));
+        assert!(help().contains("--slice a|d"));
     }
 }

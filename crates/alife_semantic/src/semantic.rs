@@ -2,7 +2,7 @@
 
 use alife_core::{
     CompressedSemanticCode, ConceptCellId, Confidence, ContextFeatureFlags, NormalizedScalar,
-    ScaffoldContractError, SemanticContextRef, SemanticSalienceEntry,
+    ScaffoldContractError, SemanticContextRef,
 };
 
 /// Maximum number of semantic code slots kept for a packed context.
@@ -57,8 +57,6 @@ pub fn build_semantic_context(
 ) -> Result<Option<SemanticContextRef>, ScaffoldContractError> {
     // External bindings are opaque hypotheses. They never select a learner-
     // owned concept cell or enter the authoritative concept salience lane.
-    let salience_entries: Vec<SemanticSalienceEntry> = Vec::new();
-
     if bindings.is_empty() && descriptors.is_empty() {
         return Ok(None);
     }
@@ -89,20 +87,16 @@ pub fn build_semantic_context(
     });
     code_entries.truncate(MAX_SEMANTIC_CODE_COUNT);
 
-    if salience_entries.is_empty() && code_entries.is_empty() {
+    if code_entries.is_empty() {
         return Ok(None);
     }
 
-    let mut feature_flags = ContextFeatureFlags::INTERNAL_SLM_MODULATION;
-    if !code_entries.is_empty() {
-        feature_flags |= ContextFeatureFlags::SEMANTIC_CODES;
-    }
-
     Ok(Some(SemanticContextRef {
-        feature_flags,
+        feature_flags: ContextFeatureFlags::INTERNAL_SLM_MODULATION
+            | ContextFeatureFlags::SEMANTIC_CODES,
         confidence,
         compressed_codes: code_entries,
-        salience: salience_entries,
+        salience: Vec::new(),
     }))
 }
 

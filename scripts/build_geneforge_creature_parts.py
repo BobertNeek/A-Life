@@ -780,6 +780,7 @@ def run_worker(command: list[str]) -> None:
 
 
 def run_inventory_or_validation(args, recipe: dict, blender: Path) -> list[dict]:
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="geneforge-inspect-", dir=ARTIFACT_ROOT) as temp:
         temp_root = Path(temp)
 
@@ -836,10 +837,7 @@ def command_validate(args, recipe: dict, blender: Path) -> None:
 def command_build(args, recipe: dict, blender: Path) -> None:
     staging = ensure_artifact_path(args.staging, "staging output")
     staging.parent.mkdir(parents=True, exist_ok=True)
-    temporary = staging.with_name(staging.name + f".tmp-{os.getpid()}")
-    if temporary.exists():
-        shutil.rmtree(temporary)
-    temporary.mkdir(parents=True)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{staging.name}.tmp-", dir=staging.parent))
     sources = list(recipe["sources"])
     max_workers = min(MAX_DONOR_WORKERS, len(sources))
     try:
@@ -2703,50 +2701,11 @@ def _write_augmentation_phase(marker: Path, transaction: dict, phase: str) -> No
     _durable_json_write(marker, transaction)
 
 
-def _cleanup_augmentation_orphans(staging: Path, output: Path) -> None:
-    if _is_symlink_or_reparse(staging) or _is_symlink_or_reparse(output):
-        raise ImportFailure("live augmentation pair contains a symlink or reparse point")
-    receipt = staging / "build_receipt.json"
-    if not staging.is_dir() or not output.is_file() or not receipt.is_file():
-        return
-    if _is_symlink_or_reparse(receipt):
-        raise ImportFailure("live staging receipt is a symlink or reparse point")
-    if _pair_recipe_digest(receipt, "live staging receipt") != _pair_recipe_digest(
-        output, "live recipe"
-    ):
-        return
-    marker = _augmentation_transaction_path(staging)
-    candidates = []
-    for pattern in (
-        f"{staging.name}.augment-tmp-*",
-        f"{staging.name}.augment-rollback-*",
-    ):
-        candidates.extend(staging.parent.glob(pattern))
-    for pattern in (
-        f".{output.name}.augment-tmp-*",
-        f".{output.name}.augment-rollback-*",
-        f".{marker.name}.write-*",
-    ):
-        candidates.extend(output.parent.glob(pattern))
-    for candidate in sorted(set(candidates), key=lambda path: str(path)):
-        if candidate.parent.resolve(strict=False) not in {
-            staging.parent.resolve(),
-            output.parent.resolve(),
-        }:
-            raise ImportFailure("augmentation orphan escaped its confined parent")
-        if _is_symlink_or_reparse(candidate):
-            raise ImportFailure(
-                f"augmentation orphan is a symlink or reparse point: {candidate}"
-            )
-        _durable_remove(candidate)
-
-
 def _recover_augmentation_transaction(staging: Path, output: Path) -> None:
     marker = _augmentation_transaction_path(staging)
     if _is_symlink_or_reparse(marker):
         raise ImportFailure("anatomy transaction marker is a symlink or reparse point")
     if not marker.exists():
-        _cleanup_augmentation_orphans(staging, output)
         return
     try:
         transaction = json.loads(marker.read_text(encoding="utf-8"))
@@ -3397,12 +3356,13 @@ def _configured_blender_worker():
     return _BLENDER_WORKER_MODULE
 
 
-# Keep the existing importer module contract used by the independent tests.
-if __name__ != "__main__":
-    _worker_exports = _configured_blender_worker()
-    prepare_bridge_overlap_geometry = _worker_exports.prepare_bridge_overlap_geometry
-    staged_output_path = _worker_exports.staged_output_path
-    validate_preparation_metadata = _worker_exports.validate_preparation_metadata
+# These pure worker helpers are also used by the host-side build and anatomy commands.
+_worker_exports = _configured_blender_worker()
+barycentric_weights = _worker_exports.barycentric_weights
+assembly_preparations = _worker_exports.assembly_preparations
+postprocess_assembly_preparations = _worker_exports.postprocess_assembly_preparations
+staged_output_path = _worker_exports.staged_output_path
+validate_preparation_metadata = _worker_exports.validate_preparation_metadata
 
 
 if __name__ == "__main__":

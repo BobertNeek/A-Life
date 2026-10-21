@@ -559,16 +559,9 @@ pub fn sleep_consolidation_config_for(
     phenotype: &alife_core::BrainPhenotype,
 ) -> Result<SleepConsolidationConfig, ScaffoldContractError> {
     let architecture = phenotype.cognitive_architecture();
-    let plan = phenotype.sleep_consolidation_plan();
     let mut config = SleepConsolidationConfig::reference();
     config.sleep_pressure_threshold =
         NormalizedScalar::new(architecture.sleep_trigger_threshold())?;
-    config.h_shadow_drain_rate = NormalizedScalar::new(plan.staging_rate())?;
-    config.h_shadow_decay_rate = NormalizedScalar::new(plan.fast_decay_rate())?;
-    config.lifetime_staging_rate = NormalizedScalar::new(architecture.sleep_consolidation_rate())?;
-    config.structural_edit_candidate_limit =
-        usize::from(architecture.structural_candidate_budget());
-    config.weight_abs_limit = plan.weight_limit();
     config.validate_contract()?;
     Ok(config)
 }

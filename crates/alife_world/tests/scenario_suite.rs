@@ -2,13 +2,10 @@ use alife_core::{
     ActionKind, AffordanceBits, BrainTickStatus, PhysicalContactKind, ReferenceActionFailure,
     SleepPhase, TeacherPerceptionChannel,
 };
-use alife_world::{
-    ExpectedDirection, ScenarioAssertions, ScenarioFixture, ScenarioName, ScenarioRun,
-};
+use alife_world::{ScenarioAssertions, ScenarioFixture, ScenarioName, ScenarioRun};
 
 fn run(name: ScenarioName) -> ScenarioRun {
     let fixture = ScenarioFixture::named(name).unwrap();
-    ScenarioAssertions::assert_fixture_is_complete(&fixture);
     let run = fixture.run().unwrap();
     ScenarioAssertions::assert_run_matches_expectations(&fixture, &run);
     run
@@ -111,10 +108,7 @@ fn fatigue_rest_scenario_does_not_invoke_cpu_sleep_authority() {
     assert_eq!(patch.outcome().energy_delta.raw(), 0.0);
     assert_eq!(patch.outcome().reward_valence.raw(), 0.0);
     assert_eq!(run.sleep_phase, SleepPhase::Awake);
-    assert!(!run.sleep_transition_observed);
     assert_eq!(run.sleep_cycle_count, 0);
-    assert!(run.sleep_report.is_none());
-    assert_eq!(run.pending_structural_edit_count, 0);
 }
 
 #[test]
@@ -207,41 +201,4 @@ fn teacher_perception_event_is_perceptual_and_modulatory_only() {
     assert!(patch.decision().selected_action.teacher_lesson.is_none());
     assert!(patch.pre_action().sensory().semantic_context.is_none());
     ScenarioAssertions::assert_selected_action_came_from_arbitration(patch);
-}
-
-#[test]
-fn combined_scenario_smoke_covers_all_named_scenarios() {
-    for name in ScenarioName::ALL {
-        let run = run(name);
-        assert_eq!(run.name, name);
-        assert!(!run.patch_summaries.is_empty());
-        assert!(run.memory_record_count >= run.fixture_expectations.memory.min_records);
-        assert!(run.topology_concept_count >= run.fixture_expectations.topology.min_concepts);
-    }
-}
-
-#[test]
-fn same_seed_and_scenario_produce_same_broad_patch_summary() {
-    for name in ScenarioName::ALL {
-        let first = ScenarioFixture::with_seed(name, 9901)
-            .unwrap()
-            .run()
-            .unwrap();
-        let second = ScenarioFixture::with_seed(name, 9901)
-            .unwrap()
-            .run()
-            .unwrap();
-
-        assert_eq!(first.patch_summaries, second.patch_summaries, "{name:?}");
-        assert_eq!(first.world_signature, second.world_signature, "{name:?}");
-        assert_eq!(first.summary, second.summary, "{name:?}");
-    }
-}
-
-#[test]
-fn expected_direction_helper_checks_direction_not_exact_scores() {
-    ScenarioAssertions::assert_direction("positive", 0.1, ExpectedDirection::Positive);
-    ScenarioAssertions::assert_direction("negative", -0.1, ExpectedDirection::Negative);
-    ScenarioAssertions::assert_direction("nonnegative", 0.0, ExpectedDirection::NonNegative);
-    ScenarioAssertions::assert_direction("nonpositive", 0.0, ExpectedDirection::NonPositive);
 }

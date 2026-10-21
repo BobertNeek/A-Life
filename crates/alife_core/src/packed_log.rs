@@ -259,6 +259,8 @@ impl Validate for PackedExperienceFrame {
         Self::require_schema_version(self.schema_version)?;
         if !matches!(self.experience_schema_version, 1 | 2)
             && self.experience_schema_version != SchemaVersions::CURRENT.experience.raw()
+            && self.experience_schema_version != ExperiencePatch::V11_ABI_VERSION
+            && self.experience_schema_version != ExperiencePatch::V12_ABI_VERSION
         {
             return Err(ScaffoldContractError::IncompatibleAbi {
                 kind: SchemaKind::Experience,
@@ -476,10 +478,9 @@ impl ExperiencePacker {
         patch: &ExperiencePatch,
     ) -> Result<PackedExperienceRecord, ScaffoldContractError> {
         patch.validate_contract()?;
-        let view = patch.as_learning_view();
-        let pre = view.pre_action();
-        let decision = view.decision();
-        let outcome = view.outcome();
+        let pre = patch.pre_action();
+        let decision = patch.decision();
+        let outcome = patch.outcome();
         let selected = decision.selected_action;
         let heuristic_pre = match pre.evidence_kind() {
             crate::EvidenceKind::HeuristicBaseline => Some(pre.heuristic_evidence()?),
@@ -1096,11 +1097,10 @@ fn append_diagnostic_extras(
 }
 
 fn build_flags(patch: &ExperiencePatch) -> u32 {
-    let view = patch.as_learning_view();
-    let decision = view.decision();
-    let outcome = view.outcome();
+    let decision = patch.decision();
+    let outcome = patch.outcome();
     let selected = decision.selected_action;
-    let pre = view.pre_action();
+    let pre = patch.pre_action();
 
     let mut flags = 0;
     if pre.evidence_kind() == crate::EvidenceKind::NeuralClosedLoopCpu {
@@ -1137,8 +1137,7 @@ fn build_flags(patch: &ExperiencePatch) -> u32 {
 }
 
 fn salience_summary(patch: &ExperiencePatch) -> Result<f32, ScaffoldContractError> {
-    let view = patch.as_learning_view();
-    let pre = view.pre_action();
+    let pre = patch.pre_action();
     let mut sum =
         pre.sensory().channels.novelty_signal.raw() + pre.sensory().channels.pain_signal.raw();
     let mut count = 2.0f32;
@@ -1152,27 +1151,27 @@ fn salience_summary(patch: &ExperiencePatch) -> Result<f32, ScaffoldContractErro
         count += 1.0;
     }
 
-    if view.decision().evidence_kind() == crate::EvidenceKind::HeuristicBaseline {
-        for proposal in &view.decision().heuristic_evidence()?.proposals {
+    if patch.decision().evidence_kind() == crate::EvidenceKind::HeuristicBaseline {
+        for proposal in &patch.decision().heuristic_evidence()?.proposals {
             sum += proposal.salience.raw();
             count += 1.0;
         }
     }
-    for hint in &view.outcome().concept_hints {
+    for hint in &patch.outcome().concept_hints {
         sum += hint.salience.raw();
         count += 1.0;
     }
-    for hint in &view.outcome().memory_hints {
+    for hint in &patch.outcome().memory_hints {
         sum += hint.salience.raw();
         count += 1.0;
     }
-    if let Some(context) = &view.pre_action().sensory().semantic_context {
+    if let Some(context) = &patch.pre_action().sensory().semantic_context {
         for entry in &context.salience {
             sum += entry.salience.raw();
             count += 1.0;
         }
     }
-    if let Some(context) = &view.pre_action().sensory().gaussian_context {
+    if let Some(context) = &patch.pre_action().sensory().gaussian_context {
         for cluster in &context.clusters {
             sum += cluster.salience.raw();
             count += 1.0;

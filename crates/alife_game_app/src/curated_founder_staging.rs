@@ -749,19 +749,6 @@ fn prepare_curated_founder_reset(
             source,
         }
     })?;
-    let decoded_foundation = FoundationWeightAsset::decode_canonical(&foundation_asset_bytes)
-        .map_err(|source| CuratedFounderStagingError::Contract {
-            field: "canonical Nano512 foundation bytes",
-            source,
-        })?;
-    if decoded_foundation.manifest() != foundation_asset.manifest()
-        || decoded_foundation.digest() != foundation_asset.digest()
-    {
-        return Err(CuratedFounderStagingError::Mismatch {
-            field: "canonical Nano512 foundation identity or digest",
-        });
-    }
-
     let mut archive_inputs = Vec::with_capacity(stage.archive_birth_intents.len());
     for (entry, intent) in bundle.entries.iter().zip(&stage.archive_birth_intents) {
         archive_inputs.push(CompositeGeneticArchiveBatchInput {

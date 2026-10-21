@@ -12,15 +12,11 @@ use alife_game_app::{
     validate_app_bundle_manifest, GameAppShellError, CA12_MAX_BUNDLE_FILE_BYTES,
     CA12_MAX_REFERENCED_MANIFEST_BYTES,
 };
-use alife_world::persistence::{PersistenceError, PortableSaveFile, P34_MAX_INLINE_SAVE_BYTES};
+use alife_world::persistence::PortableSaveFile;
 use serde_json::Value;
 
 #[path = "../src/test_fixtures.rs"]
 mod fixtures;
-
-// Historical bundle-wide threshold: retain the regression without treating it
-// as current portable-save or approved-production-asset admission policy.
-const LEGACY_BUNDLE_ASSET_LIMIT_BYTES: u64 = 768 * 1024;
 
 struct CurrentBundleFixture {
     root: PathBuf,
@@ -47,8 +43,6 @@ impl CurrentBundleFixture {
         let destination = root.join(&relative);
         copy_tree(&source, &destination);
         let save = fixtures::current_scene_save(&source, population);
-        // Pretty file serialization is valid even when the inline-string
-        // serializer's small transport bound cannot carry this authority.
         save.to_json_file(destination.join("tiny_save.json"))
             .unwrap();
         let mut environment: Value =
@@ -123,7 +117,6 @@ fn full_current_bundle_accepts_pretty_saves_and_canonical_production_assets() {
         .unwrap()
         .len();
     assert!(bytes > CA12_MAX_BUNDLE_FILE_BYTES);
-    assert!(bytes > P34_MAX_INLINE_SAVE_BYTES);
     let summary = validate_app_bundle_manifest(fixture.write_manifest()).unwrap();
     assert_eq!(
         summary.config_entries,
@@ -132,7 +125,6 @@ fn full_current_bundle_accepts_pretty_saves_and_canonical_production_assets() {
     assert_eq!(summary.shader_assets, summary.discovered_shader_assets);
     assert!(summary.shader_discovery_complete);
     assert!(summary.production_voxel_generated_assets > 0);
-    assert!(summary.largest_production_asset_bytes > LEGACY_BUNDLE_ASSET_LIMIT_BYTES);
     assert!(summary.largest_file_bytes >= summary.largest_production_asset_bytes);
     summary.validate().unwrap();
 
@@ -150,14 +142,10 @@ fn full_current_bundle_accepts_pretty_saves_and_canonical_production_assets() {
 fn canonical_file_save_admission_preserves_larger_populations_and_exact_authority() {
     let fixture = CurrentBundleFixture::with_production_population(10);
     let path = fixture.entry_path("production-voxel-save");
-    assert!(fs::metadata(&path).unwrap().len() > LEGACY_BUNDLE_ASSET_LIMIT_BYTES);
+    assert!(fs::metadata(&path).unwrap().len() > CA12_MAX_BUNDLE_FILE_BYTES);
     let save = PortableSaveFile::from_json_file(&path).unwrap();
     save.validate_with_asset_root(path.parent().unwrap())
         .unwrap();
-    assert!(matches!(
-        save.to_json_string_pretty(),
-        Err(PersistenceError::HugeInlinePayload { bytes }) if bytes > P34_MAX_INLINE_SAVE_BYTES
-    ));
     let before = save.restore_headless_world().unwrap();
     assert_eq!(before.organism_registry().len(), 10);
     let roundtrip_path = path.with_file_name("current-file-roundtrip.json");

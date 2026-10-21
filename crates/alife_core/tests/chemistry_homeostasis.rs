@@ -257,8 +257,7 @@ fn recovery_triggers_cover_hyperactivity_catatonia_sleep_pain_and_safe_idle() {
 }
 
 #[test]
-fn modulation_helpers_bound_learning_salience_thresholds_and_motor_confidence() {
-    let params = HomeostaticParameters::reference();
+fn modulation_helpers_bound_learning_salience_and_motor_confidence() {
     let baseline = HomeostaticSnapshot::baseline(Tick::new(1));
     let stressed = HomeostaticSnapshot::new(
         Tick::new(2),
@@ -280,19 +279,14 @@ fn modulation_helpers_bound_learning_salience_thresholds_and_motor_confidence() 
     )
     .unwrap();
 
-    let baseline_threshold = ChemistryModulation::threshold_scale(&baseline, params).unwrap();
-    let stressed_threshold = ChemistryModulation::threshold_scale(&stressed, params).unwrap();
-    assert!(stressed_threshold > baseline_threshold);
-
-    let learning = ChemistryModulation::learning_rate_scale(&stressed, params).unwrap();
-    let salience = ChemistryModulation::salience_weight(&stressed, params).unwrap();
+    let learning = ChemistryModulation::learning_rate_scale(&stressed).unwrap();
+    let salience = ChemistryModulation::salience_weight(&stressed).unwrap();
     assert!((0.0..=1.0).contains(&learning));
     assert!((0.0..=1.0).contains(&salience));
-    assert!(salience > ChemistryModulation::salience_weight(&baseline, params).unwrap());
+    assert!(salience > ChemistryModulation::salience_weight(&baseline).unwrap());
 
     let base_confidence = Confidence::new(0.8).unwrap();
-    let adjusted =
-        ChemistryModulation::motor_confidence(base_confidence, &stressed, params).unwrap();
+    let adjusted = ChemistryModulation::motor_confidence(base_confidence, &stressed).unwrap();
     assert!((0.0..=1.0).contains(&adjusted.raw()));
     assert!(adjusted.raw() < base_confidence.raw());
 }
@@ -360,13 +354,9 @@ fn deterministic_finite_inputs_never_produce_nan_or_out_of_range_outputs() {
             .expect("finite bounded input should update");
 
         next.validate_contract().unwrap();
-        assert!((0.0..=1.0).contains(&ChemistryModulation::threshold_scale(&next, params).unwrap()));
-        assert!(
-            (0.0..=1.0).contains(&ChemistryModulation::learning_rate_scale(&next, params).unwrap())
-        );
-        assert!((0.0..=1.0).contains(&ChemistryModulation::salience_weight(&next, params).unwrap()));
-        ChemistryModulation::motor_confidence(Confidence::new(0.5).unwrap(), &next, params)
-            .unwrap();
+        assert!((0.0..=1.0).contains(&ChemistryModulation::learning_rate_scale(&next).unwrap()));
+        assert!((0.0..=1.0).contains(&ChemistryModulation::salience_weight(&next).unwrap()));
+        ChemistryModulation::motor_confidence(Confidence::new(0.5).unwrap(), &next).unwrap();
     }
 }
 

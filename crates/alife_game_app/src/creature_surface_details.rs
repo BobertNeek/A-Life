@@ -1,43 +1,9 @@
 use std::collections::BTreeMap;
 
-use alife_world::CreatureAppearanceGenome;
+use alife_world::{CreatureAppearanceGenome, CREATURE_APPEARANCE_GENE_BUCKETS};
 use thiserror::Error;
 
-use crate::{
-    CreaturePartSlot, CreatureVisualBounds, GeneForgeCanonicalBounds, GeneForgeLandmarkId,
-};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CreatureDetailMeshKind {
-    CheekPatch,
-    BrowBand,
-    Muzzle,
-    Ear,
-    Fin,
-    Tuft,
-    LimbBand,
-    Hand,
-    Foot,
-    TailAccent,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CreatureDetailMaterialRole {
-    Belly,
-    Accent,
-    Dark,
-    Keratin,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CreatureSurfaceDetailSpec {
-    pub role: &'static str,
-    pub anchor_slot: CreaturePartSlot,
-    pub local_offset: [f32; 3],
-    pub local_scale: [f32; 3],
-    pub mesh: CreatureDetailMeshKind,
-    pub material: CreatureDetailMaterialRole,
-}
+use crate::{CreatureVisualBounds, GeneForgeCanonicalBounds, GeneForgeLandmarkId};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CreatureFaceStyle {
@@ -113,7 +79,8 @@ pub fn creature_face_style_from_landmarks(
         return Err(CreatureSurfaceDetailError::NonFiniteLandmark);
     }
 
-    let inherited = f32::from(appearance.ear_muzzle_trait) / 255.0;
+    let inherited =
+        f32::from(appearance.ear_muzzle_trait) / f32::from(CREATURE_APPEARANCE_GENE_BUCKETS - 1);
     let eye_spacing = (right[0] - left[0]).abs() * 0.5;
     let eye_radius = (eye_spacing * (0.52 + inherited * 0.08)).clamp(0.10, 0.17);
     let eye_size = eye_radius / 0.085;
@@ -129,37 +96,11 @@ pub fn creature_face_style_from_landmarks(
     })
 }
 
-/// Coat markings layered over the source-authored body geometry.
-pub fn creature_surface_detail_recipe(
-    appearance: CreatureAppearanceGenome,
-    lod_scale: f32,
-) -> Vec<CreatureSurfaceDetailSpec> {
-    let lod_scale = lod_scale.clamp(0.5, 1.25);
-    let marking = f32::from(appearance.marking_density) / 255.0;
-    let body_mass = f32::from(appearance.body_mass_trait) / 255.0;
-    let width = (0.90 + marking * 0.48 + body_mass * 0.08) * lod_scale;
-    let height = (1.02 + body_mass * 0.18) * lod_scale;
-    let depth = (0.62 + marking * 0.10) * lod_scale;
-    let offset_y = (0.04 + body_mass * 0.04) * lod_scale;
-
-    vec![CreatureSurfaceDetailSpec {
-        role: "belly-coat-marking",
-        anchor_slot: CreaturePartSlot::Torso,
-        local_offset: [0.0, offset_y, 0.20 * lod_scale],
-        local_scale: [width, height, depth],
-        mesh: CreatureDetailMeshKind::CheekPatch,
-        material: CreatureDetailMaterialRole::Belly,
-    }]
-}
-
 #[cfg(test)]
 mod tests {
     use alife_world::CreatureAppearanceGenome;
 
-    use crate::{
-        load_geneforge_creature_part_catalog, CreaturePartAssetId, CreaturePartSlot,
-        GeneForgeLandmarkId,
-    };
+    use crate::{load_geneforge_creature_part_catalog, CreaturePartAssetId, GeneForgeLandmarkId};
 
     use super::*;
 
@@ -211,35 +152,24 @@ mod tests {
     }
 
     #[test]
-    fn source_authored_anatomy_removes_generic_face_hat_and_limb_recipes() {
-        for species in 0..alife_world::CREATURE_APPEARANCE_SPECIES_COUNT {
-            let appearance =
-                CreatureAppearanceGenome::founder_for_species(species, 0x6002 + u64::from(species));
-            let details = creature_surface_detail_recipe(appearance, 1.0);
-            assert!(details.iter().all(|detail| {
-                detail.anchor_slot == CreaturePartSlot::Torso
-                    && !matches!(
-                        detail.mesh,
-                        CreatureDetailMeshKind::Muzzle
-                            | CreatureDetailMeshKind::Ear
-                            | CreatureDetailMeshKind::Fin
-                            | CreatureDetailMeshKind::Tuft
-                            | CreatureDetailMeshKind::Hand
-                            | CreatureDetailMeshKind::Foot
-                    )
-            }));
-        }
-    }
-
-    #[test]
-    fn continuous_marking_traits_change_torso_surface_without_family_tables() {
-        let base = CreatureAppearanceGenome::founder_for_species(0, 0x6003);
-        let mut changed = base;
-        changed.marking_density = changed.marking_density.saturating_add(1).min(15);
-        assert_ne!(
-            creature_surface_detail_recipe(base, 1.0),
-            creature_surface_detail_recipe(changed, 1.0)
-        );
+    fn eye_size_spans_the_valid_inherited_trait_buckets() {
+        let landmarks = BTreeMap::from([
+            (GeneForgeLandmarkId::LeftEye, [-0.25, 0.0, 0.0]),
+            (GeneForgeLandmarkId::RightEye, [0.25, 0.0, 0.0]),
+        ]);
+        let size = |trait_value| {
+            creature_face_style_from_landmarks(
+                CreatureAppearanceGenome {
+                    ear_muzzle_trait: trait_value,
+                    ..Default::default()
+                },
+                &landmarks,
+            )
+            .unwrap()
+            .sclera_scale[0]
+        };
+        assert!((size(0) - 0.13 / 0.085).abs() < 1.0e-6);
+        assert!((size(CREATURE_APPEARANCE_GENE_BUCKETS - 1) - 0.15 / 0.085).abs() < 1.0e-6);
     }
 
     #[test]

@@ -717,27 +717,8 @@ impl RecoveryAssessment {
 pub struct ChemistryModulation;
 
 impl ChemistryModulation {
-    pub fn threshold_scale(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<f32, ScaffoldContractError> {
+    pub fn learning_rate_scale(state: &HomeostaticSnapshot) -> Result<f32, ScaffoldContractError> {
         state.validate_contract()?;
-        parameters.validate_contract()?;
-        validate_finite(clamp01(
-            0.45 + 0.18 * state.hormones.cortisol
-                + 0.12 * state.drives.fear
-                + 0.12 * state.drives.pain
-                + 0.08 * state.drives.fatigue
-                - 0.05 * state.hormones.dopamine,
-        ))
-    }
-
-    pub fn learning_rate_scale(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<f32, ScaffoldContractError> {
-        state.validate_contract()?;
-        parameters.validate_contract()?;
         let stress_penalty = 1.0 - 0.55 * state.hormones.cortisol;
         let reward_gain = 0.5 + 0.5 * state.hormones.dopamine;
         let energy_gate = 0.25 + 0.75 * state.drives.brain_atp;
@@ -746,12 +727,8 @@ impl ChemistryModulation {
         ))
     }
 
-    pub fn salience_weight(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<f32, ScaffoldContractError> {
+    pub fn salience_weight(state: &HomeostaticSnapshot) -> Result<f32, ScaffoldContractError> {
         state.validate_contract()?;
-        parameters.validate_contract()?;
         validate_finite(clamp01(
             0.15 + 0.18 * state.drives.curiosity
                 + 0.18 * state.drives.fear
@@ -765,10 +742,8 @@ impl ChemistryModulation {
     pub fn motor_confidence(
         base_confidence: Confidence,
         state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
     ) -> Result<Confidence, ScaffoldContractError> {
         state.validate_contract()?;
-        parameters.validate_contract()?;
         let fatigue_penalty = 1.0 - 0.35 * state.drives.fatigue;
         let pain_penalty = 1.0 - 0.25 * state.drives.pain;
         let fear_penalty = 1.0 - 0.2 * state.drives.fear;

@@ -163,7 +163,6 @@ name = "alife_gpu_backend"
 version = "0.1.0"
 dependencies = [
  "alife_core",
- "blake3",
  "bytemuck",
  "naga 29.0.3",
  "pollster",
@@ -214,7 +213,6 @@ dependencies = [
  "image",
  "serde",
  "serde_json",
- "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "windows-sys 0.61.2",

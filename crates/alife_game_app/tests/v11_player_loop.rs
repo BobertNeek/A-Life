@@ -88,7 +88,9 @@ fn player_loop_base_save(runtime: &GpuLiveBrainRuntime) -> PortableSaveFile {
     .expect("canonical player-loop base save")
 }
 
-fn focused_player_action_runtime() -> (
+fn focused_player_action_runtime(
+    label: &str,
+) -> (
     GpuLiveBrainRuntime,
     OrganismId,
     HabitatId,
@@ -193,7 +195,7 @@ fn focused_player_action_runtime() -> (
         .expect("world-owned focused action authority");
 
     let archive_root =
-        std::env::temp_dir().join(format!("alife-v11-player-actions-{}", std::process::id()));
+        std::env::temp_dir().join(format!("alife-v11-{label}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&archive_root);
     let runtime = GpuLiveBrainRuntime::new_profiled_archived(
         backend,
@@ -202,7 +204,7 @@ fn focused_player_action_runtime() -> (
         BrainScaleTier::Standard2048,
         sensor_profile,
         LineageLibraryConfig::profile_default(&archive_root),
-        "task-13-v11-player-actions",
+        &format!("task-13-v11-{label}"),
         ArchiveLearnedCapturePolicy::GeneticOnly,
     )
     .expect("supported profiled Standard2048 production runtime");
@@ -210,119 +212,15 @@ fn focused_player_action_runtime() -> (
 }
 
 #[test]
-fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_boundary() {
-    let organism_id = OrganismId(1);
-    let managed_id = HabitatId::new(2).expect("non-zero managed habitat id");
-    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())
-        .expect("Task 13 requires the production GPU backend");
-    let mut world = HeadlessScenarioBuilder::new(13_001)
-        .agent("learner", organism_id, Vec3f::ZERO)
-        .agent("parent-b", OrganismId(2), Vec3f::new(-1.0, 0.0, 0.0))
-        .social_agent("teacher", OrganismId(3), Vec3f::new(0.5, 0.0, 0.0), 0.75)
-        .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
-        .build()
-        .expect("bounded grounded player-loop world");
-    let teacher_entity = world.entity_id("teacher").expect("grounded teacher entity");
-    world
-        .grounded_teacher_actor(teacher_entity)
-        .expect("grounded teacher actor")
-        .emit_perceptual_cue(
-            &mut world,
-            "teacher-word",
-            77,
-            TeacherPerceptionChannel::Hearing,
-            None,
-        )
-        .expect("grounded teacher cue");
-    let world_entity_id = world
-        .organism_entity_ids()
-        .into_iter()
-        .find(|(candidate, _)| *candidate == organism_id)
-        .map(|(_, entity)| entity)
-        .expect("learner world entity");
-    let sensor_profile = SensorProfile::GroundedObjectSlotsV1;
-    let foundation_asset = FoundationWeightAsset::builtin_n2048_v1(sensor_profile)
-        .expect("checked N2048 foundation asset");
-    let foundation_manifest = foundation_asset.manifest();
-    let foundation = FoundationGeneticIdentity::new(
-        foundation_manifest.foundation_id().raw(),
-        foundation_manifest.foundation_version().raw() as u16,
-        foundation_manifest.compatibility_family_id().raw(),
-        BrainCapacityClass::N2048_ID,
-    )
-    .expect("valid N2048 foundation identity");
-    let genome = alife_core::CreatureGenome::early_mammal_founder(13_001, foundation)
-        .expect("valid learner genome");
-    let phenotype = genome.express().expect("valid learner phenotype");
-    let biochemistry = alife_core::BiochemistryState::new(&phenotype, Tick::ZERO)
-        .expect("valid learner biochemistry");
-    world
-        .register_organism_record(
-            WorldOrganismRecord::new(
-                organism_id,
-                world_entity_id,
-                genome,
-                phenotype,
-                biochemistry,
-                Tick::ZERO,
-            )
-            .expect("valid learner world-organism record"),
-        )
-        .expect("register learner world-organism record");
-    let second_world_entity_id = world
-        .entity_id("parent-b")
-        .expect("second parent world entity");
-    let second_genome = alife_core::CreatureGenome::early_mammal_founder(13_002, foundation)
-        .expect("valid second-parent genome");
-    let second_phenotype = second_genome
-        .express()
-        .expect("valid second-parent phenotype");
-    let second_biochemistry = alife_core::BiochemistryState::new(&second_phenotype, Tick::ZERO)
-        .expect("valid second-parent biochemistry");
-    world
-        .register_organism_record(
-            WorldOrganismRecord::new(
-                OrganismId(2),
-                second_world_entity_id,
-                second_genome,
-                second_phenotype,
-                second_biochemistry,
-                Tick::ZERO,
-            )
-            .expect("valid second-parent world-organism record"),
-        )
-        .expect("register second-parent world-organism record");
-    let mut authority = HabitatAuthority::new(vec![
-        Habitat::new(HabitatId::DEFAULT_WILD, "Wild", HabitatMode::Wild)
-            .expect("valid wild habitat"),
-        Habitat::new(managed_id, "Managed Nursery", HabitatMode::Managed)
-            .expect("valid managed habitat"),
-    ])
-    .expect("valid habitat authority");
-    authority
-        .register_creature(organism_id, managed_id, Tick::ZERO)
-        .expect("managed membership for the learner");
-    authority
-        .register_creature(OrganismId(2), managed_id, Tick::ZERO)
-        .expect("managed membership for the second parent");
-    world
-        .replace_habitat_authority(authority)
-        .expect("world-owned school authority");
-
-    let archive_root =
-        std::env::temp_dir().join(format!("alife-v11-player-loop-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&archive_root);
-    let mut runtime = GpuLiveBrainRuntime::new_profiled_archived(
-        backend,
-        world,
-        13_001,
-        BrainScaleTier::Standard2048,
-        sensor_profile,
-        LineageLibraryConfig::profile_default(&archive_root),
-        "task-13-v11-player-loop",
-        ArchiveLearnedCapturePolicy::GeneticOnly,
-    )
-    .expect("supported profiled Standard2048 production runtime");
+fn v11_player_loop_preserves_cognition_through_recovery_breeding_and_durable_restore() {
+    let (mut runtime, organism_id, managed_id, archive_root) =
+        focused_player_action_runtime("player-loop");
+    let world_entity_id = runtime
+        .world()
+        .organism_registry()
+        .get(organism_id)
+        .unwrap()
+        .world_entity_id();
 
     let birth_manifest_digest = runtime
         .archive_birth_manifest(organism_id)
@@ -830,14 +728,8 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
             assert_eq!(root.stable_id, world_entity_id);
             transform.translation
         };
-        assert_eq!(
-            baseline_root_translation.x,
-            pre_update_position.x.round() + 0.5
-        );
-        assert_eq!(
-            baseline_root_translation.z,
-            pre_update_position.z.round() + 0.5
-        );
+        assert_eq!(baseline_root_translation.x, pre_update_position.x);
+        assert_eq!(baseline_root_translation.z, pre_update_position.z);
 
         // Production intentionally withholds 12 startup render frames. The first
         // permitted update may be the curated residency pass, so allow that pass
@@ -915,14 +807,8 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
             .world()
             .get::<bevy::prelude::Transform>(rendered_entity)
             .expect("mapped rendered learner root must have a transform");
-        assert_eq!(
-            rendered_transform.translation.x,
-            live_position.x.round() + 0.5
-        );
-        assert_eq!(
-            rendered_transform.translation.z,
-            live_position.z.round() + 0.5
-        );
+        assert_eq!(rendered_transform.translation.x, live_position.x);
+        assert_eq!(rendered_transform.translation.z, live_position.z);
 
         drop(app);
     }
@@ -931,7 +817,8 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
 
 #[test]
 fn v11_player_actions_execute_live_school_and_managed_breeding() {
-    let (mut runtime, organism_id, managed_id, archive_root) = focused_player_action_runtime();
+    let (mut runtime, organism_id, managed_id, archive_root) =
+        focused_player_action_runtime("player-actions");
 
     let education = runtime
         .authorize_structured_education(organism_id, managed_id, HabitatActor::Teacher)

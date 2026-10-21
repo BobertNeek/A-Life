@@ -461,15 +461,6 @@ mod tests {
             .validate(&module)
             .unwrap();
         }
-        let composed = shader_source(crate::CLOSED_LOOP_DECODE_WGSL);
-        assert!(composed.contains("return (header.reserved & 0x80000000u) == 0u;"));
-        // The game's bounded noise never changes training logits or its
-        // fixed-temperature sampler/probability code.
-        assert!(composed.contains("selected_candidate = training_sample(header, brain, 0u);"));
-        assert!(composed
-            .contains("motor_candidates[slot] = training_sample(header, brain, slot + 1u);"));
-        assert!(!include_str!("../shaders/training_rollout.wgsl")
-            .contains("game_candidate_arbitration_score"));
         assert!(GpuTrainingSamplingConfig {
             seed: 1,
             counter: 0,

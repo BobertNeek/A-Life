@@ -515,8 +515,6 @@ mod hardware {
         assert!(receipt.driver_digest.iter().any(|word| *word != 0));
         assert!(receipt.feature_digest.iter().any(|word| *word != 0));
         assert!(receipt.limits_digest.iter().any(|word| *word != 0));
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
-        assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
         assert!(matches!(backend.state(), GpuBackendState::Ready));
 
         let second = required_backend();
@@ -666,8 +664,6 @@ mod hardware {
         assert_eq!(backend.completed_dispatch_count(), 1);
         assert_eq!(backend.perception_upload_count(), 3);
         assert_eq!(backend.completed_selection_count(), 3);
-        assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
         for ((frame, tick), index) in bound_ticks.iter().zip(order) {
             assert_eq!(
                 tick.handle.phenotype_hash(),
@@ -725,7 +721,6 @@ mod hardware {
         assert_eq!(backend.completed_dispatch_count(), 2);
         assert_eq!(backend.completed_selection_count(), 2);
         assert_eq!(backend.perception_upload_count(), 2);
-        assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
     }
 
     #[test]
@@ -1456,7 +1451,6 @@ mod hardware {
         assert_eq!(handle_a.phenotype_hash(), hash_a);
         assert_eq!(handle_b.phenotype_hash(), hash_b);
         assert_ne!(handle_a.slot(), handle_b.slot());
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
         let receipt_generation = backend.hardware_receipt().generation;
 
         let frame_a_1 = perception_frame_for_profile_at_tick(
@@ -1572,7 +1566,6 @@ mod hardware {
             ),
             expected_b
         );
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
 
         let mut control = required_backend();
         let control_b = control

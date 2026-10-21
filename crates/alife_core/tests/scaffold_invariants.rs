@@ -1,20 +1,9 @@
 use alife_core::{
     ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, ExperiencePatchHeader,
-    ExperienceSequenceId, LobeKind, LobeLayout, OrganismId, ScaffoldContractError,
-    SemanticPriorRequest, TeacherPerceptionChannel, Tick, WorldEntityId,
+    ExperienceSequenceId, OrganismId, SemanticPriorRequest, TeacherPerceptionChannel, Tick,
+    WorldEntityId,
 };
 use alife_core::{Confidence, DurationTicks};
-
-#[test]
-fn founder_homologues_cannot_be_disabled() {
-    assert_eq!(
-        LobeLayout::with_disabled_lobe(
-            BrainScaleTier::Nano512.neuron_count().unwrap(),
-            LobeKind::SocialCommunication,
-        ),
-        Err(ScaffoldContractError::PhenotypeCompile)
-    );
-}
 
 #[test]
 fn genome_references_brain_class_without_runtime_weights() {

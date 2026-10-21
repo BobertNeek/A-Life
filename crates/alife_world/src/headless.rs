@@ -22,11 +22,11 @@ use alife_core::{
     ReferenceOutcomeObservation, ReferenceOutcomeObserver, ReferenceOutcomeRequest,
     ReferenceSensoryAdapter, ReferenceSensoryRequest, ScaffoldContractError, SensorCapability,
     SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
-    SignedValence, SleepConsolidationReport, SleepTransition, SocialAgentSnapshot,
-    SocialProximityEntry, SpeechActKind, SpeechMotorPayload, TeacherPerceptionChannel, Tick,
-    UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity, WorldEntityId, MAX_HEARD_TOKENS,
-    MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
-    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    SignedValence, SocialAgentSnapshot, SocialProximityEntry, SpeechActKind, SpeechMotorPayload,
+    TeacherPerceptionChannel, Tick, UtteranceId, UtteranceSourceKind, Validate, Vec3f, Velocity,
+    WorldEntityId, MAX_HEARD_TOKENS, MAX_SOCIAL_AGENTS, SENSORY_AUDITORY_CHANNEL_COUNT,
+    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
+    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 
 use crate::candidate_enumerator::{
@@ -1248,8 +1248,6 @@ pub struct HeadlessTelemetry {
 pub struct HeadlessBrainTick {
     pub brain: BrainTickOutput,
     pub action_result: Option<HeadlessActionResult>,
-    pub sleep_transition: Option<SleepTransition>,
-    pub sleep_report: Option<SleepConsolidationReport>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3019,7 +3017,7 @@ impl HeadlessWorld {
             nutrition: 0.0,
             hazard_pain: 0.0,
             token_id: None,
-            social_affinity: affinity.clamp(-1.0, 1.0),
+            social_affinity: affinity,
             teacher_channel: None,
         })
     }
@@ -4949,6 +4947,15 @@ impl HeadlessWorld {
         mut spec: SpawnSpec<'_>,
     ) -> Result<WorldEntityId, ScaffoldContractError> {
         spec.position.validate()?;
+        if let Some(organism_id) = spec.organism_id {
+            organism_id.validate()?;
+        }
+        if [spec.nutrition, spec.hazard_pain, spec.social_affinity]
+            .iter()
+            .any(|value| !value.is_finite())
+        {
+            return Err(ScaffoldContractError::NonFiniteFloat);
+        }
         if let Some(terrain) = self.terrain.as_ref() {
             spec.position.y = terrain
                 .surface()
@@ -6554,7 +6561,7 @@ impl HeadlessScenarioBuilder {
             nutrition: 0.0,
             hazard_pain: 0.0,
             token_id: None,
-            social_affinity: affinity.clamp(-1.0, 1.0),
+            social_affinity: affinity,
             teacher_channel: None,
         });
         self
@@ -6960,8 +6967,6 @@ impl HeadlessBrainHarness {
         HeadlessBrainTick {
             brain,
             action_result,
-            sleep_transition: None,
-            sleep_report: None,
         }
     }
 }
@@ -8987,24 +8992,6 @@ mod task_6_factorized_motor_tests {
     }
 
     #[test]
-    fn factorized_posture_inspect_reaches_world_target() {
-        let (mut world, agent, food, _) = prepared_world();
-        let bundle = posture_bundle(ActionKind::Inspect.canonical_id(), Some(food));
-
-        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
-
-        let result = world.last_action_result.as_ref().unwrap();
-        assert_eq!(result.command.kind, ActionKind::Inspect);
-        assert_eq!(result.command.target_entity, Some(food));
-        assert!(receipt.succeeded);
-        assert_eq!(
-            result.execution.physical.contact,
-            PhysicalContactKind::Touch
-        );
-        assert!(!world.entity(food).unwrap().consumed);
-    }
-
-    #[test]
     fn factorized_posture_inspect_rejects_missing_world_target() {
         let (mut world, agent, _, _) = prepared_world();
         let bundle = posture_bundle(ActionKind::Inspect.canonical_id(), None);
@@ -9016,20 +9003,6 @@ mod task_6_factorized_motor_tests {
             world.last_action_result.as_ref().unwrap().command.kind,
             ActionKind::Inspect
         );
-    }
-
-    #[test]
-    fn factorized_posture_rest_retains_rest_outcome() {
-        let (mut world, agent, food, _) = prepared_world();
-        let bundle = posture_bundle(ActionKind::Rest.canonical_id(), Some(food));
-
-        let receipt = world.apply_registered_motor_bundle(&bundle, agent).unwrap();
-
-        let result = world.last_action_result.as_ref().unwrap();
-        assert_eq!(result.command.kind, ActionKind::Rest);
-        assert_eq!(result.command.target_entity, None);
-        assert!(receipt.succeeded);
-        assert_eq!(result.execution.physical.contact, PhysicalContactKind::None);
     }
 
     #[test]
@@ -9053,12 +9026,23 @@ mod task_6_factorized_motor_tests {
             let direct_receipt = direct_world
                 .apply_registered_command(&direct_command, factorized_agent, Tick::new(1))
                 .unwrap();
-            let factorized_bundle = posture_bundle(expected_action_id, direct_target);
+            let factorized_bundle = posture_bundle(expected_action_id, Some(food));
             let factorized_receipt = factorized_world
                 .apply_registered_motor_bundle(&factorized_bundle, factorized_agent)
                 .unwrap();
             let factorized_result = factorized_world.last_action_result.as_ref().unwrap();
 
+            assert!(factorized_receipt.succeeded, "{kind:?}");
+            assert!(!factorized_world.entity(food).unwrap().consumed, "{kind:?}");
+            assert_eq!(
+                factorized_result.execution.physical.contact,
+                if needs_target {
+                    PhysicalContactKind::Touch
+                } else {
+                    PhysicalContactKind::None
+                },
+                "{kind:?}"
+            );
             assert_eq!(direct_receipt.action_result.command.kind, kind, "{kind:?}");
             assert_eq!(factorized_result.command.kind, kind, "{kind:?}");
             assert_eq!(
@@ -9225,7 +9209,6 @@ mod task_6_factorized_motor_tests {
         assert_eq!(receipt.bundle, bundle);
         assert_eq!(receipt.outcome_tick, Tick::new(1));
         assert!(receipt.succeeded);
-        assert_eq!(receipt.joint.joint_reward(), None);
         assert_eq!(receipt.joint.channel_observations.len(), 1);
         assert_eq!(receipt.channel_receipts.len(), 2);
         assert_eq!(
@@ -9600,6 +9583,37 @@ mod task_3_2a_tests {
         );
         assert_eq!(world.next_entity_id, before_next_entity_id);
         assert!(world.entity_id("overflow-object").is_none());
+    }
+
+    #[test]
+    fn malformed_spawn_payload_preserves_objects_and_identity_allocators() {
+        let mut world = HeadlessScenarioBuilder::new(32_002).build().unwrap();
+        let before = world.save_state();
+        for (nutrition, hazard_pain, social_affinity, organism_id) in [
+            (f32::NAN, 0.0, 0.0, None),
+            (0.0, f32::NAN, 0.0, None),
+            (0.0, 0.0, f32::NAN, None),
+            (0.0, 0.0, 0.0, Some(OrganismId(0))),
+        ] {
+            assert!(world
+                .insert_object(SpawnSpec {
+                    label: "invalid",
+                    kind: if organism_id.is_some() {
+                        WorldObjectKind::Agent
+                    } else {
+                        WorldObjectKind::Food
+                    },
+                    organism_id,
+                    position: Vec3f::ZERO,
+                    nutrition,
+                    hazard_pain,
+                    token_id: None,
+                    social_affinity,
+                    teacher_channel: None,
+                })
+                .is_err());
+            assert_eq!(world.save_state(), before);
+        }
     }
 
     const ORGANISM_ID: OrganismId = OrganismId(7);

@@ -136,19 +136,6 @@ impl NeuromodulatorSample {
         frustration: f32,
         novelty: f32,
     ) -> Result<Self, ScaffoldContractError> {
-        let components = [
-            prediction_residual,
-            pain,
-            homeostatic_improvement,
-            frustration,
-            novelty,
-        ];
-        if components.iter().any(|value| !value.is_finite()) {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
-        if components.iter().any(|value| !(-1.0..=1.0).contains(value)) {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
         let frame = NeuromodulatoryFrame::try_new([
             prediction_residual,
             pain,

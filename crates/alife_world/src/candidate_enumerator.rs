@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use alife_core::{
-    ActionCandidate, ActionKind, ActionTarget, AffordanceBits, CandidateActionFamily,
+    ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, CandidateActionFamily,
     CandidateFeatureVector, CandidateObservationRef, Confidence, DurationTicks, NormalizedScalar,
     ScaffoldContractError, SensorProfile, Validate, Vec3f, CANDIDATE_FEATURE_COUNT,
     MAX_ACTION_CANDIDATES,
@@ -29,6 +29,44 @@ pub const CANDIDATE_FEATURE_RESERVED_START_LANE: usize = 18;
 // Activation and gripping use separate existing readout families. All 24 object
 // features keep their physical meanings, including angular speed in lane 20.
 const INTRINSIC_CANDIDATE_COUNT: usize = 3;
+const OBJECT_ACTIONS: [(ActionId, ActionKind, CandidateActionFamily, f32); 6] = [
+    (
+        ActionKind::Inspect.canonical_id(),
+        ActionKind::Inspect,
+        CandidateActionFamily::Inspect,
+        0.1,
+    ),
+    (
+        HeadlessActionIds::APPROACH,
+        ActionKind::Move,
+        CandidateActionFamily::Approach,
+        0.3,
+    ),
+    (
+        HeadlessActionIds::FLEE,
+        ActionKind::Move,
+        CandidateActionFamily::Avoid,
+        0.3,
+    ),
+    (
+        HeadlessActionIds::EAT,
+        ActionKind::Interact,
+        CandidateActionFamily::Ingest,
+        0.2,
+    ),
+    (
+        HeadlessActionIds::GRAB,
+        ActionKind::Interact,
+        CandidateActionFamily::Contact,
+        0.2,
+    ),
+    (
+        HeadlessActionIds::PLAY,
+        ActionKind::Interact,
+        CandidateActionFamily::Other,
+        0.2,
+    ),
+];
 const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 6;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
 
@@ -60,44 +98,7 @@ pub fn enumerate_privileged_candidates(
         );
         let target = ActionTarget::new(Some(entity.id), Some(target_position));
         let observation = CandidateObservationRef::None;
-        for (action_id, kind, family, effort) in [
-            (
-                ActionKind::Inspect.canonical_id(),
-                ActionKind::Inspect,
-                CandidateActionFamily::Inspect,
-                0.1,
-            ),
-            (
-                HeadlessActionIds::APPROACH,
-                ActionKind::Move,
-                CandidateActionFamily::Approach,
-                0.3,
-            ),
-            (
-                HeadlessActionIds::FLEE,
-                ActionKind::Move,
-                CandidateActionFamily::Avoid,
-                0.3,
-            ),
-            (
-                HeadlessActionIds::EAT,
-                ActionKind::Interact,
-                CandidateActionFamily::Ingest,
-                0.2,
-            ),
-            (
-                HeadlessActionIds::GRAB,
-                ActionKind::Interact,
-                CandidateActionFamily::Contact,
-                0.2,
-            ),
-            (
-                HeadlessActionIds::PLAY,
-                ActionKind::Interact,
-                CandidateActionFamily::Other,
-                0.2,
-            ),
-        ] {
+        for (action_id, kind, family, effort) in OBJECT_ACTIONS {
             candidates.push(ActionCandidate::new(
                 u16::try_from(candidates.len())
                     .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
@@ -251,44 +252,7 @@ pub fn enumerate_grounded_candidates(
             Some(transport.target_position),
         );
         let observation = CandidateObservationRef::ObjectSlot(slot.slot_index);
-        for (action_id, kind, family, effort) in [
-            (
-                ActionKind::Inspect.canonical_id(),
-                ActionKind::Inspect,
-                CandidateActionFamily::Inspect,
-                0.1,
-            ),
-            (
-                HeadlessActionIds::APPROACH,
-                ActionKind::Move,
-                CandidateActionFamily::Approach,
-                0.3,
-            ),
-            (
-                HeadlessActionIds::FLEE,
-                ActionKind::Move,
-                CandidateActionFamily::Avoid,
-                0.3,
-            ),
-            (
-                HeadlessActionIds::EAT,
-                ActionKind::Interact,
-                CandidateActionFamily::Ingest,
-                0.2,
-            ),
-            (
-                HeadlessActionIds::GRAB,
-                ActionKind::Interact,
-                CandidateActionFamily::Contact,
-                0.2,
-            ),
-            (
-                HeadlessActionIds::PLAY,
-                ActionKind::Interact,
-                CandidateActionFamily::Other,
-                0.2,
-            ),
-        ] {
+        for (action_id, kind, family, effort) in OBJECT_ACTIONS {
             candidates.push(ActionCandidate::new(
                 u16::try_from(candidates.len())
                     .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,

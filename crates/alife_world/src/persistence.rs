@@ -47,9 +47,7 @@ pub const P34_RUNTIME_CONFIG_SCHEMA: &str = "alife.p34.runtime_config.v1";
 pub const P34_RUNTIME_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_ASSET_MANIFEST_SCHEMA: &str = "alife.p34.asset_manifest.v1";
 pub const P34_ASSET_MANIFEST_SCHEMA_VERSION: u16 = 1;
-pub const P34_MIGRATION_HOOK_SCHEMA_VERSION: u16 = 1;
 pub const BRAIN_POLICY_CONFIG_SCHEMA_VERSION: u16 = 1;
-pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
 pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 2;
@@ -93,8 +91,6 @@ pub enum PersistenceError {
         expected: String,
         actual: String,
     },
-    #[error("engine-local id leaked through {field}: {value}")]
-    EngineLocalIdLeak { field: &'static str, value: String },
     #[error("asset reference {asset_id} is not present in the manifest")]
     MissingAssetReference { asset_id: String },
     #[error("genetic fixed layer cannot be mutable in default portable saves")]
@@ -106,8 +102,6 @@ pub enum PersistenceError {
     },
     #[error("architecture migration failed: {0}")]
     ArchitectureMigration(#[from] ArchitectureMigrationError),
-    #[error("inline save payload is too large: {bytes} bytes")]
-    HugeInlinePayload { bytes: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -635,13 +629,6 @@ impl GpuRuntimeSaveState {
             return Err(PersistenceError::InvalidConfig {
                 field: "gpu_runtime.compact_action_readback_bytes_per_creature",
                 message: "compact action readback budget must be bounded and nonzero",
-            });
-        }
-        let json = serde_json::to_string(self)?;
-        if contains_engine_local_runtime_token(&json) {
-            return Err(PersistenceError::EngineLocalIdLeak {
-                field: "gpu_runtime",
-                value: "engine-local token".to_string(),
             });
         }
         Ok(())
@@ -1391,13 +1378,6 @@ pub struct PortableSaveFile {
     pub packed_log_schema_version: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MigrationHook {
-    pub schema_version: u16,
-    pub from_schema_version: u16,
-    pub to_schema_version: u16,
-}
-
 impl PortableSaveFile {
     pub fn from_headless_world(
         save_id: impl Into<String>,
@@ -1487,13 +1467,7 @@ impl PortableSaveFile {
     }
 
     pub fn to_json_string_pretty(&self) -> Result<String, PersistenceError> {
-        let json = serde_json::to_string_pretty(self)?;
-        if json.len() as u64 > P34_MAX_INLINE_SAVE_BYTES {
-            return Err(PersistenceError::HugeInlinePayload {
-                bytes: json.len() as u64,
-            });
-        }
-        Ok(json)
+        Ok(serde_json::to_string_pretty(self)?)
     }
 
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
@@ -1839,22 +1813,6 @@ impl PortableSaveFile {
     }
 }
 
-impl MigrationHook {
-    pub fn reject_premature_migration(&self) -> Result<(), PersistenceError> {
-        if self.schema_version != P34_MIGRATION_HOOK_SCHEMA_VERSION {
-            return Err(PersistenceError::SchemaVersion {
-                schema: "alife.p34.migration_hook.v1",
-                expected: P34_MIGRATION_HOOK_SCHEMA_VERSION,
-                actual: self.schema_version,
-            });
-        }
-        Err(PersistenceError::MigrationUnsupported {
-            from_schema_version: self.from_schema_version,
-            to_schema_version: self.to_schema_version,
-        })
-    }
-}
-
 impl CreatureSaveState {
     fn validate(&self, assets: &AssetManifest, world_seed: u64) -> Result<(), PersistenceError> {
         self.organism_id.validate()?;
@@ -2040,8 +1998,6 @@ impl AdapterRemapTable {
                     message: "namespace and slot are required",
                 });
             }
-            reject_engine_local_token("adapter_namespace", &entry.adapter_namespace)?;
-            reject_engine_local_token("adapter_slot", &entry.adapter_slot)?;
             if !stable_ids.insert(entry.stable_world_entity_id.raw()) {
                 return Err(PersistenceError::InvalidConfig {
                     field: "adapter_remap",
@@ -2614,46 +2570,6 @@ fn validate_relative_path(asset_id: &str, path: &Path) -> Result<(), Persistence
         }
     }
     Ok(())
-}
-
-fn reject_engine_local_token(field: &'static str, value: &str) -> Result<(), PersistenceError> {
-    let lower = value.to_ascii_lowercase();
-    let leaks = [
-        "entity(",
-        "bevy::",
-        "avian::",
-        "wgpu::",
-        "windowhandle",
-        "rendererhandle",
-        "oswindow",
-    ];
-    if leaks.iter().any(|needle| lower.contains(needle)) {
-        Err(PersistenceError::EngineLocalIdLeak {
-            field,
-            value: value.to_string(),
-        })
-    } else {
-        Ok(())
-    }
-}
-
-fn contains_engine_local_runtime_token(value: &str) -> bool {
-    let lower = value.to_ascii_lowercase();
-    [
-        "entity(",
-        "bevy::",
-        "avian::",
-        "wgpu::",
-        "windowhandle",
-        "rendererhandle",
-        "oswindow",
-        "handle<",
-        "mesh3d",
-        "standardmaterial",
-        "egui",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
 }
 
 #[cfg(test)]

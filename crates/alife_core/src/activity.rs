@@ -466,6 +466,87 @@ impl NeuralThrottleDecision {
         {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
+        Self::derive_unchecked(policy, phenotype, execution, identity, pressure)
+    }
+
+    pub const fn route_is_mandatory(route: &CompiledProjection) -> bool {
+        matches!(
+            route.source_lobe(),
+            LobeKind::PerceptualIntegration | LobeKind::SocialCommunication
+        ) || matches!(route.source_lobe(), LobeKind::FlexibleReserve)
+            || matches!(
+                route.target_lobe(),
+                LobeKind::FlexibleReserve | LobeKind::ActionPlanning
+            )
+            || matches!(
+                route.projection_type(),
+                ProjectionType::MotorProposal
+                    | ProjectionType::Homeostatic
+                    | ProjectionType::LateralInhibition
+            )
+    }
+
+    /// Returns the canonical route-schedule digest in the exact eight-word
+    /// representation carried by GPU dispatch headers.
+    pub const fn route_schedule_digest_words(&self) -> [u32; 8] {
+        let digest = self.route_schedule_digest;
+        [
+            digest[0] as u32,
+            (digest[0] >> 32) as u32,
+            digest[1] as u32,
+            (digest[1] >> 32) as u32,
+            digest[2] as u32,
+            (digest[2] >> 32) as u32,
+            digest[3] as u32,
+            (digest[3] >> 32) as u32,
+        ]
+    }
+
+    pub fn validate_for(
+        &self,
+        phenotype: &BrainPhenotype,
+        execution: &BrainExecutionBudget,
+    ) -> Result<(), ScaffoldContractError> {
+        let policy = BrainActivityPolicyV1::production_v1();
+        self.pressure.validate_for(&policy)?;
+        let identity = BrainDispatchIdentity {
+            organism_id_raw: self.organism_id_raw,
+            tick: self.tick,
+            class_id_raw: self.class_id_raw,
+            handle_slot: self.handle_slot,
+            handle_generation: self.handle_generation,
+            sequence_cursor: self.sequence_cursor,
+            dispatch_generation: self.dispatch_generation,
+            frame_digest: self.frame_digest,
+        };
+        identity.validate_contract()?;
+        let expected =
+            Self::derive_unchecked(&policy, phenotype, execution, identity, self.pressure)?;
+        if self.schema_version != policy.schema_version
+            || self.policy_version != policy.policy_version
+            || self.class_id_raw != phenotype.brain_class_id().raw()
+            || self.pressure.dispatch_identity() != identity
+            || self.pressure_digest != self.pressure.sample_digest
+            || self.policy_digest != policy.policy_digest
+            || self.level != expected.level
+            || self.microsteps != expected.microsteps
+            || self.enabled_route_ids != expected.enabled_route_ids
+            || self.route_schedule_digest != expected.route_schedule_digest
+            || self.decision_digest == [0; 4]
+            || self.decision_digest != self.recompute_digest()
+        {
+            return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
+        }
+        Ok(())
+    }
+
+    fn derive_unchecked(
+        policy: &BrainActivityPolicyV1,
+        phenotype: &BrainPhenotype,
+        execution: &BrainExecutionBudget,
+        identity: BrainDispatchIdentity,
+        pressure: GpuPressureSample,
+    ) -> Result<Self, ScaffoldContractError> {
         let level = pressure.throttle_level();
         let (min_microsteps, max_microsteps) = execution.microstep_range();
         let configured = phenotype.microstep_count();
@@ -524,141 +605,10 @@ impl NeuralThrottleDecision {
             decision_digest: [0; 4],
         };
         decision.decision_digest = decision.recompute_digest();
-        decision.validate_for(phenotype, execution)?;
-        Ok(decision)
-    }
-
-    pub const fn route_is_mandatory(route: &CompiledProjection) -> bool {
-        matches!(
-            route.source_lobe(),
-            LobeKind::PerceptualIntegration | LobeKind::SocialCommunication
-        ) || matches!(route.source_lobe(), LobeKind::FlexibleReserve)
-            || matches!(
-                route.target_lobe(),
-                LobeKind::FlexibleReserve | LobeKind::ActionPlanning
-            )
-            || matches!(
-                route.projection_type(),
-                ProjectionType::MotorProposal
-                    | ProjectionType::Homeostatic
-                    | ProjectionType::LateralInhibition
-            )
-    }
-
-    /// Returns the canonical route-schedule digest in the exact eight-word
-    /// representation carried by GPU dispatch headers.
-    pub const fn route_schedule_digest_words(&self) -> [u32; 8] {
-        let digest = self.route_schedule_digest;
-        [
-            digest[0] as u32,
-            (digest[0] >> 32) as u32,
-            digest[1] as u32,
-            (digest[1] >> 32) as u32,
-            digest[2] as u32,
-            (digest[2] >> 32) as u32,
-            digest[3] as u32,
-            (digest[3] >> 32) as u32,
-        ]
-    }
-
-    pub fn validate_for(
-        &self,
-        phenotype: &BrainPhenotype,
-        execution: &BrainExecutionBudget,
-    ) -> Result<(), ScaffoldContractError> {
-        let policy = BrainActivityPolicyV1::production_v1();
-        self.pressure.validate_for(&policy)?;
-        let identity = BrainDispatchIdentity {
-            organism_id_raw: self.organism_id_raw,
-            tick: self.tick,
-            class_id_raw: self.class_id_raw,
-            handle_slot: self.handle_slot,
-            handle_generation: self.handle_generation,
-            sequence_cursor: self.sequence_cursor,
-            dispatch_generation: self.dispatch_generation,
-            frame_digest: self.frame_digest,
-        };
-        identity.validate_contract()?;
-        let expected =
-            Self::derive_unchecked(&policy, phenotype, execution, identity, self.pressure)?;
-        if self.schema_version != policy.schema_version
-            || self.policy_version != policy.policy_version
-            || self.pressure.dispatch_identity() != identity
-            || self.pressure_digest != self.pressure.sample_digest
-            || self.policy_digest != policy.policy_digest
-            || self.level != expected.level
-            || self.microsteps != expected.microsteps
-            || self.enabled_route_ids != expected.enabled_route_ids
-            || self.route_schedule_digest != expected.route_schedule_digest
-            || self.decision_digest == [0; 4]
-            || self.decision_digest != self.recompute_digest()
-        {
+        if decision.decision_digest == [0; 4] {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
-        Ok(())
-    }
-
-    fn derive_unchecked(
-        policy: &BrainActivityPolicyV1,
-        phenotype: &BrainPhenotype,
-        execution: &BrainExecutionBudget,
-        identity: BrainDispatchIdentity,
-        pressure: GpuPressureSample,
-    ) -> Result<Self, ScaffoldContractError> {
-        let level = pressure.throttle_level();
-        let (min_microsteps, max_microsteps) = execution.microstep_range();
-        let configured = phenotype.microstep_count();
-        if !(min_microsteps..=max_microsteps).contains(&configured) {
-            return Err(ScaffoldContractError::BrainActivityPolicyMismatch);
-        }
-        let microsteps = match level {
-            NeuralThrottleLevel::Full => configured,
-            NeuralThrottleLevel::Reduced => configured.saturating_sub(1).max(min_microsteps),
-            NeuralThrottleLevel::EssentialOnly => min_microsteps,
-        };
-        let mut enabled_route_ids = phenotype
-            .projections()
-            .iter()
-            .filter_map(|route| {
-                let mandatory = Self::route_is_mandatory(route);
-                let enabled = match level {
-                    NeuralThrottleLevel::Full => true,
-                    NeuralThrottleLevel::Reduced => {
-                        route.priority() != BiologicalPriority::NonEssential
-                    }
-                    NeuralThrottleLevel::EssentialOnly => {
-                        route.priority() == BiologicalPriority::Essential || mandatory
-                    }
-                };
-                enabled.then_some(route.route_index())
-            })
-            .collect::<Vec<_>>();
-        enabled_route_ids.sort_unstable();
-        enabled_route_ids.dedup();
-        let route_schedule_digest =
-            route_schedule_digest(phenotype, microsteps, &enabled_route_ids);
-        let mut value = Self {
-            schema_version: policy.schema_version,
-            policy_version: policy.policy_version,
-            organism_id_raw: identity.organism_id_raw,
-            tick: identity.tick,
-            class_id_raw: identity.class_id_raw,
-            handle_slot: identity.handle_slot,
-            handle_generation: identity.handle_generation,
-            sequence_cursor: identity.sequence_cursor,
-            dispatch_generation: identity.dispatch_generation,
-            frame_digest: identity.frame_digest,
-            level,
-            pressure,
-            microsteps,
-            enabled_route_ids,
-            pressure_digest: pressure.sample_digest,
-            route_schedule_digest,
-            policy_digest: policy.policy_digest,
-            decision_digest: [0; 4],
-        };
-        value.decision_digest = value.recompute_digest();
-        Ok(value)
+        Ok(decision)
     }
 
     pub fn validate_runtime_binding(

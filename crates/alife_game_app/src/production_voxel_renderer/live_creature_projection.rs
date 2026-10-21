@@ -14,7 +14,6 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
             if !frame.is_changed() {
                 return;
             }
-            let mut animation_by_stable_id = BTreeMap::new();
             world.resource_scope(
                 |world, mut scene: bevy::prelude::Mut<Fvr03ProductionVoxelSceneResource>| {
                     scene.creature_refs_by_tile.clear();
@@ -103,7 +102,6 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                                 }
                             }
                         }
-                        animation_by_stable_id.insert(root.stable_id.raw(), visual.animation);
                         let stable_ref = StableVoxelObjectRef {
                             kind: StableVoxelRefKind::Creature,
                             stable_id: Some(root.stable_id),
@@ -124,15 +122,6 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                     scene.creature_root_count = rendered_count;
                 },
             );
-            let mut parts = world.query::<&mut ProductionCreaturePartMarker>();
-            for mut part in parts.iter_mut(world) {
-                if let Some(animation) = animation_by_stable_id.get(&part.stable_id.raw()) {
-                    if part.animation != *animation {
-                        part.animation = *animation;
-                    }
-                }
-            }
-
             #[cfg(feature = "gpu-runtime")]
             {
                 let pending_newborns = {

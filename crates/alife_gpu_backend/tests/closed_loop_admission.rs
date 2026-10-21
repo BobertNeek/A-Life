@@ -7,7 +7,7 @@ use alife_core::OrganismId;
 use alife_core::{BrainCapacityClass, SensorProfile};
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::GpuRuntimeBudget;
-use alife_gpu_backend::{GpuClassBucketPlan, GpuRuntimeProfile, GpuSlotAllocationReceipt};
+use alife_gpu_backend::{GpuClassBucketPlan, GpuRuntimeProfile};
 
 #[cfg(feature = "gpu-tests")]
 use support::scaling::finalized_memory_frame;
@@ -301,7 +301,6 @@ fn heterogeneous_same_class_memory_batch_keeps_slot_state_disjoint() {
             .unwrap(),
     ];
     assert_ne!(handles[0].slot(), handles[1].slot());
-    assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
 
     let (frame_a, recall_a) = finalized_memory_frame(11, 401);
     let (frame_b, recall_b) = finalized_memory_frame(12, 401);
@@ -417,7 +416,6 @@ fn mixed_class_memory_batch_preserves_input_identity_on_one_backend() {
             .insert_brain(organism, phenotypes[index].clone())
             .unwrap()
     });
-    assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
     assert_eq!(backend.allocated_class_arena_count_for_test(), 3);
     assert_eq!(backend.admission_receipt().live_brains, 3);
 
@@ -636,5 +634,3 @@ fn production_profile_accepts_only_the_known_previous_v1_checkpoint_envelope() {
         .accepts_portable_checkpoint_profile(previous_v1.profile_id + 1, previous_digest)
         .unwrap());
 }
-
-fn _assert_receipt_is_public(_: GpuSlotAllocationReceipt) {}

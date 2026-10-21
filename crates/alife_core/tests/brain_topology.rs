@@ -1,6 +1,6 @@
 use alife_core::{
-    ActiveTilePolicy, BiologicalPriority, BrainClassSpec, BrainScaleTier, LobeKind, ProjectionType,
-    ScaffoldContractError, UpdateCadence,
+    ActiveTilePolicy, BiologicalPriority, BrainClassId, BrainClassSpec, BrainScaleTier, LobeKind,
+    ProjectionType, ScaffoldContractError, UpdateCadence,
 };
 
 #[test]
@@ -161,5 +161,24 @@ fn routing_validation_rejects_missing_founder_lobe_references() {
     assert_eq!(
         spec.routing_matrix.validate_for_layout(&invalid_layout),
         Err(ScaffoldContractError::RoutingReferencesDisabledLobe)
+    );
+}
+
+#[test]
+fn custom_layout_arithmetic_handles_full_u32_neuron_range() {
+    let neurons = u32::MAX - 15;
+    let spec = BrainClassSpec::research_custom(BrainClassId(100), neurons).unwrap();
+    spec.validate().unwrap();
+    assert_eq!(spec.lobe_layout.total_neurons(), neurons);
+    assert_eq!(spec.lobe_layout.regions.last().unwrap().end(), neurons);
+}
+
+#[test]
+fn malformed_layout_lengths_return_an_error_without_overflowing() {
+    let mut layout = BrainClassSpec::for_tier(BrainScaleTier::Nano512).lobe_layout;
+    layout.regions[0].len = u32::MAX - 15;
+    assert_eq!(
+        layout.validate_for_neuron_count(512),
+        Err(ScaffoldContractError::LobeTotalMismatch)
     );
 }

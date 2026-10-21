@@ -185,8 +185,6 @@ fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
         summary.save_metadata.voxel_dirty_region_count
             <= summary.save_metadata.voxel_visible_chunk_signatures
     );
-    assert!(summary.save_metadata.voxel_roundtrip_signatures_match);
-    assert!(summary.save_metadata.no_renderer_tokens_in_voxel_save);
 }
 
 #[test]

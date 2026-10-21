@@ -146,7 +146,7 @@ fn batch(
         .iter()
         .zip(&placed)
         .zip(&decisions)
-        .map(|((frame, slot), activity)| GpuBatchEntryView {
+        .map(|((frame, slot), activity)| GpuActiveBatchEntry {
             frame,
             slot,
             phenotype: &phenotype,

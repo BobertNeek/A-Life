@@ -14,19 +14,15 @@ use super::{GpuBrainAssetRef, PersistenceError};
 pub const GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION: u16 = 1;
 pub const PORTABLE_THROTTLE_CHECKPOINT_SCHEMA_VERSION: u16 = 1;
 pub const THROTTLE_REPLAY_SAVE_SCHEMA_VERSION: u16 = 1;
-pub const INSPECTION_ONLY_BRAIN_SCHEMA_VERSION: u16 = 1;
 
 pub const NEURAL_AVAILABILITY_REASON_UNSUPPORTED_CLASS: u16 = 1;
-pub const NEURAL_AVAILABILITY_REASON_REQUIRED_FEATURE_MISSING: u16 = 2;
 pub const NEURAL_AVAILABILITY_REASON_REQUIRED_LIMIT_MISSING: u16 = 3;
 pub const NEURAL_AVAILABILITY_REASON_ADMISSION_EXCEEDED: u16 = 4;
-pub const NEURAL_AVAILABILITY_REASON_DEVICE_UNAVAILABLE: u16 = 5;
 
 const PORTABLE_PROVENANCE_DOMAIN: &[u8] = b"alife.gpu.backend.portable-compatibility.v1";
 const SAME_ADAPTER_DOMAIN: &[u8] = b"alife.gpu.backend.same-adapter.v1";
 const THROTTLE_CHECKPOINT_DOMAIN: &[u8] = b"alife.gpu.throttle-checkpoint.v1";
 const THROTTLE_SEQUENCE_DOMAIN: &[u8] = b"alife.gpu.throttle-sequence.v1";
-const INSPECTION_ONLY_DOMAIN: &[u8] = b"alife.gpu.inspection-only.v1";
 
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -505,94 +501,6 @@ impl ProductionNeuralAvailability {
             _ => Err(ScaffoldContractError::UnsupportedProductionBrainClass),
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct InspectionOnlyLegacyBrainState {
-    pub source_schema: u16,
-    pub legacy_class_id_raw: u16,
-    pub raw_brain_asset: GpuBrainAssetRef,
-    pub inspection_reason_code: u16,
-    pub canonical_digest: [u64; 4],
-}
-
-impl InspectionOnlyLegacyBrainState {
-    pub fn try_new(
-        source_schema: u16,
-        legacy_class_id_raw: u16,
-        raw_brain_asset: GpuBrainAssetRef,
-        inspection_reason_code: u16,
-    ) -> Result<Self, PersistenceError> {
-        let mut value = Self {
-            source_schema,
-            legacy_class_id_raw,
-            raw_brain_asset,
-            inspection_reason_code,
-            canonical_digest: [0; 4],
-        };
-        value.canonical_digest = value.recompute_digest()?;
-        value.validate()?;
-        Ok(value)
-    }
-
-    pub fn validate(&self) -> Result<(), PersistenceError> {
-        self.raw_brain_asset.validate()?;
-        if self.source_schema != INSPECTION_ONLY_BRAIN_SCHEMA_VERSION
-            || !(4..=8).contains(&self.legacy_class_id_raw)
-            || self.inspection_reason_code != NEURAL_AVAILABILITY_REASON_UNSUPPORTED_CLASS
-            || self.canonical_digest == [0; 4]
-            || self.canonical_digest != self.recompute_digest()?
-        {
-            return Err(PersistenceError::Contract(
-                ScaffoldContractError::UnsupportedProductionBrainClass,
-            ));
-        }
-        Ok(())
-    }
-
-    fn recompute_digest(&self) -> Result<[u64; 4], PersistenceError> {
-        self.raw_brain_asset.validate()?;
-        let mut digest = CanonicalDigestBuilder::new(INSPECTION_ONLY_DOMAIN);
-        digest.write_u16(self.source_schema);
-        digest.write_u16(self.legacy_class_id_raw);
-        digest.write_utf8(&self.raw_brain_asset.asset_id);
-        digest.write_utf8(&self.raw_brain_asset.digest.0);
-        digest.write_u16(self.inspection_reason_code);
-        Ok(digest.finish256())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InspectionOnlyLegacyBrainLoad {
-    pub state: InspectionOnlyLegacyBrainState,
-    pub availability: ProductionNeuralAvailability,
-    pub phenotype_compile_count: u64,
-    pub gpu_admission_count: u64,
-}
-
-pub fn load_legacy_large_tier_for_inspection(
-    state: InspectionOnlyLegacyBrainState,
-) -> Result<InspectionOnlyLegacyBrainLoad, PersistenceError> {
-    state.validate()?;
-    let availability = ProductionNeuralAvailability::for_saved_class(
-        BrainClassId(state.legacy_class_id_raw),
-        [1; 4],
-        [1; 4],
-    )?;
-    if !matches!(
-        availability,
-        ProductionNeuralAvailability::InspectionOnly { .. }
-    ) {
-        return Err(PersistenceError::Contract(
-            ScaffoldContractError::UnsupportedProductionBrainClass,
-        ));
-    }
-    Ok(InspectionOnlyLegacyBrainLoad {
-        state,
-        availability,
-        phenotype_compile_count: 0,
-        gpu_admission_count: 0,
-    })
 }
 
 fn throttle_level_for_pressure(

@@ -337,6 +337,7 @@ fn exclusions(value: &Value, seed: u64) -> Result<()> {
 
 fn import(
     path: &Path,
+    expected_sha256: &str,
     seed: u64,
     seen: &mut BTreeSet<PathBuf>,
     records: &mut Vec<Value>,
@@ -351,6 +352,10 @@ fn import(
         return Err("duplicate/cyclic seed evidence import".into());
     }
     let (bytes, document) = read(&path)?;
+    let sha256 = hash(&bytes);
+    if sha256 != expected_sha256 {
+        return Err("seed evidence import changed".into());
+    }
     *bytes_total = bytes_total
         .checked_add(bytes.len() as u64)
         .ok_or("seed evidence byte count overflow")?;
@@ -369,17 +374,20 @@ fn import(
             } else {
                 path.parent().unwrap().join(child)
             };
-            if hash(&read(&child)?.0)
-                != item["sha256"]
+            import(
+                &child,
+                item["sha256"]
                     .as_str()
-                    .ok_or("missing seed import digest")?
-            {
-                return Err("seed evidence import changed".into());
-            }
-            import(&child, seed, seen, records, depth + 1, bytes_total)?;
+                    .ok_or("missing seed import digest")?,
+                seed,
+                seen,
+                records,
+                depth + 1,
+                bytes_total,
+            )?;
         }
     }
-    records.push(json!({"path":path,"sha256":hash(&bytes),"document":document}));
+    records.push(json!({"path":path,"sha256":sha256,"document":document}));
     Ok(())
 }
 
@@ -398,9 +406,6 @@ pub(super) fn admit(
     );
     if document["kind"] != "mixed-care-seed-history"
         || document["schema"] != 1
-        || document["evidence"]
-            .as_str()
-            .is_none_or(|s| s.trim().is_empty())
         || (!known_exclusions && document["complete"] != true)
         || (known_exclusions && document["complete"] != false)
         || recorded != selected
@@ -453,7 +458,15 @@ pub(super) fn admit(
     }
     let mut seen = BTreeSet::new();
     let mut records = Vec::new();
-    import(history, seed, &mut seen, &mut records, 0, &mut 0)?;
+    import(
+        history,
+        &hash(&bytes),
+        seed,
+        &mut seen,
+        &mut records,
+        0,
+        &mut 0,
+    )?;
     // Existing lane exclusions cannot be silently omitted. Each file must be an
     // exact-byte history import, including prior group reservations.
     {

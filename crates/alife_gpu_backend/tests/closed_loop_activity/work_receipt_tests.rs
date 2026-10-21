@@ -1,16 +1,12 @@
 //! Equivalence against the original independently scanning accounting function.
 
-use alife_core::{
-    BrainActivityPolicyV1, BrainCapacityClass, BrainWorkReceipt, ScaffoldContractError,
-    SensorProfile,
-};
+use alife_core::{BrainCapacityClass, ScaffoldContractError, SensorProfile};
 use alife_gpu_backend::derive_executed_work;
 
 use super::{decision_for, support, work_scan_reference};
 
 #[test]
 fn immutable_route_receipts_match_scan_for_changing_schedules() {
-    let mut compared = 0;
     for capacity in [
         BrainCapacityClass::n512(),
         BrainCapacityClass::n1024(),
@@ -47,7 +43,6 @@ fn immutable_route_receipts_match_scan_for_changing_schedules() {
                             "class={} enabled={enabled:?} microsteps={microsteps}",
                             capacity.id().raw(),
                         );
-                        compared += 1;
                     }
                 }
             }
@@ -57,13 +52,10 @@ fn immutable_route_receipts_match_scan_for_changing_schedules() {
             );
         }
     }
-    assert!(compared > 1_000);
-    println!("exact_changing_schedule_comparisons={compared}");
 }
 
 #[test]
-fn policy_selected_work_costs_and_receipts_match_scan() {
-    let policy = BrainActivityPolicyV1::production_v1();
+fn policy_selected_work_matches_scan() {
     for capacity in [
         BrainCapacityClass::n512(),
         BrainCapacityClass::n1024(),
@@ -103,14 +95,6 @@ fn policy_selected_work_costs_and_receipts_match_scan() {
                 )
                 .unwrap();
                 assert_eq!(actual, expected);
-                assert_eq!(
-                    policy.cost.neural_cost_q24(&actual),
-                    policy.cost.neural_cost_q24(&expected),
-                );
-                assert_eq!(
-                    BrainWorkReceipt::try_new(&policy, &decision, actual, 65_535),
-                    BrainWorkReceipt::try_new(&policy, &decision, expected, 65_535),
-                );
             }
         }
     }

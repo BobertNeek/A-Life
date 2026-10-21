@@ -1337,9 +1337,6 @@ impl FoundationAbiBinding {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
         }
-        if self.schema_version != 1 {
-            return Err(ScaffoldContractError::PhenotypeCompile);
-        }
         Ok(())
     }
 }

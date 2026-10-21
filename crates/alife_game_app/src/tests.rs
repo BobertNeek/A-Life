@@ -112,23 +112,6 @@ fn path_ends_with(path: &Path, suffix: &str) -> bool {
 }
 
 #[test]
-fn headless_app_shell_loads_p34_config_and_manifest() {
-    let launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
-    let summary = run_headless_app_shell_smoke(&launch).unwrap();
-    assert_eq!(summary.schema, G01_APP_SHELL_SCHEMA);
-    assert_eq!(summary.schema_version, G01_APP_SHELL_SCHEMA_VERSION);
-    assert_eq!(summary.seed, 4242);
-    assert_eq!(summary.brain_class, "Nano512");
-    assert_eq!(summary.requested_backend, PolicyBackend::HeuristicBaseline);
-    assert_eq!(summary.asset_count, 2);
-    assert!(!summary.graphics_required_for_default_path);
-    assert_eq!(
-        summary.state_labels(),
-        vec!["Boot", "LoadConfig", "DevMenu", "Running", "Shutdown"]
-    );
-}
-
-#[test]
 fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
     let manifest_path = default_environment_manifest_path();
     let manifest = EnvironmentManifest::from_json_file(&manifest_path).unwrap();
@@ -142,23 +125,19 @@ fn ca10_environment_manifest_validates_and_selects_default_production_voxel() {
     assert_eq!(manifest.scenario_ids(), vec!["production-voxel"]);
 
     let fixtures = CurrentAppFixtures::new();
-    let summary = run_environment_launcher_smoke(fixtures.environment_manifest(), None).unwrap();
-    assert_eq!(summary.schema, CA10_ENVIRONMENT_MANIFEST_SCHEMA);
-    assert_eq!(summary.selected_scenario_id, "production-voxel");
-    assert_eq!(summary.scenario_count, 1);
+    let selection = select_environment_scenario(fixtures.environment_manifest(), None).unwrap();
+    assert_eq!(selection.entry.id, "production-voxel");
     assert!(path_ends_with(
-        &summary.fixture_root,
+        &selection.launch.fixture_root,
         "crates/alife_world/tests/fixtures/production_voxel"
     ));
-    assert_eq!(summary.seed, 4242);
-    assert_eq!(summary.object_count, 12);
-    assert_eq!(summary.creature_count, 3);
-    assert_eq!(summary.food_count, 3);
-    assert_eq!(summary.hazard_count, 3);
-    assert_eq!(summary.obstacle_count, 3);
-    assert!(summary
-        .player_visible_error_sample
-        .contains("Unknown scenario"));
+    let visible = load_visible_world_from_p34_save(&selection.launch).unwrap();
+    assert_eq!(visible.seed, 4242);
+    assert_eq!(visible.object_count, 12);
+    assert_eq!(visible.kind_count(WorldObjectKind::Agent), 3);
+    assert_eq!(visible.kind_count(WorldObjectKind::Food), 3);
+    assert_eq!(visible.kind_count(WorldObjectKind::Hazard), 3);
+    assert_eq!(visible.kind_count(WorldObjectKind::Obstacle), 3);
 }
 
 #[test]
@@ -186,16 +165,6 @@ fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
     assert!(summary.production_voxel_generated_assets > 0);
     assert!(summary.shader_discovery_complete);
     summary.validate().unwrap();
-}
-
-#[test]
-fn ca12_active_manifests_exclude_retired_visuals_and_gpu_diagnostics() {
-    let environment = std::fs::read_to_string(default_environment_manifest_path()).unwrap();
-    let bundle = std::fs::read_to_string(default_app_bundle_manifest_path()).unwrap();
-
-    assert!(!environment.contains("gpu-alpha"));
-    assert!(!bundle.contains("placeholder_art_manifest"));
-    assert!(!bundle.contains("p25_static_forward"));
 }
 
 #[test]
@@ -241,25 +210,6 @@ fn ca12_app_bundle_manifest_rejects_missing_shader_assets() {
 }
 
 #[test]
-fn paused_state_path_is_explicit_and_deterministic() {
-    let mut launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
-    launch.start_paused = true;
-    let summary = run_headless_app_shell_smoke(&launch).unwrap();
-    assert_eq!(
-        summary.state_labels(),
-        vec![
-            "Boot",
-            "LoadConfig",
-            "DevMenu",
-            "Running",
-            "Paused",
-            "Running",
-            "Shutdown"
-        ]
-    );
-}
-
-#[test]
 fn invalid_config_rejects_with_p34_diagnostics() {
     let mut launch = AppShellLaunchConfig::from_p34_fixture_root(p34_fixture_root());
     launch.config_path = launch.fixture_root.join("missing_config.json");
@@ -268,24 +218,10 @@ fn invalid_config_rejects_with_p34_diagnostics() {
 }
 
 #[test]
-fn invalid_state_transition_is_rejected() {
-    let mut trace = AppShellStateTrace::default();
-    let err = trace.transition(GameAppState::Running).unwrap_err();
-    assert!(matches!(
-        err,
-        GameAppShellError::InvalidTransition {
-            from: GameAppState::Boot,
-            to: GameAppState::Running
-        }
-    ));
-}
-
-#[test]
-fn visible_world_signature_loads_from_p34_save_without_bevy() {
+fn visible_world_loads_actual_saved_objects_without_bevy() {
     let fixtures = CurrentAppFixtures::new();
     let launch = fixtures.p34_launch();
     let presentation = load_visible_world_from_p34_save(&launch).unwrap();
-    compare_visible_world_to_headless(&presentation).unwrap();
     assert_eq!(presentation.schema, G02_VISIBLE_WORLD_SCHEMA);
     assert_eq!(
         presentation.schema_version,
@@ -296,48 +232,9 @@ fn visible_world_signature_loads_from_p34_save_without_bevy() {
     assert_eq!(presentation.kind_count(WorldObjectKind::Agent), 1);
     assert_eq!(presentation.kind_count(WorldObjectKind::Food), 1);
     assert!(presentation
-        .visible_signature
+        .objects
         .iter()
-        .any(|line| line.contains("Food:berry")));
-}
-
-#[test]
-fn placeholder_mapping_covers_g02_required_visual_kinds() {
-    assert_eq!(
-        placeholder_for_kind(WorldObjectKind::Agent),
-        (
-            VisiblePlaceholderShape::CreatureCapsule,
-            VisibleMaterialKind::Creature
-        )
-    );
-    assert_eq!(
-        placeholder_for_kind(WorldObjectKind::Food),
-        (
-            VisiblePlaceholderShape::FoodSphere,
-            VisibleMaterialKind::Food
-        )
-    );
-    assert_eq!(
-        placeholder_for_kind(WorldObjectKind::Hazard),
-        (
-            VisiblePlaceholderShape::HazardCone,
-            VisibleMaterialKind::Hazard
-        )
-    );
-    assert_eq!(
-        placeholder_for_kind(WorldObjectKind::Obstacle),
-        (
-            VisiblePlaceholderShape::ObstacleCube,
-            VisibleMaterialKind::Obstacle
-        )
-    );
-    assert_eq!(
-        placeholder_for_kind(WorldObjectKind::Token),
-        (
-            VisiblePlaceholderShape::TokenBillboard,
-            VisibleMaterialKind::Token
-        )
-    );
+        .any(|object| object.kind == WorldObjectKind::Food && object.label == "berry"));
 }
 
 #[test]

@@ -187,7 +187,11 @@ pub(super) fn capture_player_view(
         .directory
         .clone()
         .unwrap_or_else(|| crate::ca12_workspace_root().join("target/artifacts/player-captures"));
-    if fs::create_dir_all(&directory).is_err() {
+    if let Err(error) = fs::create_dir_all(&directory) {
+        eprintln!(
+            "Player capture could not create {}: {error}",
+            directory.display()
+        );
         return;
     }
     let stamp = std::time::SystemTime::now()
@@ -236,7 +240,6 @@ pub(super) fn capture_player_view(
                     })
                 }),
             "outcome_feedback":visual.map(hearthling::HearthlingVisual::capture_feedback),
-            "overlays_suppressed_for_sleep":v.animation == CreatureAnimationState::Sleeping,
             "body_yaw":v.body_yaw, "head_yaw":v.head_yaw,
             "articulated_pose":bones.iter().filter(|(bone,_,_,_)| bone.capture_root() == root)
                 .map(|(bone,name,local,global)| serde_json::json!({
@@ -252,7 +255,9 @@ pub(super) fn capture_player_view(
             "world_position":frame.as_ref().and_then(|f| f.current.object(v.stable_id)).map(|o| [o.position.x,o.position.y,o.position.z]),
         })).collect::<Vec<_>>()
     });
-    let _ = fs::write(directory.join(format!("{name}.json")), receipt.to_string());
+    if let Err(error) = fs::write(directory.join(format!("{name}.json")), receipt.to_string()) {
+        eprintln!("Player capture metadata could not be written: {error}");
+    }
     commands
         .spawn(Screenshot::primary_window())
         .observe(save_to_disk(directory.join(format!("{name}.png"))));

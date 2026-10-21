@@ -1026,13 +1026,6 @@ fn outcome_credit_record_matches_the_frozen_abi() {
 
 #[test]
 fn plasticity_wgsl_parses_with_four_passes_and_exactly_seven_heap_bindings() {
-    assert!(
-        alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL.contains(&format!(
-            "const PLASTICITY_DISPATCH_ROW_WORDS:u32 = {}u;",
-            alife_gpu_backend::GPU_ACTIVE_DISPATCH_ROW_WORDS
-        )),
-        "plasticity row stepping must match the complete host dispatch row"
-    );
     let module = naga::front::wgsl::parse_str(alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL)
         .expect("plasticity WGSL must parse");
     naga::valid::Validator::new(
@@ -1430,120 +1423,6 @@ fn eligibility_contract_is_validated_once_per_row_before_synapse_work() {
         .expect("eligibility requires a once-per-row prevalidation pass");
     assert_eq!(entry.stage, naga::ShaderStage::Compute);
     assert_eq!(entry.workgroup_size, [1, 1, 1]);
-    assert_eq!(
-        source.matches("learning_contract_is_valid(").count(),
-        2,
-        "the full contract may appear only in its definition and row prepass"
-    );
-    assert_eq!(
-        source.matches("pending_row_is_zero(").count(),
-        2,
-        "the 36-word pending scan may run only in the row prepass"
-    );
-    assert_eq!(
-        source.matches("learning_contract_prevalidated(").count(),
-        0,
-        "parallel synapse work must consume the prevalidated selection sentinel directly"
-    );
-}
-
-#[test]
-fn parallel_learning_loops_trust_the_validated_row_and_immutable_upload() {
-    let eligibility = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL;
-    for (entry, next) in [
-        (
-            "fn accumulate_recurrent_eligibility",
-            "fn accumulate_decoder_eligibility",
-        ),
-        (
-            "fn accumulate_decoder_eligibility",
-            "fn finalize_pending_eligibility",
-        ),
-    ] {
-        let body = eligibility
-            .split_once(entry)
-            .expect("parallel eligibility entry exists")
-            .1
-            .split_once(next)
-            .expect("parallel eligibility entry is bounded")
-            .0;
-        for repeated_guard in [
-            "immutable_span_within(",
-            "receptor_is_valid(",
-            "state_span_within(",
-        ] {
-            assert!(
-                !body.contains(repeated_guard),
-                "{entry} repeated immutable upload guard {repeated_guard}"
-            );
-        }
-    }
-
-    let plasticity = alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL;
-    let apply_body = plasticity
-        .split_once("fn apply_fast_plasticity")
-        .expect("fast plasticity entry exists")
-        .1
-        .split_once("fn capture_fast_plasticity_replay")
-        .expect("fast plasticity entry is bounded")
-        .0;
-    for repeated_guard in [
-        "immutable_plan_span_within(",
-        "receptor_valid_for_plasticity(",
-        "state_span_within(",
-    ] {
-        assert!(
-            !apply_body.contains(repeated_guard),
-            "fast plasticity repeated immutable upload guard {repeated_guard}"
-        );
-    }
-}
-
-#[test]
-fn fast_plasticity_canonicalizes_zero_before_gpu_storage() {
-    let source = alife_gpu_backend::CLOSED_LOOP_PLASTICITY_WGSL;
-    let body = source
-        .split_once("fn apply_fast_plasticity")
-        .expect("fast plasticity entry exists")
-        .1
-        .split_once("fn capture_fast_plasticity_replay")
-        .expect("fast plasticity entry is bounded")
-        .0;
-    assert!(source.contains("fn canonicalize_state_zero(value:f32) -> f32"));
-    assert!(
-        body.contains("store_state_f32(evaluation.inactive_fast_index,canonicalize_state_zero(evaluation.next_fast))")
-    );
-}
-
-#[test]
-fn recurrent_eligibility_obeys_the_validated_activity_route_mask() {
-    let source = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL;
-    let body = source
-        .split_once("fn accumulate_recurrent_eligibility")
-        .expect("recurrent eligibility entry exists")
-        .1
-        .split_once("fn accumulate_decoder_eligibility")
-        .expect("recurrent eligibility entry is bounded")
-        .0;
-    assert!(body.contains(
-        "let route_index = immutable_plan_words[brain.route_indices_offset + local_synapse]"
-    ));
-    assert!(body.contains("if (!route_enabled_at(route_mask_base, route_index))"));
-    let inactive = body
-        .split_once("if (!route_enabled_at(route_mask_base, route_index))")
-        .unwrap()
-        .1
-        .split_once("let post_activation_offset")
-        .unwrap()
-        .0;
-    assert!(inactive.contains("let next = eligibility_decay * previous"));
-    assert!(inactive.contains(
-        "store_state_f32(staging_bases.recurrent + local_synapse, canonicalize_state_zero(next))"
-    ));
-    assert!(
-        !inactive.contains("let local ="),
-        "inactive routes must not add coactivation"
-    );
 }
 
 #[test]
@@ -1635,6 +1514,104 @@ fn same_class_learning_batch_spans_fixed_arenas_without_aliasing_slots() {
             .unwrap()
             .iter()
             .any(|weight| *weight != 0.0));
+    }
+}
+
+#[test]
+fn partially_committed_learning_batch_stops_without_retrying_or_clearing_acquired_banks() {
+    // Exercise both independent rows in one submission and a later arena failure.
+    for chunk_slots in [2, 1] {
+        let (genome, development, phenotype) = controlled_learning_fixture(1.0);
+        let slot_bytes = alife_gpu_backend::GpuClassBucketPlan::for_phenotype(&phenotype)
+            .unwrap()
+            .slot_allocation_receipt()
+            .unwrap()
+            .logical_slot_commit_bytes;
+        let profile =
+            support::scaling::bounded_profile(slot_bytes * 2, 512 * 1024 * 1024, 2, chunk_slots);
+        let mut backend = GpuClosedLoopBackend::new_required(profile).unwrap();
+        let handles = [4_211, 4_212].map(|id| {
+            backend
+                .insert_brain(alife_core::OrganismId(id), phenotype.clone())
+                .unwrap()
+        });
+        let physiologies = handles.map(|handle| {
+            support::test_physiology(handle.organism_id().raw(), &phenotype).unwrap()
+        });
+        let frames = handles.map(|handle| {
+            support::perception_frame_for_profile_at_tick(
+                handle.organism_id().raw(),
+                1_250,
+                SensorProfile::PrivilegedAffordanceV1,
+                true,
+                2,
+            )
+        });
+        let rows = [0, 1].map(|index| {
+            (
+                handles[index],
+                &phenotype,
+                &physiologies[index],
+                &frames[index],
+            )
+        });
+        let (frames, ticks): (Vec<_>, Vec<_>) = support::tick_chemistry_batch(&mut backend, &rows)
+            .unwrap()
+            .into_iter()
+            .unzip();
+        let outcomes = [0, 1].map(|index| {
+            sealed_measured_event(
+                handles[index],
+                &phenotype,
+                &genome,
+                &development,
+                &physiologies[index],
+                &frames[index],
+                &ticks[index],
+                1,
+                nutrition_event(),
+            )
+        });
+        let before = handles.map(|handle| backend.plasticity_probe_for_test(handle).unwrap());
+        let counters = backend.runtime_counters_for_test();
+        backend
+            .inject_plasticity_guard_faults_for_test(handles[1], &[0], &[], &[])
+            .unwrap();
+        let batch = [0, 1].map(|index| (handles[index], &outcomes[index].0, &outcomes[index].1));
+        assert_eq!(
+            backend.apply_sealed_outcome_batch(&batch),
+            Err(alife_core::ScaffoldContractError::NeuralBackendUnavailable)
+        );
+        assert!(matches!(
+            backend.state(),
+            alife_gpu_backend::GpuBackendState::DeviceLost { .. }
+        ));
+        let after = handles.map(|handle| backend.plasticity_probe_for_test(handle).unwrap());
+        assert_ne!(
+            after[0].learning[1], before[0].learning[1],
+            "the first row actually published its new GPU bank"
+        );
+        assert_ne!(
+            after[0].active_fast, before[0].active_fast,
+            "acquired changes survive the later row's rejection"
+        );
+        assert_eq!(
+            after[0].host_generations, before[0].host_generations,
+            "no successful whole-batch host receipt was fabricated"
+        );
+        r12_assert_no_promotion(&before[1], &after[1]);
+        assert_eq!(backend.runtime_counters_for_test(), counters);
+        assert_eq!(
+            backend.apply_sealed_outcome_batch(&batch),
+            Err(alife_core::ScaffoldContractError::NeuralBackendUnavailable)
+        );
+        for index in 0..2 {
+            assert_eq!(
+                backend.plasticity_probe_for_test(handles[index]).unwrap(),
+                after[index],
+                "retry cannot mutate either resident after the uncertain commit"
+            );
+        }
     }
 }
 

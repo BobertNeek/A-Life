@@ -1,6 +1,6 @@
 //! Canonical production brain capacity and compiled budgets.
 
-mod task3_capacity_budget_red_tests {
+mod capacity_budget_tests {
     use std::collections::BTreeSet;
 
     use alife_core::{
@@ -134,7 +134,7 @@ mod task3_capacity_budget_red_tests {
     }
 
     #[test]
-    fn canonical_capacity_budgets_match_every_approved_tuple_limit_and_alignment() {
+    fn canonical_capacity_budgets_match_layout_limits_and_alignment() {
         for (capacity, expected) in [
             (
                 BrainCapacityClass::n512(),

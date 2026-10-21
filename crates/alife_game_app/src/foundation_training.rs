@@ -46,7 +46,6 @@ fn invalid() -> ScaffoldContractError {
 
 pub(crate) fn prime_foundation_lesson_prior(
     runtime: &mut GpuLiveBrainRuntime,
-    _output: &Path,
     lesson: Option<FoundationTeacherLesson>,
 ) -> Result<()> {
     if matches!(
@@ -388,8 +387,7 @@ fn foundation_replay_sequence_with_upload(
         }
         let effects = step
             .memory_upload
-            .neural_receptor_effects
-            .as_ref()
+            .neural_receptor_effects()
             .ok_or_else(invalid)?;
         effects.validate_contract()?;
         if effects.source_tick != step.frame.tick() {
@@ -1816,7 +1814,7 @@ fn run_foundation_training_pilot_with_request(
             .transpose()?
     };
     close_foundation_navigation_gate(&mut runtime, &scenario)?;
-    prime_foundation_lesson_prior(&mut runtime, output, scenario_lesson)?;
+    prime_foundation_lesson_prior(&mut runtime, scenario_lesson)?;
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     let mut held_food_possession_frames = Vec::new();
@@ -1860,7 +1858,7 @@ fn run_foundation_training_pilot_with_request(
                         | FoundationTeacherLesson::GrabFood
                 )
             ) {
-                prime_foundation_lesson_prior(&mut runtime, output, scenario_lesson)?;
+                prime_foundation_lesson_prior(&mut runtime, scenario_lesson)?;
             }
         }
         let held_food_before =
@@ -2587,7 +2585,7 @@ fn run_foundation_training_pilot_with_request(
     Ok(receipt)
 }
 
-fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
+pub(crate) fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
     let outcome = step.patch.outcome();
     outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
         || outcome.joint.as_ref().is_some_and(|joint| {

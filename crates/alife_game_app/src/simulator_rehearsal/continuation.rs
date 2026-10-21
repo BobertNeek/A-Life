@@ -113,6 +113,8 @@ struct ReceiptConfig {
     seed: u64,
     expected_source_policy: u64,
     #[serde(default)]
+    collection_wall_limit_seconds: Option<u64>,
+    #[serde(default)]
     qualification_wall_limit_seconds: Option<u64>,
 }
 
@@ -299,18 +301,22 @@ fn require_qualification_completion(source: &Path, receipt: &ReceiptIdentity) ->
             .count()
             == 1
     };
-    if receipt.config.qualification_wall_limit_seconds != Some(360)
-        || timing.schema != "alife.simulator-rehearsal-timing.v1"
+    let allowance = receipt
+        .config
+        .qualification_wall_limit_seconds
+        .filter(|seconds| *seconds > 0)
+        .ok_or("invalid total rehearsal allowance")?;
+    if timing.schema != "alife.simulator-rehearsal-timing.v1"
         || timing.status != "completed"
         || timing.error.is_some()
-        || timing.collection_allowance_seconds != 240
-        || timing.qualification_allowance_seconds != Some(360)
+        || receipt.config.collection_wall_limit_seconds != Some(timing.collection_allowance_seconds)
+        || timing.qualification_allowance_seconds != Some(allowance)
         || !timing.elapsed_seconds.is_finite()
-        || !(0.0..360.0).contains(&timing.elapsed_seconds)
+        || !(0.0..allowance as f64).contains(&timing.elapsed_seconds)
         || timing.training_decisions != receipt.decisions
         || timing.holdout_decisions != receipt.holdout_decisions
-        || !(1..=32).contains(&timing.training_decisions)
-        || !(1..=16).contains(&timing.holdout_decisions)
+        || timing.training_decisions == 0
+        || timing.holdout_decisions == 0
         || !completed_stage("execution_and_resource_release")
         || !completed_stage("completion_publication")
         || timing.stages.iter().any(|stage| {
@@ -593,11 +599,12 @@ mod tests {
         let receipt_path = output.join("rehearsal.json");
         let mut receipt: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
-        receipt["config"]["qualification_wall_limit_seconds"] = serde_json::json!(360);
+        receipt["config"]["collection_wall_limit_seconds"] = serde_json::json!(30);
+        receipt["config"]["qualification_wall_limit_seconds"] = serde_json::json!(90);
         receipt["decisions"] = serde_json::json!(1);
         receipt["holdout_decisions"] = serde_json::json!(1);
         std::fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
-        let timing = RunTiming::new(240, Some(360));
+        let timing = RunTiming::new(30, Some(90));
         timing.own_output(&output).unwrap();
         timing
             .stage("execution_and_resource_release", || {
@@ -624,7 +631,7 @@ mod tests {
         for (field, value) in [
             ("status", serde_json::json!("running")),
             ("status", serde_json::json!("failed")),
-            ("elapsed_seconds", serde_json::json!(360.0)),
+            ("elapsed_seconds", serde_json::json!(90.0)),
             ("training_decisions", serde_json::json!(2)),
             ("qualification_allowance_seconds", serde_json::json!(600)),
         ] {

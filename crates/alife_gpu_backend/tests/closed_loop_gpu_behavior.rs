@@ -17,29 +17,12 @@ use naga::ShaderStage;
 
 use support::{CompactSelection, GpuFrameResult, GpuPipelineFixture};
 
-#[derive(Clone)]
-struct CausalGpuCheckpoint {
-    phenotype: BrainPhenotype,
-}
-
 struct ReplayReceipt {
     adapter_identity: String,
     selected_candidates: Vec<u32>,
     selected_logits: Vec<f32>,
     dispatch_generations: Vec<u64>,
     tolerance: f32,
-}
-
-fn causal_n512_gpu_checkpoint() -> CausalGpuCheckpoint {
-    CausalGpuCheckpoint {
-        phenotype: support::controlled_sensory_n512_phenotype(),
-    }
-}
-
-async fn restore_same_adapter_pair_from_checkpoint(
-    checkpoint: &CausalGpuCheckpoint,
-) -> GpuPipelineFixture {
-    GpuPipelineFixture::new(&checkpoint.phenotype).await
 }
 
 fn two_candidate_frame(organism_raw: u64, tick_raw: u64, sensory: [f32; 2]) -> PerceptionFrame {
@@ -205,10 +188,6 @@ fn expected_final_side(microsteps: u8) -> u32 {
     u32::from(microsteps & 1)
 }
 
-fn expected_candidate_for_side(microsteps: u8) -> u32 {
-    expected_final_side(microsteps)
-}
-
 fn assert_compact_selection(result: &GpuFrameResult) -> CompactSelection {
     assert_eq!(
         result.compact_readback_bytes,
@@ -242,9 +221,9 @@ fn decode_wgsl_parses_with_expected_entry_points_and_compact_layouts() {
 #[test]
 fn same_candidates_different_sensory_frames_change_gpu_logits() {
     pollster::block_on(async {
-        let checkpoint = causal_n512_gpu_checkpoint();
-        let mut gpu = restore_same_adapter_pair_from_checkpoint(&checkpoint).await;
-        gpu.configure_controlled_sensory_path_and_decoder(&checkpoint.phenotype);
+        let phenotype = support::controlled_sensory_n512_phenotype();
+        let mut gpu = GpuPipelineFixture::new(&phenotype).await;
+        gpu.configure_controlled_sensory_path_and_decoder(&phenotype);
         let first_frame = two_candidate_frame(7, 77, [0.9, 0.0]);
         let second_frame = two_candidate_frame(9, 77, [0.0, 0.9]);
         assert_base_frames_differ_only_in_sensory_and_transport_identity(
@@ -279,7 +258,6 @@ fn lesioning_motor_weights_changes_gpu_selection() {
         gpu.configure_controlled_motor_loop_and_decoder(&phenotype, true);
         let lesion = gpu.lesion_decoder_genetic_weights();
         assert_eq!(lesion.adapter_identity, adapter);
-        assert!(lesion.recurrent_prefixes_unchanged);
         assert_eq!(lesion.changed_ranges.len(), 3);
         assert!(lesion
             .changed_ranges
@@ -446,7 +424,7 @@ fn decoder_reads_the_final_ping_pong_side_for_two_three_and_four_microsteps() {
             );
             assert_eq!(
                 result.selection.candidate_index,
-                expected_candidate_for_side(microsteps)
+                expected_final_side(microsteps)
             );
         }
     });

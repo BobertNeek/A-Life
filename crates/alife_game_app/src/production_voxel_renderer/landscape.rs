@@ -246,10 +246,10 @@ pub(super) fn reveal_creatures(
                 && t < 1.0
                 && (center - camera.translation - sight * t).length_squared() < radius * radius
         });
-        *visibility = if obscures {
+        visibility.set_if_neq(if obscures {
             Visibility::Hidden
         } else {
             Visibility::Inherited
-        };
+        });
     }
 }

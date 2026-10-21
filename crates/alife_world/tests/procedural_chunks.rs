@@ -1,13 +1,10 @@
 use alife_core::{Vec3f, WorldEntityId};
 use alife_world::{
     activate_procedural_chunks_around_creatures, generate_procedural_world_content,
-    procedural_chunk_summary, procedural_world_scale_report,
-    sample_creature_procedural_content_neighborhood, sample_creature_procedural_neighborhood,
-    sample_procedural_terrain_tile, simulate_procedural_world_travel, CreatureWorldAnchor,
+    procedural_chunk_summary, sample_procedural_terrain_tile, CreatureWorldAnchor,
     ProceduralChunkCoord, ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig,
     ProceduralWorldContentKind, DEFAULT_ACTIVATION_RADIUS_CHUNKS, PROCEDURAL_CONTENT_ID_BASE,
     PROCEDURAL_WORLD_CHUNKS_SCHEMA, PROCEDURAL_WORLD_CONTENT_SCHEMA,
-    PROCEDURAL_WORLD_TRAVEL_SCHEMA,
 };
 
 fn anchor(id: u64, x: f32, z: f32) -> CreatureWorldAnchor {
@@ -36,8 +33,6 @@ fn procedural_chunks_activate_around_creatures_without_rendering() {
 
     assert_eq!(report.schema, PROCEDURAL_WORLD_CHUNKS_SCHEMA);
     assert_eq!(report.creature_anchor_count, 2);
-    assert!(report.generated_without_rendering);
-    assert!(!report.rendering_required);
     assert!(report.active_chunks.iter().any(|chunk| {
         chunk.anchor_stable_id == WorldEntityId(1)
             && chunk.anchor_tile == ProceduralTileCoord::new(0, 0)
@@ -68,8 +63,6 @@ fn procedural_chunks_follow_creature_travel_from_same_seed() {
         origin_report.active_chunks, traveled_report.active_chunks,
         "creature travel should materialize a new deterministic active chunk window instead of reusing a single screen"
     );
-    assert!(origin_report.generated_without_rendering);
-    assert!(traveled_report.generated_without_rendering);
     assert!(origin_report
         .active_chunks
         .iter()
@@ -87,130 +80,14 @@ fn procedural_chunks_follow_creature_travel_from_same_seed() {
 }
 
 #[test]
-fn procedural_world_travel_streams_chunks_without_rendering() {
-    let config = ProceduralWorldConfig::with_seed(4242);
-    let route = [
-        ProceduralTileCoord::new(0, 0),
-        ProceduralTileCoord::new(48, 0),
-        ProceduralTileCoord::new(96, -64),
-        ProceduralTileCoord::new(144, 32),
-        ProceduralTileCoord::new(192, -96),
-        ProceduralTileCoord::new(240, -16),
-    ];
-
-    let report = simulate_procedural_world_travel(config, WorldEntityId(1), &route).unwrap();
-
-    report.validate(config).unwrap();
-    assert_eq!(report.schema, PROCEDURAL_WORLD_TRAVEL_SCHEMA);
-    assert_eq!(report.seed, config.seed);
-    assert_eq!(report.stable_id, WorldEntityId(1));
-    assert_eq!(report.requested_step_count, route.len());
-    assert!(
-        report.total_unique_materialized_chunks > report.max_active_chunk_count,
-        "travel should materialize more deterministic chunks over time than one active window"
-    );
-    assert!(report.total_content_candidates_seen > 0);
-    assert!(report.generated_without_rendering);
-    assert!(!report.rendering_required);
-    assert!(!report.chunks_exist_without_creature_presence);
-    assert!(report.materialized_only_near_creature_anchors);
-    assert!(report.bounded_for_creature_context);
-    assert!(!report.can_emit_actions);
-    assert!(!report.can_rewrite_weights);
-    assert!(report
-        .steps
-        .iter()
-        .skip(1)
-        .any(|step| { step.newly_materialized_chunk_count > 0 && step.retired_chunk_count > 0 }));
-    assert!(report.steps.iter().all(|step| {
-        step.generated_without_rendering
-            && !step.rendering_required
-            && !step.can_emit_actions
-            && !step.can_rewrite_weights
-            && step.active_chunk_count <= config.max_active_chunks
-            && step.content_candidate_count <= config.max_active_content_candidates
-    }));
-}
-
-#[test]
-fn procedural_world_travel_report_is_deterministic_for_same_seed_route() {
-    let config = ProceduralWorldConfig::with_seed(987_654);
-    let route = [
-        ProceduralTileCoord::new(-16, 8),
-        ProceduralTileCoord::new(32, 24),
-        ProceduralTileCoord::new(80, 48),
-        ProceduralTileCoord::new(128, 96),
-    ];
-
-    let first = simulate_procedural_world_travel(config, WorldEntityId(6), &route).unwrap();
-    let second = simulate_procedural_world_travel(config, WorldEntityId(6), &route).unwrap();
-
-    assert_eq!(first, second);
-    assert!(first.total_unique_materialized_chunks > first.max_active_chunk_count);
-    assert!(first.steps.iter().any(|step| {
-        step.dominant_material == ProceduralTerrainMaterial::HazardPressure
-            || step.dominant_material == ProceduralTerrainMaterial::ResourceGrove
-            || step.dominant_material == ProceduralTerrainMaterial::StoneRough
-    }));
-}
-
-#[test]
-fn procedural_world_travel_rejects_empty_route() {
-    let config = ProceduralWorldConfig::with_seed(4242);
-
-    let err = simulate_procedural_world_travel(config, WorldEntityId(1), &[]).unwrap_err();
-
-    assert_eq!(err, alife_core::ScaffoldContractError::ScalarOutOfRange);
-}
-
-#[test]
 fn procedural_chunks_do_not_exist_without_creature_anchors() {
     let config = ProceduralWorldConfig::with_seed(4242);
 
     let report = activate_procedural_chunks_around_creatures(config, &[]).unwrap();
-    let scale = procedural_world_scale_report(config, &report, 0).unwrap();
 
     assert_eq!(report.creature_anchor_count, 0);
     assert!(report.active_chunks.is_empty());
     assert_eq!(report.skipped_due_to_cap, 0);
-    assert!(report.generated_without_rendering);
-    assert_eq!(scale.creature_anchor_count, 0);
-    assert_eq!(scale.active_chunk_count, 0);
-    assert_eq!(scale.materialized_chunk_count, 0);
-    assert!(!scale.chunks_exist_without_creature_anchors);
-    assert!(scale.generated_without_rendering);
-    assert!(!scale.rendering_required);
-    assert!(!scale.can_emit_actions);
-    assert!(!scale.can_rewrite_weights);
-    scale.validate(config).unwrap();
-}
-
-#[test]
-fn procedural_world_scale_is_large_virtual_and_creature_anchored() {
-    let config = ProceduralWorldConfig::with_seed(4242);
-    let anchors = [anchor(1, 0.0, 0.0), anchor(6, 34.0, -18.0)];
-    let activation = activate_procedural_chunks_around_creatures(config, &anchors).unwrap();
-
-    let report = procedural_world_scale_report(config, &activation, anchors.len()).unwrap();
-
-    report.validate(config).unwrap();
-    assert!(report.virtual_width_tiles >= 4096);
-    assert!(report.virtual_height_tiles >= 4096);
-    assert!(report.virtual_tile_count > 16_000_000);
-    assert!(report.potential_chunk_count > 60_000);
-    assert_eq!(report.creature_anchor_count, anchors.len());
-    assert!(report.active_chunk_count > 0);
-    assert!(report.active_chunk_count <= config.max_active_chunks);
-    assert!(report.materialized_chunk_count <= report.active_chunk_count);
-    assert!(report.active_fraction_of_virtual_world < 0.001);
-    assert!(report.generated_without_rendering);
-    assert!(!report.rendering_required);
-    assert!(!report.chunks_exist_without_creature_anchors);
-    assert!(report.bounded_active_chunk_window);
-    assert!(report.materialized_only_near_creature_anchors);
-    assert!(report.bounded_for_creature_context);
-    assert!(!report.can_emit_actions);
-    assert!(!report.can_rewrite_weights);
 }
 
 #[test]
@@ -242,21 +119,6 @@ fn procedural_chunk_summary_reports_bounded_material_distribution() {
     assert!(summary.material_counts.iter().any(|entry| entry.count > 0));
     assert!((0.0..=1.0).contains(&summary.average_resource_bias));
     assert!((0.0..=1.0).contains(&summary.average_hazard_pressure));
-}
-
-#[test]
-fn procedural_creature_neighborhood_is_bounded_context_not_action_authority() {
-    let config = ProceduralWorldConfig::with_seed(4242);
-
-    let neighborhood =
-        sample_creature_procedural_neighborhood(config, anchor(1, 0.0, 0.0)).unwrap();
-
-    neighborhood.validate(config).unwrap();
-    assert_eq!(neighborhood.stable_id, WorldEntityId(1));
-    assert!(neighborhood.sample_count <= config.max_neighborhood_samples);
-    assert!(neighborhood.bounded_for_sensory);
-    assert!(!neighborhood.can_emit_actions);
-    assert!(!neighborhood.can_rewrite_weights);
 }
 
 #[test]
@@ -297,11 +159,6 @@ fn procedural_world_content_is_deterministic_and_creature_anchored() {
     first.validate(config).unwrap();
     assert_eq!(first, second);
     assert_eq!(first.schema, PROCEDURAL_WORLD_CONTENT_SCHEMA);
-    assert!(first.generated_without_rendering);
-    assert!(!first.rendering_required);
-    assert!(first.bounded_for_creature_context);
-    assert!(!first.can_emit_actions);
-    assert!(!first.can_rewrite_weights);
     assert!(first.candidate_count > 0);
     assert!(first
         .candidates
@@ -326,12 +183,10 @@ fn procedural_world_content_includes_readable_ecology_roles() {
     assert!(report.count_kind(ProceduralWorldContentKind::Hazard) > 0);
     assert!(report.count_kind(ProceduralWorldContentKind::Obstacle) > 0);
     assert!(report.count_kind(ProceduralWorldContentKind::DressingProp) > 0);
-    assert!(report.candidates.iter().all(|candidate| {
-        candidate.alpha_art_role == candidate.kind.alpha_art_role()
-            && !candidate.can_emit_actions
-            && !candidate.can_rewrite_weights
-            && !candidate.rendering_required
-    }));
+    assert!(report
+        .candidates
+        .iter()
+        .all(|candidate| { candidate.alpha_art_role == candidate.kind.alpha_art_role() }));
 }
 
 #[test]
@@ -343,8 +198,6 @@ fn procedural_world_content_does_not_exist_without_active_creature_chunks() {
 
     assert_eq!(report.candidate_count, 0);
     assert!(report.candidates.is_empty());
-    assert!(report.generated_without_rendering);
-    assert!(!report.rendering_required);
 }
 
 #[test]
@@ -364,19 +217,18 @@ fn procedural_world_content_respects_capacity() {
 }
 
 #[test]
-fn procedural_creature_content_neighborhood_is_bounded_context_only() {
-    let config = ProceduralWorldConfig::with_seed(4242);
-    let creature = anchor(1, 0.0, 0.0);
-    let activation = activate_procedural_chunks_around_creatures(config, &[creature]).unwrap();
-    let report = generate_procedural_world_content(config, &activation).unwrap();
-
-    let neighborhood =
-        sample_creature_procedural_content_neighborhood(config, creature, &report).unwrap();
-
-    neighborhood.validate(config).unwrap();
-    assert_eq!(neighborhood.stable_id, WorldEntityId(1));
-    assert!(neighborhood.candidate_count <= config.max_neighborhood_samples);
-    assert!(neighborhood.bounded_for_sensory);
-    assert!(!neighborhood.can_emit_actions);
-    assert!(!neighborhood.can_rewrite_weights);
+fn valid_far_virtual_tiles_keep_biome_distance_arithmetic_in_range() {
+    let config = ProceduralWorldConfig {
+        chunk_tile_size: 64,
+        virtual_half_extent_chunks: 8192,
+        ..ProceduralWorldConfig::with_seed(4242)
+    };
+    for tile in [
+        ProceduralTileCoord::new(200_000, -200_000),
+        ProceduralTileCoord::new(-500_000, 500_000),
+    ] {
+        let sample = sample_procedural_terrain_tile(config, tile).unwrap();
+        assert_eq!(sample.tile, tile);
+        sample.validate().unwrap();
+    }
 }

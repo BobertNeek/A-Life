@@ -615,8 +615,6 @@ fn run_meal_continuation(harmful: bool) {
     )
     .unwrap();
     save.validate_with_asset_root(std::env::temp_dir()).unwrap();
-    // The real registered genome/biology exceeds the inline-string convenience limit.
-    // Use the supported complete file-save API without weakening the production cap.
     let world_path = std::env::temp_dir().join(format!(
         "regrowth-memory-components-{}-{}-{}.json",
         std::process::id(),
@@ -630,6 +628,7 @@ fn run_meal_continuation(harmful: bool) {
 
     // Separate test-owned bytes exercise real component DTOs. They are not runtime content-store I/O.
     let loaded = PortableSaveFile::from_json_file(&world_path).unwrap();
+    std::fs::remove_file(&world_path).unwrap();
     loaded
         .validate_with_asset_root(std::env::temp_dir())
         .unwrap();

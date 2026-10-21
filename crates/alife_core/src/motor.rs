@@ -108,7 +108,6 @@ impl ChannelCommand {
         mut self,
         payload: BoundedMotorPayload,
     ) -> Result<Self, ScaffoldContractError> {
-        payload.validate_contract()?;
         self.payload = payload;
         self.validate_contract()?;
         Ok(self)

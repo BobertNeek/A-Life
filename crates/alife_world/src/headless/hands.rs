@@ -91,18 +91,22 @@ impl HeadlessWorld {
             && (!mobile
                 || (self.grasp_target_is_reachable(command.organism_id, agent, target)
                     && (already_held || object.hazard_pain == 0.0)));
-        if !valid || !self.activity_grip_available(command.organism_id, target) {
+        if !valid {
             return self.hand_preparation_failure(command, target).map(Some);
         }
-        let held = self
-            .objects
-            .values()
-            .find(|object| !object.consumed && object.carried_by == Some(command.organism_id))
-            .map(|object| object.id);
+        let (held, multiple_held) = {
+            let mut held = self.objects.values().filter(|object| {
+                !object.consumed && object.carried_by == Some(command.organism_id)
+            });
+            (held.next().map(|object| object.id), held.next().is_some())
+        };
+        if multiple_held {
+            return self.hand_preparation_failure(command, target).map(Some);
+        }
         if let Some(held) = held.filter(|held| *held != target) {
-            let position = self
-                .activity_placement(command.organism_id, held)
-                .expect("validated activity placement");
+            let Some(position) = self.activity_placement(command.organism_id, held) else {
+                return self.hand_preparation_failure(command, target).map(Some);
+            };
             let previous = self.objects[&held.raw()].position;
             let object = self
                 .objects

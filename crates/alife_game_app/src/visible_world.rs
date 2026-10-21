@@ -3,39 +3,6 @@
 use crate::prelude::*;
 use crate::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VisiblePlaceholderShape {
-    GroundPlane,
-    CreatureCapsule,
-    FoodSphere,
-    HazardCone,
-    ObstacleCube,
-    TokenBillboard,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VisibleMaterialKind {
-    Ground,
-    Creature,
-    Food,
-    Hazard,
-    Obstacle,
-    Token,
-}
-
-impl VisibleMaterialKind {
-    pub const fn rgba(self) -> [f32; 4] {
-        match self {
-            Self::Ground => [0.18, 0.23, 0.18, 1.0],
-            Self::Creature => [0.30, 0.55, 0.95, 1.0],
-            Self::Food => [0.24, 0.78, 0.34, 1.0],
-            Self::Hazard => [0.90, 0.20, 0.18, 1.0],
-            Self::Obstacle => [0.42, 0.38, 0.33, 1.0],
-            Self::Token => [0.72, 0.62, 0.95, 1.0],
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct VisibleWorldObjectPresentation {
     pub stable_id: alife_core::WorldEntityId,
@@ -47,14 +14,10 @@ pub struct VisibleWorldObjectPresentation {
     pub nutrition: f32,
     pub hazard_pain: f32,
     pub token_id: Option<u32>,
-    pub shape: VisiblePlaceholderShape,
-    pub material: VisibleMaterialKind,
-    pub debug_label: String,
 }
 
 impl VisibleWorldObjectPresentation {
     pub fn from_save_object(object: &WorldObjectSaveState) -> Self {
-        let (shape, material) = placeholder_for_kind(object.kind);
         Self {
             stable_id: object.id,
             label: object.label.clone(),
@@ -65,15 +28,12 @@ impl VisibleWorldObjectPresentation {
             nutrition: object.nutrition,
             hazard_pain: object.hazard_pain,
             token_id: object.token_id,
-            shape,
-            material,
-            debug_label: format!("{:04}:{:?}:{}", object.id.raw(), object.kind, object.label),
         }
     }
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{:?}:{}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:?}:{:?}:{:?}",
+            "{}:{:?}:{}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:.3}:{:?}",
             self.stable_id.raw(),
             self.kind,
             self.label,
@@ -83,9 +43,7 @@ impl VisibleWorldObjectPresentation {
             self.radius,
             self.nutrition,
             self.hazard_pain,
-            self.token_id,
-            self.shape,
-            self.material
+            self.token_id
         )
     }
 }
@@ -97,11 +55,7 @@ pub struct VisibleWorldPresentation {
     pub save_id: String,
     pub seed: u64,
     pub object_count: usize,
-    pub ground_shape: VisiblePlaceholderShape,
-    pub ground_material: VisibleMaterialKind,
     pub objects: Vec<VisibleWorldObjectPresentation>,
-    pub headless_signature: Vec<String>,
-    pub visible_signature: Vec<String>,
 }
 
 impl VisibleWorldPresentation {
@@ -140,7 +94,6 @@ pub fn visible_world_from_save(
     save: &PortableSaveFile,
 ) -> Result<VisibleWorldPresentation, GameAppShellError> {
     let restored = save.restore_headless_world()?;
-    let headless_signature = restored.stable_signature();
     let mut objects = save
         .world
         .objects
@@ -148,11 +101,7 @@ pub fn visible_world_from_save(
         .map(VisibleWorldObjectPresentation::from_save_object)
         .collect::<Vec<_>>();
     objects.sort_by_key(|object| object.stable_id.raw());
-    let visible_signature = objects
-        .iter()
-        .map(VisibleWorldObjectPresentation::signature_line)
-        .collect::<Vec<_>>();
-    if objects.len() != headless_signature.len() {
+    if objects.len() != restored.object_count() {
         return Err(GameAppShellError::VisibleWorldMismatch {
             message: "visible object count must match restored headless world",
         });
@@ -163,86 +112,6 @@ pub fn visible_world_from_save(
         save_id: save.save_id.clone(),
         seed: save.deterministic_seed,
         object_count: objects.len(),
-        ground_shape: VisiblePlaceholderShape::GroundPlane,
-        ground_material: VisibleMaterialKind::Ground,
         objects,
-        headless_signature,
-        visible_signature,
     })
-}
-
-pub fn compare_visible_world_to_headless(
-    presentation: &VisibleWorldPresentation,
-) -> Result<(), GameAppShellError> {
-    if presentation.object_count != presentation.objects.len()
-        || presentation.object_count != presentation.headless_signature.len()
-        || presentation.object_count != presentation.visible_signature.len()
-    {
-        return Err(GameAppShellError::VisibleWorldMismatch {
-            message: "presentation, visible signature, and headless signature counts must match",
-        });
-    }
-    let mut stable_ids = presentation.stable_ids();
-    stable_ids.sort_by_key(|id| id.raw());
-    stable_ids.dedup();
-    if stable_ids.len() != presentation.objects.len() {
-        return Err(GameAppShellError::VisibleWorldMismatch {
-            message: "visible objects must have unique stable IDs",
-        });
-    }
-    Ok(())
-}
-
-pub const fn placeholder_for_kind(
-    kind: WorldObjectKind,
-) -> (VisiblePlaceholderShape, VisibleMaterialKind) {
-    match kind {
-        WorldObjectKind::Agent => (
-            VisiblePlaceholderShape::CreatureCapsule,
-            VisibleMaterialKind::Creature,
-        ),
-        WorldObjectKind::Food => (
-            VisiblePlaceholderShape::FoodSphere,
-            VisibleMaterialKind::Food,
-        ),
-        WorldObjectKind::Hazard => (
-            VisiblePlaceholderShape::HazardCone,
-            VisibleMaterialKind::Hazard,
-        ),
-        WorldObjectKind::Obstacle => (
-            VisiblePlaceholderShape::ObstacleCube,
-            VisibleMaterialKind::Obstacle,
-        ),
-        WorldObjectKind::Ball | WorldObjectKind::ActivityToy => (
-            VisiblePlaceholderShape::FoodSphere,
-            VisibleMaterialKind::Token,
-        ),
-        WorldObjectKind::Token => (
-            VisiblePlaceholderShape::TokenBillboard,
-            VisibleMaterialKind::Token,
-        ),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn visible_world_comparison_rejects_a_stale_visible_signature() {
-        let presentation = VisibleWorldPresentation {
-            schema: G02_VISIBLE_WORLD_SCHEMA,
-            schema_version: G02_VISIBLE_WORLD_SCHEMA_VERSION,
-            save_id: "test-save".to_string(),
-            seed: 7,
-            object_count: 0,
-            ground_shape: VisiblePlaceholderShape::GroundPlane,
-            ground_material: VisibleMaterialKind::Ground,
-            objects: Vec::new(),
-            headless_signature: Vec::new(),
-            visible_signature: vec!["stale".to_string()],
-        };
-
-        assert!(compare_visible_world_to_headless(&presentation).is_err());
-    }
 }

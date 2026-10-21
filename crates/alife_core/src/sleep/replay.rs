@@ -125,10 +125,6 @@ impl BoundedReplayBatch {
                 .windows(2)
                 .any(|pair| pair[0].sequence_id.raw() >= pair[1].sequence_id.raw())
             || self
-                .events
-                .iter()
-                .any(|event| event.validate_contract().is_err())
-            || self
                 .synapse_spans
                 .windows(2)
                 .any(|pair| pair[0].local_synapse_id >= pair[1].local_synapse_id)
@@ -224,14 +220,7 @@ impl SleepReplayEvidence {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        self.batch.validate_contract(
-            MAX_SLEEP_TRANSACTION_EVENTS,
-            MAX_SLEEP_TRANSACTION_SAMPLES,
-            u32::MAX,
-        )?;
-        if self.prediction_targets.len() != self.batch.events.len()
-            || self.canonical_digest != self.recompute_canonical_digest()?
-        {
+        if self.canonical_digest != self.recompute_canonical_digest()? {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         for (event, target) in self.batch.events.iter().zip(&self.prediction_targets) {

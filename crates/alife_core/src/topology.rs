@@ -391,9 +391,6 @@ impl Validate for ConceptBindings {
         for action in &self.actions {
             action.validate_contract()?;
         }
-        for family in &self.action_families {
-            CandidateActionFamily::try_from_raw(family.raw())?;
-        }
         self.emotions.validate_contract()?;
         for location in &self.locations {
             location.validate()?;
@@ -993,42 +990,9 @@ struct TopologyObservationBindings {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum TopologyReplacement {
-    Concept {
-        index: u32,
-        expected_id: Option<ConceptCellId>,
-        value: ConceptCell,
-    },
-    Edge {
-        index: u32,
-        expected_id: Option<CognitiveEdgeId>,
-        value: CognitiveEdge,
-    },
-    Simplex {
-        index: u32,
-        expected_id: Option<CognitiveSimplexId>,
-        value: CognitiveSimplex,
-    },
-    Gap {
-        index: u32,
-        expected_id: Option<UnresolvedGapId>,
-        value: UnresolvedGap,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq)]
 struct TopologyMutationPlan {
-    expected_digest: [u64; 4],
+    map: TopologicalMap,
     final_digest: [u64; 4],
-    expected_counts: TopologyCounts,
-    final_counts: TopologyCounts,
-    expected_next_ids: TopologyIdCounters,
-    final_next_ids: TopologyIdCounters,
-    primary_signature: ConceptSignature,
-    action_signature: ConceptSignature,
-    primary_bindings: ConceptBindings,
-    action_bindings: ConceptBindings,
-    replacements: Vec<TopologyReplacement>,
     degradations: Vec<TopologyDegradationKind>,
     update: TopologyUpdate,
 }
@@ -1508,11 +1472,11 @@ impl TopologicalMap {
                     *semantic_id = survivor_id;
                 }
             }
-            concept.bindings.semantic_refs.dedup();
+            let mut seen = std::collections::BTreeSet::new();
             concept
                 .bindings
                 .semantic_refs
-                .retain(|semantic_id| *semantic_id != concept.id);
+                .retain(|semantic_id| *semantic_id != concept.id && seen.insert(semantic_id.raw()));
         }
         for simplex in &mut self.simplexes {
             for concept_id in &mut simplex.concept_ids {
@@ -1562,9 +1526,6 @@ impl TopologicalMap {
             ),
             action_id: patch.decision().selected_action.action_id,
         };
-        let expected_digest = self.canonical_digest()?;
-        let expected_counts = self.counts();
-        let expected_next_ids = self.next_ids();
         let mut planned = self.clone();
         let mut degradations = Vec::new();
         let tick = patch.outcome().outcome_tick;
@@ -1618,19 +1579,9 @@ impl TopologicalMap {
         )?;
         planned.validate_contract()?;
         let final_digest = planned.canonical_digest()?;
-        let replacements = diff_replacements(self, &planned)?;
-        let plan = TopologyMutationPlan {
-            expected_digest,
+        Ok(TopologyMutationPlan {
+            map: planned,
             final_digest,
-            expected_counts,
-            final_counts: planned.counts(),
-            expected_next_ids,
-            final_next_ids: planned.next_ids(),
-            primary_signature,
-            action_signature,
-            primary_bindings: observation_bindings.primary_bindings,
-            action_bindings: observation_bindings.action_bindings,
-            replacements,
             degradations,
             update: TopologyUpdate {
                 primary_concept_id,
@@ -1638,12 +1589,7 @@ impl TopologicalMap {
                 simplex_id,
                 gap_ids,
             },
-        };
-        // The planned map is fully validated above. Reconstructing its fresh
-        // private diff is a development diagnostic, not observation work.
-        #[cfg(debug_assertions)]
-        plan.validate_against(self)?;
-        Ok(plan)
+        })
     }
 
     pub fn config(&self) -> &TopologicalMapConfig {
@@ -2057,60 +2003,6 @@ impl Validate for TopologicalMap {
     }
 }
 
-impl TopologyMutationPlan {
-    // Keep the complete diagnostic available to debug builds and unit tests.
-    #[cfg_attr(not(debug_assertions), allow(dead_code))]
-    fn validate_against(&self, map: &TopologicalMap) -> Result<(), ScaffoldContractError> {
-        if map.canonical_digest()? != self.expected_digest
-            || map.counts() != self.expected_counts
-            || map.next_ids() != self.expected_next_ids
-            || !self.expected_counts.within(map.config())
-            || !self.final_counts.within(map.config())
-        {
-            return Err(ScaffoldContractError::InvalidMemoryQuery);
-        }
-        self.primary_bindings.validate_contract()?;
-        self.action_bindings.validate_contract()?;
-        let _planned_signatures = (&self.primary_signature, &self.action_signature);
-        let mut previous_target = None;
-        for replacement in &self.replacements {
-            let target = replacement_target(replacement);
-            if previous_target.is_some_and(|previous| previous >= target) {
-                return Err(ScaffoldContractError::InvalidMemoryQuery);
-            }
-            previous_target = Some(target);
-        }
-        let mut reconstructed = map.clone();
-        apply_replacements_checked(&mut reconstructed, &self.replacements)?;
-        reconstructed.assign_next_ids(self.final_next_ids);
-        reconstructed.validate_contract()?;
-        if reconstructed.counts() != self.final_counts
-            || reconstructed.next_ids() != self.final_next_ids
-            || reconstructed.canonical_digest()? != self.final_digest
-            || reconstructed
-                .concept(self.update.primary_concept_id)
-                .is_none()
-            || self
-                .update
-                .edge_ids
-                .iter()
-                .any(|id| reconstructed.edge(*id).is_none())
-            || !reconstructed
-                .simplexes
-                .iter()
-                .any(|simplex| simplex.id == self.update.simplex_id)
-            || self
-                .update
-                .gap_ids
-                .iter()
-                .any(|id| reconstructed.gap(*id).is_none())
-        {
-            return Err(ScaffoldContractError::InvalidMemoryQuery);
-        }
-        Ok(())
-    }
-}
-
 impl TopologySidecar {
     pub fn new(
         organism_id: OrganismId,
@@ -2380,12 +2272,12 @@ impl TopologySidecar {
                 );
             }
         };
-        let receipt_degradations = plan.degradations.clone();
-        let update = plan.update.clone();
-        let after_counts = plan.final_counts;
-        let after_next_ids = plan.final_next_ids;
+        let after_counts = plan.map.counts();
+        let after_next_ids = plan.map.next_ids();
         let after_digest = plan.final_digest;
-        commit_prevalidated_plan(&mut self.map, plan);
+        let receipt_degradations = plan.degradations;
+        let update = plan.update;
+        self.map = plan.map;
         self.last_observed_sequence_id = Some(sequence);
         self.last_observed_key_digest = Some(key_digest);
         self.diagnostics.observations = self.diagnostics.observations.saturating_add(1);
@@ -3053,165 +2945,6 @@ fn gap_status_from_raw(value: u16) -> Result<GapResolutionStatus, ScaffoldContra
         3 => Ok(GapResolutionStatus::Resolved),
         4 => Ok(GapResolutionStatus::Dismissed),
         _ => Err(ScaffoldContractError::InvalidMemoryQuery),
-    }
-}
-
-fn diff_replacements(
-    before: &TopologicalMap,
-    after: &TopologicalMap,
-) -> Result<Vec<TopologyReplacement>, ScaffoldContractError> {
-    if after.concepts.len() < before.concepts.len()
-        || after.edges.len() < before.edges.len()
-        || after.simplexes.len() < before.simplexes.len()
-        || after.unresolved_gaps.len() < before.unresolved_gaps.len()
-    {
-        return Err(ScaffoldContractError::InvalidMemoryQuery);
-    }
-    let mut replacements = Vec::new();
-    for (index, value) in after.concepts.iter().enumerate() {
-        if before.concepts.get(index) != Some(value) {
-            replacements.push(TopologyReplacement::Concept {
-                index: u32::try_from(index)
-                    .map_err(|_| ScaffoldContractError::TopologyCapacityExceeded)?,
-                expected_id: before.concepts.get(index).map(|current| current.id),
-                value: value.clone(),
-            });
-        }
-    }
-    for (index, value) in after.edges.iter().enumerate() {
-        if before.edges.get(index) != Some(value) {
-            replacements.push(TopologyReplacement::Edge {
-                index: u32::try_from(index)
-                    .map_err(|_| ScaffoldContractError::TopologyCapacityExceeded)?,
-                expected_id: before.edges.get(index).map(|current| current.id),
-                value: value.clone(),
-            });
-        }
-    }
-    for (index, value) in after.simplexes.iter().enumerate() {
-        if before.simplexes.get(index) != Some(value) {
-            replacements.push(TopologyReplacement::Simplex {
-                index: u32::try_from(index)
-                    .map_err(|_| ScaffoldContractError::TopologyCapacityExceeded)?,
-                expected_id: before.simplexes.get(index).map(|current| current.id),
-                value: value.clone(),
-            });
-        }
-    }
-    for (index, value) in after.unresolved_gaps.iter().enumerate() {
-        if before.unresolved_gaps.get(index) != Some(value) {
-            replacements.push(TopologyReplacement::Gap {
-                index: u32::try_from(index)
-                    .map_err(|_| ScaffoldContractError::TopologyCapacityExceeded)?,
-                expected_id: before.unresolved_gaps.get(index).map(|current| current.id),
-                value: value.clone(),
-            });
-        }
-    }
-    Ok(replacements)
-}
-
-fn replacement_target(replacement: &TopologyReplacement) -> (u8, u32) {
-    match replacement {
-        TopologyReplacement::Concept { index, .. } => (0, *index),
-        TopologyReplacement::Edge { index, .. } => (1, *index),
-        TopologyReplacement::Simplex { index, .. } => (2, *index),
-        TopologyReplacement::Gap { index, .. } => (3, *index),
-    }
-}
-
-fn apply_replacements_checked(
-    map: &mut TopologicalMap,
-    replacements: &[TopologyReplacement],
-) -> Result<(), ScaffoldContractError> {
-    for replacement in replacements {
-        match replacement {
-            TopologyReplacement::Concept {
-                index,
-                expected_id,
-                value,
-            } => replace_or_append_checked(
-                &mut map.concepts,
-                *index,
-                *expected_id,
-                value.clone(),
-                |current| current.id,
-            )?,
-            TopologyReplacement::Edge {
-                index,
-                expected_id,
-                value,
-            } => replace_or_append_checked(
-                &mut map.edges,
-                *index,
-                *expected_id,
-                value.clone(),
-                |current| current.id,
-            )?,
-            TopologyReplacement::Simplex {
-                index,
-                expected_id,
-                value,
-            } => replace_or_append_checked(
-                &mut map.simplexes,
-                *index,
-                *expected_id,
-                value.clone(),
-                |current| current.id,
-            )?,
-            TopologyReplacement::Gap {
-                index,
-                expected_id,
-                value,
-            } => replace_or_append_checked(
-                &mut map.unresolved_gaps,
-                *index,
-                *expected_id,
-                value.clone(),
-                |current| current.id,
-            )?,
-        }
-    }
-    Ok(())
-}
-
-fn replace_or_append_checked<T, I: Copy + PartialEq>(
-    values: &mut Vec<T>,
-    index: u32,
-    expected_id: Option<I>,
-    value: T,
-    id: impl Fn(&T) -> I,
-) -> Result<(), ScaffoldContractError> {
-    let index = usize::try_from(index).map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
-    match (index.cmp(&values.len()), expected_id) {
-        (std::cmp::Ordering::Equal, None) => values.push(value),
-        (std::cmp::Ordering::Less, Some(expected)) if id(&values[index]) == expected => {
-            values[index] = value;
-        }
-        _ => return Err(ScaffoldContractError::InvalidMemoryQuery),
-    }
-    Ok(())
-}
-
-fn commit_prevalidated_plan(map: &mut TopologicalMap, plan: TopologyMutationPlan) {
-    // No caller can change the map between private planning and commit.
-    // Checked replacement application below still enforces every target.
-    #[cfg(debug_assertions)]
-    plan.validate_against(map)
-        .expect("private topology mutation plan was validated before commit");
-    apply_replacements_checked(map, &plan.replacements)
-        .expect("prevalidated topology replacements have exact targets");
-    map.assign_next_ids(plan.final_next_ids);
-    debug_assert_eq!(map.counts(), plan.final_counts);
-    debug_assert_eq!(map.canonical_digest().ok(), Some(plan.final_digest));
-}
-
-impl TopologicalMap {
-    const fn assign_next_ids(&mut self, counters: TopologyIdCounters) {
-        self.next_concept_id = counters.next_concept_id;
-        self.next_edge_id = counters.next_edge_id;
-        self.next_simplex_id = counters.next_simplex_id;
-        self.next_gap_id = counters.next_gap_id;
     }
 }
 
@@ -3949,6 +3682,30 @@ mod lifecycle_tests {
     }
 
     #[test]
+    fn merging_concepts_deduplicates_nonadjacent_bindings_before_export() {
+        let mut sidecar = mature_sidecar(1, 4);
+        sidecar.map.concepts[3].bindings.objects = sidecar.map.concepts[0].bindings.objects.clone();
+        sidecar.map.concepts[3].bindings.semantic_refs = vec![ConceptCellId(1)];
+        sidecar.map.concepts[2].bindings.semantic_refs =
+            vec![ConceptCellId(1), ConceptCellId(2), ConceptCellId(4)];
+        sidecar.refresh_diagnostics_after_map_mutation().unwrap();
+        sidecar
+            .merge_concepts(ConceptCellId(1), ConceptCellId(4), Tick(30))
+            .unwrap();
+        assert_eq!(
+            sidecar
+                .map
+                .concept(ConceptCellId(3))
+                .unwrap()
+                .bindings
+                .semantic_refs,
+            vec![ConceptCellId(1), ConceptCellId(2)]
+        );
+        let asset = sidecar.export_portable().unwrap();
+        assert_eq!(TopologySidecar::restore_portable(asset).unwrap(), sidecar);
+    }
+
+    #[test]
     #[ignore = "manual matched CPU lifecycle timing; no GPU or FPS claim"]
     fn lifecycle_matched_timing_probe() {
         use std::{hint::black_box, time::Instant};
@@ -3990,89 +3747,5 @@ mod lifecycle_tests {
             new_ns.sort_unstable();
             println!("lifecycle_matched size={size} calls={CALLS} rounds=8 old_ns={old_ns:?} new_ns={new_ns:?} old_median_ns={} new_median_ns={}", old_ns[4], new_ns[4]);
         }
-    }
-}
-
-#[cfg(test)]
-mod mutation_plan_tests {
-    use super::*;
-
-    fn valid_plan() -> (TopologicalMap, TopologyMutationPlan) {
-        let map = TopologicalMap::new(TopologicalMapConfig::default()).unwrap();
-        let mut planned = map.clone();
-        planned
-            .concepts
-            .push(ConceptCell::new(ConceptCellId(1), ConceptBindings::default()).unwrap());
-        planned.simplexes.push(
-            CognitiveSimplex::new(
-                CognitiveSimplexId(1),
-                vec![ConceptCellId(1)],
-                SignedValence(0.0),
-                NormalizedScalar(0.1),
-                NormalizedScalar(0.2),
-                Tick(1),
-            )
-            .unwrap(),
-        );
-        planned.next_concept_id = 2;
-        planned.next_simplex_id = 2;
-        planned.validate_contract().unwrap();
-        let signature = ConceptSignature::Action {
-            family: CandidateActionFamily::Idle,
-            action_id: ActionId(200),
-        };
-        let plan = TopologyMutationPlan {
-            expected_digest: map.canonical_digest().unwrap(),
-            final_digest: planned.canonical_digest().unwrap(),
-            expected_counts: map.counts(),
-            final_counts: planned.counts(),
-            expected_next_ids: map.next_ids(),
-            final_next_ids: planned.next_ids(),
-            primary_signature: signature.clone(),
-            action_signature: signature,
-            primary_bindings: ConceptBindings::default(),
-            action_bindings: ConceptBindings::default(),
-            replacements: diff_replacements(&map, &planned).unwrap(),
-            degradations: vec![],
-            update: TopologyUpdate {
-                primary_concept_id: ConceptCellId(1),
-                edge_ids: vec![],
-                simplex_id: CognitiveSimplexId(1),
-                gap_ids: vec![],
-            },
-        };
-        (map, plan)
-    }
-
-    #[test]
-    fn private_plan_diagnostic_rejects_stale_or_corrupted_provenance_without_mutation() {
-        let (map, plan) = valid_plan();
-        plan.validate_against(&map).unwrap();
-        let original = map.clone();
-        let edits: [fn(&mut TopologyMutationPlan); 6] = [
-            |p| p.expected_digest[0] ^= 1,
-            |p| p.final_digest[0] ^= 1,
-            |p| p.expected_next_ids.next_concept_id += 1,
-            |p| p.final_counts.concepts += 1,
-            |p| p.replacements.reverse(),
-            |p| {
-                if let TopologyReplacement::Simplex { expected_id, .. } = &mut p.replacements[1] {
-                    *expected_id = Some(CognitiveSimplexId(9));
-                } else {
-                    panic!("fixture requires simplex replacement");
-                }
-            },
-        ];
-        for edit in edits {
-            let mut invalid = plan.clone();
-            edit(&mut invalid);
-            assert!(invalid.validate_against(&map).is_err());
-            assert_eq!(map, original);
-        }
-        let mut committed = map;
-        commit_prevalidated_plan(&mut committed, plan);
-        committed.validate_contract().unwrap();
-        assert_eq!(committed.concepts().len(), 1);
-        assert_eq!(committed.simplexes().len(), 1);
     }
 }

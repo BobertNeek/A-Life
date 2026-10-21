@@ -299,7 +299,7 @@ impl GpuLiveBrainRuntime {
                     &mut routed_driver,
                     false,
                 )?;
-                replace_canonical_organism_record(&mut self.world, record)?;
+                self.world.replace_organism_record_exact(record)?;
                 if event.sleep_work_units > 0 {
                     let sleep_work = resident
                         .last_sleep_work
@@ -316,38 +316,19 @@ impl GpuLiveBrainRuntime {
                     )?;
                 }
                 event
-            } else if !self.schedule_sleep {
-                if phase_before != SleepPhase::Awake {
+            } else {
+                if !self.schedule_sleep && phase_before != SleepPhase::Awake {
                     return Err(ScaffoldContractError::MissingPhaseData.into());
                 }
-                GpuSleepScheduleEvent {
-                    tick: tick_before,
-                    phase: SleepPhase::Awake,
-                    cycle_id: sleep_before.last_consolidated_cycle_id,
-                    transition: None,
-                    consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
-                    selected_action: None,
-                    motor_eligible: motor_eligible(SleepPhase::Awake),
-                    sleep_work_units: 0,
-                    phase_receipt: SleepPhaseReceipt {
-                        phase: SleepPhase::Awake,
-                        cycle_id: sleep_before.last_consolidated_cycle_id,
-                        tick: tick_before,
-                        due_work: SleepWorkDue::empty(),
-                        work_units: 0,
-                        cumulative_work_units: 0,
-                        sealed: false,
-                    },
-                }
-            } else {
+                let cycle_id = if self.schedule_sleep && sleep_before.active_cycle_id != 0 {
+                    sleep_before.active_cycle_id
+                } else {
+                    sleep_before.last_consolidated_cycle_id
+                };
                 GpuSleepScheduleEvent {
                     tick: tick_before,
                     phase: phase_before,
-                    cycle_id: if sleep_before.active_cycle_id != 0 {
-                        sleep_before.active_cycle_id
-                    } else {
-                        sleep_before.last_consolidated_cycle_id
-                    },
+                    cycle_id,
                     transition: None,
                     consolidation_kind_raw: sleep_before.consolidation.kind_raw(),
                     selected_action: None,
@@ -355,11 +336,7 @@ impl GpuLiveBrainRuntime {
                     sleep_work_units: 0,
                     phase_receipt: SleepPhaseReceipt {
                         phase: phase_before,
-                        cycle_id: if sleep_before.active_cycle_id != 0 {
-                            sleep_before.active_cycle_id
-                        } else {
-                            sleep_before.last_consolidated_cycle_id
-                        },
+                        cycle_id,
                         tick: tick_before,
                         due_work: SleepWorkDue::empty(),
                         work_units: 0,

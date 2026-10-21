@@ -706,7 +706,6 @@
       "usage_category": "environment-dressing"
     }
   ],
-  "generated_art_target": "target/generated_art/production_voxel_v1",
   "pack_id": "production-voxel-v1",
   "schema": "alife.fvr07.production_asset_manifest.v1",
   "schema_version": 1

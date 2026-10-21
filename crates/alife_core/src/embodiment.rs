@@ -160,56 +160,16 @@ impl EmbodimentState {
             revision: 1,
             source_tick,
             sensors: vec![
-                SensorPortDescriptor {
-                    port_id: 1,
-                    capability: SensorCapability::Vision,
-                    value_lanes: 8,
-                    sample_period_ticks: 1,
-                },
-                SensorPortDescriptor {
-                    port_id: 2,
-                    capability: SensorCapability::Hearing,
-                    value_lanes: 4,
-                    sample_period_ticks: 1,
-                },
-                SensorPortDescriptor {
-                    port_id: 3,
-                    capability: SensorCapability::Proprioception,
-                    value_lanes: 6,
-                    sample_period_ticks: 1,
-                },
-                SensorPortDescriptor {
-                    port_id: 4,
-                    capability: SensorCapability::Interoception,
-                    value_lanes: 8,
-                    sample_period_ticks: 1,
-                },
+                sensor_port(1, SensorCapability::Vision, 8),
+                sensor_port(2, SensorCapability::Hearing, 4),
+                sensor_port(3, SensorCapability::Proprioception, 6),
+                sensor_port(4, SensorCapability::Interoception, 8),
             ],
             effectors: vec![
-                EffectorPortDescriptor {
-                    port_id: 1,
-                    capability: EffectorCapability::Translation,
-                    command_lanes: 3,
-                    safety_class: 1,
-                },
-                EffectorPortDescriptor {
-                    port_id: 2,
-                    capability: EffectorCapability::Rotation,
-                    command_lanes: 3,
-                    safety_class: 1,
-                },
-                EffectorPortDescriptor {
-                    port_id: 3,
-                    capability: EffectorCapability::Vocalization,
-                    command_lanes: 4,
-                    safety_class: 1,
-                },
-                EffectorPortDescriptor {
-                    port_id: 4,
-                    capability: EffectorCapability::Ingestion,
-                    command_lanes: 1,
-                    safety_class: 2,
-                },
+                effector_port(1, EffectorCapability::Translation, 3, 1),
+                effector_port(2, EffectorCapability::Rotation, 3, 1),
+                effector_port(3, EffectorCapability::Vocalization, 4, 1),
+                effector_port(4, EffectorCapability::Ingestion, 1, 2),
             ],
             sensor_calibration: vec![0.0; 26],
             effector_controllability: vec![0.0; 11],
@@ -295,12 +255,13 @@ impl EmbodimentState {
         proprioceptive_body_schema: Vec<f32>,
     ) -> Result<(), ScaffoldContractError> {
         Tick::validate_monotonic(self.source_tick, source_tick)?;
-        let original = self.clone();
-        self.source_tick = source_tick;
-        self.revision = self
+        let revision = self
             .revision
             .checked_add(1)
             .ok_or(ScaffoldContractError::InvalidId)?;
+        let original = self.clone();
+        self.source_tick = source_tick;
+        self.revision = revision;
         self.sensor_calibration = sensor_calibration;
         self.effector_controllability = effector_controllability;
         self.proprioceptive_body_schema = proprioceptive_body_schema;

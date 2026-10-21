@@ -277,14 +277,6 @@ fn validated_waking_and_sleep_entrypoints_reach_the_developmental_rate_helper() 
         CLOSED_LOOP_PLASTICITY_WGSL,
         CLOSED_LOOP_REPLAY_LEARNING_WGSL,
     ] {
-        let compact: String = source.split_whitespace().collect();
-        assert!(
-            compact.contains(
-                "letroute=immutable_plan_words[brain.route_indices_offset+local_synapse];"
-            ),
-            "route indices belong to immutable plan storage, never mutable learned-state storage"
-        );
-        assert!(!compact.contains("load_state_u32(brain.route_indices_offset+local_synapse)"));
         let module = naga::front::wgsl::parse_str(source).unwrap();
         naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),

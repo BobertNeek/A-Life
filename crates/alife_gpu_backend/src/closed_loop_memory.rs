@@ -55,14 +55,14 @@ pub struct GpuMemoryContextDispatchReceipt {
 /// Finalized candidate memory rows plus the exact frame identities they encode.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuMemoryContextUpload {
-    pub header: GpuMemoryContextHeader,
-    pub records: Vec<GpuCandidateMemoryRecord>,
-    pub cognitive_records: Vec<GpuCognitiveProjectionRecord>,
-    pub base_frame_digest: PerceptionBaseDigest,
-    pub context_digest: PerceptionContextDigest,
-    pub final_frame_digest: PerceptionFrameDigest,
-    pub perception_binding: GpuPerceptionFrameBinding,
-    pub neural_receptor_effects: Option<NeuralReceptorEffects>,
+    pub(crate) header: GpuMemoryContextHeader,
+    pub(crate) records: Vec<GpuCandidateMemoryRecord>,
+    pub(crate) cognitive_records: Vec<GpuCognitiveProjectionRecord>,
+    pub(crate) base_frame_digest: PerceptionBaseDigest,
+    pub(crate) context_digest: PerceptionContextDigest,
+    pub(crate) final_frame_digest: PerceptionFrameDigest,
+    pub(crate) perception_binding: GpuPerceptionFrameBinding,
+    pub(crate) neural_receptor_effects: Option<NeuralReceptorEffects>,
     offset_domain: GpuMemoryOffsetDomain,
 }
 
@@ -99,6 +99,38 @@ impl ValidatedLocalMemoryUpload {
 }
 
 impl GpuMemoryContextUpload {
+    pub fn header(&self) -> &GpuMemoryContextHeader {
+        &self.header
+    }
+
+    pub fn records(&self) -> &[GpuCandidateMemoryRecord] {
+        &self.records
+    }
+
+    pub fn cognitive_records(&self) -> &[GpuCognitiveProjectionRecord] {
+        &self.cognitive_records
+    }
+
+    pub const fn base_frame_digest(&self) -> PerceptionBaseDigest {
+        self.base_frame_digest
+    }
+
+    pub const fn context_digest(&self) -> PerceptionContextDigest {
+        self.context_digest
+    }
+
+    pub const fn final_frame_digest(&self) -> PerceptionFrameDigest {
+        self.final_frame_digest
+    }
+
+    pub const fn perception_binding(&self) -> GpuPerceptionFrameBinding {
+        self.perception_binding
+    }
+
+    pub const fn neural_receptor_effects(&self) -> Option<NeuralReceptorEffects> {
+        self.neural_receptor_effects
+    }
+
     pub(crate) fn validate_local_for_batch(
         self,
         frame: &PerceptionFrame,

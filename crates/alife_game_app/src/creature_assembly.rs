@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -9,9 +9,9 @@ use serde::Deserialize;
 use thiserror::Error;
 
 use crate::{
-    CreatureCoatKey, CreaturePartAssetId, CreaturePartLodId, CreaturePartSlot,
-    CreatureVisualBounds, GeneForgeCreaturePartCatalog, GeneForgeGroupTransform,
-    GeneForgeLandmarkId, GeneForgeSocketEvidence,
+    CreaturePartAssetId, CreaturePartLodId, CreaturePartSlot, CreatureVisualBounds,
+    GeneForgeCreaturePartCatalog, GeneForgeGroupTransform, GeneForgeLandmarkId,
+    GeneForgeSocketEvidence,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,13 +54,6 @@ pub enum CreatureAssemblyError {
     MissingPreparationFile { path: PathBuf },
     #[error("invalid GeneForge assembly preparation file {path}: {message}")]
     InvalidPreparationFile { path: PathBuf, message: String },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CreaturePartMeshKey {
-    pub asset_id: CreaturePartAssetId,
-    pub lod: CreaturePartLodId,
-    pub runtime_group: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -264,17 +257,7 @@ pub struct CreatureAssemblyPartRecipe {
     pub landmarks: BTreeMap<GeneForgeLandmarkId, [f32; 3]>,
     pub attachment_residual: f64,
     pub socket_evidence: Vec<GeneForgeSocketEvidence>,
-    pub coat_key: CreatureCoatKey,
-}
-
-impl CreatureAssemblyPartRecipe {
-    pub fn mesh_key(&self) -> CreaturePartMeshKey {
-        CreaturePartMeshKey {
-            asset_id: self.asset_id.clone(),
-            lod: self.lod,
-            runtime_group: self.runtime_group.clone(),
-        }
-    }
+    pub palette_family: u8,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -284,7 +267,7 @@ pub struct ResolvedJoinCover {
     pub cover_kind: String,
     pub authored_transform: [f64; 16],
     pub overlap_depth: f32,
-    pub coat_key: CreatureCoatKey,
+    pub palette_family: u8,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -294,7 +277,7 @@ pub struct CreatureAssemblyRecipe {
     pub target_torso_asset_id: CreaturePartAssetId,
     pub parts: BTreeMap<CreaturePartSlot, CreatureAssemblyPartRecipe>,
     pub join_covers: Vec<ResolvedJoinCover>,
-    pub coat_key: CreatureCoatKey,
+    pub palette_family: u8,
     pub warning: Option<CreatureAssemblyWarning>,
     pub display_only: bool,
 }
@@ -307,45 +290,10 @@ pub struct CreaturePartDisplayResolution {
     pub display_only: bool,
 }
 
-#[derive(Debug, Default)]
-pub struct CreaturePartAssetKeyCache {
-    mesh_keys: BTreeSet<CreaturePartMeshKey>,
-    coat_keys: BTreeSet<CreatureCoatKey>,
-    requested_meshes: usize,
-}
-
-impl CreaturePartAssetKeyCache {
-    pub fn register_geneforge_recipe(&mut self, recipe: &CreatureAssemblyRecipe) {
-        for part in recipe.parts.values() {
-            self.requested_meshes += 1;
-            self.mesh_keys.insert(part.mesh_key());
-            self.coat_keys.insert(part.coat_key);
-        }
-        self.coat_keys
-            .extend(recipe.join_covers.iter().map(|cover| cover.coat_key));
-    }
-
-    pub fn mesh_key_count(&self) -> usize {
-        self.mesh_keys.len()
-    }
-
-    pub fn coat_key_count(&self) -> usize {
-        self.coat_keys.len()
-    }
-
-    pub fn requested_mesh_count(&self) -> usize {
-        self.requested_meshes
-    }
-
-    pub fn mesh_keys(&self) -> impl Iterator<Item = &CreaturePartMeshKey> {
-        self.mesh_keys.iter()
-    }
-}
-
 pub fn resolve_geneforge_creature_assembly(
     requested_sources: CreaturePartSources,
     lod: CreaturePartLodId,
-    coat_key: CreatureCoatKey,
+    palette_family: u8,
     catalog: &GeneForgeCreaturePartCatalog,
     preparations: &GeneForgeAssemblyPreparationIndex,
 ) -> Result<CreatureAssemblyRecipe, CreatureAssemblyError> {
@@ -406,7 +354,7 @@ pub fn resolve_geneforge_creature_assembly(
                 landmarks: asset.landmarks.clone(),
                 attachment_residual: preparation.residual,
                 socket_evidence: preparation.socket_evidence.clone(),
-                coat_key,
+                palette_family,
             },
         );
     }
@@ -435,7 +383,7 @@ pub fn resolve_geneforge_creature_assembly(
                     cover_kind,
                     authored_transform: part.authored_transform,
                     overlap_depth: catalog.assembly_contract.default_overlap_depth,
-                    coat_key,
+                    palette_family,
                 })
             })
             .collect::<Result<Vec<_>, CreatureAssemblyError>>()?
@@ -447,7 +395,7 @@ pub fn resolve_geneforge_creature_assembly(
         target_torso_asset_id,
         parts,
         join_covers,
-        coat_key,
+        palette_family,
         warning,
         display_only: true,
     })
@@ -677,14 +625,12 @@ fn socket_name(slot: CreaturePartSlot) -> Option<&'static str> {
 
 #[cfg(test)]
 mod geneforge_tests {
-    use std::collections::BTreeSet;
-
     use alife_world::{CreaturePartFamilyId, CreaturePartSlotKey, CreaturePartSources};
 
     use super::*;
     use crate::{
-        load_geneforge_creature_part_catalog, CreatureCoatKey, CreaturePartAssetId,
-        GeneForgeCreaturePartCatalog, GeneForgeGroupTransform, GeneForgeSocketEvidence,
+        load_geneforge_creature_part_catalog, CreaturePartAssetId, GeneForgeCreaturePartCatalog,
+        GeneForgeGroupTransform, GeneForgeSocketEvidence,
     };
 
     fn authored_matrix(
@@ -799,10 +745,6 @@ mod geneforge_tests {
         records
     }
 
-    fn coat_key(sources: CreaturePartSources) -> CreatureCoatKey {
-        CreatureCoatKey::new(sources, 3, 5, 7)
-    }
-
     #[test]
     fn authored_preparations_resolve_inherited_parts_on_every_torso() {
         let catalog = load_geneforge_creature_part_catalog().unwrap();
@@ -820,7 +762,7 @@ mod geneforge_tests {
                     let recipe = resolve_geneforge_creature_assembly(
                         sources,
                         lod,
-                        coat_key(sources),
+                        3,
                         &catalog,
                         &preparations,
                     )
@@ -842,14 +784,9 @@ mod geneforge_tests {
         for family in &catalog.families {
             for lod in [CreaturePartLodId::Full, CreaturePartLodId::Compact] {
                 let sources = CreaturePartSources::coherent(family.id);
-                let recipe = resolve_geneforge_creature_assembly(
-                    sources,
-                    lod,
-                    coat_key(sources),
-                    &catalog,
-                    &preparations,
-                )
-                .unwrap();
+                let recipe =
+                    resolve_geneforge_creature_assembly(sources, lod, 3, &catalog, &preparations)
+                        .unwrap();
                 for slot in CreaturePartSlot::ALL {
                     let logical_slot = logical_slot(slot);
                     assert_eq!(
@@ -877,7 +814,7 @@ mod geneforge_tests {
         let recipe = resolve_geneforge_creature_assembly(
             sources,
             CreaturePartLodId::Full,
-            coat_key(sources),
+            3,
             &catalog,
             &preparations,
         )
@@ -917,7 +854,7 @@ mod geneforge_tests {
         let full = resolve_geneforge_creature_assembly(
             sources,
             CreaturePartLodId::Full,
-            coat_key(sources),
+            3,
             &catalog,
             &preparations,
         )
@@ -925,7 +862,7 @@ mod geneforge_tests {
         let compact = resolve_geneforge_creature_assembly(
             sources,
             CreaturePartLodId::Compact,
-            coat_key(sources),
+            3,
             &catalog,
             &preparations,
         )
@@ -943,36 +880,6 @@ mod geneforge_tests {
         assert!(full_head.attachment_residual <= 0.025);
         assert!(!full_head.landmarks.is_empty());
         assert_eq!(full_head.socket_evidence.len(), 1);
-    }
-
-    #[test]
-    fn mesh_keys_deduplicate_by_asset_lod_group_and_one_coat_covers_entire_assembly() {
-        let catalog = load_geneforge_creature_part_catalog().unwrap();
-        let preparations =
-            GeneForgeAssemblyPreparationIndex::new(&catalog, authored_records(&catalog)).unwrap();
-        let mut cache = CreaturePartAssetKeyCache::default();
-        let mut coat_keys = BTreeSet::new();
-        for family_id in [0, 3, 6, 9] {
-            let sources = CreaturePartSources::coherent(CreaturePartFamilyId(family_id));
-            let recipe = resolve_geneforge_creature_assembly(
-                sources,
-                CreaturePartLodId::Compact,
-                coat_key(sources),
-                &catalog,
-                &preparations,
-            )
-            .unwrap();
-            cache.register_geneforge_recipe(&recipe);
-            coat_keys.extend(recipe.parts.values().map(|part| part.coat_key));
-            coat_keys.extend(recipe.join_covers.iter().map(|cover| cover.coat_key));
-        }
-        assert_eq!(cache.requested_mesh_count(), 28);
-        assert_eq!(cache.mesh_key_count(), 17);
-        assert_eq!(cache.coat_key_count(), 4);
-        assert_eq!(coat_keys.len(), 4);
-        assert!(cache
-            .mesh_keys()
-            .all(|key| !key.asset_id.0.is_empty() && !key.runtime_group.is_empty()));
     }
 
     #[test]
@@ -1008,7 +915,7 @@ mod geneforge_tests {
             resolve_geneforge_creature_assembly(
                 sources,
                 CreaturePartLodId::Full,
-                coat_key(sources),
+                3,
                 &catalog,
                 &wrong_target,
             ),
@@ -1020,7 +927,7 @@ mod geneforge_tests {
             resolve_geneforge_creature_assembly(
                 sources,
                 CreaturePartLodId::Full,
-                coat_key(sources),
+                3,
                 &catalog,
                 &missing_group,
             ),

@@ -132,7 +132,7 @@ fn alpha_mask_defaults_to_hierarchical_sparse_policy() {
         .push(alife_core::SynapseAlphaOverride {
             synapse: SynapseAddress::new(3, 9),
             alpha: NormalizedScalar::new(0.75).unwrap(),
-            exceptional_reason: "injury recovery fixture".to_owned(),
+            exceptional_reason: String::new(),
         });
     assert!(alpha.validate_contract().is_ok());
 

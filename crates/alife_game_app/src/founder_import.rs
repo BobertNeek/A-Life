@@ -158,17 +158,6 @@ fn same_organism_id_set(left: &[alife_core::OrganismId], right: &[alife_core::Or
     left == right
 }
 
-/// Backward-compatible descriptive name for callers that only selected mind
-/// clones. The implementation now also makes genetic founders launch-ready.
-pub fn materialize_founder_mind_clones(
-    backend: GpuClosedLoopBackend,
-    save: PortableSaveFile,
-    asset_root: impl AsRef<Path>,
-    cohort: &ResolvedFounderCohort,
-) -> Result<PortableSaveFile, GameAppShellError> {
-    materialize_founder_gpu_states(backend, save, asset_root, cohort)
-}
-
 fn capture_genetic_founder(
     store: &GpuCheckpointAssetStore,
     session: &mut GpuAuthoritativeSession,

@@ -1,6 +1,6 @@
 use alife_core::{
     BrainScaleTier, CandidateActionFamily, HomeostaticSnapshot, OrganismId, SensorProfile, Tick,
-    TrackedObjectId, Vec3f,
+    Vec3f,
 };
 use alife_world::{
     AssetManifest, GroundedPhysicalProperties, HeadlessActionIds, HeadlessScenarioBuilder,
@@ -598,11 +598,6 @@ fn grounded_physical_state_participates_in_the_world_determinism_signature() {
         .unwrap();
 
     assert_ne!(world.stable_signature(), before);
-}
-
-#[test]
-fn tracked_object_id_zero_remains_reserved() {
-    assert_eq!(TrackedObjectId(0).raw(), 0);
 }
 
 #[test]

@@ -5,8 +5,8 @@ validators. Normal gameplay does not depend on this crate.
 
 ## Asset tools
 
-- [`creature_part_builder`](src/bin/creature_part_builder.rs) analyzes, validates,
-  previews, and builds creature part packs.
+- [`creature_part_builder`](src/bin/creature_part_builder.rs) renders GeneForge
+  assembly preview sheets. The Blender importer in `scripts/` builds the assets.
 - [`terrain_atlas_builder`](src/bin/terrain_atlas_builder.rs) builds albedo, normal,
   and ORM atlases from a source sheet and generation configuration.
 

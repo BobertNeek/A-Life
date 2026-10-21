@@ -23,9 +23,9 @@ case "${mode}" in
     source scripts/rust_env.sh
     ensure_cargo
     cargo fmt --all -- --check
-    cargo check --workspace --all-targets
-    cargo test --workspace --all-targets
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo check --locked --workspace --all-targets
+    cargo test --locked --workspace --all-targets
+    cargo clippy --locked --workspace --all-targets -- -D warnings
     "${BASH}" scripts/check_core_boundaries.sh
     ;;
   *)

@@ -1034,16 +1034,14 @@ impl SynapseAddress {
 pub struct SynapseAlphaOverride {
     pub synapse: SynapseAddress,
     pub alpha: NormalizedScalar,
+    // Retained in existing compiler-input identities; explanatory text is optional.
+    #[serde(default)]
     pub exceptional_reason: String,
 }
 
 impl Validate for SynapseAlphaOverride {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_normalized(self.alpha)?;
-        if self.exceptional_reason.trim().is_empty() {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        Ok(())
+        validate_normalized(self.alpha)
     }
 }
 
@@ -1302,8 +1300,7 @@ impl PlasticityGenomeParameters {
         Ok(value)
     }
 
-    /// Deterministic schema-v1 compatibility constructor. New production code
-    /// must supply an explicit multi-lane receptor profile through `try_new`.
+    /// Maps the legacy modulator sign onto the current multi-lane receptor profile.
     #[allow(clippy::too_many_arguments)]
     pub fn try_new_v1(
         eligibility_decay: f32,
@@ -1317,13 +1314,12 @@ impl PlasticityGenomeParameters {
         sleep_weight_limit: f32,
         sleep_fast_decay_rate: f32,
     ) -> Result<Self, ScaffoldContractError> {
-        let value = Self {
-            schema_version: SchemaVersions::CURRENT.learning.raw(),
+        Self::try_new(
             eligibility_decay,
             base_learning_rate,
             normalization_rate,
             sleep_replay_rate,
-            receptor_profile: crate::PlasticityReceptorProfile::try_new([
+            crate::PlasticityReceptorProfile::try_new([
                 0.2 * modulator_sign,
                 -modulator_sign,
                 1.0 * modulator_sign,
@@ -1333,16 +1329,12 @@ impl PlasticityGenomeParameters {
                 0.5 * modulator_sign,
                 -0.5 * modulator_sign,
             ])?,
-            action_candidate_credit_profile: None,
-            decoder_lifetime_rate_policy: None,
             fast_min,
             fast_max,
             sleep_staging_rate,
             sleep_weight_limit,
             sleep_fast_decay_rate,
-        };
-        value.validate_contract()?;
-        Ok(value)
+        )
     }
 
     pub(crate) fn canonical_default() -> Self {

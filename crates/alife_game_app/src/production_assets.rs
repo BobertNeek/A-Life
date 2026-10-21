@@ -15,7 +15,6 @@ pub const FVR07_PRODUCTION_ASSET_MANIFEST_RELATIVE_PATH: &str =
 pub const FVR07_PRODUCTION_ASSET_MANIFEST_APP_RELATIVE_PATH: &str =
     "assets/production_voxel_v1/production_asset_manifest.json";
 pub const FVR07_PRODUCTION_ASSET_PACK_ID: &str = "production-voxel-v1";
-pub const FVR07_ART_DIRECTION: &str = "stylized-voxel-alife-production-v1";
 // Editable Blender sources and full authoring-scene GLBs are not runtime assets.
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -23,8 +22,6 @@ pub struct ProductionVoxelAssetManifest {
     pub schema: String,
     pub schema_version: u16,
     pub pack_id: String,
-    pub art_direction: String,
-    pub generated_art_target: String,
     pub entries: Vec<ProductionVoxelAssetEntry>,
 }
 
@@ -65,12 +62,8 @@ pub struct ProductionAssetValidationSummary {
     pub generated_assets: usize,
     pub external_assets: usize,
     pub final_art_entries: usize,
-    pub placeholder_final_entries: usize,
-    pub unknown_license_entries: usize,
-    pub missing_or_rejected_assets: usize,
     pub committed_asset_bytes: u64,
     pub largest_asset_bytes: u64,
-    pub generated_art_target: String,
 }
 
 impl ProductionAssetValidationSummary {
@@ -79,11 +72,7 @@ impl ProductionAssetValidationSummary {
             || self.schema_version != FVR07_PRODUCTION_ASSET_MANIFEST_SCHEMA_VERSION
             || self.pack_id != FVR07_PRODUCTION_ASSET_PACK_ID
             || self.asset_count == 0
-            || self.placeholder_final_entries != 0
-            || self.unknown_license_entries != 0
-            || self.missing_or_rejected_assets != 0
             || self.committed_asset_bytes == 0
-            || self.generated_art_target.trim().is_empty()
         {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "FVR07 production asset manifest failed validation".to_string(),
@@ -94,15 +83,13 @@ impl ProductionAssetValidationSummary {
 
     pub fn signature_line(&self) -> String {
         format!(
-            "{}:{}:{}:assets={}:generated={}:external={}:licenses={}:placeholder_final={}:bytes={}:largest={}",
+            "{}:{}:{}:assets={}:generated={}:external={}:bytes={}:largest={}",
             self.schema,
             self.schema_version,
             self.pack_id,
             self.asset_count,
             self.generated_assets,
             self.external_assets,
-            self.unknown_license_entries,
-            self.placeholder_final_entries,
             self.committed_asset_bytes,
             self.largest_asset_bytes,
         )
@@ -152,7 +139,6 @@ pub(crate) fn validate_production_assets_inner(
     manifest: &ProductionVoxelAssetManifest,
 ) -> Result<ProductionAssetValidationSummary, GameAppShellError> {
     validate_manifest_header(manifest)?;
-    validate_generated_target_path(&manifest.generated_art_target)?;
 
     let mut asset_ids = BTreeSet::new();
     let mut committed_asset_bytes = 0_u64;
@@ -160,18 +146,9 @@ pub(crate) fn validate_production_assets_inner(
     let mut generated_assets = 0_usize;
     let mut external_assets = 0_usize;
     let mut final_art_entries = 0_usize;
-    let mut placeholder_final_entries = 0_usize;
-    let mut unknown_license_entries = 0_usize;
-    let mut missing_or_rejected_assets = 0_usize;
 
     for entry in &manifest.entries {
-        if validate_production_asset_entry(root, entry, &mut asset_ids).is_err() {
-            missing_or_rejected_assets += 1;
-            continue;
-        }
-        if !license_allowed(&entry.license) {
-            unknown_license_entries += 1;
-        }
+        validate_production_asset_entry(root, entry, &mut asset_ids)?;
         if entry.generated {
             generated_assets += 1;
         }
@@ -180,9 +157,6 @@ pub(crate) fn validate_production_assets_inner(
         }
         if entry.final_art {
             final_art_entries += 1;
-        }
-        if entry.placeholder && entry.final_art {
-            placeholder_final_entries += 1;
         }
         committed_asset_bytes = committed_asset_bytes.saturating_add(entry.size_bytes);
         largest_asset_bytes = largest_asset_bytes.max(entry.size_bytes);
@@ -197,12 +171,8 @@ pub(crate) fn validate_production_assets_inner(
         generated_assets,
         external_assets,
         final_art_entries,
-        placeholder_final_entries,
-        unknown_license_entries,
-        missing_or_rejected_assets,
         committed_asset_bytes,
         largest_asset_bytes,
-        generated_art_target: manifest.generated_art_target.clone(),
     })
 }
 
@@ -212,7 +182,6 @@ fn validate_manifest_header(
     if manifest.schema != FVR07_PRODUCTION_ASSET_MANIFEST_SCHEMA
         || manifest.schema_version != FVR07_PRODUCTION_ASSET_MANIFEST_SCHEMA_VERSION
         || manifest.pack_id != FVR07_PRODUCTION_ASSET_PACK_ID
-        || manifest.art_direction != FVR07_ART_DIRECTION
         || manifest.entries.is_empty()
     {
         return Err(GameAppShellError::InvalidProductionFrontend {
@@ -232,7 +201,7 @@ fn validate_production_asset_entry(
     if !asset_ids.insert(entry.asset_id.clone()) {
         return Err(invalid_asset("duplicate production asset id"));
     }
-    validate_production_asset_local_path(&entry.local_path, false)?;
+    validate_production_asset_local_path(&entry.local_path)?;
     let path = root.join(&entry.local_path);
     if !path.is_file() {
         return Err(invalid_asset("production asset local path is missing"));
@@ -292,17 +261,7 @@ fn validate_generated_asset_source(
             "generated asset source metadata is incomplete",
         ));
     }
-    validate_production_asset_local_path(&generator.config_path, false)?;
-    Ok(())
-}
-
-fn validate_generated_target_path(relative: &str) -> Result<(), GameAppShellError> {
-    validate_production_asset_local_path(relative, true)?;
-    if !relative.starts_with("target/") {
-        return Err(invalid_asset(
-            "generated art target must live under target/",
-        ));
-    }
+    validate_production_asset_local_path(&generator.config_path)?;
     Ok(())
 }
 
@@ -333,10 +292,7 @@ fn require_production_asset_id(value: &str) -> Result<(), GameAppShellError> {
     Ok(())
 }
 
-fn validate_production_asset_local_path(
-    relative: &str,
-    allow_target: bool,
-) -> Result<(), GameAppShellError> {
+fn validate_production_asset_local_path(relative: &str) -> Result<(), GameAppShellError> {
     if relative.trim().is_empty() {
         return Err(invalid_asset("empty production asset path"));
     }
@@ -352,9 +308,8 @@ fn validate_production_asset_local_path(
                 let lower = name.to_string_lossy().to_ascii_lowercase();
                 if matches!(
                     lower.as_str(),
-                    "captures" | "screenshots" | ".cache" | "cache"
-                ) || (!allow_target && matches!(lower.as_str(), "target" | "artifacts"))
-                {
+                    "captures" | "screenshots" | ".cache" | "cache" | "target" | "artifacts"
+                ) {
                     return Err(invalid_asset(
                         "production asset path points at a generated/cache artifact",
                     ));
@@ -379,36 +334,6 @@ fn invalid_asset(message: &'static str) -> GameAppShellError {
 mod tests {
     use super::*;
 
-    const GENEFORGE_RECIPE_PATH: &str =
-        "crates/alife_game_app/assets/production_voxel_v1/creature_parts/geneforge_recipes.json";
-    const GENEFORGE_OUTPUT_COUNT: usize = 168;
-
-    fn collect_recipe_output_paths(value: &serde_json::Value, output: &mut BTreeSet<String>) {
-        match value {
-            serde_json::Value::Object(fields) => {
-                for (key, value) in fields {
-                    if matches!(
-                        key.as_str(),
-                        "generated_obj" | "socket_manifest" | "semantic_mask" | "anatomy_mask"
-                    ) {
-                        let path = value
-                            .as_str()
-                            .unwrap_or_else(|| panic!("{key} must contain a string path"));
-                        output.insert(format!("crates/alife_game_app/assets/{path}"));
-                    } else {
-                        collect_recipe_output_paths(value, output);
-                    }
-                }
-            }
-            serde_json::Value::Array(values) => {
-                for value in values {
-                    collect_recipe_output_paths(value, output);
-                }
-            }
-            _ => {}
-        }
-    }
-
     fn fixture_manifest() -> ProductionVoxelAssetManifest {
         serde_json::from_str(
             &std::fs::read_to_string(default_production_asset_manifest_path()).unwrap(),
@@ -421,58 +346,6 @@ mod tests {
         let path = default_production_asset_manifest_path();
         let summary = validate_production_assets(&path).unwrap();
         summary.validate().unwrap();
-        assert_eq!(summary.unknown_license_entries, 0);
-        assert_eq!(summary.placeholder_final_entries, 0);
-        assert_eq!(summary.missing_or_rejected_assets, 0);
-    }
-
-    #[test]
-    fn retired_geneforge_outputs_are_not_required_by_the_production_pack() {
-        let root = ca12_workspace_root();
-        let recipe: serde_json::Value = serde_json::from_str(
-            &std::fs::read_to_string(root.join(GENEFORGE_RECIPE_PATH)).unwrap(),
-        )
-        .unwrap();
-        let mut retired_paths = BTreeSet::new();
-        collect_recipe_output_paths(&recipe, &mut retired_paths);
-        assert_eq!(retired_paths.len(), GENEFORGE_OUTPUT_COUNT);
-        assert!(retired_paths.iter().all(|path| !root.join(path).exists()));
-        let manifest = fixture_manifest();
-        assert!(manifest
-            .entries
-            .iter()
-            .all(|entry| !retired_paths.contains(&entry.local_path)));
-        validate_production_assets(default_production_asset_manifest_path()).unwrap();
-    }
-
-    #[test]
-    fn superseded_whole_body_pack_is_absent_from_production_assets() {
-        let root = ca12_workspace_root();
-        let generated =
-            root.join("crates/alife_game_app/assets/production_voxel_v1/creature_parts/generated");
-        let stale_generated = std::fs::read_dir(generated)
-            .into_iter()
-            .flatten()
-            .filter_map(Result::ok)
-            .filter(|entry| entry.path().is_file())
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        assert!(
-            stale_generated.is_empty(),
-            "superseded generated family files remain: {stale_generated:?}"
-        );
-
-        let models = root.join("crates/alife_game_app/assets/production_voxel_v1/models");
-        let stale_surfaces = std::fs::read_dir(models)
-            .unwrap()
-            .filter_map(Result::ok)
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| name.starts_with("T_") && name.ends_with(".png"))
-            .collect::<Vec<_>>();
-        assert!(
-            stale_surfaces.is_empty(),
-            "superseded whole-body surfaces remain: {stale_surfaces:?}"
-        );
     }
 
     #[test]

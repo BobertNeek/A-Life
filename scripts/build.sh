@@ -9,5 +9,5 @@ source "${script_dir}/rust_env.sh"
 ensure_cargo
 
 cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo build --workspace --all-targets
+cargo check --locked --workspace --all-targets
+cargo build --locked --workspace --all-targets

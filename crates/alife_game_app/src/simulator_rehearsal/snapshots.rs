@@ -80,7 +80,7 @@ pub(super) fn snapshot_from_save(
     save.validate_with_asset_root(store.root())?;
     let world = save.restore_headless_world()?;
     learner(&world)?;
-    // Match the canonical on-disk save serializer; the inline-text helper has a separate 64 KiB display limit.
+    // Use the canonical on-disk save representation.
     let bytes = serde_json::to_vec_pretty(&save)?;
     if bytes.len() > 64 * 1024 * 1024 {
         return Err("snapshot world envelope exceeds 64 MiB".into());

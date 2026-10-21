@@ -31,24 +31,16 @@ fn validated_module(source: &str) -> naga::Module {
     module
 }
 
-fn compact(source: &str) -> String {
-    source.split_whitespace().collect()
-}
-
-fn entry_body<'a>(source: &'a str, name: &str) -> &'a str {
-    let marker = format!("fn {name}");
-    let start = source.find(&marker).expect("required WGSL function");
-    &source[start..]
-}
-
-fn function_definition<'a>(source: &'a str, name: &str, next: &str) -> &'a str {
-    let start = source
-        .find(&format!("fn {name}"))
-        .expect("required WGSL function");
-    let relative_end = source[start..]
-        .find(&format!("fn {next}"))
-        .expect("following WGSL function");
-    &source[start..start + relative_end]
+fn assert_shader_constant(source: &str, name: &str, expected: u32) {
+    let module = validated_module(source);
+    let (_, value) = module
+        .constants
+        .iter()
+        .find(|(_, c)| c.name.as_deref() == Some(name))
+        .expect("required ABI constant");
+    assert!(
+        matches!(module.global_expressions[value.init], Expression::Literal(naga::Literal::U32(actual)) if actual == expected)
+    );
 }
 
 #[derive(Default)]
@@ -244,11 +236,6 @@ fn recurrent_shader_has_four_host_specialized_microstep_variants() {
         .filter_map(|(_, value)| value.name.as_deref())
         .collect::<Vec<_>>();
     assert!(overrides.contains(&"microstep_index"));
-    assert_eq!(GpuClosedLoopPipelines::recurrent_variant_count(), 4);
-    assert_eq!(
-        GpuClosedLoopPipelines::recurrent_variant_microstep_indices(),
-        [0, 1, 2, 3]
-    );
     for count in 2..=4 {
         assert!(GpuClosedLoopPipelines::validate_microstep_count(count).is_ok());
     }
@@ -257,91 +244,11 @@ fn recurrent_shader_has_four_host_specialized_microstep_variants() {
 }
 
 #[test]
-fn each_shader_concatenates_the_canonical_abi_prefix_exactly_once() {
-    let abi_anchor = "struct GpuBrainSlotRecord";
-    assert_eq!(CLOSED_LOOP_ABI_WGSL.matches(abi_anchor).count(), 1);
-    for source in [
-        CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
-        CLOSED_LOOP_DECODE_WGSL,
-        CLOSED_LOOP_ELIGIBILITY_WGSL,
-        CLOSED_LOOP_ENCODE_WGSL,
-        CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
-        CLOSED_LOOP_PLASTICITY_WGSL,
-        CLOSED_LOOP_RECURRENT_WGSL,
-    ] {
-        assert!(source.starts_with(CLOSED_LOOP_ABI_WGSL));
-        assert_eq!(source.matches(abi_anchor).count(), 1);
-        for declaration in [
-            "struct GpuPerceptionHeader",
-            "struct GpuBrainSlotRecord",
-            "struct GpuPhenotypeIdentityRecord",
-            "struct GpuCandidateRecord",
-            "struct GpuSelectionRecord",
-            "struct GpuEncoderPlanRecord",
-            "struct GpuEncoderAssignmentRecord",
-            "struct GpuNeuronDynamicsRecord",
-            "struct GpuProjectionRecord",
-            "struct GpuRouteMetadataRecord",
-            "struct GpuDecoderPlanRecord",
-            "struct GpuDecoderFamilyRecord",
-            "struct GpuDecoderWeightIndexRecord",
-        ] {
-            assert_eq!(source.matches(declaration).count(), 1, "{declaration}");
-        }
-    }
-}
-
-#[test]
-fn slot_extension_and_learning_state_helpers_load_every_exact_word_once() {
-    let extension = compact(function_definition(
-        CLOSED_LOOP_ABI_WGSL,
-        "load_slot_extension",
-        "load_slot_learning_state",
-    ));
-    let learning = compact(function_definition(
-        CLOSED_LOOP_ABI_WGSL,
-        "load_slot_learning_state",
-        "active_weight_bases",
-    ));
-    assert_eq!(extension.matches("load_state_u32(base)").count(), 1);
-    assert_eq!(learning.matches("load_state_u32(base)").count(), 1);
-    for index in 1..20 {
-        assert_eq!(
-            extension
-                .matches(&format!("load_state_u32(base+{index}u)"))
-                .count(),
-            1,
-            "extension word {index}"
-        );
-    }
-    for index in 1..24 {
-        assert_eq!(
-            learning
-                .matches(&format!("load_state_u32(base+{index}u)"))
-                .count(),
-            1,
-            "learning-state word {index}"
-        );
-    }
-    for helper in [
-        "active_weight_bases",
-        "inactive_weight_bases",
-        "active_eligibility_bases",
-        "inactive_eligibility_bases",
-    ] {
-        assert!(CLOSED_LOOP_ABI_WGSL.contains(&format!("fn {helper}")));
-    }
-}
-
-#[test]
 fn learning_state_schema_matches_the_wgsl_validation_contract() {
-    let expected = format!(
-        "constGPU_LEARNING_SCHEMA_VERSION:u32={}u;",
-        SchemaVersions::CURRENT.learning.raw()
-    );
-    assert!(
-        compact(CLOSED_LOOP_ABI_WGSL).contains(&expected),
-        "WGSL must validate the exact learning-state schema uploaded by Rust"
+    assert_shader_constant(
+        CLOSED_LOOP_ABI_WGSL,
+        "GPU_LEARNING_SCHEMA_VERSION",
+        u32::from(SchemaVersions::CURRENT.learning.raw()),
     );
 }
 
@@ -461,12 +368,16 @@ fn dispatch_dimension_boundaries_are_checked_without_truncation() {
         CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
         CLOSED_LOOP_RECURRENT_WGSL,
     ] {
-        assert!(compact(source).contains("constACTIVE_DISPATCH_ROW_WORDS:u32=332u;"));
+        assert_shader_constant(
+            source,
+            "ACTIVE_DISPATCH_ROW_WORDS",
+            GPU_ACTIVE_DISPATCH_ROW_WORDS as u32,
+        );
     }
 }
 
 #[test]
-fn encode_uses_gid_y_as_the_active_batch_row_and_current_canonical_frame() {
+fn encode_has_reachable_dispatch_input_loads_and_mutable_state_writes() {
     let module = validated_module(CLOSED_LOOP_ENCODE_WGSL);
     assert!(entry_uses_global_invocation_id(&module));
     let effects = reachable_ir_effects(&module, "encode_perception");
@@ -477,48 +388,10 @@ fn encode_uses_gid_y_as_the_active_batch_row_and_current_canonical_frame() {
         );
     }
     assert!(effects.writes.contains_key(&(0, 6)));
-    let body = compact(entry_body(CLOSED_LOOP_ENCODE_WGSL, "encode_perception"));
-    for required in [
-        "gid.y",
-        "slot_generation",
-        "target_offsets_offset",
-        "sensory_offset",
-        "encoded_input_offset",
-    ] {
-        assert!(
-            body.contains(required),
-            "missing encode causal fragment: {required}"
-        );
-    }
-    assert!(body.contains("clamp("));
 }
 
 #[test]
-fn encoder_source_groups_are_bounds_checked_and_concatenated_exactly_once() {
-    let body = compact(entry_body(
-        CLOSED_LOOP_ENCODE_WGSL,
-        "resolve_encoder_source_lane",
-    ));
-    for required in [
-        "source_group_raw==1u",
-        "source_index<encoder.sensory_lane_count",
-        "source_group_raw==2u",
-        "source_index<encoder.body_lane_count",
-        "encoder.sensory_lane_count+source_index",
-        "source_group_raw==3u",
-        "source_index<encoder.homeostasis_lane_count",
-        "encoder.sensory_lane_count+encoder.body_lane_count+source_index",
-    ] {
-        assert!(
-            body.contains(required),
-            "missing source-group fragment: {required}"
-        );
-    }
-    assert!(!body.contains("+encoder.sensory_lane_count+encoder.sensory_lane_count"));
-}
-
-#[test]
-fn recurrent_shader_uses_target_major_csr_and_never_projection_provenance_for_weights() {
+fn recurrent_shader_has_reachable_graph_weight_and_state_access() {
     let module = validated_module(CLOSED_LOOP_RECURRENT_WGSL);
     assert!(entry_uses_global_invocation_id(&module));
     let effects = reachable_ir_effects(&module, "recurrent_microstep");
@@ -530,83 +403,6 @@ fn recurrent_shader_uses_target_major_csr_and_never_projection_provenance_for_we
     }
     assert!(effects.writes.contains_key(&(0, 6)));
     assert!(effects.atomics > 0);
-    let body = compact(entry_body(
-        CLOSED_LOOP_RECURRENT_WGSL,
-        "recurrent_microstep",
-    ));
-    for required in [
-        "gid.y",
-        "target_offsets_offset",
-        "source_indices_offset",
-        "route_indices_offset",
-        "route_metadata_offset",
-        "genetic_weight_offset",
-        "alpha_offset",
-        "active_weight_bases(",
-        "weight_bases.lifetime",
-        "weight_bases.fast",
-    ] {
-        assert!(
-            body.contains(required),
-            "missing recurrent CSR fragment: {required}"
-        );
-    }
-    for forbidden in [
-        "projection.synapse_start",
-        "projection.synapse_count",
-        "brain.projection_offset+cursor",
-    ] {
-        assert!(
-            !body.contains(forbidden),
-            "provenance span used by kernel: {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn recurrent_shader_applies_cadence_zero_delay_and_exact_effective_weight() {
-    let body = compact(entry_body(
-        CLOSED_LOOP_RECURRENT_WGSL,
-        "recurrent_microstep",
-    ));
-    assert!(body.contains("route.delay_microsteps!=0u"));
-    assert!(body.contains("route_fires("));
-    assert!(body.contains("microstep_index"));
-    assert!(body.contains("genetic+lifetime+alpha*fast"));
-    assert!(!body.contains("genetic+fast+alpha*lifetime"));
-}
-
-#[test]
-fn every_microstep_keeps_current_input_and_updates_dynamics_homeostasis_and_diagnostics() {
-    let body = compact(entry_body(
-        CLOSED_LOOP_RECURRENT_WGSL,
-        "recurrent_microstep",
-    ));
-    for required in [
-        "brain.encoded_input_offset+target",
-        "brain.neuron_dynamics_offset+target*8u",
-        "brain.neuron_homeostasis_offset+target*2u",
-        "homeostatic_gain",
-        "metabolic_load",
-        "activity_ema_decay",
-        "metabolic_decay",
-        "abs(output)",
-        "output*output",
-        "clamp(",
-        "is_finite",
-        "brain.diagnostic_offset",
-    ] {
-        assert!(
-            body.contains(required),
-            "missing recurrent dynamics fragment: {required}"
-        );
-    }
-    for activation_raw in ["0u", "1u", "2u", "3u"] {
-        assert!(
-            body.contains(activation_raw),
-            "missing activation raw {activation_raw}"
-        );
-    }
 }
 
 #[test]

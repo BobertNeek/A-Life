@@ -170,11 +170,11 @@ pub use evolutionary_genetics::{
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
-    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
-    HeuristicDecisionEvidence, HeuristicPreActionEvidence, JointPhysicalOutcome,
-    MeasuredPhysiologyTransition, MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence,
-    PreActionSnapshot, TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
+    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, HeuristicDecisionEvidence,
+    HeuristicPreActionEvidence, JointPhysicalOutcome, MeasuredPhysiologyTransition,
+    MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence, PreActionSnapshot,
+    TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
 };
 pub use foundation::{
     FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,
@@ -290,7 +290,7 @@ pub use perception::{
     CandidateFeatureVector, CandidateObservationRef, NeuralActionSelection, PerceptionBaseDigest,
     PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
     PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
-    CANDIDATE_FEATURE_COUNT, CONTACT_ACTIVATION_FEATURE_LANE, MAX_ACTION_CANDIDATES,
+    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 pub use phenotype::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
@@ -325,14 +325,13 @@ pub use routing::{
     ActiveTilePolicy, BiologicalPriority, ProjectionType, RoutingMask, RoutingMatrix,
 };
 pub use sensory_abi::{
-    AffordanceBits, ChannelBounds, ChannelExtensionPolicy, ChannelGroupKind, ChannelGroupSpec,
-    CompressedSemanticCode, ContextFeatureFlags, ContextStreams, EnvironmentStreamEntry,
-    GaussianContextRef, GaussianSalienceEntry, HeardToken, LanguageContextSnapshot,
-    SemanticContextRef, SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion,
-    SensoryChannels, SensorySnapshot, SensorySnapshotFromAdapter, SensorySnapshotSource,
-    SocialAgentSnapshot, SocialContextSnapshot, SocialProximityEntry, TeacherPerceptionChannel,
-    VocalizedToken, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
-    SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
+    AffordanceBits, CompressedSemanticCode, ContextFeatureFlags, ContextStreams,
+    EnvironmentStreamEntry, GaussianContextRef, GaussianSalienceEntry, HeardToken,
+    LanguageContextSnapshot, SemanticContextRef, SemanticSalienceEntry, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SocialAgentSnapshot, SocialContextSnapshot,
+    SocialProximityEntry, TeacherPerceptionChannel, VocalizedToken, MAX_HEARD_TOKENS,
+    MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS, SENSORY_ABI_CHANNEL_COUNT,
+    SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
@@ -342,10 +341,9 @@ pub use sleep::{
     decode_replay_eligibility_q15, encode_replay_eligibility_q15, BoundedReplayBatch,
     ConceptConsolidationReport, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId,
     ConsolidationStagedOutput, ConsolidationState, GpuConsolidationRequest, HTraceDrainReport,
-    LifetimeTraitEvidence, LifetimeTraitLedger, MemoryCompressionReport, ReplayEligibilitySample,
-    ReplaySynapseSpan, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
-    SleepController, SleepPhase, SleepReplayEvent, SleepReplayJournal, SleepState, SleepTransition,
-    SleepTrigger, StableLifetimeTrait, StableLifetimeTraitKind, StructuralEditApplicationStatus,
+    MemoryCompressionReport, ReplayEligibilitySample, ReplaySynapseSpan, SleepConsolidationConfig,
+    SleepConsolidationReport, SleepConsolidator, SleepController, SleepPhase, SleepReplayEvent,
+    SleepReplayJournal, SleepState, SleepTransition, SleepTrigger, StructuralEditApplicationStatus,
     StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
     TraitPromotionReport, BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
     GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION, SLEEP_CONSOLIDATION_SCHEMA_VERSION,

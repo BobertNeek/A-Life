@@ -18,7 +18,6 @@ struct TerrainGenerationConfig {
     gutter: u32,
     grid_columns: u32,
     grid_rows: u32,
-    source_prompt: String,
     slots: Vec<TerrainMaterialSlot>,
 }
 
@@ -45,11 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let output_directory = PathBuf::from(&args[2]);
     let source = image::open(&source_path)?.into_rgba8();
     let config: TerrainGenerationConfig = serde_json::from_str(&fs::read_to_string(&config_path)?)?;
-    validate_config(&config, &source)?;
-
-    let cell_size = config.tile_size + config.gutter * 2;
-    let atlas_width = config.grid_columns * cell_size;
-    let atlas_height = config.grid_rows * cell_size;
+    let (atlas_width, atlas_height) = validate_config(&config, &source)?;
     let mut albedo = RgbaImage::new(atlas_width, atlas_height);
     let mut normal = RgbaImage::new(atlas_width, atlas_height);
     let mut orm = RgbaImage::new(atlas_width, atlas_height);
@@ -57,10 +52,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     for (index, slot) in config.slots.iter().enumerate() {
         let column = index as u32 % config.grid_columns;
         let row = index as u32 / config.grid_columns;
-        let x0 = source.width() * column / config.grid_columns;
-        let x1 = source.width() * (column + 1) / config.grid_columns;
-        let y0 = source.height() * row / config.grid_rows;
-        let y1 = source.height() * (row + 1) / config.grid_rows;
+        let x0 =
+            (u64::from(source.width()) * u64::from(column) / u64::from(config.grid_columns)) as u32;
+        let x1 = (u64::from(source.width()) * u64::from(column + 1)
+            / u64::from(config.grid_columns)) as u32;
+        let y0 = (u64::from(source.height()) * u64::from(row) / u64::from(config.grid_rows)) as u32;
+        let y1 =
+            (u64::from(source.height()) * u64::from(row + 1) / u64::from(config.grid_rows)) as u32;
         let crop = image::imageops::crop_imm(&source, x0, y0, x1 - x0, y1 - y0).to_image();
         let edge_blend = 8.min(config.tile_size / 4);
         let wrapped = make_wrapped_tile(&crop, config.tile_size, edge_blend);
@@ -101,7 +99,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn validate_config(
     config: &TerrainGenerationConfig,
     source: &RgbaImage,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(u32, u32), Box<dyn Error>> {
     if config.schema != TERRAIN_GENERATION_SCHEMA {
         return Err(format!("unsupported terrain generation schema: {}", config.schema).into());
     }
@@ -112,10 +110,21 @@ fn validate_config(
     {
         return Err("terrain atlas dimensions and gutter must be positive".into());
     }
-    if config.source_prompt.trim().is_empty() {
-        return Err("terrain source prompt must be recorded".into());
-    }
-    let expected_slots = (config.grid_columns * config.grid_rows) as usize;
+    let cell_size = config
+        .gutter
+        .checked_mul(2)
+        .and_then(|gutter| config.tile_size.checked_add(gutter))
+        .ok_or("terrain cell dimensions overflow")?;
+    let atlas_width = config
+        .grid_columns
+        .checked_mul(cell_size)
+        .ok_or("terrain atlas width overflow")?;
+    let atlas_height = config
+        .grid_rows
+        .checked_mul(cell_size)
+        .ok_or("terrain atlas height overflow")?;
+    let expected_slots =
+        usize::try_from(u64::from(config.grid_columns) * u64::from(config.grid_rows))?;
     if config.slots.len() != expected_slots {
         return Err(format!(
             "terrain config has {} slots; expected {expected_slots}",
@@ -136,7 +145,7 @@ fn validate_config(
             return Err(format!("invalid terrain material slot: {}", slot.id).into());
         }
     }
-    Ok(())
+    Ok((atlas_width, atlas_height))
 }
 
 fn make_wrapped_tile(source: &RgbaImage, size: u32, blend: u32) -> RgbaImage {
@@ -306,6 +315,24 @@ mod tests {
             }
         }
         energy
+    }
+
+    #[test]
+    fn overflowing_atlas_dimensions_return_an_error_before_allocation() {
+        let source = RgbaImage::new(1, 1);
+        for (tile_size, gutter, grid_columns) in
+            [(u32::MAX, 1, 1), (1, u32::MAX, 1), (1, 1, u32::MAX)]
+        {
+            let config = TerrainGenerationConfig {
+                schema: TERRAIN_GENERATION_SCHEMA.into(),
+                tile_size,
+                gutter,
+                grid_columns,
+                grid_rows: 1,
+                slots: Vec::new(),
+            };
+            assert!(validate_config(&config, &source).is_err());
+        }
     }
 
     #[test]

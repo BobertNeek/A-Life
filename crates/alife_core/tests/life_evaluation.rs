@@ -364,3 +364,30 @@ fn heard_creature_vocalization_does_not_measure_peer_communication() {
         }
     );
 }
+
+#[test]
+fn survival_counter_overflow_leaves_statistics_unchanged() {
+    let statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
+    for field in ["survival_ticks", "gpu_dispatches", "mean_brain_atp"] {
+        let mut wire = serde_json::to_value(&statistics).unwrap();
+        if field == "mean_brain_atp" {
+            wire["energy_stability"]["samples"] = serde_json::json!(u64::MAX);
+        } else {
+            wire[field] = serde_json::json!(u64::MAX);
+        }
+        let mut restored: PassiveLifeStatistics = serde_json::from_value(wire).unwrap();
+        restored.validate_contract().unwrap();
+        let before = restored.clone();
+        assert!(restored
+            .observe(PassiveLifeEvent::SurvivalTick {
+                tick: Tick(1),
+                regime: EnvironmentalRegime::Temperate,
+                energy_q16: 0,
+                movement_distance_q16: 0,
+                gpu_dispatched: true,
+                gpu_throttled: false,
+            })
+            .is_err());
+        assert_eq!(restored, before, "overflow in {field}");
+    }
+}

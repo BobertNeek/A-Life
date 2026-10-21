@@ -13,13 +13,12 @@ use bevy::{
 
 use crate::{Fvr03ProductionVoxelMaterialKind, Fvr07ProductionDressingKind};
 
-pub(crate) const PRODUCTION_DRESSING_KINDS: [Fvr07ProductionDressingKind; 14] = [
+pub(crate) const PRODUCTION_DRESSING_KINDS: [Fvr07ProductionDressingKind; 13] = [
     Fvr07ProductionDressingKind::LeafPatch,
     Fvr07ProductionDressingKind::MushroomCluster,
     Fvr07ProductionDressingKind::PebbleCluster,
     Fvr07ProductionDressingKind::NestMarker,
     Fvr07ProductionDressingKind::FoodResource,
-    Fvr07ProductionDressingKind::CorpseMarker,
     Fvr07ProductionDressingKind::FlowerPatch,
     Fvr07ProductionDressingKind::ReedCluster,
     Fvr07ProductionDressingKind::LichenRock,
@@ -299,8 +298,7 @@ fn cluster_child_count(kind: Fvr07ProductionDressingKind) -> u32 {
         | Fvr07ProductionDressingKind::GlowBulbCluster => 2,
         Fvr07ProductionDressingKind::PebbleCluster
         | Fvr07ProductionDressingKind::LichenRock
-        | Fvr07ProductionDressingKind::NestMarker
-        | Fvr07ProductionDressingKind::CorpseMarker => 1,
+        | Fvr07ProductionDressingKind::NestMarker => 1,
     }
 }
 
@@ -311,7 +309,6 @@ fn dressing_scale(kind: Fvr07ProductionDressingKind) -> Vec3 {
         Fvr07ProductionDressingKind::PebbleCluster => Vec3::new(1.00, 0.82, 1.00),
         Fvr07ProductionDressingKind::NestMarker => Vec3::new(1.08, 0.76, 1.08),
         Fvr07ProductionDressingKind::FoodResource => Vec3::new(1.28, 1.50, 1.28),
-        Fvr07ProductionDressingKind::CorpseMarker => Vec3::new(0.90, 0.52, 0.86),
         Fvr07ProductionDressingKind::FlowerPatch => Vec3::new(1.32, 1.62, 1.32),
         Fvr07ProductionDressingKind::ReedCluster => Vec3::new(1.24, 1.72, 1.24),
         Fvr07ProductionDressingKind::LichenRock => Vec3::new(1.12, 0.96, 1.12),
@@ -329,7 +326,6 @@ fn dressing_y_offset(kind: Fvr07ProductionDressingKind) -> f32 {
         Fvr07ProductionDressingKind::PebbleCluster
         | Fvr07ProductionDressingKind::LichenRock
         | Fvr07ProductionDressingKind::NestMarker
-        | Fvr07ProductionDressingKind::CorpseMarker
         | Fvr07ProductionDressingKind::DeadLeafPatch => 0.02,
         _ => 0.035,
     }
@@ -368,10 +364,6 @@ fn kind_is_compatible(
             Fvr03ProductionVoxelMaterialKind::SafeGrass
                 | Fvr03ProductionVoxelMaterialKind::Resource
                 | Fvr03ProductionVoxelMaterialKind::Soil
-        ),
-        Fvr07ProductionDressingKind::CorpseMarker => matches!(
-            tile.material,
-            Fvr03ProductionVoxelMaterialKind::Decay | Fvr03ProductionVoxelMaterialKind::Hazard
         ),
         Fvr07ProductionDressingKind::ReedCluster => {
             tile.material == Fvr03ProductionVoxelMaterialKind::Water
@@ -527,7 +519,6 @@ fn dressing_material(kind: Fvr07ProductionDressingKind) -> StandardMaterial {
             Fvr07ProductionDressingKind::FoodResource => Color::srgb(0.76, 0.84, 0.62),
             Fvr07ProductionDressingKind::DeadLeafPatch => Color::srgb(0.84, 0.70, 0.52),
             Fvr07ProductionDressingKind::NestMarker => Color::srgb(0.74, 0.60, 0.42),
-            Fvr07ProductionDressingKind::CorpseMarker => Color::srgb(0.76, 0.70, 0.68),
             Fvr07ProductionDressingKind::AlienFern => Color::srgb(0.64, 0.82, 0.54),
             Fvr07ProductionDressingKind::CrimsonSpire => Color::srgb(0.92, 0.52, 0.46),
             Fvr07ProductionDressingKind::GlowBulbCluster => Color::srgb(0.62, 0.78, 0.92),
@@ -557,7 +548,7 @@ fn dressing_material(kind: Fvr07ProductionDressingKind) -> StandardMaterial {
 fn build_dressing_mesh(kind: Fvr07ProductionDressingKind) -> Mesh {
     let mut builder = DressingMeshBuilder::default();
     match kind {
-        Fvr07ProductionDressingKind::LeafPatch => append_leaf_patch(&mut builder, false),
+        Fvr07ProductionDressingKind::LeafPatch => append_leaf_patch(&mut builder),
         Fvr07ProductionDressingKind::FlowerPatch => append_flower_patch(&mut builder),
         Fvr07ProductionDressingKind::MushroomCluster => {
             append_mushroom_cluster(&mut builder, false)
@@ -569,7 +560,6 @@ fn build_dressing_mesh(kind: Fvr07ProductionDressingKind) -> Mesh {
         Fvr07ProductionDressingKind::DeadLeafPatch => append_dead_leaf_patch(&mut builder),
         Fvr07ProductionDressingKind::NestMarker => append_nest(&mut builder),
         Fvr07ProductionDressingKind::FoodResource => append_food_resource(&mut builder),
-        Fvr07ProductionDressingKind::CorpseMarker => append_corpse_marker(&mut builder),
         Fvr07ProductionDressingKind::AlienFern => append_alien_fern(&mut builder),
         Fvr07ProductionDressingKind::CrimsonSpire => append_crimson_spire(&mut builder),
         Fvr07ProductionDressingKind::GlowBulbCluster => append_glow_bulb_cluster(&mut builder),
@@ -769,12 +759,8 @@ impl DressingMeshBuilder {
     }
 }
 
-fn append_leaf_patch(builder: &mut DressingMeshBuilder, dry: bool) {
-    let lower_colors = if dry {
-        [[0.68, 0.36, 0.08, 1.0], [0.48, 0.24, 0.05, 1.0]]
-    } else {
-        [[0.26, 0.62, 0.08, 1.0], [0.40, 0.74, 0.12, 1.0]]
-    };
+fn append_leaf_patch(builder: &mut DressingMeshBuilder) {
+    let lower_colors = [[0.26, 0.62, 0.08, 1.0], [0.40, 0.74, 0.12, 1.0]];
     for index in 0..8 {
         let angle = index as f32 * std::f32::consts::TAU / 8.0 + 0.18;
         let center = Vec3::new(angle.cos() * 0.10, 0.02, angle.sin() * 0.10);
@@ -788,11 +774,7 @@ fn append_leaf_patch(builder: &mut DressingMeshBuilder, dry: bool) {
         );
     }
 
-    let upper_colors = if dry {
-        [[0.76, 0.44, 0.10, 1.0], [0.56, 0.30, 0.06, 1.0]]
-    } else {
-        [[0.18, 0.50, 0.05, 1.0], [0.50, 0.80, 0.16, 1.0]]
-    };
+    let upper_colors = [[0.18, 0.50, 0.05, 1.0], [0.50, 0.80, 0.16, 1.0]];
     for index in 0..6 {
         let angle = index as f32 * std::f32::consts::TAU / 6.0 + 0.70;
         let center = Vec3::new(angle.cos() * 0.08, 0.10, angle.sin() * 0.08);
@@ -806,21 +788,19 @@ fn append_leaf_patch(builder: &mut DressingMeshBuilder, dry: bool) {
         );
     }
 
-    if !dry {
-        for index in 0..4 {
-            let angle = index as f32 * std::f32::consts::FRAC_PI_2 + 0.42;
-            builder.blade(
-                Vec3::new(angle.cos() * 0.13, 0.02, angle.sin() * 0.13),
-                0.38 + (index % 2) as f32 * 0.06,
-                0.028,
-                angle + 0.32,
-                if index % 2 == 0 {
-                    [0.72, 0.16, 0.08, 1.0]
-                } else {
-                    [0.56, 0.10, 0.22, 1.0]
-                },
-            );
-        }
+    for index in 0..4 {
+        let angle = index as f32 * std::f32::consts::FRAC_PI_2 + 0.42;
+        builder.blade(
+            Vec3::new(angle.cos() * 0.13, 0.02, angle.sin() * 0.13),
+            0.38 + (index % 2) as f32 * 0.06,
+            0.028,
+            angle + 0.32,
+            if index % 2 == 0 {
+                [0.72, 0.16, 0.08, 1.0]
+            } else {
+                [0.56, 0.10, 0.22, 1.0]
+            },
+        );
     }
 }
 
@@ -1112,25 +1092,6 @@ fn append_food_resource(builder: &mut DressingMeshBuilder) {
             None,
         );
     }
-}
-
-fn append_corpse_marker(builder: &mut DressingMeshBuilder) {
-    for index in 0..5 {
-        let angle = index as f32 * 1.17;
-        builder.leaf(
-            Vec3::new(angle.cos() * 0.18, 0.025, angle.sin() * 0.18),
-            0.42,
-            0.07,
-            angle,
-            0.01,
-            if index % 2 == 0 {
-                [0.68, 0.62, 0.48, 1.0]
-            } else {
-                [0.28, 0.18, 0.24, 1.0]
-            },
-        );
-    }
-    builder.rock(Vec3::ZERO, 0.18, 0.10, [0.30, 0.18, 0.24, 1.0], None);
 }
 
 #[cfg(test)]

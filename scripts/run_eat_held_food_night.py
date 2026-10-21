@@ -238,13 +238,21 @@ def stop_owned(process):
     if process.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, check=True)
+        result = subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True)
+        if result.returncode and process.poll() is None:
+            result.check_returncode()
     else:
-        os.killpg(process.pid, signal.SIGTERM)
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass  # The child may have exited between poll and signal.
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
     process.wait(timeout=10)
 
 

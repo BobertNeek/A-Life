@@ -420,6 +420,14 @@ impl StructuralPlasticityState {
         Ok(output)
     }
 
+    /// Stored edges in target-major, then source order, without recomputing weights.
+    pub fn connections(&self) -> impl Iterator<Item = (u32, u32, f32)> + '_ {
+        self.connections
+            .values()
+            .flatten()
+            .map(|edge| (edge.source, edge.target, edge.weight))
+    }
+
     pub fn candidate_count(&self) -> usize {
         self.candidates.values().map(Vec::len).sum()
     }
@@ -576,6 +584,10 @@ mod tests {
         assert_eq!(plasticity.connection_count(), 1);
         let after_growth = plasticity.compute(&input).unwrap();
         assert_ne!(before_growth[2], after_growth[2]);
+        assert_eq!(
+            plasticity.connections().collect::<Vec<_>>(),
+            vec![(1, 2, after_growth[2])]
+        );
 
         plasticity.record_edge_support(1, 2, 1).unwrap();
         let pruning = plasticity.apply_structural_phase().unwrap();

@@ -12,6 +12,7 @@ use alife_core::{
     CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 use bytemuck::Zeroable;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     phenotype_hash_from_gpu_words, split_u64x2, GpuActivityDispatchHeader, GpuBrainSlot,
@@ -250,8 +251,8 @@ pub(crate) enum GpuSelectorDiagnosticFailureClass {
     ArithmeticOverflow,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GpuDecodeMappedRecordsSubstage {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuDecodeMappedRecordsSubstage {
     AuthorityPoisoned,
     CompactWordCount,
     SelectionValidation,
@@ -260,8 +261,8 @@ pub(crate) enum GpuDecodeMappedRecordsSubstage {
     PendingEligibility,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GpuSelectionValidationField {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuSelectionValidationField {
     RecordCount,
     Slot,
     SlotGeneration,
@@ -281,11 +282,11 @@ pub(crate) enum GpuSelectionValidationField {
     EmptyConfidenceQ16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct GpuSelectionValidationFailure {
-    pub(crate) field: GpuSelectionValidationField,
-    pub(crate) expected: u64,
-    pub(crate) actual: u64,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GpuSelectionValidationFailure {
+    pub field: GpuSelectionValidationField,
+    pub expected: u64,
+    pub actual: u64,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -498,8 +499,8 @@ pub(crate) struct GpuFastPlasticityBatchEntry<'a> {
     pub transaction_generation: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum GpuFastPlasticityMalformedField {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuFastPlasticityMalformedField {
     BrainSlotIndex,
     DuplicateSlotGeneration,
     PendingSlot,
@@ -622,64 +623,11 @@ impl<'a> GpuActiveBatchEntry<'a> {
             active_eligibility_generation: 1,
         }
     }
-}
 
-/// Borrowed fixed-arena row used by the live runtime. It carries no packed
-/// append-plan state and binds the physical arena index explicitly.
-pub(crate) struct GpuFixedActiveBatchEntry<'a> {
-    frame: &'a PerceptionFrame,
-    slot: &'a GpuBrainSlot,
-    phenotype: &'a BrainPhenotype,
-    activity: &'a NeuralThrottleDecision,
-    memory_upload: Option<&'a GpuMemoryContextUpload>,
-    active_eligibility_generation: u64,
-}
-
-impl<'a> GpuFixedActiveBatchEntry<'a> {
-    pub(crate) const fn new(
-        frame: &'a PerceptionFrame,
-        slot: &'a GpuBrainSlot,
-        phenotype: &'a BrainPhenotype,
-        activity: &'a NeuralThrottleDecision,
-        active_eligibility_generation: u64,
-    ) -> Self {
-        Self {
-            frame,
-            slot,
-            phenotype,
-            activity,
-            memory_upload: None,
-            active_eligibility_generation,
-        }
+    pub(crate) const fn with_eligibility_generation(mut self, generation: u64) -> Self {
+        self.active_eligibility_generation = generation;
+        self
     }
-
-    pub(crate) const fn with_memory(
-        frame: &'a PerceptionFrame,
-        slot: &'a GpuBrainSlot,
-        phenotype: &'a BrainPhenotype,
-        activity: &'a NeuralThrottleDecision,
-        memory_upload: &'a GpuMemoryContextUpload,
-        active_eligibility_generation: u64,
-    ) -> Self {
-        Self {
-            frame,
-            slot,
-            phenotype,
-            activity,
-            memory_upload: Some(memory_upload),
-            active_eligibility_generation,
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct GpuBatchEntryView<'a> {
-    frame: &'a PerceptionFrame,
-    slot: &'a GpuBrainSlot,
-    phenotype: &'a BrainPhenotype,
-    activity: &'a NeuralThrottleDecision,
-    memory_upload: Option<&'a GpuMemoryContextUpload>,
-    active_eligibility_generation: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -766,7 +714,7 @@ impl GpuActiveBatchUpload {
     }
     #[allow(clippy::too_many_arguments)]
     fn try_from_views(
-        entries: &[GpuBatchEntryView<'_>],
+        entries: &[GpuActiveBatchEntry<'_>],
         frame_base_words: u32,
         bucket_ownership_token: u64,
         active_sides: &BTreeMap<(u32, u32), u32>,
@@ -2039,7 +1987,9 @@ impl GpuClosedLoopPipelines {
         header: &crate::GpuSleepHeader,
         payload_words: &[u32],
         reset_word_count: u32,
+        submission_started: &mut bool,
     ) -> Result<(), GpuClosedLoopError> {
+        *submission_started = false;
         self.validate_sleep_dispatch(buffers, header, payload_words)?;
         if reset_word_count == 0 {
             return Err(GpuClosedLoopError::MalformedUpload);
@@ -2063,6 +2013,7 @@ impl GpuClosedLoopPipelines {
             &self.kernels.finalize_sleep_commit_pipeline,
             1,
         );
+        *submission_started = true;
         let submission = queue.submit(Some(encoder.finish()));
         device
             .poll(wgpu::PollType::Wait {
@@ -2154,19 +2105,8 @@ impl GpuClosedLoopPipelines {
                 return Err(GpuClosedLoopError::MalformedUpload);
             }
         }
-        let views = entries
-            .iter()
-            .map(|entry| GpuBatchEntryView {
-                frame: entry.frame,
-                slot: entry.slot,
-                phenotype: entry.phenotype,
-                activity: entry.activity,
-                memory_upload: entry.memory_upload,
-                active_eligibility_generation: entry.active_eligibility_generation,
-            })
-            .collect::<Vec<_>>();
         let batch = GpuActiveBatchUpload::try_from_views(
-            &views,
+            entries,
             frame_base_words,
             self.bucket_ownership_token,
             &self.authority.active_sides,
@@ -2180,7 +2120,7 @@ impl GpuClosedLoopPipelines {
 
     pub(crate) fn preflight_fixed_active_batch(
         &self,
-        entries: &[GpuFixedActiveBatchEntry<'_>],
+        entries: &[GpuActiveBatchEntry<'_>],
         frame_base_words: u32,
         dispatch_generation: NonZeroU64,
     ) -> Result<GpuPreparedActiveBatch, GpuClosedLoopError> {
@@ -2188,18 +2128,7 @@ impl GpuClosedLoopPipelines {
         if self.authority.pending.is_some() || entries.is_empty() {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
-        let views = entries
-            .iter()
-            .map(|entry| GpuBatchEntryView {
-                frame: entry.frame,
-                slot: entry.slot,
-                phenotype: entry.phenotype,
-                activity: entry.activity,
-                memory_upload: entry.memory_upload,
-                active_eligibility_generation: entry.active_eligibility_generation,
-            })
-            .collect::<Vec<_>>();
-        if views.iter().any(|entry| {
+        if entries.iter().any(|entry| {
             entry.slot.record().slot != entry.slot.brain_slot_index()
                 || entry.slot.record().neuron_count != self.max_neurons
                 || !(2..=4).contains(&entry.slot.record().microstep_count)
@@ -2207,7 +2136,7 @@ impl GpuClosedLoopPipelines {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
         let batch = GpuActiveBatchUpload::try_from_views(
-            &views,
+            entries,
             frame_base_words,
             self.bucket_ownership_token,
             &self.authority.active_sides,
@@ -2343,14 +2272,6 @@ impl GpuClosedLoopPipelines {
         Ok(())
     }
 
-    pub const fn recurrent_variant_count() -> usize {
-        4
-    }
-
-    pub const fn recurrent_variant_microstep_indices() -> [u32; 4] {
-        [0, 1, 2, 3]
-    }
-
     pub fn validate_microstep_count(microsteps: u32) -> Result<(), GpuClosedLoopError> {
         if (2..=4).contains(&microsteps) {
             Ok(())
@@ -2404,7 +2325,9 @@ impl GpuClosedLoopPipelines {
         buffers: &GpuFixedClassArenaBuffers,
         entries: &[GpuFastPlasticityBatchEntry<'_>],
         timestamp: GpuTimestampQueryResources<'_>,
+        submission_started: &mut bool,
     ) -> Result<GpuTimedFastPlasticityResult, GpuClosedLoopError> {
+        *submission_started = false;
         #[cfg(feature = "gpu-tests")]
         let faults = self.fast_plasticity_faults_for_test.take();
         self.last_fast_plasticity_malformed = None;
@@ -2858,6 +2781,7 @@ impl GpuClosedLoopPipelines {
                 let _ = timestamp_sender.send(result);
             },
         );
+        *submission_started = true;
         let submission = queue.submit(Some(command_buffer));
         if device
             .poll(wgpu::PollType::Wait {
@@ -3674,11 +3598,10 @@ impl GpuClosedLoopPipelines {
             record.confidence_q16 = 0;
             record.status = 2;
         }
-        if !self.validate_selection_records(batch, &records) {
+        if let Some(failure) = self.first_selection_validation_failure(batch, &records) {
             if let Some(diagnostic) = diagnostic.as_deref_mut() {
                 diagnostic.substage = Some(GpuDecodeMappedRecordsSubstage::SelectionValidation);
-                diagnostic.selection_failure =
-                    self.first_selection_validation_failure(batch, &records);
+                diagnostic.selection_failure = Some(failure);
             }
             return Err(GpuClosedLoopError::SubmissionFailed);
         }
@@ -3809,8 +3732,8 @@ impl GpuClosedLoopPipelines {
             self.record_encode(&mut pass, batch)?;
             self.record_microsteps(&mut pass, batch)
         })();
-        let receipt = match recorded {
-            Ok(receipt) => receipt,
+        let max_microsteps = match recorded {
+            Ok(max_microsteps) => max_microsteps,
             Err(error) => {
                 self.authority.recording_failed(batch.authority_nonce)?;
                 return Err(error);
@@ -3845,7 +3768,19 @@ impl GpuClosedLoopPipelines {
             .collect::<Result<Vec<_>, GpuClosedLoopError>>()?;
         self.authority
             .recurrent_diagnostic_succeeded(batch.authority_nonce, &final_sides)?;
-        Ok(receipt)
+        Ok(GpuRecurrentDispatchReceipt {
+            max_microsteps_dispatched: max_microsteps,
+            initial_activation_sides: batch
+                .headers
+                .iter()
+                .map(|header| header.active_activation_side)
+                .collect(),
+            row_microstep_counts: batch
+                .headers
+                .iter()
+                .map(|header| header.microstep_count)
+                .collect(),
+        })
     }
 
     pub async fn submit_closed_loop_frame(
@@ -3899,7 +3834,6 @@ impl GpuClosedLoopPipelines {
         pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
-        self.validate_dispatch(batch)?;
         let rows =
             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         let recurrent_synapses = batch
@@ -3953,7 +3887,6 @@ impl GpuClosedLoopPipelines {
         pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
-        self.validate_dispatch(batch)?;
         let rows =
             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         pass.set_pipeline(&self.kernels.decode_pipeline);
@@ -3967,7 +3900,6 @@ impl GpuClosedLoopPipelines {
         pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
     ) -> Result<(), GpuClosedLoopError> {
-        self.validate_dispatch(batch)?;
         let rows =
             u32::try_from(batch.row_count()).map_err(|_| GpuClosedLoopError::CapacityExceeded)?;
         pass.set_pipeline(&self.kernels.memory_context_pipeline);
@@ -3980,57 +3912,6 @@ impl GpuClosedLoopPipelines {
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.dispatch_workgroups(1, rows, 1);
         Ok(())
-    }
-
-    fn validate_selection_records(
-        &self,
-        batch: &GpuActiveBatchUpload,
-        records: &[GpuSelectionRecord],
-    ) -> bool {
-        records.len() == batch.headers.len()
-            && records.iter().zip(&batch.headers).all(|(record, header)| {
-                let generation = u64::from(record.dispatch_generation_lo)
-                    | (u64::from(record.dispatch_generation_hi) << 32);
-                let expected_generation = u64::from(header.dispatch_generation_lo)
-                    | (u64::from(header.dispatch_generation_hi) << 32);
-                let expected_side = Self::final_activation_side(
-                    header.active_activation_side,
-                    header.microstep_count,
-                )
-                .ok();
-                if record.slot != header.slot
-                    || record.slot_generation != header.slot_generation
-                    || generation == 0
-                    || generation != expected_generation
-                    || Some(record.active_activation_side) != expected_side
-                    || record.active_tiles == 0
-                    || record.active_synapses == 0
-                    || record.dendritic_gated_branches > record.dendritic_branches_evaluated
-                {
-                    return false;
-                }
-                match record.status {
-                    3 => {
-                        if record.candidate_index >= header.candidate_count
-                            || !f32::from_bits(record.logit_bits).is_finite()
-                        {
-                            return false;
-                        }
-                        let base = header.candidate_offset as usize
-                            + record.candidate_index as usize * GPU_CANDIDATE_RECORD_WORDS;
-                        GpuCandidateRecord::from_words(
-                            &batch.dispatch_header_words[base..base + GPU_CANDIDATE_RECORD_WORDS],
-                        )
-                        .is_ok_and(|candidate| candidate.confidence_q16 == record.confidence_q16)
-                    }
-                    2 => {
-                        record.candidate_index == u32::MAX
-                            && record.logit_bits == 0
-                            && record.confidence_q16 == 0
-                    }
-                    _ => false,
-                }
-            })
     }
 
     fn first_selection_validation_failure(
@@ -4347,7 +4228,7 @@ impl GpuClosedLoopPipelines {
         &'pass self,
         pass: &mut wgpu::ComputePass<'pass>,
         batch: &GpuActiveBatchUpload,
-    ) -> Result<GpuRecurrentDispatchReceipt, GpuClosedLoopError> {
+    ) -> Result<u32, GpuClosedLoopError> {
         let max_microsteps = batch
             .headers
             .iter()
@@ -4372,21 +4253,7 @@ impl GpuClosedLoopPipelines {
                 1,
             );
         }
-        let initial_activation_sides = batch
-            .headers
-            .iter()
-            .map(|header| header.active_activation_side)
-            .collect::<Vec<_>>();
-        let row_microstep_counts = batch
-            .headers
-            .iter()
-            .map(|header| header.microstep_count)
-            .collect::<Vec<_>>();
-        Ok(GpuRecurrentDispatchReceipt {
-            max_microsteps_dispatched: max_microsteps,
-            initial_activation_sides,
-            row_microstep_counts,
-        })
+        Ok(max_microsteps)
     }
 
     fn validate_batch_identity(
@@ -4851,15 +4718,17 @@ fn validate_production_shader_contract(
     source: &str,
     required_entries: &[&str],
 ) -> Result<(), GpuClosedLoopError> {
-    let layout_anchor = format!(
-        "GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = {}u",
-        crate::GPU_CLOSED_LOOP_LAYOUT_VERSION
-    );
-    if !source.contains(&layout_anchor) {
-        return Err(GpuClosedLoopError::LayoutMismatch);
-    }
     let module =
         naga::front::wgsl::parse_str(source).map_err(|_| GpuClosedLoopError::LayoutMismatch)?;
+    let version = module.constants.iter().find_map(|(_, constant)| {
+        (constant.name.as_deref() == Some("GPU_CLOSED_LOOP_LAYOUT_VERSION"))
+            .then(|| &module.global_expressions[constant.init])
+    });
+    if !matches!(version, Some(naga::Expression::Literal(naga::Literal::U32(version)))
+        if *version == crate::GPU_CLOSED_LOOP_LAYOUT_VERSION)
+    {
+        return Err(GpuClosedLoopError::LayoutMismatch);
+    }
     naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::empty(),
@@ -4950,93 +4819,6 @@ mod lifecycle_tests {
     use super::*;
 
     #[test]
-    fn selection_status_protocol_installs_pending_state_before_readback() {
-        assert!(CLOSED_LOOP_DECODE_WGSL.contains("select(2u, 1u, found)"));
-        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("selection.status != 1u"));
-        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-            .contains("store_state_u32(header.selection_offset + 5u, 2u)"));
-        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("selection.status != 2u"));
-        assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-            .contains("store_state_u32(header.selection_offset + 5u, 3u)"));
-    }
-
-    #[test]
-    fn sparse_selector_prevalidation_accepts_requested_ranges_only() {
-        fn sparse_spans_are_valid(
-            block: &[u32],
-            candidate_count: u32,
-            frame_word_count: usize,
-        ) -> bool {
-            let Some(&request_count) = block.first() else {
-                return false;
-            };
-            if request_count == 0 || request_count > 8 {
-                return false;
-            }
-            let Ok(request_count) = usize::try_from(request_count) else {
-                return false;
-            };
-            let Some(control_words) = request_count
-                .checked_mul(GPU_SELECTOR_DIAGNOSTIC_REQUEST_WORDS)
-                .and_then(|words| words.checked_add(1))
-            else {
-                return false;
-            };
-            if control_words > block.len() || block.len() > frame_word_count {
-                return false;
-            }
-            let mut expected_detail_offset = control_words;
-            let mut previous_candidate = None;
-            for request in 0..request_count {
-                let base = 1 + request * GPU_SELECTOR_DIAGNOSTIC_REQUEST_WORDS;
-                let candidate = block[base];
-                let Ok(detail_offset) = usize::try_from(block[base + 1]) else {
-                    return false;
-                };
-                let Ok(synapse_count) = usize::try_from(block[base + 2]) else {
-                    return false;
-                };
-                if candidate >= candidate_count
-                    || previous_candidate.is_some_and(|previous| candidate <= previous)
-                    || synapse_count == 0
-                    || detail_offset != expected_detail_offset
-                {
-                    return false;
-                }
-                let Some(detail_words) =
-                    synapse_count.checked_mul(GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS)
-                else {
-                    return false;
-                };
-                let Some(detail_end) = detail_offset.checked_add(detail_words) else {
-                    return false;
-                };
-                if detail_end > block.len() || detail_end > frame_word_count {
-                    return false;
-                }
-                expected_detail_offset = detail_end;
-                previous_candidate = Some(candidate);
-            }
-            true
-        }
-
-        let family_synapse_counts = [1, 1, 1, 2, 1, 3];
-        let block = selector_diagnostic_sparse_block(&family_synapse_counts, &[3, 5]).unwrap();
-        assert!(sparse_spans_are_valid(&block, 6, block.len()));
-
-        let mut out_of_range = block.clone();
-        out_of_range[5] = u32::try_from(out_of_range.len()).unwrap();
-        assert!(!sparse_spans_are_valid(
-            &out_of_range,
-            6,
-            out_of_range.len()
-        ));
-        let abi_shader = include_str!("../shaders/closed_loop_abi.wgsl");
-        assert!(abi_shader.contains("sparse_selector_request_spans_valid(header)"));
-        assert!(!abi_shader.contains("decoder_synapse_count * SELECTOR_RECEIPT_RECORD_WORDS"));
-    }
-
-    #[test]
     fn selector_diagnostic_error_receipt_preserves_failure_class_and_boundary() {
         let capacity = selector_diagnostic_detail_plan(2048, 3, 2, 100, 2, 10, 580, 200)
             .expect_err("diagnostic detail must exceed the fixed payload capacity");
@@ -5114,6 +4896,26 @@ mod lifecycle_tests {
         assert_eq!(
             validate_production_shader_contract(CLOSED_LOOP_PLASTICITY_WGSL, &entries),
             Ok(())
+        );
+
+        let formatted_version = CLOSED_LOOP_PLASTICITY_WGSL.replace(
+            "GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 =",
+            "GPU_CLOSED_LOOP_LAYOUT_VERSION : u32=",
+        );
+        assert_eq!(
+            validate_production_shader_contract(&formatted_version, &entries),
+            Ok(())
+        );
+        let wrong_version = CLOSED_LOOP_PLASTICITY_WGSL.replace(
+            &format!(
+                "GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = {}u",
+                crate::GPU_CLOSED_LOOP_LAYOUT_VERSION
+            ),
+            "GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 0u",
+        );
+        assert_eq!(
+            validate_production_shader_contract(&wrong_version, &entries),
+            Err(GpuClosedLoopError::LayoutMismatch)
         );
 
         let missing_entry = CLOSED_LOOP_PLASTICITY_WGSL.replacen(

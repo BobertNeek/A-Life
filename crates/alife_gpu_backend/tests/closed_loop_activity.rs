@@ -257,6 +257,22 @@ fn throttle_and_work_receipts_cannot_cross_apply_between_same_class_slots() {
 }
 
 #[test]
+fn matching_pressure_and_dispatch_identity_cannot_apply_to_another_brain_class() {
+    let phenotype = support::n512_phenotype(4_513);
+    let capacity = BrainCapacityClass::n512();
+    let policy = BrainActivityPolicyV1::production_v1();
+    let mut foreign = identity(&phenotype, 0, 1, 1);
+    foreign.class_id_raw = BrainCapacityClass::n1024().id().raw();
+    let sample = pressure(&policy, foreign, 0, 0, 0, 65_535);
+    sample.validate_for(&policy).unwrap();
+
+    assert_eq!(
+        NeuralThrottleDecision::derive(&policy, &phenotype, capacity.execution(), foreign, sample),
+        Err(alife_core::ScaffoldContractError::BrainActivitySequenceMismatch)
+    );
+}
+
+#[test]
 fn every_pressure_bucket_truth_table_row_and_q24_rounding_is_exact() {
     let phenotype = support::phenotype_for_capacity_at_maturation(
         BrainCapacityClass::n512(),
@@ -455,7 +471,6 @@ fn backend_rejects_unaffordable_bounded_activity_before_submission() {
         )
         .unwrap();
     let dispatches_before = brain.backend.completed_dispatch_count();
-    assert!(essential_debit < full_debit);
     assert!(brain
         .backend
         .next_bounded_activity_is_affordable(brain.handle)

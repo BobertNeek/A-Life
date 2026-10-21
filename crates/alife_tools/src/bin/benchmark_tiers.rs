@@ -99,10 +99,10 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let output = PathBuf::from(required_value(args, "--output")?);
     let provenance = clean_git_provenance()?;
     let staging = output.with_extension(format!("staging-{}", std::process::id()));
-    if staging.exists() {
-        fs::remove_dir_all(&staging)?;
+    if let Some(parent) = staging.parent() {
+        fs::create_dir_all(parent)?;
     }
-    fs::create_dir_all(&staging)?;
+    fs::create_dir(&staging)?;
     let _staging_cleanup = BenchmarkStagingDirectory(staging.clone());
     let executable = std::env::current_exe()?;
     let result = (|| -> Result<Vec<_>, Box<dyn std::error::Error>> {
@@ -140,13 +140,7 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(rows)
     })();
-    let rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            fs::remove_dir_all(&staging)?;
-            return Err(error);
-        }
-    };
+    let rows = result?;
     let mut observed = None;
     let mut adapter = None;
     for row in &rows {
@@ -159,7 +153,6 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Some(expected) if expected == identity => {}
                 Some(_) => {
-                    fs::remove_dir_all(&staging)?;
                     return Err(GpuBenchmarkError::Contract(
                         "benchmark children used different adapters",
                     )
@@ -182,7 +175,6 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     manifest.seal_digest()?;
     manifest.validate(&targets)?;
     atomic_write_json(&output, &manifest)?;
-    fs::remove_dir_all(&staging)?;
     println!("{}", output.display());
     Ok(())
 }
@@ -259,13 +251,19 @@ fn atomic_write_json<T: serde::Serialize>(
         fs::create_dir_all(parent)?;
     }
     let temp = path.with_extension(format!("tmp-{}", std::process::id()));
-    let mut file = fs::File::create(&temp)?;
-    file.write_all(&serde_json::to_vec_pretty(value)?)?;
-    file.sync_all()?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)?;
+    let result = (|| {
+        file.write_all(&serde_json::to_vec_pretty(value)?)?;
+        file.sync_all()?;
+        Ok::<_, Box<dyn std::error::Error>>(())
+    })();
     drop(file);
-    if let Err(error) = atomic_replace(&temp, path) {
+    if let Err(error) = result.and_then(|()| atomic_replace(&temp, path).map_err(Into::into)) {
         let _ = fs::remove_file(&temp);
-        return Err(error.into());
+        return Err(error);
     }
     Ok(())
 }

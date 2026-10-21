@@ -17,6 +17,7 @@ struct Fixture {
     frames: Vec<PerceptionFrame>,
     decisions: Vec<NeuralThrottleDecision>,
     memories: Vec<GpuMemoryContextUpload>,
+    recalls: Vec<alife_core::FinalizedMemoryRecall>,
 }
 
 impl Fixture {
@@ -32,6 +33,7 @@ impl Fixture {
         let mut frames = Vec::new();
         let mut decisions = Vec::new();
         let mut memories = Vec::new();
+        let mut recalls = Vec::new();
         for row in 0..2 {
             let slot = plan.insert_phenotype(row, row + 7, &phenotype).unwrap();
             let owner = OrganismId(u64::from(row) + 1);
@@ -150,6 +152,7 @@ impl Fixture {
             slots.push(slot);
             frames.push(frame);
             memories.push(memory);
+            recalls.push(recall);
         }
         Self {
             phenotype,
@@ -157,6 +160,7 @@ impl Fixture {
             frames,
             decisions,
             memories,
+            recalls,
         }
     }
 
@@ -170,7 +174,7 @@ impl Fixture {
         payload_capacity: usize,
     ) -> Result<GpuActiveBatchUpload, GpuClosedLoopError> {
         let entries = (0..2)
-            .map(|row| GpuBatchEntryView {
+            .map(|row| GpuActiveBatchEntry {
                 frame: &self.frames[row],
                 slot: &self.slots[row],
                 phenotype: &self.phenotype,
@@ -465,4 +469,23 @@ fn local_memory_validation_checks_every_context_lane_with_signed_zero_equality()
         record.family_confidence = -0.0;
     }
     memory.validate_for_frame_and_slot(frame, slot).unwrap();
+}
+
+#[test]
+fn sealed_memory_upload_matches_its_real_recall_and_rejects_finite_cognitive_tampering() {
+    let fixture = Fixture::new(BrainCapacityClass::n512());
+    let upload = &fixture.memories[0];
+    upload
+        .validate_against(&fixture.frames[0], &fixture.recalls[0], &fixture.slots[0])
+        .unwrap();
+    for value in [0.25, f32::NAN, f32::INFINITY] {
+        let mut changed = upload.clone();
+        changed.cognitive_records[0].values[0] = value;
+        assert!(changed
+            .validate_against(&fixture.frames[0], &fixture.recalls[0], &fixture.slots[0])
+            .is_err());
+    }
+    assert!(upload
+        .validate_against(&fixture.frames[1], &fixture.recalls[1], &fixture.slots[1])
+        .is_err());
 }

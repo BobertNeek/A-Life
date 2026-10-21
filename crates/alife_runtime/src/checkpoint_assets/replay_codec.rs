@@ -41,12 +41,8 @@ pub(crate) fn encode_portable_replay(
     for physical_index in &physical_order {
         events.push(decode_event(physical.events[*physical_index])?);
     }
-    let active = physical_order
-        .iter()
-        .copied()
-        .collect::<std::collections::BTreeSet<_>>();
     for (index, event) in physical.events.iter().enumerate() {
-        if !active.contains(&index) && !event_is_zero(event) {
+        if index >= count && !event_is_zero(event) {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
     }
@@ -81,9 +77,7 @@ pub(crate) fn encode_portable_replay(
             });
         }
         for physical_event in 0..capacity {
-            if !active.contains(&physical_event)
-                && physical.samples[physical_start + physical_event] != 0
-            {
+            if physical_event >= count && physical.samples[physical_start + physical_event] != 0 {
                 return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
             }
         }

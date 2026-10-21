@@ -202,20 +202,6 @@ fn sealed_cpu_eat_pickup_then_meal_keeps_eat_identity_and_zero_explicit_grab_cre
                 gate.observe(row);
             }
         }
-        println!(
-            "{}",
-            serde_json::json!({
-                "evidence": "CPU scaffold sealed world receipt; not GPU/on-policy admission",
-                "row": row, "selected_action": action.command.action_id,
-                "selected_target": action.command.target_entity,
-                "owner_before": owner_before, "owner_after": food.carried_by,
-                "consumed_after": food.consumed,
-                "physical": action.execution.physical,
-                "nutrition": action.body_event.nutrition,
-                "explicit_grab_selected": selected_grab_command(&bundle, target).is_some(),
-                "explicit_grab_credit": gate.reward(row, 2),
-            })
-        );
         if row == 0 {
             assert_eq!(
                 action.execution.physical.contact,

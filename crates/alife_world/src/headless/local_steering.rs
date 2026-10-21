@@ -55,9 +55,6 @@ impl HeadlessWorld {
             self.objects.values(),
             true,
         )?;
-        if snapshot.tick != self.tick {
-            return Err(ScaffoldContractError::NonMonotonicTick);
-        }
         Ok(snapshot
             .visible
             .iter()

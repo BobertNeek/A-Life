@@ -2346,13 +2346,14 @@ fn write_soak_receipt(
             "serialized Slice D evidence exceeds 128 MiB",
         ));
     }
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&temporary)?;
     let result = (|| -> Result<(), GpuEvidenceError> {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
+        drop(file);
         fs::rename(&temporary, path)?;
         Ok(())
     })();

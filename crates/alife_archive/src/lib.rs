@@ -614,13 +614,6 @@ impl LineageLibrary {
         &self.config.root
     }
 
-    pub fn archive_birth(
-        &mut self,
-        input: GeneticArchiveInput<'_>,
-    ) -> Result<Blake3Digest, ArchiveError> {
-        self.archive_birth_internal(input)
-    }
-
     pub fn archive_composite_birth(
         &mut self,
         input: CompositeGeneticArchiveInput<'_>,
@@ -1415,7 +1408,7 @@ impl LineageLibrary {
         Ok(bytes)
     }
 
-    fn archive_birth_internal(
+    pub fn archive_birth(
         &mut self,
         input: GeneticArchiveInput<'_>,
     ) -> Result<Blake3Digest, ArchiveError> {
@@ -3507,36 +3500,6 @@ mod archive_path_tests {
         assert!(compressed_error
             .to_string()
             .contains("checkpoint compressed byte limit"));
-    }
-
-    #[test]
-    fn current_writer_multi_page_checkpoint_round_trip_preserves_bytes() {
-        let root = std::env::temp_dir().join(format!(
-            "alife-archive-checkpoint-roundtrip-{}",
-            super::TEMP_SEQUENCE.fetch_add(1, super::Ordering::Relaxed)
-        ));
-        let library =
-            super::LineageLibrary::open(super::LineageLibraryConfig::profile_default(&root))
-                .unwrap();
-        let bytes = (0..(super::ARCHIVE_PAGE_BYTES * 2 + 137))
-            .map(|index| (index % 251) as u8)
-            .collect::<Vec<_>>();
-        let stored = library
-            .store_checkpoint(
-                "bounded-decode-roundtrip",
-                &bytes,
-                super::ArchiveCheckpointRetention::Pinned,
-            )
-            .unwrap();
-        let reference = match stored {
-            super::ArchiveCheckpointDisposition::Stored(reference) => reference,
-            other => panic!("expected stored checkpoint, got {other:?}"),
-        };
-
-        assert_eq!(library.read_checkpoint(&reference).unwrap(), bytes);
-
-        drop(library);
-        std::fs::remove_dir_all(root).unwrap();
     }
 }
 

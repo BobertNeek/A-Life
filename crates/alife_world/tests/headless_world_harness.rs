@@ -581,7 +581,6 @@ fn headless_harness_collects_rest_patch_without_forcing_cpu_sleep() {
     assert_eq!(harness.telemetry().sealed_patches.len(), 1);
     assert_eq!(harness.world().tick(), Tick::new(1));
     assert_eq!(mind.sleep_state().phase, SleepPhase::Awake);
-    assert!(first.sleep_transition.is_none());
 }
 
 #[test]

@@ -188,7 +188,7 @@ impl ReplayCapturePlan {
             sample_capacity,
             canonical_digest: [0; 4],
         };
-        value.validate_local()?;
+        value.validate_shape()?;
         value.canonical_digest = value.recompute_digest();
         Ok(value)
     }
@@ -245,7 +245,7 @@ impl ReplayCapturePlan {
         self.validate_local()
     }
 
-    fn validate_local(&self) -> Result<(), ScaffoldContractError> {
+    fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != SchemaVersions::CURRENT.learning.raw()
             || self.global_synapse_ids.is_empty()
             || self.global_synapse_ids.len() > MAX_REPLAY_CAPTURE_SYNAPSES as usize
@@ -264,7 +264,12 @@ impl ReplayCapturePlan {
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        if self.canonical_digest != [0; 4] && self.canonical_digest != self.recompute_digest() {
+        Ok(())
+    }
+
+    fn validate_local(&self) -> Result<(), ScaffoldContractError> {
+        self.validate_shape()?;
+        if self.canonical_digest != self.recompute_digest() {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
         Ok(())
@@ -471,6 +476,7 @@ pub(super) fn compile_learning_plans(
             .checked_add(len)
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let section_policy = n2048_section_policy(capacity, projection);
+        let developmental_multiplier = critical_period_multiplier(development, projection);
         for (local, synapse) in synapses[start as usize..end as usize]
             .iter_mut()
             .enumerate()
@@ -482,7 +488,6 @@ pub(super) fn compile_learning_plans(
                 section_policy,
                 local as u32,
             );
-            let developmental_multiplier = critical_period_multiplier(development, projection);
             let effective_scale = (scale * developmental_multiplier).clamp(0.0, 1.0);
             let profile = match (synapse.kind(), parameters.action_candidate_credit_profile()) {
                 (CompiledSynapseKind::Decoder(c), Some(profile))
@@ -910,6 +915,21 @@ mod tests {
         )
         .unwrap();
         assert!(!receptor.is_delta_enabled());
+    }
+
+    #[test]
+    fn replay_capture_plan_rejects_missing_or_changed_integrity_digest() {
+        let plan = ReplayCapturePlan::try_new(vec![1, 3], 2, 4, 8).unwrap();
+        let wire = serde_json::to_value(&plan).unwrap();
+        assert_eq!(
+            serde_json::from_value::<ReplayCapturePlan>(wire.clone()).unwrap(),
+            plan
+        );
+        for digest in [[0; 4], [1; 4]] {
+            let mut forged = wire.clone();
+            forged["canonical_digest"] = serde_json::json!(digest);
+            assert!(serde_json::from_value::<ReplayCapturePlan>(forged).is_err());
+        }
     }
 
     #[test]

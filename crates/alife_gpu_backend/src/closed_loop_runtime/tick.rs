@@ -196,21 +196,21 @@ impl GpuClosedLoopBackend {
                         .as_ref()
                         .expect("complete preflight retained occupied slot");
                     match input.memory_upload {
-                        Some(memory_upload) => GpuFixedActiveBatchEntry::with_memory(
+                        Some(memory_upload) => GpuActiveBatchEntry::with_memory(
                             input.frame,
                             &resident.brain_slot,
                             &resident.phenotype,
                             &activity_decisions[*index],
                             memory_upload,
-                            resident.active_eligibility_generation,
-                        ),
-                        None => GpuFixedActiveBatchEntry::new(
+                        )
+                        .with_eligibility_generation(resident.active_eligibility_generation),
+                        None => GpuActiveBatchEntry::new(
                             input.frame,
                             &resident.brain_slot,
                             &resident.phenotype,
                             &activity_decisions[*index],
-                            resident.active_eligibility_generation,
-                        ),
+                        )
+                        .with_eligibility_generation(resident.active_eligibility_generation),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -346,7 +346,8 @@ impl GpuClosedLoopBackend {
         }
 
         if capture_logits {
-            for dispatch in &mut dispatches {
+            for index in 0..dispatches.len() {
+                let dispatch = &mut dispatches[index];
                 let bytes = dispatch
                     .batch
                     .as_ref()
@@ -363,6 +364,7 @@ impl GpuClosedLoopBackend {
                                     dispatch.chunk_index,
                                 );
                         }
+                        self.cleanup_unsubmitted_dispatches(&mut dispatches);
                         return Err(map_gpu_contract_error(error));
                     }
                 };

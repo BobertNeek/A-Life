@@ -1,13 +1,12 @@
 use alife_core::{
-    AffordanceBits, ChannelGroupKind, CompressedSemanticCode, ContextFeatureFlags, ContextStreams,
+    AffordanceBits, CompressedSemanticCode, ContextFeatureFlags, ContextStreams,
     EnvironmentStreamEntry, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry,
     HeardToken, OrganismId, ScaffoldContractError, SchemaKind, SemanticContextRef,
-    SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion, SensoryChannels,
-    SensorySnapshot, SocialAgentSnapshot, TeacherPerceptionChannel, Tick, Validate, Vec3f,
-    VocalizedToken, WorldEntityId, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS,
-    MAX_SOCIAL_AGENTS, SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT,
-    SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
-    SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
+    SemanticSalienceEntry, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    SocialAgentSnapshot, TeacherPerceptionChannel, Tick, Validate, Vec3f, VocalizedToken,
+    WorldEntityId, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
+    SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
+    SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
 use alife_core::{Confidence, NormalizedScalar, SignedValence};
 
@@ -25,36 +24,7 @@ fn valid_channels() -> SensoryChannels {
 }
 
 #[test]
-fn sensory_abi_descriptor_is_versioned_and_fixed_width() {
-    let descriptor = SensoryAbiDescriptor::V1;
-
-    assert_eq!(
-        descriptor.version,
-        SensoryAbiVersion::CURRENT,
-        "sensory ABI uses the central schema version"
-    );
-    assert_eq!(
-        descriptor.total_channel_count(),
-        SENSORY_ABI_CHANNEL_COUNT,
-        "fixed-size ABI width must match group totals"
-    );
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::VisualAffordance));
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::AuditoryAcoustic));
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::SmellChemistry));
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::TactileContact));
-
+fn sensory_channels_flatten_to_the_runtime_width() {
     assert_eq!(
         valid_channels().as_flat_array().len(),
         SENSORY_ABI_CHANNEL_COUNT

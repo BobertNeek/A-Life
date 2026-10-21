@@ -379,8 +379,10 @@ impl Validate for AttentionFrame {
         for identity in &self.focal_targets {
             identity.validate_contract()?;
         }
-        if self.focal_targets.windows(2).any(|pair| pair[0] == pair[1]) {
-            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        for (index, identity) in self.focal_targets.iter().enumerate() {
+            if self.focal_targets[..index].contains(identity) {
+                return Err(ScaffoldContractError::InvalidDecisionEvidence);
+            }
         }
         for salience in &self.salience_components {
             salience.validate_contract()?;
@@ -458,7 +460,6 @@ pub fn select_focal_targets(
         .take(requested)
         .map(|(index, _)| *index)
         .collect::<Vec<_>>();
-    let mut retained_previous = false;
     if let Some(previous_identity) = previous_hysteresis.previous_identity {
         if let Some(previous_index) = peripheral_summaries
             .iter()
@@ -474,36 +475,13 @@ pub fn select_focal_targets(
             // including when only one focal slot is available.
             if !challenger_exceeds_switch_cost && requested > 0 {
                 selected.retain(|index| *index != previous_index);
-                retained_previous = true;
                 selected.insert(0, previous_index);
             }
         }
     }
-    if retained_previous {
-        selected[1..].sort_by(|left, right| {
-            salience_score(peripheral_summaries[*right].salience)
-                .total_cmp(&salience_score(peripheral_summaries[*left].salience))
-                .then_with(|| {
-                    peripheral_summaries[*left]
-                        .identity
-                        .canonical_key()
-                        .cmp(&peripheral_summaries[*right].identity.canonical_key())
-                })
-        });
-        selected.truncate(requested);
-    } else {
-        selected.sort_by(|left, right| {
-            salience_score(peripheral_summaries[*right].salience)
-                .total_cmp(&salience_score(peripheral_summaries[*left].salience))
-                .then_with(|| {
-                    peripheral_summaries[*left]
-                        .identity
-                        .canonical_key()
-                        .cmp(&peripheral_summaries[*right].identity.canonical_key())
-                })
-        });
-    }
-    selected.dedup();
+    // The ranked prefix already has deterministic salience/tie order. Moving
+    // the incumbent to the front leaves every other selected index in that order.
+    selected.truncate(requested);
 
     if selected.len() < usize::from(policy.protected_minimum) {
         return Err(ScaffoldContractError::InvalidDecisionEvidence);

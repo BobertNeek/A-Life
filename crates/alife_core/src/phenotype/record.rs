@@ -693,7 +693,6 @@ impl BrainPhenotype {
             || !self.neuron_count.is_multiple_of(16)
             || !(execution.microstep_range().0..=execution.microstep_range().1)
                 .contains(&self.microstep_count)
-            || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()
             || self.projections.is_empty()
             || self.synapses.is_empty()
             || self.plasticity_receptors.is_empty()
@@ -980,8 +979,6 @@ impl BrainPhenotype {
                 .validate_against(self, capacity)
                 .is_err()
             || self.sleep_consolidation_plan.validate_contract().is_err()
-            || self.persistent_address_map.digest()
-                != self.persistent_address_map.recompute_digest()?
             || self.persistent_address_map.validate_against(self).is_err()
             || self.recompute_phenotype_hash()? != self.phenotype_hash
         {

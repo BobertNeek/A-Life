@@ -19,7 +19,6 @@ use crate::{
     GpuActivityRuntimeSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
     GpuCompactCheckpointAuthorityV1, GpuPendingEligibilityRecord, GpuSleepStagingReceipt,
     GpuSlotLearningStateRecord, GpuV11Checkpoint, PendingEligibilityReceipt,
-    PendingEligibilityRestoreParts,
 };
 
 pub const GPU_EXACT_POPULATION_CAPTURE_SCHEMA_VERSION: u16 = 1;
@@ -123,21 +122,7 @@ impl GpuExactPopulationCaptureRowV1 {
     ) -> Result<GpuCompactCheckpointAuthorityV1, ScaffoldContractError> {
         let pending = self
             .pending_eligibility
-            .map(|receipt| {
-                let identity = receipt.identity();
-                PendingEligibilityRestoreParts::try_new(
-                    identity.dispatch_generation(),
-                    identity.originating_tick(),
-                    identity.frame_digest(),
-                    identity.active_activation_side(),
-                    identity.candidate_index(),
-                    identity.action_id(),
-                    identity.action_family(),
-                    identity.candidate_feature_digest(),
-                    identity.active_eligibility_generation(),
-                    identity.staging_eligibility_generation(),
-                )
-            })
+            .map(crate::closed_loop_checkpoint::pending_parts_from_receipt)
             .transpose()?;
         GpuCompactCheckpointAuthorityV1::try_new(
             self.identity.active_activation_side,
@@ -490,8 +475,7 @@ impl GpuClosedLoopBackend {
             mapped_at_creation: false,
         });
 
-        // Copies were recorded with destination offsets but need the final
-        // staging buffer. Re-record now that its bounded size is known.
+        // Destination offsets and the final staging size are now known.
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

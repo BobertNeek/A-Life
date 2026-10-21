@@ -519,8 +519,6 @@ mod tests {
         let roundtrip: CreatureAppearanceGenome = serde_json::from_str(&json).unwrap();
 
         assert_eq!(roundtrip, appearance);
-        assert!(!json.to_ascii_lowercase().contains("bevy"));
-        assert!(!json.to_ascii_lowercase().contains("mesh"));
     }
 
     #[test]

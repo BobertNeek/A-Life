@@ -2,8 +2,8 @@ use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, BodySnapshot,
     BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateObservationRef,
     CognitiveEdge, CognitiveSimplex, CognitiveSimplexId, ConceptBindings, ConceptCell,
-    ConceptCellId, Confidence, ContextFeatureFlags, ContradictionType, CuriosityBias,
-    DevelopmentState, DriveBinding, DriveChannel, DurationTicks, EdgeRelationKind, ExperiencePatch,
+    ConceptCellId, Confidence, ContextFeatureFlags, ContradictionType, DevelopmentState,
+    DriveBinding, DriveChannel, DurationTicks, EdgeRelationKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, GapResolutionStatus, GaussianClusterId,
     GaussianContextRef, GaussianSalienceEntry, HeardToken, HomeostaticDelta, HomeostaticSnapshot,
     LobeKind, MemoryBank, MemoryBankConfig, NeuralActionSelection, NormalizedScalar, OrganismId,
@@ -656,10 +656,7 @@ fn invalid_ids_and_nan_or_out_of_range_values_are_rejected() {
 }
 
 #[test]
-fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
-    fn returns_biases_only(_: fn(&TopologicalMap) -> Vec<CuriosityBias>) {}
-    returns_biases_only(TopologicalMap::curiosity_biases);
-
+fn contradictory_evidence_populates_curiosity_bias() {
     let mut map = map();
     observe(
         &mut map,

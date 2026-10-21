@@ -332,27 +332,35 @@ impl PassiveLifeStatistics {
                 {
                     return Err(ScaffoldContractError::ScalarOutOfRange);
                 }
-                self.last_tick = tick;
-                self.survival_ticks = self
+                let survival_ticks = self
                     .survival_ticks
                     .checked_add(1)
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                let mut environmental_regime_ticks = self.environmental_regime_ticks;
                 if let Some(index) = regime.index() {
-                    let regime_ticks = &mut self.environmental_regime_ticks[index];
-                    *regime_ticks = regime_ticks
+                    environmental_regime_ticks[index] = environmental_regime_ticks[index]
                         .checked_add(1)
                         .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
                 }
-                self.mean_brain_atp.observe(energy_q16)?;
-                self.movement.observe(movement_distance_q16)?;
-                self.gpu_dispatches = self
+                let mut mean_brain_atp = self.mean_brain_atp;
+                mean_brain_atp.observe(energy_q16)?;
+                let mut movement = self.movement;
+                movement.observe(movement_distance_q16)?;
+                let gpu_dispatches = self
                     .gpu_dispatches
                     .checked_add(u64::from(gpu_dispatched))
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-                self.gpu_throttled_dispatches = self
+                let gpu_throttled_dispatches = self
                     .gpu_throttled_dispatches
                     .checked_add(u64::from(gpu_throttled))
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                self.last_tick = tick;
+                self.survival_ticks = survival_ticks;
+                self.environmental_regime_ticks = environmental_regime_ticks;
+                self.mean_brain_atp = mean_brain_atp;
+                self.movement = movement;
+                self.gpu_dispatches = gpu_dispatches;
+                self.gpu_throttled_dispatches = gpu_throttled_dispatches;
             }
             PassiveLifeEvent::FoodOutcome { beneficial } => {
                 self.food_success.observe(bool_q16(beneficial))?

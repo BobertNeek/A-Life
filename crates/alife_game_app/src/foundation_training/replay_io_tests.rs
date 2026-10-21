@@ -1,5 +1,5 @@
 use super::*;
-use std::io::{Cursor, Read, Seek};
+use std::io::{Cursor, Read};
 
 #[test]
 fn verified_encoding_checks_all_bytes_and_bounds_the_read() {
@@ -114,64 +114,4 @@ fn verified_encoding_preserves_every_replay_float_bit_and_rejects_late_corruptio
     );
     *encoded.last_mut().unwrap() ^= 1;
     assert!(read_verified_replay_bytes(encoded.as_slice(), encoded.len() as u64, &digest).is_err());
-}
-
-#[test]
-#[ignore = "CPU-only filesystem/codec timing; run separately without concurrent builds"]
-fn replay_verified_read_cpu_timing() {
-    let raw = bincode::serde::encode_to_vec(sequence(), bincode::config::standard()).unwrap();
-    let encoded = zstd::stream::encode_all(raw.as_slice(), 3).unwrap();
-    let digest = *blake3::hash(&encoded).as_bytes();
-    let path = std::env::temp_dir().join(format!("alife-replay-io-{}.zst", std::process::id()));
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .unwrap();
-    std::io::Write::write_all(&mut file, &encoded).unwrap();
-    drop(file);
-    let load = |new: bool| {
-        let mut file = std::fs::File::open(&path).unwrap();
-        assert_eq!(file.metadata().unwrap().len(), encoded.len() as u64);
-        let decoded = if new {
-            let bytes = read_verified_replay_bytes(file, encoded.len() as u64, &digest).unwrap();
-            decode(bytes.as_slice())
-        } else {
-            // Frozen main: hash the entire file, rewind, decode from the file.
-            let mut hasher = blake3::Hasher::new();
-            let mut buffer = [0; 64 * 1024];
-            loop {
-                let n = file.read(&mut buffer).unwrap();
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buffer[..n]);
-            }
-            assert_eq!(*hasher.finalize().as_bytes(), digest);
-            file.rewind().unwrap();
-            decode(std::io::BufReader::new(file))
-        };
-        std::hint::black_box(decoded);
-    };
-    for new in [false, true] {
-        load(new);
-    }
-    for sample in 0..9 {
-        for new in if sample % 2 == 0 {
-            [false, true]
-        } else {
-            [true, false]
-        } {
-            let started = Instant::now();
-            for _ in 0..200 {
-                load(new);
-            }
-            println!(
-                "replay_io sample={sample} new={new} iterations=200 encoded_bytes={} elapsed_ns={}",
-                encoded.len(),
-                started.elapsed().as_nanos()
-            );
-        }
-    }
-    std::fs::remove_file(path).unwrap();
 }

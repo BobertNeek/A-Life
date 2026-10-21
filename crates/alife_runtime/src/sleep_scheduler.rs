@@ -2,7 +2,7 @@
 
 use alife_core::sleep::SleepWorkReceipt;
 use alife_core::{
-    ActionId, BodyEventDelta, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
+    BodyEventDelta, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
     HomeostaticParameters, HomeostaticSnapshot, OrganismId, ScaffoldContractError,
     SleepConsolidationConfig, SleepController, SleepPhase, SleepState, SleepTransition,
     SleepTrigger, Tick, Validate,
@@ -129,7 +129,6 @@ pub struct GpuSleepScheduleEvent {
     pub cycle_id: u64,
     pub transition: Option<SleepTransition>,
     pub consolidation_kind_raw: u16,
-    pub selected_action: Option<ActionId>,
     pub motor_eligible: bool,
     pub sleep_work_units: u64,
     pub phase_receipt: SleepPhaseReceipt,
@@ -507,7 +506,6 @@ impl GpuSleepScheduler {
             cycle_id,
             transition,
             consolidation_kind_raw: state.consolidation.kind_raw(),
-            selected_action: None,
             motor_eligible,
             sleep_work_units: work_units,
             phase_receipt: SleepPhaseReceipt {

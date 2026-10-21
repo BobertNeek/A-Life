@@ -3,20 +3,18 @@ use alife_core::sleep::{SleepReplayEvidence, SleepWorkStatus};
 use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, BodySnapshot, BrainClassSpec,
     BrainScaleTier, CandidateActionFamily, CandidateFeatureDigest, CandidateObservationRef,
-    Confidence, CreatureMind, DenseTile, DriveDelta, DurationTicks, EndocrineDelta,
-    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition, LobeKind,
-    MemoryBank, MemoryBankConfig, MemoryExpectancy, MemoryOutcomeSummary, MemoryRecord,
-    MemoryUpdateKind, MotorChannel, MotorChannelFactor, NeuralActionSelection,
-    NeuralProjectionSchema, NeuromodulatorSample, NormalizedScalar, OrganismId,
+    Confidence, DriveDelta, DurationTicks, EndocrineDelta, HomeostaticDelta, HomeostaticParameters,
+    HomeostaticSnapshot, JointMotorCondition, LobeKind, MemoryBank, MemoryBankConfig,
+    MemoryOutcomeSummary, MemoryRecord, MemoryUpdateKind, MotorChannel, MotorChannelFactor,
+    NeuralActionSelection, NeuromodulatorSample, NormalizedScalar, OrganismId,
     PerceptionFrameDigest, PerceptionFrameDraft, PhenotypeHash, PhysicalActionOutcome,
     PhysicalContactKind, PostActionOutcome, PredictionTargetReceipt, ProjectionRoutingRef,
-    ProjectionTile, ReplayCapturePlan, ScaffoldContractError, SemanticStateVector, SensorProfile,
+    ReplayCapturePlan, ScaffoldContractError, SemanticStateVector, SensorProfile,
     SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
     SleepConsolidationConfig, SleepConsolidator, SleepController, SleepPhase, SleepReplayEvent,
-    SleepReplayJournal, SleepTrigger, SparseTileCoord, SparseTilePayload, StableLifetimeTraitKind,
-    StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
-    SynapseWeightSplit, Tick, TopologicalMapConfig, TopologySidecar, TrackedObjectId, Validate,
-    Vec3f, Velocity, WorldEntityId, MICROTILE_CELLS,
+    SleepReplayJournal, SleepTrigger, StructuralEditBatch, StructuralEditCandidate,
+    StructuralEditKind, StructuralEditReason, Tick, TopologicalMapConfig, TopologySidecar,
+    TrackedObjectId, Validate, Vec3f, Velocity, WorldEntityId,
 };
 
 fn organism() -> OrganismId {
@@ -40,18 +38,9 @@ fn spec() -> BrainClassSpec {
 fn config() -> SleepConsolidationConfig {
     SleepConsolidationConfig {
         entering_duration: DurationTicks::new(1),
-        consolidation_duration: DurationTicks::new(2),
         waking_duration: DurationTicks::new(1),
-        stable_trait_promotion_threshold: 2,
-        stable_trait_strength_threshold: NormalizedScalar::new(0.45).unwrap(),
-        stable_trait_variance_threshold: NormalizedScalar::new(0.05).unwrap(),
         memory_max_records_after: 2,
         concept_simplex_consolidation_limit: 4,
-        structural_edit_candidate_limit: 3,
-        h_shadow_drain_rate: NormalizedScalar::new(0.5).unwrap(),
-        h_shadow_decay_rate: NormalizedScalar::new(0.25).unwrap(),
-        lifetime_staging_rate: NormalizedScalar::new(0.5).unwrap(),
-        reset_alpha_after_lifetime_staging: true,
         ..SleepConsolidationConfig::reference()
     }
 }
@@ -77,27 +66,6 @@ fn catatonia_homeostasis(tick: Tick) -> HomeostaticSnapshot {
     let mut drives = alife_core::DriveSnapshot::baseline();
     drives.brain_atp = 0.02;
     HomeostaticSnapshot::new(tick, drives, alife_core::EndocrineSnapshot::baseline()).unwrap()
-}
-
-fn neural_schema_with_h_shadow() -> NeuralProjectionSchema {
-    let spec = spec();
-    let mut schema = NeuralProjectionSchema::empty_for_brain_class(&spec).unwrap();
-    let mut dense = vec![SynapseWeightSplit::zero(); MICROTILE_CELLS];
-    dense[0] = SynapseWeightSplit::new(0.25, 0.1, 0.5, 0.2, 0.4).unwrap();
-    schema.projections[0].tiles.push(ProjectionTile::new_dense(
-        0,
-        SparseTileCoord::new(0, 0).unwrap(),
-        DenseTile::new(dense).unwrap(),
-    ));
-    schema.rebuild_supertile_masks();
-    schema
-}
-
-fn first_weights(schema: &NeuralProjectionSchema) -> SynapseWeightSplit {
-    let SparseTilePayload::Dense(tile) = &schema.projections[0].tiles[0].payload else {
-        panic!("expected dense test tile");
-    };
-    tile.weights[0]
 }
 
 fn memory_record(raw_id: u64, tick: u64, valence: f32) -> MemoryRecord {
@@ -415,129 +383,25 @@ fn forced_sleep_is_explicit_and_inspectable_without_engine_time() {
 }
 
 #[test]
-fn h_shadow_drains_decays_and_promotes_lifetime_without_genetic_mutation() {
-    let mut schema = neural_schema_with_h_shadow();
-    let before = first_weights(&schema);
-    let consolidator = SleepConsolidator::new(config()).unwrap();
-    let mut traits = alife_core::LifetimeTraitLedger::new(8).unwrap();
-    traits
-        .observe(
-            alife_core::LifetimeTraitEvidence::new(
-                10,
-                StableLifetimeTraitKind::MotorHabit,
-                NormalizedScalar::new(0.75).unwrap(),
-                NormalizedScalar::new(0.01).unwrap(),
-                1,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-    traits
-        .observe(
-            alife_core::LifetimeTraitEvidence::new(
-                10,
-                StableLifetimeTraitKind::MotorHabit,
-                NormalizedScalar::new(0.76).unwrap(),
-                NormalizedScalar::new(0.01).unwrap(),
-                2,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-
-    let report = consolidator
-        .consolidate_neural_schema(&mut schema, &mut traits, Tick::new(100))
-        .unwrap();
-    let after = first_weights(&schema);
-
-    assert_eq!(after.genetic_fixed, before.genetic_fixed);
-    assert!(after.h_operational > before.h_operational);
-    assert!(after.h_shadow.abs() < before.h_shadow.abs());
-    assert!(after.lifetime_consolidated > before.lifetime_consolidated);
-    assert_eq!(after.alpha, 0.0);
-    assert_eq!(report.active_synapses, 1);
-    assert!(report.h_operational_delta_l1 > 0.0);
-    assert!(report.lifetime_delta_l1 > 0.0);
-    assert!(report.genetic_layer_unchanged);
-}
-
-#[test]
-fn trait_promotion_requires_stable_repeated_evidence() {
-    let consolidator = SleepConsolidator::new(config()).unwrap();
-    let mut insufficient = alife_core::LifetimeTraitLedger::new(8).unwrap();
-    insufficient
-        .observe(
-            alife_core::LifetimeTraitEvidence::new(
-                99,
-                StableLifetimeTraitKind::TopologyCorrelation,
-                NormalizedScalar::new(0.8).unwrap(),
-                NormalizedScalar::new(0.01).unwrap(),
-                1,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-
-    let rejected = consolidator
-        .promote_stable_traits(&mut insufficient, Tick::new(40))
-        .unwrap();
-    assert_eq!(rejected.promoted_count, 0);
-    assert_eq!(rejected.insufficient_evidence_count, 1);
-
-    insufficient
-        .observe(
-            alife_core::LifetimeTraitEvidence::new(
-                99,
-                StableLifetimeTraitKind::TopologyCorrelation,
-                NormalizedScalar::new(0.85).unwrap(),
-                NormalizedScalar::new(0.02).unwrap(),
-                2,
-            )
-            .unwrap(),
-        )
-        .unwrap();
-    let promoted = consolidator
-        .promote_stable_traits(&mut insufficient, Tick::new(41))
-        .unwrap();
-    assert_eq!(promoted.promoted_count, 1);
-    assert_eq!(insufficient.promoted_traits().len(), 1);
-    assert!(insufficient.promoted_traits()[0].confidence.raw() >= 0.8);
-}
-
-#[test]
-fn memory_compression_is_bounded_and_preserves_expectancy_not_action_replay() {
+fn rejected_memory_replacement_preserves_all_existing_state() {
     let mut bank = memory_bank_with_three_records();
-    let consolidator = SleepConsolidator::new(config()).unwrap();
-
-    let report = consolidator.compress_memory_bank(&mut bank).unwrap();
-
-    assert_eq!(report.input_records, 3);
-    assert_eq!(report.output_records, 2);
-    assert_eq!(bank.len(), 2);
-    assert_eq!(
-        report.retained_source_memory_ids,
-        vec![alife_core::MemoryId(2), alife_core::MemoryId(3)]
-    );
-
-    let expectancy = MemoryExpectancy::neutral(Confidence::new(0.05).unwrap()).unwrap();
-    let MemoryExpectancy {
-        expected_valence: _,
-        predicted_drive_delta: _,
-        predicted_sensory_outcome: _,
-        affordance_bias: _,
-        danger_bias: _,
-        safety_bias: _,
-        social_trust_bias: _,
-        social_fear_bias: _,
-        novelty_bias: _,
-        curiosity_bias: _,
-        confidence: _,
-        source_memory_ids: _,
-    } = expectancy;
+    let before = serde_json::to_vec(&bank).unwrap();
+    for oversized in [false, true] {
+        let mut invalid = memory_record(5, 14, 0.5);
+        if oversized {
+            invalid.features = vec![0.0; 17];
+        } else {
+            invalid.features[0] = f32::NAN;
+        }
+        assert!(bank
+            .replace_with_consolidated_records(vec![memory_record(4, 13, 0.4), invalid])
+            .is_err());
+        assert_eq!(serde_json::to_vec(&bank).unwrap(), before);
+    }
 }
 
 #[test]
-fn concept_consolidation_preserves_gaps_and_cannot_emit_actions() {
+fn concept_consolidation_preserves_gaps() {
     let mut map = topology_with_gap();
     let consolidator = SleepConsolidator::new(config()).unwrap();
 
@@ -552,8 +416,6 @@ fn concept_consolidation_preserves_gaps_and_cannot_emit_actions() {
         map.unresolved_gaps().len() as u32
     );
     assert!(report.curiosity_bias_count > 0);
-    fn topology_report_is_not_action(_: alife_core::ConceptConsolidationReport) {}
-    topology_report_is_not_action(report);
 }
 
 #[test]
@@ -635,44 +497,6 @@ fn structural_edit_batches_validate_sort_and_defer_application() {
         ),
         Err(ScaffoldContractError::ScalarOutOfRange)
     );
-}
-
-#[test]
-fn structural_candidates_are_generated_but_not_active_applied() {
-    let schema = neural_schema_with_h_shadow();
-    let map = topology_with_gap();
-    let consolidator = SleepConsolidator::new(config()).unwrap();
-
-    let batch = consolidator
-        .generate_structural_edit_batch(&schema, &map, Tick::new(80))
-        .unwrap();
-
-    assert!(!batch.candidates().is_empty());
-    assert_eq!(
-        consolidator.reject_active_tick_structural_application(&batch),
-        Err(ScaffoldContractError::InvalidSparseProjectionSchema)
-    );
-}
-
-#[test]
-fn creature_mind_can_force_and_run_sleep_without_active_tick_structural_application() {
-    let mut mind =
-        CreatureMind::scaffold(organism(), BrainScaleTier::Nano512, 44, Tick::ZERO).unwrap();
-
-    let transition = mind
-        .force_sleep(Tick::ZERO, SleepTrigger::ForcedRequest)
-        .unwrap();
-    assert_eq!(transition.to, SleepPhase::ForcedRecoverySleep);
-    assert_eq!(mind.sleep_state().phase, SleepPhase::ForcedRecoverySleep);
-
-    let report = mind.run_sleep_consolidation(Tick::new(1)).unwrap();
-    assert_eq!(report.sleep_phase, SleepPhase::ForcedRecoverySleep);
-    assert!(mind.development_state().sleep_cycle_count >= 1);
-    assert!(!mind.pending_structural_edits().is_empty());
-
-    let before_pending = mind.pending_structural_edits().len();
-    assert_eq!(mind.current_tick(), Tick::ZERO);
-    assert_eq!(mind.pending_structural_edits().len(), before_pending);
 }
 
 #[test]

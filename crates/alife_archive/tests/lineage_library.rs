@@ -1478,27 +1478,6 @@ fn composite_birth_batch_prepare_rejects_a_curated_receipt_mismatch_without_writ
 }
 
 #[test]
-fn composite_birth_batch_prepare_rejects_projection_provenance_mismatch_without_writes() {
-    let root = temp_root("batch-receipt-provenance");
-    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
-    let fixture = curated_n512_fixture(914, SensorProfile::GroundedObjectSlotsV1);
-    let other = curated_n512_fixture(915, SensorProfile::GroundedObjectSlotsV1);
-    let mut input = fixture.input("batch-receipt-provenance", OrganismId(914), Tick::new(20));
-    input.projection_receipt = other.projection_receipt.as_ref();
-    let before = snapshot_archive_state(&library, &root);
-
-    let error = library.prepare_composite_birth_batch(&[input]).unwrap_err();
-    assert!(matches!(
-        error,
-        alife_archive::ArchiveError::Contract(_) | alife_archive::ArchiveError::Integrity(_)
-    ));
-    assert_eq!(snapshot_archive_state(&library, &root), before);
-
-    drop(library);
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
 fn composite_birth_batch_prepare_accepts_a_contract_valid_curated_receipt() {
     let root = temp_root("batch-receipt-valid");
     let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();

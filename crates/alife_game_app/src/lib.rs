@@ -19,8 +19,8 @@ mod prelude {
         FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::{
-        CreatureAppearanceGenome, CreatureWorldAnchor, EcologyZoneId, PersistentVoxelProfileId,
-        PersistentVoxelWorldBackend, TerrainZoneKind, WorldObjectKind,
+        CreatureAppearanceGenome, CreatureWorldAnchor, PersistentVoxelProfileId,
+        PersistentVoxelWorldBackend, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;
@@ -34,9 +34,6 @@ pub use production_run_mode::*;
 
 mod app_shell;
 pub use app_shell::*;
-
-mod composite_population_runtime;
-pub use composite_population_runtime::*;
 
 mod habitat_lab_commands;
 pub use habitat_lab_commands::*;
@@ -55,9 +52,6 @@ pub use creature_visuals::*;
 
 mod creature_part_catalog;
 pub use creature_part_catalog::*;
-
-mod creature_part_genetics;
-pub use creature_part_genetics::*;
 
 mod creature_part_assets;
 pub use creature_part_assets::*;
@@ -92,9 +86,6 @@ pub use alife_runtime::{
 mod founder_import;
 #[cfg(feature = "gpu-runtime")]
 pub use founder_import::*;
-
-mod ecology_loop;
-pub use ecology_loop::*;
 
 mod runtime_prereq_diagnostics;
 pub use runtime_prereq_diagnostics::*;

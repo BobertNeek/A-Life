@@ -410,23 +410,6 @@ fn sleep_header_layout_matches_wgsl() {
 }
 
 #[test]
-fn sleep_weight_writes_canonicalize_zero_before_gpu_storage() {
-    let consolidate = alife_gpu_backend::CLOSED_LOOP_CONSOLIDATE_WGSL;
-    assert!(consolidate.contains("fn canonicalize_state_zero(value:f32) -> f32"));
-    assert!(
-        consolidate.contains("store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(fast))")
-    );
-    assert!(consolidate.contains(
-        "store_state_f32(inactive.lifetime+gid.x,canonicalize_state_zero(next_lifetime))"
-    ));
-    assert!(consolidate
-        .contains("store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(next_fast))"));
-
-    let replay = alife_gpu_backend::CLOSED_LOOP_REPLAY_LEARNING_WGSL;
-    assert!(replay.contains("store_state_f32(fast_index,canonicalize_state_zero(next))"));
-}
-
-#[test]
 fn consolidation_promotes_fast_preserves_genetic_and_commits_once() {
     let (mut backend, handle, phenotype) = learned_backend(5_001);
     let genetic_before = backend
@@ -504,32 +487,20 @@ fn consolidation_promotes_fast_preserves_genetic_and_commits_once() {
     );
     assert_eq!(genetic_before.len(), phenotype.synapses().len());
     assert!(lifetime_after.iter().any(|value| *value != 0.0));
+    let fast_after = backend.read_active_fast_weights_for_test(handle).unwrap();
+    for value in lifetime_after.iter().chain(&fast_after) {
+        assert!(value.is_finite());
+        assert_ne!(value.to_bits(), (-0.0_f32).to_bits());
+    }
+    assert!(matches!(
+        backend.poll_sleep_consolidation(handle, staged.staged.job_id),
+        Err(alife_core::ScaffoldContractError::ConsolidationGenerationMismatch)
+    ));
 
     let retry = backend
         .commit_sleep_consolidation(handle, &request, &staged.staged)
         .unwrap();
     assert_eq!(retry, receipt);
-}
-
-#[test]
-fn committed_sleep_retires_staging_payload_but_remains_idempotent() {
-    let (mut backend, handle, _) = learned_backend(5_010);
-    let (_replay, request, staged) = stage_sleep(&mut backend, handle, 1);
-
-    let receipt = backend
-        .commit_sleep_consolidation(handle, &request, &staged.staged)
-        .unwrap();
-
-    assert!(matches!(
-        backend.poll_sleep_consolidation(handle, staged.staged.job_id),
-        Err(alife_core::ScaffoldContractError::ConsolidationGenerationMismatch)
-    ));
-    assert_eq!(
-        backend
-            .commit_sleep_consolidation(handle, &request, &staged.staged)
-            .unwrap(),
-        receipt
-    );
 }
 
 #[test]
@@ -833,40 +804,4 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
         max_post_wake_delta > LOGIT_TOLERANCE,
         "GPU replay payload must causally alter the selected logit within the bounded post-wake probe window: max_delta={max_post_wake_delta}",
     );
-}
-
-#[test]
-fn gpu_test_brain_sleep_delegate_runs_the_full_request_transaction() {
-    let phenotype = support::controlled_learning_n512_phenotype(1.0);
-    let mut brain =
-        support::GpuTestBrain::from_phenotype(alife_core::OrganismId(5_007), phenotype).unwrap();
-    let source = support::perception_frame_for_profile_at_tick(
-        5_007,
-        4_000,
-        alife_core::SensorProfile::PrivilegedAffordanceV1,
-        true,
-        2,
-    );
-    let (frame, tick) = brain.tick_with_frame(&source).unwrap();
-    let (patch, _) = sealed_reward(
-        brain.handle,
-        brain.brain_phenotype(),
-        brain.physiology(),
-        &frame,
-        &tick,
-        1,
-        BodyEventDelta {
-            nutrition: 1.0,
-            ..BodyEventDelta::zero()
-        },
-    );
-    brain.apply_sealed_outcome(&patch).unwrap();
-
-    let receipt = brain
-        .submit_and_complete_sleep_consolidation(ConsolidationIntent { cycle_id: 1 })
-        .unwrap();
-
-    assert_eq!(receipt.generation_swaps, 1);
-    assert_eq!(receipt.staged.cycle_id, 1);
-    assert!(receipt.promoted_fast_l1 > 0.0);
 }

@@ -123,9 +123,6 @@ pub fn build_gaussian_context(
     }
 
     let confidence = Confidence::new(confidence)?;
-    if confidence.raw() == 0.0 {
-        return Ok(None);
-    }
 
     entries.sort_by(|lhs, rhs| {
         rhs.salience

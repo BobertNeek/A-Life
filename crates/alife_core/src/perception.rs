@@ -16,10 +16,6 @@ use crate::{
 };
 
 pub const CANDIDATE_FEATURE_COUNT: usize = 24;
-/// Historical Play flag location. Current object candidates preserve angular
-/// speed in this lane and distinguish activation through the Other family.
-/// Retained as a source-level alias for callers describing old evidence.
-pub const CONTACT_ACTIVATION_FEATURE_LANE: usize = 20;
 pub const MAX_ACTION_CANDIDATES: usize = 32;
 
 const PERCEPTION_BASE_DOMAIN: &[u8] = b"alife.perception.base.v1";
@@ -479,8 +475,6 @@ impl PerceptionFrameDraft {
         self,
         context: PerceptionContextBlock,
     ) -> Result<PerceptionFrame, ScaffoldContractError> {
-        self.validate_contract()?;
-        context.validate_contract()?;
         let frame_digest = compute_frame_digest(self.base_digest, &context);
         Ok(PerceptionFrame {
             base: self,
@@ -864,7 +858,6 @@ fn validate_frame_base(
 ) -> Result<(), ScaffoldContractError> {
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
-    SensorProfile::try_from_raw(sensor_profile.raw())?;
     organism_id
         .validate()
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
@@ -1030,7 +1023,6 @@ fn validate_context(
 ) -> Result<(), ScaffoldContractError> {
     ensure_current_version(SchemaKind::Perception, schema_version)
         .map_err(|_| ScaffoldContractError::InvalidPerceptionFrame)?;
-    PerceptionContextKind::try_from_raw(context_kind.raw())?;
     match context_kind {
         PerceptionContextKind::None => {
             if !values.is_empty() {

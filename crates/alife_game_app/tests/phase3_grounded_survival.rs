@@ -50,7 +50,7 @@ fn new_game_request(label: &str) -> CanonicalNewGameLaunchRequest {
 }
 
 fn planar_distance(left: Vec3f, right: Vec3f) -> f32 {
-    (left.x - right.x).hypot(left.y - right.y)
+    (left.x - right.x).hypot(left.z - right.z)
 }
 
 #[test]

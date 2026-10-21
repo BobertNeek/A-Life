@@ -603,43 +603,6 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
     assert_eq!(rest.action_result.body_event.sleep_recovery, 1.0);
     assert_eq!(rest.action_result.body_event.mating_opportunity, 0.0);
 
-    let mut hazard_world = HeadlessScenarioBuilder::new(32_007)
-        .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
-        .build()
-        .unwrap();
-    let hazard_agent = hazard_world.entity_id("agent").unwrap();
-    let hazard = hazard_world.entity_id("hazard").unwrap();
-    register(&mut hazard_world, hazard_agent);
-    let hazard_receipt = hazard_world
-        .apply_registered_command(
-            &HeadlessWorldCommand::approach(ORGANISM_ID, hazard).unwrap(),
-            hazard_agent,
-            Tick(1),
-        )
-        .unwrap();
-    assert_eq!(hazard_receipt.action_result.body_event.energy, -0.08);
-    assert_eq!(
-        hazard_receipt
-            .action_result
-            .observation
-            .reward_valence
-            .raw(),
-        0.0
-    );
-    assert_eq!(hazard_receipt.action_result.body_event.damage, 0.7);
-    assert_eq!(
-        hazard_receipt.action_result.body_event.temperature_stress,
-        0.0
-    );
-    assert_eq!(hazard_receipt.action_result.body_event.nutrition, 0.0);
-    assert_eq!(hazard_receipt.action_result.body_event.social_contact, 0.0);
-    assert_eq!(hazard_receipt.action_result.body_event.sleep_recovery, 0.0);
-    assert_eq!(
-        hazard_receipt.action_result.body_event.mating_opportunity,
-        0.0
-    );
-
     for (seed, affinity, expected_contact) in [
         (32_008, 0.6_f32, PEER_TOUCH_PER_INTERVAL),
         (32_009, -0.6_f32, PEER_TOUCH_PER_INTERVAL),

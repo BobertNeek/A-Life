@@ -334,18 +334,18 @@ impl GroundedSensorExtractor {
                 Ok((object, descriptor))
             })
             .collect::<Result<Vec<_>, ScaffoldContractError>>()?;
-        let receipts = tracker.observe_batch(
+        let tracked_ids = tracker.observe_batch(
             snapshot.observer,
             prepared.iter().map(|(object, descriptor)| {
                 (object.tracking_provenance, *descriptor, snapshot.tick)
             }),
         )?;
         let mut tracked = Vec::with_capacity(prepared.len());
-        for ((object, _), receipt) in prepared.into_iter().zip(receipts) {
+        for ((object, _), tracked_object_id) in prepared.into_iter().zip(tracked_ids) {
             let relative = subtract(object.position, snapshot.observer_pose.translation);
             tracked.push(TrackedVisibleObject {
                 object,
-                tracked_object_id: receipt.tracked_object_id,
+                tracked_object_id,
                 distance: length(relative),
                 relative,
             });
