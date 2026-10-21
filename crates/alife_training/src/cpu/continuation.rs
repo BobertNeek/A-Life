@@ -163,13 +163,6 @@ fn fixture_asset(seed: u64) -> Result<FoundationWeightAsset> {
         TrainingStageManifest::new(1, 1, 1),
     )?)
 }
-fn fixture_ancestry(receipt: &Value, previous: &Path) -> Result<bool> {
-    Ok(crate::native_receipt::Lineage::load(receipt, previous)?
-        .frames
-        .iter()
-        .any(|r| r["fixture"] == true))
-}
-
 pub fn run_cpu_continuation(
     mut args: CpuContinuationConfig,
     episode: &mut impl CpuEpisodeHooks,
@@ -404,17 +397,6 @@ pub fn run_cpu_continuation(
             None,
         )
     };
-    let fixture = args.fixture
-        || source_receipt
-            .as_ref()
-            .map(|receipt| {
-                fixture_ancestry(
-                    receipt,
-                    args.previous.as_ref().expect("source receipt has path"),
-                )
-            })
-            .transpose()?
-            .unwrap_or(false);
     let mut lineage = source_receipt
         .as_ref()
         .map(|receipt| {
@@ -424,6 +406,13 @@ pub fn run_cpu_continuation(
             )
         })
         .transpose()?;
+    let fixture = args.fixture
+        || lineage.as_ref().is_some_and(|lineage| {
+            lineage
+                .frames
+                .iter()
+                .any(|receipt| receipt["fixture"] == true)
+        });
     let parent_ref = if let Some(lineage) = lineage.as_ref() {
         let name = ["cycle.json", "cpu-cycle.json", "group50.json"]
             .into_iter()
