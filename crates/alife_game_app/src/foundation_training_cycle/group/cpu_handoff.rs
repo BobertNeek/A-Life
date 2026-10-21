@@ -5,6 +5,7 @@ use alife_training::{FoundationTrainingBackendV1, FoundationTrainingHandoffV1};
 
 pub(super) fn source(previous: &Path) -> Result<SealedCycleContinuation> {
     let (_, receipt) = admission::read(&previous.join("cpu-cycle.json"))?;
+    alife_training::native_receipt::Lineage::load(&receipt, previous)?;
     let (handoff_bytes, _) = admission::read(&previous.join("training-handoff.json"))?;
     let handoff: FoundationTrainingHandoffV1 = serde_json::from_slice(&handoff_bytes)?;
     handoff.validate()?;

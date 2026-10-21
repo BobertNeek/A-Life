@@ -457,6 +457,17 @@ fn run_owned(
     provenance: &serde_json::Value,
 ) -> Result<serde_json::Value> {
     let output = request.output;
+    let source_name = admission::source_name(request.previous)?;
+    let (source_bytes, source_receipt) = admission::read(&request.previous.join(source_name))?;
+    let mut lineage =
+        alife_training::native_receipt::Lineage::load(&source_receipt, request.previous)?;
+    let mut output_provenance = provenance.clone();
+    output_provenance
+        .as_object_mut()
+        .ok_or("invalid group provenance")?
+        .remove("native_source_receipt");
+    output_provenance["native_source_receipt_ref"] =
+        serde_json::json!(admission::hash(&source_bytes));
     let SealedCycleContinuation {
         asset,
         policy_version,
@@ -493,6 +504,9 @@ fn run_owned(
             )?;
         }
     }
+    lineage.write_to(&output.join("source-receipts"))?;
+    lineage.retain_parent(source_bytes)?;
+    lineage.write_to(output)?;
     for (name, expected) in provenance["source_sha256"]
         .as_object()
         .ok_or("missing native source bindings")?
@@ -1243,7 +1257,7 @@ fn run_owned(
     let elapsed = started.elapsed().as_secs_f64();
     let receipt = serde_json::json!({"schema":1,"complete":true,"mode":"group50_shared_habitat","population":50,"world_seed":request.seed,"seed":request.seed,
         "founder_seed_base":founder_seed_base,"policy_version":policy_version,"biological_objective_version":BIOLOGICAL_OBJECTIVE_VERSION,"critic_objective_version":critic_residual::OBJECTIVE_VERSION,
-        "objective_state_reset":false,"sampling_temperature":request.sampling_temperature,"source":source,"seed_provenance":provenance,"episodes":episodes,
+        "objective_state_reset":false,"sampling_temperature":request.sampling_temperature,"source":source,"seed_provenance":output_provenance,"episodes":episodes,
         "new_asset_digest":digest(&trained),"actor_checkpoint_sha256":admission::hash(&actor_bytes),"value_checkpoint_sha256":admission::hash(&value_bytes),
         "actor_optimizer_step":update.actor_optimizer_step,"value_optimizer_step":critic_checkpoint.optimizer_step,"actor_optimizer_updates":update.actor_optimizer_step-actor_age,
         "value_optimizer_updates":critic_updates,"next_cohort_optimizer_rebound":true,"completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,

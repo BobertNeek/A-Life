@@ -102,7 +102,7 @@ bevy-app = [
     "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
-foundation-training = ["gpu-runtime", "dep:alife_training", "alife_runtime/training-rollout", "dep:sha2"]
+foundation-training = ["gpu-runtime", "dep:alife_training", "alife_training/receipt-lineage", "alife_runtime/training-rollout", "dep:sha2"]
 cpu-training = ["foundation-training", "alife_training/cpu-backend"]
 gpu-tests = [
     "gpu-runtime",

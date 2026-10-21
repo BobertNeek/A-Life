@@ -32,88 +32,12 @@ fn verified_source_links(previous: &Path) -> Result<Value> {
     if receipt_name == "cycle.json" {
         return Ok(Value::Null);
     }
-    let (_, mut native) = read(&previous.join(receipt_name))?;
-
-    for depth in 0..64 {
-        let group = native["complete"] == true
-            && native["mode"] == "group50_shared_habitat"
-            && native["population"] == 50;
-        let cpu = native["complete"] == true
-            && native["mode"] == "native_cpu_fresh_cohort"
-            && native["backend"] == "native-cpu"
-            && native["receipt_filename"] == "cpu-cycle.json"
-            && native["objective_state_reset"] == false
-            && native["biological_objective_version"] == 2
-            && native["critic_objective_version"] == 1;
-        if !group && !cpu {
-            return Err("invalid training ancestry receipt".into());
-        }
-        let provenance = &native["seed_provenance"];
-        let map = provenance["source_sha256"]
-            .as_object()
-            .ok_or("missing training ancestry hashes")?;
-        let names = ["cycle.json", "group50.json", "cpu-cycle.json"]
-            .into_iter()
-            .filter(|name| map.contains_key(*name))
-            .collect::<Vec<_>>();
-        if names.len() != 1
-            || map.len() != 4
-            || [
-                "trained.alife-foundation",
-                "actor-checkpoint.json",
-                "value-checkpoint.json",
-            ]
-            .iter()
-            .any(|name| !map.contains_key(*name))
-        {
-            return Err("invalid native ancestry pin set".into());
-        }
-        let name = names[0];
-        let child = &provenance["native_source_receipt"];
-        let expected = map[name]
-            .as_str()
-            .ok_or("missing pinned ancestry receipt hash")?;
-        // The terminal native receipt uses a typed field order. Its exact raw
-        // hash and parsed content are checked against the surviving mixed file
-        // once Python resolves that file; no byte reconstruction is needed.
-        if name == "cycle.json" {
-            return Ok(
-                json!({"pin_set_sha256":hash(&serde_json::to_vec(map)?), "terminal_native_receipt":child}),
-            );
-        }
-        let mut verified = false;
-        if depth == 0 {
-            let retained = previous
-                .join(if cpu {
-                    "source-native"
-                } else {
-                    "source-receipts"
-                })
-                .join(name);
-            if retained.is_file() {
-                let (bytes, document) = read(&retained)?;
-                verified = hash(&bytes) == expected && document == *child;
-                if !verified {
-                    return Err("retained training ancestry receipt changed".into());
-                }
-            }
-        }
-        if !verified {
-            for mut bytes in [
-                serde_json::to_vec(child)?,
-                serde_json::to_vec_pretty(child)?,
-            ] {
-                verified |= hash(&bytes) == expected;
-                bytes.push(b'\n');
-                verified |= hash(&bytes) == expected;
-            }
-        }
-        if !verified {
-            return Err("embedded training receipt differs from pinned source hash".into());
-        }
-        native = child.clone();
+    let (_, native) = read(&previous.join(receipt_name))?;
+    let lineage = alife_training::native_receipt::Lineage::load(&native, previous)?;
+    if let Some(error) = lineage.legacy_proof_error {
+        return Err(error.into());
     }
-    Err("training ancestry exceeds64 links".into())
+    Ok(lineage.terminal_proof.unwrap_or(Value::Null))
 }
 
 // Reuse the accepted read-only recovery reconciliation, including its Python
@@ -198,80 +122,8 @@ if runs:
     Ok(())
 }
 
-// Reject duplicate keys at every depth; an overwritten exclusion is a safety
-// failure, even when another JSON reader would silently accept the last value.
-struct Unique(Value);
-impl<'de> serde::Deserialize<'de> for Unique {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> std::result::Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = Unique;
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str("JSON with unique object keys")
-            }
-            fn visit_map<M: serde::de::MapAccess<'de>>(
-                self,
-                mut map: M,
-            ) -> std::result::Result<Unique, M::Error> {
-                let mut out = serde_json::Map::new();
-                while let Some((key, Unique(value))) = map.next_entry::<String, Unique>()? {
-                    if out.insert(key, value).is_some() {
-                        return Err(serde::de::Error::custom("duplicate seed evidence key"));
-                    }
-                }
-                Ok(Unique(Value::Object(out)))
-            }
-            fn visit_seq<S: serde::de::SeqAccess<'de>>(
-                self,
-                mut seq: S,
-            ) -> std::result::Result<Unique, S::Error> {
-                let mut out = Vec::new();
-                while let Some(Unique(value)) = seq.next_element()? {
-                    out.push(value);
-                }
-                Ok(Unique(Value::Array(out)))
-            }
-            fn visit_bool<E: serde::de::Error>(self, v: bool) -> std::result::Result<Unique, E> {
-                Ok(Unique(json!(v)))
-            }
-            fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<Unique, E> {
-                Ok(Unique(json!(v)))
-            }
-            fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<Unique, E> {
-                Ok(Unique(json!(v)))
-            }
-            fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<Unique, E> {
-                Ok(Unique(json!(v)))
-            }
-            fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<Unique, E> {
-                Ok(Unique(json!(v)))
-            }
-            fn visit_string<E: serde::de::Error>(
-                self,
-                v: String,
-            ) -> std::result::Result<Unique, E> {
-                Ok(Unique(json!(v)))
-            }
-            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Unique, E> {
-                Ok(Unique(Value::Null))
-            }
-        }
-        deserializer.deserialize_any(Visitor)
-    }
-}
 pub(super) fn read(path: &Path) -> Result<(Vec<u8>, Value)> {
-    use std::io::Read;
-    let mut bytes = Vec::new();
-    std::fs::File::open(path)?
-        .take(64 * 1024 * 1024 + 1)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() > 64 * 1024 * 1024 {
-        return Err("seed evidence exceeds64 MiB".into());
-    }
-    let Unique(value) = serde_json::from_slice(&bytes)?;
-    Ok((bytes, value))
+    Ok(alife_training::native_receipt::read(path)?)
 }
 
 fn exclusions(value: &Value, seed: u64) -> Result<()> {
@@ -420,7 +272,7 @@ pub(super) fn admit(
         mixed_lane_admission(history, lane, previous, &hash(&bytes), known_exclusions)?;
     }
     let source_name = source_name(previous)?;
-    let (_, native) = read(&previous.join(source_name))?;
+    let (native_bytes, native) = read(&previous.join(source_name))?;
     let source_seed = native["seed"]
         .as_u64()
         .filter(|v| *v > 0)
@@ -428,7 +280,11 @@ pub(super) fn admit(
     if source_seed == seed {
         return Err("group seed reuses the native source seed".into());
     }
-    exclusions(&native, seed)?;
+    let lineage = alife_training::native_receipt::Lineage::load(&native, previous)?;
+    lineage.check_parent(&native_bytes)?;
+    for frame in &lineage.frames {
+        exclusions(frame, seed)?;
+    }
     let consumed = document["consumed_seed_ranges"]
         .as_array()
         .ok_or("history lacks consumed seed ranges")?;
@@ -832,7 +688,7 @@ history.write_text(json.dumps(document))
             br#"{"imports":[{"reserved_seed_ranges":[[1,2]],"reserved_seed_ranges":[]}]}"#
                 .as_slice(),
         ] {
-            assert!(serde_json::from_slice::<Unique>(bytes).is_err());
+            assert!(alife_training::native_receipt::parse(bytes).is_err());
         }
     }
 }

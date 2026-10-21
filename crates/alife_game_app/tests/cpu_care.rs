@@ -256,12 +256,19 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         first["value_optimizer_step"]
     );
     assert_eq!(second["fixture"], true);
+    assert!(second["seed_provenance"]
+        .get("native_source_receipt")
+        .is_none());
     assert_eq!(
-        serde_json::to_string(&second)
-            .unwrap()
-            .matches("\"native_source_receipt\"")
-            .count(),
-        2
+        second["seed_provenance"]["native_source_receipt_ref"],
+        json!(sha(source.join("cpu-cycle.json")))
+    );
+    let blob = output
+        .join("source-lineage")
+        .join(format!("{}.json", sha(source.join("cpu-cycle.json"))));
+    assert_eq!(
+        fs::read(blob).unwrap(),
+        fs::read(source.join("cpu-cycle.json")).unwrap()
     );
     assert_eq!(
         second["seed_admission"]["historical_freshness"],
@@ -288,6 +295,45 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         success(&["--reconcile-pending", text(&lane)])["status"],
         "accepted"
     );
+    // Reproduce the legacy native reader failure after seal, then reconcile the
+    // exact complete optimizer/archive bytes without redispatching the episode.
+    let models_before = [
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+        "trained.alife-foundation",
+        "training-handoff.json",
+    ]
+    .map(|name| (name, fs::read(output.join(name)).unwrap()));
+    let mut legacy = load(output.join("cpu-cycle.json"));
+    let mut deep = json!(0);
+    for _ in 0..128 {
+        deep = json!({"legacy":deep});
+    }
+    legacy["legacy_depth_regression"] = deep;
+    let legacy_bytes = serde_json::to_vec_pretty(&legacy).unwrap();
+    assert!(serde_json::from_slice::<Value>(&legacy_bytes).is_err());
+    fs::write(output.join("cpu-cycle.json"), &legacy_bytes).unwrap();
+    let mut reservation = load(&ledger_path);
+    reservation["cpu_care_attempts"][0]["status"] = json!("pending");
+    reservation["cpu_care_attempts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("native_output_sha256");
+    reservation["cpu_care_attempts"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("result");
+    fs::write(&ledger_path, serde_json::to_vec(&reservation).unwrap()).unwrap();
+    let before_reconcile = snapshot(&output);
+    assert_eq!(
+        success(&["--reconcile-pending", text(&lane)])["status"],
+        "accepted"
+    );
+    assert_eq!(before_reconcile, snapshot(&output));
+    assert!(run(&["--validate-output", text(&output)]).status.success());
+    for (name, bytes) in models_before {
+        assert_eq!(bytes, fs::read(output.join(name)).unwrap());
+    }
     // Full private archive loss or a changed retained moment invalidates a seal.
     for name in [
         "collector-checkpoint.json",
