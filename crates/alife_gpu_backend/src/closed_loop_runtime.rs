@@ -4332,8 +4332,7 @@ impl GpuClosedLoopBackend {
                         && malformed_receipt.is_some_and(|receipt| {
                             receipt.field == GpuRuntimeApplyFastPlasticityMalformedField::CommitGuardRejected
                         });
-                    if *published || (submission_started && !rejected_single_row)
-                    {
+                    if *published || (submission_started && !rejected_single_row) {
                         self.mark_device_lost();
                         return Err(ScaffoldContractError::NeuralBackendUnavailable);
                     }
