@@ -104,7 +104,7 @@ fn centering_cli_rejects_mixed_continuation_sources_before_gpu_work() {
         assert!(!result.status.success());
         let stderr = String::from_utf8_lossy(&result.stderr);
         assert!(
-            stderr.contains("actor advantage centering requires a sealed GrabFood continuation"),
+            stderr.contains("ambiguous training continuation"),
             "unexpected rejection for {marker}: {stderr}"
         );
         assert!(!output.exists());
