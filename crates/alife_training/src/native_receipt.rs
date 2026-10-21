@@ -145,11 +145,18 @@ pub fn parse(bytes: &[u8]) -> io::Result<Value> {
         parse_checked(bytes)
     }
 }
-pub fn read(path: &Path) -> io::Result<(Vec<u8>, Value)> {
+fn read_bytes(path: &Path) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
     fs::File::open(path)?
         .take(MAX_RECEIPT_BYTES as u64 + 1)
         .read_to_end(&mut bytes)?;
+    if bytes.len() > MAX_RECEIPT_BYTES {
+        return Err(invalid("seed evidence exceeds64 MiB"));
+    }
+    Ok(bytes)
+}
+pub fn read(path: &Path) -> io::Result<(Vec<u8>, Value)> {
+    let bytes = read_bytes(path)?;
     let value = parse(&bytes)?;
     Ok((bytes, value))
 }
@@ -221,7 +228,7 @@ fn digest_name(digest: &str) -> io::Result<String> {
     }
     Ok(format!("{digest}.json"))
 }
-fn load_blob(directory: &Path, digest: &str) -> io::Result<(Vec<u8>, Value)> {
+fn load_blob(directory: &Path, digest: &str) -> io::Result<Vec<u8>> {
     let base = directory.join(DIRECTORY);
     if fs::symlink_metadata(&base)?.file_type().is_symlink() {
         return Err(invalid("lineage directory must not be a symlink"));
@@ -230,11 +237,11 @@ fn load_blob(directory: &Path, digest: &str) -> io::Result<(Vec<u8>, Value)> {
     if !fs::symlink_metadata(&path)?.is_file() {
         return Err(invalid("lineage blob must be a regular file"));
     }
-    let (bytes, value) = read(&path)?;
+    let bytes = read_bytes(&path)?;
     if sha256(&bytes) != digest {
         return Err(invalid("lineage blob differs from pinned SHA256"));
     }
-    Ok((bytes, value))
+    Ok(bytes)
 }
 impl Lineage {
     /// All references use the existing direct predecessor pin; a free-standing
@@ -309,7 +316,8 @@ impl Lineage {
                 if !seen.insert(expected.to_owned()) {
                     return Err(invalid("cyclic or repeated lineage reference"));
                 }
-                let (bytes, value) = load_blob(directory, &expected)?;
+                let bytes = load_blob(directory, &expected)?;
+                let value = parse(&bytes)?;
                 aggregate = aggregate
                     .checked_add(bytes.len())
                     .ok_or_else(|| invalid("lineage byte overflow"))?;
@@ -385,7 +393,8 @@ impl Lineage {
     /// Match the original immutable-source guard after collection and export.
     pub fn verify_at(&self, source: &Path) -> io::Result<()> {
         for digest in &self.imported {
-            let (bytes, _) = load_blob(source, digest)?;
+            // Admission parsed these bytes already; exact equality preserves that validation.
+            let bytes = load_blob(source, digest)?;
             if self.blobs.get(digest) != Some(&bytes) {
                 return Err(invalid("source lineage changed during native run"));
             }
@@ -524,6 +533,7 @@ mod tests {
             json!([[19, 20]])
         );
         assert!(lineage.legacy_proof_error.is_none());
+        lineage.verify_at(&tree.0).unwrap();
         lineage.retain_parent(bytes.clone()).unwrap();
         let copy = Tree::new();
         lineage.write_to(&copy.0).unwrap();
