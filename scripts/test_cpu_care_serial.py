@@ -73,8 +73,23 @@ class CpuScheduleTests(unittest.TestCase):
         return {}
 
     def execute(self):
-        with patch.object(cpu, 'command', self.command), patch.dict(cpu.os.environ, {}, clear=True):
+        with patch.object(cpu, 'command', self.command), patch.object(cpu, 'verify_source'), patch.dict(cpu.os.environ, {}, clear=True):
             return cpu.execute(self.plan)
+
+    def test_resume_rejects_changed_checkout_or_shared_validator(self):
+        root = Path(cpu.__file__).resolve().parent.parent
+        plan = {**self.plan, 'git_head':'head', 'git_tree':'tree',
+                'cargo_lock_sha256':cpu.mixed.host.sha256(root / 'Cargo.lock'),
+                'helper_sha256':{name:cpu.mixed.host.sha256(root / 'scripts' / name) for name in cpu.HELPERS}}
+        with patch.object(cpu.subprocess, 'check_output', side_effect=['', 'head', 'tree']):
+            cpu.verify_source(plan)
+        with patch.object(cpu.subprocess, 'check_output', return_value='dirty'):
+            with self.assertRaises(ValueError):
+                cpu.verify_source(plan)
+        plan['helper_sha256']['run_mixed_care_serial.py'] = 'changed'
+        with patch.object(cpu.subprocess, 'check_output', side_effect=['', 'head', 'tree']):
+            with self.assertRaises(ValueError):
+                cpu.verify_source(plan)
 
     def test_serial_uses_latest_full_native_source_and_keeps_unknown_freshness(self):
         result = self.execute()

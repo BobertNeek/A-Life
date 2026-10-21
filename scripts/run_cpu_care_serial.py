@@ -17,6 +17,8 @@ import run_mixed_care_serial as mixed
 
 LEDGER = ".grab-food-seed-reservations.json"
 PLAN = ".cpu-care-plan.json"
+HELPERS = ("run_mixed_care_serial.py", "grab_food_seed_reservations.py",
+           "run_eat_held_food_night.py", "summarize_ppo_diagnostics.py")
 require = mixed.require
 
 
@@ -44,9 +46,10 @@ def build_plan(args):
             "CPU lane and immutable source must be separate trees")
     require(not lane.exists() or not any(lane.iterdir()), "new CPU lane must be empty")
     schedule = read(args.schedule)
-    mixed.schedule_rows(schedule)  # Reuse the native explicit three-lesson/dose grammar.
+    rows = mixed.schedule_rows(schedule)  # Reuse the native explicit three-lesson/dose grammar.
     first, last = map(int, args.seeds.split(":"))
     require(0 < first <= last <= seeds.MAX_SEED, "invalid explicit seed range")
+    require(last - first + 1 >= len(rows), "seed range cannot cover the explicit episode schedule")
     require(math.isfinite(args.temperature) and args.temperature > 0, "invalid temperature")
     history = args.seed_history.resolve(strict=True)
     document = read(history)
@@ -66,6 +69,7 @@ def build_plan(args):
             "seed_range": [first, last], "temperature": args.temperature, "seed_admission": admission,
             "git_head": git("rev-parse", "HEAD"), "git_tree": git("rev-parse", "HEAD^{tree}"),
             "scheduler_sha256": mixed.host.sha256(Path(__file__)),
+            "helper_sha256": {name: mixed.host.sha256(root / "scripts" / name) for name in HELPERS},
             "cargo_lock_sha256": mixed.host.sha256(root / "Cargo.lock"),
             "prior_environment": {k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")}}
 
@@ -88,10 +92,21 @@ def episode_history(plan, previous, attempts, lane):
     return doc
 
 
+def verify_source(plan):
+    root = Path(__file__).resolve().parent.parent
+    git = lambda *a: subprocess.check_output(["git", *a], cwd=root, text=True).strip()
+    require(not git("status", "--porcelain") and git("rev-parse", "HEAD") == plan["git_head"]
+            and git("rev-parse", "HEAD^{tree}") == plan["git_tree"], "pinned clean source checkout changed")
+    require(mixed.host.sha256(root / "Cargo.lock") == plan["cargo_lock_sha256"], "pinned Cargo.lock changed")
+    require(plan["helper_sha256"] == {name: mixed.host.sha256(root / "scripts" / name) for name in HELPERS},
+            "pinned scheduling/admission helpers changed")
+
+
 def execute(plan):
     lane = Path(plan["lane"])
     binary = plan["binary"]
     require(plan["schema"] == 1 and plan["kind"] == "native-cpu-care-plan", "invalid saved CPU plan")
+    verify_source(plan)
     require(mixed.host.sha256(binary) == plan["binary_sha256"], "pinned CPU binary changed")
     require(mixed.host.sha256(Path(__file__)) == plan["scheduler_sha256"], "pinned scheduler changed")
     require({k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")} == plan["prior_environment"],
