@@ -1,4 +1,4 @@
-//! v0 scaffold: bounded endocrine and drive modulation contracts.
+//! Bounded endocrine and drive dynamics.
 
 use serde::{Deserialize, Serialize};
 

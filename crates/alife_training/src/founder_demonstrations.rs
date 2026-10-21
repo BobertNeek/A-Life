@@ -28,10 +28,8 @@ pub struct FounderDemonstration {
     pub steps: Vec<FounderDemonstrationStep>,
 }
 
-/// A declared training-only demonstrator. It approaches one visible object,
-/// inspects it within contact range, grabs it, then samples the held object
-/// through ordinary ingestion.
-/// The teacher has no choice between hidden nutritional contingencies.
+/// Records approach, contact inspection, grab and ingestion of one visible object.
+/// The fixed sequence does not choose between hidden nutritional contingencies.
 pub fn record_founder_demonstration(
     seed: u64,
     target_position: Vec3f,
@@ -39,8 +37,7 @@ pub fn record_founder_demonstration(
     record_demonstration(seed, target_position, true)
 }
 
-/// Observation-grounded approach/grab/sample curriculum without a hidden
-/// inspection phase. Autonomous inspection is a separate, still-required behavior.
+/// Records the same physical sequence without the inspection step.
 pub fn record_founder_sampling_demonstration(
     seed: u64,
     target_position: Vec3f,

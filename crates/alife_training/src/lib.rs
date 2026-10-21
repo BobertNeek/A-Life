@@ -1,4 +1,4 @@
-//! Offline-only exact-graph WGSL foundation training.
+//! Offline foundation training on the compiled neural graph, using WGSL or CPU.
 
 mod backend_handoff;
 #[cfg(feature = "cpu-backend")]

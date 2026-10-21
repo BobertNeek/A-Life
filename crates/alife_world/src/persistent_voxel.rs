@@ -1,8 +1,7 @@
-//! FVR02 runtime contract: renderer-independent persistent voxel world backend.
+//! Renderer-independent persistent voxel world state.
 //!
-//! This module owns saved voxel terrain truth for later Bevy renderers. It
-//! deliberately stores stable IDs, chunk coordinates, material summaries,
-//! dirty regions, and profile budgets, never Bevy/wgpu/renderer handles.
+//! Stores stable IDs, chunk coordinates, material summaries, dirty regions,
+//! and profile budgets independently of renderer handles.
 
 use std::collections::BTreeSet;
 

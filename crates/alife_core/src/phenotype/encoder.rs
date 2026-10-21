@@ -1,4 +1,4 @@
-//! Contract-only compiler-owned sensory/body/homeostasis encoder plan.
+//! Compiled sensory, body, and homeostatic encoder plans.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

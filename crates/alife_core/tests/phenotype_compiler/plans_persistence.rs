@@ -1,10 +1,6 @@
-//! Test-only Task 3 compiler, encoder, decoder, and persistence contract ownership.
+//! Compiler, encoder, decoder, and persistence checks.
 
 use super::*;
-
-// Draft-only RED additions for crates/alife_core/tests/phenotype_compiler.rs.
-// Append after the seed tests. This snippet intentionally relies on that file's
-// existing imports and `compile` helper; it does not replace or edit the live test.
 
 use alife_core::{
     BrainPhenotype, CandidateActionFamily, CandidateDecoderPlan, CompiledSynapse,

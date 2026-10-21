@@ -1,9 +1,9 @@
 # N2048 foundation assets
 
 These immutable payloads are the registered N2048 Foundation V1 assets loaded by production
-birth, checkpoint capture, and checkpoint restore. The grounded asset contains the curriculum-
-trained, evolution-hardened weights and an embedded promotion receipt. The privileged-affordance
-asset remains an explicitly unpromoted bootstrap/ablation foundation.
+birth, checkpoint capture, and checkpoint restore. The grounded asset retains its
+historical training metadata and embedded promotion receipt. The privileged-affordance
+asset is a bootstrap/ablation reference. Historical metadata does not describe a new run.
 
 The bootstrap exporter is for test or scratch assets only. Do not run it over this directory: it
 would replace the promoted grounded payload with an untrained procedural baseline.

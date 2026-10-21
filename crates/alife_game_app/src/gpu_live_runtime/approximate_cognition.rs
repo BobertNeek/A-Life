@@ -257,8 +257,7 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
         let slot = job
             .slot
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        // The old path encoded an entire perception payload solely to discard
-        // it and keep this binding. The real backend still packs the payload.
+        // The backend packs the payload; preparation needs only its binding.
         let record = slot.record();
         let binding = alife_gpu_backend::GpuPerceptionFrameBinding {
             perception_header_index: 0,

@@ -1,4 +1,4 @@
-//! v0 scaffold: engine-neutral sensory ABI, context streams, and perception refs.
+//! Engine-neutral sensory ABI, context streams, and perception references.
 
 use core::ops::{BitOr, BitOrAssign};
 

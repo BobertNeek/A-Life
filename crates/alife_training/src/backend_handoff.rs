@@ -50,8 +50,8 @@ pub enum FoundationTrainingBackendV1 {
 pub enum FoundationContinuationKindV1 {
     FreshCohort,
 }
-/// Training-only package. It contains no creature decisions or hardware claims;
-/// normal gameplay can consume the canonical asset through its existing codec.
+/// Founder and optimizer continuation package, separate from organism state.
+/// Gameplay reads only the foundation asset through its normal codec.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FoundationTrainingHandoffV1 {
@@ -149,9 +149,8 @@ impl FoundationTrainingHandoffV1 {
             value: self.value,
         })
     }
-    /// Import into the real existing GPU Training session. No CPU decisions are
-    /// relabeled, and neither optimizer is reinitialized. A real GPU owner must
-    /// execute this path; CPU-only callers can validate/admit without a device.
+    /// Restores founder and optimizer state into a GPU training session.
+    /// Device-free validation is available through `admit`.
     pub fn into_gpu_training_session(
         self,
         session: alife_runtime::GpuAuthoritativeSession,

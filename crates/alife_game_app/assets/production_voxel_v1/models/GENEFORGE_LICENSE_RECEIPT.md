@@ -15,12 +15,12 @@ inventing an upstream copyright notice.
 - Source SHA-256 values: recorded per donor in
   `../creature_parts/geneforge_recipes.json`
 
-## Production Modifications
+## Historical asset preparation
 
-A-Life imports the source `.blend` files with Blender 5.1.0, selects named
-adult neutral body geometry, normalizes and separates reusable anatomical
-groups, prepares canonical and cross-torso attachment transforms, generates
-three LODs, and bakes semantic/anatomy masks for cohesive inherited coats.
-Only generated runtime OBJ, socket JSON, and PNG mask outputs are distributed
-in the production pack. Source `.blend` files, source textures, archives,
-previews, and screenshots are not included.
+The GeneForge pipeline imported donor `.blend` files with Blender 5.1.0, separated
+anatomical groups, prepared attachment transforms and LODs, and generated OBJ,
+socket and mask outputs. The donor source `.blend` files were not bundled.
+
+Current production creatures use the Hearthling GLB. GeneForge outputs are
+retired from the shipping pack; the catalog, attribution and offline authoring
+records remain available.

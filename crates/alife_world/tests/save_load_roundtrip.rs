@@ -727,52 +727,31 @@ fn runtime_config_defaults_are_deterministic_and_invalid_combinations_reject() {
 }
 
 #[test]
-fn brain_policy_config_vnext_round_trips_without_runtime_fallback_state() {
-    for policy in [
-        PolicyBackend::NeuralClosedLoopGpu,
-        PolicyBackend::HeuristicBaseline,
-    ] {
-        let expected = BrainPolicyConfig {
-            schema_version: 1,
-            policy,
-        };
-        let value = serde_json::to_value(expected).unwrap();
-        assert_no_runtime_fallback_keys(&value);
-        assert_eq!(
-            serde_json::from_value::<BrainPolicyConfig>(value).unwrap(),
-            expected
-        );
-    }
-}
-
-#[test]
-fn requires_gpu_is_derived_only_from_the_explicit_policy() {
-    assert!(PolicyBackend::NeuralClosedLoopGpu.requires_gpu());
-    assert!(!PolicyBackend::HeuristicBaseline.requires_gpu());
-}
-
-#[test]
-fn current_runtime_config_serializes_only_explicit_policy_intent() {
-    let config = RuntimeConfig::deterministic_default(99, BrainScaleTier::Nano512);
-    let value = serde_json::to_value(&config).unwrap();
-    assert_no_runtime_fallback_keys(&value);
-    assert_eq!(
-        value.pointer("/brain_policy/policy"),
-        Some(&serde_json::Value::String(
-            "NeuralClosedLoopGpu".to_string()
-        ))
-    );
-}
-
-#[test]
 fn current_runtime_config_round_trips_both_explicit_policies() {
-    for policy in [
-        PolicyBackend::NeuralClosedLoopGpu,
-        PolicyBackend::HeuristicBaseline,
+    for (policy, wire_name, requires_gpu) in [
+        (
+            PolicyBackend::NeuralClosedLoopGpu,
+            "NeuralClosedLoopGpu",
+            true,
+        ),
+        (PolicyBackend::HeuristicBaseline, "HeuristicBaseline", false),
     ] {
         let mut expected = RuntimeConfig::deterministic_default(99, BrainScaleTier::Nano512);
         expected.brain_policy.policy = policy;
         expected.validate().unwrap();
+        assert_eq!(policy.requires_gpu(), requires_gpu);
+        assert_eq!(expected.brain_policy.schema_version, 1);
+        let value = serde_json::to_value(&expected).unwrap();
+        assert_no_runtime_fallback_keys(&value);
+        assert_eq!(
+            value
+                .pointer("/brain_policy/policy")
+                .and_then(serde_json::Value::as_str),
+            Some(wire_name)
+        );
+        let restored_policy: BrainPolicyConfig =
+            serde_json::from_value(value["brain_policy"].clone()).unwrap();
+        assert_eq!(restored_policy, expected.brain_policy);
         let bytes = serde_json::to_vec(&expected).unwrap();
         let restored: RuntimeConfig = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(restored, expected);

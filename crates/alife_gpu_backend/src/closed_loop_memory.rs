@@ -131,12 +131,7 @@ impl GpuMemoryContextUpload {
         recall
             .validate_for_frame(frame)
             .map_err(|_| GpuClosedLoopError::MalformedUpload)?;
-        let upload = Self::build_local(frame, recall, perception_binding, slot)?;
-        // Inputs and encoded bounds are checked above. Rebuilding this fresh
-        // upload for an exact self-comparison is a development diagnostic.
-        #[cfg(debug_assertions)]
-        upload.validate_against(frame, recall, slot)?;
-        Ok(upload)
+        Self::build_local(frame, recall, perception_binding, slot)
     }
 
     pub fn validate_against(
@@ -417,8 +412,7 @@ impl GpuMemoryContextUpload {
 }
 
 // Compare the exact encoded lane sequence without temporary heap storage.
-// Iterator equality checks both length and ordinary f32 equality, so signed
-// zero retains the same semantics as the former Vec-to-slice comparison.
+// Iterator equality checks length and f32 equality; signed zeros compare equal.
 fn memory_records_match_context(records: &[GpuCandidateMemoryRecord], context: &[f32]) -> bool {
     records
         .iter()

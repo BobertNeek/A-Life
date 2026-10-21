@@ -1,8 +1,7 @@
 //! Explicit `HeuristicBaseline` comparison runtime in pure Rust.
 //!
-//! This separately labelled baseline never shadows, gates, or replaces the
-//! GPU-authoritative production neural policy. It orchestrates existing core
-//! contracts and owns no world simulation, adapters, rendering, or GPU runtime.
+//! Combines core systems for comparison; production neural execution lives in
+//! `alife_gpu_backend`.
 
 use serde::{Deserialize, Serialize};
 

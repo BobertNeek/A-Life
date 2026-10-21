@@ -1,4 +1,4 @@
-//! Contract-only causal three-phase ExperiencePatch and policy-evidence records.
+//! Causal three-phase ExperiencePatch and neural decision evidence.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -21,9 +21,8 @@ use crate::{
     MAX_ACTION_CANDIDATES,
 };
 
-/// The v1.1 semantic spine is a deliberate ABI after the legacy/current
-/// experience ABI. The central version registry remains owned by migration
-/// work, so this source task keeps the new boundary explicit here.
+/// Cognitive-context experience extends the base header ABI; joint motor
+/// outcomes use the following version.
 pub const V11_EXPERIENCE_ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION + 1;
 pub const V12_EXPERIENCE_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION + 1;
 
@@ -629,7 +628,7 @@ pub struct NeuralDecisionEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[allow(clippy::large_enum_variant)] // The unboxed public shape is the versioned Task 2 ABI.
+#[allow(clippy::large_enum_variant)] // Preserve the public unboxed representation.
 pub enum DecisionEvidence {
     NeuralClosedLoopGpu(NeuralDecisionEvidence),
     HeuristicBaseline(HeuristicDecisionEvidence),

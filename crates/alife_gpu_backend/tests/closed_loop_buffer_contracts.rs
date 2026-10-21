@@ -1,4 +1,4 @@
-//! Contract-first tests for phenotype-owned GPU closed-loop storage.
+//! Phenotype-owned GPU storage, layout and upload tests.
 
 #[path = "closed_loop_buffer_contracts/abi.rs"]
 mod abi;

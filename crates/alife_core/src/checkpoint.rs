@@ -1,4 +1,4 @@
-//! Engine-neutral checkpoint intent contracts.
+//! Portable brain checkpoint modes.
 
 use serde::{Deserialize, Serialize};
 

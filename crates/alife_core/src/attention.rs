@@ -1,4 +1,4 @@
-//! Bounded two-tier attention contracts for the v1.1 cognitive spine.
+//! Bounded two-tier attention.
 
 use serde::{Deserialize, Serialize};
 

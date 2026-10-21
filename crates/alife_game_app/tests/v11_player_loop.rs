@@ -1,7 +1,5 @@
-//! Smallest v1.1 player-loop RED gate.
-//!
-//! The fixture reaches a grounded teacher token, a coherent production GPU
-//! tick, bounded recovery sleep, and managed breeding with canonical archives.
+//! Player-loop integration: spatial teaching, GPU ticks, recovery sleep,
+//! and managed breeding with lineage archives.
 #![cfg(feature = "gpu-tests")]
 
 use std::fs;
@@ -904,7 +902,7 @@ fn v11_player_loop_reaches_one_coherent_gpu_tick_then_reds_at_next_lifecycle_bou
 
         let rendered_entity = app
             .world()
-            .resource::<alife_bevy_adapter::BevyEntityMap>()
+            .resource::<alife_game_app::BevyEntityMap>()
             .bevy_entity(world_entity_id)
             .expect("stable world ID must map to the rendered learner root");
         let rendered_root = app

@@ -1,4 +1,4 @@
-//! GPU-authority status contracts shared by headless diagnostics and the GPU runtime.
+//! GPU runtime status shared by headless diagnostics and the desktop UI.
 
 use crate::GraphicalBrainPolicyMode;
 

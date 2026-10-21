@@ -10,9 +10,9 @@ lang: en-CA
 - [Document status](#document-status)
 - [Executive summary](#executive-summary)
 - [**Part I - Design foundation**](#part-i-design-foundation)
-  - [1. Design labels and scope](#1-design-labels-and-scope)
+  - [1. Design scope](#1-design-scope)
   - [2. Project objectives](#2-project-objectives)
-  - [3. Global invariants](#3-global-invariants)
+  - [3. Ownership and continuity](#3-ownership-and-continuity)
   - [4. Whole-system authority model](#4-whole-system-authority-model)
   - [5. Time, cadence, and causal scheduling](#5-time-cadence-and-causal-scheduling)
 - [**Part II - World, body, and physiology**](#part-ii-world-body-and-physiology)
@@ -67,7 +67,7 @@ lang: en-CA
 - [**Part XIII - Migration, supersession, and deferred research**](#part-xiii-migration-supersession-and-deferred-research)
   - [44. Migration from existing implementations](#44-migration-from-existing-implementations)
   - [45. Deferred and research capabilities](#45-deferred-and-research-capabilities)
-- [**Appendix A - Canonical interface catalogue**](#appendix-a-canonical-interface-catalogue)
+- [**Appendix A - Information and ownership reference**](#appendix-a-information-and-ownership-reference)
   - [A.1 Organism genotype package](#a1-organism-genotype-package)
   - [A.2 Grounded perception frame](#a2-grounded-perception-frame)
   - [A.3 Cognitive context frame](#a3-cognitive-context-frame)
@@ -83,7 +83,7 @@ lang: en-CA
   - [B.3 Multi-dimensional three-factor learning](#b3-multi-dimensional-three-factor-learning)
   - [B.4 Function-preserving recurrent growth](#b4-function-preserving-recurrent-growth)
   - [B.5 Inherited complexity pressure](#b5-inherited-complexity-pressure)
-- [**Appendix C - Prohibited shortcuts**](#appendix-c-prohibited-shortcuts)
+- [**Appendix C - Interpreting intelligence claims**](#appendix-c-interpreting-intelligence-claims)
 - [**Appendix E - Glossary**](#appendix-e-glossary)
 - [**Appendix F - Design lineage and superseded material**](#appendix-f-design-lineage-and-superseded-material)
 
@@ -120,17 +120,16 @@ Individual learning, cultural inheritance, and ordinary genetic inheritance rema
 
 A mature creature's cognitive core can be scaled upward without destroying its learned abilities and can later be transplanted into another game, software environment, or embodied robot through explicit sensory, motor, and viability adapters.
 
-![Whole-system architecture](diagrams/01_whole_system.png){width=95%}
+![Whole-system architecture](diagrams/01_whole_system.svg){width=95%}
 
 *Figure 1. The organism-centred system and its external semantic-prior, teacher, player, and community services.*
 
 # Part I - Design foundation
 
-## 1. Design labels and scope
+## 1. Design scope
 
-The labels distinguish goals, observable capabilities, correctness invariants,
-semantic interfaces, suggested mechanisms, tunable defaults, deferred capabilities,
-and research. They are navigation aids rather than a hierarchy of permanent laws.
+The section IDs support existing references. Examples, tunable defaults, and
+research ideas remain identified as such; they are not a hierarchy of laws.
 
 Save integrity, individual continuity, bounded work, and causal learning matter
 throughout. Within those boundaries, playable outcomes govern scope and
@@ -166,8 +165,8 @@ systems need no rewrite merely because a reference design changes.
 
 Use the smallest existing check capable of revealing a relevant failure. Focused
 behavior and save/load checks can establish a small gameplay change. Full ablations,
-population studies, long soaks, and comprehensive compliance matrices belong to
-milestones or specific research claims. Reuse valid evidence until relevant code or
+population studies, and long soaks belong to specific milestones or research
+questions. A compliance matrix is not a substitute for exercising the behavior. Reuse valid evidence until relevant code or
 configuration changes. Diagnostics do not authorize continual test-infrastructure
 expansion.
 
@@ -177,45 +176,45 @@ When used, they still obey applicable identity, integrity, and authority boundar
 
 ## 2. Project objectives
 
-**[AOA-GOAL-001 | GOAL]** Develop artificial animals capable of increasingly general lifelong learning, grounded prediction, memory, concept formation, social learning, planning, communication, and transfer.
+**AOA-GOAL-001.** Develop artificial animals capable of increasingly general lifelong learning, grounded prediction, memory, concept formation, social learning, planning, communication, and transfer.
 
-**[AOA-GOAL-002 | GOAL]** Maximize behavioural capability per unit of neural compute, memory, latency, biochemical work, teacher/SLM cost, and simulated energy.
+**AOA-GOAL-002.** Maximize behavioural capability per unit of neural compute, memory, latency, biochemical work, teacher/SLM cost, and simulated energy.
 
-**[AOA-GOAL-003 | GOAL]** Preserve evolvability: the organism must remain capable of useful genetic, developmental, biochemical, neural, and cultural adaptation rather than becoming one frozen engineered policy.
+**AOA-GOAL-003.** Preserve evolvability: the organism must remain capable of useful genetic, developmental, biochemical, neural, and cultural adaptation rather than becoming one frozen engineered policy.
 
-**[AOA-GOAL-004 | GOAL]** Remain a fun, legible persistent simulation game built around individual creatures, relationships, communities, teaching, breeding, culture, ecology, and visible behavioural change.
+**AOA-GOAL-004.** Remain a fun, legible persistent simulation game built around individual creatures, relationships, communities, teaching, breeding, culture, ecology, and visible behavioural change.
 
-**[AOA-GOAL-005 | GOAL]** Use biologically inspired mechanisms when they improve intelligence, efficiency, robustness, evolvability, individuality, or game value; biological resemblance is never an end in itself.
+**AOA-GOAL-005.** Use biologically inspired mechanisms when they improve intelligence, efficiency, robustness, evolvability, individuality, or game value; biological resemblance is never an end in itself.
 
-**[AOA-GOAL-006 | DEFERRED CAPABILITY]** Support extraction, enlargement, transplantation, and reuse of mature cognitive cores in other games, software environments, and embodied robots as a long-term capability, not a playable-release prerequisite.
+**AOA-GOAL-006 (research).** Support extraction, enlargement, transplantation, and reuse of mature cognitive cores in other games, software environments, and embodied robots as a long-term capability, not a playable-release prerequisite.
 
-**[AOA-GOAL-007 | GOAL]** Keep the architecture inspectable and falsifiable so that apparent intelligence can be attributed to the creature rather than hidden host code, teachers, SLMs, or benchmark leakage.
+**AOA-GOAL-007.** Keep the architecture inspectable and falsifiable so that apparent intelligence can be attributed to the creature rather than hidden host code, teachers, SLMs, or benchmark leakage.
 
-## 3. Global invariants
+## 3. Ownership and continuity
 
-**[AOA-INV-001 | INVARIANT]** All creature cognition is grounded in causal world, body, biochemical, memory, social, and teacher interactions. No privileged semantic truth may silently enter the brain.
+**AOA-INV-001.** All creature cognition is grounded in causal world, body, biochemical, memory, social, and teacher interactions. No privileged semantic truth may silently enter the brain.
 
-**[AOA-INV-002 | INVARIANT]** The world reports physical and transactional facts, not reward, desirability, task success, or what the creature ought to do.
+**AOA-INV-002.** The world reports physical and transactional facts, not reward, desirability, task success, or what the creature ought to do.
 
-**[AOA-INV-003 | INVARIANT]** Every mutable fact has one authoritative owner. Other representations are explicitly derived views and cannot advance independently.
+**AOA-INV-003.** Every mutable fact has one authoritative owner. Other representations are explicitly derived views and cannot advance independently.
 
-**[AOA-INV-004 | INVARIANT]** Genetics/development, body/physiology, biochemistry, and brain/cognitive memory are separate mechanisms with explicit interfaces and no duplicated ownership.
+**AOA-INV-004.** Genetics/development, body/physiology, biochemistry, and brain/cognitive memory are separate mechanisms with explicit interfaces and no duplicated ownership.
 
-**[AOA-INV-005 | INVARIANT]** Computation and storage are bounded by explicit phenotype, world, or platform budgets. Unbounded all-pairs search, unbounded graph growth, and unbounded external-model calls are prohibited.
+**AOA-INV-005.** Computation and storage are bounded by explicit phenotype, world, or platform budgets. Unbounded all-pairs search, unbounded graph growth, and unbounded external-model calls are prohibited.
 
-**[AOA-INV-006 | INVARIANT]** No hidden host policy may choose creature actions, fabricate learning credit, inject concepts or memories, or solve semantic tasks outside the creature.
+**AOA-INV-006.** No hidden host policy may choose creature actions, fabricate learning credit, inject concepts or memories, or solve semantic tasks outside the creature.
 
-**[AOA-INV-007 | INVARIANT]** Personal episodic memories, individual semantic propositions, current activations, current chemistry, pending eligibility, and autobiographical identity are not inherited biologically.
+**AOA-INV-007.** Personal episodic memories, individual semantic propositions, current activations, current chemistry, pending eligibility, and autobiographical identity are not inherited biologically.
 
-**[AOA-INV-008 | INVARIANT]** Teacher and semantic-prior services may accelerate learning but may not substitute for the creature brain. Competence must be separately measurable with each service removed.
+**AOA-INV-008.** Teacher and semantic-prior services may accelerate learning but may not substitute for the creature brain. Competence must be separately measurable with each service removed.
 
-**[AOA-INV-009 | INVARIANT]** The ordinary game, training/evaluation hosts, school system, and research scenarios must use the same semantic causal organism step. Reduced evaluators may exist only when explicitly labelled and may not certify full-organism capabilities.
+**AOA-INV-009.** The ordinary game, training/evaluation hosts, school system, and research scenarios must use the same semantic causal organism step. Reduced evaluators may exist only when explicitly labelled and may not certify full-organism capabilities.
 
-**[AOA-INV-010 | INVARIANT]** Failure must be explicit. Missing assets, incompatible schemas, invalid causal transactions, and partial multi-system commits may not silently fall back to plausible defaults.
+**AOA-INV-010.** Failure must be explicit. Missing assets, incompatible schemas, invalid causal transactions, and partial multi-system commits may not silently fall back to plausible defaults.
 
-**[AOA-INV-011 | INVARIANT]** Brain, body, biochemistry, world, memory, persistence, lifecycle, and presentation must describe the same individual organism and causal sequence.
+**AOA-INV-011.** Brain, body, biochemistry, world, memory, persistence, lifecycle, and presentation must describe the same individual organism and causal sequence.
 
-**[AOA-INV-012 | INVARIANT]** Architectural success is behavioural and causal, not ornamental. A biological mechanism that adds cost without measurable capability, robustness, game value, or evolvability must be replaceable or removable.
+**AOA-INV-012.** Architectural success is behavioural and causal, not ornamental. A biological mechanism that adds cost without measurable capability, robustness, game value, or evolvability must be replaceable or removable.
 
 ## 4. Whole-system authority model
 
@@ -232,15 +231,15 @@ The organism is the unit of authority. The simulation may store components in di
 | Teacher/culture infrastructure | curriculum and lesson records, never learner-owned cognition |
 | Semantic-prior infrastructure | shared pretrained semantic model and cache, never organism truth |
 
-**[AOA-AUTH-001 | INTERFACE]** The canonical organism record binds organism identity to its genome/development state, body, biochemistry, brain ownership, memories, lifecycle, persistence dependencies, and presentation identity.
+**AOA-AUTH-001.** The canonical organism record binds organism identity to its genome/development state, body, biochemistry, brain ownership, memories, lifecycle, persistence dependencies, and presentation identity.
 
-**[AOA-AUTH-002 | INVARIANT]** A subsystem may cache another subsystem's state only as a versioned read-only view tied to a causal tick or transaction ID.
+**AOA-AUTH-002.** A subsystem may cache another subsystem's state only as a versioned read-only view tied to a causal tick or transaction ID.
 
-**[AOA-AUTH-003 | INVARIANT]** No evaluator, UI, teacher, trainer, or adapter may maintain an independently advancing copy of canonical body, biochemical, developmental, neural, or memory state.
+**AOA-AUTH-003.** No evaluator, UI, teacher, trainer, or adapter may maintain an independently advancing copy of canonical body, biochemical, developmental, neural, or memory state.
 
-**[AOA-AUTH-004 | INTERFACE]** Every action/outcome cycle has a stable organism ID, causal sequence ID, pre-action state reference, decision reference, measured joint outcome, and commit status.
+**AOA-AUTH-004.** Every action/outcome cycle has a stable organism ID, causal sequence ID, pre-action state reference, decision reference, measured joint outcome, and commit status.
 
-**[AOA-AUTH-005 | INVARIANT]** A transaction touching several authoritative systems either commits all required state transitions or rolls back all of them.
+**AOA-AUTH-005.** A transaction touching several authoritative systems either commits all required state transitions or rolls back all of them.
 
 ## 5. Time, cadence, and causal scheduling
 
@@ -248,19 +247,19 @@ A-Life is a multirate simulation. Neural cognition, fast neurochemistry, metabol
 
 The scheduler advances each due subsystem exactly once for the current causal interval according to that subsystem's configured cadence. A single rendering frame may contain zero, one, or several simulation substeps. A creature that is asleep, inactive, distant, or low-priority may be updated less frequently only if the scheduler preserves equivalent causal semantics within declared approximation bounds.
 
-**[AOA-TIME-001 | INVARIANT]** Causal sequence order is explicit and deterministic for identical initial state, inputs, configuration, and randomness seeds.
+**AOA-TIME-001.** Causal sequence order is explicit and deterministic for identical initial state, inputs, configuration, and randomness seeds.
 
-**[AOA-TIME-002 | INVARIANT]** Neural, biochemical, metabolic, ecological, developmental, reproductive, and presentation cadences are not forced to one universal tick rate.
+**AOA-TIME-002.** Neural, biochemical, metabolic, ecological, developmental, reproductive, and presentation cadences are not forced to one universal tick rate.
 
-**[AOA-TIME-003 | INTERFACE]** Each derived view records the authoritative tick or interval from which it was derived. Stale views are rejected when semantic freshness matters.
+**AOA-TIME-003.** Each derived view records the authoritative tick or interval from which it was derived. Stale views are rejected when semantic freshness matters.
 
-**[AOA-TIME-004 | INVARIANT]** Catch-up processing is bounded. Large time jumps use capped substeps, analytically equivalent integration, or explicit approximation receipts rather than unbounded loops.
+**AOA-TIME-004.** Catch-up processing is bounded. Large time jumps use capped substeps, analytically equivalent integration, or explicit approximation receipts rather than unbounded loops.
 
-**[AOA-TIME-005 | CAPABILITY]** The simulation supports accelerated time while preserving births, deaths, learning, chemical dynamics, sleep, culture, and ecology within declared fidelity limits.
+**AOA-TIME-005.** The simulation supports accelerated time while preserving births, deaths, learning, chemical dynamics, sleep, culture, and ecology within declared fidelity limits.
 
-**[AOA-TIME-006 | REFERENCE MECHANISM]** High-bandwidth neural updates normally run on the GPU; sparse irregular memory, concept, structural proposal, persistence, teacher, and world operations normally run on the CPU or service best suited to them. Placement is determined by measured efficiency, not authority ideology.
+**AOA-TIME-006 (example).** High-bandwidth neural updates normally run on the GPU; sparse irregular memory, concept, structural proposal, persistence, teacher, and world operations normally run on the CPU or service best suited to them. Placement is determined by measured efficiency, not authority ideology.
 
-![Canonical causal loop](diagrams/02_causal_loop.png){width=100%}
+![Canonical causal loop](diagrams/02_causal_loop.svg){width=100%}
 
 *Figure 2. The ordinary multirate organism loop. Every training and evaluation host that claims full-organism evidence must traverse this semantic sequence.*
 
@@ -270,17 +269,17 @@ The scheduler advances each due subsystem exactly once for the current causal in
 
 The world is a causal environment, not a reward wrapper. It owns physical resources, spatial structure, environmental fields, objects, other organisms, and opportunities for interaction. It may expose physically grounded properties and legal low-level affordances required to operate a body, but it may not expose designer-authored value or task labels as creature policy.
 
-**[AOA-WORLD-001 | INTERFACE]** World sensing exposes grounded observables: geometry, motion, material/chemical cues, sound, light, contact, temperature, object persistence, social signals, and other physically or socially instantiated properties.
+**AOA-WORLD-001.** World sensing exposes grounded observables: geometry, motion, material/chemical cues, sound, light, contact, temperature, object persistence, social signals, and other physically or socially instantiated properties.
 
-**[AOA-WORLD-002 | INVARIANT]** The world may expose that an effector can contact, grip, ingest, emit sound, or apply force. It may not expose that an entity is food, an enemy, a tool, desirable, dangerous, or the correct task target unless that information is itself communicated through a grounded world channel.
+**AOA-WORLD-002.** The world may expose that an effector can contact, grip, ingest, emit sound, or apply force. It may not expose that an entity is food, an enemy, a tool, desirable, dangerous, or the correct task target unless that information is itself communicated through a grounded world channel.
 
-**[AOA-WORLD-003 | INTERFACE]** World action execution returns a measured joint physical outcome for the complete factorized motor bundle, including contacts, transfers, movement, damage, energy/material exchange, and failures.
+**AOA-WORLD-003.** World action execution returns a measured joint physical outcome for the complete factorized motor bundle, including contacts, transfers, movement, damage, energy/material exchange, and failures.
 
-**[AOA-WORLD-004 | CAPABILITY]** Ecologies support resource scarcity, niches, hazards, social interaction, construction or manipulation, reproduction, and persistent environmental consequences sufficient for selection and culture.
+**AOA-WORLD-004.** Ecologies support resource scarcity, niches, hazards, social interaction, construction or manipulation, reproduction, and persistent environmental consequences sufficient for selection and culture.
 
-**[AOA-WORLD-005 | INVARIANT]** Natural selection operates through survival, reproduction, resource access, and ecological consequence. The runtime brain is not trained by a hidden world fitness scalar.
+**AOA-WORLD-005.** Natural selection operates through survival, reproduction, resource access, and ecological consequence. The runtime brain is not trained by a hidden world fitness scalar.
 
-**[AOA-WORLD-006 | REFERENCE MECHANISM]** Environmental complexity is introduced progressively so that founders can survive, but later worlds vary enough to prevent one fixed engineered policy from dominating all niches.
+**AOA-WORLD-006 (example).** Environmental complexity is introduced progressively so that founders can survive, but later worlds vary enough to prevent one fixed engineered policy from dominating all niches.
 
 ## 7. Body and physiology
 
@@ -303,25 +302,25 @@ The following are normally noncognitive:
 
 The brain may influence autonomic setpoints and may learn when to invoke behaviours that affect these systems. It does not numerically integrate them.
 
-**[AOA-BODY-001 | INVARIANT]** Body and physiology own physical morphology, tissue and organ state, energy reserves, injury, temperature, proprioception, actuator limits, and viability.
+**AOA-BODY-001.** Body and physiology own physical morphology, tissue and organ state, energy reserves, injury, temperature, proprioception, actuator limits, and viability.
 
-**[AOA-BODY-002 | INVARIANT]** The body never stores reward, learned value, concepts, intentions, or semantic action preferences.
+**AOA-BODY-002.** The body never stores reward, learned value, concepts, intentions, or semantic action preferences.
 
-**[AOA-BODY-003 | CAPABILITY]** Organisms may differ genetically and developmentally in size, morphology, sensors, effectors, metabolism, resilience, lifespan, fertility, and physiological trade-offs.
+**AOA-BODY-003.** Organisms may differ genetically and developmentally in size, morphology, sensors, effectors, metabolism, resilience, lifespan, fertility, and physiological trade-offs.
 
-**[AOA-BODY-004 | CAPABILITY]** Local organ or tissue dysfunction may alter behaviour and survival without immediately collapsing every other subsystem.
+**AOA-BODY-004.** Local organ or tissue dysfunction may alter behaviour and survival without immediately collapsing every other subsystem.
 
-**[AOA-BODY-005 | INTERFACE]** Body events report physical facts such as tissue damage, nutrient intake, material transfer, temperature change, force, displacement, social contact, and actuator effort.
+**AOA-BODY-005.** Body events report physical facts such as tissue damage, nutrient intake, material transfer, temperature change, force, displacement, social contact, and actuator effort.
 
-**[AOA-BODY-006 | INVARIANT]** A body event never contains a field whose semantics are equivalent to reward, punishment, task success, or preferred action.
+**AOA-BODY-006.** A body event never contains a field whose semantics are equivalent to reward, punishment, task success, or preferred action.
 
-**[AOA-BODY-007 | CAPABILITY]** Simple withdrawal, balance, actuator protection, and life-preserving reflexes may bypass deliberative cognition, but their stimuli and outcomes remain available to the brain for learning.
+**AOA-BODY-007.** Simple withdrawal, balance, actuator protection, and life-preserving reflexes may bypass deliberative cognition, but their stimuli and outcomes remain available to the brain for learning.
 
-**[AOA-BODY-008 | INVARIANT]** A reflex may prevent catastrophic harm; it may not silently solve a semantic or strategic task that the creature is expected to learn.
+**AOA-BODY-008.** A reflex may prevent catastrophic harm; it may not silently solve a semantic or strategic task that the creature is expected to learn.
 
-**[AOA-BODY-009 | REFERENCE MECHANISM]** Physiology is represented as typed organs and tissues with local cadence, energetic cost, damage, repair, and exposed loci, rather than one undifferentiated health scalar.
+**AOA-BODY-009 (example).** Physiology is represented as typed organs and tissues with local cadence, energetic cost, damage, repair, and exposed loci, rather than one undifferentiated health scalar.
 
-**[AOA-BODY-010 | TUNABLE DEFAULT]** Initial founder bodies use a manageable early-animal or early-mammal reference morphology; the architecture does not lock one species body plan.
+**AOA-BODY-010 (default).** Initial founder bodies use a manageable early-animal or early-mammal reference morphology; the architecture does not lock one species body plan.
 
 # Part III - Genetics, development, and heritable priors
 
@@ -331,25 +330,25 @@ Genetics answers: **what kind of organism is built?** It does not continuously m
 
 The complete heritable genotype consists of a compact recombining genome plus exact references to immutable germline assets. The genome encodes developmental rules and low-dimensional parameters. Large pretrained neural priors are stored out-of-line in content-addressed regional blocks.
 
-**[AOA-GEN-001 | INVARIANT]** The genome contains only heritable construction, development, mutation, recombination, and prior-reference information. It does not contain current acquired state.
+**AOA-GEN-001.** The genome contains only heritable construction, development, mutation, recombination, and prior-reference information. It does not contain current acquired state.
 
-**[AOA-GEN-002 | CAPABILITY]** The genome can alter body, organ, biochemical, neural, developmental, reproductive, temperament, plasticity, and learning characteristics.
+**AOA-GEN-002.** The genome can alter body, organ, biochemical, neural, developmental, reproductive, temperament, plasticity, and learning characteristics.
 
-**[AOA-GEN-003 | INTERFACE]** The genome expresses separate body, biochemical, neural, and embodiment phenotypes. Shared traits may influence several phenotypes only through explicit compiler rules.
+**AOA-GEN-003.** The genome expresses separate body, biochemical, neural, and embodiment phenotypes. Shared traits may influence several phenotypes only through explicit compiler rules.
 
-**[AOA-GEN-004 | INVARIANT]** Biochemical parameters are not duplicated as independently authoritative brain constants. Neural receptor genes may refer to biochemical species or receptor classes without transferring ownership of chemistry into the brain genome.
+**AOA-GEN-004.** Biochemical parameters are not duplicated as independently authoritative brain constants. Neural receptor genes may refer to biochemical species or receptor classes without transferring ownership of chemistry into the brain genome.
 
-**[AOA-GEN-005 | CAPABILITY]** Ordinary reproduction supports diploid or otherwise explicitly modelled recombination, mutation, dominance/codominance where used, lineage provenance, and compatibility checks.
+**AOA-GEN-005.** Ordinary reproduction supports diploid or otherwise explicitly modelled recombination, mutation, dominance/codominance where used, lineage provenance, and compatibility checks.
 
-**[AOA-GEN-006 | CAPABILITY]** Structural genetic variation may alter region allocation, create or suppress derived-region alleles, change biochemical graph topology, and change developmental timing within viability bounds.
+**AOA-GEN-006.** Structural genetic variation may alter region allocation, create or suppress derived-region alleles, change biochemical graph topology, and change developmental timing within viability bounds.
 
-**[AOA-GEN-007 | INVARIANT]** A child receives new organism, brain, neuron, synapse, memory, and runtime identities. Parent runtime IDs are never inherited literally.
+**AOA-GEN-007.** A child receives new organism, brain, neuron, synapse, memory, and runtime identities. Parent runtime IDs are never inherited literally.
 
-**[AOA-GEN-008 | INVARIANT]** Genetic and germline prior dependencies are content-addressed and versioned. Fragile filesystem paths and silent fallback assets are prohibited.
+**AOA-GEN-008.** Genetic and germline prior dependencies are content-addressed and versioned. Fragile filesystem paths and silent fallback assets are prohibited.
 
-**[AOA-GEN-009 | CAPABILITY]** Genetic complexity and inherited neural information are measurable so evolution and breed design can trade innate structure against lifetime learning.
+**AOA-GEN-009.** Genetic complexity and inherited neural information are measurable so evolution and breed design can trade innate structure against lifetime learning.
 
-**[AOA-GEN-010 | REFERENCE MECHANISM]** The compact genome stores region floors and shares, connectivity-generator parameters, receptor profiles, plasticity parameters, developmental schedules, biochemical graph genes, mutation policy, and germline-prior manifests.
+**AOA-GEN-010 (example).** The compact genome stores region floors and shares, connectivity-generator parameters, receptor profiles, plasticity parameters, developmental schedules, biochemical graph genes, mutation policy, and germline-prior manifests.
 
 ## 9. Development
 
@@ -357,45 +356,45 @@ Development compiles the genotype into a viable organism over time. It controls 
 
 Development is not a one-time constructor. It is an explicit state machine or continuous process whose due transitions are part of the organism's causal life.
 
-**[AOA-DEV-001 | CAPABILITY]** Development supports staged growth from newborn through mature life, including body growth, organ maturation, biochemical expression, neural growth, critical periods, puberty, senescence, and other species-specific stages.
+**AOA-DEV-001.** Development supports staged growth from newborn through mature life, including body growth, organ maturation, biochemical expression, neural growth, critical periods, puberty, senescence, and other species-specific stages.
 
-**[AOA-DEV-002 | INTERFACE]** Development receives authoritative biological age, genotype, current body and biochemical context, and previous developmental state; it outputs due expression and growth operations.
+**AOA-DEV-002.** Development receives authoritative biological age, genotype, current body and biochemical context, and previous developmental state; it outputs due expression and growth operations.
 
-**[AOA-DEV-003 | INVARIANT]** World time and biological age are distinct. A newborn created late in world history begins at biological age zero unless a specific reproductive mechanism says otherwise.
+**AOA-DEV-003.** World time and biological age are distinct. A newborn created late in world history begins at biological age zero unless a specific reproductive mechanism says otherwise.
 
-**[AOA-DEV-004 | INVARIANT]** Biochemical signals may gate or modulate development, but biochemistry does not directly rewrite cognitive policy. It triggers genetically defined developmental responses.
+**AOA-DEV-004.** Biochemical signals may gate or modulate development, but biochemistry does not directly rewrite cognitive policy. It triggers genetically defined developmental responses.
 
-**[AOA-DEV-005 | REFERENCE MECHANISM]** Developmental brain growth and mature-brain augmentation may share a migration substrate where reuse is useful. A common engine is not required.
+**AOA-DEV-005 (example).** Developmental brain growth and mature-brain augmentation may share a migration substrate where reuse is useful. A common engine is not required.
 
-**[AOA-DEV-006 | CAPABILITY]** Critical periods may alter plasticity, structural growth, receptor expression, teacher responsiveness, or region recruitment without making mature learning impossible by default.
+**AOA-DEV-006.** Critical periods may alter plasticity, structural growth, receptor expression, teacher responsiveness, or region recruitment without making mature learning impossible by default.
 
-**[AOA-DEV-007 | INVARIANT]** Developmental operations that change graph topology occur at explicit transaction boundaries with checkpoint, provenance, and rollback support.
+**AOA-DEV-007.** Developmental operations that change graph topology occur at explicit transaction boundaries with checkpoint, provenance, and rollback support.
 
-**[AOA-DEV-008 | REFERENCE MECHANISM]** Developmental regions are generated by compact regional and connectivity programs rather than by storing every neuron and synapse in the genome.
+**AOA-DEV-008 (example).** Developmental regions are generated by compact regional and connectivity programs rather than by storing every neuron and synapse in the genome.
 
 ## 10. Germline neural-prior assets
 
 The compact genome cannot efficiently carry every pretrained neural parameter inline. Heritable neural capability therefore uses immutable content-addressed germline prior blocks.
 
-![Genotype, germline priors, culture, and lifetime learning](diagrams/03_genotype_assets.png){width=90%}
+![Genotype, germline priors, culture, and lifetime learning](diagrams/03_genotype_assets.svg){width=90%}
 
 *Figure 3. The physical split between compact recombining genome, large germline neural priors, separate culture, and nonheritable adult state.*
 
-**[AOA-PRIOR-001 | INTERFACE]** A germline prior manifest names exact regional blocks, bridge blocks, schemas, compatibility families, source provenance, sanitization receipts, and inherited-information cost.
+**AOA-PRIOR-001.** A germline prior manifest names exact regional blocks, bridge blocks, schemas, compatibility families, source provenance, sanitization receipts, and inherited-information cost.
 
-**[AOA-PRIOR-002 | INVARIANT]** Germline prior blocks are immutable and content-addressed. A new breed revision creates new blocks or a new manifest; it never mutates an existing published block in place.
+**AOA-PRIOR-002.** Germline prior blocks are immutable and content-addressed. A new breed revision creates new blocks or a new manifest; it never mutates an existing published block in place.
 
-**[AOA-PRIOR-003 | INVARIANT]** A germline prior is a sanitized newborn-compatible template, not a saved adult checkpoint with a memory table removed.
+**AOA-PRIOR-003.** A germline prior is a sanitized newborn-compatible template, not a saved adult checkpoint with a memory table removed.
 
-**[AOA-PRIOR-004 | CAPABILITY]** Prior blocks are region-addressable and may be recombined or selected independently when compatibility and bridge requirements are satisfied.
+**AOA-PRIOR-004.** Prior blocks are region-addressable and may be recombined or selected independently when compatibility and bridge requirements are satisfied.
 
-**[AOA-PRIOR-005 | CAPABILITY]** Bridge blocks or deterministic developmental bridge rules describe cross-region priors without requiring one monolithic whole-brain asset.
+**AOA-PRIOR-005.** Bridge blocks or deterministic developmental bridge rules describe cross-region priors without requiring one monolithic whole-brain asset.
 
-**[AOA-PRIOR-006 | INVARIANT]** Personal episodes, named individuals, exact locations, private conversations, current body schema, current chemistry, current activation, pending eligibility, and unresolved action credit are excluded from germline priors.
+**AOA-PRIOR-006.** Personal episodes, named individuals, exact locations, private conversations, current body schema, current chemistry, current activation, pending eligibility, and unresolved action credit are excluded from germline priors.
 
-**[AOA-PRIOR-007 | CAPABILITY]** Generic reusable representations and skills may be inherited after sanitization: object persistence, containment, affordance structure, generic navigation, manipulation priors, social prediction, and language-grounding priors.
+**AOA-PRIOR-007.** Generic reusable representations and skills may be inherited after sanitization: object persistence, containment, affordance structure, generic navigation, manipulation priors, social prediction, and language-grounding priors.
 
-**[AOA-PRIOR-008 | INVARIANT]** Missing or incompatible germline assets cause explicit construction failure or an explicitly requested migration path. Silent substitution is prohibited.
+**AOA-PRIOR-008.** Missing or incompatible germline assets cause explicit construction failure or an explicitly requested migration path. Silent substitution is prohibited.
 
 # Part IV - Sparse evolvable biochemistry
 
@@ -407,29 +406,29 @@ Biochemistry answers: **what physiological state is the organism in, what chemic
 
 It does not answer: **what should the creature attend to, believe, remember, or do?**
 
-![Sparse biochemical nervous system](diagrams/05_biochemistry.png){width=92%}
+![Sparse biochemical nervous system](diagrams/05_biochemistry.svg){width=92%}
 
 *Figure 4. Typed loci, emitters, active chemical species, sparse reactions, receptors, derived drives, and neural emitters.*
 
-**[AOA-BIO-001 | INVARIANT]** Biochemistry owns chemical concentrations, reaction state, receptor/emitter state, endocrine regulation, metabolic intermediates, and biochemical developmental signals.
+**AOA-BIO-001.** Biochemistry owns chemical concentrations, reaction state, receptor/emitter state, endocrine regulation, metabolic intermediates, and biochemical developmental signals.
 
-**[AOA-BIO-002 | INVARIANT]** Biochemistry does not own final neural threshold, attention, salience, motor confidence, learning-rate, planning, or action policy values. It supplies signals; neural receptor phenotypes determine cognitive effects.
+**AOA-BIO-002.** Biochemistry does not own final neural threshold, attention, salience, motor confidence, learning-rate, planning, or action policy values. It supplies signals; neural receptor phenotypes determine cognitive effects.
 
-**[AOA-BIO-003 | CAPABILITY]** The biochemical phenotype contains a bounded sparse active set of chemical species with per-species baseline, decay, range, type, and compartment information.
+**AOA-BIO-003.** The biochemical phenotype contains a bounded sparse active set of chemical species with per-species baseline, decay, range, type, and compartment information.
 
-**[AOA-BIO-004 | TUNABLE DEFAULT]** The address space may support up to 256 species for compatibility and experimentation, while each phenotype instantiates a smaller active subset such as 32-64 species unless its budget permits more.
+**AOA-BIO-004 (default).** The address space may support up to 256 species for compatibility and experimentation, while each phenotype instantiates a smaller active subset such as 32-64 species unless its budget permits more.
 
-**[AOA-BIO-005 | CAPABILITY]** The biochemical phenotype supports sparse reactions with bounded reactants, products, stoichiometry, rates, compartments, and optional rate-control loci.
+**AOA-BIO-005.** The biochemical phenotype supports sparse reactions with bounded reactants, products, stoichiometry, rates, compartments, and optional rate-control loci.
 
-**[AOA-BIO-006 | CAPABILITY]** The biochemical phenotype supports emitters that map typed source loci to chemical release using bounded cadence, threshold, gain, analogue/digital response, inversion, and optional source reset.
+**AOA-BIO-006.** The biochemical phenotype supports emitters that map typed source loci to chemical release using bounded cadence, threshold, gain, analogue/digital response, inversion, and optional source reset.
 
-**[AOA-BIO-007 | CAPABILITY]** The biochemical phenotype supports receptors that map chemical concentrations to typed body, organ, drive, developmental, autonomic, or neural loci.
+**AOA-BIO-007.** The biochemical phenotype supports receptors that map chemical concentrations to typed body, organ, drive, developmental, autonomic, or neural loci.
 
-**[AOA-BIO-008 | CAPABILITY]** The biochemical phenotype supports neuroemitters that map bounded neural summaries or learned assembly activity to chemical release.
+**AOA-BIO-008.** The biochemical phenotype supports neuroemitters that map bounded neural summaries or learned assembly activity to chemical release.
 
-**[AOA-BIO-009 | INVARIANT]** Receptor and emitter destinations are typed and validated. Untyped raw pointers or arbitrary memory addresses are prohibited.
+**AOA-BIO-009.** Receptor and emitter destinations are typed and validated. Untyped raw pointers or arbitrary memory addresses are prohibited.
 
-**[AOA-BIO-010 | CAPABILITY]** Different organisms may respond differently to the same chemical concentration because receptor expression, thresholds, gains, target loci, and neural receptor profiles are heritable and evolvable.
+**AOA-BIO-010.** Different organisms may respond differently to the same chemical concentration because receptor expression, thresholds, gains, target loci, and neural receptor profiles are heritable and evolvable.
 
 ### 11.1 Reference chemical dynamics
 
@@ -447,25 +446,25 @@ a = min_k(c_Rk / p_Rk);    Δ = k · a
 
 and applies stoichiometric reductions and products. Numerical integrators may differ if they preserve non-negativity, declared conservation, boundedness, and cadence semantics.
 
-**[AOA-BIO-011 | INVARIANT]** Material and energetic biochemical pathways obey declared conservation and resource accounting. Regulatory signalling chemicals may be produced and decay non-conservatively only through explicit emitters and costs.
+**AOA-BIO-011.** Material and energetic biochemical pathways obey declared conservation and resource accounting. Regulatory signalling chemicals may be produced and decay non-conservatively only through explicit emitters and costs.
 
-**[AOA-BIO-012 | INVARIANT]** Biochemical execution cost scales with active reactions, receptors, emitters, organs, and species, not the square of all possible chemical IDs.
+**AOA-BIO-012.** Biochemical execution cost scales with active reactions, receptors, emitters, organs, and species, not the square of all possible chemical IDs.
 
-**[AOA-BIO-013 | CAPABILITY]** Chemicals may act on different natural timescales, providing transient arousal, medium-duration reinforcement, slow developmental regulation, persistent toxins, and other temporal roles.
+**AOA-BIO-013.** Chemicals may act on different natural timescales, providing transient arousal, medium-duration reinforcement, slow developmental regulation, persistent toxins, and other temporal roles.
 
-**[AOA-BIO-014 | CAPABILITY]** Compartmentalization may model blood, organ-local chemistry, extracellular signalling, gut contents, neural modulators, or other species-specific compartments without requiring every organism to instantiate every compartment.
+**AOA-BIO-014.** Compartmentalization may model blood, organ-local chemistry, extracellular signalling, gut contents, neural modulators, or other species-specific compartments without requiring every organism to instantiate every compartment.
 
 ### 11.2 Drives and interoception
 
 Drives are brain-facing summaries of viability-relevant state, not the primary biochemical substrate. Hunger, fatigue, pain, fear, social need, curiosity, reproductive motivation, temperature stress, and brain-energy availability may be reference drive channels, but their values are derived by biochemical/body receptor networks.
 
-**[AOA-BIO-015 | INTERFACE]** A drive frame is a bounded derived view tied to authoritative body and biochemical state. It cannot advance independently.
+**AOA-BIO-015.** A drive frame is a bounded derived view tied to authoritative body and biochemical state. It cannot advance independently.
 
-**[AOA-BIO-016 | CAPABILITY]** Evolution can change what raises, lowers, suppresses, stores, or restores a drive by changing body, chemical, reaction, emitter, and receptor pathways while preserving the brain-facing ABI where required.
+**AOA-BIO-016.** Evolution can change what raises, lowers, suppresses, stores, or restores a drive by changing body, chemical, reaction, emitter, and receptor pathways while preserving the brain-facing ABI where required.
 
-**[AOA-BIO-017 | CAPABILITY]** Emergency chemistry may suppress or transform lower-priority drive signals without hardcoding a complete cognitive decision tree.
+**AOA-BIO-017.** Emergency chemistry may suppress or transform lower-priority drive signals without hardcoding a complete cognitive decision tree.
 
-**[AOA-BIO-018 | INVARIANT]** A drive is not itself a reward. A high drive changes internal state and salience; the brain must still learn or infer which grounded actions affect it.
+**AOA-BIO-018.** A drive is not itself a reward. A high drive changes internal state and salience; the brain must still learn or infer which grounded actions affect it.
 
 ### 11.3 Neural receptor and neuroemitter interfaces
 
@@ -473,15 +472,15 @@ The biochemical-to-brain interface is a compact receptor frame plus direct inter
 
 Reference neural-emission sources include regional mean/max activity, tile or assembly activation, prediction residuals, selected motor channels, unresolved-gap voltage, and sustained executive or social state.
 
-**[AOA-BIO-019 | INTERFACE]** The neural receptor frame exposes bounded chemical/receptor activations with stable semantics, source chemistry version, target neural receptor class, and causal tick.
+**AOA-BIO-019.** The neural receptor frame exposes bounded chemical/receptor activations with stable semantics, source chemistry version, target neural receptor class, and causal tick.
 
-**[AOA-BIO-020 | INTERFACE]** The neural-emission frame exposes bounded neural summaries to biochemistry without giving chemistry arbitrary access to raw neural state.
+**AOA-BIO-020.** The neural-emission frame exposes bounded neural summaries to biochemistry without giving chemistry arbitrary access to raw neural state.
 
-**[AOA-BIO-021 | CAPABILITY]** Neural receptor effects may modulate interoceptive input, regional excitability, projection gain, local threshold, attention gating, plasticity receptor classes, structural growth, sleep, and consolidation.
+**AOA-BIO-021.** Neural receptor effects may modulate interoceptive input, regional excitability, projection gain, local threshold, attention gating, plasticity receptor classes, structural growth, sleep, and consolidation.
 
-**[AOA-BIO-022 | INVARIANT]** Those effects are computed by the neural phenotype from biochemical signals. Biochemistry does not publish one universal finished `NeuralModulation` policy object.
+**AOA-BIO-022.** Those effects are computed by the neural phenotype from biochemical signals. Biochemistry does not publish one universal finished `NeuralModulation` policy object.
 
-**[AOA-BIO-023 | CAPABILITY]** Neuroemitters allow learned cognition to influence autonomic, endocrine, developmental, social, and metabolic state without directly mutating body variables.
+**AOA-BIO-023.** Neuroemitters allow learned cognition to influence autonomic, endocrine, developmental, social, and metabolic state without directly mutating body variables.
 
 ### 11.4 Homeostatic value and neuromodulation
 
@@ -497,15 +496,15 @@ but this value is derived from the organism's before/after state, not supplied b
 
 A bounded neuromodulatory frame may contain appetitive, aversive, novelty, arousal, social, consolidation, metabolic-availability, and developmental lanes. The exact lane count is replaceable.
 
-**[AOA-BIO-024 | INVARIANT]** Reward valence, biological value change, and neural reward-prediction error remain separately represented and inspectable.
+**AOA-BIO-024.** Reward valence, biological value change, and neural reward-prediction error remain separately represented and inspectable.
 
-**[AOA-BIO-025 | INTERFACE]** Every sealed experience transaction includes measured before/after body and biochemical references sufficient to compute actual homeostatic change.
+**AOA-BIO-025.** Every sealed experience transaction includes measured before/after body and biochemical references sufficient to compute actual homeostatic change.
 
-**[AOA-BIO-026 | INVARIANT]** A production outcome may not substitute a zero or default homeostatic delta when canonical biology changed.
+**AOA-BIO-026.** A production outcome may not substitute a zero or default homeostatic delta when canonical biology changed.
 
-**[AOA-BIO-027 | REFERENCE MECHANISM]** Use a small multidimensional neuromodulatory vector rather than one universal scalar. Synapse or projection receptor profiles project that vector into a local third factor.
+**AOA-BIO-027 (example).** Use a small multidimensional neuromodulatory vector rather than one universal scalar. Synapse or projection receptor profiles project that vector into a local third factor.
 
-**[AOA-BIO-028 | CAPABILITY]** The organism can learn different things from the same physical event depending on its current physiology, expectations, receptor genetics, memory, and social context.
+**AOA-BIO-028.** The organism can learn different things from the same physical event depending on its current physiology, expectations, receptor genetics, memory, and social context.
 
 # Part V - Brain and cognitive memory
 
@@ -513,15 +512,15 @@ A bounded neuromodulatory frame may contain appetitive, aversive, novelty, arous
 
 The adaptive brain receives grounded sensory and interoceptive evidence, remembers, predicts, forms concepts, allocates attention, chooses factorized motor intentions, learns, and reorganizes. It does not perform routine autonomic integration or deterministic actuator control.
 
-**[AOA-BRAIN-001 | INVARIANT]** Adaptive neural compute is reserved for functions that materially benefit from learning, prediction, memory, context, generalization, arbitration, communication, or flexible control.
+**AOA-BRAIN-001.** Adaptive neural compute is reserved for functions that materially benefit from learning, prediction, memory, context, generalization, arbitration, communication, or flexible control.
 
-**[AOA-BRAIN-002 | CAPABILITY]** The brain supports recurrent processing, local plasticity, predictive learning, attention, memory, concept relationships, coordinated action selection, and adaptation. Concrete neural mechanisms are replaceable when they preserve these capabilities within the compute budget.
+**AOA-BRAIN-002.** The brain supports recurrent processing, local plasticity, predictive learning, attention, memory, concept relationships, coordinated action selection, and adaptation. Concrete neural mechanisms are replaceable when they preserve these capabilities within the compute budget.
 
-**[AOA-BRAIN-003 | INVARIANT]** No region name dispatches a handwritten cognitive algorithm. Region function emerges from connectivity, ports, dynamics, chemistry, plasticity, development, training, and experience.
+**AOA-BRAIN-003.** No region name dispatches a handwritten cognitive algorithm. Region function emerges from connectivity, ports, dynamics, chemistry, plasticity, development, training, and experience.
 
-**[AOA-BRAIN-004 | INVARIANT]** The brain never receives game-specific commands such as `find food`, `attack target`, `solve task`, or an equivalent high-level policy shortcut as a sensory input or motor primitive.
+**AOA-BRAIN-004.** The brain never receives game-specific commands such as `find food`, `attack target`, `solve task`, or an equivalent high-level policy shortcut as a sensory input or motor primitive.
 
-**[AOA-BRAIN-005 | INTERFACE]** The portable cognitive core has stable sensory, interoceptive, memory, semantic-prior, teacher/social, motor-intent, neural-emission, persistence, and inspection ports.
+**AOA-BRAIN-005.** The portable cognitive core has stable sensory, interoceptive, memory, semantic-prior, teacher/social, motor-intent, neural-emission, persistence, and inspection ports.
 
 ## 13. Neural substrate
 
@@ -535,29 +534,29 @@ W_eff(i,j) = W_genetic(i,j) + W_lifetime(i,j) + α(i,j) · W_fast(i,j)
 
 where \(\alpha\) is susceptibility or mixing, not a fourth additive memory.
 
-**[AOA-BRAIN-006 | CAPABILITY]** Neural state is recurrent and can preserve context, attractors, oscillations, working memory, and temporally extended competence.
+**AOA-BRAIN-006.** Neural state is recurrent and can preserve context, attractors, oscillations, working memory, and temporally extended competence.
 
-**[AOA-BRAIN-007 | CAPABILITY]** Synaptic state has distinct inherited, lifetime-consolidated, and fast acquired components with explicit update, persistence, and inheritance semantics.
+**AOA-BRAIN-007.** Synaptic state has distinct inherited, lifetime-consolidated, and fast acquired components with explicit update, persistence, and inheritance semantics.
 
-**[AOA-BRAIN-008 | INVARIANT]** Lifetime and fast acquired weights are somatic. They do not enter offspring except through explicit sanitizing assimilation.
+**AOA-BRAIN-008.** Lifetime and fast acquired weights are somatic. They do not enter offspring except through explicit sanitizing assimilation.
 
-**[AOA-BRAIN-009 | CAPABILITY]** Neurons or projections may use different intrinsic time constants, update cadences, receptor profiles, plasticity classes, and metabolic costs.
+**AOA-BRAIN-009.** Neurons or projections may use different intrinsic time constants, update cadences, receptor profiles, plasticity classes, and metabolic costs.
 
-**[AOA-BRAIN-010 | REFERENCE MECHANISM]** Bounded dendritic branches are one way to learn nonlinear conjunctions. Use them when they improve capability or efficiency; simpler neural methods are permitted.
+**AOA-BRAIN-010 (example).** Bounded dendritic branches are one way to learn nonlinear conjunctions. Use them when they improve capability or efficiency; simpler neural methods are permitted.
 
-**[AOA-BRAIN-011 | INVARIANT]** Dendritic execution is indexed by target or another sparse equivalent. It may not scan every branch for every neuron.
+**AOA-BRAIN-011.** Dendritic execution is indexed by target or another sparse equivalent. It may not scan every branch for every neuron.
 
-**[AOA-BRAIN-012 | CAPABILITY]** The neural substrate exposes enough bounded state for persistence, migration, debugging, work accounting, and capability attribution without placing identity indirection in the hot path.
+**AOA-BRAIN-012.** The neural substrate exposes enough bounded state for persistence, migration, debugging, work accounting, and capability attribution without placing identity indirection in the hot path.
 
-**[AOA-BRAIN-013 | REFERENCE MECHANISM]** High-volume recurrent projections, dendritic evaluation, local learning, and prediction heads are batch-executed on the GPU using sparse target-major or tile-major layouts.
+**AOA-BRAIN-013 (example).** High-volume recurrent projections, dendritic evaluation, local learning, and prediction heads are batch-executed on the GPU using sparse target-major or tile-major layouts.
 
-**[AOA-BRAIN-014 | INVARIANT]** Quantization, sparsity, batching, and accelerator-specific kernels may alter numerical precision only within declared behavioural and dynamical tolerances.
+**AOA-BRAIN-014.** Quantization, sparsity, batching, and accelerator-specific kernels may alter numerical precision only within declared behavioural and dynamical tolerances.
 
 ## 14. Nine founder developmental regions
 
 The founder brain uses nine conserved homologues. Their names state ancestral input/output and training roles, not fixed algorithms.
 
-![Nine founder developmental regions](diagrams/04_brain_regions.png){width=84%}
+![Nine founder developmental regions](diagrams/04_brain_regions.svg){width=84%}
 
 *Figure 5. The nine conserved founder homologues and broad recurrent communication. Dashed links from Flexible Reserve indicate potential recruitment.*
 
@@ -579,25 +578,25 @@ Founder sizes use minimum functional floors plus proportional allocation of the 
 N_r = N_r,min + α_r · (N - Σ_k N_k,min);    Σ_r α_r = 1
 ```
 
-**[AOA-REG-001 | INVARIANT]** The nine founder homologues are permanent developmental and compatibility anchors. They cannot be deleted, although their mature functions and sizes may change above functional floors.
+**AOA-REG-001.** The current founder homologues provide developmental and compatibility anchors. Changes to their identities or interfaces should preserve useful founder behavior and account for persisted-state compatibility; their count and mature allocation are not permanent limits.
 
-**[AOA-REG-002 | INVARIANT]** Founder region labels never authorize special handwritten cognitive code.
+**AOA-REG-002.** Founder region labels never authorize special handwritten cognitive code.
 
-**[AOA-REG-003 | CAPABILITY]** Region size, recurrence, cell mix, dendritic capacity, connectivity, receptor expression, plasticity, cadence, and developmental timing are phenotype-controlled and evolvable.
+**AOA-REG-003.** Region size, recurrence, cell mix, dendritic capacity, connectivity, receptor expression, plasticity, cadence, and developmental timing are phenotype-controlled and evolvable.
 
-**[AOA-REG-004 | CAPABILITY]** Founder allocation uses minimum floors plus proportional remainder so small brains preserve essential interfaces while larger brains devote most added capacity to flexible cognition.
+**AOA-REG-004.** Founder allocation uses minimum floors plus proportional remainder so small brains preserve essential interfaces while larger brains devote most added capacity to flexible cognition.
 
-**[AOA-REG-005 | TUNABLE DEFAULT]** Reference remainder shares are: Perceptual 16%, Interoceptive 6%, Association 23%, Temporal 13%, Executive 10%, Memory Interface 7%, Action/Planning 10%, Social/Communication 8%, Flexible Reserve 7%.
+**AOA-REG-005 (default).** Reference remainder shares are: Perceptual 16%, Interoceptive 6%, Association 23%, Temporal 13%, Executive 10%, Memory Interface 7%, Action/Planning 10%, Social/Communication 8%, Flexible Reserve 7%.
 
-**[AOA-REG-006 | CAPABILITY]** Evolution and development may create derived regions by reserve recruitment, subdivision, duplication and divergence, assembly specialization, bounded fusion, and pruning.
+**AOA-REG-006.** Evolution and development may create derived regions by reserve recruitment, subdivision, duplication and divergence, assembly specialization, bounded fusion, and pruning.
 
-**[AOA-REG-007 | INTERFACE]** Every derived region records parent homology, creation mechanism, interface ports, prior dependencies, receptor/plasticity profile, capacity requirements, and compatibility family.
+**AOA-REG-007.** Every derived region records parent homology, creation mechanism, interface ports, prior dependencies, receptor/plasticity profile, capacity requirements, and compatibility family.
 
-**[AOA-REG-008 | INVARIANT]** Derived-region count and capacity are bounded by brain class, developmental viability, inherited-information cost, and runtime work budgets.
+**AOA-REG-008.** Derived-region count and capacity are bounded by brain class, developmental viability, inherited-information cost, and runtime work budgets.
 
-**[AOA-REG-009 | CAPABILITY]** Crossbreeding uses homology-aware bounded recombination. Matched derived regions recombine; unmatched regions are optional structural alleles expressed only when dependencies and budgets are satisfied.
+**AOA-REG-009.** Crossbreeding uses homology-aware bounded recombination. Matched derived regions recombine; unmatched regions are optional structural alleles expressed only when dependencies and budgets are satisfied.
 
-**[AOA-REG-010 | INVARIANT]** New or unmatched bridges begin silent, zero-gain, low-gain, or in developmental acclimation. They may not immediately destabilize the child brain.
+**AOA-REG-010.** New or unmatched bridges begin silent, zero-gain, low-gain, or in developmental acclimation. They may not immediately destabilize the child brain.
 
 ## 15. Sensory grounding and attention
 
@@ -614,33 +613,33 @@ A reference salience score may combine novelty, drive relevance, episodic expect
 S_i = Σ_k w_k · f_i,k + h_i
 ```
 
-**[AOA-SENSE-001 | INTERFACE]** Sensory adapters expose grounded modality features, confidence, spatial/temporal reference, and provenance. They do not expose designer semantic categories as truth.
+**AOA-SENSE-001.** Sensory adapters expose grounded modality features, confidence, spatial/temporal reference, and provenance. They do not expose designer semantic categories as truth.
 
-**[AOA-SENSE-002 | INVARIANT]** A body-neutral sensor ABI may normalize or compress raw signals, but must not secretly perform the semantic recognition, planning, or value judgement assigned to cognition.
+**AOA-SENSE-002.** A body-neutral sensor ABI may normalize or compress raw signals, but must not secretly perform the semantic recognition, planning, or value judgement assigned to cognition.
 
-**[AOA-ATT-001 | CAPABILITY]** Attention performs broad peripheral processing followed by bounded expensive focal processing or an equivalent mechanism that materially reallocates compute.
+**AOA-ATT-001.** Attention performs broad peripheral processing followed by bounded expensive focal processing or an equivalent mechanism that materially reallocates compute.
 
-**[AOA-ATT-002 | CAPABILITY]** Focal selection depends on current physiology, memory, concepts, uncertainty, prediction residuals, social state, novelty, and learned neural influence.
+**AOA-ATT-002.** Focal selection depends on current physiology, memory, concepts, uncertainty, prediction residuals, social state, novelty, and learned neural influence.
 
-**[AOA-ATT-003 | CAPABILITY]** Focal capacity is a function of brain class, phenotype, current state, and available compute rather than a universal fixed constant.
+**AOA-ATT-003.** Focal capacity is a function of brain class, phenotype, current state, and available compute rather than a universal fixed constant.
 
-**[AOA-ATT-004 | INVARIANT]** Changing attention while holding the world constant must be capable of changing downstream neural evidence or action, not only a diagnostic label.
+**AOA-ATT-004.** Changing attention while holding the world constant must be capable of changing downstream neural evidence or action, not only a diagnostic label.
 
-**[AOA-ATT-005 | CAPABILITY]** Attention includes hysteresis and persistence so noisy small salience changes do not cause pathological target thrashing.
+**AOA-ATT-005.** Attention includes hysteresis and persistence so noisy small salience changes do not cause pathological target thrashing.
 
-**[AOA-ATT-006 | REFERENCE MECHANISM]** The peripheral pass is usually world/CPU efficient; focal sensory encoding and neural processing may be batched on the GPU. Exact placement is replaceable.
+**AOA-ATT-006 (example).** The peripheral pass is usually world/CPU efficient; focal sensory encoding and neural processing may be batched on the GPU. Exact placement is replaceable.
 
 ## 16. Cognitive context and interoception
 
 A bounded cognitive context integrates focal perception, peripheral summaries, canonical interoception, memory expectancies, active concepts, unresolved gaps, prediction state, social context, and current compute budget.
 
-**[AOA-CTX-001 | INTERFACE]** The cognitive context is bound to one organism, causal sequence, world tick, perception frame, and canonical body/biochemical view.
+**AOA-CTX-001.** The cognitive context is bound to one organism, causal sequence, world tick, perception frame, and canonical body/biochemical view.
 
-**[AOA-CTX-002 | INVARIANT]** The context interoceptive view is populated from canonical biology. A default or stale internal-state vector may not coexist with a different authoritative state in the same decision.
+**AOA-CTX-002.** The context interoceptive view is populated from canonical biology. A default or stale internal-state vector may not coexist with a different authoritative state in the same decision.
 
-**[AOA-CTX-003 | INVARIANT]** Canonical digests are identity and integrity evidence. They are not semantic embeddings and may not be used as geometry for learning or generalization.
+**AOA-CTX-003.** Canonical digests are identity and integrity evidence. They are not semantic embeddings and may not be used as geometry for learning or generalization.
 
-**[AOA-CTX-004 | CAPABILITY]** The context supports bounded explicit uncertainty, source confidence, recency, and provenance so cognition can distinguish observation, memory, semantic prior, and teacher communication.
+**AOA-CTX-004.** The context supports bounded explicit uncertainty, source confidence, recency, and provenance so cognition can distinguish observation, memory, semantic prior, and teacher communication.
 
 ## 17. Episodic, semantic, and social memory
 
@@ -658,23 +657,23 @@ Semantic memory stores concepts and relations inferred during this individual's 
 
 Procedural skill and generalized representations may also reside in neural weights and structure. They are somatic unless explicitly promoted through assimilation under section 32.
 
-**[AOA-MEM-001 | CAPABILITY]** The organism supports delayed episodic recall, context-sensitive retrieval, memory confidence, source/provenance, and forgetting or compression.
+**AOA-MEM-001.** The organism supports delayed episodic recall, context-sensitive retrieval, memory confidence, source/provenance, and forgetting or compression.
 
-**[AOA-MEM-002 | INVARIANT]** Memory retrieval provides evidence and expectancy; it does not force an action or bypass neural arbitration.
+**AOA-MEM-002.** Memory retrieval provides evidence and expectancy; it does not force an action or bypass neural arbitration.
 
-**[AOA-MEM-003 | CAPABILITY]** Candidate-specific episodic evidence may alter attention, prediction, neural state, or action preference through a real production path.
+**AOA-MEM-003.** Candidate-specific episodic evidence may alter attention, prediction, neural state, or action preference through a real production path.
 
-**[AOA-MEM-004 | CAPABILITY]** Individual semantic memory stores grounded concepts, relations, confidence, source, temporal validity, and contradiction history.
+**AOA-MEM-004.** Individual semantic memory stores grounded concepts, relations, confidence, source, temporal validity, and contradiction history.
 
-**[AOA-MEM-005 | INVARIANT]** Personal semantic propositions and autobiographical episodes are not written into the germline by ordinary sleep or reproduction.
+**AOA-MEM-005.** Personal semantic propositions and autobiographical episodes are not written into the germline by ordinary sleep or reproduction.
 
-**[AOA-MEM-006 | INTERFACE]** The Memory Interface region controls queries, retrieval, storage, and neural translation while the memory store remains an explicit bounded subsystem.
+**AOA-MEM-006.** The Memory Interface region controls queries, retrieval, storage, and neural translation while the memory store remains an explicit bounded subsystem.
 
-**[AOA-MEM-007 | CAPABILITY]** Memory can represent individuals and relationships persistently across time, save/load, sleep, separation, and reunion.
+**AOA-MEM-007.** Memory can represent individuals and relationships persistently across time, save/load, sleep, separation, and reunion.
 
-**[AOA-MEM-008 | CAPABILITY]** Memory consolidation balances retention, compression, interference control, and generalization without forcing all stable memories into neural weights.
+**AOA-MEM-008.** Memory consolidation balances retention, compression, interference control, and generalization without forcing all stable memories into neural weights.
 
-**[AOA-MEM-009 | REFERENCE MECHANISM]** Episodic memory is usually sparse irregular CPU-side storage with bounded GPU uploads for selected retrievals; alternative placements require measured benefit.
+**AOA-MEM-009 (example).** Episodic memory is usually sparse irregular CPU-side storage with bounded GPU uploads for selected retrievals; alternative placements require measured benefit.
 
 ## 18. Concepts, causal topology, and unresolved gaps
 
@@ -688,19 +687,19 @@ U(C) = ΔL_prediction + λ_a·ΔL_affordance + λ_m·ΔL_memory
      - λ_c·Complexity(C) - λ_r·ResidualContradiction(C)
 ```
 
-**[AOA-CON-001 | CAPABILITY]** Concepts can form, strengthen, weaken, split, merge, decay, and be re-grounded from experience.
+**AOA-CON-001.** Concepts can form, strengthen, weaken, split, merge, decay, and be re-grounded from experience.
 
-**[AOA-CON-002 | CAPABILITY]** Concept induction is organized by predictive and cognitive utility, not only perceptual clustering.
+**AOA-CON-002.** Concept induction is organized by predictive and cognitive utility, not only perceptual clustering.
 
-**[AOA-CON-003 | CAPABILITY]** Systematic contradiction may create or raise an unresolved gap and may trigger concept splitting, relation revision, targeted attention, or exploration.
+**AOA-CON-003.** Systematic contradiction may create or raise an unresolved gap and may trigger concept splitting, relation revision, targeted attention, or exploration.
 
-**[AOA-CON-004 | CAPABILITY]** Concept and gap state can alter neural context, attention, prediction, memory retrieval, communication, or action through explicit causal paths.
+**AOA-CON-004.** Concept and gap state can alter neural context, attention, prediction, memory retrieval, communication, or action through explicit causal paths.
 
-**[AOA-CON-005 | INVARIANT]** Global diagnostic maxima alone do not satisfy target-grounded concept or gap influence. Evidence must be linked to relevant objects, relations, actions, or contexts.
+**AOA-CON-005.** Global diagnostic maxima alone do not satisfy target-grounded concept or gap influence. Evidence must be linked to relevant objects, relations, actions, or contexts.
 
-**[AOA-CON-006 | INVARIANT]** Concept induction and neural structural growth are separate learning processes. They may exchange bounded evidence, but concept edges are not automatically synapses and strong synapses are not automatically concepts.
+**AOA-CON-006.** Concept induction and neural structural growth are separate learning processes. They may exchange bounded evidence, but concept edges are not automatically synapses and strong synapses are not automatically concepts.
 
-**[AOA-CON-007 | INVARIANT]** External semantic-prior suggestions remain hypotheses until grounded. They cannot create authoritative concepts by declaration.
+**AOA-CON-007.** External semantic-prior suggestions remain hypotheses until grounded. They cannot create authoritative concepts by declaration.
 
 ## 19. Prediction, world modelling, and bounded planning
 
@@ -714,25 +713,25 @@ z_hat_(t+1) = P(z_t, A_t, c_t)
 
 where \(z_t\) is a compact semantic state, \(A_t\) is the complete factorized motor bundle, and \(c_t\) is relevant context. A small nonlinear or low-rank interaction model is preferred over a purely additive linear map when state-action interactions matter.
 
-**[AOA-PRED-001 | CAPABILITY]** The brain predicts grounded successor features including sensory change, contact, motion, drive/chemical change, success/failure, concepts, social response, and other phenotype-supported targets.
+**AOA-PRED-001.** The brain predicts grounded successor features including sensory change, contact, motion, drive/chemical change, success/failure, concepts, social response, and other phenotype-supported targets.
 
-**[AOA-PRED-002 | INVARIANT]** Source and successor vectors use explicitly versioned semantically corresponding features or an explicit cross-schema mapping.
+**AOA-PRED-002.** Source and successor vectors use explicitly versioned semantically corresponding features or an explicit cross-schema mapping.
 
-**[AOA-PRED-003 | INVARIANT]** Prediction conditions on the full joint motor bundle, not only one primary action ID when multiple channels execute together.
+**AOA-PRED-003.** Prediction conditions on the full joint motor bundle, not only one primary action ID when multiple channels execute together.
 
-**[AOA-PRED-004 | INVARIANT]** Categorical motor identities use one-hot, learned, structured, or otherwise semantically valid encodings. Arbitrary integer or bit geometry is not treated as meaningful distance.
+**AOA-PRED-004.** Categorical motor identities use one-hot, learned, structured, or otherwise semantically valid encodings. Arbitrary integer or bit geometry is not treated as meaningful distance.
 
-**[AOA-PRED-005 | INVARIANT]** The predictive objective includes information-preserving constraints or grounded target construction that makes constant and action-insensitive representations non-optimal.
+**AOA-PRED-005.** The predictive objective includes information-preserving constraints or grounded target construction that makes constant and action-insensitive representations non-optimal.
 
-**[AOA-PRED-006 | CAPABILITY]** Different materially distinct successor states remain separable; different actions can predict different outcomes; passive observation can improve later prediction or behaviour.
+**AOA-PRED-006.** Different materially distinct successor states remain separable; different actions can predict different outcomes; passive observation can improve later prediction or behaviour.
 
-**[AOA-PRED-007 | CAPABILITY]** Prediction is used before action to estimate candidate consequences, uncertainty, or information gain, not only updated after the fact.
+**AOA-PRED-007.** Prediction is used before action to estimate candidate consequences, uncertainty, or information gain, not only updated after the fact.
 
-**[AOA-PRED-008 | CAPABILITY]** Prediction residuals influence unresolved gaps, attention, curiosity, memory prioritization, learning, and structural proposals through bounded interfaces.
+**AOA-PRED-008.** Prediction residuals influence unresolved gaps, attention, curiosity, memory prioritization, learning, and structural proposals through bounded interfaces.
 
-**[AOA-PRED-009 | REFERENCE MECHANISM]** Stable targets may use EMA teachers, stop-gradient encoders, fixed projections, variance/covariance constraints, contrastive structure, grounded observables, or evidence-backed combinations. No one self-supervised family is locked.
+**AOA-PRED-009 (example).** Stable targets may use EMA teachers, stop-gradient encoders, fixed projections, variance/covariance constraints, contrastive structure, grounded observables, or evidence-backed combinations. No one self-supervised family is locked.
 
-**[AOA-PRED-010 | DEFERRED CAPABILITY]** The brain supports bounded counterfactual rollout or deliberation using its learned world model, initially at small depth and candidate count rather than exhaustive tree search.
+**AOA-PRED-010 (research).** The brain supports bounded counterfactual rollout or deliberation using its learned world model, initially at small depth and candidate count rather than exhaustive tree search.
 
 ## 20. Neural learning and credit assignment
 
@@ -746,25 +745,25 @@ A reference three-factor update is:
 
 where \(e_{ij}\) is eligibility, \(r_{ij}\) a heritable receptor vector, \(m_t\) the biochemical neuromodulatory frame, \(\epsilon_t\) local predictive error, and \(N_{ij}\) a bounded normalization/homeostatic term.
 
-**[AOA-LEARN-001 | CAPABILITY]** The brain supports fast online learning that can alter behaviour after a small number of relevant experiences.
+**AOA-LEARN-001.** The brain supports fast online learning that can alter behaviour after a small number of relevant experiences.
 
-**[AOA-LEARN-002 | INVARIANT]** Eligibility is bound to the exact organism, phenotype/graph epoch, perception/context, selected joint motor output, and causal outcome transaction.
+**AOA-LEARN-002.** Eligibility is bound to the exact organism, phenotype/graph epoch, perception/context, selected joint motor output, and causal outcome transaction.
 
-**[AOA-LEARN-003 | CAPABILITY]** Every active motor channel can receive causally supportable credit through joint eligibility or channel-aware traces without fabricated channel reward labels.
+**AOA-LEARN-003.** Every active motor channel can receive causally supportable credit through joint eligibility or channel-aware traces without fabricated channel reward labels.
 
-**[AOA-LEARN-004 | INVARIANT]** Experience preserves individual channel commands and the joint physical outcome. It need not invent separable rewards for channels whose effects are inseparable.
+**AOA-LEARN-004.** Experience preserves individual channel commands and the joint physical outcome. It need not invent separable rewards for channels whose effects are inseparable.
 
-**[AOA-LEARN-005 | INVARIANT]** Immediate plasticity and slower normalization/consolidation have distinguishable semantics, schedules, and evidence.
+**AOA-LEARN-005.** Immediate plasticity and slower normalization/consolidation have distinguishable semantics, schedules, and evidence.
 
-**[AOA-LEARN-006 | CAPABILITY]** Negative physical/biochemical experience can produce an appropriate aversive learning signal and change later action preference through the ordinary production path.
+**AOA-LEARN-006.** Negative physical/biochemical experience can produce an appropriate aversive learning signal and change later action preference through the ordinary production path.
 
-**[AOA-LEARN-007 | CAPABILITY]** Positive homeostatic improvement, novelty, social consequence, and prediction surprise can shape different receptor classes rather than collapsing into one universal reward.
+**AOA-LEARN-007.** Positive homeostatic improvement, novelty, social consequence, and prediction surprise can shape different receptor classes rather than collapsing into one universal reward.
 
-**[AOA-LEARN-008 | INVARIANT]** Current hormone names may be reference species channels, but the architecture does not assume one universal mammalian mapping for every breed or transplanted brain.
+**AOA-LEARN-008.** Current hormone names may be reference species channels, but the architecture does not assume one universal mammalian mapping for every breed or transplanted brain.
 
-**[AOA-LEARN-009 | CAPABILITY]** Metaplasticity and local learning-rule parameters are heritable and can be optimized through founder meta-training and evolution.
+**AOA-LEARN-009.** Metaplasticity and local learning-rule parameters are heritable and can be optimized through founder meta-training and evolution.
 
-**[AOA-LEARN-010 | INVARIANT]** A teacher, evaluation harness, or world script cannot directly set the neuromodulatory third factor as an answer key.
+**AOA-LEARN-010.** A teacher, evaluation harness, or world script cannot directly set the neuromodulatory third factor as an answer key.
 
 ## 21. Structural plasticity and dendritic allocation
 
@@ -777,21 +776,21 @@ G_i,j = C_i,j · P_i,j · U_i,j · R_i,j
       - λ_red · Redundancy_i,j - λ_cost · Cost_i,j
 ```
 
-but the exact formula is replaceable. The locked requirement is sparse candidate generation and causal structural change.
+but the exact formula is replaceable. The intended behavior is sparse candidate generation and causal structural change.
 
-**[AOA-STR-001 | CAPABILITY]** The lifetime brain supports experience-dependent synaptogenesis, pruning, dendritic branch allocation, and accepted structural changes that alter later computation.
+**AOA-STR-001.** The lifetime brain supports experience-dependent synaptogenesis, pruning, dendritic branch allocation, and accepted structural changes that alter later computation.
 
-**[AOA-STR-002 | INVARIANT]** Structural candidate discovery never enumerates all absent neuron pairs. Its complexity is approximately proportional to active structure times a bounded candidate budget, such as O(NK), O(BK), or better.
+**AOA-STR-002.** Structural candidate discovery never enumerates all absent neuron pairs. Its complexity is approximately proportional to active structure times a bounded candidate budget, such as O(NK), O(BK), or better.
 
-**[AOA-STR-003 | CAPABILITY]** Candidate evidence may include coactivation, eligibility, prediction residuals, shared concept/gap support, local activity sketches, spatial/developmental affinity, and bounded stochastic exploration.
+**AOA-STR-003.** Candidate evidence may include coactivation, eligibility, prediction residuals, shared concept/gap support, local activity sketches, spatial/developmental affinity, and bounded stochastic exploration.
 
-**[AOA-STR-004 | INVARIANT]** Candidate storage granularity is replaceable: neuron, branch, route, tile, sketch, or hybrid. No per-neuron reservoir is locked as universal architecture.
+**AOA-STR-004.** Candidate storage granularity is replaceable: neuron, branch, route, tile, sketch, or hybrid. No per-neuron reservoir is locked as universal architecture.
 
-**[AOA-STR-005 | CAPABILITY]** Dendritic conjunction capacity is allocated by phenotype, development, experience, and capability-per-compute evidence rather than uniformly or decoratively.
+**AOA-STR-005.** Dendritic conjunction capacity is allocated by phenotype, development, experience, and capability-per-compute evidence rather than uniformly or decoratively.
 
-**[AOA-STR-006 | INVARIANT]** A structural counter, proposal object, or pruning-only path does not satisfy synaptogenesis. Accepted growth must change live sparse computation.
+**AOA-STR-006.** A structural counter, proposal object, or pruning-only path does not satisfy synaptogenesis. Accepted growth must change live sparse computation.
 
-**[AOA-STR-007 | CAPABILITY]** Structural changes are persisted, versioned by graph epoch, included in work accounting, and compatible with brain growth and rollback.
+**AOA-STR-007.** Structural changes are persisted, versioned by graph epoch, included in work accounting, and compatible with brain growth and rollback.
 
 ## 22. Action, planning, and motor intentions
 
@@ -799,19 +798,19 @@ The cognitive brain outputs simultaneous bounded intentions across factorized ch
 
 Reference channels include locomotion, orientation/gaze, manipulation, grip, posture, vocalization, and social signalling. Species and embodiments may expose different compatible channels.
 
-**[AOA-MOTOR-001 | CAPABILITY]** The brain can issue simultaneous bounded commands on multiple motor channels.
+**AOA-MOTOR-001.** The brain can issue simultaneous bounded commands on multiple motor channels.
 
-**[AOA-MOTOR-002 | INTERFACE]** A motor intent bundle records every active channel, primitive/parameterization, intensity, duration, direction or target reference, confidence, coordination group, and causal sequence.
+**AOA-MOTOR-002.** A motor intent bundle records every active channel, primitive/parameterization, intensity, duration, direction or target reference, confidence, coordination group, and causal sequence.
 
-**[AOA-MOTOR-003 | INVARIANT]** Inhibition is primarily within channels; learned coordination operates across channels. The architecture does not force locomotion, gaze, posture, manipulation, and vocalization into one exclusive token.
+**AOA-MOTOR-003.** Inhibition is primarily within channels; learned coordination operates across channels. The architecture does not force locomotion, gaze, posture, manipulation, and vocalization into one exclusive token.
 
-**[AOA-MOTOR-004 | CAPABILITY]** Orientation and sensor direction are real motor channels with production candidates, execution, outcome, learning, and persistence.
+**AOA-MOTOR-004.** Orientation and sensor direction are real motor channels with production candidates, execution, outcome, learning, and persistence.
 
-**[AOA-MOTOR-005 | INVARIANT]** The motor ABI expresses body-neutral effectors and intentions, not game-specific semantic goals.
+**AOA-MOTOR-005.** The motor ABI expresses body-neutral effectors and intentions, not game-specific semantic goals.
 
-**[AOA-MOTOR-006 | CAPABILITY]** The brain can learn novel combinations of existing primitives and can adapt motor intentions to changed embodiment through the peripheral body-schema layer.
+**AOA-MOTOR-006.** The brain can learn novel combinations of existing primitives and can adapt motor intentions to changed embodiment through the peripheral body-schema layer.
 
-**[AOA-MOTOR-007 | REFERENCE MECHANISM]** Parameterized motor primitives and learned synergies provide combinatorial behaviour without an explosion of discrete action IDs.
+**AOA-MOTOR-007 (example).** Parameterized motor primitives and learned synergies provide combinatorial behaviour without an explosion of discrete action IDs.
 
 ## 23. Embodiment adapters and body schema
 
@@ -826,17 +825,17 @@ cognitive goal and factorized intention
 -> actuator and physics
 ```
 
-**[AOA-EMB-001 | INVARIANT]** Deterministic actuator stabilization, inverse dynamics, servo loops, and safety constraints do not consume the portable cognitive neural budget.
+**AOA-EMB-001.** Deterministic actuator stabilization, inverse dynamics, servo loops, and safety constraints do not consume the portable cognitive neural budget.
 
-**[AOA-EMB-002 | CAPABILITY]** The embodiment layer learns sensor calibration, effector controllability, proprioceptive body schema, motor synergies, and action-to-sensory consequences.
+**AOA-EMB-002.** The embodiment layer learns sensor calibration, effector controllability, proprioceptive body schema, motor synergies, and action-to-sensory consequences.
 
-**[AOA-EMB-003 | INVARIANT]** The embodiment adapter may not infer or choose semantic goals on behalf of the cognitive core.
+**AOA-EMB-003.** The embodiment adapter may not infer or choose semantic goals on behalf of the cognitive core.
 
-**[AOA-EMB-004 | DEFERRED CAPABILITY]** A transplanted brain can discover a new embodiment through exploration, prediction, teacher guidance, and safe calibration rather than requiring hardcoded assumptions such as two legs or a forward camera.
+**AOA-EMB-004 (research).** A transplanted brain can discover a new embodiment through exploration, prediction, teacher guidance, and safe calibration rather than requiring hardcoded assumptions such as two legs or a forward camera.
 
-**[AOA-EMB-005 | INTERFACE]** Sensor and motor port descriptors are stable, typed, capability-oriented, versioned, and discoverable by the organism.
+**AOA-EMB-005.** Sensor and motor port descriptors are stable, typed, capability-oriented, versioned, and discoverable by the organism.
 
-**[AOA-EMB-006 | CAPABILITY]** Embodiment-specific acquired state can be saved, replaced, retrained, or discarded independently of the portable cognitive core.
+**AOA-EMB-006.** Embodiment-specific acquired state can be saved, replaced, retrained, or discarded independently of the portable cognitive core.
 
 # Part VI - Sleep, growth, and identity
 
@@ -844,19 +843,19 @@ cognitive goal and factorized intention
 
 Biochemistry and physiology determine sleep pressure and readiness. The cognitive system owns replay and neural consolidation. Sleep is a multi-system transaction rather than a sequence of loosely related side effects.
 
-**[AOA-SLEEP-001 | CAPABILITY]** Organisms can enter, maintain, and exit sleep through biological state, external conditions, or explicit safety/recovery mechanisms.
+**AOA-SLEEP-001.** Organisms can enter, maintain, and exit sleep through biological state, external conditions, or explicit safety/recovery mechanisms.
 
-**[AOA-SLEEP-002 | CAPABILITY]** Sleep may consolidate fast to lifetime weights, episodic and semantic memory, prediction, concepts/gaps, structural proposals, derived-region recruitment, and developmental neural growth.
+**AOA-SLEEP-002.** Sleep may consolidate fast to lifetime weights, episodic and semantic memory, prediction, concepts/gaps, structural proposals, derived-region recruitment, and developmental neural growth.
 
-**[AOA-SLEEP-003 | INVARIANT]** All required sleep updates commit atomically for one cycle or roll back. Partial cross-system consolidation is prohibited.
+**AOA-SLEEP-003.** All required sleep updates commit atomically for one cycle or roll back. Partial cross-system consolidation is prohibited.
 
-**[AOA-SLEEP-004 | INVARIANT]** Sleep does not directly mutate germline priors or offspring. Natural assimilation is a separate lineage process.
+**AOA-SLEEP-004.** Sleep does not directly mutate germline priors or offspring. Natural assimilation is a separate lineage process.
 
-**[AOA-SLEEP-005 | CAPABILITY]** Sleep and replay are bounded by phenotype and work budgets and may prioritize salient, surprising, unresolved, socially important, or unstable experiences.
+**AOA-SLEEP-005.** Sleep and replay are bounded by phenotype and work budgets and may prioritize salient, surprising, unresolved, socially important, or unstable experiences.
 
-**[AOA-SLEEP-006 | CAPABILITY]** A completed sleep cycle can restore fatigue/energy state and can change later behaviour through actual consolidated cognition.
+**AOA-SLEEP-006.** A completed sleep cycle can restore fatigue/energy state and can change later behaviour through actual consolidated cognition.
 
-**[AOA-SLEEP-007 | INVARIANT]** Replay identity, cycle identity, graph epoch, and persistence state prevent duplicate, stale, or out-of-order consolidation.
+**AOA-SLEEP-007.** Replay identity, cycle identity, graph epoch, and persistence state prevent duplicate, stale, or out-of-order consolidation.
 
 ## 25. Cognitive identity and graph epochs
 
@@ -869,21 +868,21 @@ Identity is layered so logical continuity survives GPU recompaction without impo
 | Synapse, dendritic branch, sparse route | Graph-epoch structural handle |
 | GPU buffer offset or physical index | Valid only for one compiled layout |
 
-**[AOA-ID-001 | INVARIANT]** Semantic and memory systems reference persistent concepts, memories, assemblies, regions, and ports; they do not depend on raw synapse handles or GPU indices.
+**AOA-ID-001.** Semantic and memory systems reference persistent concepts, memories, assemblies, regions, and ports; they do not depend on raw synapse handles or GPU indices.
 
-**[AOA-ID-002 | CAPABILITY]** Every neuron has an individual-local lineage identity sufficient to track preservation, duplication, specialization, migration, and assimilation provenance.
+**AOA-ID-002.** Every neuron has an individual-local lineage identity sufficient to track preservation, duplication, specialization, migration, and assimilation provenance.
 
-**[AOA-ID-003 | INVARIANT]** Ordinary synapses, branches, and routes need not have permanent global IDs. They use deterministic graph-epoch handles and durable old-to-new migration manifests.
+**AOA-ID-003.** Ordinary synapses, branches, and routes need not have permanent global IDs. They use deterministic graph-epoch handles and durable old-to-new migration manifests.
 
-**[AOA-ID-004 | CAPABILITY]** Structural recompaction, pruning, growth, expansion, and relocation can freely change physical indices while preserving logical identity and causal state.
+**AOA-ID-004.** Structural recompaction, pruning, growth, expansion, and relocation can freely change physical indices while preserving logical identity and causal state.
 
-**[AOA-ID-005 | INVARIANT]** Offspring inherit developmental homologues and priors, never the parent's runtime neuron or structural handles.
+**AOA-ID-005.** Offspring inherit developmental homologues and priors, never the parent's runtime neuron or structural handles.
 
 ## 26. Function-preserving brain growth and augmentation
 
 A trained individual may grow naturally during development or be deliberately enlarged offline without losing established competence.
 
-![Function-preserving growth and identity](diagrams/08_growth_identity.png){width=96%}
+![Function-preserving growth and identity](diagrams/08_growth_identity.svg){width=96%}
 
 *Figure 6. Quiescent migration from one graph epoch to another with acclimation, continuity verification, and rollback.*
 
@@ -895,25 +894,25 @@ R·P = I;    F'(P·x, u) ≈ P·F(x, u)
 
 For that reference approach in a locally linear regime, the recurrent Jacobians should satisfy \(J'P \approx PJ\). New transverse modes begin stable, silent, or contractive.
 
-**[AOA-GROW-001 | DEFERRED CAPABILITY]** A trained brain can be deliberately enlarged while retaining useful competence and individual continuity. Developmental growth and mature augmentation need not use one common engine.
+**AOA-GROW-001 (research).** A trained brain can be deliberately enlarged while retaining useful competence and individual continuity. Developmental growth and mature augmentation need not use one common engine.
 
-**[AOA-GROW-002 | INVARIANT]** Expansion occurs at a quiescent cognitive transaction boundary after pending action credit, weight-bank transactions, and replay state are committed or explicitly discarded.
+**AOA-GROW-002.** Expansion occurs at a quiescent cognitive transaction boundary after pending action credit, weight-bank transactions, and replay state are committed or explicitly discarded.
 
-**[AOA-GROW-003 | INVARIANT]** Existing trained neurons, routes, memory anchors, concepts, predictor state, and learned dynamics remain the anchored core. Expansion does not randomly rebuild the old brain.
+**AOA-GROW-003.** Existing trained neurons, routes, memory anchors, concepts, predictor state, and learned dynamics remain the anchored core. Expansion does not randomly rebuild the old brain.
 
-**[AOA-GROW-004 | REFERENCE MECHANISM]** Candidate growth methods include silent neuron addition, neuron duplication, zero-gain routes, dormant dendrites, residual paths, and self-distillation. None is individually mandatory.
+**AOA-GROW-004 (example).** Candidate growth methods include silent neuron addition, neuron duplication, zero-gain routes, dormant dendrites, residual paths, and self-distillation. None is individually mandatory.
 
-**[AOA-GROW-005 | REFERENCE MECHANISM]** When duplicating neurons, preserving aggregate downstream drive and starting new modes stable or contractive is a useful way to protect learned behavior.
+**AOA-GROW-005 (example).** When duplicating neurons, preserving aggregate downstream drive and starting new modes stable or contractive is a useful way to protect learned behavior.
 
-**[AOA-GROW-006 | REFERENCE MECHANISM]** Additional capacity may be recruited through prediction of old regional state, residual-error learning, self-distillation, or staged plasticity. Choose a method proportionate to the growth being implemented.
+**AOA-GROW-006 (example).** Additional capacity may be recruited through prediction of old regional state, residual-error learning, self-distillation, or staged plasticity. Choose a method proportionate to the growth being implemented.
 
-**[AOA-GROW-007 | INVARIANT]** Enlargement preserves individual continuity and established useful skills before new capacity changes behavior substantially. Exact internal trajectories are not required when focused behavioral and state-integrity checks are sufficient.
+**AOA-GROW-007.** Enlargement preserves individual continuity and established useful skills before new capacity changes behavior substantially. Exact internal trajectories are not required when focused behavioral and state-integrity checks are sufficient.
 
-**[AOA-GROW-008 | CAPABILITY]** When growth changes persisted brain structure, retain enough prior state and mapping information to restore or roll back safely. Reuse existing checkpoint and provenance formats; separate receipt types for every growth operation are not required.
+**AOA-GROW-008.** When growth changes persisted brain structure, retain enough prior state and mapping information to restore or roll back safely. Reuse existing checkpoint and provenance formats; separate receipt types for every growth operation are not required.
 
-**[AOA-GROW-009 | INVARIANT]** Somatic augmentation does not alter offspring until explicit genetic assimilation creates a new germline prior or developmental allele.
+**AOA-GROW-009.** Somatic augmentation does not alter offspring until explicit genetic assimilation creates a new germline prior or developmental allele.
 
-**[AOA-GROW-010 | REFERENCE MECHANISM]** New capacity is preferentially allocated to Flexible Reserve, Association, Temporal-Predictive, Executive, Action/Planning, and Social/Communication unless profiling shows another bottleneck.
+**AOA-GROW-010 (example).** New capacity is preferentially allocated to Flexible Reserve, Association, Temporal-Predictive, Executive, Action/Planning, and Social/Communication unless profiling shows another bottleneck.
 
 # Part VII - Founder training, teachers, SLMs, and culture
 
@@ -923,77 +922,77 @@ Natural selection cannot optimize sophisticated cognition if founders are unable
 
 Privileged offline training may use gradients, labels, demonstrations, large teachers, contrastive objectives, privileged world state, evolutionary outer loops, and differentiable surrogates. These privileges may optimize the genotype, priors, development, receptor profiles, local learning rules, structural policy, and sleep. They may not survive as hidden runtime policy.
 
-**[AOA-FOUND-001 | CAPABILITY]** The founder species receives a viable pretrained neural and developmental foundation rather than random unusable cognition.
+**AOA-FOUND-001.** The founder species receives a viable pretrained neural and developmental foundation rather than random unusable cognition.
 
-**[AOA-FOUND-002 | INVARIANT]** The published founder runs only through ordinary organism interfaces. No oracle feature, hidden label, direct action trace, or privileged trainer remains attached.
+**AOA-FOUND-002.** The published founder runs only through ordinary organism interfaces. No oracle feature, hidden label, direct action trace, or privileged trainer remains attached.
 
-**[AOA-FOUND-003 | CAPABILITY]** Founder pretraining covers generic competencies: object persistence, action consequence, body schema, navigation, avoidance, homeostatic learning, manipulation, social attention, imitation, and communication grounding.
+**AOA-FOUND-003.** Founder pretraining covers generic competencies: object persistence, action consequence, body schema, navigation, avoidance, homeostatic learning, manipulation, social attention, imitation, and communication grounding.
 
-**[AOA-FOUND-004 | INVARIANT]** Founder training varies worlds, object identities, curricula, embodiments, and sensor mappings enough to reduce benchmark or world memorization.
+**AOA-FOUND-004.** Founder training varies worlds, object identities, curricula, embodiments, and sensor mappings enough to reduce benchmark or world memorization.
 
-**[AOA-FOUND-005 | REFERENCE MECHANISM]** Nested meta-training is one option for improving initial priors and lifetime learning. Select the least costly method that produces capable, adaptable founders without hidden runtime assistance.
+**AOA-FOUND-005 (example).** Nested meta-training is one option for improving initial priors and lifetime learning. Select the least costly method that produces capable, adaptable founders without hidden runtime assistance.
 
-**[AOA-FOUND-006 | INVARIANT]** Inner lifetimes inside meta-training use the same causal organism step, local plasticity, memory, chemistry, motor, sleep, and structural mechanisms available after deployment.
+**AOA-FOUND-006.** Inner lifetimes inside meta-training use the same causal organism step, local plasticity, memory, chemistry, motor, sleep, and structural mechanisms available after deployment.
 
-**[AOA-FOUND-007 | CAPABILITY]** A trainer-removed acclimation phase demonstrates retained competence, continued learning, resistance to catastrophic forgetting, and absence of hidden teacher dependence before a founder prior is published.
+**AOA-FOUND-007.** A trainer-removed acclimation phase demonstrates retained competence, continued learning, resistance to catastrophic forgetting, and absence of hidden teacher dependence before a founder prior is published.
 
-**[AOA-FOUND-008 | INVARIANT]** Pretraining gives generic capabilities and priors, not game answers, fixed locations, private source-world facts, or a complete solved policy.
+**AOA-FOUND-008.** Pretraining gives generic capabilities and priors, not game answers, fixed locations, private source-world facts, or a complete solved policy.
 
 ## 28. Shared semantic-prior service
 
 An optional shared SLM supplies compressed general semantic relationships that small creature brains would otherwise spend excessive compute rediscovering. It is external infrastructure, not one of the biological systems and not the creature's executive system.
 
-**[AOA-SLM-001 | INTERFACE]** Semantic-prior requests contain bounded language or symbol context, a small set of active grounded concepts, model/interface version, and budget metadata.
+**AOA-SLM-001.** Semantic-prior requests contain bounded language or symbol context, a small set of active grounded concepts, model/interface version, and budget metadata.
 
-**[AOA-SLM-002 | INTERFACE]** Semantic-prior responses contain candidate relations, embeddings, distinctions, confidence, and provenance. They contain no creature action, reward, memory write, or policy command.
+**AOA-SLM-002.** Semantic-prior responses contain candidate relations, embeddings, distinctions, confidence, and provenance. They contain no creature action, reward, memory write, or policy command.
 
-**[AOA-SLM-003 | INVARIANT]** The semantic-prior service cannot inspect the full private episodic history, raw synapses, pending actions, or broad internal state unless a later architecture revision explicitly creates a safe interface.
+**AOA-SLM-003.** The semantic-prior service receives only its bounded, intentionally exposed context. A new interface to private history or neural state needs a concrete purpose and explicit user scope; a document revision is not permission to expose it.
 
-**[AOA-SLM-004 | INVARIANT]** A semantic hint is nonauthoritative. The creature must ground, accept, reject, revise, or ignore it through its own cognition and experience.
+**AOA-SLM-004.** A semantic hint is nonauthoritative. The creature must ground, accept, reject, revise, or ignore it through its own cognition and experience.
 
-**[AOA-SLM-005 | REFERENCE MECHANISM]** If a semantic-prior service is used, share it across organisms and bound its cost through suitable caching, batching, or event-triggering. Shipping such a service is not required for the playable game.
+**AOA-SLM-005 (example).** If a semantic-prior service is used, share it across organisms and bound its cost through suitable caching, batching, or event-triggering. Shipping such a service is not required for the playable game.
 
-**[AOA-SLM-006 | CAPABILITY]** A mature creature retains substantial nonlinguistic intelligence and grounded competence when the semantic-prior service is disabled.
+**AOA-SLM-006.** A mature creature retains substantial nonlinguistic intelligence and grounded competence when the semantic-prior service is disabled.
 
-**[AOA-SLM-007 | DEFERRED CAPABILITY]** Breed genetics may evolve how much capacity and attention are allocated to semantic-prior integration without inheriting or duplicating the external model weights.
+**AOA-SLM-007 (research).** Breed genetics may evolve how much capacity and attention are allocated to semantic-prior integration without inheriting or duplicating the external model weights.
 
 ## 29. Teacher system
 
 The teacher is distinct from the semantic prior. It is an active pedagogical system that selects lessons and interacts with the learner through grounded channels.
 
-![Semantic prior and split teacher authority](diagrams/06_teacher_slm.png){width=86%}
+![Semantic prior and split teacher authority](diagrams/06_teacher_slm.svg){width=86%}
 
 *Figure 7. The semantic prior provides bounded hints; the pedagogical planner chooses lessons; only the embodied teacher actor influences the learner.*
 
-**[AOA-TEACH-001 | INTERFACE]** The teacher has a read-only pedagogical planner and an embodied teacher actor with separate authority.
+**AOA-TEACH-001.** The teacher has a read-only pedagogical planner and an embodied teacher actor with separate authority.
 
-**[AOA-TEACH-002 | CAPABILITY]** The planner may inspect bounded curriculum progress, observable success/failure, developmental stage, available interfaces, coarse safety/homeostasis, uncertainty summaries, lesson history, and world state needed to construct lessons.
+**AOA-TEACH-002.** The planner may inspect bounded curriculum progress, observable success/failure, developmental stage, available interfaces, coarse safety/homeostasis, uncertainty summaries, lesson history, and world state needed to construct lessons.
 
-**[AOA-TEACH-003 | INVARIANT]** The planner cannot inspect raw synapses, neuron activations, eligibility traces, private episodic contents, hidden SLM state, pending action internals, or direct reward controls.
+**AOA-TEACH-003.** The planner cannot inspect raw synapses, neuron activations, eligibility traces, private episodic contents, hidden SLM state, pending action internals, or direct reward controls.
 
-**[AOA-TEACH-004 | INVARIANT]** Only the embodied teacher actor influences the learner, through speech, gesture, demonstration, objects, environment arrangement, social response, and other ordinary world channels.
+**AOA-TEACH-004.** Only the embodied teacher actor influences the learner, through speech, gesture, demonstration, objects, environment arrangement, social response, and other ordinary world channels.
 
-**[AOA-TEACH-005 | INVARIANT]** Teachers cannot directly write learner memories, concepts, weights, actions, rewards, neurochemistry, or declarations of understanding.
+**AOA-TEACH-005.** Teachers cannot directly write learner memories, concepts, weights, actions, rewards, neurochemistry, or declarations of understanding.
 
-**[AOA-TEACH-006 | CAPABILITY]** Teachers may be players, scripted agents, SLMs, larger LLMs, older creatures, or hybrids, provided they use the same grounded teaching interface.
+**AOA-TEACH-006.** Teachers may be players, scripted agents, SLMs, larger LLMs, older creatures, or hybrids, provided they use the same grounded teaching interface.
 
-**[AOA-TEACH-007 | CAPABILITY]** Teaching episodes are auditable by curriculum ID, planner-visible diagnostics, teacher acts, learner-visible stimuli, learner response, physical/biochemical consequence, model provenance, and compute/token cost.
+**AOA-TEACH-007.** Teaching diagnostics should connect the cue the learner actually perceived to its response and measured consequence. Record assistance and costs when relevant to the comparison, using existing traces rather than a mandatory report for every interaction.
 
-**[AOA-TEACH-008 | CAPABILITY]** Learner competence is measured after the teacher is removed, not only while a capable external model is directing lessons.
+**AOA-TEACH-008.** Learner competence is measured after the teacher is removed, not only while a capable external model is directing lessons.
 
 ## 30. Culture and curricula
 
 Culture is a separate versioned artifact that must be learned. It is neither genome nor personal memory, although it becomes personal memory and skill after acquisition.
 
-**[AOA-CULT-001 | INTERFACE]** A cultural package may contain language conventions, curriculum graphs, prerequisites, demonstrations, environmental setup recipes, social norms, tool-use procedures, assessments, and teacher capability requirements.
+**AOA-CULT-001.** A cultural package may contain language conventions, curriculum graphs, prerequisites, demonstrations, environmental setup recipes, social norms, tool-use procedures, assessments, and teacher capability requirements.
 
-**[AOA-CULT-002 | INVARIANT]** A cultural package does not directly alter genotype, germline neural priors, personal memory, neural weights, or biochemical state.
+**AOA-CULT-002.** A cultural package does not directly alter genotype, germline neural priors, personal memory, neural weights, or biochemical state.
 
-**[AOA-CULT-003 | CAPABILITY]** A breed may recommend or bundle a cultural package while remaining usable without it. Breed and culture dependencies are separately identifiable and removable.
+**AOA-CULT-003.** A breed may recommend or bundle a cultural package while remaining usable without it. Breed and culture dependencies are separately identifiable and removable.
 
-**[AOA-CULT-004 | CAPABILITY]** Genetically similar populations can diverge culturally through teaching, imitation, language, environment, and historical contingency.
+**AOA-CULT-004.** Genetically similar populations can diverge culturally through teaching, imitation, language, environment, and historical contingency.
 
-**[AOA-CULT-005 | CAPABILITY]** Research tooling can distinguish competence inherited genetically, acquired culturally, acquired individually without teaching, available only with the SLM, and available only while a teacher is active.
+**AOA-CULT-005.** Research tooling can distinguish competence inherited genetically, acquired culturally, acquired individually without teaching, available only with the SLM, and available only while a teacher is active.
 
 # Part VIII - Reproduction, assimilation, and evolution
 
@@ -1001,17 +1000,17 @@ Culture is a separate versioned artifact that must be learned. It is neither gen
 
 Ordinary reproduction constructs a new organism. It recombines compact genetic instructions and compatible prior references; it does not clone an adult brain.
 
-**[AOA-REP-001 | CAPABILITY]** Reproduction uses canonical parent genotypes, physiological readiness, world interaction, and lifecycle authority to create a new child genotype and organism.
+**AOA-REP-001.** Reproduction uses canonical parent genotypes, physiological readiness, world interaction, and lifecycle authority to create a new child genotype and organism.
 
-**[AOA-REP-002 | INVARIANT]** A child receives a newly developed brain with new neuron identities and no parent personal memory.
+**AOA-REP-002.** A child receives a newly developed brain with new neuron identities and no parent personal memory.
 
-**[AOA-REP-003 | CAPABILITY]** Compatible regional prior blocks and bridge blocks may be selected, blended, or recombined through explicit bounded recipes.
+**AOA-REP-003.** Compatible regional prior blocks and bridge blocks may be selected, blended, or recombined through explicit bounded recipes.
 
-**[AOA-REP-004 | INVARIANT]** Ordinary births do not publish a new permanent large neural asset for every child. Child-specific compiled priors may be cached by content hash but remain derivable from genotype and dependencies.
+**AOA-REP-004.** Ordinary births do not publish a new permanent large neural asset for every child. Child-specific compiled priors may be cached by content hash but remain derivable from genotype and dependencies.
 
-**[AOA-REP-005 | CAPABILITY]** Incompatible body, biochemical, neural, derived-region, or prior dependencies are detected before admission and either resolved through an explicit migration/crossing mechanism or rejected.
+**AOA-REP-005.** Incompatible body, biochemical, neural, derived-region, or prior dependencies are detected before admission and either resolved through an explicit migration/crossing mechanism or rejected.
 
-**[AOA-REP-006 | CAPABILITY]** Parental investment, gestation/incubation, teaching opportunity, and social environment may influence development without becoming hardcoded inherited knowledge.
+**AOA-REP-006.** Parental investment, gestation/incubation, teaching opportunity, and social environment may influence development without becoming hardcoded inherited knowledge.
 
 ## 32. Genetic assimilation
 
@@ -1031,41 +1030,41 @@ The first playable version retains compatible skill-bearing weights, general con
 
 Playable care, teaching, capable founders, and retained skills take priority over absolute biological fidelity. The care loop comes first; breed promotion follows as a small reuse of foundation and archive paths. Future embodied intelligence and investigation of subjective experience remain research aims, not claims of demonstrated qualia or release gates.
 
-**[AOA-ASSIM-001 | DEFERRED CAPABILITY]** Natural assimilation can gradually alter developmental growth, receptor expression, connectivity affinities, plasticity, regional allocation, and reusable motifs. It is separate from practical player-directed breed promotion in section 32.2.
+**AOA-ASSIM-001 (research).** Natural assimilation can gradually alter developmental growth, receptor expression, connectivity affinities, plasticity, regional allocation, and reusable motifs. It is separate from practical player-directed breed promotion in section 32.2.
 
-**[AOA-ASSIM-002 | INVARIANT]** Natural assimilation is rare, lineage-level, information-budgeted, and does not publish a large new prior at every birth.
+**AOA-ASSIM-002.** Natural assimilation is rare, lineage-level, information-budgeted, and does not publish a large new prior at every birth.
 
-**[AOA-ASSIM-003 | CAPABILITY]** Breeder assimilation accepts one selected individual or a cohort and publishes compatible acquired abilities as a named breed foundation. Cohort comparison is optional.
+**AOA-ASSIM-003.** Breeder assimilation accepts one selected individual or a cohort and publishes compatible acquired abilities as a named breed foundation. Cohort comparison is optional.
 
-**[AOA-ASSIM-004 | INVARIANT]** Single-individual breed promotion is an ordinary player operation and requires no expert override. It preserves the source creature and records the source, retained foundation, and reset policy.
+**AOA-ASSIM-004.** Single-individual breed promotion is an ordinary player operation and requires no expert override. It preserves the source creature and records the source, retained foundation, and reset policy.
 
-**[AOA-ASSIM-005 | CAPABILITY]** The first playable promotion path checks compatible foundation loading, fresh explicit personal records, and retention of a useful skill in a fresh situation. Cohort consensus, compression bottlenecks, developmental redistillation, and exhaustive leakage probes are optional advanced methods, not prerequisites.
+**AOA-ASSIM-005.** The first playable promotion path checks compatible foundation loading, fresh explicit personal records, and retention of a useful skill in a fresh situation. Cohort consensus, compression bottlenecks, developmental redistillation, and exhaustive leakage probes are optional advanced methods, not prerequisites.
 
-**[AOA-ASSIM-006 | INVARIANT]** Promotion excludes explicit autobiographical episodes, personal semantic facts, individual and place references, relationships, current chemistry, current activation, pending eligibility, and adult body-specific calibration. Limited incidental personal associations in retained neural weights are acceptable; zero leakage is not required.
+**AOA-ASSIM-006.** Promotion excludes explicit autobiographical episodes, personal semantic facts, individual and place references, relationships, current chemistry, current activation, pending eligibility, and adult body-specific calibration. Limited incidental personal associations in retained neural weights are acceptable; zero leakage is not required.
 
-**[AOA-ASSIM-007 | CAPABILITY]** Assimilation may preserve generalized regional weights, motifs, assembly templates, connectivity affinities, receptor/plasticity profiles, and learning priors.
+**AOA-ASSIM-007.** Assimilation may preserve generalized regional weights, motifs, assembly templates, connectivity affinities, receptor/plasticity profiles, and learning priors.
 
-**[AOA-ASSIM-008 | INVARIANT]** Every assimilated bit or parameter is charged against an inherited-information and developmental-complexity budget.
+**AOA-ASSIM-008.** Research objectives may compare inherited information and developmental complexity when selecting a compact prior. Practical breed promotion does not require a new per-parameter accounting system.
 
-**[AOA-ASSIM-009 | CAPABILITY]** Published breed revisions are immutable, versioned, content-addressed, provenance-tracked, and independently testable from their source adults.
+**AOA-ASSIM-009.** Published breed revisions are immutable, versioned, content-addressed, provenance-tracked, and independently testable from their source adults.
 
 ## 33. Evolution and selection
 
 Evolution operates on complete organisms and lineages. It may alter body, chemistry, brain, development, learning, culture-learning ability, and reproductive strategy. It is not restricted to tuning neural weights.
 
-**[AOA-EVO-001 | CAPABILITY]** Evolution can alter morphology, metabolism, biochemical topology, developmental schedules, region allocation, derived regions, connectivity, receptors, plasticity, learning rules, temperament, and reproductive strategy.
+**AOA-EVO-001.** Evolution can alter morphology, metabolism, biochemical topology, developmental schedules, region allocation, derived regions, connectivity, receptors, plasticity, learning rules, temperament, and reproductive strategy.
 
-**[AOA-EVO-002 | INVARIANT]** Natural selection in game worlds is mediated by ecological survival and reproduction, not a hidden neural reward or externally assigned fitness during life.
+**AOA-EVO-002.** Natural selection in game worlds is mediated by ecological survival and reproduction, not a hidden neural reward or externally assigned fitness during life.
 
-**[AOA-EVO-003 | CAPABILITY]** Offline founder and research outer loops may use explicit fitness or loss functions, but their privileged optimization is training infrastructure and is removed at deployment.
+**AOA-EVO-003.** Offline founder and research outer loops may use explicit fitness or loss functions, but their privileged optimization is training infrastructure and is removed at deployment.
 
-**[AOA-EVO-004 | GOAL]** Evolution should discover compact priors and effective learners rather than serializing complete adult solutions genetically.
+**AOA-EVO-004.** Evolution should discover compact priors and effective learners rather than serializing complete adult solutions genetically.
 
-**[AOA-EVO-005 | REFERENCE MECHANISM]** A lineage objective may penalize inherited information, neural work, biochemical complexity, developmental fragility, and metabolic cost while rewarding survival and reproductive success.
+**AOA-EVO-005 (example).** A lineage objective may penalize inherited information, neural work, biochemical complexity, developmental fragility, and metabolic cost while rewarding survival and reproductive success.
 
-**[AOA-EVO-006 | CAPABILITY]** Niches may favour cheap reflexive brains, larger flexible brains, specialized biochemistry, strong cultural learning, or other legitimate strategies.
+**AOA-EVO-006.** Niches may favour cheap reflexive brains, larger flexible brains, specialized biochemistry, strong cultural learning, or other legitimate strategies.
 
-**[AOA-EVO-007 | INVARIANT]** Evaluation environments must monitor degenerate strategies such as inactivity, sensor exploits, reproduction loopholes, reward leakage, parasitic use of teachers, or trivial niche collapse.
+**AOA-EVO-007.** Evaluation environments must monitor degenerate strategies such as inactivity, sensor exploits, reproduction loopholes, reward leakage, parasitic use of teachers, or trivial niche collapse.
 
 # Part IX - Portability and external use
 
@@ -1073,23 +1072,23 @@ Evolution operates on complete organisms and lineages. It may alter body, chemis
 
 The portable cognitive core contains acquired cognition that should survive a change of body or environment. It is distinct from body, biochemistry, and peripheral embodiment state.
 
-![Portable cognitive core and a new embodiment](diagrams/07_portability.png){width=92%}
+![Portable cognitive core and a new embodiment](diagrams/07_portability.svg){width=92%}
 
 *Figure 8. Cognitive transplantation preserves the mature core while replacing embodiment and viability interfaces.*
 
-**[AOA-PORT-001 | CAPABILITY]** A mature cognitive core can be exported with neural graph, acquired weights, concepts, unresolved gaps, episodic and semantic memory, predictor, attention state, learned personality-like tendencies, and language grounding.
+**AOA-PORT-001.** A mature cognitive core can be exported with neural graph, acquired weights, concepts, unresolved gaps, episodic and semantic memory, predictor, attention state, learned personality-like tendencies, and language grounding.
 
-**[AOA-PORT-002 | INTERFACE]** Portable exports include exact dependency, graph-epoch, schema, germline-prior, semantic-prior ABI, and adapter compatibility manifests.
+**AOA-PORT-002.** Portable exports include exact dependency, graph-epoch, schema, germline-prior, semantic-prior ABI, and adapter compatibility manifests.
 
-**[AOA-PORT-003 | CAPABILITY]** Full-organism transplantation may carry body and biochemistry; cognitive-core transplantation carries cognition plus an explicit receptor/viability interface but not the old transient chemistry by default.
+**AOA-PORT-003.** Full-organism transplantation may carry body and biochemistry; cognitive-core transplantation carries cognition plus an explicit receptor/viability interface but not the old transient chemistry by default.
 
-**[AOA-PORT-004 | INVARIANT]** A new game, software host, or robot supplies sensory, motor, and viability adapters. It may not replace the cognitive core with a host planner or arbitrary reward function.
+**AOA-PORT-004.** A new game, software host, or robot supplies sensory, motor, and viability adapters. It may not replace the cognitive core with a host planner or arbitrary reward function.
 
-**[AOA-PORT-005 | CAPABILITY]** A transplanted brain can reacquire body schema, controls, and local semantics faster than a newborn when its learned abstractions are genuinely general.
+**AOA-PORT-005.** A transplanted brain can reacquire body schema, controls, and local semantics faster than a newborn when its learned abstractions are genuinely general.
 
-**[AOA-PORT-006 | CAPABILITY]** Transfer tests evaluate retention of object concepts, causal learning, social knowledge, language, planning habits, and learning speed across changed embodiment and environment.
+**AOA-PORT-006.** Transfer tests evaluate retention of object concepts, causal learning, social knowledge, language, planning habits, and learning speed across changed embodiment and environment.
 
-**[AOA-PORT-007 | INVARIANT]** Robot or software hosts may map battery, heat, damage, resource usage, and task constraints into a virtual physiology only through an explicit inspectable adapter. They may not inject hidden desirability labels.
+**AOA-PORT-007.** Robot or software hosts may map battery, heat, damage, resource usage, and task constraints into a virtual physiology only through an explicit inspectable adapter. They may not inject hidden desirability labels.
 
 # Part X - Game and community architecture
 
@@ -1097,23 +1096,23 @@ The portable cognitive core contains acquired cognition that should survive a ch
 
 The architecture must produce a compelling simulation game rather than hiding its depth behind developer tools.
 
-**[AOA-GAME-001 | CAPABILITY]** Players can raise persistent individuals with visible needs, learning, relationships, language, habits, development, and personality-like differences.
+**AOA-GAME-001.** Players can raise persistent individuals with visible needs, learning, relationships, language, habits, development, and personality-like differences.
 
-**[AOA-GAME-002 | CAPABILITY]** Players can teach directly, construct schools and curricula, arrange environments, introduce cultures, and observe competence after teaching ends.
+**AOA-GAME-002.** Players can teach directly, construct schools and curricula, arrange environments, introduce cultures, and observe competence after teaching ends.
 
-**[AOA-GAME-003 | CAPABILITY]** Players can select cohorts, breed lineages, cross compatible breeds, stabilize traits, perform breeder assimilation, and compare descendants.
+**AOA-GAME-003.** Players can select cohorts, breed lineages, cross compatible breeds, stabilize traits, perform breeder assimilation, and compare descendants.
 
-**[AOA-GAME-004 | CAPABILITY]** Communities can exchange breeds, cultural packages, curricula, and exact individual exports as distinct artifact types.
+**AOA-GAME-004.** Communities can exchange breeds, cultural packages, curricula, and exact individual exports as distinct artifact types.
 
-**[AOA-GAME-005 | CAPABILITY]** Ecological communities can form persistent social structures, traditions, cooperation, conflict, resource practices, and cultural divergence.
+**AOA-GAME-005.** Ecological communities can form persistent social structures, traditions, cooperation, conflict, resource practices, and cultural divergence.
 
-**[AOA-GAME-006 | CAPABILITY]** Exceptional trained individuals may undergo deliberate brain augmentation or transplantation as a visible game/research process with risk, acclimation, and rollback.
+**AOA-GAME-006.** Exceptional trained individuals may undergo deliberate brain augmentation or transplantation as a visible game/research process with risk, acclimation, and rollback.
 
-**[AOA-GAME-007 | INVARIANT]** The ordinary player interface emphasizes behavioural legibility and causal explanation. Raw synapse-level detail is reserved for expert inspection.
+**AOA-GAME-007.** The ordinary player interface emphasizes behavioural legibility and causal explanation. Raw synapse-level detail is reserved for expert inspection.
 
-**[AOA-GAME-008 | CAPABILITY]** The game distinguishes inherited, learned, culturally taught, SLM-assisted, and currently teacher-dependent behaviour in inspection and lineage records.
+**AOA-GAME-008.** The game distinguishes inherited, learned, culturally taught, SLM-assisted, and currently teacher-dependent behaviour in inspection and lineage records.
 
-**[AOA-GAME-009 | INVARIANT]** Game convenience features must not silently bypass the organism's learning or causal systems when they are used as evidence of intelligence.
+**AOA-GAME-009.** Game convenience features must not silently bypass the organism's learning or causal systems when they are used as evidence of intelligence.
 
 ## 36. Community artifact types
 
@@ -1129,15 +1128,15 @@ A cultural package contains curricula, language conventions, demonstrations, nor
 
 An individual export contains exact current cognitive state, personal memories, learned structure, current graph epoch, and optionally body/chemistry for full-organism transfer.
 
-**[AOA-ART-001 | INVARIANT]** Breed, culture, and individual artifacts are semantically distinct and cannot be silently substituted for one another.
+**AOA-ART-001.** Breed, culture, and individual artifacts are semantically distinct and cannot be silently substituted for one another.
 
-**[AOA-ART-002 | INVARIANT]** Community artifacts contain no executable native code. Data, declarative curricula, validated model references, and sandboxed scripts use explicit trust and permission policies.
+**AOA-ART-002.** Community artifacts contain no executable native code. Data, declarative curricula, validated model references, and sandboxed scripts use explicit trust and permission policies.
 
-**[AOA-ART-003 | CAPABILITY]** Artifacts are content-addressed, schema-versioned, dependency-complete or exactly resolvable, provenance-tracked, and reproducibly loadable.
+**AOA-ART-003.** Artifacts are content-addressed, schema-versioned, dependency-complete or exactly resolvable, provenance-tracked, and reproducibly loadable.
 
-**[AOA-ART-004 | CAPABILITY]** Licensing, authorship, source cohort, training cost, model dependencies, and compatibility are recorded for shared artifacts.
+**AOA-ART-004.** Licensing, authorship, source cohort, training cost, model dependencies, and compatibility are recorded for shared artifacts.
 
-**[AOA-ART-005 | INVARIANT]** Missing dependencies and incompatible prior/adapter families fail explicitly rather than loading a superficially similar default.
+**AOA-ART-005.** Missing dependencies and incompatible prior/adapter families fail explicitly rather than loading a superficially similar default.
 
 # Part XI - Compute, persistence, observability, and failure handling
 
@@ -1145,82 +1144,73 @@ An individual export contains exact current cognitive state, personal memories, 
 
 The system targets many persistent organisms under limited hardware. It must spend adaptive neural compute where it increases intelligence and use deterministic simulation where learning provides little value.
 
-Hardware-independent work units are recorded separately for:
+Relevant costs can include neural projection, learning and prediction, memory
+and attention, biology and physics, external assistance, sleep, and persistence.
+Which counters are useful depends on the bottleneck being investigated.
 
-- recurrent neural projection and activation;
-- dendritic computation;
-- local learning and structural change;
-- prediction;
-- memory and concept operations;
-- attention and focal sensing;
-- biochemical species, reactions, receptors, emitters, and organs;
-- body/physics and embodiment adapters;
-- SLM and teacher tokens/inference;
-- sleep, development, reproduction, persistence, and migration.
+**AOA-PERF-001.** Use relevant existing work counters and hardware measurements to compare capability and compute cost. Add accounting when it answers a concrete performance question, rather than requiring instrumentation in every subsystem.
 
-**[AOA-PERF-001 | INVARIANT]** All major subsystems expose deterministic hardware-independent work accounting sufficient for capability-per-compute comparison.
+**AOA-PERF-002.** Conversion of cognitive or biochemical work to simulated metabolic cost is a configurable species/world policy, normally enabled in ecological/evolutionary worlds and optionally disabled in isolated benchmarks.
 
-**[AOA-PERF-002 | INVARIANT]** Conversion of cognitive or biochemical work to simulated metabolic cost is a configurable species/world policy, normally enabled in ecological/evolutionary worlds and optionally disabled in isolated benchmarks.
+**AOA-PERF-003.** No neural, biochemical, attention, memory, teacher, or structural mechanism performs unbounded search or allocation.
 
-**[AOA-PERF-003 | INVARIANT]** No neural, biochemical, attention, memory, teacher, or structural mechanism performs unbounded search or allocation.
+**AOA-PERF-004.** Benchmark the population, brain/body class, and active cadence being supported. Progressive population scales can expose bottlenecks; a fixed set of tiers is not a prerequisite for gameplay changes.
 
-**[AOA-PERF-004 | CAPABILITY]** The runtime supports benchmark tiers of 1, 10, 30, 100, and 500 organisms or equivalent progressive population scales, with results reported by brain/body class and active cadence.
+**AOA-PERF-005.** Population scaling claims identify the hardware, workload, measured timing/memory, and useful behavior. Include transfers, sleep, assistance, or other stage costs when they explain the result; missing measurements are not invented.
 
-**[AOA-PERF-005 | INVARIANT]** Population scaling claims require measured wall time, GPU time, CPU time, memory, buffer traffic, work units, sleep bursts, teacher/SLM cost, and behavioural fidelity.
+**AOA-PERF-006 (example).** High-volume sparse recurrent and local-learning operations are GPU-batched; irregular sparse memory/topology/asset operations remain CPU-side until profiling supports relocation.
 
-**[AOA-PERF-006 | REFERENCE MECHANISM]** High-volume sparse recurrent and local-learning operations are GPU-batched; irregular sparse memory/topology/asset operations remain CPU-side until profiling supports relocation.
+**AOA-PERF-007.** Inactive, sleeping, offscreen, or distant organisms may use reduced cadence or lower fidelity only through declared policies that preserve causal state and do not fabricate outcomes.
 
-**[AOA-PERF-007 | CAPABILITY]** Inactive, sleeping, offscreen, or distant organisms may use reduced cadence or lower fidelity only through declared policies that preserve causal state and do not fabricate outcomes.
+**AOA-PERF-008.** Logical IDs, provenance, and migration maps remain off the accelerator hot path unless measured evidence justifies a different design.
 
-**[AOA-PERF-008 | INVARIANT]** Logical IDs, provenance, and migration maps remain off the accelerator hot path unless measured evidence justifies a different design.
-
-**[AOA-PERF-009 | GOAL]** A mechanism must justify its compute cost through capability, robustness, evolvability, game value, or compression of other costs.
+**AOA-PERF-009.** A mechanism must justify its compute cost through capability, robustness, evolvability, game value, or compression of other costs.
 
 ## 38. Persistence and exact continuity
 
 Persistence is part of organism identity. Saves and exports must retain the exact state required to continue the same individual rather than manufacture a plausible replacement.
 
-**[AOA-PERSIST-001 | CAPABILITY]** Exact saves contain world/ecology, body/organs, biochemistry, genotype and prior dependencies, developmental state, neural graph epoch, acquired weights/structure, memory, concepts, prediction, sleep, culture, adapters, and identity metadata.
+**AOA-PERSIST-001.** Exact saves contain world/ecology, body/organs, biochemistry, genotype and prior dependencies, developmental state, neural graph epoch, acquired weights/structure, memory, concepts, prediction, sleep, culture, adapters, and identity metadata.
 
-**[AOA-PERSIST-002 | INVARIANT]** Missing exact cognitive, biochemical, genetic, memory, or dependency state causes an explicit restore error or an explicit migration path, never silent default substitution.
+**AOA-PERSIST-002.** Missing exact cognitive, biochemical, genetic, memory, or dependency state causes an explicit restore error or an explicit migration path, never silent default substitution.
 
-**[AOA-PERSIST-003 | CAPABILITY]** Schema migrations are deterministic, versioned, auditable, and produce receipts identifying transformed or discarded state.
+**AOA-PERSIST-003.** Schema migrations identify their input/output versions and deterministically preserve or explicitly report transformed or discarded state. Existing migration results and recovery mechanisms can provide this information.
 
-**[AOA-PERSIST-004 | CAPABILITY]** Save/load preserves later control behaviour and internal causal state within declared deterministic or numerical tolerance.
+**AOA-PERSIST-004.** Save/load preserves later control behaviour and internal causal state within declared deterministic or numerical tolerance.
 
-**[AOA-PERSIST-005 | CAPABILITY]** Brain growth, derived regions, germline blocks, culture, teacher provenance, and portable-core exports are represented in persistence schemas from the moment they become production mechanisms.
+**AOA-PERSIST-005.** Brain growth, derived regions, germline blocks, culture, teacher provenance, and portable-core exports are represented in persistence schemas from the moment they become production mechanisms.
 
-**[AOA-PERSIST-006 | INVARIANT]** A checkpoint never stores unresolved references to temporary local paths or mutable remote assets.
+**AOA-PERSIST-006.** A checkpoint never stores unresolved references to temporary local paths or mutable remote assets.
 
 ## 39. Observability and presentation
 
 The architecture must be inspectable at several levels without letting diagnostic state become a second authority.
 
-**[AOA-OBS-001 | CAPABILITY]** Player-facing presentation exposes understandable needs, emotions, relationships, learning, development, sleep, culture, and lineage without requiring neural expertise.
+**AOA-OBS-001.** Player-facing presentation exposes understandable needs, emotions, relationships, learning, development, sleep, culture, and lineage without requiring neural expertise.
 
-**[AOA-OBS-002 | CAPABILITY]** Expert inspection can trace stimulus -> attention -> neural state -> motor intent -> physical outcome -> biochemical consequence -> learning -> changed later response.
+**AOA-OBS-002.** Expert inspection can trace stimulus -> attention -> neural state -> motor intent -> physical outcome -> biochemical consequence -> learning -> changed later response.
 
-**[AOA-OBS-003 | CAPABILITY]** Inspection distinguishes inherited prior, fast learning, lifetime consolidation, explicit memory, culture, SLM hints, teacher actions, and host/adapter effects.
+**AOA-OBS-003.** Inspection distinguishes inherited prior, fast learning, lifetime consolidation, explicit memory, culture, SLM hints, teacher actions, and host/adapter effects.
 
-**[AOA-OBS-004 | INVARIANT]** Telemetry, presentation, reports, and debug snapshots are read-only derived views tied to authoritative versions and ticks.
+**AOA-OBS-004.** Telemetry, presentation, reports, and debug snapshots are read-only derived views tied to authoritative versions and ticks.
 
-**[AOA-OBS-005 | REFERENCE MECHANISM]** Use bounded diagnostics to explain material external assistance, state transformations, and measured costs. Reuse existing logs and identifiers; ordinary work does not require a new receipt schema, report, or tracking system for every event.
+**AOA-OBS-005 (example).** Use bounded diagnostics to explain material external assistance, state transformations, and measured costs. Reuse existing logs and identifiers; ordinary work does not require a new receipt schema, report, or tracking system for every event.
 
-**[AOA-OBS-006 | INVARIANT]** Documentation describes the behavior actually implemented and exercised, including relevant limits. Do not claim an absent mechanism works or relabel a failed observation as a pass. Deferred research and optional methods do not become gameplay prerequisites through this document.
+**AOA-OBS-006.** Documentation describes the behavior actually implemented and exercised, including relevant limits. Do not claim an absent mechanism works or relabel a failed observation as a pass. Deferred research and optional methods do not become gameplay prerequisites through this document.
 
 ## 40. Failure, recovery, and transaction safety
 
-**[AOA-FAIL-001 | INVARIANT]** Invalid IDs, stale causal sequences, incompatible graph epochs, malformed assets, nonfinite state, and impossible ownership relations fail explicitly.
+**AOA-FAIL-001.** Invalid IDs, stale causal sequences, incompatible graph epochs, malformed assets, nonfinite state, and impossible ownership relations fail explicitly.
 
-**[AOA-FAIL-002 | INVARIANT]** A failed multi-system action, sleep, reproduction, assimilation, migration, or restore transaction does not partially commit authoritative state.
+**AOA-FAIL-002.** A failed multi-system action, sleep, reproduction, assimilation, migration, or restore transaction does not partially commit authoritative state.
 
-**[AOA-FAIL-003 | CAPABILITY]** Safe fallback states may protect the simulation from corruption or catastrophic body control, but they are observable and cannot masquerade as successful cognition.
+**AOA-FAIL-003.** Safe fallback states may protect the simulation from corruption or catastrophic body control, but they are observable and cannot masquerade as successful cognition.
 
-**[AOA-FAIL-004 | CAPABILITY]** Rollback checkpoints exist for brain augmentation, schema migration, breed publication, and other high-risk irreversible operations.
+**AOA-FAIL-004.** Rollback checkpoints exist for brain augmentation, schema migration, breed publication, and other high-risk irreversible operations.
 
-**[AOA-FAIL-005 | INVARIANT]** Repeated diagnostic expansion is not a substitute for source-level tracing and repair. Observability remains bounded and purpose-driven.
+**AOA-FAIL-005.** Repeated diagnostic expansion is not a substitute for source-level tracing and repair. Observability remains bounded and purpose-driven.
 
-**[AOA-FAIL-006 | CAPABILITY]** Long-running simulations can detect and isolate corrupted individuals or assets without silently contaminating lineages or shared priors.
+**AOA-FAIL-006.** Long-running simulations can detect and isolate corrupted individuals or assets without silently contaminating lineages or shared priors.
 
 # Part XII - Capability evaluation
 
@@ -1230,75 +1220,77 @@ Describe what the change does, the source and configuration that were tested,
 the important result, and any remaining uncertainty. Ordinary changes need no
 per-requirement grade, evidence-flag taxonomy, or separate compliance report.
 
-**[AOA-GRADE-002 | INVARIANT]** A test written specifically around a stub or fixture cannot certify a production capability unless the same semantic path is used in ordinary gameplay.
+**AOA-GRADE-002.** A test written specifically around a stub or fixture cannot certify a production capability unless the same semantic path is used in ordinary gameplay.
 
-**[AOA-GRADE-003 | INVARIANT]** A passing causal test does not prove intelligence, usefulness, generalization, robustness, scale, or compute efficiency.
+**AOA-GRADE-003.** A passing causal test does not prove intelligence, usefulness, generalization, robustness, scale, or compute efficiency.
 
-**[AOA-GRADE-004 | INVARIANT]** Behavioural capability claims include appropriate controls, fresh environments, and service-off conditions where SLM or teacher dependence is possible.
+**AOA-GRADE-004.** Behavioural capability claims include appropriate controls, fresh environments, and service-off conditions where SLM or teacher dependence is possible.
 
-**[AOA-GRADE-005 | INVARIANT]** Mechanism attribution requires ablation or another credible causal comparison when multiple systems could explain the result.
+**AOA-GRADE-005.** Mechanism attribution requires ablation or another credible causal comparison when multiple systems could explain the result.
 
-**[AOA-GRADE-006 | INVARIANT]** Performance claims identify brain class, body class, population composition, update cadence, sleep state, hardware, precision, and configuration.
+**AOA-GRADE-006.** Performance claims identify brain class, body class, population composition, update cadence, sleep state, hardware, precision, and configuration.
 
 ## 42. Capability examples
 
 Use these examples to evaluate the particular ability being claimed. They are not a checklist required before making a gameplay improvement.
 
-**[AOA-EVAL-001 | CAPABILITY]** Few-shot avoidance: one or a few adverse grounded experiences reduce later selection of the relevant hazardous behaviour without a host rule.
+**AOA-EVAL-001.** Few-shot avoidance: one or a few adverse grounded experiences reduce later selection of the relevant hazardous behaviour without a host rule.
 
-**[AOA-EVAL-002 | CAPABILITY]** Reversal learning: the creature updates when an earlier useful relation changes, without erasing unrelated knowledge.
+**AOA-EVAL-002.** Reversal learning: the creature updates when an earlier useful relation changes, without erasing unrelated knowledge.
 
-**[AOA-EVAL-003 | CAPABILITY]** Passive observational learning: watching another agent or event can improve later prediction or behaviour without direct action experience.
+**AOA-EVAL-003.** Passive observational learning: watching another agent or event can improve later prediction or behaviour without direct action experience.
 
-**[AOA-EVAL-004 | CAPABILITY]** Delayed episodic recall: relevant past events influence behaviour after intervening time and context changes.
+**AOA-EVAL-004.** Delayed episodic recall: relevant past events influence behaviour after intervening time and context changes.
 
-**[AOA-EVAL-005 | CAPABILITY]** Concept generalization: learned structure transfers to novel instances while systematic contradiction can trigger refinement or splitting.
+**AOA-EVAL-005.** Concept generalization: learned structure transfers to novel instances while systematic contradiction can trigger refinement or splitting.
 
-**[AOA-EVAL-006 | CAPABILITY]** Targeted curiosity: unresolved gaps and prediction uncertainty cause information-seeking attention or action rather than indiscriminate novelty seeking.
+**AOA-EVAL-006.** Targeted curiosity: unresolved gaps and prediction uncertainty cause information-seeking attention or action rather than indiscriminate novelty seeking.
 
-**[AOA-EVAL-007 | CAPABILITY]** Novel motor combination: the creature composes known factorized primitives in a useful new joint behaviour.
+**AOA-EVAL-007.** Novel motor combination: the creature composes known factorized primitives in a useful new joint behaviour.
 
-**[AOA-EVAL-008 | CAPABILITY]** Continual-learning retention: new learning does not catastrophically erase earlier unrelated competence.
+**AOA-EVAL-008.** Continual-learning retention: new learning does not catastrophically erase earlier unrelated competence.
 
-**[AOA-EVAL-009 | CAPABILITY]** Experience-dependent structure: different life histories produce meaningfully different neural structure and behaviour.
+**AOA-EVAL-009.** Experience-dependent structure: different life histories produce meaningfully different neural structure and behaviour.
 
-**[AOA-EVAL-010 | CAPABILITY]** Social learning and teaching: competence acquired through a teacher or peer remains after the teacher is removed.
+**AOA-EVAL-010.** Social learning and teaching: competence acquired through a teacher or peer remains after the teacher is removed.
 
-**[AOA-EVAL-011 | CAPABILITY]** Cultural transmission: a learned convention or skill can pass through teaching across generations without biological inheritance.
+**AOA-EVAL-011.** Cultural transmission: a learned convention or skill can pass through teaching across generations without biological inheritance.
 
-**[AOA-EVAL-012 | CAPABILITY]** Genetic contribution: descendants inherit compact learning or skill priors without inheriting source adults' personal memories.
+**AOA-EVAL-012.** Genetic contribution: descendants inherit compact learning or skill priors without inheriting source adults' personal memories.
 
-**[AOA-EVAL-013 | CAPABILITY]** Crossbreed viability: compatible regional priors and derived-region alleles recombine without destroying founder interfaces or causing silent dependency loss.
+**AOA-EVAL-013.** Crossbreed viability: compatible regional priors and derived-region alleles recombine without destroying founder interfaces or causing silent dependency loss.
 
-**[AOA-EVAL-014 | CAPABILITY]** Memory leakage resistance: germline priors fail probes for source identities, private facts, exact locations, and autobiographical episodes while retaining generalized skill.
+**AOA-EVAL-014.** Memory leakage resistance: germline priors fail probes for source identities, private facts, exact locations, and autobiographical episodes while retaining generalized skill.
 
-**[AOA-EVAL-015 | CAPABILITY]** Brain expansion continuity: a trained individual preserves immediate and dynamical competence across upward scaling, then makes productive use of new capacity.
+**AOA-EVAL-015.** Brain expansion continuity: a trained individual preserves immediate and dynamical competence across upward scaling, then makes productive use of new capacity.
 
-**[AOA-EVAL-016 | CAPABILITY]** Transplantation: a mature cognitive core reacquires a new embodiment or environment faster or more effectively than an equivalent newborn.
+**AOA-EVAL-016.** Transplantation: a mature cognitive core reacquires a new embodiment or environment faster or more effectively than an equivalent newborn.
 
-**[AOA-EVAL-017 | CAPABILITY]** SLM independence: disabling the semantic prior reduces only the capabilities legitimately dependent on it and does not erase grounded core intelligence.
+**AOA-EVAL-017.** SLM independence: disabling the semantic prior reduces only the capabilities legitimately dependent on it and does not erase grounded core intelligence.
 
-**[AOA-EVAL-018 | CAPABILITY]** Teacher independence: disabling the teacher after training preserves acquired competence and does not reveal hidden teacher-side policy execution.
+**AOA-EVAL-018.** Teacher independence: disabling the teacher after training preserves acquired competence and does not reveal hidden teacher-side policy execution.
 
-**[AOA-EVAL-019 | CAPABILITY]** Evolutionary usefulness: heritable variation in body, chemistry, development, cognition, or learning produces measurable, nontrivial selection gradients across generations.
+**AOA-EVAL-019.** Evolutionary usefulness: heritable variation in body, chemistry, development, cognition, or learning produces measurable, nontrivial selection gradients across generations.
 
-**[AOA-EVAL-020 | CAPABILITY]** Capability per compute: added neural, biochemical, memory, SLM, or teacher cost is justified by measurable capability, robustness, adaptability, or game value.
+**AOA-EVAL-020.** Capability per compute: added neural, biochemical, memory, SLM, or teacher cost is justified by measurable capability, robustness, adaptability, or game value.
 
 ## 43. Test and evidence strategy
 
-The preferred pyramid is:
+Use focused checks for meaningful behavior: crashes, state loss, causal learning,
+and gameplay. Exercise the accelerator when its behavior matters and reuse an
+ordinary play scenario for connected controls, care, and continuity. Long
+evolutionary runs answer separate research questions. A fixed test count or
+implementation-shape assertion does not establish correctness.
 
-- **many fast deterministic causal checks**;
-- **fewer focused accelerator integration tests**;
-- **very few full-game journeys and long evolutionary runs**.
+For expensive experiments, use a bounded budget and relevant comparisons. Reuse
+valid results where the measured source path is unchanged; fix known defects
+before spending on a broader run.
 
-Expensive experiments use progressive budgets, common seeds, content-addressed result caching, and early stopping. A failed small-scale prerequisite blocks larger runs until repaired.
+**AOA-GRADE-008 (example).** Use layered fast checks for contracts and causal boundaries, focused GPU checks for accelerator semantics, milestone end-to-end journeys, and separate statistical capability/scaling campaigns.
 
-**[AOA-GRADE-008 | REFERENCE MECHANISM]** Use layered fast checks for contracts and causal boundaries, focused GPU checks for accelerator semantics, milestone end-to-end journeys, and separate statistical capability/scaling campaigns.
+**AOA-GRADE-009.** Full corpora, 500-organism profiles, long soaks, or evolution runs are not repeated against unchanged commits/configurations when exact valid receipts already exist.
 
-**[AOA-GRADE-009 | INVARIANT]** Full corpora, 500-organism profiles, long soaks, or evolution runs are not repeated against unchanged commits/configurations when exact valid receipts already exist.
-
-**[AOA-GRADE-010 | INVARIANT]** Expensive validation waits until known source-level defects in the measured path are repaired, unless the purpose is explicitly to measure the defective baseline.
+**AOA-GRADE-010.** Expensive validation waits until known source-level defects in the measured path are repaired, unless the purpose is explicitly to measure the defective baseline.
 
 # Part XIII - Migration, supersession, and deferred research
 
@@ -1306,45 +1298,45 @@ Expensive experiments use progressive budgets, common seeds, content-addressed r
 
 The design includes long-term aspirations. Preserve working behavior and acquired state while fixing concrete ownership or causal-path problems; an aspirational mechanism alone does not justify a rewrite.
 
-**[AOA-MIG-001 | INVARIANT]** Describe the behavior actually implemented and identify relevant limitations. Deferred research is separate from a working gameplay change.
+**AOA-MIG-001.** Describe the behavior actually implemented and identify relevant limitations. Deferred research is separate from a working gameplay change.
 
-**[AOA-MIG-002 | CAPABILITY]** Migration supports compatibility layers that reproduce current founder species behaviour while new genetics, biochemistry, neural receptors, priors, and adapters are introduced.
+**AOA-MIG-002.** Migration supports compatibility layers that reproduce current founder species behaviour while new genetics, biochemistry, neural receptors, priors, and adapters are introduced.
 
-**[AOA-MIG-003 | INVARIANT]** Compatibility layers are versioned and temporary. They may not become hidden permanent authorities that bypass the new subsystem boundaries.
+**AOA-MIG-003.** Compatibility layers are versioned and temporary. They may not become hidden permanent authorities that bypass the new subsystem boundaries.
 
-**[AOA-MIG-004 | INVARIANT]** The current fixed drive/hormone controller may serve as a reference breed phenotype during biochemical migration, but it is not the permanent biochemical architecture.
+**AOA-MIG-004.** The current fixed drive/hormone controller may serve as a reference breed phenotype during biochemical migration, but it is not the permanent biochemical architecture.
 
-**[AOA-MIG-005 | INVARIANT]** Current Rust types, Bevy entities, WGSL layouts, N512/N2048 assumptions, IDs, constants, and test fixtures do not define permanent architecture.
+**AOA-MIG-005.** Current Rust types, Bevy entities, WGSL layouts, N512/N2048 assumptions, IDs, constants, and test fixtures do not define permanent architecture.
 
-**[AOA-MIG-006 | CAPABILITY]** For a migration, explain the state affected, how useful behavior and learned state survive, and how to recover from failure. Reuse existing tests and recovery mechanisms.
+**AOA-MIG-006.** For a migration, explain the state affected, how useful behavior and learned state survive, and how to recover from failure. Reuse existing tests and recovery mechanisms.
 
-**[AOA-MIG-007 | INVARIANT]** Earlier designs remain in Git history for context. Consult them when they explain a concrete implementation or retained-state dependency.
+**AOA-MIG-007.** Earlier designs remain in Git history for context. Consult them when they explain a concrete implementation or retained-state dependency.
 
 ## 45. Deferred and research capabilities
 
 These are optional longer-term work, selected when they advance the game or a specific research objective.
 
-**[AOA-DEF-001 | DEFERRED CAPABILITY]** Bounded counterfactual planning with learned rollouts at greater depth and breadth.
+**AOA-DEF-001 (research).** Bounded counterfactual planning with learned rollouts at greater depth and breadth.
 
-**[AOA-DEF-002 | DEFERRED CAPABILITY]** Open-ended region duplication and specialization beyond initial bounded derived-region policies.
+**AOA-DEF-002 (research).** Open-ended region duplication and specialization beyond initial bounded derived-region policies.
 
-**[AOA-DEF-003 | DEFERRED CAPABILITY]** Large-scale robot deployment with real sensors, actuators, safety certification, and long-duration autonomous operation.
+**AOA-DEF-003 (research).** Large-scale robot deployment with real sensors, actuators, safety certification, and long-duration autonomous operation.
 
-**[AOA-DEF-004 | DEFERRED CAPABILITY]** Cross-world software-agent embodiment with tools, files, and external services represented through grounded adapters and virtual physiology.
+**AOA-DEF-004 (research).** Cross-world software-agent embodiment with tools, files, and external services represented through grounded adapters and virtual physiology.
 
-**[AOA-RES-001 | RESEARCH]** Evolved compact local plasticity programs or tiny meta-learned update networks, provided they remain bounded, inspectable, and accelerator-friendly.
+**AOA-RES-001 (research).** Evolved compact local plasticity programs or tiny meta-learned update networks, provided they remain bounded, inspectable, and accelerator-friendly.
 
-**[AOA-RES-002 | RESEARCH]** Indirect developmental encodings such as CPPN-like generators, coordinate networks, or learned graph grammars for efficient neural and biochemical topology generation.
+**AOA-RES-002 (research).** Indirect developmental encodings such as CPPN-like generators, coordinate networks, or learned graph grammars for efficient neural and biochemical topology generation.
 
-**[AOA-RES-003 | RESEARCH]** Neural and biochemical region duplication as an explicit evolutionary innovation mechanism with homology discovery.
+**AOA-RES-003 (research).** Neural and biochemical region duplication as an explicit evolutionary innovation mechanism with homology discovery.
 
-**[AOA-RES-004 | RESEARCH]** Differentiable or surrogate models of organism development and lifetime learning for more efficient founder meta-training.
+**AOA-RES-004 (research).** Differentiable or surrogate models of organism development and lifetime learning for more efficient founder meta-training.
 
-**[AOA-RES-005 | RESEARCH]** Shared community teacher ecosystems in which trained creatures teach younger creatures without an external LLM.
+**AOA-RES-005 (research).** Shared community teacher ecosystems in which trained creatures teach younger creatures without an external LLM.
 
-# Appendix A - Canonical interface catalogue
+# Appendix A - Information and ownership reference
 
-This appendix specifies semantic data contracts. Concrete field names and serialization may change, but meanings remain stable.
+This appendix outlines related information and ownership. It is a design reference, not a checklist requiring a new type, schema, or receipt for each item; concrete fields and serialization follow the implemented behavior.
 
 ## A.1 Organism genotype package
 
@@ -1424,7 +1416,7 @@ For active neural structure size \(S\) and bounded candidate budget \(K\):
 C_growth = O(S·K), where K ≪ N
 ```
 
-Global enumeration of absent pairs is noncompliant.
+Global enumeration of absent pairs loses this sparse work bound.
 
 ## B.3 Multi-dimensional three-factor learning
 
@@ -1449,30 +1441,23 @@ F = Capability + Survival + Reproduction
 
 This is not a runtime reward signal.
 
-# Appendix C - Prohibited shortcuts
+# Appendix C - Interpreting intelligence claims
 
-The following are explicitly noncompliant when used as claimed creature intelligence:
+Useful capability comes from the organism's grounded causal path. In particular:
 
-- world-supplied reward or task-success labels;
-- high-level engine actions such as `find food` or `solve task`;
-- concepts or memories written directly by teachers or SLMs;
-- diagnostic-only topology presented as active cognition;
-- attention that only reorders labels without changing expensive processing;
-- prediction trained on cryptographic digest geometry;
-- a predictor conditioned on one primary action while several channels execute;
-- fabricated per-channel rewards for inseparable joint outcomes;
-- zeroed homeostatic change when canonical biology changed;
-- biochemistry computing finished universal attention or learning policy;
-- brain genomes owning duplicate authoritative chemistry;
-- evaluators with independently advancing body or biochemical state;
-- all-pairs synaptogenesis candidate search;
-- per-neuron scans of every dendritic branch;
-- adult checkpoint cloning disguised as genetic memory;
-- culture bundled as innate biological knowledge;
-- external teachers or SLMs acting as hidden executive controllers;
-- silent save/load fallback that replaces missing cognitive state;
-- claiming capability from a type, counter, stub, or isolated fixture;
-- claiming general intelligence while the creature fails when the SLM or teacher is removed.
+- A world-supplied solution, reward label, or hidden teacher/SLM controller does
+  not demonstrate the creature's own learned competence.
+- Adult checkpoint cloning is distinct from ordinary inheritance; culture is
+  acquired rather than bundled as innate object knowledge.
+- Diagnostics, counters, types, and isolated fixtures describe implementation;
+  they do not by themselves demonstrate active cognition or successful gameplay.
+- Save/load must preserve the individual rather than silently replace missing
+  cognitive state with a plausible default.
+- Performance and learning claims should identify the actual workload, assistance,
+  and behavior observed. Missing observations remain unknown.
+
+The relevant sections above explain the underlying biology, learning, ownership,
+and persistence semantics; this appendix adds no separate acceptance process.
 
 # Appendix E - Glossary
 
@@ -1514,6 +1499,6 @@ The following are explicitly noncompliant when used as claimed creature intellig
 
 This document incorporates and replaces useful requirements from earlier A-Life architecture and review material, including the adaptive brain v1.1 design, sparse GPU runtime work, ExperiencePatch transaction design, main-branch architecture reviews, manual stimulus-to-response tracing, repair plans, and the new organism-level decisions developed in August 2026.
 
-It also draws architectural inspiration from the released *Creatures 3* engine, especially its separation and coupling of genome, organs, chemistry, receptors, emitters, neural emitters, drive loci, and neural plasticity. The source is design lineage only; this document defines the modern target.
+It also draws architectural inspiration from the released *Creatures 3* engine, especially its separation and coupling of genome, organs, chemistry, receptors, emitters, neural emitters, drive loci, and neural plasticity. The source provides design context for the modern game.
 
 Earlier documents provide design history; current user intent and useful working behavior guide changes.

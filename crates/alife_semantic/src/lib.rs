@@ -1,6 +1,6 @@
-//! v0 scaffold: internal private semantic-prior contracts.
+//! Private semantic priors, speech translation and optional context adapters.
 
-use alife_core::{ScaffoldContractError, SemanticPriorProvider};
+use alife_core::ScaffoldContractError;
 use serde::{Deserialize, Serialize};
 
 mod developmental_prior;
@@ -32,30 +32,6 @@ mod providers;
 #[cfg(feature = "gaussian-adapter")]
 mod semantic;
 
-#[derive(Debug, Default)]
-pub struct NoopSemanticPriorProvider;
-
-impl SemanticPriorProvider for NoopSemanticPriorProvider {
-    fn provider_name(&self) -> &'static str {
-        "noop-semantic-prior"
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SemanticBoundaryManifest {
-    pub private_prior: bool,
-    pub can_issue_actions: bool,
-    pub can_rewrite_weights: bool,
-}
-
-impl SemanticBoundaryManifest {
-    pub const INTERNAL_PRIOR: Self = Self {
-        private_prior: true,
-        can_issue_actions: false,
-        can_rewrite_weights: false,
-    };
-}
-
 pub const G11_SEMANTIC_PROVIDER_SCHEMA: &str = "alife.g11.semantic_provider.v1";
 pub const G11_SEMANTIC_PROVIDER_SCHEMA_VERSION: u16 = 1;
 
@@ -85,107 +61,6 @@ impl SemanticProviderKind {
             Self::ExternalExtension => "external-extension",
             Self::LlamaCppEmbedding => "local-llamacpp-embedding",
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SemanticProviderConfig {
-    pub schema: String,
-    pub schema_version: u16,
-    pub provider_id: String,
-    pub provider_kind: SemanticProviderKind,
-    pub required: bool,
-    pub max_display_entries: usize,
-}
-
-impl Default for SemanticProviderConfig {
-    fn default() -> Self {
-        Self::disabled()
-    }
-}
-
-impl SemanticProviderConfig {
-    pub fn disabled() -> Self {
-        Self {
-            schema: G11_SEMANTIC_PROVIDER_SCHEMA.to_string(),
-            schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-            provider_id: "disabled".to_string(),
-            provider_kind: SemanticProviderKind::Disabled,
-            required: false,
-            max_display_entries: 0,
-        }
-    }
-
-    pub fn fake_local_table() -> Self {
-        Self {
-            schema: G11_SEMANTIC_PROVIDER_SCHEMA.to_string(),
-            schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-            provider_id: "fake-local-table".to_string(),
-            provider_kind: SemanticProviderKind::FakeLocalTable,
-            required: false,
-            max_display_entries: 8,
-        }
-    }
-
-    pub fn external_extension(provider_id: impl Into<String>) -> Self {
-        Self {
-            schema: G11_SEMANTIC_PROVIDER_SCHEMA.to_string(),
-            schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-            provider_id: provider_id.into(),
-            provider_kind: SemanticProviderKind::ExternalExtension,
-            required: false,
-            max_display_entries: 8,
-        }
-    }
-
-    pub fn local_llamacpp_embedding(provider_id: impl Into<String>) -> Self {
-        Self {
-            schema: G11_SEMANTIC_PROVIDER_SCHEMA.to_string(),
-            schema_version: G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-            provider_id: provider_id.into(),
-            provider_kind: SemanticProviderKind::LlamaCppEmbedding,
-            required: false,
-            max_display_entries: 8,
-        }
-    }
-
-    pub fn from_json_str(json: &str) -> Result<Self, serde_json::Error> {
-        serde_json::from_str(json)
-    }
-
-    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
-        if self.schema != G11_SEMANTIC_PROVIDER_SCHEMA
-            || self.schema_version != G11_SEMANTIC_PROVIDER_SCHEMA_VERSION
-        {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        if self.provider_id.trim().is_empty() || self.max_display_entries > 32 {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        if self.required && matches!(self.provider_kind, SemanticProviderKind::Disabled) {
-            return Err(ScaffoldContractError::MissingPhaseData);
-        }
-        if matches!(self.provider_kind, SemanticProviderKind::Disabled)
-            && (self.provider_id != "disabled" || self.max_display_entries != 0)
-        {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        match self.provider_kind {
-            SemanticProviderKind::Disabled => {}
-            SemanticProviderKind::FakeLocalTable => {
-                if self.provider_id != "fake-local-table" || self.max_display_entries == 0 {
-                    return Err(ScaffoldContractError::ScalarOutOfRange);
-                }
-            }
-            SemanticProviderKind::ExternalExtension | SemanticProviderKind::LlamaCppEmbedding => {
-                if matches!(self.provider_id.as_str(), "disabled" | "fake-local-table")
-                    || self.max_display_entries == 0
-                {
-                    return Err(ScaffoldContractError::ScalarOutOfRange);
-                }
-            }
-        }
-        Ok(())
     }
 }
 

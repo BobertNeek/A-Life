@@ -2,7 +2,7 @@
 
 ## Principle
 
-Evidence supports only the claim it causally measures. A green unit test proves its contract. A preflight receipt proves preflight. A screenshot proves a rendered frame. None alone proves an end-to-end GPU organism loop.
+Evidence supports only the claim it causally measures. A green unit test supports the behavior it exercises. A preflight receipt proves preflight. A screenshot proves a rendered frame. None alone proves an end-to-end GPU organism loop.
 
 ## Reproducing a result
 
@@ -52,7 +52,7 @@ Those lists are reproducibility context, not authority over current work.
 
 The [core game-loop plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/core-game-loop-plan-2026-09-20.md),
 [training regimen](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-care-training-regimen-2026-09-21.md), and
-[operator guide](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-training-operator.md) record the recent bounded checks.
+[operator guide](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-training-operator.md) record bounded checks on their original source.
 Teacher demonstrations, warm-up completion, and successful PPO handoffs do not
 establish held-out learning, retention, or autonomous care. Raw `target/` paths in
 those records refer to the originating machine and are not committed artifacts.
@@ -62,7 +62,7 @@ those records refer to the originating machine and are not committed artifacts.
 - [October 1 CPU preparation measurements](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/20261001-cpu-preparation.md):
   source-bound synthetic comparisons, retained samples and reproduction inputs.
 - [October 1 cloud candidate validation](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-10-01-cloud-validation.md):
-  current CPU/compiler results, earlier failures and unrun hardware checks.
+  CPU/compiler results on the recorded source, earlier failures and unrun hardware checks.
 - [Exact-population checkpoint decision](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/exact-population-checkpoint-design.md):
   historical transaction and failure rationale.
 - [Recovered review outcomes](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-recovered-review-outcomes.md):
@@ -79,11 +79,11 @@ new observations resolve it.
 
 ## Honest failure states
 
-- `Pass` means every named gate passed for the bound claim.
+- `Pass` means the named checks passed for the stated claim.
 - `Blocked` means execution completed enough to measure a failing or missing prerequisite.
 - `Unavailable` means required hardware or service could not execute.
 - `Unknown` means the evidence does not measure the value.
-- `Missed` means a required populated evidence row was not produced.
+- `Missed` means an expected observation was not produced.
 
 Missing hardware is `Unavailable`, not fallback success.
 

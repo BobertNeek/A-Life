@@ -1,4 +1,4 @@
-//! Contract-only canonical phenotype evidence identities shared by runtime evidence producers.
+//! Canonical phenotype identities shared by runtime evidence producers.
 
 use serde::{Deserialize, Serialize};
 

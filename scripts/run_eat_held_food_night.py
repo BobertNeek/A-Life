@@ -449,12 +449,12 @@ def run_night(args, state, state_path, input_hashes):
             publish()
         repo = Path(__file__).resolve().parent.parent
         if Path.cwd().resolve() != repo:
-            raise ValueError("run from the authoritative repository root")
+            raise ValueError("run from the repository root containing this script")
         if args.output.parent != repo / "target" / "founder-training":
             raise ValueError("run output must be a fresh directory directly under target/founder-training for one shared owner lock")
         git = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
         if git.stdout.strip():
-            raise ValueError("run requires clean reviewed repository source")
+            raise ValueError("run requires a clean source checkout for reproducible continuation")
         state["git_head"] = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
         before = probe("frozen-before", previous, startup_cutoff)
         observed_frozen_meal = bool(before["held_food_meals"])

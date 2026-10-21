@@ -266,7 +266,7 @@ fn full_normal_tick_seals_patch_updates_subsystems_and_increments_tick() {
     assert_eq!(
         output.selected_action.unwrap().kind,
         ActionKind::Interact,
-        "P09 arbitration remains the action-selection path"
+        "arbitration remains the action-selection path"
     );
     assert!(output.experience_patch.is_some());
     assert!(output.packed_record.is_some());
@@ -310,7 +310,7 @@ fn failed_action_path_is_bounded_sealed_and_biases_away_next_tick() {
     assert_eq!(failed.status, BrainTickStatus::RecoverableActionFailure);
     assert_eq!(
         executor.attempts, 1,
-        "P15 must not retry infinitely in one tick"
+        "failed actions must not retry indefinitely in one tick"
     );
     assert!(
         failed

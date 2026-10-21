@@ -1,5 +1,4 @@
-//! Offline orchestration over the ordinary game runtime and existing trainer.
-//! No alternate world step, neural policy, or biological update lives here.
+//! Offline training and evaluation through the game runtime and shared trainer.
 
 use std::{ops::Range, path::Path, time::Instant};
 
@@ -58,7 +57,6 @@ pub(crate) fn prime_foundation_lesson_prior(
                 | FoundationTeacherLesson::GrabFood
         )
     ) {
-        // Grounded senses and ordinary organism contracts remain mandatory.
         runtime.require_foundation_rich_information()?;
     }
     runtime.prime_foundation_semantic_prior()?;
@@ -842,7 +840,7 @@ fn foundation_pilot_sampling(seed: u64, temperature: f32) -> Result<GpuTrainingS
 }
 
 /// A fixed founder asset acts without a demonstrator or offline optimizer updates.
-/// Normal in-world lifetime learning, biology, sleep and audited cognition remain active.
+/// In-world lifetime learning, biology, sleep, and cognition remain active.
 pub fn run_foundation_evaluation_pilot(
     output: &Path,
     world_seed: u64,

@@ -1,4 +1,4 @@
-//! Contract acceptance for the frozen N2048 foundation and language ABI.
+//! Frozen N2048 foundation and language ABI compatibility.
 
 use std::collections::BTreeSet;
 

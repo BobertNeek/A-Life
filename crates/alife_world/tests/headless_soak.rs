@@ -33,7 +33,7 @@ fn fast_headless_soak_preserves_release_gate_invariants() {
 }
 
 #[test]
-#[ignore = "manual extended P36 headless soak: cargo test -p alife_world --test headless_soak -- --ignored --nocapture"]
+#[ignore = "manual extended headless soak: cargo test -p alife_world --test headless_soak -- --ignored --nocapture"]
 fn manual_extended_headless_soak_preserves_release_gate_invariants() {
     let runs = run_soak(EXTENDED_SOAK_CYCLES);
     assert_eq!(runs.len(), EXTENDED_SOAK_CYCLES * ScenarioName::ALL.len());
@@ -61,19 +61,19 @@ fn assert_release_invariants(run: &ScenarioRun) {
     assert!(!run.patches.is_empty(), "{:?}: no sealed patches", run.name);
     assert!(
         run.memory_record_count <= MAX_MEMORY_RECORDS_PER_RUN,
-        "{:?}: memory grew past release soak bound: {}",
+        "{:?}: memory grew past soak bound: {}",
         run.name,
         run.memory_record_count
     );
     assert!(
         run.topology_concept_count <= MAX_TOPOLOGY_CONCEPTS_PER_RUN,
-        "{:?}: topology concepts grew past release soak bound: {}",
+        "{:?}: topology concepts grew past soak bound: {}",
         run.name,
         run.topology_concept_count
     );
     assert!(
         run.topology_gap_ids.len() <= MAX_TOPOLOGY_GAPS_PER_RUN,
-        "{:?}: topology gaps grew past release soak bound: {}",
+        "{:?}: topology gaps grew past soak bound: {}",
         run.name,
         run.topology_gap_ids.len()
     );

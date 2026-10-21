@@ -1,4 +1,4 @@
-//! Explicit admission contract for the immutable pre-v2 Nano512 foundation.
+//! Explicit compatibility for the immutable pre-v2 Nano512 foundation.
 
 use std::sync::OnceLock;
 

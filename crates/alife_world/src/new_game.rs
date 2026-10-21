@@ -516,7 +516,7 @@ fn initial_creature_save(
             simplex_count: 0,
             unresolved_gap_count: 0,
             sleep_state_label: "awake".to_string(),
-            diagnostics: vec!["canonical Phase 3 founder awaiting GPU admission".to_string()],
+            diagnostics: vec!["new founder awaiting GPU admission".to_string()],
         },
         weights: WeightLayerSaveSummary {
             generated_weight_asset_id: None,

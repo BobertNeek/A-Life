@@ -1,4 +1,4 @@
-//! CPU/source contracts for immutable disabled receptors; no GPU execution.
+//! Disabled-receptor encoding and consolidation arithmetic checks.
 use alife_core::{
     BrainCapacityClass, BrainGenome, BrainPhenotype, CompiledSynapseKind, DevelopmentState,
     NormalizedScalar, PhenotypeCompiler, PlasticityReceptorPlan, PlasticityReceptorProfile,
@@ -22,7 +22,7 @@ fn receptor(rates: [f32; 3]) -> PlasticityReceptorPlan {
     .unwrap()
 }
 
-// Test-only arithmetic oracle, paired with assertions on the production source.
+// Arithmetic reference for the shader's disabled-receptor behavior.
 fn staged_weights(receptor: PlasticityReceptorPlan, lifetime: f32, fast: f32) -> (f32, f32) {
     if receptor.is_delta_enabled() {
         ((lifetime + 0.5 * fast).clamp(-4.0, 4.0), fast * 0.5)
@@ -102,7 +102,7 @@ fn sleep_source_uses_immutable_delta_semantics_before_weight_arithmetic() {
         entry.contains("if(delta_mode==2u){consolidate_reject(header.completion_offset);return;}")
     );
     assert!(source.contains("letno_replay_fast=select(active_fast*(1.0-parameters.fast_decay_rate),active_fast,delta_mode==0u);"));
-    // The enabled branch retains the exact previous arithmetic.
+    // Enabled receptors use ordinary consolidation arithmetic.
     assert!(entry.contains("letpromoted=parameters.staging_rate*replayed_fast;"));
     assert!(entry.contains("letnext_lifetime=clamp(active_lifetime+promoted,-parameters.weight_limit,parameters.weight_limit);"));
     assert!(entry.contains("letnext_fast=replayed_fast*(1.0-parameters.fast_decay_rate);"));

@@ -215,8 +215,7 @@ impl CpuCanonicalHost {
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
-    /// Lawful simulator variations can mutate the branched world through its
-    /// ordinary world APIs; no method exposes a reward or neural input override.
+    /// Scene variations use ordinary world APIs without reward or neural overrides.
     pub fn world_mut(&mut self) -> &mut HeadlessWorld {
         &mut self.world
     }

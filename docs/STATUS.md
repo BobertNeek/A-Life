@@ -1,99 +1,74 @@
 # Current status
 
-Baseline status: 2026-09-02. Care/training update: 2026-09-24.
-The older capability matrix below is a historical baseline, not a fresh HEAD validation.
+This describes source integration as inspected on 21 October 2026. It does not
+report a new hardware run or playtest. Dated measurements and their source
+revisions are linked in [Evidence](EVIDENCE.md).
 
-## Current care and training work
+## Production game
 
-- **Signed Decoders**: `ActionCandidate` and `SpeechPayload` mathematical readouts support signed weights in compilation and foundation training. Recurrent pathways retain their inherited route-sign rules; fresh builtin distance readouts prefer nearer equivalent observations.
-- **Dedicated `PLAY` Motor Population**: `PLAY` (`ActionKind::Interact`) routes to `CandidateActionFamily::Other` (`DRIVE_BOREDOM_MASK | DRIVE_CURIOSITY_MASK`), separate from `GRAB` (`CandidateActionFamily::Contact`).
-- **Credit-Gated Waking Oja Normalization**: Waking normalization scales with `abs(local_third_factor * credited_eligibility)`; zero causal credit leaves the fast-weight contribution unchanged.
-- **Grounded Priors and Newborn Nociception**: Distant `GroundedTerrainVisionV1` objects supply contact-gated chemical lanes, so Approach uses the neutral 0.75 geometry scale there. Recalled target valence enters through the separate learned-memory decoder, not the innate function. Legacy `GroundedObjectSlotsV1` chemistry and fractional-contact behavior retain their existing semantics. Avoid keeps its noncontact spatial fallback; newborn pain remains enabled. These mechanisms do not establish correct learned hazard avoidance under combined drives.
-- **Batched Multi-Creature GPU Training Capture**: `capture_training_states` captures each cohort before and after inference through bounded staging packets, with streamed `zstd` cohort replay.
+`production-voxel` restores a selected save and a required GPU neural runtime.
+The world constructs grounded perception and unscored legal candidates; WGSL
+selects actions and applies neural learning after world execution. The renderer
+consumes tick-bound positions, births, and retirement events. It cannot change
+world truth.
 
-The old synthetic-physiology evolution, active-battery, and Era 1 runners have been removed. The foundation trainer and production organism loop remain the current execution paths.
+The player surfaces include camera/follow, creature selection and naming, care
+tools, speech, needs/inspector views, pause, speed, save, and load. Load replaces
+the runtime and reconstructs the scene. Save can include the real GPU checkpoint;
+exact restoration is distinct from genetic rebuild or a learned-founder clone.
 
-## Honest headline
+World/runtime lifecycle and archive hooks exist for reproduction, development,
+ageing, and death. The complete autonomous family lifecycle, retained learning,
+and visible save/load continuity still need observation through the current
+application on supported hardware.
 
-The GPU-authoritative organism loop starts inside the production voxel application. The renderer seeds its records from the selected save, then consumes tick-bound authoritative frames for movement, births, selection, follow state, and retirement. The source path is causally connected. Current-source rendered lifecycle and performance proof remain outstanding.
+## Cognition and training
 
-The project is a research alpha. It is not ready for a public claim of an autonomous GPU voxel life game.
+- Signed action and speech readouts survive foundation compilation and offline
+  training. Recurrent routes retain their inherited sign restrictions.
+- Play and Grab use distinct decoder families while retaining physical feature
+  lanes. Older learned Play coordinates and replay have different semantics.
+- Waking Oja normalization follows local third-factor credit times credited
+  eligibility; zero local credit leaves fast weights unchanged.
+- Terrain vision gates object chemistry by contact. Noncontact Avoid uses spatial
+  bearing under danger urgency; this alone does not establish learned hazard
+  recognition or avoidance under combined drives.
+- The runtime coordinates episodic memory, topology, sleep, and individual neural
+  state. Batched training captures private organism rows and streams cohort replay.
+- Language teaching uses spatial world speech and perception. A local SLM can
+  optionally translate player/creature speech. Its developmental-prior service is
+  available to offline training, but is not wired into live gameplay cognition.
+- Offline native CPU training and native GPU training preserve actor/value
+  weights, moments, and integer optimizer ages. A successful optimizer update or
+  checkpoint handoff does not establish learned-care competence.
 
-## Status vocabulary
+The foundation trainer and production organism loop are the execution paths.
+The former synthetic evolution, active-battery, and Era 1 runners are retired.
 
-- **Implemented** — the source contract or function exists.
-- **Integrated** — the current `production-voxel` launch reaches it.
-- **Player-visible** — the current Bevy scene or control surface exposes it.
-- **Proven** — an executed causal receipt, hardware result, or rendered real-input check supports the claim.
+## Known limits and unmeasured behavior
 
-## Capability matrix
+- Current-source rendered controls, complete lifecycle, and fresh-process
+  restoration need hardware observation; source integration is not a playtest.
+- Dynamic overlays and some VFX triggers still derive from the launch snapshot.
+  Sleep feedback follows the living individual's authoritative sleep phase and
+  displayed pose, clears on waking/removal/load, and pauses with playback.
+- Creature LOD remains selected by graphics profile rather than camera distance.
+- Production admission supports N512, N1024, and N2048. Fresh games use the
+  built-in Nano512 founder. N2048 care training remains experimental; N4096 is a
+  research class. Enum values and population caps do not establish hardware
+  capacity or useful behavior.
+- The user target of fifty creatures at 20 FPS on i7-3770K / 32 GB /
+  RTX 3050 8 GB at 1080p remains unmeasured for the current source.
 
-| Capability | Implemented | Integrated | Player-visible | Proven now |
-| --- | :---: | :---: | :---: | --- |
-| World legality, unscored candidates, action execution, outcomes | Yes | Yes | Indirectly | Source-backed; prior bounded receipts |
-| GPU closed-loop cognition and learning | Yes | Yes | Telemetry only | Source-bound EI receipts; not current-HEAD product proof |
-| Save and GPU checkpoint contracts | Yes | Yes | Save surface | Source and prior round-trip receipts |
-| Live world-to-voxel transforms | Yes | Yes | Yes | Source-backed; fresh rendered proof pending |
-| Autonomous birth, ageing, reproduction, and death | Partial | Runtime presentation hooks active | Partial | Fresh autonomous lifecycle proof pending |
-| Birth/death archive transactions | Yes | Runtime lifecycle path present | Retirement is visible | Source-backed; fresh transaction receipt pending |
-| Teacher perception boundary | Yes | School smoke only | Diagnostic surfaces | Bounded smoke source, not live GPU school proof |
-| Private local SLM prior | Yes | No live cognition call | No | Local inference smoke only |
-| Optional SLM speech translation | Yes | Yes | Yes | Not exercised in this reset |
-| Player speech into live world | Yes | Yes | Yes | Source-backed; not freshly exercised |
-| Pause and load semantics | Yes | Yes | Yes | Source-backed; fresh real-input and fresh-process proof pending |
-| Release package | Yes | Build path exists | Yes | Public release gates remain open |
+This is a research alpha. A public release claim needs a working packaged game,
+observed care and learning, retained individual state, practical performance,
+and the user's release decision.
 
-## Production path today
+## Historical experiments
 
-1. `production-voxel` runs preflight and selects a source save.
-2. The Bevy shell restores a required `GpuLiveBrainRuntime` and schedules its tick.
-3. The GPU runtime gathers perception, enumerates unscored candidates, selects an action in WGSL, asks the world to execute it, applies the sealed result, and advances the world.
-4. The renderer reconstructs initial creature records from the save.
-5. Each changed presentation frame moves matching creature roots, creates missing newborn roots, and reconciles retired identities.
-6. UI, selection, follow, contact shadows, and creature-attached effects read the same tick-bound presentation state.
-
-The bridge is implemented and integrated in source. This status does not substitute for a fresh Vulkan run showing a complete birth-to-retirement sequence.
-
-## Important control gaps
-
-- Pause controls GPU scheduler playback in the integrated production path. Fresh real-input proof remains pending.
-- Load validates the durable save, replaces the live runtime, resets scheduler state, and rebuilds the rendered scene. Fresh-process proof remains pending.
-- Save can capture a real GPU checkpoint, but save/load/player-visible restoration still needs one fresh-process causal proof.
-- The save/load UX autosave policy is 15 minutes of production simulation time. Sleep-journal publication is separate neural durability work, not a player save on every tick.
-- Full autonomous lifecycle and lineage behavior still needs current-source causal and rendered proof.
-- Dynamic overlay geometry is still derived from the launch snapshot.
-- Sleep feedback reads each living individual's authoritative sleep phase and follows
-  its displayed root pose. Three small, wordless amber bubbles clear on waking,
-  missing authority, identity mismatch, removal and load; pause freezes their pulse.
-  At most eight individuals share one mesh and material. This is presentation only;
-  it does not change sleep, learning or persistence. Other scene VFX triggers remain
-  launch-snapshot based, and stay disabled on authored terrain. Native gameplay
-  visual acceptance remains unverified.
-- Creature LOD is profile-selected rather than camera-distance selected.
-
-## Evolutionary-intelligence results
-
-### EI0 — bounded pass
-
-EI0 passed its source-bound exit contract for lifecycle, archive, save/restore, tamper rejection, and a bounded GPU challenge battery. Era 1 was explicitly out of scope. The result does not prove general intelligence, autonomous product play, current-HEAD parity, or Era 1 readiness.
-
-### EI1 — blocked
-
-EI1 retained 2,640 source-bound descendant receipts and 52,800 GPU dispatches on an RTX 3050 through Vulkan. Its promotion verdict is `Blocked`. Recorded blockers are:
-
-- `NonPositiveIntact`;
-- `ControlNotWorseForEveryCell`;
-- `ControlMarginBelowMinimum`.
-
-The historical report recorded plateau `Unknown` and its internal review-eligibility
-and larger-brain-authorization fields as false. Those fields describe that old
-experiment; they are not present user permissions or gates on gameplay changes.
-The reports remain linked from [Evidence](EVIDENCE.md).
-
-## Scale
-
-Production insertion supports N512, N1024, and N2048. Fresh games default to the built-in Nano512 founder. N2048 care training is experimental and has not earned learned-care acceptance. N4096 is research-only. Higher enum values, population caps, and performance target tables are not evidence of production support.
-
-## Release status
-
-Not ready. Release requires autonomous lifecycle proof, truthful controls, current-source GPU and rendered evidence, target-hardware measurements, external playtest feedback, and an explicit release decision.
+EI0 measured bounded lifecycle/archive/save behavior and a GPU challenge battery
+on its original source. EI1 recorded 2,640 descendant receipts and 52,800 GPU
+dispatches but failed its learning comparison. These historical results do not
+certify current gameplay or impose promotion gates on ordinary fixes. The exact
+reports, blockers, hardware, and source revisions remain in
+[Evidence](EVIDENCE.md).

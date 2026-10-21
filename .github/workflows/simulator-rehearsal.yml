@@ -1,4 +1,4 @@
-name: Simulator rehearsal contracts
+name: Simulator rehearsal
 
 on:
   push:
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   rehearsal-source:
-    name: Rehearsal CPU contracts and GPU fixture compilation
+    name: Rehearsal CPU tests and GPU fixture compilation
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -52,11 +52,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Lawful world branches, policy identity and sequence masks
+      - name: World branches, policy identity and sequence masks
         run: cargo test --locked -p alife_training --lib rehearsal
       - name: Exact source ancestry, package integrity and budget boundaries
         run: cargo test --locked -p alife_game_app --features foundation-training --lib simulator_rehearsal
-      - name: Canonical founder bootstrap and strict decoder contracts
+      - name: Founder bootstrap and decoder compatibility
         run: |
           cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::initial_asset
           cargo test --locked -p alife_game_app --features foundation-training --lib graph_comparison_allows_new_weights_but_preserves_every_other_contract

@@ -1,4 +1,4 @@
-//! Shared required-GPU ownership and evidence contracts for the closed loop.
+//! GPU device ownership and closed-loop transaction state.
 //!
 //! The world supplies current perception and unscored candidates. This module
 //! owns the one authoritative device, fixed class arenas, generation-checked
@@ -259,7 +259,7 @@ pub struct GpuHardwareReceipt {
     pub backend_version: String,
 }
 
-/// Ephemeral capture of Task 3 activity state. Runtime handle fields are
+/// Activity snapshot whose runtime handle fields are
 /// validated before the app canonicalizes this into portable world records.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuActivityRuntimeSnapshot {

@@ -1,4 +1,4 @@
-//! Split from the original playable-sim app shell during R13 remediation.
+//! Headless tick controls and creature presentation snapshots.
 
 use crate::prelude::*;
 use crate::*;

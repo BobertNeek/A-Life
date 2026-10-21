@@ -1,4 +1,4 @@
-//! v0 scaffold: scalable brain class registry and topology contracts.
+//! Named reference brain classes, compute budgets, and lobe layouts.
 
 use serde::{Deserialize, Serialize};
 
@@ -291,54 +291,6 @@ impl BrainComputeBudget {
             ],
             max_replay_events: replay_events_for_neuron_count(neuron_count),
         }
-    }
-}
-
-pub struct BrainClassRegistry;
-
-/// Compatibility boundary from legacy named tiers to stable capacity IDs.
-pub struct LegacyBrainClassAdapter;
-
-impl LegacyBrainClassAdapter {
-    pub const fn capacity_id_for_tier(tier: BrainScaleTier) -> BrainClassId {
-        tier.default_class_id()
-    }
-}
-
-impl BrainClassRegistry {
-    const CANONICAL_TIERS: [BrainScaleTier; 8] = [
-        BrainScaleTier::Nano512,
-        BrainScaleTier::Small1024,
-        BrainScaleTier::Standard2048,
-        BrainScaleTier::Large4096,
-        BrainScaleTier::Cognitive32768,
-        BrainScaleTier::Student131k,
-        BrainScaleTier::Ascended1M,
-        BrainScaleTier::Ascended5M,
-    ];
-
-    pub const fn canonical_tiers() -> &'static [BrainScaleTier; 8] {
-        &Self::CANONICAL_TIERS
-    }
-
-    pub fn canonical_specs() -> Vec<BrainClassSpec> {
-        Self::CANONICAL_TIERS
-            .iter()
-            .copied()
-            .map(BrainClassSpec::for_tier)
-            .collect()
-    }
-
-    pub fn spec_for_tier(tier: BrainScaleTier) -> Result<BrainClassSpec, ScaffoldContractError> {
-        BrainClassSpec::try_for_tier(tier)
-    }
-
-    pub fn spec_for_id(id: BrainClassId) -> Option<BrainClassSpec> {
-        Self::CANONICAL_TIERS
-            .iter()
-            .copied()
-            .find(|tier| tier.default_class_id() == id)
-            .map(BrainClassSpec::for_tier)
     }
 }
 

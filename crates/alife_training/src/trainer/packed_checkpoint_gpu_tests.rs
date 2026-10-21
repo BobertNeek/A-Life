@@ -10,8 +10,7 @@ use alife_core::{
     NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
 };
 
-// The old checkpoint body, using the retained independent buffer readers.
-// Never call read_checkpoint_state or its decoder from this oracle.
+// Independent buffer readers keep this oracle separate from the packed decoder.
 fn separate_checkpoint(
     trainer: &FoundationTrainer,
 ) -> Result<FoundationTrainerCheckpoint, TrainingError> {

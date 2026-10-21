@@ -1,4 +1,4 @@
-//! New procedural founders must use the same inherited compiler contract as New Game.
+//! Construct procedural founders through the New Game compiler.
 use super::*;
 
 pub(super) fn for_canonical_founder(seed: u64) -> Result<FoundationWeightAsset> {

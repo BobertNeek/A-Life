@@ -1,8 +1,7 @@
-//! Contract-only typed canonical digest byte construction.
+//! Typed canonical digest construction.
 //!
-//! Callers choose a versioned domain and write every field in contract order.
-//! The builder exposes no reflective struct, field-name, map, or formatting
-//! surface, so language-level names cannot become causal identity inputs.
+//! Callers supply a versioned domain and write fields in encoding order.
+//! Rust field names and formatting do not enter the identity.
 
 use crate::ScaffoldContractError;
 

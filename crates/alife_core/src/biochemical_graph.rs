@@ -1,4 +1,4 @@
-//! Bounded sparse biochemical graph and typed neural coupling contracts.
+//! Bounded sparse biochemical graphs and typed neural coupling.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

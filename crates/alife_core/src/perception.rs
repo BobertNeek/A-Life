@@ -1,4 +1,4 @@
-//! Contract-only same-tick perception and unscored action-candidate records.
+//! Same-tick perception and unscored action-candidate records.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

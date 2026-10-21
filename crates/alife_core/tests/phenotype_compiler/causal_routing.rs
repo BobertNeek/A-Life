@@ -1,4 +1,4 @@
-//! RED contract tests owned by Task 3 causal genome compilation and routing validation.
+//! Causal genome compilation and routing validation.
 
 #[cfg(test)]
 mod task3_causal_genome_and_routing_red_tests {

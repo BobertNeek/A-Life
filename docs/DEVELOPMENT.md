@@ -2,7 +2,7 @@
 
 ## Environment
 
-A-Life is a Rust workspace targeting Windows, Bevy 0.18, wgpu 29, Vulkan, and WGSL. Install a current Rust toolchain and Git for Windows. Repository PowerShell wrappers call Git Bash for shell gates and avoid accidental WSL use.
+A-Life is a Rust workspace targeting Windows, Bevy 0.18, wgpu 29, Vulkan, and WGSL. Install a current Rust toolchain and Git for Windows. Repository PowerShell wrappers call Git Bash for shell checks and avoid accidental WSL use.
 
 Run `bash scripts/setup.sh` to check the Rust, Git, Python, production-asset, Vulkan-tool, Blender, and optional Graphify environment. Read root `AGENTS.md` and the nearest subtree `AGENTS.md` before changing code or documentation.
 
@@ -18,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 - `-NewGame` starts a fresh creature with newborn nociception enabled. For the terrain N2048 founder candidate, add `-Founder 'n2048:assets/founders/terrain-care-n2048-v1/trained.alife-foundation'`.
 - `-DryRun` executes application preflight without opening a window.
 - `-PreviewCommand` prints the Cargo command without running it.
-- The default graphics profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor, not permission for CPU neural fallback.
+- The default graphics profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor; cognition still uses the GPU.
 
 ### Controls & UI
 
@@ -57,7 +57,7 @@ cargo run -p alife_game_app --bin alife_game_app -- validate-production-assets
 cargo test -p alife_world --test headless_soak fast_headless_soak_preserves_release_gate_invariants
 ```
 
-Optional GPU demonstrations remain manual. A typed GPU unavailability result is a failure state, not permission to substitute a reference brain.
+Hardware checks use an available resource window. Report GPU unavailability as such.
 
 ## GPU measurements
 

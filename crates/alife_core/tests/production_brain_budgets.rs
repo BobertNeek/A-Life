@@ -1,4 +1,4 @@
-//! Contract tests for the single production capacity and compiled-budget authority.
+//! Production capacity and compiled-budget validation.
 
 use alife_core::{
     BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,

@@ -1,18 +1,7 @@
-# Automatic code review, powered by Jules — matched to Codex's branch workflow.
-#
-# Codex never opens PRs; it pushes directly to codex/** branches. So this
-# workflow fires on:
-#   1. push that CREATES a branch under codex/** -> one review per new branch,
-#      covering the branch's full diff against main. Throttled to creation so
-#      Codex's rapid follow-up pushes don't each spawn a Jules session.
-#   2. pull_request opened/synchronize/reopened  -> kept for completeness.
-#   3. workflow_dispatch                         -> manual re-review of any branch.
-#
-# The review is posted as a commit comment on the branch head (PR comment for
-# PRs) — the same place Bob posts findings for Codex.
-#
-# One-time setup (already done): repo connected at https://jules.google.com,
-# JULES_API_KEY repo secret set.
+# Review pull requests, newly created codex/** branches, or a manually selected
+# branch. Follow-up pushes to an existing branch do not start another review.
+# Results are posted to the PR or branch-head commit.
+# Requires a connected Jules source and the JULES_API_KEY repository secret.
 
 name: Jules review
 
@@ -119,9 +108,8 @@ jobs:
                (physics/contact math, genetics, biochemistry, learning) — flag world bugs, not just test bugs
           3. Be specific: file path and line number for each finding, with a brief quote of the offending code.
           4. Skip style nitpicks unless they signal a real problem. No filler praise.
-          Write your review as plain markdown. Start with exactly one verdict line:
-          VERDICT: APPROVE or VERDICT: NEEDS WORK
-          Then a '## Findings' section listing each issue (or 'No issues found' if clean).
+          Write concise markdown with concrete findings and their impact.
+          If no actionable issue is found, say so and identify material unverified behavior.
           Review only. Do not open pull requests, push branches, or modify any code."
           RESPONSE="$(curl -sS -X POST \
             -H 'Content-Type: application/json' \

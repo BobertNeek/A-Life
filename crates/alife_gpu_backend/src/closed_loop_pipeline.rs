@@ -1,7 +1,4 @@
-//! Production GPU-authoritative perception, recurrent, selection, and eligibility dispatch.
-//!
-//! This module exposes no CPU neural execution and obtains neural results only
-//! from WGSL state plus bounded compact receipts.
+//! WGSL perception, recurrent, selection and eligibility dispatch with bounded readback.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -832,11 +829,6 @@ impl GpuActiveBatchUpload {
             let payload_base = u32::try_from(frame_payload_words.len())
                 .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
             upload.rebase(row_base_u32, payload_base)?;
-            // This upload was just encoded from the immutable frame and rebased
-            // with checked offsets. Rebuilding it for an exact self-comparison
-            // is a development diagnostic, not another production preflight.
-            #[cfg(debug_assertions)]
-            upload.validate_against(entry.frame, entry.slot)?;
             // Keep caller-input rejection at its original boundary (before
             // payload capacity errors). Ownership prevents edits before the
             // checked local upload is consumed by rebasing below.

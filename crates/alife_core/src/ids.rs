@@ -1,4 +1,4 @@
-//! v0 scaffold: stable IDs shared across A-Life contracts.
+//! Stable IDs shared across A-Life.
 
 use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};

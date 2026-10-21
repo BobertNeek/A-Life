@@ -307,7 +307,7 @@ impl PreparedMemoryRecall {
         Ok(())
     }
 
-    /// Bind the v1.1 context to the existing episodic lanes before the
+    /// Bind cognitive context to the existing episodic lanes before the
     /// perception frame is finalized. The projection only changes channels
     /// backed by an actual memory source, so an empty bank remains neutral.
     pub fn with_cognitive_context(

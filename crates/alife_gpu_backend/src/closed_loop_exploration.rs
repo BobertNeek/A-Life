@@ -1,5 +1,4 @@
 //! Unscored logical candidate identity for the GPU exploration counter.
-//! This encodes identity only; it never evaluates neural activity or selects actions.
 
 use alife_core::{ActionCandidate, CanonicalDigestBuilder, ScaffoldContractError};
 

@@ -1,4 +1,4 @@
-//! v0 scaffold: structured action ABI contracts and CPU arbitration reference.
+//! Structured action commands and reference arbitration.
 
 use core::cmp::Ordering;
 

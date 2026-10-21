@@ -1,8 +1,6 @@
-//! Patch-gated three-factor learning contracts.
+//! Three-factor learning evidence and replay protection for sealed experience.
 //!
-//! This module owns only engine-independent evidence and replay contracts. GPU
-//! storage and WGSL updates live in `alife_gpu_backend`; no CPU neural update is
-//! performed here.
+//! GPU storage and weight updates live in `alife_gpu_backend`.
 
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 

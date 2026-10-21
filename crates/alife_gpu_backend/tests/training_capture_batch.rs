@@ -1,4 +1,4 @@
-//! Explicit real-GPU differential qualification. Compile-only in CPU clouds.
+//! Real-GPU batch-versus-single state-capture checks.
 #![cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
 mod support;
 use alife_core::{OrganismId, SensorProfile, Tick};
@@ -41,7 +41,7 @@ fn capture_boundary(
 }
 
 #[test]
-#[ignore = "requires an explicitly coordinated GPU; no fallback or cloud emulation"]
+#[ignore = "requires GPU hardware"]
 fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
     let mut backend =
         GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();

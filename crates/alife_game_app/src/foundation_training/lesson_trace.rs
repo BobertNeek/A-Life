@@ -1,5 +1,4 @@
-//! Passive lesson diagnostics from already-resident CPU receipts.
-//! No world queries, neural readbacks, or changes to policy/outcome contracts.
+//! Passive lesson diagnostics from existing CPU-side action and outcome records.
 
 use alife_core::{DecisionSnapshot, MotorCommandBundle, PerceptionFrame, PostActionOutcome};
 use alife_gpu_backend::GpuTrainingRolloutReceipt;

@@ -90,7 +90,7 @@ pub struct LanguageNursery {
 }
 
 impl LanguageNursery {
-    /// Reusable ordinary teacher speech exposure in an existing production world.
+    /// Exposes an existing organism to spatial teacher speech.
     pub fn speak_in_world(
         world: &mut HeadlessWorld,
         subject: OrganismId,

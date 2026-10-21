@@ -1,7 +1,4 @@
-//! Production GPU checkpoint validation, exact slot snapshot, and atomic restore.
-//!
-//! This module is an explicit save/restore boundary. Active neural ticks never
-//! call it, and no CPU neural execution or fallback is implemented here.
+//! Exact GPU checkpoint capture, validation and atomic restore at sealed boundaries.
 
 use std::mem::size_of;
 
@@ -420,12 +417,8 @@ const fn split_checkpoint_digest(values: [u64; 4]) -> [u32; 8] {
     ]
 }
 
-/// Bounded post-dispatch readback used only by causal evidence collection.
-///
-/// Gameplay consumes the compact winning-selection record instead. This
-/// snapshot exists so offline acceptance can prove how one finalized memory
-/// context changed every candidate without creating host-side policy
-/// authority.
+/// Post-dispatch candidate logits for offline causal diagnostics.
+/// Gameplay consumes the compact winning-selection record instead.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuCandidateLogitEvidenceSnapshot {
     pub handle: GpuBrainHandle,

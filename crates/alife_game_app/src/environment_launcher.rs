@@ -1,8 +1,4 @@
-//! CA10 versioned environment manifest launcher.
-//!
-//! This module stays Bevy-free. It resolves player-facing scenario IDs into
-//! existing P34-compatible fixture roots and validates those roots through the
-//! normal persistence/config contracts.
+//! Resolve environment selections to saved configuration, assets, and worlds.
 
 use std::collections::BTreeSet;
 

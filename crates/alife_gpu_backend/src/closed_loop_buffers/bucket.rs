@@ -84,6 +84,32 @@ pub struct GpuTypedCounts {
     pub sleep_parameters: usize,
 }
 
+impl GpuTypedCounts {
+    fn from_upload(upload: &GpuPhenotypeUpload) -> Self {
+        Self {
+            encoder_plans: upload.encoder_plans.len(),
+            encoder_assignments: upload.encoder_assignments.len(),
+            encoder_target_offsets: upload.encoder_target_offsets.len(),
+            neuron_dynamics: upload.neuron_dynamics.len(),
+            projections: upload.projections.len(),
+            route_metadata: upload.route_metadata.len(),
+            target_offsets: upload.target_offsets.len(),
+            source_indices: upload.source_indices.len(),
+            route_indices: upload.route_indices.len(),
+            decoder_plans: upload.decoder_plans.len(),
+            decoder_families: upload.decoder_families.len(),
+            decoder_weight_indices: upload.decoder_weight_indices.len(),
+            memory_channel_plans: upload.memory_channel_plans.len(),
+            memory_weight_indices: upload.memory_weight_indices.len(),
+            plasticity_receptors: upload.plasticity_receptors.len(),
+            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
+            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
+            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
+            sleep_parameters: upload.sleep_parameters.len(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuSlotWordRanges {
     pub encoder_plan_words: Range<u32>,
@@ -269,27 +295,7 @@ impl GpuClassBucketPlan {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         let upload = GpuPhenotypeUpload::try_from(phenotype)?;
-        let counts = GpuTypedCounts {
-            encoder_plans: upload.encoder_plans.len(),
-            encoder_assignments: upload.encoder_assignments.len(),
-            encoder_target_offsets: upload.encoder_target_offsets.len(),
-            neuron_dynamics: upload.neuron_dynamics.len(),
-            projections: upload.projections.len(),
-            route_metadata: upload.route_metadata.len(),
-            target_offsets: upload.target_offsets.len(),
-            source_indices: upload.source_indices.len(),
-            route_indices: upload.route_indices.len(),
-            decoder_plans: upload.decoder_plans.len(),
-            decoder_families: upload.decoder_families.len(),
-            decoder_weight_indices: upload.decoder_weight_indices.len(),
-            memory_channel_plans: upload.memory_channel_plans.len(),
-            memory_weight_indices: upload.memory_weight_indices.len(),
-            plasticity_receptors: upload.plasticity_receptors.len(),
-            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
-            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
-            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
-            sleep_parameters: upload.sleep_parameters.len(),
-        };
+        let counts = GpuTypedCounts::from_upload(&upload);
 
         let p0 = u32_len(&self.immutable_plan_words)?;
         let encoder_plan_words = span(p0, counts.encoder_plans * 8)?;
@@ -2565,29 +2571,8 @@ impl GpuFixedClassArenaPlan {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         let upload = GpuPhenotypeUpload::try_from(phenotype)?;
-        upload.validate_against(phenotype)?;
         let execution = self.capacity.execution();
-        let counts = GpuTypedCounts {
-            encoder_plans: upload.encoder_plans.len(),
-            encoder_assignments: upload.encoder_assignments.len(),
-            encoder_target_offsets: upload.encoder_target_offsets.len(),
-            neuron_dynamics: upload.neuron_dynamics.len(),
-            projections: upload.projections.len(),
-            route_metadata: upload.route_metadata.len(),
-            target_offsets: upload.target_offsets.len(),
-            source_indices: upload.source_indices.len(),
-            route_indices: upload.route_indices.len(),
-            decoder_plans: upload.decoder_plans.len(),
-            decoder_families: upload.decoder_families.len(),
-            decoder_weight_indices: upload.decoder_weight_indices.len(),
-            memory_channel_plans: upload.memory_channel_plans.len(),
-            memory_weight_indices: upload.memory_weight_indices.len(),
-            plasticity_receptors: upload.plasticity_receptors.len(),
-            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
-            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
-            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
-            sleep_parameters: upload.sleep_parameters.len(),
-        };
+        let counts = GpuTypedCounts::from_upload(&upload);
         let encoder_ceiling = usize::try_from(self.strides.encoder_assignment_count)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         if counts.encoder_plans != 1

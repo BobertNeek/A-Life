@@ -1,4 +1,4 @@
-//! Aligned lobe layout contracts, independent of runtime allocation.
+//! Aligned lobe layouts, independent of runtime allocation.
 
 use serde::{Deserialize, Serialize};
 

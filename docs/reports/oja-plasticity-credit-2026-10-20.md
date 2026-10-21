@@ -67,7 +67,7 @@ per-synapse evidence. Existing neuron homeostasis and separately scheduled sleep
 remain. A future independent homeostat would need explicit semantics/evidence;
 this change does not outlaw that design.
 
-## Actual gates, rates, and retained traces
+## Credit conditions, rates, and retained traces
 
 Credit lanes are prediction residual, pain, homeostatic improvement,
 frustration, novelty, social consequence, biochemical appetitive and aversive.
@@ -285,11 +285,9 @@ raw sleep promotion under that existing semantic. Born-fixed zero-rate rows
 remain delta-disabled. This separate alpha/sleep behavior is disclosed, not
 silently repaired by the causal-eligibility change.
 
-No accepted backup, learned payload, Adam history or checkpoint is reset,
-destroyed or replaced. No migration is required. Reserved CPU modules/tests/CLI,
-unrelated GPU digests, sensory/decoder/new_game work and pinned PR #111 remain
-untouched. PR #109 had no GPU file overlap at checked b7a67384. No external
-agent was contacted.
+The correction preserves accepted backups, learned payloads, Adam history, and
+checkpoints. It changes future credit-gated updates without rewriting acquired
+history or requiring a state migration.
 
 ## Validation and evidence limits
 
@@ -308,19 +306,19 @@ stagnation against real arithmetic; observed maximum deviation is about
 bounds and exact-gate discontinuity
 are asserted separately. Category maxima are printed.
 
-Current focused checks: closed_loop_wgsl (16 passed), developmental_plasticity
+Focused checks at the report revision: closed_loop_wgsl (16 passed), developmental_plasticity
 (3 passed), strict backend all-target Clippy, formatting and the hardware
 regression build. Physical production sealed-outcome execution remains Blocked
-by NeuralBackendUnavailable in this cloud; the existing PC owner coordinates
-hardware acceptance. No production rejection was bypassed.
+by NeuralBackendUnavailable on the report's cloud host. Production admission
+was not bypassed.
 
 Historical full workspace validation at the preceding law passed compilation,
-1,941 tests across 216 targets (23 ignored), strict workspace Clippy, core
-boundaries and docs 77/77. That broad run is not final-q-law evidence and was
+1,941 tests across 216 targets (23 ignored), strict workspace Clippy, and core
+boundaries. That broad run is not final-q-law evidence and was
 not duplicated for this follow-up. New validation targets changed WGSL and
 actual eligibility consumers. The earlier symbol-heavy build exhausted disk;
 only session-created compiler artifacts were removed before the saved compact
-cloud settings completed its remaining gates.
+cloud settings completed its remaining checks.
 
 ~~~sh
 cargo test --locked -p alife_gpu_backend --test closed_loop_wgsl --test developmental_plasticity
@@ -334,11 +332,6 @@ Baseline: fetched main bda3b65be5fa6f01865b850640adf2e8d01f4990. This report
 corrects the earlier classification of zero-eligibility normalization.
 Gameplay improvement and empirical post-activity distributions on an accepted
 trained founder remain Unknown; this local defect does not require a perfect
-founder and does not establish global learning failure. Keep PR #112 draft
-pending parent review, CPU mirror/parity and final checks.
-
-Architecture trace: AOA-LEARN-001/006/007 (signed online learning),
-AOA-LEARN-002/003/004 (local causal assignment), AOA-LEARN-005 (distinct
-stabilization/consolidation), AOA-FOUND-006 (ordinary production law),
-AOA-SLEEP-002/003/004 (unchanged sleep/germline boundary),
-AOA-PERSIST-001 (preserved acquired history).
+founder and does not establish global learning failure. The correction subsequently
+merged through [PR #112](https://github.com/BobertNeek/A-Life/pull/112); this dated
+report retains the measured results and limitations of its original source.

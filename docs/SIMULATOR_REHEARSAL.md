@@ -77,13 +77,10 @@ BLAKE3 lineage. No simulator progress occurs between setup and that consumption.
 Unused setup state is discarded before the first tick, and later eight-decision
 boundaries still export current GPU state. No live runtime/device cache is added.
 
-`pool_snapshots` counts serialized pool IDs separately from `snapshot_captures`
-and `snapshot-capture-ledger.json`, which count actual explicit GPU save exports
-(including setup and holdouts). With full attempts and every requested capture
-admitted, qualification needs 6 exports instead of 10, with 4 pool snapshots;
-default mode needs 66 instead of 82, with 64 pool snapshots. These are source-
-derived counts, not measured runs or speedups. A previous capture measured
-9.6569 seconds; multiplying it by removed exports does not measure saved time.
+`pool_snapshots` counts serialized pool IDs; `snapshot_captures` and
+`snapshot-capture-ledger.json` count actual GPU save exports, including setup and
+holdouts. Use observed stage timing rather than multiplying a historical capture
+time by a source-derived export count to claim a speedup.
 
 For a bounded hardware qualification, append `--qualify`: four attempts
 of eight decisions and two eight-decision holdouts. Collection admits work for

@@ -1,4 +1,4 @@
-//! AOA-OBS-004: bounded, opt-in copies of already prepared offline PPO targets.
+//! Optional copies of prepared offline PPO targets for diagnostics.
 use std::path::Path;
 
 use alife_training::{PpoBatch, PpoBoundary, PpoConfig};

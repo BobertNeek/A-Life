@@ -1,4 +1,4 @@
-//! Engine-neutral orchestration seam for automatic GPU-authoritative sleep.
+//! Automatic GPU sleep scheduling.
 
 use alife_core::sleep::SleepWorkReceipt;
 use alife_core::{
@@ -95,9 +95,8 @@ pub trait GpuSleepConsolidationDriver {
 
     /// Runs the due bounded core sleep transaction.
     ///
-    /// Implementations should call `SleepConsolidator::run_bounded_transaction`
-    /// and return its validated receipt. The default keeps the legacy GPU-only
-    /// caller source-compatible; the organism-aware path requires a receipt.
+    /// Organism-aware scheduling requires the completed core transaction receipt.
+    /// The default reports no core work.
     fn run_bounded_sleep_transaction(
         &mut self,
         _organism_id: OrganismId,
@@ -113,7 +112,7 @@ pub trait GpuSleepConsolidationDriver {
     /// memory, predictor, concept, and structural sleep work.
     ///
     /// Empty newborn replay is an explicit no-work state. Nonempty replay
-    /// remains subject to the complete fail-closed transaction contract.
+    /// still requires a validated transaction.
     fn has_bounded_sleep_phase_data(
         &mut self,
         _organism_id: OrganismId,

@@ -1,8 +1,4 @@
-//! FVR08 production voxel frontend launch policy.
-//!
-//! This module wires production profile budgets, launch states, and diagnostics
-//! around the existing real P34 config/save/asset contracts. It does not move
-//! renderer, Bevy, or GPU handles into core/world state.
+//! Production profiles, launch configuration, saved UI settings, and diagnostics.
 
 use std::fs;
 
@@ -930,7 +926,6 @@ pub struct ProductionVoxelLaunchSummary {
     pub asset_manifest_path: PathBuf,
     pub production_asset_manifest_path: PathBuf,
     pub production_asset_count: usize,
-    pub production_asset_vfx_budget_state: String,
     pub production_asset_license_metadata_validated: bool,
     pub asset_root: PathBuf,
     pub diagnostics: ProductionRuntimeDiagnostics,
@@ -969,7 +964,7 @@ impl ProductionVoxelLaunchSummary {
             })
             .unwrap_or_default();
         format!(
-            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}:production_vfx={}",
+            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}",
             self.schema,
             self.schema_version,
             self.scenario_id,
@@ -986,7 +981,6 @@ impl ProductionVoxelLaunchSummary {
             self.save_path.display(),
             self.asset_manifest_path.display(),
             self.production_asset_count,
-            self.production_asset_vfx_budget_state,
         )
     }
 }
@@ -1097,13 +1091,8 @@ fn fvr06_gpu_runtime_save_state(
                 .collect(),
         },
         shader_abi_versions: GpuRuntimeShaderAbiVersions {
-            shader_manifest: vec![
-                "closed_loop_plasticity:v1".to_string(),
-                "p27_supertile_routing:v1".to_string(),
-                "p28_recompaction_autophagy:contract-v1".to_string(),
-            ],
+            shader_manifest: vec!["closed_loop_plasticity:v1".to_string()],
             abi_manifest: vec![
-                "p24_gpu_buffer_contract:v1".to_string(),
                 "p29_runtime:v1".to_string(),
                 "full_gpu_runtime:v1".to_string(),
                 "p34_save:v1".to_string(),
@@ -1394,17 +1383,6 @@ pub fn run_production_voxel_frontend_preflight(
         asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
         production_asset_manifest_path,
         production_asset_count: production_assets.asset_count,
-        production_asset_vfx_budget_state: match launch.profile_id {
-            ProductionFrontendProfileId::MinimumSettings30x30 => {
-                production_assets.minimum_vfx_budget_state
-            }
-            ProductionFrontendProfileId::MinSpecComfort1080p => {
-                production_assets.comfort_vfx_budget_state
-            }
-            ProductionFrontendProfileId::Balanced1080p => "balanced".to_string(),
-            ProductionFrontendProfileId::HighSpecScaleUp => "high".to_string(),
-            ProductionFrontendProfileId::ResearchScale => "research".to_string(),
-        },
         production_asset_license_metadata_validated: production_assets.unknown_license_entries == 0
             && production_assets.missing_or_rejected_assets == 0
             && production_assets.placeholder_final_entries == 0,

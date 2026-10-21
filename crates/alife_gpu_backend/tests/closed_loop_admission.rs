@@ -1,4 +1,4 @@
-//! Contract and real-GPU tests for shared-backend admission and complete VRAM accounting.
+//! Shared-backend admission and VRAM accounting tests.
 
 mod support;
 

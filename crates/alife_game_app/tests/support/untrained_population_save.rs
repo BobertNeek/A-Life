@@ -8,8 +8,7 @@ use alife_world::{
     RuntimeConfig, WeightLayerSaveSummary, WorldObjectKind, WorldOrganismRecord,
 };
 
-/// Construct an existing test population through individual birth authority.
-/// This is independent of the product's bounded Phase 3 New Game cohort API.
+/// Construct a test population through individual birth validation.
 pub fn untrained_population_save(config: RuntimeConfig, population: u16) -> PortableSaveFile {
     assert_eq!(config.brain_class, BrainScaleTier::Nano512);
     let foundation =

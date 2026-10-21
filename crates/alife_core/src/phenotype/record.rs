@@ -1,4 +1,4 @@
-//! Contract-only immutable aggregate for one compiler-authored production phenotype.
+//! Immutable aggregate for one compiled production phenotype.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

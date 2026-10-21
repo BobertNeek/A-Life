@@ -1,4 +1,4 @@
-//! Bounded cognitive context assembled before a v1.1 decision.
+//! Bounded cognitive context assembled before a decision.
 
 use serde::{Deserialize, Serialize};
 

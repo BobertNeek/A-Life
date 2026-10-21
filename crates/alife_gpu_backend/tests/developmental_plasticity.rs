@@ -76,7 +76,7 @@ fn assert_compiler_oracle(capacity: BrainCapacityClass) {
         2,
         "fixture needs distinct targeted recurrent routes"
     );
-    // Explicit inherited zero mask creates genuinely fixed synapses. Keep a
+    // An enabled inherited zero mask creates fixed synapses. Keep a
     // second target route at 0.5 for unsaturated boosts in every capacity.
     // Enabled zero is deliberate: N2048 treats an absent/disabled mask as its
     // default section scale, whereas an enabled zero is an actual zero scale.

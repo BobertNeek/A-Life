@@ -1,13 +1,13 @@
 # A-Life architecture
 
 [`ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`](ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md)
-describes the intended organism and gameplay behavior. Its categories distinguish
-goals and interfaces from replaceable mechanisms, defaults, and research.
+describes the intended organism and gameplay behavior. Examples,
+defaults, and research are distinguished from the intended behavior.
 Current Rust types, GPU layouts, sizes, constants, and tests describe the current
 implementation; they do not by themselves define the design target.
 
 The `AOA-*` labels identify sections for source and historical references.
-`diagrams/` contains editable DOT sources and their SVG/PNG renders. Use the parts
+`diagrams/` contains editable DOT sources and their SVG renders. Use the parts
 relevant to the change; no registry, compliance matrix, or separate report is required.
 
 Current implementation and measured limitations belong in `../ARCHITECTURE.md`,

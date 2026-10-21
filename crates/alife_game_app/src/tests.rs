@@ -172,46 +172,6 @@ fn ca10_environment_manifest_reports_known_scenarios_for_bad_selection() {
 }
 
 #[test]
-fn ca11_player_sandbox_editor_edits_default_manifest_scenario() {
-    let fixtures = CurrentAppFixtures::new();
-    let manifest_path = fixtures.environment_manifest();
-    let summary = run_player_sandbox_editor_smoke(&manifest_path, None, None).unwrap();
-    assert_eq!(summary.schema, CA11_PLAYER_SANDBOX_EDITOR_SCHEMA);
-    assert_eq!(
-        summary.schema_version,
-        CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION
-    );
-    assert_eq!(summary.scenario_id, "production-voxel");
-    assert_eq!(summary.initial_object_count, 12);
-    assert!(summary.final_object_count > summary.initial_object_count);
-    assert!(summary.placed_food && summary.removed_food);
-    assert!(summary.placed_hazard && summary.removed_hazard);
-    assert!(summary.placed_obstacle && summary.removed_obstacle);
-    assert!(summary.edit_mode_required);
-    assert!(!summary.output_written);
-    assert!(summary
-        .player_status_lines
-        .iter()
-        .any(|line| line.contains("portable stable-ID save")));
-    summary.validate().unwrap();
-}
-
-#[test]
-fn ca11_player_sandbox_editor_can_write_optional_save_output() {
-    let fixtures = CurrentAppFixtures::new();
-    let manifest_path = fixtures.environment_manifest();
-    let output = std::env::temp_dir().join("alife_ca11_player_sandbox_editor_save.json");
-    let _ = std::fs::remove_file(&output);
-    let summary = run_player_sandbox_editor_smoke(&manifest_path, None, Some(&output)).unwrap();
-    assert!(summary.output_written);
-    assert!(output.exists());
-    let saved = PortableSaveFile::from_json_file(&output).unwrap();
-    let restored = saved.restore_headless_world().unwrap();
-    assert_eq!(restored.object_count(), summary.final_object_count);
-    let _ = std::fs::remove_file(&output);
-}
-
-#[test]
 fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
     let fixtures = CurrentAppFixtures::new();
     let summary = validate_app_bundle_manifest(fixtures.bundle_manifest()).unwrap();
@@ -221,15 +181,10 @@ fn ca12_app_bundle_manifest_discovers_production_assets_and_shaders() {
         CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION
     );
     assert_eq!(summary.environment_scenarios, 1);
-    assert_eq!(summary.config_entries, 6);
-    assert_eq!(summary.shader_assets, 14);
-    assert_eq!(summary.discovered_shader_assets, 14);
+    assert_eq!(summary.shader_assets, summary.discovered_shader_assets);
     assert!(summary.production_voxel_asset_entries > 0);
     assert!(summary.production_voxel_generated_assets > 0);
-    assert!(summary.production_voxel_asset_manifest_validated);
     assert!(summary.shader_discovery_complete);
-    assert!(!summary.large_binary_assets_committed);
-    assert!(summary.missing_required_rejected);
     summary.validate().unwrap();
 }
 
@@ -452,116 +407,4 @@ fn sleep_and_pain_override_action_visual_states_without_cognitive_mutation() {
     .unwrap();
     assert_eq!(sleep_visual.animation, CreatureAnimationState::Sleeping);
     assert_eq!(sleep_visual.expression, CreatureExpressionState::Tired);
-}
-
-#[test]
-fn g04_creature_visual_smoke_derives_from_g03_tick_summary() {
-    let fixtures = CurrentAppFixtures::new();
-    let launch = fixtures.p34_launch();
-    let visual = run_creature_visual_smoke(&launch).unwrap();
-    assert_eq!(visual.organism_id, OrganismId(1));
-    assert_eq!(visual.stable_id, WorldEntityId(1));
-    assert_eq!(visual.selected_action_kind, Some(ActionKind::Interact));
-    assert_eq!(visual.target_entity, Some(WorldEntityId(2)));
-    assert_eq!(visual.animation, CreatureAnimationState::Interacting);
-    assert!(visual.debug_summary.contains("organism=1"));
-    visual.validate().unwrap();
-}
-
-#[test]
-fn g05_camera_controls_are_bounded_and_deterministic() {
-    let camera = CameraNavigationState::top_down_default()
-        .pan_by(2.0, -3.5)
-        .unwrap()
-        .zoom_by(20.0)
-        .unwrap()
-        .orbit_by(-45.0)
-        .unwrap()
-        .with_follow_target(WorldEntityId(1))
-        .unwrap();
-
-    assert_eq!(camera.zoom, 8.0);
-    assert_eq!(camera.yaw_degrees, 315.0);
-    assert_eq!(camera.follow_target, Some(WorldEntityId(1)));
-    assert!(camera.signature_line().contains("315.00"));
-    camera.validate().unwrap();
-}
-
-#[test]
-fn g05_selection_uses_stable_ids_from_visible_world() {
-    let fixtures = CurrentAppFixtures::new();
-    let launch = fixtures.p34_launch();
-    let presentation = load_visible_world_from_p34_save(&launch).unwrap();
-    let selection = select_visible_world_entity(&presentation, WorldEntityId(1)).unwrap();
-    assert_eq!(selection.schema, G05_CAMERA_INSPECTOR_SCHEMA);
-    assert_eq!(
-        selection.schema_version,
-        G05_CAMERA_INSPECTOR_SCHEMA_VERSION
-    );
-    assert_eq!(selection.stable_id, WorldEntityId(1));
-    assert_eq!(selection.organism_id, Some(OrganismId(1)));
-    assert_eq!(selection.kind, WorldObjectKind::Agent);
-    assert!(selection.debug_label.contains("Agent"));
-    selection.validate().unwrap();
-
-    assert!(select_visible_world_entity(&presentation, WorldEntityId(99_999)).is_err());
-}
-
-#[test]
-fn g05_inspector_snapshot_is_read_only_and_covers_expected_fields() {
-    let fixtures = CurrentAppFixtures::new();
-    let launch = fixtures.p34_launch();
-    let inspector = run_creature_inspector_smoke(&launch).unwrap();
-    assert_eq!(inspector.schema, G05_CAMERA_INSPECTOR_SCHEMA);
-    assert_eq!(
-        inspector.schema_version,
-        G05_CAMERA_INSPECTOR_SCHEMA_VERSION
-    );
-    assert!(inspector.read_only);
-    assert_eq!(inspector.selection.stable_id, WorldEntityId(1));
-    assert_eq!(inspector.camera.follow_target, Some(WorldEntityId(1)));
-    assert_eq!(
-        inspector.visual.selected_action_kind,
-        Some(ActionKind::Interact)
-    );
-    assert!(inspector.action_summary.contains("Interact"));
-    assert!(inspector.patch_summary.contains("sealed=true"));
-    assert!(inspector
-        .memory_topology_summary
-        .contains("memory_updates=1"));
-    assert!(inspector
-        .drive_lines
-        .iter()
-        .any(|line| line.starts_with("hunger=")));
-    assert!(inspector
-        .hormone_lines
-        .iter()
-        .any(|line| line.starts_with("sleep_pressure=")));
-    assert!(inspector
-        .troubleshooting_messages
-        .iter()
-        .any(|line| line.contains("gpu_runtime=optional")));
-    inspector.validate().unwrap();
-}
-
-#[test]
-fn g05_pause_step_run_controls_map_to_live_tick_controls() {
-    let paused = InspectorControlPanel::paused();
-    assert_eq!(
-        paused.to_live_control().unwrap(),
-        LiveBrainTickControl::paused()
-    );
-    let step = InspectorControlPanel::step_once();
-    assert_eq!(
-        step.to_live_control().unwrap(),
-        LiveBrainTickControl::step_once()
-    );
-    let run = InspectorControlPanel::run_fixed(3, 150);
-    assert_eq!(
-        run.to_live_control().unwrap(),
-        LiveBrainTickControl::run_fixed(3)
-    );
-    assert!(InspectorControlPanel::run_fixed(32, 100)
-        .validate()
-        .is_err());
 }

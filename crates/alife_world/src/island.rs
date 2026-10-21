@@ -1,4 +1,4 @@
-//! Approved island data. Sampling and movement use the ordinary world terrain solver.
+//! Island terrain data shared by sampling and movement.
 use crate::{LocomotionLimits, TerrainData, WorldTerrain};
 use std::sync::OnceLock;
 
@@ -31,7 +31,7 @@ pub fn island_terrain() -> WorldTerrain {
                 },
                 LocomotionLimits::default(),
             )
-            .expect("validated approved island bake")
+            .expect("validated island bake")
         })
         .clone()
 }

@@ -1,4 +1,4 @@
-//! Genome, development, and weight-split contracts.
+//! Genome, development, and genetic/acquired weight separation.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -551,12 +551,6 @@ impl BrainGenome {
         &self.cognitive_architecture
     }
 
-    pub const fn cognitive_architecture_parameters(
-        &self,
-    ) -> &CognitiveArchitectureGenomeParameters {
-        self.cognitive_architecture()
-    }
-
     /// Replace the heritable plasticity parameters through their validated
     /// constructor boundary. This is the causal mutation/training entrypoint;
     /// callers cannot write unchecked parameter lanes.
@@ -579,13 +573,6 @@ impl BrainGenome {
         self.cognitive_architecture = parameters;
         self.validate_contract()?;
         Ok(self)
-    }
-
-    pub fn with_cognitive_architecture_parameters(
-        self,
-        parameters: CognitiveArchitectureGenomeParameters,
-    ) -> Result<Self, ScaffoldContractError> {
-        self.with_cognitive_architecture(parameters)
     }
 }
 

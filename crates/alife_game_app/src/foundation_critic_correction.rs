@@ -1,5 +1,5 @@
-//! CPU-only admission of an explicitly receipted critic derivative. This proves
-//! checkpoint continuity, never behavioral qualification or accepted PPO work.
+//! Validate critic-correction files and preservation of the source checkpoint.
+//! This checks continuity, not behavioral improvement.
 use crate::foundation_training_cycle::{validate_cycle_optimizer_handoff, FoundationCycleReceipt};
 use alife_core::FoundationWeightAsset;
 use alife_training::{FoundationTrainerCheckpoint, PpoTrainingState, PpoValueHeadCheckpoint};

@@ -1,4 +1,4 @@
-//! Explicit group-50 native GPU continuation. No hardware or seed safety fallback.
+//! Offline GPU continuation for a shared world of fifty organisms.
 use std::path::PathBuf;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);

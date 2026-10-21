@@ -1,4 +1,4 @@
-//! Split from the original playable-sim app shell during R13 remediation.
+//! Creature animation and expression derived from world state.
 
 use crate::prelude::*;
 use crate::*;
@@ -435,18 +435,4 @@ fn validate_rgba(rgba: [f32; 4]) -> Result<(), ScaffoldContractError> {
         NormalizedScalar::new(channel)?;
     }
     Ok(())
-}
-
-pub fn run_creature_visual_smoke(
-    launch: &AppShellLaunchConfig,
-) -> Result<CreatureVisualSnapshot, GameAppShellError> {
-    let presentation = load_visible_world_from_p34_save(launch)?;
-    let mut live = LiveBrainLoop::from_p34_launch(launch)?;
-    let mut summaries = live.update(LiveBrainTickControl::step_once())?;
-    let summary = summaries
-        .pop()
-        .ok_or(GameAppShellError::VisibleWorldMismatch {
-            message: "step once must produce one live brain tick for G04 visuals",
-        })?;
-    live.creature_visual_snapshot(&presentation, Some(&summary))
 }

@@ -1,6 +1,6 @@
-//! v0 scaffold: Bevy-independent world contracts.
+//! Engine-independent world state, perception, action execution, and persistence.
 
-use alife_core::{ActionAbiVersion, ActionCommand, SensoryAbiVersion};
+use alife_core::ActionCommand;
 
 pub mod appearance;
 pub mod candidate_enumerator;
@@ -49,23 +49,6 @@ pub enum ActionLegality {
     BlockedByWorldState,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WorldContractManifest {
-    pub sensory_abi_version: SensoryAbiVersion,
-    pub action_abi_version: ActionAbiVersion,
-    pub world_validates_actions: bool,
-}
-
-impl WorldContractManifest {
-    pub const CURRENT: Self = Self {
-        sensory_abi_version: SensoryAbiVersion::CURRENT,
-        action_abi_version: ActionAbiVersion::CURRENT,
-        world_validates_actions: true,
-    };
-}
-
 pub trait ActionLegalityChecker {
     fn check_action(&self, action: &ActionCommand) -> ActionLegality;
 }
-
-pub use headless::SPONTANEOUS_SPEECH_COOLDOWN_TICKS;

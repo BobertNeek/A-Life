@@ -215,7 +215,6 @@ fn place(
             kind: Fvr07ProductionDressingKind::LeafPatch,
             tile,
             display_only: true,
-            no_renderer_authority_over_actions_or_cognition: true,
         },
     ));
     if name.starts_with("Oak_") {

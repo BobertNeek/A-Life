@@ -1,8 +1,5 @@
-//! CPU/structural qualification of bounded GPU game arbitration.
-//!
-//! The mathematical fixtures do not execute neural computation and are not
-//! hardware parity or gameplay acceptance. Naga validation and exact helper
-//! contracts bind their inputs/arithmetic to the actual production shader.
+//! CPU reference arithmetic and shader checks for bounded game exploration.
+//! GPU behavior is covered separately.
 
 #[path = "support/exploration_reference.rs"]
 mod reference;

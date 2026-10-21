@@ -1,4 +1,4 @@
-//! v0 scaffold: validation errors for architecture contract checks.
+//! Validation and execution errors.
 
 use thiserror::Error;
 
@@ -8,7 +8,7 @@ use crate::SchemaKind;
 pub enum ScaffoldContractError {
     #[error("brain class must contain at least 512 neurons")]
     BrainClassTooSmall,
-    #[error("near-term GPU brain classes must align neuron count to 128")]
+    #[error("GPU brain classes must align neuron count to 128")]
     BrainClassAlignment,
     #[error("lobe layout total does not match brain neuron count")]
     LobeTotalMismatch,
@@ -24,7 +24,7 @@ pub enum ScaffoldContractError {
     MissingCanonicalNeuronCount,
     #[error("ID value zero is reserved as invalid")]
     InvalidId,
-    #[error("brain class ID is not known to the current scaffold registry")]
+    #[error("brain class ID is not registered")]
     UnknownBrainClass,
     #[error("float value must be finite")]
     NonFiniteFloat,
@@ -38,7 +38,7 @@ pub enum ScaffoldContractError {
     InvalidGeneticBounds,
     #[error("parental foundation families or brain classes are incompatible")]
     IncompatibleGeneticClass,
-    #[error("mutation exceeds the bounded EI0 mutation envelope")]
+    #[error("mutation exceeds the configured bounds")]
     MutationOverflow,
     #[error("tick value moved backward")]
     NonMonotonicTick,
@@ -70,7 +70,7 @@ pub enum ScaffoldContractError {
     TopologyCapacityExceeded,
     #[error("sparse projection schema is invalid")]
     InvalidSparseProjectionSchema,
-    #[error("sparse tile format is defined but not implemented in the CPU oracle")]
+    #[error("sparse tile format is unsupported by the CPU reference")]
     UnsupportedSparseTileFormat,
     #[error("backend parity check failed")]
     BackendParity,
@@ -84,7 +84,7 @@ pub enum ScaffoldContractError {
     EvidenceKindMismatch,
     #[error("phenotype compilation failed")]
     PhenotypeCompile,
-    #[error("brain class is not promoted for production neural execution")]
+    #[error("brain class is unavailable for production neural execution")]
     UnsupportedProductionBrainClass,
     #[error("GPU buffer layout does not match the compiled phenotype")]
     GpuLayoutMismatch,
@@ -108,7 +108,7 @@ pub enum ScaffoldContractError {
     LearningReplayRejected,
     #[error("sleep consolidation generation does not match the installed GPU brain slot")]
     ConsolidationGenerationMismatch,
-    #[error("brain activity policy, fixed-point cost, or pressure contract mismatch")]
+    #[error("brain activity policy, fixed-point cost, or pressure mismatch")]
     BrainActivityPolicyMismatch,
     #[error("brain activity pressure, throttle, or work sequence mismatch")]
     BrainActivitySequenceMismatch,

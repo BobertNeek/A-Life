@@ -1,4 +1,4 @@
-//! Contract-first tests for GPU-authoritative sensory encoding and recurrent dynamics.
+//! WGSL sensory encoding, recurrent dynamics and layout checks.
 
 #[cfg(feature = "gpu-tests")]
 #[path = "closed_loop_wgsl/hardware.rs"]

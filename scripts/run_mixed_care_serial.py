@@ -370,9 +370,9 @@ def summary(run):
 def admit_run_context(plan):
     require(Path.cwd().resolve() == Path(__file__).resolve().parent.parent and
             Path(plan["output"]).parent == Path.cwd() / "target" / "founder-training",
-            "use the authoritative target/founder-training lane")
+            "use the shared target/founder-training lane")
     require(not subprocess.check_output(["git", "status", "--porcelain"], text=True).strip(),
-            "run requires clean reviewed repository source")
+            "run requires a clean source checkout for reproducible continuation")
     require(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() == plan["git_head"],
             "source commit changed since plan")
 

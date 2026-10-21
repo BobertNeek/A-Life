@@ -1,4 +1,4 @@
-//! Candidate-local GPU episodic-context ABI, shader, and causal behavior contracts.
+//! Candidate-local memory encoding, shader layout and causal GPU behavior tests.
 
 mod support;
 
@@ -721,8 +721,7 @@ fn finalized_memory_upload_binds_base_context_final_and_perception_header_identi
     );
 }
 
-// Use the existing checked-in Nano512 extension fixture without changing live
-// admission or the experimental fixture owned by the foundation worker.
+// Use the checked-in Nano512 extension fixture.
 fn cognitive_memory_slot() -> alife_gpu_backend::GpuBrainSlot {
     let asset = alife_core::FoundationWeightAsset::decode_canonical(include_bytes!(
         "../../../assets/founders/scaled-choice-nociceptive-v1/candidate.alife-foundation"
@@ -931,8 +930,7 @@ fn memory_upload_constructor_retains_projection_finite_and_width_checks() {
         ),
     ] {
         let (frame, recall) = populated_projected_memory(successor);
-        // These input types admit forecast vectors; encoding enforces the GPU
-        // lane width and finiteness even when release self-diagnostics are off.
+        // Forecast vectors must fit the GPU lane width and contain finite values.
         recall.validate_for_frame(&frame).unwrap();
         let perception = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
         assert_eq!(

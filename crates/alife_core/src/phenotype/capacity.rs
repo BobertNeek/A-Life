@@ -1,4 +1,4 @@
-//! Contract-only canonical production capacity and GPU ABI budget authority.
+//! Canonical production capacity and GPU ABI budgets.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

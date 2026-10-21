@@ -1,7 +1,4 @@
-//! Shared fixture construction and bounded real-GPU readback plumbing.
-//!
-//! Host code here only compiles/uploads contracts and derives structural counts. It never
-//! executes neural math, supplies a neural oracle, or falls back from GPU authority.
+//! Shared GPU fixtures and bounded readback helpers.
 #![allow(dead_code)] // Shared by integration targets that intentionally use disjoint helpers.
 
 pub mod scaling;

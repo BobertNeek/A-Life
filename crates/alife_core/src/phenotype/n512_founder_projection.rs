@@ -1,4 +1,4 @@
-//! Explicit Nano512 V1 founder projection over a frozen coordinate contract.
+//! Explicit Nano512 V1 founder projection over frozen coordinates.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

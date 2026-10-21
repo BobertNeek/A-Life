@@ -1,8 +1,6 @@
-//! v0 runtime scaffold: deterministic Bevy-independent headless world harness.
+//! Deterministic world simulation shared by graphical and headless hosts.
 //!
-//! This module owns simple world truth for P17 behavior tests. It implements
-//! core sensory/action adapter traits without importing renderer, GPU, or ECS
-//! concepts.
+//! Owns physical state, perception, action legality, and organism biology.
 
 use std::{
     cell::{Ref, RefCell},
@@ -3008,8 +3006,8 @@ impl HeadlessWorld {
         Ok(())
     }
 
-    /// Validates registered records only. Legacy unregistered Agent fixtures
-    /// remain valid until Task 3.2 seeds the production registry.
+    /// Validates each registered organism's world-object binding. Unregistered
+    /// scenario agents and external actors are outside this check.
     pub fn validate_organism_bindings(&self) -> Result<(), ScaffoldContractError> {
         self.organism_registry
             .validate_contract()
@@ -3798,7 +3796,7 @@ impl HeadlessWorld {
         )
     }
 
-    pub fn physical_observation_snapshot_indexed(
+    fn physical_observation_snapshot_indexed(
         &self,
         organism_id: OrganismId,
         tick: Tick,
@@ -4026,7 +4024,7 @@ impl HeadlessWorld {
             .is_none_or(|hit| hit >= range - target.radius * 0.25)
     }
 
-    /// The new grounded profile uses the existing 16 visual lanes as a
+    /// Terrain vision uses the 16 visual lanes as a
     /// profile-bound fan of nearest solid-surface ranges, not food labels.
     fn terrain_vision_fan(
         &self,
@@ -4142,7 +4140,7 @@ impl HeadlessWorld {
         self.sensory_report_from_visible(organism_id, tick, agent, visible_entities)
     }
 
-    pub fn sensory_report_indexed(
+    fn sensory_report_indexed(
         &self,
         organism_id: OrganismId,
         tick: Tick,
@@ -4418,20 +4416,6 @@ impl HeadlessWorld {
             return Err(error);
         }
         result
-    }
-
-    /// Executes a motor bundle without creating a nested rollback snapshot.
-    ///
-    /// This is reserved for a caller that already owns a complete
-    /// `HeadlessWorld` rollback snapshot for the enclosing tick transaction.
-    #[doc(hidden)]
-    pub fn apply_registered_motor_bundle_with_neural_emission_in_staged_tick(
-        &mut self,
-        bundle: &MotorCommandBundle,
-        world_entity_id: WorldEntityId,
-        neural: &NeuralEmissionFrame,
-    ) -> Result<HeadlessMotorTransactionReceipt, HeadlessMotorTransactionError> {
-        self.apply_registered_motor_bundle_inner(bundle, world_entity_id, Some(neural), None)
     }
 
     /// Organism-owned perception/memory evidence modulates inherited chemistry;

@@ -1,4 +1,4 @@
-//! v0 scaffold: simulation units and bounded scalar wrappers.
+//! Simulation units and bounded scalar wrappers.
 
 use serde::{Deserialize, Serialize};
 

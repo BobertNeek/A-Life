@@ -1,4 +1,4 @@
-//! Contract-only facade for immutable production phenotype compilation records.
+//! Immutable production phenotype compilation records.
 
 use serde::{Deserialize, Serialize};
 

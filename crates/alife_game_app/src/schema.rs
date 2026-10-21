@@ -1,4 +1,4 @@
-//! Versioned playable-sim schema constants split during R13 remediation.
+//! Schema identifiers and metadata parser bounds.
 
 pub const G01_APP_SHELL_SCHEMA: &str = "alife.g01.app_shell.v1";
 pub const G01_APP_SHELL_SCHEMA_VERSION: u16 = 1;
@@ -8,16 +8,9 @@ pub const G03_LIVE_BRAIN_LOOP_SCHEMA: &str = "alife.g03.live_brain_loop.v1";
 pub const G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION: u16 = 1;
 pub const G04_CREATURE_VISUAL_SCHEMA: &str = "alife.g04.creature_visual_state.v1";
 pub const G04_CREATURE_VISUAL_SCHEMA_VERSION: u16 = 1;
-pub const G05_CAMERA_INSPECTOR_SCHEMA: &str = "alife.g05.camera_selection_inspector.v1";
-pub const G05_CAMERA_INSPECTOR_SCHEMA_VERSION: u16 = 1;
-pub const G13_WORLD_EDITOR_SCHEMA: &str = "alife.g13.world_editor.v1";
-pub const G13_WORLD_EDITOR_SCHEMA_VERSION: u16 = 1;
-pub const G13_EDITOR_MAX_OBJECTS: usize = 16;
 pub const CA10_ENVIRONMENT_MANIFEST_SCHEMA: &str = "alife.ca10.environment_manifest.v1";
 pub const CA10_ENVIRONMENT_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const CA10_MAX_ENVIRONMENT_SCENARIOS: usize = 8;
-pub const CA11_PLAYER_SANDBOX_EDITOR_SCHEMA: &str = "alife.ca11.player_sandbox_editor.v1";
-pub const CA11_PLAYER_SANDBOX_EDITOR_SCHEMA_VERSION: u16 = 1;
 pub const CA12_APP_BUNDLE_MANIFEST_SCHEMA: &str = "alife.ca12.app_bundle_manifest.v1";
 pub const CA12_APP_BUNDLE_MANIFEST_SCHEMA_VERSION: u16 = 1;
 pub const CA12_MAX_BUNDLE_FILE_BYTES: u64 = 128 * 1024;

@@ -1,4 +1,4 @@
-//! Tooling-only contracts, canonical validation, and orchestration data for real GPU benchmarks.
+//! Validation and orchestration for measured GPU benchmarks.
 
 use std::{collections::BTreeSet, fs, path::Path};
 
@@ -35,9 +35,9 @@ const TARGETS_DOMAIN: &[u8] = b"alife.gpu.closed-loop-benchmark.targets.v1";
 
 #[derive(Debug, Error)]
 pub enum GpuBenchmarkError {
-    #[error("GPU benchmark contract failed: {0}")]
+    #[error("Invalid GPU benchmark: {0}")]
     Contract(&'static str),
-    #[error("GPU benchmark contract failed: {0}")]
+    #[error("Invalid GPU benchmark: {0}")]
     ContractDetail(String),
     #[error(transparent)]
     Core(#[from] alife_core::ScaffoldContractError),

@@ -1,4 +1,4 @@
-//! Split from the original playable-sim app shell during R13 remediation.
+//! Stable object presentation derived from portable saves.
 
 use crate::prelude::*;
 use crate::*;

@@ -1,4 +1,4 @@
-//! Contract acceptance for the immutable Nano512 bootstrap foundation.
+//! Immutable Nano512 bootstrap foundation compatibility.
 
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -129,8 +129,7 @@ pub fn creature_face_style_from_landmarks(
     })
 }
 
-/// Temporary renderer entry point. Source-authored heads and limbs already own
-/// face, ear, hand, foot, and silhouette geometry, so only coat markings remain.
+/// Coat markings layered over the source-authored body geometry.
 pub fn creature_surface_detail_recipe(
     appearance: CreatureAppearanceGenome,
     lod_scale: f32,

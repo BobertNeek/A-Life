@@ -1,7 +1,6 @@
 //! Real-hardware tests for sealed-outcome GPU fast plasticity.
 //!
-//! These tests build ordinary sealed neural experience patches and never run
-//! CPU neural or plasticity math.
+//! These tests apply sealed experience patches through the production GPU path.
 #![cfg(feature = "gpu-tests")]
 
 mod support;

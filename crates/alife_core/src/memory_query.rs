@@ -1,4 +1,4 @@
-//! Contract-only candidate-conditioned episodic query and retrieval-context records.
+//! Candidate-conditioned episodic queries and retrieval context.
 
 use std::ops::Range;
 

@@ -40,5 +40,4 @@ if command -v graphify >/dev/null 2>&1 || { [ -n "${USERPROFILE:-}" ] && [ -x "$
   echo "Graphify is available for optional developer graph updates."
 else
   echo "Graphify is optional. Install with: uv tool install graphifyy"
-  echo "Then run: graphify install --project --platform codex"
 fi

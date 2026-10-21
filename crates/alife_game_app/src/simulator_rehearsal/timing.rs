@@ -1,5 +1,4 @@
-//! Mandatory runner diagnostics, separate from behavioral evidence. One entry
-//! clock charges cold setup, exact captures, updates and resource release.
+//! Stage timing covering setup, captures, updates, and resource release.
 use super::Result;
 use std::{
     cell::RefCell,

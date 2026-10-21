@@ -1,8 +1,4 @@
-//! CA13 double-buffered graphical/game tick scheduler.
-//!
-//! This module is deliberately Bevy-free. It aligns render frames to a fixed
-//! simulation cadence and exposes compact scheduler state for the graphical
-//! overlay without making rendering authoritative over cognition.
+//! Fixed simulation cadence with double-buffered presentation and interpolation.
 
 use crate::*;
 

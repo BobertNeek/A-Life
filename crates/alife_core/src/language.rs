@@ -1,4 +1,4 @@
-//! Stable, bounded language codes and speech-act protocol contracts.
+//! Stable, bounded language codes and speech acts.
 
 use std::collections::BTreeSet;
 

@@ -258,7 +258,7 @@ fn fixture_and_real_staged_outputs_pass_the_complete_visual_contract() {
     let real_recipe = real_root.join("geneforge_recipes.cross-torso.json");
     assert!(
         real.join("build_receipt.json").is_file(),
-        "run the real Task 4 staged build before this integration gate"
+        "generate the GeneForge staging pack before running this test"
     );
     let real_receipt = validate_geneforge_staging(&real, &real_recipe).unwrap();
     assert_eq!(real_receipt.donor_count, 3);

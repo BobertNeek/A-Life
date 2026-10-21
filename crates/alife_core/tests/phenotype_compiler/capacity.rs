@@ -1,12 +1,11 @@
-//! Test-only RED contracts for canonical production brain capacity and compiled budget receipts.
+//! Canonical production brain capacity and compiled budgets.
 
 mod task3_capacity_budget_red_tests {
     use std::collections::BTreeSet;
 
     use alife_core::{
         BrainCapacityClass, BrainClassId, BrainScaleTier, CompiledBudgets,
-        GlobalPhenotypeBudgetReceipt, LegacyBrainClassAdapter, RouteBudgetReceipt,
-        CANDIDATE_FEATURE_COUNT,
+        GlobalPhenotypeBudgetReceipt, RouteBudgetReceipt, CANDIDATE_FEATURE_COUNT,
     };
     use serde_json::{json, Value};
 
@@ -215,12 +214,12 @@ mod task3_capacity_budget_red_tests {
             BrainClassId(0),
             BrainClassId(4),
             BrainClassId(u16::MAX),
-            LegacyBrainClassAdapter::capacity_id_for_tier(BrainScaleTier::Large4096),
-            LegacyBrainClassAdapter::capacity_id_for_tier(BrainScaleTier::Cognitive32768),
-            LegacyBrainClassAdapter::capacity_id_for_tier(BrainScaleTier::Student131k),
-            LegacyBrainClassAdapter::capacity_id_for_tier(BrainScaleTier::Ascended1M),
-            LegacyBrainClassAdapter::capacity_id_for_tier(BrainScaleTier::Ascended5M),
-            LegacyBrainClassAdapter::capacity_id_for_tier(BrainScaleTier::ResearchCustom),
+            BrainScaleTier::Large4096.default_class_id(),
+            BrainScaleTier::Cognitive32768.default_class_id(),
+            BrainScaleTier::Student131k.default_class_id(),
+            BrainScaleTier::Ascended1M.default_class_id(),
+            BrainScaleTier::Ascended5M.default_class_id(),
+            BrainScaleTier::ResearchCustom.default_class_id(),
         ];
         for foreign_id in foreign_ids {
             assert!(

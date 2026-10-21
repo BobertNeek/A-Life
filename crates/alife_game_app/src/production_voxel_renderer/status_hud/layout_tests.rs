@@ -682,7 +682,7 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
     if let Ok(path) = std::env::var("ALIFE_HUD_CPU_FIXTURE") {
         let receipt = json!({"evidence_kind": "source-derived CPU Bevy UiSurface layout",
             "is_screenshot": false, "glyph_bounds_measured": false,
-            "limitations": "Synthetic readout inputs; no renderer, simulation, GPU, font shaping, or screenshot. Text values/font styles are actual ECS components; text computed boxes do not establish glyph fit. Visibility is resolved from actual ancestor Visibility components. Warning badges may overlay their own card icons.",
+            "limitations": "CPU Bevy layout with synthetic readouts, actual ECS text styles, and ancestor visibility. Warning badges may overlap their icons; text boxes do not establish rendered glyph fit.",
             "quantity_order": QUANTITIES.map(Quantity::name), "embedded_assets": embedded_assets,
             "fixtures": fixtures});
         std::fs::write(path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();

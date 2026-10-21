@@ -1,8 +1,4 @@
-//! FVR03 production voxel renderer.
-//!
-//! This module is Bevy-facing presentation code. It mirrors the persistent
-//! voxel truth owned by `alife_world` into selectable chunk/tile meshes without
-//! moving renderer handles, Bevy entities, or wgpu state into core/world data.
+//! Bevy terrain, creature, controls, and UI presentation of the live world.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -12,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alife_bevy_adapter::BevyEntityMap;
+use crate::BevyEntityMap;
 use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_world::CreatureAppearanceGenome;
 use alife_world::{
@@ -141,7 +137,7 @@ pub const FVR10_VISIBLE_SURFACE_VARIATION_VERSION: &str = "fvr10-visible-surface
 pub const FVR10_CUTE_BIPED_VISUAL_PROFILE: &str = "approved-hearthling-skinned-v2";
 pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "approved-blender-vertex-color-v2";
 pub const FVR10_SURFACE_DETAIL_VERSION: &str = "fvr10-screenshot-visible-surface-detail-v2";
-/// Dynamic overlay geometry still comes from the scene snapshot. See `docs/STATUS.md`.
+/// Dynamic overlay geometry still comes from the scene snapshot.
 pub const FVR05_DYNAMIC_OVERLAYS_TRACK_LIVE_STATE: bool = false;
 /// Legacy scene VFX remain snapshot-driven; live sleep feedback is reconciled separately.
 pub const FVR07_VFX_TRIGGERS_TRACK_LIVE_STATE: bool = false;
@@ -587,7 +583,7 @@ pub struct Fvr04ProductionCreatureSceneResource {
     pub mesh_pool_count: usize,
     pub lod: Fvr04CreatureLod,
     pub stable_lookup_by_raw_id: BTreeMap<u64, usize>,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub expression_buffer_is_read_only_projection: bool,
     pub visual_profile: &'static str,
     pub mesh_material_version: &'static str,
@@ -670,7 +666,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub draw_radius_chunks: u16,
     pub target_fps: u16,
     pub performance_artifact_path: Option<PathBuf>,
-    pub no_renderer_authority_over_world_truth: bool,
+
     pub material_counts: BTreeMap<Fvr03ProductionVoxelMaterialKind, usize>,
     pub average_resource_bias: f32,
     pub average_hazard_pressure: f32,
@@ -1123,7 +1119,7 @@ pub struct Fvr10CreatureSurfaceDetailMarker {
     pub detail_role: &'static str,
     pub anchor_slot: CreaturePartSlot,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub high_contrast_marking: bool,
     pub heritable: bool,
 }
@@ -1258,7 +1254,6 @@ pub struct Fvr07ProductionVisualDressing {
     pub kind: Fvr07ProductionDressingKind,
     pub tile: VoxelTileCoord,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -1268,7 +1263,7 @@ pub struct Fvr07ProductionGpuVfxMarker {
     pub stable_id: Option<alife_core::WorldEntityId>,
     pub follows_creature: bool,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub budget_state: &'static str,
     pub base_translation: Vec3,
     pub base_scale: Vec3,
@@ -1282,7 +1277,7 @@ pub struct Fvr07ProductionHanabiVfxEmitter {
     pub stable_id: Option<alife_core::WorldEntityId>,
     pub follows_creature: bool,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub budget_state: &'static str,
 }
 
@@ -2851,7 +2846,6 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
                 tile: shadow.tile,
                 stable_id: shadow.stable_id,
                 display_only: true,
-                no_renderer_authority_over_world_actions_or_cognition: true,
             },
             Fvr04ProductionRuntimeSceneRoot,
         ));
@@ -3006,7 +3000,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         water_layer_count: terrain_receipt.water_layer_count,
         confetti_detail_quad_count: terrain_receipt.confetti_detail_quad_count,
         display_only: true,
-        no_renderer_authority_over_world_actions_or_cognition: true,
     };
     let creature_scene = spawn_fvr04_prepared_creature_batch(world, creatures);
     god_hand::spawn(world);
@@ -3059,7 +3052,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         draw_radius_chunks: settings.draw_radius_chunks,
         target_fps: settings.target_fps,
         performance_artifact_path: None,
-        no_renderer_authority_over_world_truth: true,
         material_counts,
         average_resource_bias: fvr05_average_resource_bias(&tile_summaries_by_tile),
         average_hazard_pressure: fvr05_average_hazard_pressure(&tile_summaries_by_tile),
@@ -3269,7 +3261,6 @@ fn spawn_fvr11_layered_terrain_meshes(
             material,
             source_tile_count,
             display_only: true,
-            no_renderer_authority_over_world_actions_or_cognition: true,
         };
         if matches!(
             role,
@@ -3597,8 +3588,6 @@ fn spawn_fvr07_production_visual_polish(
                 kind: spawn.kind,
                 tile: spawn.tile,
                 display_only: spawn.display_only,
-                no_renderer_authority_over_actions_or_cognition: spawn
-                    .no_renderer_authority_over_actions_or_cognition,
             },
             Fvr04ProductionRuntimeSceneRoot,
         ));
@@ -3627,7 +3616,6 @@ fn spawn_fvr07_production_visual_polish(
                     stable_id: spawn.stable_id,
                     follows_creature: spawn.follows_creature,
                     display_only: true,
-                    no_renderer_authority_over_actions_or_cognition: true,
                     budget_state: settings.production_vfx_budget_state,
                     base_translation: spawn.translation,
                     base_scale: spawn.scale,
@@ -4067,7 +4055,6 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
                 stable_id: spawn.stable_id,
                 follows_creature: spawn.follows_creature,
                 display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: settings.production_vfx_budget_state,
             },
             Fvr04ProductionRuntimeSceneRoot,
@@ -4387,7 +4374,6 @@ fn spawn_fvr04_prepared_creature_batch(
         mesh_pool_count: scene_mesh_handles.len(),
         lod: settings.lod,
         stable_lookup_by_raw_id,
-        no_renderer_authority_over_actions_or_cognition: true,
         expression_buffer_is_read_only_projection: true,
         visual_profile: "approved-hearthling-skinned-v2",
         mesh_material_version: "approved-blender-vertex-color-v2",
@@ -5204,8 +5190,7 @@ fn sync_v0_player_control_strip(
     if simulation_failed {
         text.push_str("\nSimulation stopped. F3 for details.");
     } else if let Some(error) = ux.last_error.as_deref() {
-        // Show only bounded, player-facing explanations here. The original
-        // error and action (including paths) remain in the debug panel.
+        // Keep detailed errors and file paths in the debug panel.
         let message = match error {
             "select a visible terrain tile first" => {
                 "Click a ground tile, then press E to place food."
@@ -7291,7 +7276,6 @@ mod tests {
             draw_radius_chunks: 2,
             target_fps: 30,
             performance_artifact_path: None,
-            no_renderer_authority_over_world_truth: true,
             material_counts: BTreeMap::new(),
             average_resource_bias: 0.0,
             average_hazard_pressure: 0.0,
@@ -7356,7 +7340,6 @@ mod tests {
                 stable_id: None,
                 follows_creature: false,
                 display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: "test",
                 base_translation: Vec3::ZERO,
                 base_scale: Vec3::ONE,
@@ -7448,7 +7431,6 @@ mod tests {
         overlays.push(Fvr05ProductionOverlayKind::ChunkBoundaries);
         overlays.sort();
         assert_eq!(scene.stable_sim_signature(), before);
-        assert!(scene.no_renderer_authority_over_world_truth);
         assert!(scene.production_visuals_display_only);
     }
 

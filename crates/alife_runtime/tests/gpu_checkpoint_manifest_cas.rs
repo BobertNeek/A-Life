@@ -1,4 +1,4 @@
-//! Durable GPU checkpoint save-manifest compare-and-swap contracts.
+//! Durable GPU checkpoint publication and compare-and-swap tests.
 use std::{fs, path::Path};
 
 use alife_core::{

@@ -1,7 +1,6 @@
 //! Portable, digest-checked GPU-brain checkpoint records.
 //!
-//! This module owns serialization contracts only. It contains no neural math,
-//! GPU handles, packed arena offsets, or fallback execution path.
+//! Stores portable data and asset references rather than process-local GPU handles.
 
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::SleepWorkReceipt;
@@ -45,7 +44,7 @@ const WEIGHT_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-DUAL-WEIGHT-BANK-V1";
 const ELIGIBILITY_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-ELIGIBILITY-BANKS-V1";
 const REPLAY_JOURNAL_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-REPLAY-JOURNAL-V1";
 
-/// The complete non-bulk v1.1 cognitive state at a sealed runtime boundary.
+/// The complete non-bulk cognitive state at a sealed runtime boundary.
 ///
 /// This is intentionally separate from durable founder state. Attention,
 /// active context, current motor intent, work receipts, sleep phase, and

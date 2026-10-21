@@ -1,9 +1,7 @@
-//! v0 test fixture layer: deterministic headless behavior scenarios for P18.
+//! Deterministic scenarios for the explicitly labelled heuristic baseline.
 //!
-//! These fixtures sit above the P17 headless harness. They define named world
-//! layouts, creature starting state, scripted proposal timelines, and broad
-//! assertions over sealed patches, memory, topology, sleep, language, and
-//! social context. They intentionally avoid P19-style exact golden traces.
+//! Defines world layouts, starting states, scripted proposals, and expected
+//! changes in experience, memory, topology, sleep, language, and social context.
 
 use alife_core::{
     ActionId, ActionKind, ActionProposal, ActionTarget, BrainScaleTier, BrainTickInput,

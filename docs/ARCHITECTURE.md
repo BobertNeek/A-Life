@@ -38,12 +38,11 @@ world perception + unscored legal candidates
 | `alife_gpu_backend` | GPU buffers, WGSL neural execution, plasticity, sleep, and state capture |
 | `alife_runtime` | Shared GPU session and checkpoint authority |
 | `alife_archive` | Immutable birth/life manifests, content-addressed assets, lineage, and learned checkpoints |
-| `alife_school` | Teacher, curriculum, nursery, readiness, and verification contracts |
+| `alife_school` | In-world language nursery and speech exposure |
 | `alife_semantic` | Private local SLM prior and bounded speech translation |
-| `alife_training` | Offline training, evaluation, and evolution tools |
-| `alife_bevy_adapter` | Bevy-facing identity and integration helpers |
+| `alife_training` | Offline neural training, replay, and CPU/GPU state handoff |
 | `alife_tools` | Developer asset tools, persistence validators, and GPU diagnostics |
-| `alife_game_app` | CLI, headless smokes, production Bevy shell, GPU live runtime, controls, and voxel presentation |
+| `alife_game_app` | CLI, headless smokes, production Bevy shell, GPU live runtime, controls, stable render identity, and voxel presentation |
 
 ## Neural tick
 
@@ -65,7 +64,7 @@ records per channel. Concept summaries and quiet topology observations run
 every ten ticks. Immediate senses, neural selection and GPU outcome learning
 remain at tick rate. Each candidate receives a fresh current-frame decision key,
 even when its expectancy is cached. Foundation training retains the audited
-per-frame path with batched GPU mutable-state capture (`capture_training_state_batch`).
+per-frame path with batched GPU mutable-state capture (`capture_training_states`).
 Candidate memory admits consequences, surprises, manipulation, blocked attempts,
 and first novel inspection rather than routine movement ticks.
 

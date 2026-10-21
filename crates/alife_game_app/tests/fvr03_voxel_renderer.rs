@@ -293,7 +293,6 @@ fn fvr11_terrain_contract_is_display_only() {
     );
     assert!(scene.sample_count > 0);
     assert!(scene.display_only);
-    assert!(scene.no_renderer_authority_over_world_actions_or_cognition);
 }
 
 #[test]
@@ -315,9 +314,6 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
     let mut query = app.world_mut().query::<&Fvr11ProductionTerrainLayer>();
     let layers = query.iter(app.world()).copied().collect::<Vec<_>>();
     assert!(layers.iter().all(|layer| layer.display_only));
-    assert!(layers
-        .iter()
-        .all(|layer| layer.no_renderer_authority_over_world_actions_or_cognition));
     assert!(layers.iter().all(|layer| layer.source_tile_count > 0));
     let roles = layers
         .iter()
@@ -452,7 +448,6 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     assert!(comfort.contact_grounding);
     assert_eq!(comfort_contact_shadows, 0);
     assert!(comfort.display_only);
-    assert!(comfort.no_renderer_authority_over_world_actions_or_cognition);
     assert!(comfort_ambient_brightness >= 360.0);
     assert!(comfort_vertical_area <= 17.5);
     assert!(comfort_sun_illuminance == 8_500.0);
@@ -483,7 +478,6 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     assert!(scene.tile_mesh_count >= scene.resident_chunk_count);
     assert!(scene.selection_ref_count >= summary.save_metadata.creature_count);
     assert!(scene.estimated_resident_bytes > 0);
-    assert!(scene.no_renderer_authority_over_world_truth);
     assert_eq!(scene.production_vfx_budget_state, "conservative");
     assert!(scene.production_visuals_display_only);
     assert!(scene.production_dressing_count >= 8);
@@ -516,9 +510,7 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         .copied()
         .collect::<Vec<_>>();
     assert_eq!(dressing.len(), scene.production_dressing_count);
-    assert!(dressing
-        .iter()
-        .all(|entry| entry.display_only && entry.no_renderer_authority_over_actions_or_cognition));
+    assert!(dressing.iter().all(|entry| entry.display_only));
     let dressing_kinds = dressing
         .iter()
         .map(|entry| entry.kind)
@@ -539,9 +531,9 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     let mut vfx_query = app.world_mut().query::<&Fvr07ProductionGpuVfxMarker>();
     let vfx = vfx_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert_eq!(vfx.len(), scene.production_vfx_marker_count);
-    assert!(vfx.iter().all(|entry| entry.display_only
-        && entry.no_renderer_authority_over_actions_or_cognition
-        && entry.budget_state == "conservative"));
+    assert!(vfx
+        .iter()
+        .all(|entry| entry.display_only && entry.budget_state == "conservative"));
     #[cfg(not(feature = "vfx-hanabi"))]
     {
         let vfx_kinds = vfx.iter().map(|entry| entry.kind).collect::<BTreeSet<_>>();
@@ -1890,7 +1882,6 @@ fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
     assert_eq!(creature_scene.mesh_pool_count, 0); // Dry-run roots load no mesh assets.
     shipping_hearthling();
     assert!(creature_scene.expression_buffer_is_read_only_projection);
-    assert!(creature_scene.no_renderer_authority_over_actions_or_cognition);
 
     let mut query = app.world_mut().query::<&Fvr09CuteBipedCreatureMarker>();
     let markers = query.iter(app.world()).copied().collect::<Vec<_>>();
@@ -2200,6 +2191,5 @@ fn hearthling_face_is_authored_in_the_skin_and_renderer_remains_display_only() {
         .world()
         .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
     assert!(scene.production_visuals_display_only);
-    assert!(scene.no_renderer_authority_over_actions_or_cognition);
     assert!(scene.expression_buffer_is_read_only_projection);
 }

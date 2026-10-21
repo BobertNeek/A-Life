@@ -1,4 +1,4 @@
-//! CPU-only causal input-chain regression (AOA-CON-003/004/005, AOA-EVAL-006).
+//! CPU regression for the predictor-to-gap-to-exploration input chain.
 //! No adapter, neural execution, or hand-injected concept/gap state.
 use super::*;
 use alife_core::{

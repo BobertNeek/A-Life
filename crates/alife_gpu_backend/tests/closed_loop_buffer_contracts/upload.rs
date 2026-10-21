@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
 use alife_core::{BrainCapacityClass, CandidateActionFamily, CompiledSynapseKind, PhenotypeHash};
-use alife_gpu_backend::{GpuPhenotypeUpload, GpuProjectionSpanDomain, GPU_NO_EXTENSION_SENTINEL};
+use alife_gpu_backend::{GpuPhenotypeUpload, GPU_NO_EXTENSION_SENTINEL};
 
 use super::support::{production_phenotypes, recurrent_count};
 
 #[test]
-fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
+fn phenotype_upload_preserves_counts_and_layout() {
     for phenotype in production_phenotypes() {
         let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
         let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id()).unwrap();
@@ -52,36 +52,6 @@ fn promoted_classes_have_exact_phenotype_owned_count_and_byte_plans() {
         assert_eq!(upload.decoder_weight_indices.len(), candidate_decoder);
         assert_eq!(upload.genetic_weights.len(), phenotype.synapses().len());
         assert_eq!(upload.alpha.len(), phenotype.synapses().len());
-
-        let counts = upload.exact_count_plan();
-        let bytes = upload.exact_byte_plan();
-        assert_eq!(counts.neurons, phenotype.neuron_count() as usize);
-        assert_eq!(counts.synapses, phenotype.synapses().len());
-        assert_eq!(counts.recurrent_synapses, recurrent);
-        assert_eq!(counts.candidate_decoder_synapses, candidate_decoder);
-        assert_eq!(bytes.immutable_weight_bytes, phenotype.synapses().len() * 8);
-        assert_eq!(bytes.mutable_weight_bytes, phenotype.synapses().len() * 24);
-        assert_eq!(
-            bytes.activation_bytes,
-            phenotype.neuron_count() as usize * 3 * 4
-        );
-        assert_eq!(
-            bytes.homeostasis_bytes,
-            phenotype.neuron_count() as usize * 2 * 4
-        );
-
-        match phenotype.brain_class_id() {
-            BrainCapacityClass::N512_ID => assert_eq!(counts.neurons, 512),
-            BrainCapacityClass::N1024_ID => assert_eq!(counts.neurons, 1024),
-            BrainCapacityClass::N2048_ID => {
-                assert_eq!(counts.neurons, 2_048);
-                assert_eq!(counts.synapses, 32_768);
-                assert_eq!(counts.recurrent_synapses, 24_576);
-                assert_eq!(counts.candidate_decoder_synapses, 3_072);
-                assert_eq!(upload.decoder_weight_indices.len(), 3_072);
-            }
-            other => panic!("unexpected production class {other:?}"),
-        }
     }
 }
 
@@ -105,10 +75,6 @@ fn replay_capture_gpu_local_ids_preserve_the_bounded_batch_ordering_contract() {
 fn upload_is_an_exact_projection_encoder_dynamics_and_decoder_translation() {
     let phenotype = production_phenotypes().into_iter().next().unwrap();
     let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
-    assert_eq!(
-        upload.projection_span_domain(),
-        GpuProjectionSpanDomain::A3ProvenanceOnly
-    );
 
     let encoder = &upload.encoder_plans[0];
     assert_eq!(
@@ -400,10 +366,6 @@ fn recurrent_and_decoder_views_are_a_disjoint_complete_global_partition() {
         );
         assert_eq!(total as usize, upload.genetic_weights.len());
         assert_eq!(total as usize, upload.alpha.len());
-        assert_eq!(
-            upload.recurrent_global_ids(),
-            (0..recurrent).collect::<Vec<_>>()
-        );
 
         let mut expected_all_decoders = phenotype
             .synapses()
@@ -460,7 +422,7 @@ fn recurrent_and_decoder_views_are_a_disjoint_complete_global_partition() {
 }
 
 #[test]
-fn upload_has_one_immutable_owner_full_identity_and_zeroed_reserved_lanes() {
+fn upload_preserves_identity_and_zeroed_reserved_lanes() {
     let phenotype = production_phenotypes().into_iter().next().unwrap();
     let upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
     upload.validate_against(&phenotype).unwrap();
@@ -480,8 +442,6 @@ fn upload_has_one_immutable_owner_full_identity_and_zeroed_reserved_lanes() {
 
     assert_eq!(upload.genetic_weights.len(), phenotype.synapses().len());
     assert_eq!(upload.alpha.len(), phenotype.synapses().len());
-    assert_eq!(upload.immutable_genetic_owner_count(), 1);
-    assert!(!upload.has_mutable_projection_copy());
     assert!(upload
         .encoder_assignments
         .iter()

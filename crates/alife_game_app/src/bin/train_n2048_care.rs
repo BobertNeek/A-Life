@@ -1,4 +1,4 @@
-//! Training-only entry point; never linked into the ordinary game executable.
+//! Offline care training command.
 
 use std::io::Read;
 

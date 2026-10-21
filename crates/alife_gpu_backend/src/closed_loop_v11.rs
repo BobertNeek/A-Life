@@ -1,8 +1,4 @@
-//! Pass 1 backend join for bounded dendritic and structural computation.
-//!
-//! The closed-loop GPU path remains authoritative for normal neural execution.
-//! This state owns the bounded descriptors and receipts compiled into the
-//! production WGSL recurrent dispatch.
+//! Bounded dendritic and structural state for the WGSL recurrent dispatch.
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{

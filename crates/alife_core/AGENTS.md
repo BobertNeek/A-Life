@@ -1,7 +1,7 @@
 # alife_core
 
 Own engine-independent organism, genome, phenotype, chemistry, learning, language,
-and persistence contracts. Keep Bevy, wgpu, UI, and provider integration outside
+and persistence formats. Keep Bevy, wgpu, UI, and provider integration outside
 this crate. Brain classes scale; `Standard2048` is a reference class.
 
 Preserve stable logical identity across storage/compiler changes. Packed GPU

@@ -1,4 +1,4 @@
-//! EI0 diploid genome, reproduction, and causal expression contracts.
+//! Diploid inheritance, reproduction, and causal expression.
 
 use alife_core::{
     AlleleDominance, BodyFrame, BrainCapacityClass, ChromosomeKind, ContinuousLocus,
@@ -537,7 +537,7 @@ fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutatio
             .with_reaction_rate(side, 0, 0.9)
             .unwrap();
     }
-    // Custom construction parameters must not reset to scaffold defaults at birth.
+    // Birth must preserve inherited construction parameters.
     let architecture = alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
         1, 4, 2, 16, 0.37, 4, 16, 16, 8, 2, 0.4, 0.2, 0.2, 0.3, 0.3, 0.3, 0.3,
     )

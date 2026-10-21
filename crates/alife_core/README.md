@@ -1,8 +1,12 @@
 # alife_core
 
-Engine-independent cognitive contracts for A-Life.
+Engine-independent cognition and biology for A-Life.
 
-This crate owns IDs, math/data primitives, brain class specs, lobe layouts, genome and endocrine skeletons, action and sensory ABI markers, experience headers, lineage manifests, and backend/provider traits. It must not depend on Bevy, wgpu, Avian, renderer types, OS windowing, Python runtimes, or LLM vendor SDKs.
+This crate implements genomes, phenotype compilation, biochemistry, learning,
+memory, language, and portable brain data. It also defines stable IDs, math
+primitives, action and sensory ABIs, and private semantic-prior messages.
+World simulation, graphics, GPU execution, and external providers live in other
+crates.
 
 Biochemical graphs validate and compile their species indexes, reaction coefficients,
 and receptor groups when constructed or loaded. Saves contain genetic source data,

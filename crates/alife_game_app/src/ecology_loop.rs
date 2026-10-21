@@ -1,4 +1,4 @@
-//! Split from the original playable-sim app shell during R13 remediation.
+//! Terrain-zone resource and hazard indicators.
 
 use crate::prelude::*;
 

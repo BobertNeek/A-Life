@@ -1,4 +1,4 @@
-//! v0 scaffold: optional semantic-code and concept binding conversion.
+//! Optional semantic-code and concept binding conversion.
 
 use alife_core::{
     CompressedSemanticCode, ConceptCellId, Confidence, ContextFeatureFlags, NormalizedScalar,

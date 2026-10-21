@@ -2,7 +2,6 @@
 //!
 //! This is a persistence transaction boundary. It copies one immutable view of
 //! every admitted resident into one staging arena and maps that arena once.
-//! It never keeps a continuously synchronized CPU neural mirror.
 
 use std::{
     ops::Range,

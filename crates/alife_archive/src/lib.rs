@@ -341,12 +341,7 @@ pub struct CompositeGeneticArchiveInput<'a> {
     pub foundation_asset_bytes: &'a [u8],
 }
 
-/// Complete input boundary for the read-only composite-birth preparation phase.
-///
-/// The older [`CompositeGeneticArchiveInput`] remains source-compatible for
-/// existing single-record callers. The batch boundary carries the explicit
-/// identity and provenance values needed to validate a curated founder without
-/// guessing any field from a hard-coded profile.
+/// Batch founder input with explicit identity and provenance.
 #[derive(Debug, Clone, Copy)]
 pub struct CompositeGeneticArchiveBatchInput<'a> {
     pub source_run_id: &'a str,
@@ -659,10 +654,7 @@ impl LineageLibrary {
             })
     }
 
-    /// Reads and validates an ordered composite-birth batch without changing
-    /// the archive. The owned payloads and observations are private so the
-    /// later commit phase can consume them without exposing mutable storage or
-    /// staging details to callers.
+    /// Validates and owns an ordered birth batch without writing archive files.
     pub fn prepare_composite_birth_batch(
         &self,
         inputs: &[CompositeGeneticArchiveBatchInput<'_>],
@@ -766,9 +758,7 @@ impl LineageLibrary {
         })
     }
 
-    /// Publishes one prepared composite-birth batch as a single in-process
-    /// archive operation. The prepared value is consumed so a stale or partly
-    /// attempted batch cannot be reused accidentally.
+    /// Publishes and consumes a prepared birth batch.
     pub fn commit_composite_birth_batch(
         &self,
         prepared: PreparedCompositeBirthBatch,

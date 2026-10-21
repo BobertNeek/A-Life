@@ -1,9 +1,7 @@
-//! Engine-agnostic A-Life cognitive contracts.
+//! Engine-independent A-Life cognition and biology.
 
 pub mod action;
-pub mod action_abi;
 pub mod activity;
-pub mod adapter;
 pub mod archive;
 pub mod attention;
 pub mod biochemical_graph;
@@ -48,7 +46,6 @@ pub use factorized_selection::{
 };
 pub use genome::ActionCandidateCreditProfileV1;
 pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
-pub mod lineage;
 pub mod lobe;
 pub mod math;
 pub mod memory;
@@ -80,14 +77,12 @@ pub use action::{
     MotorPayloadKind, MotorPayloadRef, RankedActionProposal, SuppressedProposal, SuppressionReason,
     TeacherLessonMetadata, TeacherLessonResponseChannel,
 };
-pub use action_abi::ActionAbiVersion;
 pub use activity::{
     BrainActivityPolicyV1, BrainAtpCostModel, BrainDispatchIdentity, BrainWorkCounters,
     BrainWorkReceipt, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
     NeuralThrottleLevel, BRAIN_ACTIVITY_POLICY_VERSION, BRAIN_ACTIVITY_SCHEMA_VERSION,
     BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
 };
-pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use archive::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchivePageRef,
@@ -118,9 +113,7 @@ pub use biochemistry::{
     MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
 };
 pub use blake3_digest::Blake3Digest;
-pub use brain_class::{
-    BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
-};
+pub use brain_class::{BrainClassSpec, BrainComputeBudget, BrainScaleTier};
 pub use canonical_digest::CanonicalDigestBuilder;
 pub use checkpoint::{BrainCheckpointMode, BRAIN_CHECKPOINT_MODE_SCHEMA_VERSION};
 pub use chemistry::{
@@ -231,7 +224,6 @@ pub use legacy_nano512_compatibility::{
     MigratedN2048FoundationV1Descriptor, ProductionRuntimeAbiId, ProductionRuntimePath,
     LEGACY_NANO512_V1_COORDINATE_SEED,
 };
-pub use lineage::LineageExportManifest;
 pub use lobe::{
     ActivationPolicy, LegacyLobeKindV1, LobeEssentiality, LobeKind, LobeLayout, LobeRegion,
     LobeThrottlePriority, PlasticityPolicy, UpdateCadence,
@@ -376,9 +368,8 @@ pub use topology::{
     TopologySidecarDiagnostics, TopologyUpdate, UnresolvedGap, UnresolvedGapId,
 };
 pub use traits::{
-    NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,
-    SEMANTIC_PRIOR_MAX_GAIN, SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS,
-    SEMANTIC_PRIOR_MAX_PACKET_TICKS,
+    SemanticPriorPacket, SemanticPriorRequest, SEMANTIC_PRIOR_MAX_GAIN,
+    SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS, SEMANTIC_PRIOR_MAX_PACKET_TICKS,
 };
 
 pub use language::{basic_vocabulary_bindings, BASIC_VOCABULARY_V1, FOUNDATION_LESSON_VOCABULARY};
@@ -386,7 +377,7 @@ pub use units::{
     Confidence, DurationTicks, FixedPointScale, Intensity, NormalizedScalar, Seconds,
     SignedValence, Tick,
 };
-pub use validation::{ensure_current_version, Validate, Validated};
+pub use validation::{ensure_current_version, Validate};
 pub use version::{
     require_current_version, require_version, ContractVersion, SchemaKind, SchemaVersions,
 };

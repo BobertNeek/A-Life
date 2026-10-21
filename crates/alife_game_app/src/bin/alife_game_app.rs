@@ -281,7 +281,7 @@ fn production_asset_validation_receipt() -> Result<String, String> {
     let summary = validate_production_assets(default_production_asset_manifest_path())
         .map_err(|error| error.to_string())?;
     Ok(format!(
-        "FVR07 production assets schema={} version={} pack={} manifest={} assets={} generated={} external={} required_categories={} final_art={} placeholder_final={} unknown_license={} rejected={} committed_bytes={} largest={} generated_target={} vfx_profiles={} vfx_effects={} min_vfx={} comfort_vfx={} display_only_vfx={} adaptive_vfx={} renderer_authority_blocked={} scale_up_profiles={} signature={}",
+        "FVR07 production assets schema={} version={} pack={} manifest={} assets={} generated={} external={} final_art={} placeholder_final={} unknown_license={} rejected={} committed_bytes={} largest={} generated_target={} signature={}",
         summary.schema,
         summary.schema_version,
         summary.pack_id,
@@ -289,7 +289,6 @@ fn production_asset_validation_receipt() -> Result<String, String> {
         summary.asset_count,
         summary.generated_assets,
         summary.external_assets,
-        summary.required_usage_categories_present,
         summary.final_art_entries,
         summary.placeholder_final_entries,
         summary.unknown_license_entries,
@@ -297,14 +296,6 @@ fn production_asset_validation_receipt() -> Result<String, String> {
         summary.committed_asset_bytes,
         summary.largest_asset_bytes,
         summary.generated_art_target,
-        summary.vfx_profile_count,
-        summary.vfx_effects_present,
-        summary.minimum_vfx_budget_state,
-        summary.comfort_vfx_budget_state,
-        summary.display_only_vfx,
-        summary.adaptive_vfx,
-        summary.no_renderer_authority,
-        summary.scale_up_profiles_present,
         summary.signature_line(),
     ))
 }
@@ -885,7 +876,6 @@ mod tests {
         let receipt = production_asset_validation_receipt().unwrap();
         assert!(receipt.starts_with("FVR07 production assets"));
         assert!(receipt.contains("unknown_license=0"));
-        assert!(receipt.contains("renderer_authority_blocked=true"));
         assert!(help().contains(VALIDATE_PRODUCTION_ASSETS_COMMAND));
     }
 

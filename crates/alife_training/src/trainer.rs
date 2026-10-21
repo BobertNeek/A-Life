@@ -156,10 +156,7 @@ impl FoundationTrainer {
         stage_mask: StageTrainableMask,
         config: AdamWConfig,
     ) -> Result<Self, TrainingError> {
-        if !matches!(
-            session.authority().consumer(),
-            GpuSessionConsumerKind::Training | GpuSessionConsumerKind::Evolution
-        ) {
+        if session.authority().consumer() != GpuSessionConsumerKind::Training {
             return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
         }
         config.validate()?;
@@ -1088,8 +1085,8 @@ impl FoundationTrainer {
         })
     }
 
-    /// The old API always measures after-update loss. Callers may explicitly
-    /// omit that second forward pass here; absence is represented by None.
+    /// Optionally skips the second forward pass for after-update loss.
+    /// A skipped measurement is `None`.
     pub fn train_step_with_statistics(
         &mut self,
         sequence: &TrainingSequence32,
@@ -1355,8 +1352,8 @@ impl FoundationTrainer {
         )?)
     }
 
-    /// Legacy neutral-context diagnostic forward. Grounded collection uses the
-    /// explicit replay API; these synthetic targets do not prove runtime parity.
+    /// Neutral-context diagnostic forward. Grounded collection uses replay;
+    /// synthetic targets do not demonstrate runtime parity.
     pub fn evaluate_sequence(
         &self,
         sequence: &TrainingSequence32,

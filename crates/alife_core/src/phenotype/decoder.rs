@@ -1,4 +1,4 @@
-//! Contract-only compiler-owned candidate-conditioned decoder plan.
+//! Compiled candidate-conditioned decoder plans.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

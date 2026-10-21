@@ -31,7 +31,7 @@ fn sensory_abi_descriptor_is_versioned_and_fixed_width() {
     assert_eq!(
         descriptor.version,
         SensoryAbiVersion::CURRENT,
-        "P08 uses central schema versioning"
+        "sensory ABI uses the central schema version"
     );
     assert_eq!(
         descriptor.total_channel_count(),

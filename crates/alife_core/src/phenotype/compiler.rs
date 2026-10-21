@@ -1,4 +1,4 @@
-//! Contract-only compiler entry point; Stage 3 policy fills the validated construction path.
+//! Validated phenotype compiler entry points.
 
 use crate::{
     BrainGenome, DevelopmentState, FoundationAbiBinding, FoundationWeightAsset,

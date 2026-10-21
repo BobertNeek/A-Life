@@ -469,7 +469,7 @@ fn cpu_layout_fits_four_viewports_and_exports_actual_wordless_feedback_nodes() {
     }
     if let Ok(path) = std::env::var("ALIFE_CARE_DOCK_CPU_FIXTURE") {
         let receipt = json!({"evidence_kind":"source-derived CPU Bevy UiSurface layout","is_screenshot":false,
-            "glyph_bounds_measured":false,"limitations":"Synthetic availability/evidence passed to actual production feedback projection. No renderer, GPU, neural session, simulation ticks, font shaping, screenshot, or proof of biological effect. Action markers fit the dock and are disjoint from glyphs and adjacent buttons; they may overlap their own button chrome. Error badge occupies a separate viewport-contained alert gutter above the dock.",
+            "glyph_bounds_measured":false,"limitations":"CPU Bevy layout with synthetic care feedback. Checks marker, glyph, button, and alert bounds; excludes rendering and biological effects.",
             "embedded_assets":embedded_assets,"fixtures":fixtures,"composer_fixtures":composer_fixtures()});
         std::fs::write(path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
     }
@@ -1244,7 +1244,6 @@ fn conversation_state() -> ProductionConversationLineageUiState {
         asset_manifest_path: PathBuf::new(),
         production_asset_manifest_path: PathBuf::new(),
         production_asset_count: 0,
-        production_asset_vfx_budget_state: "none".into(),
         production_asset_license_metadata_validated: false,
         asset_root: PathBuf::new(),
         diagnostics: crate::ProductionRuntimeDiagnostics {
@@ -1396,7 +1395,7 @@ fn composer_fixtures() -> Vec<Value> {
             fixtures.push(json!({"case":case, "viewport":[size.x,size.y], "error":error,
                 "composer_box":composer.json(), "dock_box":dock.json(), "alert_box":alert_box.json(),
                 "typed_input_preserved":input, "glyph_bounds_measured":false,
-                "limitations":"Actual source Node/UiSurface parent bounds, clipping and word-or-character style, and conservative formatter-based height budget. No font shaping, glyph visibility, or renderer measurement. Scroll target requests end-caret following; the visible caret is not rendered here.",
+                "limitations":"CPU Bevy layout checks parent bounds, clipping, text styles, height budget, and end-caret scroll target; excludes glyph shaping and rendering.",
                 "nodes":export_nodes(app.world_mut())}));
             app.world_mut()
                 .resource_mut::<ProductionConversationLineageUiState>()

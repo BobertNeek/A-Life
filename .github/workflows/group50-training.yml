@@ -1,8 +1,8 @@
-name: Group50 training contracts
+name: Group50 training
 
 on:
   push:
-    # Dedicated qualification refs run this focused job without broad codex jobs.
+    # Additional refs support targeted training checks.
     branches: ["main", "group50-ci/**"]
     paths:
       - ".github/workflows/group50-training.yml"
@@ -44,7 +44,7 @@ concurrency:
 
 jobs:
   group50-source:
-    name: Group50 CPU contracts and GPU fixture compilation
+    name: Group50 CPU tests and GPU fixture compilation
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:

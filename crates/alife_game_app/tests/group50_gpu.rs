@@ -1,5 +1,4 @@
-//! Opt-in real-hardware qualification. Never run this on the user's PC without
-//! coordination; cloud CPU checks do not substitute for this test.
+//! Opt-in GPU continuation test using an explicitly selected source and seed history.
 #![cfg(all(feature = "gpu-tests", feature = "foundation-training"))]
 #[test]
 #[ignore = "requires an explicitly coordinated GPU and admitted native source/history"]

@@ -1,4 +1,4 @@
-//! Contract-only compiler-owned projection, synapse, and neuron-dynamics records.
+//! Compiled projection, synapse, and neuron-dynamics records.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

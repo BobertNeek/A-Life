@@ -1,4 +1,4 @@
-//! v0 scaffold: CPU-side topological concept map and curiosity gap contracts.
+//! Topological concept maps and curiosity gaps.
 
 use serde::{Deserialize, Serialize};
 

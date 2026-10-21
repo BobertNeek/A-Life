@@ -384,7 +384,7 @@ function Invoke-FinalComparison([string]$Exe,[string]$Baseline,[string]$Latest,[
     foreach ($panel in $panels | Select-Object -Skip 1) {
         if (Test-ScoreImprovement $panel $winner) {$winner=$panel}
     }
-    # Baseline wins ties/incomparable scores. A incomplete comparison cannot
+    # Baseline wins ties/incomparable scores. An incomplete comparison cannot
     # silently certify a partially evaluated candidate. This never promotes it.
     $state.finalComparison = [ordered]@{panels=$panels;interrupted=$interrupted;completed=($panels.Count -eq $seen.Count -and -not $interrupted);
         selectionRule='same-stage componentwise improvement; baseline wins ties and tradeoffs';winner=$winner}
@@ -405,10 +405,10 @@ try {
     if (Test-Path -LiteralPath $latest) {
         $previous = Get-Content -Raw -LiteralPath $latest | ConvertFrom-Json
         if ($previous.fingerprint -eq $source.fingerprint) {
-            if ($previous.state -eq 'Failed') { throw 'This exact source already failed. Stop for supervisor diagnosis; do not retry or alter thresholds.' }
-            if ($previous.state -eq 'Running') { throw 'Previous run ended without a terminal receipt. Stop for supervisor diagnosis.' }
+            if ($previous.state -eq 'Failed') { throw 'This exact source already failed. Inspect the saved failure before starting another preparation.' }
+            if ($previous.state -eq 'Running') { throw 'Previous run ended without a terminal receipt. Reconcile the saved run and any owned process before preparing again.' }
             if ($previous.state -eq 'Prepared' -and (Test-Path -LiteralPath $previous.executable) -and (Test-Path -LiteralPath $previous.pilotReceipt)) {
-                if ((Get-FileHash $previous.executable).Hash -eq $previous.executableSha256 -and (Get-FileHash $previous.pilotReceipt).Hash -eq $previous.pilotReceiptSha256) { Write-Output "Already prepared: $($previous.run). No gates repeated."; return }
+                if ((Get-FileHash $previous.executable).Hash -eq $previous.executableSha256 -and (Get-FileHash $previous.pilotReceipt).Hash -eq $previous.pilotReceiptSha256) { Write-Output "Already prepared: $($previous.run). Reusing its verified preparation."; return }
             }
         }
     }

@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alife_bevy_adapter::{AlifeBevyAdapterPlugin, BevyEntityMap};
+use crate::BevyEntityMap;
 use alife_core::{OrganismId, Tick, WorldEntityId};
 #[cfg(feature = "gpu-runtime")]
 use alife_world::persistence::PortableSaveFile;
@@ -997,7 +997,7 @@ fn build_production_voxel_frontend_app_shell_inner(
         #[cfg(feature = "vfx-hanabi")]
         app.add_plugins(bevy_hanabi::prelude::HanabiPlugin);
     }
-    app.add_plugins(AlifeBevyAdapterPlugin)
+    app.init_resource::<BevyEntityMap>()
         .insert_resource(WinitSettings::continuous())
         .insert_resource(ClearColor(Color::srgb(0.065, 0.105, 0.090)))
         .insert_resource(ProductionVoxelFrontendResource {

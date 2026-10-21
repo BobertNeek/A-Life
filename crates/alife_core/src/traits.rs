@@ -1,4 +1,4 @@
-//! v0 scaffold: semantic-prior and compute-backend interfaces only.
+//! Private semantic-prior requests and bounded responses.
 
 use serde::{Deserialize, Serialize};
 
@@ -70,12 +70,4 @@ impl Validate for SemanticPriorPacket {
         }
         Ok(())
     }
-}
-
-pub trait SemanticPriorProvider {
-    fn provider_name(&self) -> &'static str;
-}
-
-pub trait NeuralComputeBackend {
-    fn backend_name(&self) -> &'static str;
 }

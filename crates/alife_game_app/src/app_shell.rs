@@ -1,4 +1,4 @@
-//! Split from the original playable-sim app shell during R13 remediation.
+//! Application launch state and shared errors.
 
 use crate::prelude::*;
 use crate::*;

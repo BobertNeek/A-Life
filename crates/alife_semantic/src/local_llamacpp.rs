@@ -1,8 +1,5 @@
-//! CA26: localhost-only semantic embedding provider boundary.
-//!
-//! This module talks to a local llama.cpp process backed by a locally installed
-//! open-weight embedding model. It never calls a hosted inference API and it
-//! returns bounded context data, not actions or weight updates.
+//! Bounded semantic embeddings from a local llama.cpp model.
+//! Requests stay on localhost; responses supply context, not actions or weights.
 
 use std::{
     collections::BTreeSet,
@@ -424,10 +421,15 @@ impl LlamaCppErrorValue {
     }
 }
 
-fn parse_llamacpp_embedding_response(response: &str) -> Result<Vec<f32>, String> {
+/// Decode the common llama.cpp HTTP envelope before parsing endpoint payloads.
+pub(crate) fn llamacpp_response_body(
+    response: &str,
+    missing_body_error: &str,
+    request_error_prefix: &str,
+) -> Result<String, String> {
     let (header, body) = response
         .split_once("\r\n\r\n")
-        .ok_or_else(|| "local llama.cpp response missing HTTP body".to_string())?;
+        .ok_or_else(|| missing_body_error.to_string())?;
     let body = if header
         .lines()
         .any(|line| line.eq_ignore_ascii_case("Transfer-Encoding: chunked"))
@@ -440,10 +442,17 @@ fn parse_llamacpp_embedding_response(response: &str) -> Result<Vec<f32>, String>
         let message = serde_json::from_str::<LlamaCppErrorResponse>(&body)
             .map(|err| err.error.into_message())
             .unwrap_or_else(|_| body.trim().to_string());
-        return Err(format!(
-            "USER_ACTION_REQUIRED: local llama.cpp embedding request failed: {message}"
-        ));
+        return Err(format!("{request_error_prefix}: {message}"));
     }
+    Ok(body)
+}
+
+fn parse_llamacpp_embedding_response(response: &str) -> Result<Vec<f32>, String> {
+    let body = llamacpp_response_body(
+        response,
+        "local llama.cpp response missing HTTP body",
+        "USER_ACTION_REQUIRED: local llama.cpp embedding request failed",
+    )?;
     let response =
         serde_json::from_str::<LlamaCppEmbeddingResponse>(&body).map_err(|err| err.to_string())?;
     if response

@@ -43,7 +43,6 @@ required-features = ["foundation-training"]
 accesskit = { version = "=0.21.1", optional = true }
 alife_core = { path = "../alife_core" }
 alife_archive = { path = "../alife_archive", optional = true }
-alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
 alife_gpu_backend = { path = "../alife_gpu_backend", optional = true }
 alife_runtime = { path = "../alife_runtime", optional = true }
 alife_school = { path = "../alife_school" }
@@ -74,7 +73,6 @@ windows-sys = { version = "0.61.2", features = [
 default = []
 bevy-app = [
     "dep:accesskit",
-    "dep:alife_bevy_adapter",
     "dep:bevy",
     "bevy/default_app",
     "bevy/default_platform",
@@ -106,11 +104,9 @@ gpu-tests = [
     "alife_gpu_backend/gpu-tests",
     "alife_runtime/gpu-tests",
 ]
-production-assets = ["bevy-app"]
 vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
 production-voxel-frontend = [
     "bevy-app",
     "gpu-runtime",
-    "production-assets",
     "vfx-hanabi",
 ]

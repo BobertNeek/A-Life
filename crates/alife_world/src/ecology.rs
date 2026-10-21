@@ -1,8 +1,8 @@
-//! G07 deterministic ecology/resource-cycle contracts for headless worlds.
+//! Deterministic ecology and resource cycles for headless worlds.
 //!
 //! This module stays Bevy-independent. It models terrain zones, bounded
 //! resource regrowth/spawn policies, hazard pressure, and compact ecology
-//! metrics for tests and product smoke paths.
+//! metrics.
 
 use std::collections::{BTreeMap, BTreeSet};
 

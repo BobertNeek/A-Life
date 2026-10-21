@@ -1,6 +1,5 @@
-//! Analytic oracles and executable production WGSL for credit-gated Oja.
-//! The ignored device test permits a software Vulkan adapter for isolated shader
-//! arithmetic. It is not a production backend or a gameplay learning claim.
+//! Analytic references and isolated WGSL arithmetic tests for credit-gated Oja.
+//! Device tests permit a software Vulkan adapter.
 use alife_core::{
     BrainCapacityClass, BrainGenome, CompiledSynapseKind, DevelopmentState, NormalizedScalar,
     PhenotypeCompiler, SensorProfile, Tick,

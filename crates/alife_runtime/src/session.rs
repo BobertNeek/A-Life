@@ -9,12 +9,11 @@ use alife_gpu_backend::{
     GpuResearchGrowthHandoffOutcome,
 };
 
-/// Identifies the production consumer using the shared neural session.
+/// Consumer of the shared neural session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GpuSessionConsumerKind {
     Gameplay,
     Training,
-    Evolution,
     Challenge,
 }
 
@@ -34,8 +33,7 @@ pub struct DurableGpuCheckpointRef {
     pub neural_state_digest: [u64; 4],
 }
 
-/// Proof that one exact durable reference passed monotonicity validation
-/// against the session's previously published checkpoint authority.
+/// Validated checkpoint update for the session's monotonic durable cursor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DurableGpuCheckpointMonotonicityPermit {
     checkpoint: DurableGpuCheckpointRef,
@@ -147,7 +145,7 @@ impl GpuSessionAuthority {
 
 /// Sole owner of one production GPU neural backend and its fail-stop ledger.
 ///
-/// Game, training, evolution, and challenge worlds all drive this same type.
+/// Gameplay, training and diagnostic worlds use this same type.
 /// Bulk checkpoint codecs operate only at sealed boundaries and report the
 /// resulting durable reference back through this session.
 pub struct GpuAuthoritativeSession {

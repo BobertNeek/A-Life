@@ -16,8 +16,7 @@ use super::{
     RouteBudgetReceipt, SensorEncoderAssignment, SensorEncoderPlan,
 };
 
-/// Frozen research-only size contract. It is deliberately absent from the
-/// promoted production-class registry.
+/// Frozen research layout, outside the production-class registry.
 pub struct N4096ResearchLayoutV1;
 
 impl N4096ResearchLayoutV1 {

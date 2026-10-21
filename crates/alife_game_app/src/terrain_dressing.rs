@@ -104,7 +104,6 @@ pub(crate) struct ProductionTerrainDressingSpawn {
     pub yaw_radians: f32,
     pub cluster_id: u32,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
 }
 
 pub(crate) struct TerrainDressingLibrary {
@@ -282,7 +281,6 @@ fn append_cluster(
             yaw_radians: angle + f32::from((hash & 0xff) as u8) / 255.0,
             cluster_id,
             display_only: true,
-            no_renderer_authority_over_actions_or_cognition: true,
         });
     }
 }
@@ -1201,9 +1199,6 @@ mod tests {
             .iter()
             .all(|spawn| dressing_child_clears_occupied(spawn.translation, &occupied)));
         assert!(first.iter().all(|spawn| spawn.display_only));
-        assert!(first
-            .iter()
-            .all(|spawn| spawn.no_renderer_authority_over_actions_or_cognition));
         let kinds = first
             .iter()
             .map(|spawn| spawn.kind)

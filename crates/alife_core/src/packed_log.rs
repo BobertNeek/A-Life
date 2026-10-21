@@ -1,7 +1,7 @@
-//! v0 scaffold: lossy packed logging derived from sealed ExperiencePatch records.
+//! Lossy packed logging derived from sealed ExperiencePatch records.
 //!
 //! Packed logs are export/replay data. They intentionally do not replace the
-//! rich runtime `ExperiencePatch` contract used by cognition, learning, memory,
+//! rich runtime `ExperiencePatch` used by cognition, learning, memory,
 //! or topology systems.
 
 use serde::{Deserialize, Serialize};

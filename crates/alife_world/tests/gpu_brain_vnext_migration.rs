@@ -1,4 +1,4 @@
-//! Strict vNext GPU-brain persistence and inspection-only migration contracts.
+//! GPU-brain provenance, persistence, and inspection-only migration.
 
 use alife_core::{
     BrainActivityPolicyV1, BrainClassId, BrainWorkCounters, NeuralThrottleLevel,

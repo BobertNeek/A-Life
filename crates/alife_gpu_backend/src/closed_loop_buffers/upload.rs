@@ -12,31 +12,6 @@ use super::{
     GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_NO_EXTENSION_SENTINEL,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuProjectionSpanDomain {
-    A3ProvenanceOnly,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuPhenotypeCountPlan {
-    pub neurons: usize,
-    pub synapses: usize,
-    pub recurrent_synapses: usize,
-    pub candidate_decoder_synapses: usize,
-    pub decoder_synapses: usize,
-    pub plasticity_receptors: usize,
-    pub replay_capture_synapses: usize,
-    pub sleep_parameters: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuPhenotypeBytePlan {
-    pub immutable_weight_bytes: usize,
-    pub mutable_weight_bytes: usize,
-    pub activation_bytes: usize,
-    pub homeostasis_bytes: usize,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuPhenotypeUpload {
     /// Offline capture conversion must undo the production target-major packing.
@@ -75,39 +50,6 @@ pub struct GpuPhenotypeUpload {
 }
 
 impl GpuPhenotypeUpload {
-    pub const fn projection_span_domain(&self) -> GpuProjectionSpanDomain {
-        GpuProjectionSpanDomain::A3ProvenanceOnly
-    }
-    pub const fn immutable_genetic_owner_count(&self) -> usize {
-        1
-    }
-    pub const fn has_mutable_projection_copy(&self) -> bool {
-        false
-    }
-    pub fn recurrent_global_ids(&self) -> Vec<u32> {
-        (0..self.source_indices.len() as u32).collect()
-    }
-    pub fn exact_count_plan(&self) -> GpuPhenotypeCountPlan {
-        GpuPhenotypeCountPlan {
-            neurons: self.neuron_count as usize,
-            synapses: self.genetic_weights.len(),
-            recurrent_synapses: self.source_indices.len(),
-            candidate_decoder_synapses: self.decoder_weight_indices.len(),
-            decoder_synapses: self.decoder_eligibility_metadata.len(),
-            plasticity_receptors: self.plasticity_receptors.len(),
-            replay_capture_synapses: self.replay_capture_local_synapse_ids.len(),
-            sleep_parameters: self.sleep_parameters.len(),
-        }
-    }
-    pub fn exact_byte_plan(&self) -> GpuPhenotypeBytePlan {
-        let c = self.exact_count_plan();
-        GpuPhenotypeBytePlan {
-            immutable_weight_bytes: c.synapses * 8,
-            mutable_weight_bytes: c.synapses * 24,
-            activation_bytes: c.neurons * 3 * 4,
-            homeostasis_bytes: c.neurons * 2 * 4,
-        }
-    }
     pub fn validate_against(&self, phenotype: &BrainPhenotype) -> Result<(), GpuClosedLoopError> {
         let capacity = BrainCapacityClass::supported_for_id(phenotype.brain_class_id())
             .map_err(|_| GpuClosedLoopError::LayoutMismatch)?;

@@ -1,4 +1,4 @@
-//! v0 scaffold: optional Gaussian cluster observations and egocentric hashing.
+//! Optional Gaussian cluster observations and egocentric hashing.
 
 use alife_core::{
     Confidence, ContextFeatureFlags, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry,

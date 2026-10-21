@@ -1,7 +1,5 @@
-//! Bounded test-only mathematical qualification of game arbitration.
-//!
-//! This is not a CPU neural backend or a hardware parity oracle. The integration
-//! target separately binds the arithmetic and identity inputs to the actual WGSL.
+//! Test-only reference arithmetic for bounded game exploration.
+//! Integration tests check it against the WGSL inputs and arithmetic.
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct State {

@@ -1,4 +1,4 @@
-//! GPU-authoritative, phenotype-owned closed-loop storage contracts.
+//! Phenotype-owned layouts and uploads for GPU closed-loop storage.
 
 mod abi;
 mod bucket;

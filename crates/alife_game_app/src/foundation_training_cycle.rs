@@ -1,5 +1,4 @@
-//! A bounded, real-world actor update and next-cohort admission gate.
-//! The ordinary GPU runtime owns perception, action, biology, and legality.
+//! Collect through the game runtime, update actor/value state, and validate continuation.
 
 use std::{path::Path, time::Instant};
 

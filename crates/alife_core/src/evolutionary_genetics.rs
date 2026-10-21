@@ -1,4 +1,4 @@
-//! Contract-only EI0 diploid genome, chromosome, and allele-expression records.
+//! Diploid genomes, chromosomes, and allele expression.
 
 use serde::{Deserialize, Serialize};
 

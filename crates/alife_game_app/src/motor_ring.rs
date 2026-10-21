@@ -1,8 +1,4 @@
-//! CA14 read-only motor-ring arbitration presentation.
-//!
-//! This module mirrors existing P09 structured arbitration as fixed-order
-//! action-channel display data. It does not choose actions and does not bypass
-//! the core `heuristic_baseline_arbitrate` decision path.
+//! Fixed-order display of heuristic arbitration channels and their selected action.
 
 use crate::prelude::*;
 use crate::*;
@@ -220,7 +216,7 @@ impl MotorRingPresentation {
 
     pub fn compact_line(&self) -> String {
         format!(
-            "Motor Ring: winner={} margin={:.2} source=P09 no-bypass",
+            "Motor Ring: winner={} margin={:.2}",
             self.selected_label, self.winner_margin
         )
     }
@@ -233,7 +229,7 @@ impl MotorRingPresentation {
             .collect::<Vec<_>>()
             .join("\n");
         format!(
-            "Motor Ring\n{}\nWinner: {} margin={:.2}\nBoundary: normal arbitration; no direct bypass",
+            "Motor Ring\n{}\nWinner: {} margin={:.2}",
             lines, self.selected_label, self.winner_margin
         )
     }

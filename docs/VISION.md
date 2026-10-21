@@ -44,7 +44,7 @@ An external teacher acts through the same visible and audible world as everyone 
 
 ### Evidence grows with the claim
 
-A contract can be implemented without being integrated. An integrated feature can remain invisible. A visible feature can remain unproven. Describe what was exercised and what remains unknown. Hardware, learning, and release claims need relevant observations from the actual path; ordinary fixes do not need a new receipt framework.
+A feature can be implemented without being integrated. An integrated feature can remain invisible. A visible feature can remain unproven. Describe what was exercised and what remains unknown. Hardware, learning, and release claims need relevant observations from the actual path; ordinary fixes do not need a new receipt framework.
 
 ## Near-term product
 

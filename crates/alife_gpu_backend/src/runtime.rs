@@ -1,4 +1,4 @@
-//! P29 runtime integration contracts for required GPU execution.
+//! GPU adapter admission and device probing.
 
 use alife_core::ScaffoldContractError;
 

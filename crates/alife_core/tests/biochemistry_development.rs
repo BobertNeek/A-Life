@@ -1,4 +1,4 @@
-//! EI0 body, homeostasis, development, sleep, and reproduction integration.
+//! Body, homeostasis, development, sleep, and reproduction integration.
 
 use std::collections::BTreeSet;
 

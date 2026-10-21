@@ -1,8 +1,8 @@
 # Founder sensing, readout signs, and newborn pain corrections — 2026-10-20
 
 This implementation report starts from main
-`bda3b65be5fa6f01865b850640adf2e8d01f4990`. It does not amend the controlling
-architecture or qualify a founder. Tests run in the saved Linux cloud workspace,
+`bda3b65be5fa6f01865b850640adf2e8d01f4990` and records the corrections in
+[PR #113](https://github.com/BobertNeek/A-Life/pull/113). Tests ran in Linux,
 without the user's PC, training episodes, seed allocation, or physical GPU work.
 
 ## Reproduction and corrections
@@ -168,30 +168,8 @@ their existing acquisition/contact meanings. No family is used to route Play
 into vocal output or posture. These software tests do not qualify on-policy GPU
 activation or transfer of old Play learning.
 
-The relevant architecture requirements are `AOA-INV-001`, `AOA-SENSE-001`,
-`AOA-WORLD-001/003`, `AOA-DEV-001/003`, `AOA-BIO-006/007/015`,
-`AOA-PRED-004`, `AOA-MOTOR-002/005`, and `AOA-OBS-002/003`. The tests establish
-these narrow implementation corrections; long-term learning and physical GPU
-behavior remain unqualified here.
-
-## Coordination scope
-
-The base remains fetched main `bda3b65`. At the overlap check, rehearsal #109
-was `b7a67384075223be24e5375a7fd3bfe96995042f`, published CPU #110 was
-`8e480e029cf04a4201ccfa81e4b191f0cd8a3469`, and group #111's audit head was
-`52559f55a564475233db940c1fbda2b5069e2dd7`. The group qualification binary
-remains independently pinned to `785d392c926f50bff2354f954c8029bc82221214`.
-No candidate asset or qualification binary was modified.
-
-There is no changed-file overlap with those published #109/#110 heads. The
-reserved CPU perception interface was reported before the narrow core validator
-change; CPU collector, runtime, evidence, learning and persistence interfaces
-were left untouched. CPU integration must consume the revised decoder semantics.
-With #111, shared files are `trainer.rs` (its allocation helpers versus this
-branch's Adam sign metadata/test) and `new_game.rs` (its group admission versus
-this branch's common newborn floor). Their changed hunks do not overlap. The
-vocabulary correction is confined to `foundation_training.rs` and was reported
-before editing. Existing CPU/group/rehearsal behavior is not imported or rewritten.
+These checks cover the described sensing, readout, and physiology corrections;
+long-term learning and physical GPU behavior were not qualified here.
 
 ## Validation
 

@@ -249,7 +249,7 @@ pub fn tracked_object_id_for_candidate(
     }
 }
 
-pub fn target_prior_residual(
+fn target_prior_residual(
     candidate: &alife_core::CandidateMemoryContextV1,
 ) -> Result<f32, ScaffoldContractError> {
     let mean_abs_latent = candidate
@@ -290,7 +290,7 @@ pub fn topology_evidence_for_draft(
     Ok(evidence)
 }
 
-pub fn target_bound_topology_scores(
+fn target_bound_topology_scores(
     tracked_object_id: Option<alife_core::TrackedObjectId>,
     topology: &TopologySidecar,
 ) -> Result<(NormalizedScalar, NormalizedScalar), ScaffoldContractError> {
@@ -298,20 +298,18 @@ pub fn target_bound_topology_scores(
         return Ok((NormalizedScalar(0.0), NormalizedScalar(0.0)));
     };
     tracked_object_id.validate()?;
-    let concept_ids = topology
+    let (concept_ids, concept_match) = topology
         .map()
         .concepts()
         .iter()
         .filter(|concept| concept.bindings.objects.contains(&tracked_object_id))
-        .map(|concept| concept.id)
-        .collect::<Vec<_>>();
-    let concept_match = topology
-        .map()
-        .concepts()
-        .iter()
-        .filter(|concept| concept.bindings.objects.contains(&tracked_object_id))
-        .map(|concept| concept.confidence.raw() * concept.salience.raw())
-        .fold(0.0, f32::max);
+        .fold((Vec::new(), 0.0_f32), |(mut ids, value), concept| {
+            ids.push(concept.id);
+            (
+                ids,
+                value.max(concept.confidence.raw() * concept.salience.raw()),
+            )
+        });
     let gap_match = topology
         .map()
         .unresolved_gaps()
@@ -427,14 +425,14 @@ pub fn cognitive_projection_for_draft(
     Ok(projection)
 }
 
-pub fn bounded_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
+fn bounded_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
     if !value.is_finite() {
         return Err(ScaffoldContractError::NonFiniteFloat);
     }
     Ok((0.5 + 0.5 * (value / (1.0 + value.abs()))).clamp(0.0, 1.0))
 }
 
-pub fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
+fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
     if !value.is_finite() {
         return Err(ScaffoldContractError::NonFiniteFloat);
     }
@@ -465,7 +463,7 @@ pub fn grounded_semantic_state_from_draft(
 
 // Both sides describe the same observable quantities: position, velocity and
 // seven drives. Contact, success and physical damage remain outcome evidence.
-pub fn grounded_semantic_state(
+fn grounded_semantic_state(
     position: Vec3f,
     velocity: Vec3f,
     homeostasis: &HomeostaticSnapshot,
@@ -758,12 +756,15 @@ pub fn prepare_canonical_frame(
         let routed_recall = memory.recall_frame(&routed_draft)?;
         let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
         let leaf_started = measure.then(std::time::Instant::now);
-        let cognitive_context = cognitive_context_for_recall(
+        let mut cognitive_context = cognitive_memory_context_for_recall(
             input.draft.organism_id(),
             sequence_id,
             &routed_recall,
-            topology,
         )?;
+        // Topology is immutable during preparation. Focal routing changes
+        // candidate recall, while the sorted concepts and gaps remain identical.
+        cognitive_context.concept = baseline_context.concept;
+        cognitive_context.gap = baseline_context.gap;
         let cognitive_context = cognitive_context_with_attention(cognitive_context, attention)?;
         let routed_context_ns = leaf_started.map_or(0, elapsed_ns);
         preparation_stage = "cognitive projection";

@@ -1,4 +1,4 @@
-//! Bounded factorized motor-command contracts.
+//! Bounded factorized motor commands.
 
 use serde::{Deserialize, Serialize};
 

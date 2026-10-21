@@ -1,8 +1,6 @@
-//! Explicit offline CPU execution of the compiled sparse production graph.
-//!
-//! No adapter, graphics API, CPU reference controller, or automatic fallback is
-//! involved. Organism collection owns canonical biology and sealed outcomes;
-//! the trainer owns only genetic parameters, Adam state and detached replay.
+//! Offline CPU execution of the compiled sparse production graph.
+//! The collector owns organism biology and outcomes; the trainer owns genetic
+//! parameters, Adam state and detached replay. CPU execution is opt-in.
 
 mod activity;
 mod cohort;
@@ -52,57 +50,6 @@ pub struct CpuFoundationTrainer {
     source_foundation: FoundationWeightAsset,
     checkpoint: FoundationTrainerCheckpoint,
     graph: replay::SparseGraph,
-}
-
-/// Shared explicit offline replay boundary. Adjoint rows exclude burn-in, as
-/// they do in the native GPU trainer. No device handle crosses this interface.
-pub trait FoundationReplayBackend {
-    fn evaluate_replay(
-        &mut self,
-        sequence: &TrainingSequence,
-    ) -> Result<TrainingReplayEvaluation, TrainingError>;
-    fn probe_replay_gradients(
-        &mut self,
-        sequence: &TrainingSequence,
-        adjoints: &[Vec<f32>],
-    ) -> Result<TrainingGradientProbe, TrainingError>;
-    fn checkpoint(&self) -> Result<FoundationTrainerCheckpoint, TrainingError>;
-}
-impl FoundationReplayBackend for CpuFoundationTrainer {
-    fn evaluate_replay(
-        &mut self,
-        s: &TrainingSequence,
-    ) -> Result<TrainingReplayEvaluation, TrainingError> {
-        CpuFoundationTrainer::evaluate_replay(self, s)
-    }
-    fn probe_replay_gradients(
-        &mut self,
-        s: &TrainingSequence,
-        a: &[Vec<f32>],
-    ) -> Result<TrainingGradientProbe, TrainingError> {
-        CpuFoundationTrainer::probe_replay_gradients(self, s, a)
-    }
-    fn checkpoint(&self) -> Result<FoundationTrainerCheckpoint, TrainingError> {
-        Ok(CpuFoundationTrainer::checkpoint(self))
-    }
-}
-impl FoundationReplayBackend for crate::FoundationTrainer {
-    fn evaluate_replay(
-        &mut self,
-        s: &TrainingSequence,
-    ) -> Result<TrainingReplayEvaluation, TrainingError> {
-        crate::FoundationTrainer::evaluate_replay(self, s)
-    }
-    fn probe_replay_gradients(
-        &mut self,
-        s: &TrainingSequence,
-        a: &[Vec<f32>],
-    ) -> Result<TrainingGradientProbe, TrainingError> {
-        crate::FoundationTrainer::probe_replay_gradients(self, s, a)
-    }
-    fn checkpoint(&self) -> Result<FoundationTrainerCheckpoint, TrainingError> {
-        crate::FoundationTrainer::checkpoint(self)
-    }
 }
 
 impl CpuFoundationTrainer {

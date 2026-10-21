@@ -916,7 +916,7 @@ impl ProductionConversationLineageUiState {
         self.input_open = false;
         self.input_help_open = false;
         self.input_cue = SpeechInputCue::Pending;
-        self.status = "Translating player speech with the bounded local SLM".to_string();
+        self.status = "Translating player speech".to_string();
     }
 
     fn complete_player_speech_input(&mut self, origin: PlayerSpeechCompletionOrigin) {
@@ -2429,7 +2429,7 @@ fn refresh_creature_speech_receipt(
         };
         match speech_worker.start(&request, context) {
             Ok(true) => {
-                state.status = "Translating creature speech with the bounded local SLM".to_string();
+                state.status = "Translating creature speech".to_string();
             }
             Ok(false) => {}
             Err(error) => match translate_speech_unaided(&request) {
@@ -2519,9 +2519,7 @@ fn poll_speech_translation_worker(
             state.last_creature_utterance_id = Some(utterance_id);
             state.last_creature_speaker = speaker_id;
             state.last_creature_receipt = Some(receipt);
-            state.status = warning.unwrap_or_else(|| {
-                "Creature speech translated by the bounded local SLM".to_string()
-            });
+            state.status = warning.unwrap_or_else(|| "Creature speech translated".to_string());
         }
         (SpeechTranslationJobContext::Player { .. }, Err(error)) => {
             state.input_cue = SpeechInputCue::Failed;

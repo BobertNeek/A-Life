@@ -1,6 +1,5 @@
-//! Wordless player care controls. Evidence is bounded by the existing world APIs.
-//! Queued care has no command-completion receipt and never becomes "successful"
-//! because a tick passes or a measured hormone changes.
+//! Wordless player care controls. Feedback distinguishes queued care, physical
+//! placement, and rejection; queued stimuli do not establish a creature response.
 use super::*;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::prelude::*;
@@ -355,8 +354,7 @@ pub(super) fn world_input_allowed(state: Option<Res<State>>) -> bool {
     !state.is_some_and(|s| s.captured)
 }
 
-/// A structurally valid object reference with a tile is eligible too. Do not
-/// silently narrow E's existing contract to terrain-only selection.
+/// Food can be placed from any stable selection with a ground tile.
 pub(super) fn food_tile(selected: Option<StableVoxelObjectRef>) -> Option<VoxelTileCoord> {
     selected.and_then(|s| s.is_stable().then_some(s.tile).flatten())
 }
@@ -375,8 +373,7 @@ fn care_target(
         .then_some((organism, object.position))
 }
 
-/// This testable frontend port wraps existing runtime methods. It does not
-/// implement a second live simulation or a neural CPU fallback.
+/// Runtime operations shared by keyboard, pointer, and CPU UI tests.
 #[cfg(any(feature = "gpu-runtime", test))]
 trait CarePort {
     fn world(&self) -> &alife_world::HeadlessWorld;

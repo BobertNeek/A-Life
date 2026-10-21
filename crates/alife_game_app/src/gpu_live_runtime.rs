@@ -151,8 +151,7 @@ use crate::{
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
     GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
     LiveBrainTickSummary, LiveCognitivePresentationSnapshot, RetainedLearningCapture,
-    WorldEditCommand, WorldEditorConfig, CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA,
-    G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 #[cfg(test)]
 use alife_core::channel_command_for_action;
@@ -1178,8 +1177,7 @@ struct SleepJournalPublicationWorkerOwnerV1 {
     incremental_entry_count: usize,
 }
 
-// The final worker message stays owned inline through polling and shutdown;
-// keep this ownership boundary unchanged during lint-only cleanup.
+// Polling and shutdown retain ownership of the final worker message.
 #[allow(clippy::large_enum_variant)]
 enum SleepJournalPublicationWorkerPollV1 {
     Pending,
@@ -3219,14 +3217,12 @@ pub(crate) enum CuratedFounderResetDispatchResult {
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) trait CuratedFounderResetRuntimePort {
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn dispatch_attempt(
         &mut self,
         intent: LiveAgentResetIntent,
     ) -> CuratedFounderResetRuntimeResult;
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult;
 }
@@ -3703,7 +3699,6 @@ fn curated_founder_gpu_residency_state(
 }
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-// Preserve inline publication/recovery evidence in the error contract.
 #[allow(clippy::result_large_err)]
 fn attempt_curated_founder_reset_with_owned_authorities(
     checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
@@ -3727,7 +3722,6 @@ fn attempt_curated_founder_reset_with_owned_authorities(
 }
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-// Preserve inline publication/recovery evidence in the error contract.
 #[allow(clippy::result_large_err)]
 // Keep the separately owned world, persistence, archive, and retry authorities explicit.
 #[allow(clippy::too_many_arguments)]
@@ -4925,7 +4919,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn build_live_agent_reset_request(
         &self,
@@ -4977,7 +4970,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_live_agent_reset(
         &mut self,
@@ -4988,7 +4980,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_curated_founder_reset(
         &mut self,
@@ -5017,7 +5008,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn retry_curated_founder_reset(
         &mut self,
@@ -5044,11 +5034,8 @@ impl GpuLiveBrainRuntime {
         Ok(result)
     }
 
-    /// Consumes the retained exact 4a projection only after every app-side
-    /// resident and sidecar candidate is ready. The four maps publish only
-    /// after the backend returns a completed residency receipt.
+    /// Publishes prepared resident and sidecar maps after GPU residency completes.
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn commit_retained_curated_founder_gpu_residency(
         &mut self,
@@ -5243,7 +5230,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn note_curated_founder_durable_checkpoint(
         &mut self,
@@ -6530,8 +6516,7 @@ impl GpuLiveBrainRuntime {
         Ok(host)
     }
 
-    // Retain the exact V11-only constructor during this lint-only cleanup.
-    // Live persistence uses the private-prior-aware constructor above.
+    // V11 fixtures omit the private-prior state captured by live persistence.
     #[allow(dead_code)]
     fn exact_cognitive_state_for_checkpoint_with_v11(
         organism_id: OrganismId,
@@ -10085,6 +10070,9 @@ fn validate_player_resource_position(
     request.validate()?;
     // Terrain worlds are Y-up; only legacy flat worlds require Z = 0.
     // Ground height and terrain bounds remain owned by world insertion below.
+    if position.x.abs() > 512.0 || position.y.abs() > 512.0 || position.z.abs() > 512.0 {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
     if world.terrain().is_none() && position.z != 0.0 {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
@@ -10103,14 +10091,6 @@ fn move_food_in_world(
             object.kind == WorldObjectKind::Food && !object.consumed && object.carried_by.is_none()
         })
         .ok_or(ScaffoldContractError::InvalidId)?;
-    WorldEditCommand::Move {
-        stable_id: source,
-        position,
-    }
-    .validate(WorldEditorConfig {
-        world_bound: 512.0,
-        ..WorldEditorConfig::default()
-    })?;
     let mut candidate = world.clone();
     candidate.editor_move_object(source, position)?;
     candidate.validate_organism_bindings()?;
@@ -10143,23 +10123,14 @@ fn place_food_in_world(
 ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
     validate_player_resource_position(world, position)?;
 
-    let config = WorldEditorConfig {
-        world_bound: 512.0,
-        ..WorldEditorConfig::default()
-    };
-    if world.object_count() >= config.max_objects {
-        return Err(ScaffoldContractError::ScalarOutOfRange.into());
-    }
     // Repeated placement at the same tick and tile must still have a fresh identity.
-    let label = (0..=config.max_objects)
+    let label = (0..=world.object_count())
         .map(|suffix| format!("player-food-t{}-{suffix}", world.tick().raw()))
         .find(|label| world.entity_id(label).is_none())
         .ok_or(ScaffoldContractError::InvalidId)?;
     let variety =
         alife_world::FoodVariety::from_seed(world.seed().wrapping_add(world.object_count() as u64));
     let nutrition = variety.nutrition();
-    let command = WorldEditCommand::place_food(&label, position, nutrition);
-    command.validate(config)?;
 
     let mut candidate = world.clone();
     let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
@@ -10228,6 +10199,33 @@ mod tests {
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
     };
+
+    #[test]
+    fn player_food_placement_outgrows_the_old_sandbox_limit_without_label_collisions() {
+        let mut builder = HeadlessScenarioBuilder::new(7);
+        for suffix in 0..20 {
+            builder = builder.food(
+                &format!("player-food-t0-{suffix}"),
+                Vec3f::new(0.5, 0.0, 0.0),
+                0.5,
+            );
+        }
+        let mut world = builder.build().unwrap();
+        let existing = world.object_snapshots();
+        let position = Vec3f::new(2.5, 0.0, 0.0);
+        let first = place_food_in_world(&mut world, position).unwrap();
+        let second = place_food_in_world(&mut world, position).unwrap();
+
+        assert_eq!(world.object_count(), 22);
+        assert_ne!(first.world_entity_id, second.world_entity_id);
+        assert_ne!(first.label, second.label);
+        assert!(existing
+            .iter()
+            .all(|object| world.entity(object.id) == Some(object)));
+        assert_eq!(first.position, position);
+        assert_eq!(second.position, position);
+        assert_eq!(world.tick(), Tick::ZERO);
+    }
 
     #[test]
     fn player_food_repeated_placement_uses_xy_ground_and_distinct_ids() {
@@ -11978,7 +11976,6 @@ mod tests {
         ));
     }
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority(
         fixture: &mut CuratedRuntimeAuthorityFixture,
@@ -11998,7 +11995,6 @@ mod tests {
         )
     }
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_plan(
         fixture: &mut CuratedRuntimeAuthorityFixture,
@@ -12018,7 +12014,6 @@ mod tests {
         )
     }
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_refresh_failure(
         fixture: &mut CuratedRuntimeAuthorityFixture,

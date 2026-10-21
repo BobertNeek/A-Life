@@ -647,7 +647,7 @@ pub fn validate_geneforge_staging(
         || catalog.assembly_contract.schema != "alife.geneforge_family_assembly.v1"
     {
         return Err(fail(
-            "external recipe does not match the pinned Task 4 catalog contract".to_string(),
+            "external recipe does not match the retained GeneForge catalog".to_string(),
         ));
     }
 

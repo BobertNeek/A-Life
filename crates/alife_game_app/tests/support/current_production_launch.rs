@@ -57,8 +57,7 @@ impl CurrentProductionLaunchFixture {
         entry.fixture_root = PathBuf::from("current_scene");
         let mut config = RuntimeConfig::deterministic_default(4242, BrainScaleTier::Nano512);
         config.features.gpu_backend_enabled = true;
-        // Both profiles load an existing population of 30 fresh founders. This
-        // does not alter the separate Phase 3 New Game cohort limit.
+        // Both profiles load an existing population of 30 fresh founders.
         let save = untrained_population_save::untrained_population_save(config, 30);
         save.validate_with_asset_root(&scene_root).unwrap();
         save.to_json_file(scene_root.join(&entry.save_file))

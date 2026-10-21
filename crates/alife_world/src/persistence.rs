@@ -1,4 +1,4 @@
-//! P34 persistence, runtime config, and asset manifest contracts.
+//! Portable saves, runtime configuration, and asset manifests.
 //!
 //! These portable records intentionally store stable IDs, summaries, and asset
 //! references. Engine-local handles and bulk tensors stay outside save files.
@@ -600,7 +600,7 @@ impl GpuRuntimeSaveState {
         {
             return Err(PersistenceError::InvalidConfig {
                 field: "gpu_runtime",
-                message: "FVR06 GPU runtime descriptor is incomplete",
+                message: "GPU runtime descriptor is incomplete",
             });
         }
         if self.authority.authoritative
@@ -844,7 +844,7 @@ impl RuntimeConfig {
         if self.school.save_teacher_private_state {
             return Err(PersistenceError::InvalidConfig {
                 field: "school.save_teacher_private_state",
-                message: "teacher-private state is not part of portable P34 saves",
+                message: "teacher-private state is not part of portable saves",
             });
         }
         if self.semantic.required && self.semantic.provider.is_none() {
@@ -1878,7 +1878,7 @@ impl CreatureSaveState {
         if self.learning.lamarckian_mode_enabled {
             return Err(PersistenceError::InvalidConfig {
                 field: "learning.lamarckian_mode_enabled",
-                message: "portable P34 saves keep Lamarckian inheritance default-off",
+                message: "portable saves do not support Lamarckian inheritance",
             });
         }
         if let Some(gpu_brain) = &self.gpu_brain {

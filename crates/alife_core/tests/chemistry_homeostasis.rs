@@ -2,7 +2,7 @@ use alife_core::{
     ensure_current_version, ChemistryModulation, Confidence, DriveDelta, DriveSnapshot,
     EndocrineDelta, EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand,
     HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, RecoveryTrigger,
-    ScaffoldContractError, SchemaKind, SchemaVersions, Tick, Validate, Validated,
+    ScaffoldContractError, SchemaKind, SchemaVersions, Tick, Validate,
 };
 
 #[test]
@@ -35,8 +35,6 @@ fn snapshots_reject_nan_and_out_of_range_learning_values() {
 
     assert!(drives.validate_contract().is_ok());
     assert!(hormones.validate_contract().is_ok());
-    assert!(Validated::try_new(drives).is_ok());
-    assert!(Validated::try_new(hormones).is_ok());
 
     let mut nan_drive = drives;
     nan_drive.hunger = f32::NAN;

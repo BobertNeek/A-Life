@@ -1,4 +1,4 @@
-//! Focused RED/GREEN coverage for the explicit Nano512 founder projection.
+//! Explicit Nano512 founder projection compatibility.
 
 use alife_core::{
     Blake3Digest, BrainCapacityClass, BrainGenome, CanonicalDigestBuilder, CreatureGenome,
