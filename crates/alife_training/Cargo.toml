@@ -23,7 +23,8 @@ serde_json.workspace = true
 
 [features]
 default = []
-cpu-backend = ["dep:serde_json", "dep:sha2"]
+receipt-lineage = ["dep:serde_json", "dep:sha2", "serde_json/unbounded_depth"]
+cpu-backend = ["receipt-lineage"]
 gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]
 
 [[bin]]

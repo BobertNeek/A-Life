@@ -161,22 +161,13 @@ fn fixture_asset(seed: u64) -> Result<FoundationWeightAsset> {
         TrainingStageManifest::new(1, 1, 1),
     )?)
 }
-fn fixture_ancestry(mut receipt: &Value) -> Result<bool> {
-    for _ in 0..64 {
-        if receipt["fixture"] == true {
-            return Ok(true);
-        }
-        match receipt
-            .get("seed_provenance")
-            .and_then(|p| p.get("native_source_receipt"))
-            .filter(|r| r.is_object())
-        {
-            Some(previous) => receipt = previous,
-            None => return Ok(false),
-        }
-    }
-    Err("source receipt ancestry exceeds64 links".into())
+fn fixture_ancestry(receipt: &Value, previous: &Path) -> Result<bool> {
+    Ok(crate::native_receipt::Lineage::load(receipt, previous)?
+        .frames
+        .iter()
+        .any(|r| r["fixture"] == true))
 }
+
 pub fn run_cpu_continuation(
     mut args: CpuContinuationConfig,
     episode: &mut impl CpuEpisodeHooks,
@@ -275,7 +266,7 @@ pub fn run_cpu_continuation(
         } else {
             None
         };
-        let receipt: Value = serde_json::from_slice(&source_bytes[receipt_name])?;
+        let receipt = crate::native_receipt::parse(&source_bytes[receipt_name])?;
         if serial_handoff.is_none()
             && (receipt["biological_objective_version"].as_u64() != Some(2)
                 || receipt["critic_objective_version"].as_u64() != Some(1)
@@ -414,9 +405,32 @@ pub fn run_cpu_continuation(
     let fixture = args.fixture
         || source_receipt
             .as_ref()
-            .map(fixture_ancestry)
+            .map(|receipt| {
+                fixture_ancestry(
+                    receipt,
+                    args.previous.as_ref().expect("source receipt has path"),
+                )
+            })
             .transpose()?
             .unwrap_or(false);
+    let mut lineage = source_receipt
+        .as_ref()
+        .map(|receipt| {
+            crate::native_receipt::Lineage::load(
+                receipt,
+                args.previous.as_ref().expect("source receipt has path"),
+            )
+        })
+        .transpose()?;
+    let parent_ref = if let Some(lineage) = lineage.as_ref() {
+        let name = ["cycle.json", "cpu-cycle.json", "group50.json"]
+            .into_iter()
+            .find(|name| source_bytes.contains_key(*name))
+            .ok_or("missing source receipt")?;
+        Some(lineage.check_parent(&source_bytes[name])?)
+    } else {
+        None
+    };
     let seed_admission = episode.admit(&args, source_receipt.as_ref(), &source_hashes)?;
     let (game, p, inputs) = compile_game(args.seed, founder_seed, &asset)?;
     let profile = p.sensor_profile();
@@ -464,6 +478,18 @@ pub fn run_cpu_continuation(
     fs::create_dir_all(args.output.parent().unwrap_or(Path::new(".")))?;
     fs::create_dir(&args.output)?;
     fs::write(args.output.join("phase.txt"), "collecting-canonical-cpu")?;
+    if let Some(lineage) = &lineage {
+        fs::create_dir(args.output.join("source-native"))?;
+        lineage.write_to(&args.output.join("source-native"))?;
+    }
+    if let Some(lineage) = &mut lineage {
+        let name = ["cycle.json", "cpu-cycle.json", "group50.json"]
+            .into_iter()
+            .find(|name| source_bytes.contains_key(*name))
+            .ok_or("missing source receipt")?;
+        lineage.retain_parent(source_bytes[name].clone())?;
+        lineage.write_to(&args.output)?;
+    }
     for (name, bytes) in &source_bytes {
         let dir = args.output.join("source-native");
         fs::create_dir_all(&dir)?;
@@ -642,13 +668,20 @@ pub fn run_cpu_continuation(
   "biological_objective_version":2,"critic_objective_version":1,"objective_state_reset":false,"source_policy_version":source_version,"policy_version":version,
   "seed":args.seed,"founder_seed_base":founder_seed,"sensor_profile":profile,"sampling_temperature":args.temperature,
   "seed_admission":seed_admission,"source_native_sha256":source_hashes,
-  "seed_provenance":{"source_sha256":ancestry_hashes,"native_source_receipt":source_receipt,"seed_admission":seed_admission},
+  "seed_provenance":{"source_sha256":ancestry_hashes,"native_source_receipt_ref":parent_ref,"seed_admission":seed_admission},
   "old_asset_digest":asset_digest(&asset),"new_asset_digest":asset_digest(&trained),"initial_actor_optimizer_step":before_actor.optimizer_step,"initial_value_optimizer_step":before_value.optimizer_step,
   "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint().optimizer_step,"completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,
   "requested_world_ticks":args.ticks,"world_ticks_elapsed":host.world().tick().raw()-collection_start_tick,"collection_start_tick":collection_start_tick,"canonical_valid_decisions":valid_decisions,"training_rows":training_rows,
   "sleeping_organism_ticks":sleeping,"sleep_consolidations":consolidations,"collection_seconds":collection_seconds,"update_seconds":update_seconds,
   "elapsed_seconds":all_started.elapsed().as_secs_f64(),"private_individual_archive":"collector-checkpoint.json","private_archive_policy":"collection-policy.alife-foundation",
   "terminal_gpu_individual_restore_proven":false,"hardware":trainer.hardware_receipt()});
+    if parent_ref.is_none() {
+        receipt["seed_provenance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("native_source_receipt_ref");
+    }
+    receipt["consumer_build"] = json!({"git_head":option_env!("ALIFE_CONSUMER_GIT_HEAD"),"git_tree":option_env!("ALIFE_CONSUMER_GIT_TREE"),"executable_sha256":std::env::current_exe().ok().and_then(|p| fs::read(p).ok()).map(|bytes| hash(&bytes))});
     receipt["episode"] = episode_receipt.metadata;
     receipt["episode_artifact_sha256"] = json!(episode_hashes);
     receipt["actor_optimizer_updates"] =
@@ -671,13 +704,14 @@ pub fn run_cpu_continuation(
                 return Err("source changed during CPU run".into());
             }
         }
+        if let Some(lineage) = &lineage {
+            lineage.verify_at(previous)?;
+        }
     }
     fs::write(args.output.join("phase.txt"), "complete-fresh-cohort-cpu")?;
     write_json(args.output.join("cpu-cycle.json"), &receipt)?;
     // Return the sealed representation. serde_json's fast float parser can
     // round an in-memory f64 differently on its first text roundtrip; acceptance
     // compares two reads of the same authoritative bytes.
-    Ok(serde_json::from_slice(&fs::read(
-        args.output.join("cpu-cycle.json"),
-    )?)?)
+    Ok(crate::native_receipt::read(&args.output.join("cpu-cycle.json"))?.1)
 }

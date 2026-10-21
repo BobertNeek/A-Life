@@ -147,15 +147,18 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
     let c_bytes = fs::read(third.join("cpu-cycle.json")).unwrap();
     let c: serde_json::Value = serde_json::from_slice(&c_bytes).unwrap();
     assert!(c.get("source_receipt").is_none());
-    assert!(c["seed_provenance"]["native_source_receipt"]
-        .get("source_receipt")
-        .is_none());
+    assert!(c["seed_provenance"].get("native_source_receipt").is_none());
+    assert!(c["seed_provenance"]["native_source_receipt_ref"].is_string());
     assert_eq!(c["initial_actor_optimizer_step"], b["actor_optimizer_step"]);
     assert!(c_bytes.len() < 2 * serde_json::to_vec_pretty(&b).unwrap().len());
     // Synthetic group-output import fixture: these native bytes prove backend
     // continuity only; this test does not claim fifty GPU-collected organisms.
     let group = root.join("synthetic-group-source");
     fs::create_dir(&group).unwrap();
+    alife_training::native_receipt::Lineage::load(&c, &third)
+        .unwrap()
+        .write_to(&group)
+        .unwrap();
     for name in [
         "trained.alife-foundation",
         "actor-checkpoint.json",
