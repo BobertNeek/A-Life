@@ -31,7 +31,9 @@ fn asset_digest(asset: &FoundationWeightAsset) -> String {
         .collect()
 }
 fn write_json(path: impl AsRef<Path>, value: &impl serde::Serialize) -> Result<()> {
-    fs::write(path, serde_json::to_vec_pretty(value)?)?;
+    // Recovery includes full neural/Adam and collector state. Keep every value,
+    // but do not multiply indentation across these large retained artifacts.
+    fs::write(path, serde_json::to_vec(value)?)?;
     Ok(())
 }
 pub struct CpuContinuationConfig {
@@ -714,4 +716,43 @@ pub fn run_cpu_continuation(
     // round an in-memory f64 differently on its first text roundtrip; acceptance
     // compares two reads of the same authoritative bytes.
     Ok(crate::native_receipt::read(&args.output.join("cpu-cycle.json"))?.1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compact_recovery_json_preserves_float_bits_integer_ages_and_strings() {
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct Recovery {
+            moments: Vec<Vec<f32>>,
+            update_ages: Vec<u32>,
+            description: String,
+        }
+        let state = Recovery {
+            moments: vec![vec![-0.0, f32::MIN_POSITIVE, f32::MAX, -0.125]; 32],
+            update_ages: vec![0, (1 << 24) + 17, u32::MAX],
+            description: "spaces, \"quotes\", backslash \\ and newline\n stay intact".into(),
+        };
+        let path = std::env::temp_dir().join(format!(
+            "alife-compact-recovery-{}.json",
+            std::process::id()
+        ));
+        write_json(&path, &state).unwrap();
+        let bytes = fs::read(&path).unwrap();
+        fs::remove_file(path).unwrap();
+        assert!(bytes.len() < serde_json::to_vec_pretty(&state).unwrap().len());
+        let restored: Recovery = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(restored.update_ages, state.update_ages);
+        assert_eq!(restored.description, state.description);
+        for (before, after) in state
+            .moments
+            .iter()
+            .flatten()
+            .zip(restored.moments.iter().flatten())
+        {
+            assert_eq!(before.to_bits(), after.to_bits());
+        }
+    }
 }
