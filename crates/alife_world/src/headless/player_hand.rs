@@ -166,6 +166,62 @@ mod tests {
     use super::*;
 
     #[test]
+    fn removing_an_agent_clears_only_its_own_player_hold_before_save() {
+        for registered in [false, true] {
+            for held_label in ["walker", "food"] {
+                let organism = OrganismId(1);
+                let mut world = HeadlessScenarioBuilder::new(17)
+                    .agent("walker", organism, Vec3f::ZERO)
+                    .food("food", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+                    .build()
+                    .unwrap();
+                let agent = world.entity_id("walker").unwrap();
+                let held = world.entity_id(held_label).unwrap();
+                world.begin_player_hold(held).unwrap();
+                if registered {
+                    let genome = alife_core::CreatureGenome::early_mammal_founder(
+                        17,
+                        alife_core::FoundationGeneticIdentity::new(
+                            10,
+                            1,
+                            7,
+                            alife_core::BrainCapacityClass::N512_ID,
+                        )
+                        .unwrap(),
+                    )
+                    .unwrap();
+                    let phenotype = genome.express().unwrap();
+                    let mut record = WorldOrganismRecord::newborn(
+                        organism,
+                        agent,
+                        genome,
+                        phenotype,
+                        Tick::ZERO,
+                    )
+                    .unwrap();
+                    record.mark_dead(Tick::ZERO).unwrap();
+                    record
+                        .link_birth_manifest(alife_core::Blake3Digest::from_bytes([1; 32]))
+                        .unwrap();
+                    record
+                        .link_life_manifest(alife_core::Blake3Digest::from_bytes([2; 32]))
+                        .unwrap();
+                    world.register_organism_record(record).unwrap();
+                    world.retire_dead_organism(organism).unwrap();
+                } else {
+                    world.remove_agent_entity(agent).unwrap();
+                }
+                let expected = (held != agent).then_some(held);
+                let mut restored = HeadlessWorld::from_save_state(&world.save_state()).unwrap();
+                assert_eq!(world.player_held_object(), expected);
+                assert_eq!(restored.player_held_object(), expected);
+                assert_eq!(restored.release_player_hold().unwrap(), expected);
+                assert!(restored.can_begin_player_hold(world.entity_id("food").unwrap()));
+            }
+        }
+    }
+
+    #[test]
     fn player_can_pick_move_persist_and_release_creatures_and_movable_objects() {
         let mut world = HeadlessScenarioBuilder::new(17)
             .agent("walker", OrganismId(1), Vec3f::ZERO)

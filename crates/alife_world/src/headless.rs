@@ -2814,21 +2814,13 @@ impl HeadlessWorld {
             .organism_registry
             .remove_dead(organism_id)
             .map_err(map_organism_registry_error)?;
-        let final_object = candidate
-            .objects
-            .remove(&object.id.raw())
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        candidate.detach_carried_objects(organism_id);
-        candidate.ingestion_observations.remove(&organism_id.raw());
+        let final_object = candidate.remove_agent_entity(object.id)?;
         candidate.habitats.retire_creature(organism_id);
-        candidate.labels.remove(&final_object.label);
-        candidate
-            .last_touched_entities
-            .retain(|touched| *touched != final_object.id);
-        if candidate.last_action_result.as_ref().is_some_and(|result| {
-            result.command.organism_id == organism_id
-                || result.touched_entities.contains(&final_object.id)
-        }) {
+        if candidate
+            .last_action_result
+            .as_ref()
+            .is_some_and(|result| result.command.organism_id == organism_id)
+        {
             candidate.last_action_result = None;
         }
         candidate
@@ -3039,6 +3031,9 @@ impl HeadlessWorld {
             return Err(ScaffoldContractError::InvalidId);
         }
         self.objects.remove(&id.raw());
+        if self.player_held_object() == Some(id) {
+            self.player_hold = None;
+        }
         self.labels.remove(&object.label);
         self.last_touched_entities.retain(|touched| *touched != id);
         if self
