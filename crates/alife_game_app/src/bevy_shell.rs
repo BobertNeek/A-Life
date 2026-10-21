@@ -8,6 +8,8 @@ use std::{
 };
 
 use crate::BevyEntityMap;
+#[cfg(feature = "gpu-runtime")]
+use alife_core::Validate;
 use alife_core::{OrganismId, Tick, WorldEntityId};
 #[cfg(feature = "gpu-runtime")]
 use alife_world::persistence::PortableSaveFile;

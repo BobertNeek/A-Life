@@ -1,6 +1,7 @@
 //! Live authoritative creature projection into Bevy transforms and selection indexes.
 
 use super::*;
+use alife_core::Validate;
 
 pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
     let highlands = world.contains_resource::<creature_grounding::SelectedTerrain>();
