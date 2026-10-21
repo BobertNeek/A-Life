@@ -41,7 +41,7 @@ mod persistence_response_comparison;
 mod recovery_sleep_tests;
 #[cfg(test)]
 mod resident_sync_tests;
-mod semantic_prior;
+pub(crate) mod semantic_prior;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod sleep_atomicity_tests;
 mod staged_tick;
@@ -5571,18 +5571,7 @@ impl GpuLiveBrainRuntime {
             &index,
         )?;
         let sequence = ExperienceSequenceId(resident.next_sequence);
-        let started = std::time::Instant::now();
-        // Poll/submit once. Provider inference is optional and never stalls
-        // initial admission or a later genuine collection decision.
-        prior.prime(draft, sequence)?;
-        let exit_reason = if prior.pending(raw) {
-            "pending_continue_unaided"
-        } else {
-            "no_pending"
-        };
-        prior.metrics.prime_wait_ms +=
-            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-        prior.record_priming_status(raw, self.world.tick().raw(), exit_reason);
+        prior.prime_with_receipt(draft, sequence)?;
         Ok(())
     }
 

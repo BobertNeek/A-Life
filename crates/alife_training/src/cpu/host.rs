@@ -30,6 +30,8 @@ pub enum CpuHostError {
     Json(#[from] serde_json::Error),
     #[error("CPU canonical host: {0}")]
     State(&'static str),
+    #[error("CPU episode preparation: {0}")]
+    Preparation(String),
 }
 #[derive(Clone)]
 struct Resident {
@@ -89,7 +91,7 @@ pub struct CpuCanonicalHost {
     sampling_seed: u32,
     sampling_counter: u32,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCollectedDecision {
     pub organism_id: OrganismId,
     pub initial: crate::TrainingInitialState,
@@ -211,6 +213,90 @@ impl CpuCanonicalHost {
         };
         host.seal_all_residents()?;
         Ok(host)
+    }
+    /// A new episode, prepared by ordinary world operations before the first
+    /// neural dispatch. This first enforces newborn admission; it cannot admit
+    /// an aged retained individual or substitute a founder for its private state.
+    pub fn new_prepared_cohort<T, E: std::fmt::Display>(
+        game: CanonicalNewGame,
+        founder: &CpuFoundationTrainer,
+        sampling_seed: u32,
+        prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
+    ) -> Result<(Self, T), CpuHostError> {
+        let mut host = Self::new_cohort(game, founder, sampling_seed)?;
+        let initial = host
+            .world
+            .organism_registry()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
+        let entities = host.world.organism_entity_ids();
+        let start = host.world.tick();
+        let setup = prepare(&mut host.world)
+            .map_err(|error| CpuHostError::Preparation(error.to_string()))?;
+        if host.world.tick() < start
+            || host.world.organism_entity_ids() != entities
+            || host.world.organism_registry().iter().count() != initial.len()
+        {
+            return Err(CpuHostError::State(
+                "episode setup changed the admitted roster or world clock",
+            ));
+        }
+        for original in initial {
+            let record = host
+                .world
+                .organism_registry()
+                .get(original.organism_id())
+                .ok_or(CpuHostError::State(
+                    "episode setup lost its admitted learner",
+                ))?;
+            if record.genome() != original.genome()
+                || record.phenotype() != original.phenotype()
+                || record.birth_tick() != original.birth_tick()
+                || !record.lifecycle().is_alive()
+                || record.biochemistry().tick != host.world.tick()
+                || record.sleep_cycle_id() != 0
+                || record.biochemistry().body.sleeping
+            {
+                return Err(CpuHostError::State(
+                    "episode setup changed learner identity or cannot begin an awake episode",
+                ));
+            }
+            validate_record_founder(record, founder)?;
+        }
+        host.seal_all_residents()?;
+        Ok((host, setup))
+    }
+    /// Read-only scene drafts for nonblocking semantic-prior priming. Priming
+    /// advances no world tick, neural state, exposure or action sequence.
+    pub fn semantic_prior_inputs(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<Vec<(PerceptionFrameDraft, ExperienceSequenceId)>, CpuHostError> {
+        self.validate_founder(founder)?;
+        let tick = self.world.tick();
+        let mut result = Vec::new();
+        for (&raw, resident) in &self.residents {
+            let id = OrganismId(raw);
+            let record = self
+                .world
+                .organism_registry()
+                .get(id)
+                .ok_or(CpuHostError::State("semantic-prior learner missing"))?;
+            if record.lifecycle().is_alive() && resident.sleep.state().phase == SleepPhase::Awake {
+                let homeostasis = record.biochemistry().homeostasis;
+                result.push((
+                    self.world.perception_frame_draft(
+                        id,
+                        tick,
+                        founder.phenotype().sensor_profile(),
+                        homeostasis,
+                    )?,
+                    ExperienceSequenceId(resident.next_sequence),
+                ));
+            }
+        }
+        Ok(result)
     }
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
@@ -472,6 +558,21 @@ impl CpuCanonicalHost {
         founder: &CpuFoundationTrainer,
         temperature: f32,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
+        self.step_with_preparation(founder, temperature, |draft, _| Ok(draft))
+    }
+    /// The shared semantic prior may enrich only its bounded private context.
+    /// Ordinary senses, candidates, body and identity are checked unchanged.
+    /// Host rollback does not roll back an external provider. Its owner archives
+    /// that state and reconciles a failed episode instead of retrying its seed.
+    pub fn step_with_preparation(
+        &mut self,
+        founder: &CpuFoundationTrainer,
+        temperature: f32,
+        mut prepare: impl FnMut(
+            PerceptionFrameDraft,
+            ExperienceSequenceId,
+        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
+    ) -> Result<CpuCanonicalStep, CpuHostError> {
         self.validate_founder(founder)?;
         for (&raw, r) in &self.residents {
             let record = self
@@ -482,7 +583,7 @@ impl CpuCanonicalHost {
             validate_resident_authority(record, r, self.sampling_seed, self.sampling_counter)?;
         }
         let mut next = self.clone();
-        let result = next.step_inner(founder, temperature)?;
+        let result = next.step_inner(founder, temperature, &mut prepare)?;
         *self = next;
         Ok(result)
     }
@@ -490,6 +591,10 @@ impl CpuCanonicalHost {
         &mut self,
         founder: &CpuFoundationTrainer,
         temperature: f32,
+        prepare: &mut impl FnMut(
+            PerceptionFrameDraft,
+            ExperienceSequenceId,
+        ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
         let p = founder.phenotype();
         let tick = self.world.tick();
@@ -670,6 +775,13 @@ impl CpuCanonicalHost {
                 p.sensor_profile(),
                 record.biochemistry().homeostasis,
             )?;
+            let ordinary = draft.clone().with_semantic_context(None)?;
+            let draft = prepare(draft, sequence)?;
+            if draft.clone().with_semantic_context(None)? != ordinary {
+                return Err(CpuHostError::State(
+                    "semantic preparation changed ordinary perception",
+                ));
+            }
             let preparation = prepare_canonical_frame(
                 &CanonicalPreparationInput {
                     draft,

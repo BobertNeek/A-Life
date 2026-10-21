@@ -6,6 +6,11 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
+name = "train_cpu_care"
+path = "src/bin/train_cpu_care.rs"
+required-features = ["cpu-training"]
+
+[[bin]]
 name = "export_native_training_handoff"
 path = "src/bin/export_native_training_handoff.rs"
 required-features = ["foundation-training"]
@@ -98,6 +103,7 @@ bevy-app = [
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
 foundation-training = ["gpu-runtime", "dep:alife_training", "alife_runtime/training-rollout", "dep:sha2"]
+cpu-training = ["foundation-training", "alife_training/cpu-backend"]
 gpu-tests = [
     "gpu-runtime",
     "dep:alife_training",

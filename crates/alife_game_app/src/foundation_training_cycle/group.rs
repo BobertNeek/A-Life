@@ -12,6 +12,23 @@ mod cpu_handoff;
 
 pub const FOUNDATION_TRAINING_GROUP_SIZE: usize = 50;
 
+/// Shared read-only history/exclusion admission; this does not reserve a seed.
+#[cfg(feature = "cpu-training")]
+pub(crate) fn admit_native_cpu_care_seed(
+    previous: &Path,
+    history: &Path,
+    output: &Path,
+    seed: u64,
+    known_exclusions: bool,
+) -> Result<serde_json::Value> {
+    admission::admit(previous, history, output, seed, known_exclusions)
+}
+
+#[cfg(feature = "cpu-training")]
+pub(crate) fn read_native_cpu_care_evidence(path: &Path) -> Result<(Vec<u8>, serde_json::Value)> {
+    admission::read(path)
+}
+
 // Diagnostic only: each completed pair measures host wall time, including any
 // driver work/waits in the enclosed call. Never adds GPU polls or changes state.
 struct GroupProgress {

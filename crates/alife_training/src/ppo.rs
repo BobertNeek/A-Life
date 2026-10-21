@@ -78,9 +78,9 @@ impl PpoConfig {
     }
 }
 
-/// Masks and indices must come from the same GPU sampling receipt, not inferred
+/// Masks and indices must come from the same native sampling receipt, not inferred
 /// from action success. A candidate can be legal to attempt and fail in the world.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PpoJointAction {
     pub candidate_count: u16,
     pub representative_mask: u32,
