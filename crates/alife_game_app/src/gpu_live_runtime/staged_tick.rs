@@ -966,30 +966,11 @@ impl GpuLiveBrainRuntime {
                         .residents
                         .get(&prepared.frame.organism_id().raw())
                         .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-                    let lanes = prepared.frame.sensory().language_prior_neural_lanes();
-                    let assignments = resident
-                        .phenotype
-                        .sensor_encoder()
-                        .assignments()
-                        .iter()
-                        .filter(|a| {
-                            a.source_group() == alife_core::SensorEncoderSourceGroup::SemanticPrior
-                        });
-                    let semantic_encoder_lanes = assignments.clone().count();
-                    let nonzero_encoded = assignments
-                        .filter(|a| {
-                            let source = lanes[128 + usize::from(a.source_index())];
-                            let (low, high) = a.clamp_range();
-                            (source * a.scale() + a.bias()).clamp(low, high)
-                                != a.bias().clamp(low, high)
-                        })
-                        .count();
-                    prior.record_decision_input(
+                    prior.record_encoded_decision_input(
                         &prepared.frame,
                         resident.next_sequence,
                         gpu_tick.dispatch_generation,
-                        semantic_encoder_lanes,
-                        nonzero_encoded,
+                        &resident.phenotype,
                     );
                 }
             }

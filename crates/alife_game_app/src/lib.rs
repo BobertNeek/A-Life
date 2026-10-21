@@ -3,6 +3,11 @@
 
 #![recursion_limit = "256"]
 
+#[cfg(feature = "cpu-training")]
+mod foundation_cpu_care;
+#[cfg(feature = "cpu-training")]
+pub use foundation_cpu_care::*;
+
 mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 

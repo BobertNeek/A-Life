@@ -28,7 +28,7 @@ pub use cohort_replay::{
 mod comparison_identity;
 pub(crate) mod diagnostics;
 pub use comparison_identity::FoundationProbeComparisonIdentityV1;
-mod food_outcome;
+pub(crate) mod food_outcome;
 mod initial_asset;
 mod lesson_trace;
 mod play_assessment;
@@ -67,6 +67,14 @@ pub(crate) fn validate_foundation_lesson_prior(
     output: &Path,
     lesson: Option<FoundationTeacherLesson>,
 ) -> Result<()> {
+    write_foundation_lesson_prior_readiness(runtime.semantic_prior_metrics(), output, lesson)
+}
+
+pub(crate) fn write_foundation_lesson_prior_readiness(
+    metrics: Option<&crate::gpu_live_runtime::SemanticPriorMetrics>,
+    output: &Path,
+    lesson: Option<FoundationTeacherLesson>,
+) -> Result<()> {
     if !matches!(
         lesson,
         Some(
@@ -77,7 +85,7 @@ pub(crate) fn validate_foundation_lesson_prior(
     ) {
         return Ok(());
     }
-    let complete = runtime.semantic_prior_metrics().is_some_and(|metrics| {
+    let complete = metrics.is_some_and(|metrics| {
         metrics.decision_frames > 0
             && metrics.decision_frames_without_prior == 0
             && metrics.decision_frames_with_prior == metrics.decision_frames
@@ -88,7 +96,7 @@ pub(crate) fn validate_foundation_lesson_prior(
             "lesson": lesson,
             "rich_information_complete": complete,
             "failure_policy": "log_and_continue_without_prior",
-            "semantic_prior": runtime.semantic_prior_metrics(),
+            "semantic_prior": metrics,
         }))?,
     )?;
     if !complete {
@@ -1461,7 +1469,7 @@ fn vocabulary_reception_choice(
         .or_else(|| frame.candidates().iter().find(|c| c.family == Family::Idle))
 }
 
-fn care_meal_completed(
+pub(crate) fn care_meal_completed(
     summary: Option<&FoundationFoodOutcome>,
     organism: alife_core::OrganismId,
     target: alife_core::WorldEntityId,
@@ -2586,7 +2594,10 @@ fn run_foundation_training_pilot_with_request(
 }
 
 pub(crate) fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
-    let outcome = step.patch.outcome();
+    outcome_consumed(step.patch.outcome())
+}
+
+pub(crate) fn outcome_consumed(outcome: &alife_core::PostActionOutcome) -> bool {
     outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
         || outcome.joint.as_ref().is_some_and(|joint| {
             joint.channel_outcomes.iter().any(|channel| {

@@ -1,4 +1,5 @@
 //! Offline foundation training on the compiled neural graph, using WGSL or CPU.
+#![recursion_limit = "256"]
 
 mod backend_handoff;
 #[cfg(feature = "cpu-backend")]

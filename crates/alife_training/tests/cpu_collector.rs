@@ -7,6 +7,13 @@ fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
     fixture_atp(None)
 }
 fn fixture_atp(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
+    let (game, trainer) = new_game_fixture(atp);
+    (
+        CpuCanonicalHost::new_cohort(game, &trainer, 42).unwrap(),
+        trainer,
+    )
+}
+fn new_game_fixture(atp: Option<f32>) -> (CanonicalNewGame, CpuFoundationTrainer) {
     let builtin =
         FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
     let mut config = CanonicalNewGameConfig::phase3(0x7A1123, 1).unwrap();
@@ -59,8 +66,7 @@ fn fixture_atp(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
     )
     .unwrap();
     let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
-    let host = CpuCanonicalHost::new_cohort(game, &trainer, 42).unwrap();
-    (host, trainer)
+    (game, trainer)
 }
 #[test]
 fn canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd() {
@@ -493,4 +499,72 @@ fn canonical_low_atp_executes_minimum_budget_and_empty_atp_sleeps() {
     assert!(step.decisions.is_empty());
     assert_eq!(step.sleeping_organisms, 1);
     CpuCanonicalHost::from_checkpoint(host.checkpoint(&trainer).unwrap(), &trainer).unwrap();
+}
+
+#[test]
+fn prepared_episode_admits_newborn_before_ordinary_aging_and_keeps_founder_state() {
+    let (game, trainer) = new_game_fixture(None);
+    let founder = trainer.checkpoint();
+    let (mut host, prepared_at) =
+        CpuCanonicalHost::new_prepared_cohort(game, &trainer, 123, |world| {
+            for _ in 0..12 {
+                world.try_advance_tick()?;
+            }
+            Ok::<_, OrganismRegistryError>(world.tick())
+        })
+        .unwrap();
+    assert_eq!(prepared_at.raw(), 12);
+    assert_eq!(trainer.checkpoint(), founder);
+    let inputs = host.semantic_prior_inputs(&trainer).unwrap();
+    assert_eq!(inputs.len(), 1);
+    assert_eq!(inputs[0].1.raw(), 1);
+    assert_eq!(host.world().tick(), prepared_at);
+    let step = host.step(&trainer, 1.).unwrap();
+    assert_eq!(step.decisions.len(), 1);
+    let row = &step.decisions[0];
+    assert_eq!(row.patch.pre_action().tick, prepared_at);
+    assert_eq!(row.patch.header().sequence_id.raw(), 1);
+    let bytes = serde_json::to_vec(row).unwrap();
+    let restored: CpuCollectedDecision = serde_json::from_slice(&bytes).unwrap();
+    restored.action.validate(1.).unwrap();
+    assert_eq!(restored.patch, row.patch);
+    assert_eq!(restored.action, row.action);
+    assert_eq!(trainer.checkpoint(), founder);
+
+    let (mut aged, trainer) = new_game_fixture(None);
+    aged.world.try_advance_tick().unwrap();
+    let called = std::cell::Cell::new(false);
+    let result = CpuCanonicalHost::new_prepared_cohort(aged, &trainer, 123, |_| {
+        called.set(true);
+        Ok::<_, CpuHostError>(())
+    });
+    assert!(result.is_err());
+    assert!(
+        !called.get(),
+        "preparation must never bypass existing-individual admission"
+    );
+}
+
+#[test]
+fn semantic_preparation_cannot_edit_ordinary_senses_or_advance_a_failed_host() {
+    let (mut host, trainer) = fixture();
+    let before = serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap();
+    let inputs = host.semantic_prior_inputs(&trainer).unwrap();
+    assert_eq!(inputs[0].1.raw(), 1);
+    assert_eq!(
+        before,
+        serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+    );
+    let failure = host.step_with_preparation(&trainer, 1., |draft, _| {
+        draft.with_remembered_novelty(0.736)
+    });
+    assert!(failure.is_err());
+    assert_eq!(
+        before,
+        serde_json::to_vec(&host.checkpoint(&trainer).unwrap()).unwrap()
+    );
+    let success = host
+        .step_with_preparation(&trainer, 1., |draft, _| Ok(draft))
+        .unwrap();
+    assert_eq!(success.decisions[0].patch.header().sequence_id.raw(), 1);
 }

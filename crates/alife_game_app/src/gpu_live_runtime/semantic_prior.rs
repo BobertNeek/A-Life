@@ -168,7 +168,7 @@ struct PriorResume {
     next_request: u64,
     pending_request: bool,
 }
-pub(super) struct RuntimeSemanticPrior {
+pub(crate) struct RuntimeSemanticPrior {
     queue: Option<LocalSlmPriorAsyncQueue>,
     retry_not_before: Option<Instant>,
     reported_empty_contexts: BTreeSet<String>,
@@ -472,6 +472,29 @@ impl RuntimeSemanticPrior {
         push_bounded(&mut self.metrics.decision_inputs, receipt);
     }
 
+    pub fn record_encoded_decision_input(
+        &mut self,
+        frame: &PerceptionFrame,
+        sequence: u64,
+        dispatch_generation: u64,
+        phenotype: &alife_core::BrainPhenotype,
+    ) {
+        let lanes = frame.sensory().language_prior_neural_lanes();
+        let assignments =
+            phenotype.sensor_encoder().assignments().iter().filter(|a| {
+                a.source_group() == alife_core::SensorEncoderSourceGroup::SemanticPrior
+            });
+        let count = assignments.clone().count();
+        let nonzero = assignments
+            .filter(|a| {
+                let source = lanes[128 + usize::from(a.source_index())];
+                let (low, high) = a.clamp_range();
+                (source * a.scale() + a.bias()).clamp(low, high) != a.bias().clamp(low, high)
+            })
+            .count();
+        self.record_decision_input(frame, sequence, dispatch_generation, count, nonzero);
+    }
+
     pub fn prepare(
         &mut self,
         draft: PerceptionFrameDraft,
@@ -486,6 +509,27 @@ impl RuntimeSemanticPrior {
         sequence: ExperienceSequenceId,
     ) -> Result<(), alife_core::ScaffoldContractError> {
         self.prepare_inner(draft, sequence, false).map(|_| ())
+    }
+    /// Shared nonblocking lesson priming. No world, neural or exposure advance.
+    #[cfg(feature = "foundation-training")]
+    pub fn prime_with_receipt(
+        &mut self,
+        draft: PerceptionFrameDraft,
+        sequence: ExperienceSequenceId,
+    ) -> Result<(), alife_core::ScaffoldContractError> {
+        let id = draft.organism_id().raw();
+        let tick = draft.tick().raw();
+        let started = Instant::now();
+        self.prime(draft, sequence)?;
+        let reason = if self.pending(id) {
+            "pending_continue_unaided"
+        } else {
+            "no_pending"
+        };
+        self.metrics.prime_wait_ms +=
+            started.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
+        self.record_priming_status(id, tick, reason);
+        Ok(())
     }
     #[cfg(feature = "foundation-training")]
     pub fn pending(&self, id: u64) -> bool {

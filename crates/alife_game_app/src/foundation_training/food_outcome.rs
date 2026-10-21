@@ -17,12 +17,12 @@ pub struct FoundationFoodOutcome {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-pub(super) struct FoodOwnershipSnapshot {
+pub(crate) struct FoodOwnershipSnapshot {
     pub owner: Option<OrganismId>,
     pub consumed: bool,
 }
 
-pub(super) fn ownership(
+pub(crate) fn ownership(
     world: &alife_world::HeadlessWorld,
     target: WorldEntityId,
 ) -> Option<FoodOwnershipSnapshot> {
@@ -34,7 +34,7 @@ pub(super) fn ownership(
 
 /// Tiny CPU-map copies bracketing the actual tick, retained only for captured rows.
 #[derive(Debug, Clone, Copy)]
-pub(super) struct FoodOutcomeObservation {
+pub(crate) struct FoodOutcomeObservation {
     pub organism: OrganismId,
     pub target: WorldEntityId,
     pub decision_tick: Tick,
@@ -77,7 +77,7 @@ impl FoodOutcomeObservation {
         self.matches_row(&step.frame, &step.behavior, &step.patch)
     }
 
-    pub(super) fn matches_row(
+    pub(crate) fn matches_row(
         self,
         frame: &alife_core::PerceptionFrame,
         behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt,
@@ -104,7 +104,7 @@ impl FoodOutcomeObservation {
 }
 
 impl FoundationFoodOutcome {
-    pub(super) fn new(organism: OrganismId, target: WorldEntityId) -> Self {
+    pub(crate) fn new(organism: OrganismId, target: WorldEntityId) -> Self {
         Self {
             organism,
             target,
@@ -117,7 +117,7 @@ impl FoundationFoodOutcome {
 
     // The collector additionally checks the captured GPU row identity. CPU
     // regressions call this with honestly sealed CPU patches, never fake GPU steps.
-    pub(super) fn observe(&mut self, observation: FoodOutcomeObservation, patch: &ExperiencePatch) {
+    pub(crate) fn observe(&mut self, observation: FoodOutcomeObservation, patch: &ExperiencePatch) {
         if self.organism != observation.organism
             || self.target != observation.target
             || !observation.matches_patch(patch)

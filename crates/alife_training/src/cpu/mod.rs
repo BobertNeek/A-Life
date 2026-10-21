@@ -4,6 +4,7 @@
 
 mod activity;
 mod cohort;
+mod continuation;
 mod host;
 mod input;
 mod objective;
@@ -12,6 +13,7 @@ mod replay;
 
 pub use activity::*;
 pub use cohort::*;
+pub use continuation::*;
 pub use host::*;
 pub use input::*;
 pub use objective::*;
