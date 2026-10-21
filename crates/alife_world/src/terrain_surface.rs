@@ -74,6 +74,58 @@ mod tests {
         assert!(s.height(-501.0, 0.0).is_none());
     }
     #[test]
+    fn ray_pick_does_not_skip_grid_or_triangle_ridges() {
+        let surface = TerrainSurface::from_data(crate::TerrainData {
+            width: 3,
+            depth: 2,
+            origin_x: 0.0,
+            origin_z: 0.0,
+            spacing: 1.0,
+            heights: vec![0.0, 2.0, 0.0, 0.0, 2.0, 0.0],
+            obstacles: Vec::new(),
+            water_level: None,
+        })
+        .unwrap();
+        let origin = Vec3f::new(0.0, 1.9, 0.25);
+        let direction = Vec3f::new(1.0, 0.0, 0.0);
+        let hit = surface.ray_hit(origin, direction, 2.0).unwrap();
+        assert!((hit.x - 0.95).abs() < 0.00001);
+        assert!(surface.ray_hit(origin, direction, 0.9).is_none());
+
+        let surface = TerrainSurface::from_data(crate::TerrainData {
+            width: 2,
+            heights: vec![0.0, 0.0, 0.0, 4.0],
+            ..surface.data()
+        })
+        .unwrap();
+        let q = std::f32::consts::FRAC_1_SQRT_2;
+        let hit = surface
+            .ray_hit(Vec3f::new(0.0, 1.9, 1.0), Vec3f::new(q, 0.0, -q), 2.0)
+            .unwrap();
+        assert!((hit.x - 0.475).abs() < 0.00001);
+        assert!((hit.z - 0.525).abs() < 0.00001);
+        assert!((surface.height(hit.x, hit.z).unwrap() - hit.y).abs() < 0.00001);
+
+        // This ray's clipped entry rounds just outside x = -500 in f32.
+        let surface = TerrainSurface::from_data(crate::TerrainData {
+            origin_x: -500.0,
+            spacing: 10.0,
+            heights: vec![0.0; 4],
+            ..surface.data()
+        })
+        .unwrap();
+        let dx = 0.19486223_f32;
+        let hit = surface
+            .ray_hit(
+                Vec3f::new(-1310.7981, 4100.0, 0.25),
+                Vec3f::new(dx, -(1.0 - dx * dx).sqrt(), 0.0),
+                5000.0,
+            )
+            .unwrap();
+        assert!((-500.0..=-490.0).contains(&hit.x));
+        assert!(hit.y.abs() < 0.001);
+    }
+    #[test]
     fn island_actual_move_updates_authoritative_height_and_displacement() {
         let terrain = crate::island_terrain();
         let s = terrain.surface();
@@ -194,6 +246,9 @@ impl TerrainSurface {
         {
             return None;
         }
+        Some(self.sample_grid(u, v))
+    }
+    fn sample_grid(&self, u: f32, v: f32) -> (f32, [f32; 2]) {
         let i = (u.floor() as usize).min(self.width - 2);
         let j = (v.floor() as usize).min(self.depth - 2);
         let (u, v) = (u - i as f32, v - j as f32);
@@ -204,7 +259,7 @@ impl TerrainSurface {
             self.heights[k + self.width + 1],
             self.heights[k + self.width],
         );
-        Some(if v >= u {
+        if v >= u {
             (
                 a * (1.0 - v) + d * (v - u) + c * u,
                 [(c - d) / self.spacing, (d - a) / self.spacing],
@@ -214,7 +269,7 @@ impl TerrainSurface {
                 a * (1.0 - u) + b * (u - v) + c * v,
                 [(b - a) / self.spacing, (c - b) / self.spacing],
             )
-        })
+        }
     }
     pub fn obstacle_at(&self, x: f32, z: f32, radius: f32) -> bool {
         // Search every cell touched by this body's clearance, not a baked radius.
@@ -285,7 +340,7 @@ impl TerrainSurface {
         {
             return None;
         }
-        // Clip against the horizontal sample bounds before marching. A distant
+        // Clip against the horizontal sample bounds before intersecting. A distant
         // overview camera must honor its requested ray range, not a 2 km cap.
         let mut enter: f32 = 0.0;
         let mut exit = max_distance;
@@ -303,7 +358,7 @@ impl TerrainSurface {
                 self.origin_z + (self.depth - 1) as f32 * self.spacing,
             ),
         ] {
-            if d.abs() < 1e-8 {
+            if d == 0.0 {
                 if o < lo || o > hi {
                     return None;
                 }
@@ -324,31 +379,49 @@ impl TerrainSurface {
                 origin.z + direction.z * t,
             )
         };
-        let mut previous = None;
-        for i in 0..=(((exit - enter) / 1.25).ceil() as usize) {
-            let t = (enter + i as f32 * 1.25).min(exit);
-            let p = point(t);
-            let Some(h) = self.height(p.x, p.z) else {
-                previous = None;
+        // The height gap is linear between grid edges and triangle diagonals.
+        // Sampling every such boundary cannot jump over a narrow ridge.
+        let mut cuts = vec![enter, exit];
+        for (o, d, first, count) in [
+            (origin.x - self.origin_x, direction.x, 1.0, self.width - 2),
+            (origin.z - self.origin_z, direction.z, 1.0, self.depth - 2),
+            (
+                (origin.x - self.origin_x) - (origin.z - self.origin_z),
+                direction.x - direction.z,
+                -((self.depth - 2) as f32),
+                self.width + self.depth - 3,
+            ),
+        ] {
+            if d == 0.0 {
                 continue;
-            };
-            if p.y <= h {
-                if let Some(mut lo) = previous {
-                    let mut hi = t;
-                    for _ in 0..14 {
-                        let m = (lo + hi) * 0.5;
-                        let p = point(m);
-                        if p.y > self.height(p.x, p.z)? {
-                            lo = m;
-                        } else {
-                            hi = m;
-                        }
-                    }
-                    return Some(point(hi));
+            }
+            for i in 0..count {
+                let t = ((first + i as f32) * self.spacing - o) / d;
+                if t > enter && t < exit {
+                    cuts.push(t);
+                }
+            }
+        }
+        cuts.sort_by(f32::total_cmp);
+        cuts.dedup();
+        let mut previous = None;
+        for t in cuts {
+            let p = point(t);
+            p.validate().ok()?;
+            // Slab-boundary rounding must not reject a valid clipped endpoint.
+            let u = ((p.x - self.origin_x) / self.spacing).clamp(0.0, (self.width - 1) as f32);
+            let v = ((p.z - self.origin_z) / self.spacing).clamp(0.0, (self.depth - 1) as f32);
+            let h = self.sample_grid(u, v).0;
+            let gap = f64::from(p.y) - f64::from(h);
+            if gap <= 0.0 {
+                if let Some((before, above)) = previous {
+                    return Some(point(
+                        before + (t - before) * (above / (above - gap)) as f32,
+                    ));
                 }
                 return Some(Vec3f::new(p.x, h, p.z));
             }
-            previous = Some(t);
+            previous = Some((t, gap));
         }
         None
     }
