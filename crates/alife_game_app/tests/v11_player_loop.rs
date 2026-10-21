@@ -216,7 +216,7 @@ fn v11_player_loop_preserves_cognition_through_recovery_breeding_and_durable_res
     let (mut runtime, organism_id, managed_id, archive_root) =
         focused_player_action_runtime("player-loop");
     let world_entity_id = runtime
-        .world()
+        .world_snapshot()
         .organism_registry()
         .get(organism_id)
         .unwrap()

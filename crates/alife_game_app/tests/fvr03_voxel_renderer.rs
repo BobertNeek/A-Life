@@ -20,7 +20,6 @@ use alife_game_app::{
     Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot,
     ProductionFrontendProfileId, ProductionVoxelLaunchConfig, V0PlayerControlStrip,
     V0PlayerCreaturePanel, V0PlayerStatusChip, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
-    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
 };
 use alife_world::{
     persistence::PortableSaveFile, CreatureAppearanceGenome, StableVoxelObjectRef,

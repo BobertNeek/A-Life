@@ -74,6 +74,12 @@ pub enum GpuEvidenceError {
     Json(#[from] serde_json::Error),
 }
 
+impl From<alife_world::PersistenceError> for GpuEvidenceError {
+    fn from(error: alife_world::PersistenceError) -> Self {
+        Self::App(GameAppShellError::Persistence(error))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuSliceEvidenceHeader {
     pub artifact_schema: u16,

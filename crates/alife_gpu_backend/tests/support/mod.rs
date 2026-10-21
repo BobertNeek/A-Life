@@ -2075,8 +2075,7 @@ mod hardware {
         });
         {
             let mut mapped = buffer.slice(..).get_mapped_range_mut();
-            mapped.fill(0);
-            mapped[..bytes.len()].copy_from_slice(bytes);
+            mapped.slice(..bytes.len()).copy_from_slice(bytes);
         }
         buffer.unmap();
         buffer

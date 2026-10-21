@@ -36,8 +36,7 @@ use bevy::{
         GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d, MeshMaterial3d,
         MessageReader, MessageWriter, MouseButton, Name, Node, ParamSet, PositionType, Projection,
         Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
-        Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility, Window, With, Without,
-        World,
+        Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -4298,7 +4297,7 @@ fn animate_fvr07_production_vfx(
     mut markers: bevy::prelude::Query<(
         &mut Transform,
         &Fvr07ProductionGpuVfxMarker,
-        &ViewVisibility,
+        &bevy::prelude::ViewVisibility,
     )>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
