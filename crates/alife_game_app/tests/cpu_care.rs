@@ -122,6 +122,7 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
             "2",
         ]);
         assert_eq!(receipt["backend"], "native-cpu");
+        success(&["--validate-output", text(&output)]);
         assert_eq!(receipt["fixture"], true);
         assert_eq!(receipt["objective_state_reset"], false);
         assert_eq!(receipt["training_ticks"], 2);
@@ -256,12 +257,71 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
     );
     assert_eq!(second["fixture"], true);
     assert_eq!(
-        second["seed_admission"]["seed_admission"]["historical_freshness"],
+        serde_json::to_string(&second)
+            .unwrap()
+            .matches("\"native_source_receipt\"")
+            .count(),
+        2
+    );
+    assert_eq!(
+        second["seed_admission"]["historical_freshness"],
         "operator-attested-complete"
     );
-    let ledger = load(lane.join(".grab-food-seed-reservations.json"));
+    success(&["--validate-output", text(&output)]);
+    let ledger_path = lane.join(".grab-food-seed-reservations.json");
+    let ledger = load(&ledger_path);
     assert_eq!(ledger["cpu_care_attempts"][0]["status"], "accepted");
     assert!(!lane.join(".eat-held-food-owner.lock").exists());
+    // A pending seal is admitted only against its immutable reservation fields.
+    let mut pending = ledger.clone();
+    pending["cpu_care_attempts"][0]["status"] = json!("pending");
+    pending["cpu_care_attempts"][0]["lesson"] = json!("feeding");
+    fs::write(&ledger_path, serde_json::to_vec(&pending).unwrap()).unwrap();
+    assert!(!run(&["--reconcile-pending", text(&lane)]).status.success());
+    assert_eq!(
+        load(&ledger_path)["cpu_care_attempts"][0]["status"],
+        "pending"
+    );
+    pending["cpu_care_attempts"][0]["lesson"] = json!("eat_reachable_food");
+    fs::write(&ledger_path, serde_json::to_vec(&pending).unwrap()).unwrap();
+    assert_eq!(
+        success(&["--reconcile-pending", text(&lane)])["status"],
+        "accepted"
+    );
+    // Full private archive loss or a changed retained moment invalidates a seal.
+    for name in [
+        "collector-checkpoint.json",
+        "collection-actor-checkpoint.json",
+        "source-native/actor-checkpoint.json",
+    ] {
+        let path = output.join(name);
+        let original = fs::read(&path).unwrap();
+        fs::write(&path, b"{}").unwrap();
+        assert!(
+            !run(&["--validate-output", text(&output)]).status.success(),
+            "{name}"
+        );
+        fs::write(path, original).unwrap();
+    }
+    let mut interrupted = load(&ledger_path);
+    interrupted["training_seed_ranges"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!([893099, 893099]));
+    interrupted["cpu_care_attempts"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"status":"pending", "seed":893099,
+        "output":lane.join("interrupted"), "source_sha256":pins(&output)}));
+    fs::write(&ledger_path, serde_json::to_vec(&interrupted).unwrap()).unwrap();
+    let reconciled = success(&["--reconcile-pending", text(&lane)]);
+    assert_eq!(reconciled["status"], "failed");
+    assert_eq!(reconciled["dispatch"], false);
+    assert!(!lane.join("interrupted").exists());
+    assert_eq!(
+        load(&ledger_path)["training_seed_ranges"],
+        json!([[893002, 893002], [893099, 893099]])
+    );
     let rejected = lane.join("stale-source");
     history(&history_path, &source, &lane, &[893001, 893002]);
     let args = [
@@ -319,4 +379,45 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
     ]);
     assert!(!result.status.success());
     assert_eq!(fs::read(existing.join("keep")).unwrap(), b"owner");
+    // Incomplete history remains explicitly unknown across a real CPU successor.
+    history(&history_path, &output, &lane, &[893001, 893002, 893099]);
+    let evidence = fixture.0.join("immutable-recovery-evidence.json");
+    fs::copy(&history_path, &evidence).unwrap();
+    let mut known = load(&history_path);
+    known["complete"] = json!(false);
+    known["seed_admission"] = json!({"policy":"known-exclusions","historical_freshness":"unknown"});
+    known["missing_history"] =
+        json!("Synthetic fixture with explicitly incomplete historical evidence");
+    known["recovery_reconciliation"] = json!({"accepted_checkpoint_authoritative":true,
+        "known_inflight_attempts_reconciled_or_excluded":true,"no_known_detached_later_accepted_chain":true,
+        "explanation":"Fixture pending attempt reconciled; latest CPU founder is authoritative",
+        "evidence":[{"path":evidence,"sha256":sha(&evidence)}],
+        "prior_ledger_runs_sha256":format!("{:x}", Sha256::digest(b"[]"))});
+    fs::write(&history_path, serde_json::to_vec(&known).unwrap()).unwrap();
+    let third_output = lane.join("episode-1");
+    let third = success(&[
+        "--previous",
+        text(&output),
+        "--output",
+        text(&third_output),
+        "--seed-history",
+        text(&history_path),
+        "--known-exclusions",
+        "--seed",
+        "893003",
+        "--lesson",
+        "feeding",
+        "--decisions",
+        "2",
+    ]);
+    assert_eq!(third["seed_admission"]["historical_freshness"], "unknown");
+    assert_eq!(third["seed_admission"]["policy"], "known-exclusions");
+    assert_eq!(
+        serde_json::to_string(&third)
+            .unwrap()
+            .matches("\"native_source_receipt\"")
+            .count(),
+        3
+    );
+    success(&["--validate-output", text(&third_output)]);
 }

@@ -500,7 +500,7 @@ pub fn run_cpu_continuation(
         for row in step.decisions {
             rows.entry(row.organism_id.raw()).or_default().push(row);
         }
-        if decision_budget.is_some_and(|n| captured >= n + 1) {
+        if decision_budget.is_some_and(|n| captured > n) {
             break;
         }
         if host
@@ -672,7 +672,12 @@ pub fn run_cpu_continuation(
             }
         }
     }
-    write_json(args.output.join("cpu-cycle.json"), &receipt)?;
     fs::write(args.output.join("phase.txt"), "complete-fresh-cohort-cpu")?;
-    Ok(receipt)
+    write_json(args.output.join("cpu-cycle.json"), &receipt)?;
+    // Return the sealed representation. serde_json's fast float parser can
+    // round an in-memory f64 differently on its first text roundtrip; acceptance
+    // compares two reads of the same authoritative bytes.
+    Ok(serde_json::from_slice(&fs::read(
+        args.output.join("cpu-cycle.json"),
+    )?)?)
 }

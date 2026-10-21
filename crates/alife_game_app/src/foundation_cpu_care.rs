@@ -35,9 +35,21 @@ pub fn reconcile_cpu_care_attempt(lane: &std::path::Path) -> Result<Value> {
 }
 
 pub fn validate_cpu_care_output(output: &std::path::Path) -> Result<Value> {
-    let receipt = crate::foundation_training_cycle::read_native_cpu_care_evidence(&output.join("cpu-cycle.json"))?.1;
+    let receipt = crate::foundation_training_cycle::read_native_cpu_care_evidence(
+        &output.join("cpu-cycle.json"),
+    )?
+    .1;
     admission::validate_care_output(output, &receipt)?;
     Ok(receipt)
+}
+
+pub(crate) fn trained_care_meal_completed(
+    summary: &FoundationFoodOutcome,
+    train_rows: usize,
+    meal_rows: &[usize],
+) -> bool {
+    meal_rows.iter().any(|row| *row < train_rows)
+        && care_meal_completed(Some(summary), summary.organism, summary.target)
 }
 
 pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
@@ -114,7 +126,7 @@ impl CpuEpisodeHooks for CareEpisode {
             );
         }
         let reservation = admission::CareSeedReservation::reserve(config, &self.request)?;
-        let provenance = reservation.provenance.clone();
+        let provenance = reservation.provenance["seed_admission"].clone();
         self.reservation = Some(reservation);
         Ok(provenance)
     }
@@ -290,6 +302,11 @@ impl CpuEpisodeHooks for CareEpisode {
             "provider_identity":self.prior.as_ref().map(|p| &p.metrics.provider_identity),"world_tick":host.world().tick(),"lives":lives,
             "restore_contract":"restore host checkpoint under collection policy and restore_life for the same organism before further dispatch"}),
         )?;
+        if let Some(reservation) = self.reservation.as_ref() {
+            // Full history/provenance is retained once outside recursive native
+            // receipts. Only policy/freshness belongs in seed_admission.
+            write("care-seed-admission.json", &reservation.provenance)?;
+        }
         write_foundation_lesson_prior_readiness(
             self.prior.as_ref().map(|p| &p.metrics),
             output,
@@ -303,7 +320,7 @@ impl CpuEpisodeHooks for CareEpisode {
             "food_outcome":summary,"generic_consumed_events":self.generic_consumed,
             "captured_nourished_meals":summary.nourished_meal_events,"trained_nourished_meals":trained_meals,
             "bootstrap_nourished_meals":summary.nourished_meal_events-trained_meals,
-            "lesson_completed":trained_meals>0 && care_meal_completed(Some(summary),summary.organism,summary.target),
+            "lesson_completed":trained_care_meal_completed(summary, train_rows, &self.meal_rows),
             "curriculum_progression":"none; explicit supported care schedule only",
             "semantic_prior":self.prior.as_ref().map(|p| &p.metrics),
             "prior_failure_policy":"log_and_continue_without_prior",
@@ -314,7 +331,15 @@ impl CpuEpisodeHooks for CareEpisode {
             "care-trace.json",
             "care-prior-lives.json",
             "care-episode.json",
+            "collector-checkpoint.json",
+            "collection-policy.alife-foundation",
+            "collection-compiler-inputs.json",
+            "collection-actor-checkpoint.json",
+            "initial-value-checkpoint.json",
         ];
+        if self.reservation.is_some() {
+            artifacts.push("care-seed-admission.json");
+        }
         if output.join("semantic-prior-readiness.json").is_file() {
             artifacts.push("semantic-prior-readiness.json");
         }

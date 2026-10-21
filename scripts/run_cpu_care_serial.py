@@ -29,7 +29,7 @@ def pins(source):
 
 
 def read(path):
-    return seeds._read(path)[0]
+    return mixed.inspector_io.load_json(path, seeds.MAX_DOCUMENT_BYTES)[0]
 
 
 def command(binary, *args):
@@ -65,6 +65,7 @@ def build_plan(args):
             "binary": str(binary), "binary_sha256": mixed.host.sha256(binary), "schedule": schedule,
             "seed_range": [first, last], "temperature": args.temperature, "seed_admission": admission,
             "git_head": git("rev-parse", "HEAD"), "git_tree": git("rev-parse", "HEAD^{tree}"),
+            "scheduler_sha256": mixed.host.sha256(Path(__file__)),
             "cargo_lock_sha256": mixed.host.sha256(root / "Cargo.lock"),
             "prior_environment": {k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")}}
 
@@ -92,6 +93,7 @@ def execute(plan):
     binary = plan["binary"]
     require(plan["schema"] == 1 and plan["kind"] == "native-cpu-care-plan", "invalid saved CPU plan")
     require(mixed.host.sha256(binary) == plan["binary_sha256"], "pinned CPU binary changed")
+    require(mixed.host.sha256(Path(__file__)) == plan["scheduler_sha256"], "pinned scheduler changed")
     require({k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")} == plan["prior_environment"],
             "semantic-prior environment changed")
     require(pins(Path(plan["source"])) == plan["source_sha256"], "immutable starting source changed")
@@ -127,8 +129,11 @@ def execute(plan):
         output = lane / f"episode-{index:05d}"
         require(not output.exists(), "CPU output already exists")
         history = lane / f"history-{index:05d}.json"
-        require(not history.exists(), "dispatch history already exists; reconcile before continuing")
-        seeds.write_document(history, episode_history(plan, previous, attempts, lane))
+        document = episode_history(plan, previous, attempts, lane)
+        if history.exists():
+            require(read(history) == document, "existing dispatch history differs; preserve for reconciliation")
+        else:
+            seeds.write_document(history, document)
         row = rows[slot]
         argv = ["--previous", previous, "--output", output, "--seed-history", history,
                 "--seed", seed, "--lesson", row["lesson"], "--decisions", row["decisions"],
@@ -178,12 +183,14 @@ def main():
             print(json.dumps(plan, indent=2))
             return
         lane.mkdir(parents=True, exist_ok=True)
-        seeds.write_document(lane / PLAN, plan)
     lock = lane / ".cpu-care-scheduler.lock"
     descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     try:
         os.write(descriptor, str(os.getpid()).encode())
         os.fsync(descriptor)
+        if not args.resume:
+            require(not (lane / PLAN).exists() and not (lane / LEDGER).exists(), "CPU lane acquired another plan")
+            seeds.write_document(lane / PLAN, plan)
         print(json.dumps(execute(plan), indent=2))
     finally:
         os.close(descriptor)

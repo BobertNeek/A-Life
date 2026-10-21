@@ -47,7 +47,10 @@ fn write_atomic(path: &Path, value: &Value) -> Result<()> {
 struct LaneLock(PathBuf, Option<fs::File>);
 fn lock_lane(lane: &Path) -> Result<LaneLock> {
     let path = lane.join(LOCK);
-    let mut file = fs::OpenOptions::new().create_new(true).write(true).open(&path)?;
+    let mut file = fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&path)?;
     writeln!(file, "pid={}", std::process::id())?;
     file.sync_all()?;
     Ok(LaneLock(path, Some(file)))
@@ -61,23 +64,38 @@ fn read_ledger(path: &Path) -> Result<Value> {
     if ledger["kind"] != "grab-food-seed-ledger" || ledger["cpu_care_schema"] != 1 {
         return Err("CPU care refuses another owner's ledger; use a dedicated lane".into());
     }
-    let attempts = ledger["cpu_care_attempts"].as_array().ok_or("invalid CPU attempts")?;
+    let attempts = ledger["cpu_care_attempts"]
+        .as_array()
+        .ok_or("invalid CPU attempts")?;
     let mut seeds = std::collections::BTreeSet::new();
     let mut outputs = std::collections::BTreeSet::new();
     let mut latest = None;
     for (i, attempt) in attempts.iter().enumerate() {
-        let seed = attempt["seed"].as_u64().filter(|s| *s > 0).ok_or("invalid attempted seed")?;
-        let output = attempt["output"].as_str().ok_or("invalid attempted output")?;
+        let seed = attempt["seed"]
+            .as_u64()
+            .filter(|s| *s > 0)
+            .ok_or("invalid attempted seed")?;
+        let output = attempt["output"]
+            .as_str()
+            .ok_or("invalid attempted output")?;
         let status = attempt["status"].as_str().ok_or("invalid attempt status")?;
-        if !seeds.insert(seed) || !outputs.insert(output)
+        if !seeds.insert(seed)
+            || !outputs.insert(output)
             || !Path::new(output).is_absolute()
             || !matches!(status, "pending" | "accepted" | "failed")
             || status == "pending" && i + 1 != attempts.len()
             || latest.is_some_and(|pins| pins != &attempt["source_sha256"])
-            || !ledger["training_seed_ranges"].as_array().is_some_and(|ranges| ranges.iter().any(|r| r == &json!([seed,seed]))) {
+            || !ledger["training_seed_ranges"]
+                .as_array()
+                .is_some_and(|ranges| ranges.iter().any(|r| r == &json!([seed, seed])))
+        {
             return Err("CPU attempt lineage/status/exclusion changed".into());
         }
-        latest = Some(if status == "accepted" { &attempt["native_output_sha256"] } else { &attempt["source_sha256"] });
+        latest = Some(if status == "accepted" {
+            &attempt["native_output_sha256"]
+        } else {
+            &attempt["source_sha256"]
+        });
         if latest.is_none_or(|pins| pins.as_object().is_none_or(|p| p.len() != 4)) {
             return Err("CPU attempt lacks exact native source pins".into());
         }
@@ -207,7 +225,11 @@ impl CareSeedReservation {
     pub fn accept(&mut self, receipt: &Value) -> Result<()> {
         validate_care_output(&self.output, receipt)?;
         let ledger = read_ledger(&self.ledger_path)?;
-        let attempt = ledger["cpu_care_attempts"].as_array().unwrap().last().unwrap();
+        let attempt = ledger["cpu_care_attempts"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
         validate_attempt_output(attempt, receipt)?;
         let pins = [
             "cpu-cycle.json",
@@ -245,7 +267,8 @@ fn validate_attempt_output(attempt: &Value, receipt: &Value) -> Result<()> {
         || receipt["seed_provenance"]["source_sha256"] != attempt["source_sha256"]
         || receipt["episode"]["lesson"] != attempt["lesson"]
         || receipt["requested_training_ticks"] != attempt["decisions"]
-        || receipt["seed_admission"]["seed_admission"] != attempt["seed_admission"] {
+        || receipt["seed_admission"] != attempt["seed_admission"]
+    {
         return Err("sealed CPU output differs from its reserved attempt".into());
     }
     Ok(())
@@ -258,21 +281,35 @@ pub(super) fn reconcile(lane: &Path) -> Result<Value> {
     let lock = lock_lane(&lane)?;
     let ledger_path = lane.join(LEDGER);
     let ledger = read_ledger(&ledger_path)?;
-    let attempt = ledger["cpu_care_attempts"].as_array().ok_or("missing attempts")?
-        .last().filter(|a| a["status"] == "pending").ok_or("no pending CPU attempt")?;
+    let attempt = ledger["cpu_care_attempts"]
+        .as_array()
+        .ok_or("missing attempts")?
+        .last()
+        .filter(|a| a["status"] == "pending")
+        .ok_or("no pending CPU attempt")?;
     let output = PathBuf::from(attempt["output"].as_str().ok_or("invalid pending output")?);
     if output.parent() != Some(lane.as_path()) || output.is_symlink() {
         return Err("pending output escaped its dedicated lane".into());
     }
-    let mut reservation = CareSeedReservation { provenance: Value::Null, ledger_path, output,
-        seed:attempt["seed"].as_u64().ok_or("missing pending seed")?, _lock:lock };
+    let mut reservation = CareSeedReservation {
+        provenance: Value::Null,
+        ledger_path,
+        output,
+        seed: attempt["seed"].as_u64().ok_or("missing pending seed")?,
+        _lock: lock,
+    };
     if reservation.output.join("cpu-cycle.json").exists() {
-        let (_, receipt) = read_native_cpu_care_evidence(&reservation.output.join("cpu-cycle.json"))?;
+        let (_, receipt) =
+            read_native_cpu_care_evidence(&reservation.output.join("cpu-cycle.json"))?;
         reservation.accept(&receipt)?;
-        Ok(json!({"status":"accepted","output":reservation.output,"seed":reservation.seed,"dispatch":false}))
+        Ok(
+            json!({"status":"accepted","output":reservation.output,"seed":reservation.seed,"dispatch":false}),
+        )
     } else {
         reservation.fail("interrupted unsealed episode reconciled; seed remains excluded")?;
-        Ok(json!({"status":"failed","output":reservation.output,"seed":reservation.seed,"dispatch":false}))
+        Ok(
+            json!({"status":"failed","output":reservation.output,"seed":reservation.seed,"dispatch":false}),
+        )
     }
 }
 
@@ -304,9 +341,23 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
             "CPU care output has inconsistent sealed identity or decision/bootstrap dose".into(),
         );
     }
-    let artifacts = receipt["episode_artifact_sha256"].as_object().ok_or("care artifacts missing")?;
-    for name in ["care-replay.json", "care-trace.json", "care-prior-lives.json", "care-episode.json"] {
-        if !artifacts.contains_key(name) { return Err("required CPU care artifact missing".into()); }
+    let artifacts = receipt["episode_artifact_sha256"]
+        .as_object()
+        .ok_or("care artifacts missing")?;
+    for name in [
+        "care-replay.json",
+        "care-trace.json",
+        "care-prior-lives.json",
+        "care-episode.json",
+        "collector-checkpoint.json",
+        "collection-policy.alife-foundation",
+        "collection-compiler-inputs.json",
+        "collection-actor-checkpoint.json",
+        "initial-value-checkpoint.json",
+    ] {
+        if !artifacts.contains_key(name) {
+            return Err("required CPU care artifact missing".into());
+        }
     }
     for (name, expected) in receipt["episode_artifact_sha256"]
         .as_object()
@@ -325,33 +376,88 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
     if read_native_cpu_care_evidence(&output.join("care-episode.json"))?.1 != receipt["episode"] {
         return Err("CPU care episode metadata differs from seal".into());
     }
-    let source = output.join("source-native");
-    let actor: FoundationTrainerCheckpoint =
-        serde_json::from_slice(&fs::read(source.join("actor-checkpoint.json"))?)?;
     let imported: FoundationTrainerCheckpoint =
         serde_json::from_slice(&fs::read(output.join("collection-actor-checkpoint.json"))?)?;
-    let value: PpoValueHeadCheckpoint =
-        serde_json::from_slice(&fs::read(source.join("value-checkpoint.json"))?)?;
     let imported_value: PpoValueHeadCheckpoint =
         serde_json::from_slice(&fs::read(output.join("initial-value-checkpoint.json"))?)?;
-    if actor != imported
-        || value != imported_value
-        || fs::read(source.join("trained.alife-foundation"))?
-            != fs::read(output.join("collection-policy.alife-foundation"))?
+    let inputs: alife_core::PhenotypeCompilerInputs =
+        serde_json::from_slice(&fs::read(output.join("collection-compiler-inputs.json"))?)?;
+    let phenotype = alife_core::PhenotypeCompiler::compile_validated(
+        &inputs,
+        &alife_core::BrainCapacityClass::n2048(),
+    )?;
+    let asset = alife_core::FoundationWeightAsset::decode_canonical(&fs::read(
+        output.join("collection-policy.alife-foundation"),
+    )?)?;
+    if inputs.n2048_candidate_asset() != Some(&asset) {
+        return Err("collection compiler asset differs".into());
+    }
+    let founder = alife_training::cpu::CpuFoundationTrainer::from_checkpoint(
+        phenotype,
+        asset,
+        imported.clone(),
+    )?;
+    let checkpoint = serde_json::from_slice(&fs::read(output.join("collector-checkpoint.json"))?)?;
+    let _restored = alife_training::cpu::CpuCanonicalHost::from_checkpoint(checkpoint, &founder)?;
+    let source = output.join("source-native");
+    let source_pins = receipt["source_native_sha256"]
+        .as_object()
+        .ok_or("missing native source pins")?;
+    let ancestry_pins = receipt["seed_provenance"]["source_sha256"]
+        .as_object()
+        .ok_or("missing predecessor pins")?;
+    for (name, expected) in ancestry_pins {
+        if source_pins.get(name) != Some(expected) {
+            return Err("retained source pins differ from reserved predecessor".into());
+        }
+    }
+    for (name, expected) in source_pins {
+        if Path::new(name).components().count() != 1
+            || !matches!(
+                Path::new(name).components().next(),
+                Some(std::path::Component::Normal(_))
+            )
+            || expected.as_str() != Some(sha(&fs::read(source.join(name))?).as_str())
+        {
+            return Err("retained native source changed".into());
+        }
+    }
+    if receipt["source_policy_version"] == 0 && receipt["fixture"] == true && source_pins.is_empty()
     {
-        return Err(
-            "CPU care discarded or changed retained founder/full optimizer state before collection"
-                .into(),
-        );
+        // Only the explicit root development fixture has no retained predecessor.
+    } else {
+        if !artifacts.contains_key("care-seed-admission.json") {
+            return Err("care admission artifact missing".into());
+        }
+        let provenance = read_native_cpu_care_evidence(&output.join("care-seed-admission.json"))?.1;
+        if provenance["source_sha256"] != receipt["seed_provenance"]["source_sha256"]
+            || provenance["seed_admission"] != receipt["seed_admission"]
+            || provenance["world_seed"] != receipt["seed"]
+        {
+            return Err("care admission provenance differs".into());
+        }
+        let actor: FoundationTrainerCheckpoint =
+            serde_json::from_slice(&fs::read(source.join("actor-checkpoint.json"))?)?;
+        let value: PpoValueHeadCheckpoint =
+            serde_json::from_slice(&fs::read(source.join("value-checkpoint.json"))?)?;
+        if actor != imported
+            || value != imported_value
+            || fs::read(source.join("trained.alife-foundation"))?
+                != fs::read(output.join("collection-policy.alife-foundation"))?
+        {
+            return Err(
+                "CPU care changed retained founder/full optimizer state before collection".into(),
+            );
+        }
     }
     for (initial, final_age, updates) in [
         (
-            actor.optimizer_step,
+            imported.optimizer_step,
             &receipt["actor_optimizer_step"],
             &receipt["actor_optimizer_updates"],
         ),
         (
-            value.optimizer_step,
+            imported_value.optimizer_step,
             &receipt["value_optimizer_step"],
             &receipt["value_optimizer_updates"],
         ),

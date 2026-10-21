@@ -5,11 +5,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let special: Vec<_> = std::env::args().skip(1).collect();
     if special.len() == 2 {
         let result = match special[0].as_str() {
-            "--validate-output" => Some(alife_game_app::validate_cpu_care_output(std::path::Path::new(&special[1]))?),
-            "--reconcile-pending" => Some(alife_game_app::reconcile_cpu_care_attempt(std::path::Path::new(&special[1]))?),
+            "--validate-output" => Some(alife_game_app::validate_cpu_care_output(
+                std::path::Path::new(&special[1]),
+            )?),
+            "--reconcile-pending" => Some(alife_game_app::reconcile_cpu_care_attempt(
+                std::path::Path::new(&special[1]),
+            )?),
             _ => None,
         };
-        if let Some(result) = result { println!("{}", serde_json::to_string(&result)?); return Ok(()); }
+        if let Some(result) = result {
+            println!("{}", serde_json::to_string(&result)?);
+            return Ok(());
+        }
     }
     let mut arguments = std::env::args().skip(1);
     let mut values = BTreeMap::new();

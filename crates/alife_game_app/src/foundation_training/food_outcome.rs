@@ -607,6 +607,17 @@ mod tests {
         summary.observe_selected(observation, &decision, &outcome);
         assert_eq!(summary.consumption_events, 1);
         assert_eq!(summary.nourished_meal_events, 1);
+        #[cfg(feature = "cpu-training")]
+        {
+            use crate::foundation_cpu_care::trained_care_meal_completed;
+            // This is an actual world Eat and measured biological benefit. A
+            // bootstrap-only meal cannot stand in for a trained care decision.
+            assert!(trained_care_meal_completed(&summary, 2, &[1]));
+            assert!(!trained_care_meal_completed(&summary, 1, &[1]));
+            let mut generic_consumption = summary.clone();
+            generic_consumption.nourished_meal_events = 0;
+            assert!(!trained_care_meal_completed(&generic_consumption, 2, &[1]));
+        }
         assert!(super::super::care_meal_completed(
             Some(&summary),
             learner,
