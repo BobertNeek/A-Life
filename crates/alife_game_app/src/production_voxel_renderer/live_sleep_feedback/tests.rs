@@ -704,7 +704,6 @@ fn ux() -> Fvr05ProductionUxStateResource {
         selected_backend: "Unavailable".into(), adapter_name: String::new(), backend_api: String::new(),
         graphics_backend: String::new(), unavailable_reason: "CPU sleep fixture".into(),
         renderer_profile: String::new(), state_trace: String::new(),
-        authority: Fvr05ProductionDebugAuthorityReport::production_read_only(),
         gpu_runtime_state: serde_json::from_value(serde_json::json!({
             "schema":"CPU sleep fixture","schema_version":1,"requested_backend_mode":"GpuAuthoritative",
             "selected_backend_mode":"Unavailable","adapter_identity":{"adapter_name":null,

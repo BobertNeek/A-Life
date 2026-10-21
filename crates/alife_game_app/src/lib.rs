@@ -7,12 +7,9 @@ mod prelude {
     pub(crate) use std::path::{Path, PathBuf};
 
     pub(crate) use alife_core::{
-        heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionDecision, ActionId,
-        ActionKind, ActionProposal, ActionTarget, BrainTickInput, BrainTickStatus, Confidence,
-        ContractDiagnostic, CreatureMind, DurationTicks, ExperiencePatch, HomeostaticSnapshot,
-        Intensity, NeuralProjectionSchema, NormalizedScalar, OrganismId, PhysicalContactKind,
-        PolicyBackend, ReferenceActionFailure, ScaffoldContractError, SleepPhase, Tick, Validate,
-        Vec3f, WorldEntityId,
+        ActionId, ActionKind, BrainTickStatus, ContractDiagnostic, HomeostaticSnapshot,
+        NormalizedScalar, OrganismId, PhysicalContactKind, PolicyBackend, ReferenceActionFailure,
+        ScaffoldContractError, SleepPhase, Tick, Validate, Vec3f, WorldEntityId,
     };
     pub(crate) use alife_world::persistence::{
         AssetManifest, GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity,
@@ -23,8 +20,8 @@ mod prelude {
     };
     pub(crate) use alife_world::{
         CreatureAppearanceGenome, CreatureWorldAnchor, EcologyMetrics, EcologyZoneId,
-        HeadlessActionIds, HeadlessBrainHarness, HeadlessSensoryReport, HeadlessWorld,
-        PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZoneKind, WorldObjectKind,
+        HeadlessWorld, PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZoneKind,
+        WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;
@@ -202,9 +199,6 @@ pub use runtime_playback::RuntimePlaybackState;
 
 mod double_buffered_scheduler;
 pub use double_buffered_scheduler::*;
-
-mod motor_ring;
-pub use motor_ring::*;
 
 mod production_assets;
 pub use production_assets::*;

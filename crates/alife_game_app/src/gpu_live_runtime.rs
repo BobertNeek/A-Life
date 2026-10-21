@@ -10731,7 +10731,6 @@ mod tests {
                     &mut summaries,
                     0.0,
                     &memory_evidence,
-                    &context,
                     &topology_evidence,
                     receptors,
                 )
@@ -10972,7 +10971,6 @@ mod tests {
             &mut base_summaries,
             body_need,
             &memory_evidence,
-            &baseline_context,
             &topology_evidence,
             NeuralReceptorEffects::from_frame(
                 &receptors,

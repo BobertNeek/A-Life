@@ -88,7 +88,6 @@ fn ux() -> Fvr05ProductionUxStateResource {
         selected_backend:"Unavailable".into(),adapter_name:String::new(),backend_api:String::new(),
         graphics_backend:String::new(),unavailable_reason:"CPU UI fixture".into(),
         renderer_profile:String::new(),state_trace:String::new(),
-        authority:Fvr05ProductionDebugAuthorityReport::production_read_only(),
         gpu_runtime_state:serde_json::from_value(json!({
             "schema":"UI-only fixture","schema_version":1,"requested_backend_mode":"GpuAuthoritative",
             "selected_backend_mode":"Unavailable","adapter_identity":{"adapter_name":null,
@@ -1273,9 +1272,7 @@ fn conversation_state() -> ProductionConversationLineageUiState {
         ui_settings_path: PathBuf::new(),
         ui_settings: ui.settings,
         ui_settings_load_error: None,
-        debug_authority: ui.authority,
         gpu_runtime_state: ui.gpu_runtime_state,
-        gpu_gameplay_receipt: None,
     };
     ProductionConversationLineageUiState::new(&summary)
 }

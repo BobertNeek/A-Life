@@ -1,8 +1,8 @@
 use alife_core::{
     ensure_current_version, ChemistryModulation, Confidence, DriveDelta, DriveSnapshot,
-    EndocrineDelta, EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand,
-    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, RecoveryTrigger,
-    ScaffoldContractError, SchemaKind, SchemaVersions, Tick, Validate,
+    EndocrineDelta, EndocrineSnapshot, HomeostaticDelta, HomeostaticParameters,
+    HomeostaticSnapshot, RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions, Tick,
+    Validate,
 };
 
 #[test]
@@ -69,31 +69,6 @@ fn snapshots_reject_nan_and_out_of_range_learning_values() {
     assert_eq!(
         high_hormone.validate_contract(),
         Err(ScaffoldContractError::OutOfRangeDriveHormone)
-    );
-}
-
-#[test]
-fn endocrine_cadence_bands_match_the_performance_contract_without_engine_time() {
-    assert_eq!(
-        HomeostaticCadence::for_band(HomeostaticCadenceBand::Hot),
-        HomeostaticCadence {
-            min_hz: 10,
-            max_hz: 30
-        }
-    );
-    assert_eq!(
-        HomeostaticCadence::for_band(HomeostaticCadenceBand::Warm),
-        HomeostaticCadence {
-            min_hz: 2,
-            max_hz: 10
-        }
-    );
-    assert_eq!(
-        HomeostaticCadence::for_band(HomeostaticCadenceBand::Cold),
-        HomeostaticCadence {
-            min_hz: 0,
-            max_hz: 1
-        }
     );
 }
 
@@ -264,7 +239,6 @@ fn recovery_triggers_cover_hyperactivity_catatonia_sleep_pain_and_safe_idle() {
     .unwrap();
     let sleep_recovery = ChemistryModulation::recovery_triggers(&exhausted, params).unwrap();
     assert!(sleep_recovery.contains(RecoveryTrigger::FatigueSleepEntry));
-    assert!(ChemistryModulation::should_enter_sleep(&exhausted, params).unwrap());
 
     let injured = HomeostaticSnapshot::new(
         Tick::new(4),
@@ -397,17 +371,13 @@ fn deterministic_finite_inputs_never_produce_nan_or_out_of_range_outputs() {
 }
 
 #[test]
-fn recovery_and_sleep_helpers_reject_invalid_learning_state() {
+fn recovery_helpers_reject_invalid_learning_state() {
     let params = HomeostaticParameters::reference();
     let mut invalid = HomeostaticSnapshot::baseline(Tick::new(99));
     invalid.drives.fear = f32::NAN;
 
     assert_eq!(
         ChemistryModulation::recovery_triggers(&invalid, params),
-        Err(ScaffoldContractError::NonFiniteFloat)
-    );
-    assert_eq!(
-        ChemistryModulation::should_enter_sleep(&invalid, params),
         Err(ScaffoldContractError::NonFiniteFloat)
     );
 }

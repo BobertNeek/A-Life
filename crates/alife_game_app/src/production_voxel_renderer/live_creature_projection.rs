@@ -85,21 +85,20 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         if let Some(row) = frame.current.organism(root.stable_id) {
                             let selected_action_kind =
                                 row.motor.as_ref().and_then(|motor| motor.action_kind);
-                            if let Ok(snapshot) = crate::creature_visual_snapshot_from_parts(
-                                row.organism_id,
-                                row.world_entity_id,
-                                row.object.position,
-                                None,
-                                None,
-                                &row.biochemistry.homeostasis,
-                                row.sleep_phase,
-                                selected_action_kind,
-                            ) {
-                                if visual.expression != snapshot.expression {
-                                    visual.expression = snapshot.expression;
+                            let homeostasis = &row.biochemistry.homeostasis;
+                            if homeostasis.validate_contract().is_ok() {
+                                let expression =
+                                    crate::creature_expression_state(row.sleep_phase, homeostasis);
+                                let animation = crate::creature_animation_state(
+                                    row.sleep_phase,
+                                    homeostasis,
+                                    selected_action_kind,
+                                );
+                                if visual.expression != expression {
+                                    visual.expression = expression;
                                 }
-                                if visual.animation != snapshot.animation {
-                                    visual.animation = snapshot.animation;
+                                if visual.animation != animation {
+                                    visual.animation = animation;
                                 }
                             }
                         }

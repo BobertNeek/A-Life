@@ -30,8 +30,7 @@ use alife_core::{
 };
 
 use crate::candidate_enumerator::{
-    CandidateEnumerator, GroundedCandidateEnumerator, HeadlessCandidateEnumerator,
-    HEADLESS_VISION_RADIUS,
+    enumerate_grounded_candidates, enumerate_privileged_candidates, HEADLESS_VISION_RADIUS,
 };
 use crate::ecology::{
     deterministic_zone_position, EcologyConfig, EcologyMetrics, EcologySensorySummary,
@@ -408,19 +407,18 @@ mod carry_pose_tests {
             .unwrap();
         let grounded =
             GroundedSensorExtractor::extract(&snapshot, &mut world.tracked_objects).unwrap();
-        let defaults = GroundedCandidateEnumerator
-            .enumerate_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1)
-            .unwrap();
+        let defaults =
+            enumerate_grounded_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1, None)
+                .unwrap();
         assert!(!defaults
             .iter()
             .any(|candidate| candidate.target.entity == Some(held)));
-        let missing = GroundedCandidateEnumerator
-            .enumerate_candidates_with_active_contact(
-                &grounded,
-                SensorProfile::GroundedTerrainVisionV1,
-                Some(WorldEntityId(999)),
-            )
-            .unwrap();
+        let missing = enumerate_grounded_candidates(
+            &grounded,
+            SensorProfile::GroundedTerrainVisionV1,
+            Some(WorldEntityId(999)),
+        )
+        .unwrap();
         assert_eq!(defaults, missing);
         let mut without_contact = snapshot.clone();
         without_contact
@@ -431,16 +429,15 @@ mod carry_pose_tests {
             .contact = false;
         let grounded =
             GroundedSensorExtractor::extract(&without_contact, &mut world.tracked_objects).unwrap();
-        let defaults = GroundedCandidateEnumerator
-            .enumerate_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1)
-            .unwrap();
-        let without_evidence = GroundedCandidateEnumerator
-            .enumerate_candidates_with_active_contact(
-                &grounded,
-                SensorProfile::GroundedTerrainVisionV1,
-                Some(held),
-            )
-            .unwrap();
+        let defaults =
+            enumerate_grounded_candidates(&grounded, SensorProfile::GroundedTerrainVisionV1, None)
+                .unwrap();
+        let without_evidence = enumerate_grounded_candidates(
+            &grounded,
+            SensorProfile::GroundedTerrainVisionV1,
+            Some(held),
+        )
+        .unwrap();
         assert_eq!(defaults, without_evidence);
     }
 
@@ -1415,29 +1412,6 @@ pub struct HeadlessPerceptionBatchIndex {
     nonvisual_requires_full_scan: bool,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct HeadlessWorldPersistenceParts {
-    pub seed: u64,
-    pub disable_age_death: bool,
-    pub terrain: Option<crate::TerrainBinding>,
-    pub terrain_state: Option<crate::TerrainState>,
-    pub tick: Tick,
-    pub next_entity_id: u64,
-    pub next_organism_id: u64,
-    pub next_spawn_sequence: u64,
-    pub next_utterance_id: u64,
-    pub objects: Vec<WorldObject>,
-    pub last_touched_entities: Vec<WorldEntityId>,
-    pub ecology: EcologyState,
-    pub audible_utterances: Vec<AudibleUtterance>,
-    pub last_creature_utterance_ticks: Vec<(OrganismId, Tick)>,
-    pub pending_player_care: BTreeMap<u64, BodyEventDelta>,
-    pub ingestion_observations: BTreeMap<u64, IngestionObservation>,
-    pub player_hold: Option<player_hand::PlayerHold>,
-    pub habitats: HabitatAuthority,
-    pub organism_records: Option<Vec<WorldOrganismRecord>>,
-}
-
 const HEADLESS_MATING_RADIUS: f32 = 1.0;
 
 #[derive(Debug, Clone, Copy)]
@@ -1748,7 +1722,7 @@ impl HeadlessWorld {
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
         let mut candidate = self.clone();
-        let next_tick = candidate.try_advance_tick_with_body_events_inner(body_events)?;
+        let next_tick = candidate.try_advance_tick_with_body_events_in_staged_tick(body_events)?;
         *self = candidate;
         Ok(next_tick)
     }
@@ -1759,13 +1733,6 @@ impl HeadlessWorld {
     /// `HeadlessWorld` rollback snapshot for the enclosing tick transaction.
     #[doc(hidden)]
     pub fn try_advance_tick_with_body_events_in_staged_tick(
-        &mut self,
-        body_events: &BTreeMap<u64, BodyEventDelta>,
-    ) -> Result<Tick, ScaffoldContractError> {
-        self.try_advance_tick_with_body_events_inner(body_events)
-    }
-
-    fn try_advance_tick_with_body_events_inner(
         &mut self,
         body_events: &BTreeMap<u64, BodyEventDelta>,
     ) -> Result<Tick, ScaffoldContractError> {
@@ -2105,7 +2072,7 @@ impl HeadlessWorld {
         }
 
         candidate.speech.retire_expired(candidate.tick);
-        let _ = candidate.advance_ecology_at_current_tick();
+        let _ = candidate.advance_ecology();
         Ok(next_tick)
     }
 
@@ -2382,10 +2349,6 @@ impl HeadlessWorld {
         self.speech.emit(utterance.clone())?;
         self.next_utterance_id = next_utterance_id;
         Ok(utterance)
-    }
-
-    pub fn advance_ecology(&mut self) -> EcologyStepReport {
-        self.advance_ecology_at_current_tick()
     }
 
     pub fn ecology(&self) -> &EcologyState {
@@ -3322,7 +3285,7 @@ impl HeadlessWorld {
         }
     }
 
-    pub(crate) fn persistence_parts(&self) -> HeadlessWorldPersistenceParts {
+    pub(crate) fn save_state(&self) -> crate::WorldSaveState {
         let mut organism_records: Vec<_> = self.organism_registry.iter().cloned().collect();
         organism_records.sort_unstable_by_key(|record| record.organism_id().raw());
         let has_agent_objects = self
@@ -3350,7 +3313,22 @@ impl HeadlessWorld {
             .map_or(self.next_organism_id, |derived| {
                 self.next_organism_id.max(derived)
             });
-        HeadlessWorldPersistenceParts {
+        let external_actor_ids = organism_records.as_ref().map(|records| {
+            let registered_ids = records
+                .iter()
+                .map(|record| record.organism_id().raw())
+                .collect::<BTreeSet<_>>();
+            self.objects
+                .values()
+                .filter(|object| object.kind == WorldObjectKind::Agent)
+                .filter_map(|object| object.organism_id.map(OrganismId::raw))
+                .filter(|id| !registered_ids.contains(id))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(OrganismId)
+                .collect()
+        });
+        crate::WorldSaveState {
             seed: self.seed,
             disable_age_death: self.disable_age_death,
             terrain: self.terrain_binding(),
@@ -3360,7 +3338,12 @@ impl HeadlessWorld {
             next_organism_id,
             next_spawn_sequence: self.next_spawn_sequence,
             next_utterance_id: self.next_utterance_id,
-            objects: self.objects.values().cloned().collect(),
+            objects: self
+                .objects
+                .values()
+                .cloned()
+                .map(crate::WorldObjectSaveState::from)
+                .collect(),
             last_touched_entities: self.last_touched_entities.clone(),
             ecology: self.ecology.clone(),
             audible_utterances: self.speech.snapshot(),
@@ -3374,15 +3357,18 @@ impl HeadlessWorld {
                 .collect(),
             habitats: self.habitats.clone(),
             organism_records,
+            external_actor_ids,
+            voxel_backend: None,
+            habitat_authority_was_missing: false,
         }
     }
 
-    pub(crate) fn from_persistence_parts(
-        parts: HeadlessWorldPersistenceParts,
+    pub(crate) fn from_save_state(
+        state: &crate::WorldSaveState,
     ) -> Result<Self, ScaffoldContractError> {
-        if let Some(hold) = &parts.player_hold {
+        if let Some(hold) = &state.player_hold {
             hold.last_ground.validate()?;
-            let object = parts
+            let object = state
                 .objects
                 .iter()
                 .find(|o| o.id == hold.object_id)
@@ -3400,13 +3386,13 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        let terrain = crate::WorldTerrain::restore(parts.terrain, parts.terrain_state.as_ref())?;
-        let max_present_organism_id = parts
+        let terrain = crate::WorldTerrain::restore(state.terrain, state.terrain_state.as_ref())?;
+        let max_present_organism_id = state
             .objects
             .iter()
             .filter_map(|object| object.organism_id.map(OrganismId::raw))
             .chain(
-                parts
+                state
                     .organism_records
                     .as_ref()
                     .into_iter()
@@ -3415,13 +3401,13 @@ impl HeadlessWorld {
             )
             .max()
             .unwrap_or(0);
-        if parts.next_organism_id == 0
+        if state.next_organism_id == 0
             || max_present_organism_id == u64::MAX
-            || parts.next_organism_id <= max_present_organism_id
+            || state.next_organism_id <= max_present_organism_id
         {
             return Err(ScaffoldContractError::InvalidId);
         }
-        let organism_records = parts.organism_records;
+        let organism_records = state.organism_records.clone();
         let has_authoritative_organism_records = organism_records.is_some();
         let organism_registry = match organism_records {
             Some(records) => WorldOrganismRegistry::from_exact_records(records)
@@ -3433,10 +3419,10 @@ impl HeadlessWorld {
         let mut tracking_keys = std::collections::BTreeSet::new();
         let mut spawn_sequences = std::collections::BTreeSet::new();
         let mut max_id = 0_u64;
-        for object in parts.objects {
+        for object in state.objects.iter().cloned().map(WorldObject::from) {
             validate_persisted_object(&object)?;
             let raw_id = object.id.raw();
-            if object.tracking_provenance.world_seed != parts.seed
+            if object.tracking_provenance.world_seed != state.seed
                 || objects.contains_key(&raw_id)
                 || labels.contains_key(&object.label)
                 || !tracking_keys.insert(object.tracking_key)
@@ -3448,8 +3434,8 @@ impl HeadlessWorld {
             labels.insert(object.label.clone(), object.id);
             objects.insert(raw_id, object);
         }
-        if parts.next_entity_id <= max_id
-            || (objects.is_empty() && parts.next_entity_id < DEFAULT_ENTITY_ID_START)
+        if state.next_entity_id <= max_id
+            || (objects.is_empty() && state.next_entity_id < DEFAULT_ENTITY_ID_START)
         {
             return Err(ScaffoldContractError::InvalidId);
         }
@@ -3458,27 +3444,27 @@ impl HeadlessWorld {
             .map(|object| object.tracking_provenance.spawn_sequence)
             .max()
             .unwrap_or(0);
-        if parts.next_spawn_sequence <= max_spawn_sequence || parts.next_spawn_sequence == 0 {
+        if state.next_spawn_sequence <= max_spawn_sequence || state.next_spawn_sequence == 0 {
             return Err(ScaffoldContractError::InvalidId);
         }
-        let max_utterance_id = parts
+        let max_utterance_id = state
             .audible_utterances
             .iter()
             .map(|utterance| utterance.utterance_id.raw())
             .max()
             .unwrap_or(0);
-        if parts.next_utterance_id == 0 || parts.next_utterance_id <= max_utterance_id {
+        if state.next_utterance_id == 0 || state.next_utterance_id <= max_utterance_id {
             return Err(ScaffoldContractError::InvalidId);
         }
         let mut cooldown_organisms = std::collections::BTreeSet::new();
-        for (organism, tick) in &parts.last_creature_utterance_ticks {
+        for (organism, tick) in &state.last_creature_utterance_ticks {
             organism.validate()?;
-            if tick.raw() > parts.tick.raw() || !cooldown_organisms.insert(organism.raw()) {
+            if tick.raw() > state.tick.raw() || !cooldown_organisms.insert(organism.raw()) {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        parts.ecology.validate()?;
-        for resource in &parts.ecology.resources {
+        state.ecology.validate()?;
+        for resource in &state.ecology.resources {
             let Some(object) = objects.get(&resource.object_id.raw()) else {
                 return Err(ScaffoldContractError::InvalidId);
             };
@@ -3486,13 +3472,13 @@ impl HeadlessWorld {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        for touched in &parts.last_touched_entities {
+        for touched in &state.last_touched_entities {
             touched.validate()?;
             if !objects.contains_key(&touched.raw()) {
                 return Err(ScaffoldContractError::InvalidId);
             }
         }
-        for (id, event) in &parts.pending_player_care {
+        for (id, event) in &state.pending_player_care {
             event.validate_contract()?;
             if !organism_registry
                 .get(OrganismId(*id))
@@ -3511,33 +3497,33 @@ impl HeadlessWorld {
             }
         }
         let world = Self {
-            seed: parts.seed,
-            disable_age_death: parts.disable_age_death,
+            seed: state.seed,
+            disable_age_death: state.disable_age_death,
             terrain,
-            tick: parts.tick,
-            next_entity_id: parts.next_entity_id,
-            next_organism_id: parts.next_organism_id,
-            next_spawn_sequence: parts.next_spawn_sequence,
-            next_utterance_id: parts.next_utterance_id,
+            tick: state.tick,
+            next_entity_id: state.next_entity_id,
+            next_organism_id: state.next_organism_id,
+            next_spawn_sequence: state.next_spawn_sequence,
+            next_utterance_id: state.next_utterance_id,
             objects,
             labels,
-            last_touched_entities: parts.last_touched_entities,
+            last_touched_entities: state.last_touched_entities.clone(),
             last_action_result: None,
-            ingestion_observations: parts.ingestion_observations,
-            ecology: parts.ecology,
-            speech: SpatialSpeechBus::restore(parts.audible_utterances, parts.tick)?,
-            pending_player_care: parts.pending_player_care,
-            player_hold: parts.player_hold,
-            last_creature_utterance_ticks: parts
+            ingestion_observations: state.ingestion_observations.clone(),
+            ecology: state.ecology.clone(),
+            speech: SpatialSpeechBus::restore(state.audible_utterances.clone(), state.tick)?,
+            pending_player_care: state.pending_player_care.clone(),
+            player_hold: state.player_hold.clone(),
+            last_creature_utterance_ticks: state
                 .last_creature_utterance_ticks
-                .into_iter()
-                .map(|(organism, tick)| (organism.raw(), tick))
+                .iter()
+                .map(|(organism, tick)| (organism.raw(), *tick))
                 .collect(),
             tracked_objects: TrackedObjectRegistry::new(
-                parts.seed,
+                state.seed,
                 DEFAULT_TRACKED_OBJECT_CAPACITY_PER_ORGANISM,
             )?,
-            habitats: parts.habitats,
+            habitats: state.habitats.clone(),
             organism_registry,
             #[cfg(test)]
             injected_post_action_failure: false,
@@ -3594,8 +3580,7 @@ impl HeadlessWorld {
                     Some(index) => self.sensory_report_indexed(organism_id, tick, index)?,
                     None => self.sensory_report(organism_id, tick)?,
                 };
-                let candidates =
-                    HeadlessCandidateEnumerator.enumerate_candidates(&report, profile)?;
+                let candidates = enumerate_privileged_candidates(&report, profile)?;
                 let body = BodySnapshot {
                     pose: Pose {
                         translation: report.core_snapshot.observer_position,
@@ -3671,8 +3656,7 @@ impl HeadlessWorld {
                             .find(|(slot, _)| slot.contact > 0.0)
                             .map(|(_, transport)| transport.transport_entity)
                     });
-                let candidates = GroundedCandidateEnumerator
-                    .enumerate_candidates_with_active_contact(&grounded, profile, active_contact)?;
+                let candidates = enumerate_grounded_candidates(&grounded, profile, active_contact)?;
                 let (mut sensory, body, slots, transports) = grounded.into_parts();
                 // Bind only already observed bodies to personal recognition.
                 // Physical identity is not a friendly label or learned affinity.
@@ -4136,7 +4120,7 @@ impl HeadlessWorld {
     ) -> Result<HeadlessSensoryReport, ScaffoldContractError> {
         organism_id.validate()?;
         let agent = self.agent_for(organism_id)?;
-        let visible_entities = self.visible_entities_from(agent);
+        let visible_entities = Self::visible_entities_from_objects(agent, self.objects.values());
         self.sensory_report_from_visible(organism_id, tick, agent, visible_entities)
     }
 
@@ -4148,7 +4132,10 @@ impl HeadlessWorld {
     ) -> Result<HeadlessSensoryReport, ScaffoldContractError> {
         organism_id.validate()?;
         let agent = self.indexed_agent_for(organism_id, index)?;
-        let visible_entities = self.indexed_visible_entities_from(agent, index)?;
+        let visible_entities = Self::visible_entities_from_objects(
+            agent,
+            self.indexed_nearby_objects(agent, index)?.into_iter(),
+        );
         self.sensory_report_from_visible(organism_id, tick, agent, visible_entities)
     }
 
@@ -4540,7 +4527,7 @@ impl HeadlessWorld {
                     result.body_event.play_stimulation *= 1.0 - interaction_novelty;
                 }
             }
-            executed.push((Some(channel.clone()), result));
+            executed.push((channel.clone(), result));
         }
 
         let action_body_event = executed
@@ -4607,9 +4594,6 @@ impl HeadlessWorld {
             for entity in &result.touched_entities {
                 touched.insert(entity.raw());
             }
-            let Some(channel) = channel else {
-                continue;
-            };
             let observation = measured_motor_channel_observation(channel, result)?;
             let physical = result.execution.physical;
             if let Some(observation) = observation {
@@ -6071,21 +6055,6 @@ impl HeadlessWorld {
             .map(Some)
     }
 
-    fn visible_entities_from(&self, observer: &WorldObject) -> Vec<VisibleWorldEntity> {
-        Self::visible_entities_from_objects(observer, self.objects.values())
-    }
-
-    fn indexed_visible_entities_from(
-        &self,
-        observer: &WorldObject,
-        index: &HeadlessPerceptionBatchIndex,
-    ) -> Result<Vec<VisibleWorldEntity>, ScaffoldContractError> {
-        Ok(Self::visible_entities_from_objects(
-            observer,
-            self.indexed_nearby_objects(observer, index)?.into_iter(),
-        ))
-    }
-
     fn visible_entities_from_objects<'a>(
         observer: &WorldObject,
         objects: impl Iterator<Item = &'a WorldObject>,
@@ -6194,7 +6163,7 @@ impl HeadlessWorld {
         )
     }
 
-    fn advance_ecology_at_current_tick(&mut self) -> EcologyStepReport {
+    pub fn advance_ecology(&mut self) -> EcologyStepReport {
         let mut report = EcologyStepReport {
             tick: self.tick,
             ..EcologyStepReport::default()
@@ -7434,7 +7403,7 @@ fn measured_motor_channel_observation(
 }
 
 fn aggregate_motor_physical_outcome(
-    executed: &[(Option<ChannelCommand>, HeadlessActionResult)],
+    executed: &[(ChannelCommand, HeadlessActionResult)],
 ) -> Result<PhysicalActionOutcome, ScaffoldContractError> {
     let mut displacement = Vec3f::ZERO;
     let mut contact = PhysicalContactKind::None;

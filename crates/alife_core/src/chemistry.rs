@@ -643,38 +643,6 @@ impl Validate for HomeostaticParameters {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HomeostaticCadenceBand {
-    Hot,
-    Warm,
-    Cold,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HomeostaticCadence {
-    pub min_hz: u8,
-    pub max_hz: u8,
-}
-
-impl HomeostaticCadence {
-    pub const fn for_band(band: HomeostaticCadenceBand) -> Self {
-        match band {
-            HomeostaticCadenceBand::Hot => Self {
-                min_hz: 10,
-                max_hz: 30,
-            },
-            HomeostaticCadenceBand::Warm => Self {
-                min_hz: 2,
-                max_hz: 10,
-            },
-            HomeostaticCadenceBand::Cold => Self {
-                min_hz: 0,
-                max_hz: 1,
-            },
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EndocrineProfile {
     pub baseline: EndocrineSnapshot,
@@ -687,10 +655,6 @@ impl EndocrineProfile {
             baseline: EndocrineSnapshot::baseline(),
             parameters: HomeostaticParameters::reference(),
         }
-    }
-
-    pub const fn modulator_count(&self) -> usize {
-        EndocrineSnapshot::CHANNEL_COUNT
     }
 }
 
@@ -840,13 +804,6 @@ impl ChemistryModulation {
             pain_frustration_spike,
             safe_idle_fallback,
         })
-    }
-
-    pub fn should_enter_sleep(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<bool, ScaffoldContractError> {
-        Ok(Self::recovery_triggers(state, parameters)?.fatigue_sleep_entry)
     }
 }
 

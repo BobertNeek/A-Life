@@ -92,7 +92,6 @@ pub fn apply_predecision_attention_evidence(
     summaries: &mut [alife_core::PeripheralSummary],
     body_need: f32,
     memory_evidence: &[FinalizedMemoryAttentionEvidence],
-    context: &CognitiveContextFrame,
     topology_evidence: &ObjectTopologyEvidence,
     receptors: NeuralReceptorEffects,
 ) -> Result<(), ScaffoldContractError> {
@@ -100,7 +99,6 @@ pub fn apply_predecision_attention_evidence(
     // Concept and gap evidence stays bound to the candidate/object that
     // produced it. A global maximum would broadcast one object's evidence to
     // every peripheral summary and create false associations.
-    context.validate_contract()?;
     for summary in summaries {
         if let alife_core::StableFocusIdentity::TrackedObject(tracked_object_id) = summary.identity
         {
@@ -251,7 +249,7 @@ pub fn tracked_object_id_for_candidate(
 
 fn target_prior_residual(
     candidate: &alife_core::CandidateMemoryContextV1,
-) -> Result<f32, ScaffoldContractError> {
+) -> Result<NormalizedScalar, ScaffoldContractError> {
     let mean_abs_latent = candidate
         .target_latent
         .iter()
@@ -260,7 +258,7 @@ fn target_prior_residual(
         / candidate.target_latent.len() as f32;
     let residual = candidate.target_confidence.raw() * mean_abs_latent;
     if residual.is_finite() {
-        Ok(residual.clamp(0.0, 1.0))
+        NormalizedScalar::new(residual.clamp(0.0, 1.0))
     } else {
         Err(ScaffoldContractError::NonFiniteFloat)
     }
@@ -352,7 +350,7 @@ pub fn cognitive_projection_for_draft(
     }
 
     let forecast_available = predictor.has_acquired_state();
-    let mut object_priors = BTreeMap::<TrackedObjectId, f32>::new();
+    let mut object_priors = BTreeMap::<TrackedObjectId, NormalizedScalar>::new();
     let mut candidates = Vec::with_capacity(draft.candidates().len());
     for (index, candidate) in draft.candidates().iter().enumerate() {
         let expected_index =
@@ -369,12 +367,10 @@ pub fn cognitive_projection_for_draft(
                 .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?,
             None => (NormalizedScalar(0.0), NormalizedScalar(0.0)),
         };
-        let prior_residual = NormalizedScalar::new(
-            target_prior_residual(&memory_candidates[index])?.clamp(0.0, 1.0),
-        )?;
+        let prior_residual = target_prior_residual(&memory_candidates[index])?;
         if let Some(id) = tracked_object_id {
-            let object_prior = object_priors.entry(id).or_default();
-            *object_prior = object_prior.max(prior_residual.raw());
+            let object_prior = object_priors.entry(id).or_insert(NormalizedScalar(0.0));
+            *object_prior = NormalizedScalar(object_prior.raw().max(prior_residual.raw()));
         }
         let command = candidate.to_command(draft.organism_id(), candidate.sensor_confidence)?;
         let hypothetical_bundle =
@@ -411,7 +407,7 @@ pub fn cognitive_projection_for_draft(
             tracked_object_id,
             concept_match,
             gap_match,
-            prior_residual: NormalizedScalar::new(prior_residual.clamp(0.0, 1.0))?,
+            prior_residual,
         });
     }
 
@@ -718,7 +714,6 @@ pub fn prepare_canonical_frame(
             &mut peripheral_summaries,
             body_need,
             &memory_evidence,
-            &baseline_context,
             &topology_evidence,
             receptor_effects,
         )?;

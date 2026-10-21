@@ -1,8 +1,7 @@
 use alife_core::{
-    ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, EndocrineProfile,
-    EndocrineSnapshot, ExperiencePatchHeader, ExperienceSequenceId, LobeKind, LobeLayout,
-    OrganismId, ScaffoldContractError, SemanticPriorRequest, TeacherPerceptionChannel, Tick,
-    WorldEntityId,
+    ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, ExperiencePatchHeader,
+    ExperienceSequenceId, LobeKind, LobeLayout, OrganismId, ScaffoldContractError,
+    SemanticPriorRequest, TeacherPerceptionChannel, Tick, WorldEntityId,
 };
 use alife_core::{Confidence, DurationTicks};
 
@@ -18,18 +17,13 @@ fn founder_homologues_cannot_be_disabled() {
 }
 
 #[test]
-fn genome_and_endocrine_profile_reference_brain_class_without_runtime_weights() {
+fn genome_references_brain_class_without_runtime_weights() {
     let class = BrainClassSpec::for_tier(BrainScaleTier::Small1024);
     let genome = BrainGenome::scaffold(7, class.id);
-    let endocrine = EndocrineProfile::baseline();
 
     assert_eq!(genome.species_seed, 7);
     assert_eq!(genome.brain_class_id, class.id);
     assert!(genome.genetic_prior_seed != 0);
-    assert_eq!(
-        endocrine.modulator_count(),
-        EndocrineSnapshot::CHANNEL_COUNT
-    );
 }
 
 #[test]

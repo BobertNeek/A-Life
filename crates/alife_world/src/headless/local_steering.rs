@@ -783,7 +783,7 @@ mod tests {
     fn invalid_controller_state_is_rejected_by_restore() {
         let (world, target) = world(Vec::new(), 0.2);
         for on_target in [false, true] {
-            let mut parts = world.persistence_parts();
+            let mut parts = world.save_state();
             let id = if on_target {
                 target
             } else {
@@ -803,7 +803,7 @@ mod tests {
                 },
                 best_observed_distance: 2.0,
             });
-            assert!(HeadlessWorld::from_persistence_parts(parts).is_err());
+            assert!(HeadlessWorld::from_save_state(&parts).is_err());
         }
     }
 

@@ -426,13 +426,13 @@ mod tests {
         let mut json = serde_json::to_value(object).unwrap();
         json.as_object_mut().unwrap().remove("activity_hold");
         let legacy: crate::WorldObjectSaveState = serde_json::from_value(json).unwrap();
-        let mut parts = world.persistence_parts();
+        let mut parts = world.save_state();
         *parts
             .objects
             .iter_mut()
             .find(|object| object.id == ball)
-            .unwrap() = legacy.into();
-        let mut legacy = HeadlessWorld::from_persistence_parts(parts).unwrap();
+            .unwrap() = legacy;
+        let mut legacy = HeadlessWorld::from_save_state(&parts).unwrap();
         assert!(
             !legacy
                 .apply_command(&command(HeadlessActionIds::EAT, food))
@@ -594,14 +594,14 @@ mod tests {
             world.canonical_signature_digest().unwrap(),
             deliberate.canonical_signature_digest().unwrap()
         );
-        let mut parts = world.persistence_parts();
+        let mut parts = world.save_state();
         let object = parts
             .objects
             .iter_mut()
             .find(|object| object.id == ball)
             .unwrap();
         object.carried_by = None;
-        assert!(HeadlessWorld::from_persistence_parts(parts).is_err());
+        assert!(HeadlessWorld::from_save_state(&parts).is_err());
     }
 
     #[test]

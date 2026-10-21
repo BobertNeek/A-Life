@@ -82,18 +82,6 @@ impl CognitiveArchitecturePlan {
     pub const fn sleep_consolidation_rate(&self) -> f32 {
         self.parameters.sleep_consolidation_rate()
     }
-    pub const fn attention_learning_rate(&self) -> f32 {
-        self.parameters.attention_learning_rate()
-    }
-    pub const fn concept_learning_rate(&self) -> f32 {
-        self.parameters.concept_learning_rate()
-    }
-    pub const fn motor_learning_rate(&self) -> f32 {
-        self.parameters.motor_learning_rate()
-    }
-    pub const fn structural_learning_rate(&self) -> f32 {
-        self.parameters.structural_learning_rate()
-    }
 
     pub(crate) fn validate_against(
         &self,

@@ -12,9 +12,9 @@ alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_world = { path = "../alife_world" }
 blake3.workspace = true
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-flate2 = "=1.1.9"
 serde.workspace = true
 serde_json.workspace = true
+sha2 = "=0.10.9"
 thiserror.workspace = true
 
 [features]

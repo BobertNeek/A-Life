@@ -151,12 +151,6 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
         if refresh_summary {
             next.object_evidence = Arc::new(topology_evidence_for_draft(draft, topology)?);
         }
-        let mut context = CognitiveContextFrame::empty(owner, input.sequence_id, tick)?;
-        if let Some(summary) = &old.summary {
-            context.memory = summary.memory.clone();
-            context.concept = summary.concept.clone();
-            context.gap = summary.gap.clone();
-        }
         let evidence = old.recall.attention_evidence();
         let mut summaries = grounded_peripheral_summaries(draft.grounded_object_slots())?;
         let body_need = drives.iter().copied().fold(0.0, f32::max);
@@ -164,7 +158,6 @@ pub(super) fn prepare_row(job: &CpuPreparationJob<'_>, measure: bool) -> CpuPrep
             &mut summaries,
             body_need,
             evidence,
-            &context,
             &next.object_evidence,
             input.receptor_effects,
         )?;

@@ -17,12 +17,6 @@ pub const FVR01_RUNTIME_DIAGNOSTIC_LOG: &str =
 pub const FVR05_PRODUCTION_UX_SCHEMA: &str = "alife.fvr05.production_ux.v1";
 pub const FVR05_PRODUCTION_UX_SCHEMA_VERSION: u16 = 1;
 pub const FVR05_PRODUCTION_UX_SETTINGS_DIR: &str = "target/artifacts/fvr05";
-pub const FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA: &str =
-    "alife.fvr06.production_gpu_gameplay_receipt.v1";
-pub const FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION: u16 = 1;
-pub const FVR06_PRODUCTION_GPU_RECEIPT_DIR: &str = "target/artifacts/fvr06";
-pub const FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES: usize = 30;
-
 const FVR05_ENGINE_LOCAL_TOKENS: [&str; 11] = [
     "bevy",
     "wgpu",
@@ -308,66 +302,6 @@ impl Fvr05ProductionUxSettings {
 fn fvr05_world_runtime_save_name(profile: &str, save_id: &str, seed: u64) -> String {
     let identity = blake3::hash(save_id.as_bytes()).to_hex();
     format!("{profile}_{seed}_{}_runtime_save.json", &identity[..16])
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fvr05ProductionDebugAuthorityReport {
-    pub schema: &'static str,
-    pub schema_version: u16,
-    pub read_only_projection: bool,
-    pub direct_actions_blocked: bool,
-    pub action_arbitration_bypass_blocked: bool,
-    pub reward_injection_blocked: bool,
-    pub weight_mutation_blocked: bool,
-    pub hidden_cognition_mutation_blocked: bool,
-    pub bulk_neural_readback_blocked: bool,
-}
-
-impl Fvr05ProductionDebugAuthorityReport {
-    pub const fn production_read_only() -> Self {
-        Self {
-            schema: FVR05_PRODUCTION_UX_SCHEMA,
-            schema_version: FVR05_PRODUCTION_UX_SCHEMA_VERSION,
-            read_only_projection: true,
-            direct_actions_blocked: true,
-            action_arbitration_bypass_blocked: true,
-            reward_injection_blocked: true,
-            weight_mutation_blocked: true,
-            hidden_cognition_mutation_blocked: true,
-            bulk_neural_readback_blocked: true,
-        }
-    }
-
-    pub fn validate(&self) -> Result<(), GameAppShellError> {
-        if self.schema != FVR05_PRODUCTION_UX_SCHEMA
-            || self.schema_version != FVR05_PRODUCTION_UX_SCHEMA_VERSION
-            || !self.read_only_projection
-            || !self.direct_actions_blocked
-            || !self.action_arbitration_bypass_blocked
-            || !self.reward_injection_blocked
-            || !self.weight_mutation_blocked
-            || !self.hidden_cognition_mutation_blocked
-            || !self.bulk_neural_readback_blocked
-        {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR05 debug authority report is not read-only".to_string(),
-            });
-        }
-        Ok(())
-    }
-
-    pub fn compact_line(&self) -> String {
-        format!(
-            "read_only={} actions_blocked={} arbitration_bypass_blocked={} rewards_blocked={} weights_blocked={} cognition_blocked={} bulk_readback_blocked={}",
-            self.read_only_projection,
-            self.direct_actions_blocked,
-            self.action_arbitration_bypass_blocked,
-            self.reward_injection_blocked,
-            self.weight_mutation_blocked,
-            self.hidden_cognition_mutation_blocked,
-            self.bulk_neural_readback_blocked,
-        )
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -827,88 +761,6 @@ pub struct ProductionRuntimeDiagnostics {
     pub failure_stops_learned_actions: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProductionGpuGameplayReceipt {
-    pub schema: &'static str,
-    pub schema_version: u16,
-    pub profile: String,
-    pub requested_population: u16,
-    pub batch_size: usize,
-    pub receipt_batch_cap: usize,
-    pub production_save_path: PathBuf,
-    pub receipt_path: PathBuf,
-    pub batched_runtime_receipt_path: PathBuf,
-    pub requested_policy: String,
-    pub selected_backend: String,
-    pub unavailable_reason: Option<String>,
-    pub adapter: Option<String>,
-    pub active_creatures: u32,
-    pub compact_readback_bytes: usize,
-    pub finite_rejections: u32,
-    pub no_active_bulk_readback: bool,
-    pub authoritative: bool,
-}
-
-impl ProductionGpuGameplayReceipt {
-    pub fn authoritative(
-        launch: &ProductionVoxelLaunchConfig,
-        production_save_path: PathBuf,
-        receipt_path: PathBuf,
-        batched_runtime_receipt_path: PathBuf,
-        active_creatures: usize,
-        adapter: Option<String>,
-    ) -> Result<Self, GameAppShellError> {
-        let receipt = Self {
-            schema: FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA,
-            schema_version: FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION,
-            profile: launch.profile_id.label().to_string(),
-            requested_population: launch.effective_population(),
-            batch_size: active_creatures,
-            receipt_batch_cap: FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES,
-            production_save_path,
-            receipt_path,
-            batched_runtime_receipt_path,
-            requested_policy: launch.gpu_mode.label().to_string(),
-            selected_backend: "GpuAuthoritative".to_string(),
-            unavailable_reason: None,
-            adapter,
-            active_creatures: u32::try_from(active_creatures).unwrap_or(u32::MAX),
-            compact_readback_bytes: active_creatures.saturating_mul(64),
-            finite_rejections: 0,
-            no_active_bulk_readback: true,
-            authoritative: true,
-        };
-        receipt.validate()?;
-        Ok(receipt)
-    }
-
-    pub fn validate(&self) -> Result<(), GameAppShellError> {
-        if self.schema != FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA
-            || self.schema_version != FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION
-            || self.profile.trim().is_empty()
-            || self.requested_population == 0
-            || self.batch_size == 0
-            || self.batch_size > self.receipt_batch_cap
-            || self.receipt_batch_cap != FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES
-            || self.production_save_path.as_os_str().is_empty()
-            || self.receipt_path.as_os_str().is_empty()
-            || self.batched_runtime_receipt_path.as_os_str().is_empty()
-            || self.requested_policy.trim().is_empty()
-            || self.selected_backend.trim().is_empty()
-            || !self.no_active_bulk_readback
-            || !self.authoritative
-            || self.active_creatures == 0
-            || self.compact_readback_bytes != self.batch_size.saturating_mul(64)
-        {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR06 production GPU gameplay receipt violated schema or boundary"
-                    .to_string(),
-            });
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProductionVoxelLaunchSummary {
     pub schema: &'static str,
@@ -938,9 +790,7 @@ pub struct ProductionVoxelLaunchSummary {
     pub ui_settings_path: PathBuf,
     pub ui_settings: Fvr05ProductionUxSettings,
     pub ui_settings_load_error: Option<String>,
-    pub debug_authority: Fvr05ProductionDebugAuthorityReport,
     pub gpu_runtime_state: GpuRuntimeSaveState,
-    pub gpu_gameplay_receipt: Option<ProductionGpuGameplayReceipt>,
 }
 
 impl ProductionVoxelLaunchSummary {
@@ -949,22 +799,8 @@ impl ProductionVoxelLaunchSummary {
     }
 
     pub fn signature_line(&self) -> String {
-        let gameplay = self
-            .gpu_gameplay_receipt
-            .as_ref()
-            .map(|receipt| {
-                format!(
-                    ":gameplay_mode={}:gameplay={}:batch={}:active_creatures={}:finite_rejections={}",
-                    receipt.requested_policy,
-                    receipt.selected_backend,
-                    receipt.batch_size,
-                    receipt.active_creatures,
-                    receipt.finite_rejections
-                )
-            })
-            .unwrap_or_default();
         format!(
-            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}",
+            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}:save={}:assets={}:production_assets={}",
             self.schema,
             self.schema_version,
             self.scenario_id,
@@ -977,7 +813,6 @@ impl ProductionVoxelLaunchSummary {
             self.gpu_runtime_state
                 .last_safe_checkpoint
                 .checkpoint_label,
-            gameplay,
             self.save_path.display(),
             self.asset_manifest_path.display(),
             self.production_asset_count,
@@ -1118,41 +953,6 @@ fn fvr06_portable_runtime_text(value: Option<String>) -> Option<String> {
     value.filter(|text| !fvr05_contains_engine_local_token(text))
 }
 
-fn fvr06_production_gpu_gameplay_receipt(
-    launch: &ProductionVoxelLaunchConfig,
-    production_save: &PortableSaveFile,
-) -> Result<Option<ProductionGpuGameplayReceipt>, GameAppShellError> {
-    if !launch.record_performance {
-        return Ok(None);
-    }
-    let batch_size =
-        usize::from(launch.effective_population()).min(FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES);
-    if batch_size < 2 {
-        return Ok(None);
-    }
-
-    let receipt_dir = fvr08_launch_artifact_dir(launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
-    fs::create_dir_all(&receipt_dir)?;
-    let profile = launch.profile_id.label();
-    let production_save_path =
-        receipt_dir.join(format!("{profile}_production_gpu_runtime_save.json"));
-    let batched_runtime_receipt_path =
-        receipt_dir.join(format!("{profile}_batched_gpu_runtime_receipt.json"));
-    let receipt_path = receipt_dir.join(format!("{profile}_production_gpu_gameplay_receipt.json"));
-    production_save.to_json_file(&production_save_path)?;
-
-    let receipt = ProductionGpuGameplayReceipt::authoritative(
-        launch,
-        production_save_path,
-        receipt_path.clone(),
-        batched_runtime_receipt_path,
-        batch_size,
-        None,
-    )?;
-    fs::write(&receipt_path, serde_json::to_string_pretty(&receipt)?)?;
-    Ok(Some(receipt))
-}
-
 fn load_fvr05_ui_settings_or_default(
     path: &Path,
     default_settings: &Fvr05ProductionUxSettings,
@@ -1284,7 +1084,6 @@ pub fn run_production_voxel_frontend_preflight(
         }
     };
     production_save.validate_with_asset_root(&launch.app_launch.asset_root)?;
-    let gpu_gameplay_receipt = fvr06_production_gpu_gameplay_receipt(launch, &production_save)?;
     let voxel_evidence = production_voxel_backend_evidence(&production_save)?;
     let visible = visible_world_from_save(&production_save)?;
     compare_visible_world_to_headless(&visible)?;
@@ -1361,8 +1160,6 @@ pub fn run_production_voxel_frontend_preflight(
     // Legacy multiplier remains readable for old settings, but is no longer a
     // playback control or an animation clock.
     ui_settings.simulation_speed = 1.0;
-    let debug_authority = Fvr05ProductionDebugAuthorityReport::production_read_only();
-    debug_authority.validate()?;
 
     Ok(ProductionVoxelLaunchSummary {
         schema: FVR01_PRODUCTION_FRONTEND_SCHEMA,
@@ -1397,9 +1194,7 @@ pub fn run_production_voxel_frontend_preflight(
         ui_settings_path,
         ui_settings,
         ui_settings_load_error,
-        debug_authority,
         gpu_runtime_state,
-        gpu_gameplay_receipt,
     })
 }
 
@@ -2060,19 +1855,6 @@ mod tests {
     }
 
     #[test]
-    fn fvr05_debug_authority_blocks_every_mutating_path() {
-        let report = Fvr05ProductionDebugAuthorityReport::production_read_only();
-        report.validate().unwrap();
-        assert!(report.read_only_projection);
-        assert!(report.direct_actions_blocked);
-        assert!(report.action_arbitration_bypass_blocked);
-        assert!(report.reward_injection_blocked);
-        assert!(report.weight_mutation_blocked);
-        assert!(report.hidden_cognition_mutation_blocked);
-        assert!(report.bulk_neural_readback_blocked);
-    }
-
-    #[test]
     #[cfg(feature = "gpu-runtime")]
     fn fvr06_preflight_persists_gpu_runtime_descriptor_without_engine_tokens() {
         let (_fixture, mut launch) = fvr05_test_launch();
@@ -2179,47 +1961,6 @@ mod tests {
         assert_eq!(comfort.active_chunk_cap, 256);
         assert_eq!(comfort.neural_heap_mb, 512);
         assert!(comfort.staging_readback_budget_kib >= minimum.staging_readback_budget_kib);
-    }
-
-    #[test]
-    #[cfg(feature = "gpu-runtime")]
-    fn fvr06_record_performance_serializes_preflight_receipt_metadata_for_30_creatures() {
-        // Preflight records descriptor/file metadata. This test does not
-        // execute a neural GPU tick or establish measured gameplay evidence.
-        let (_fixture, mut launch) = fvr05_test_launch();
-        launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
-        launch.population = Some(30);
-        launch.graphics_backend = "existing".to_string();
-        launch.record_performance = true;
-        let fixture_artifact_dir =
-            fvr08_launch_artifact_dir(&launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
-        let fixture_runtime_save_path =
-            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_runtime_save.json");
-        let fixture_gameplay_receipt_path =
-            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_gameplay_receipt.json");
-        let artifact_root = _fixture.root.join("performance-receipt");
-        launch.manifest_path =
-            artifact_root.join("crates/alife_game_app/environment_manifest.json");
-
-        let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
-        let receipt = summary.gpu_gameplay_receipt.as_ref().unwrap();
-        assert_eq!(receipt.schema, FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA);
-        assert_eq!(receipt.requested_population, 30);
-        assert_eq!(receipt.batch_size, 30);
-        assert_eq!(
-            receipt.receipt_batch_cap,
-            FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES
-        );
-        assert!(receipt.no_active_bulk_readback);
-        assert!(receipt.authoritative);
-        assert!(receipt.receipt_path.exists());
-        assert!(receipt.production_save_path.exists());
-        assert_eq!(receipt.active_creatures, 30);
-        assert_eq!(receipt.compact_readback_bytes, 30 * 64);
-        assert!(summary.signature_line().contains("gameplay="));
-        assert!(!fixture_runtime_save_path.exists());
-        assert!(!fixture_gameplay_receipt_path.exists());
-        fs::remove_dir_all(artifact_root).unwrap();
     }
 
     #[test]

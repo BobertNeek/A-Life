@@ -3,22 +3,18 @@
 mod backend_handoff;
 #[cfg(feature = "cpu-backend")]
 pub mod cpu;
-mod curriculum;
 mod founder_demonstrations;
 mod founder_merge;
 mod founder_readout;
 mod ppo;
-mod program;
 mod trainer;
 mod types;
 
 pub use backend_handoff::*;
-pub use curriculum::*;
 pub use founder_demonstrations::*;
 pub use founder_merge::*;
 pub use founder_readout::*;
 pub use ppo::*;
-pub use program::*;
 pub use trainer::FoundationTrainer;
 pub use types::*;
 

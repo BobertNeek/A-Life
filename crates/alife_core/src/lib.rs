@@ -118,9 +118,9 @@ pub use canonical_digest::CanonicalDigestBuilder;
 pub use checkpoint::{BrainCheckpointMode, BRAIN_CHECKPOINT_MODE_SCHEMA_VERSION};
 pub use chemistry::{
     BiologicalValueProfile, ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta,
-    EndocrineProfile, EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand,
-    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment,
-    RecoveryTrigger, DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+    EndocrineProfile, EndocrineSnapshot, HomeostaticDelta, HomeostaticParameters,
+    HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger, DRIVE_EXTENSION_SLOTS,
+    ENDOCRINE_EXTENSION_SLOTS,
 };
 pub use cognitive_context::{
     CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,
@@ -185,16 +185,15 @@ pub use foundation::{
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy,
     DecoderLifetimeRatePolicyV1, DevelopmentStage, DevelopmentState, DevelopmentalMilestone,
-    DevelopmentalSchedule, DriveThresholdGene, DriveThresholdKind, EffectiveWeightSample,
-    EndocrineConstantGene, EndocrineConstantKind, GenomeSeedSet, HOperational, HShadow,
-    InheritancePolicy, InnatePriorityGenes, LifetimeConsolidationDelta, LobeAlphaOverride,
-    LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask,
-    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityGenomeParameters,
-    PlasticityMask, ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask,
-    SensorChannelGene, SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress,
-    SynapseAlphaOverride, TileAddress, TileAlphaOverride, WEffective, WGeneticFixed,
-    WLifetimeConsolidated, WeightLayerDescriptor, WeightLayerKind, WeightSplitContract,
-    WeightStorageSemantics,
+    DevelopmentalSchedule, DriveThresholdKind, EffectiveWeightSample, EndocrineConstantKind,
+    GenomeSeedSet, HOperational, HShadow, InheritancePolicy, InnatePriorityGenes,
+    LifetimeConsolidationDelta, LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan,
+    LobeRatioRegistryRef, MacroConnectomeMask, MotorAffordanceGene, MotorAffordanceKind,
+    MutationRates, PlasticityGenomeParameters, PlasticityMask, ProjectionAlphaOverride,
+    ProjectionKey, ProjectionPlasticityMask, SensorChannelGene, SensorChannelKind,
+    SensorLayoutGene, SparseDensityPrior, SynapseAddress, SynapseAlphaOverride, TileAddress,
+    TileAlphaOverride, WEffective, WGeneticFixed, WLifetimeConsolidated, WeightLayerDescriptor,
+    WeightLayerKind, WeightSplitContract, WeightStorageSemantics,
 };
 pub use grounding::{
     GroundedObjectSlotV1, SensorProfileId, SensorProfileIdentity, SensorProfileProvenance,

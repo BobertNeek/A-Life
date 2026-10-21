@@ -188,8 +188,7 @@ mod tests {
                 world.entity(id).unwrap().grounded_physical.velocity,
                 Vec3f::ZERO
             );
-            let mut restored =
-                HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
+            let mut restored = HeadlessWorld::from_save_state(&world.save_state()).unwrap();
             assert_eq!(restored.player_held_object(), Some(id));
             assert_eq!(
                 restored.entity(id).unwrap().position,
@@ -249,7 +248,7 @@ mod tests {
         assert!(world
             .move_player_hold(Vec3f::new(-500.0, 0.0, -600.0))
             .is_err());
-        let restored = HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
+        let restored = HeadlessWorld::from_save_state(&world.save_state()).unwrap();
         assert_eq!(restored.player_held_object(), Some(id));
         world.release_player_hold().unwrap();
         assert_eq!(world.entity(id).unwrap().position, original);

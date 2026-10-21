@@ -1189,18 +1189,10 @@ fn reconcile_production_presentation(
         sample.social = ((row.object.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0);
 
         let selected_action_kind = row.motor.as_ref().and_then(|motor| motor.action_kind);
-        if let Ok(visual) = crate::creature_visual_snapshot_from_parts(
-            row.organism_id,
-            row.world_entity_id,
-            row.object.position,
-            None,
-            None,
-            homeostasis,
-            row.sleep_phase,
-            selected_action_kind,
-        ) {
-            sample.expression = visual.expression;
-            sample.animation = visual.animation;
+        if homeostasis.validate_contract().is_ok() {
+            sample.expression = crate::creature_expression_state(row.sleep_phase, homeostasis);
+            sample.animation =
+                crate::creature_animation_state(row.sleep_phase, homeostasis, selected_action_kind);
         }
         sample.display_label = row.object.label.clone();
         true

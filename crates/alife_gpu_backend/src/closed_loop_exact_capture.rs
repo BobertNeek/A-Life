@@ -423,11 +423,15 @@ impl GpuClosedLoopBackend {
                 activity_sequence_cursor: resident.activity_sequence_cursor,
                 brain_atp_q16: resident.brain_atp_q16,
                 last_world_atp_tick: resident.last_world_atp_tick,
-                last_activity_dispatch_generation: resident.last_activity_dispatch_generation,
-                last_activity_frame_digest: resident.last_activity_frame_digest,
+                last_activity_dispatch_generation: activity_snapshot
+                    .pressure
+                    .map_or(0, |pressure| pressure.dispatch_generation),
+                last_activity_frame_digest: activity_snapshot
+                    .pressure
+                    .map_or([0; 4], |pressure| pressure.frame_digest),
                 last_completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
-                last_throttle: resident.last_throttle.clone(),
-                last_work: resident.last_work.clone(),
+                last_throttle: activity_snapshot.throttle.clone(),
+                last_work: activity_snapshot.work.clone(),
                 v11: resident.v11.checkpoint(),
             };
             validate_capture_identity(&identity)?;

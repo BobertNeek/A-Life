@@ -2005,7 +2005,9 @@ impl LineageLibrary {
             }
         }
 
-        if !destination.exists() {
+        if destination.exists() {
+            self.read_checkpoint(&reference)?;
+        } else {
             let staged = self.config.root.join("staging").join(format!(
                 "checkpoint-{}-{}-{}",
                 digest_hex(digest),
@@ -2031,7 +2033,10 @@ impl LineageLibrary {
             };
             match fs::rename(&staged, &destination) {
                 Ok(()) => {}
-                Err(_) if destination.exists() => cleanup_staged()?,
+                Err(_) if destination.exists() => {
+                    cleanup_staged()?;
+                    self.read_checkpoint(&reference)?;
+                }
                 Err(error) => {
                     let _ = cleanup_staged();
                     return Err(error.into());

@@ -1741,17 +1741,27 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) activity_sequence_cursor: u64,
     pub(crate) brain_atp_q16: u32,
     pub(crate) last_world_atp_tick: Option<u64>,
-    pub(crate) last_activity_dispatch_generation: u64,
-    pub(crate) last_activity_frame_digest: [u64; 4],
     pub(crate) last_completed_gpu_time_ns: u64,
-    pub(crate) last_pressure: Option<GpuPressureSample>,
-    pub(crate) last_throttle: Option<NeuralThrottleDecision>,
-    pub(crate) last_work: Option<BrainWorkReceipt>,
+    pub(crate) last_activity: Option<ResidentActivity>,
     pub(crate) v11: GpuV11CausalState,
     pub(crate) sleep_plan: alife_core::SleepConsolidationPlan,
     pub(crate) learning_sequence_guard: LearningSequenceGuard,
     pub(crate) pending_eligibility: Option<PendingEligibilityReceipt>,
     pub(crate) pending_eligibility_record: Option<GpuPendingEligibilityRecord>,
+}
+
+pub(crate) struct ResidentActivity {
+    pub(crate) throttle: NeuralThrottleDecision,
+    pub(crate) work: BrainWorkReceipt,
+}
+
+impl ResidentBrainSlot {
+    fn last_activity_source(&self) -> (u64, [u64; 4]) {
+        self.last_activity.as_ref().map_or((0, [0; 4]), |activity| {
+            let pressure = activity.throttle.pressure;
+            (pressure.dispatch_generation, pressure.frame_digest)
+        })
+    }
 }
 
 #[cfg(feature = "training-rollout")]
@@ -2708,8 +2718,8 @@ fn live_pressure_sample(
         policy,
         GpuPressureSampleInput {
             identity,
-            source_dispatch_generation: resident.last_activity_dispatch_generation,
-            source_frame_digest: resident.last_activity_frame_digest,
+            source_dispatch_generation: resident.last_activity_source().0,
+            source_frame_digest: resident.last_activity_source().1,
             completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
             // The runtime waits for the submitted mixed-class batch before it
             // accepts another neural dispatch, so no older neural work is queued.
@@ -3168,8 +3178,8 @@ impl GpuClosedLoopBackend {
             &self.activity_policy,
             GpuPressureSampleInput {
                 identity,
-                source_dispatch_generation: resident.last_activity_dispatch_generation,
-                source_frame_digest: resident.last_activity_frame_digest,
+                source_dispatch_generation: resident.last_activity_source().0,
+                source_frame_digest: resident.last_activity_source().1,
                 completed_gpu_time_ns: 0,
                 queue_depth: 0,
                 logical_heap_used: 0,
@@ -3325,24 +3335,21 @@ impl GpuClosedLoopBackend {
                 let synapse = phenotype
                     .synapses()
                     .get(usize::try_from(span.local_synapse_id).ok()?)?;
-                Some((
-                    synapse.source(),
-                    synapse.target(),
-                    synapse.route_index(),
-                    eligibility,
-                ))
+                Some((synapse.source(), synapse.target(), eligibility))
             })
             .take(32)
             .collect::<Vec<_>>();
+        // Local growth proposals are anchored in replay eligibility. Unit
+        // coactivation is proposal support, not an observed firing count.
+        const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
         let mut structural_evidence = Vec::new();
         for pair in active.windows(2).take(32) {
-            let (source, target, route, eligibility) = (pair[0].0, pair[1].1, pair[0].2, pair[0].3);
+            let (source, target, eligibility) = (pair[0].0, pair[1].1, pair[0].2);
             if source == target || base_pairs.contains(&(source, target)) {
                 continue;
             }
-            let region = route;
             structural_evidence.push(CoactivationEvidence {
-                region,
+                region: CANONICAL_SLEEP_STRUCTURAL_REGION,
                 source,
                 target,
                 coactivation: 1,
@@ -3351,7 +3358,7 @@ impl GpuClosedLoopBackend {
             });
         }
         if structural_evidence.is_empty() {
-            if let Some((source, target, route, eligibility)) = active.first().copied() {
+            if let Some((source, target, eligibility)) = active.first().copied() {
                 for offset in 1..=8_u32 {
                     let candidate_target = (target % phenotype.neuron_count()).wrapping_add(offset)
                         % phenotype.neuron_count();
@@ -3360,9 +3367,8 @@ impl GpuClosedLoopBackend {
                     {
                         continue;
                     }
-                    let region = route;
                     structural_evidence.push(CoactivationEvidence {
-                        region,
+                        region: CANONICAL_SLEEP_STRUCTURAL_REGION,
                         source,
                         target: candidate_target,
                         coactivation: 1,
@@ -3372,10 +3378,6 @@ impl GpuClosedLoopBackend {
                     break;
                 }
             }
-        }
-        const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
-        for item in &mut structural_evidence {
-            item.region = CANONICAL_SLEEP_STRUCTURAL_REGION;
         }
         self.apply_v11_structural_phase(handle, &structural_evidence)?;
         Ok(())
@@ -3697,23 +3699,13 @@ impl GpuClosedLoopBackend {
             .get(&handle.class_id.raw())
             .and_then(|pool| pool.resident(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let all_absent = resident.last_pressure.is_none()
-            && resident.last_throttle.is_none()
-            && resident.last_work.is_none();
-        let all_present = resident.last_pressure.is_some()
-            && resident.last_throttle.is_some()
-            && resident.last_work.is_some();
-        if !(all_absent || all_present)
-            || resident.activity_sequence_cursor == 0
-            || resident.brain_atp_q16 > BRAIN_ATP_Q16_MAX
-        {
+        if resident.activity_sequence_cursor == 0 || resident.brain_atp_q16 > BRAIN_ATP_Q16_MAX {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
-        if let (Some(pressure), Some(throttle), Some(work)) = (
-            resident.last_pressure,
-            resident.last_throttle.as_ref(),
-            resident.last_work.as_ref(),
-        ) {
+        if let Some(activity) = &resident.last_activity {
+            let throttle = &activity.throttle;
+            let pressure = throttle.pressure;
+            let work = &activity.work;
             pressure.validate_for(&self.activity_policy)?;
             let capacity = capacity_for_gpu_class(handle.class_id)?;
             throttle.validate_for(&resident.phenotype, capacity.execution())?;
@@ -3727,15 +3719,10 @@ impl GpuClosedLoopBackend {
             work.validate_runtime_binding(handle.slot, handle.generation)?;
             if resident.activity_sequence_cursor
                 != pressure.sequence_cursor.checked_add(1).unwrap_or(0)
-                || resident.last_activity_dispatch_generation != pressure.dispatch_generation
-                || resident.last_activity_frame_digest != pressure.frame_digest
             {
                 return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
             }
-        } else if resident.activity_sequence_cursor != 1
-            || resident.last_activity_dispatch_generation != 0
-            || resident.last_activity_frame_digest != [0; 4]
-            || resident.last_completed_gpu_time_ns != 0
+        } else if resident.activity_sequence_cursor != 1 || resident.last_completed_gpu_time_ns != 0
         {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
@@ -3744,9 +3731,18 @@ impl GpuClosedLoopBackend {
             brain_atp_q16: resident.brain_atp_q16,
             last_world_atp_tick: resident.last_world_atp_tick,
             next_completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
-            pressure: resident.last_pressure,
-            throttle: resident.last_throttle.clone(),
-            work: resident.last_work.clone(),
+            pressure: resident
+                .last_activity
+                .as_ref()
+                .map(|activity| activity.throttle.pressure),
+            throttle: resident
+                .last_activity
+                .as_ref()
+                .map(|activity| activity.throttle.clone()),
+            work: resident
+                .last_activity
+                .as_ref()
+                .map(|activity| activity.work.clone()),
         })
     }
 
@@ -3835,7 +3831,7 @@ impl GpuClosedLoopBackend {
                 {
                     return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
                 }
-                Some((pressure, throttle, work))
+                Some(ResidentActivity { throttle, work })
             }
             None if input.next_sequence_cursor == 1 && input.next_completed_gpu_time_ns == 0 => {
                 None
@@ -3849,28 +3845,10 @@ impl GpuClosedLoopBackend {
             .and_then(|pool| pool.resident_mut(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         resident.activity_sequence_cursor = input.next_sequence_cursor;
-        match rebound {
-            Some((pressure, throttle, work)) => {
-                resident.brain_atp_q16 = input.brain_atp_q16;
-                resident.last_world_atp_tick = input.last_world_atp_tick;
-                resident.last_activity_dispatch_generation = pressure.dispatch_generation;
-                resident.last_activity_frame_digest = pressure.frame_digest;
-                resident.last_completed_gpu_time_ns = input.next_completed_gpu_time_ns;
-                resident.last_pressure = Some(pressure);
-                resident.last_throttle = Some(throttle);
-                resident.last_work = Some(work);
-            }
-            None => {
-                resident.brain_atp_q16 = input.brain_atp_q16;
-                resident.last_world_atp_tick = input.last_world_atp_tick;
-                resident.last_activity_dispatch_generation = 0;
-                resident.last_activity_frame_digest = [0; 4];
-                resident.last_completed_gpu_time_ns = 0;
-                resident.last_pressure = None;
-                resident.last_throttle = None;
-                resident.last_work = None;
-            }
-        }
+        resident.brain_atp_q16 = input.brain_atp_q16;
+        resident.last_world_atp_tick = input.last_world_atp_tick;
+        resident.last_completed_gpu_time_ns = input.next_completed_gpu_time_ns;
+        resident.last_activity = rebound;
         Ok(())
     }
 
@@ -5355,12 +5333,8 @@ impl GpuClosedLoopBackend {
             activity_sequence_cursor: 1,
             brain_atp_q16: BRAIN_ATP_Q16_MAX,
             last_world_atp_tick: None,
-            last_activity_dispatch_generation: 0,
-            last_activity_frame_digest: [0; 4],
             last_completed_gpu_time_ns: 0,
-            last_pressure: None,
-            last_throttle: None,
-            last_work: None,
+            last_activity: None,
             v11,
             sleep_plan: *phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
@@ -6160,12 +6134,8 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             activity_sequence_cursor: 1,
             brain_atp_q16: BRAIN_ATP_Q16_MAX,
             last_world_atp_tick: None,
-            last_activity_dispatch_generation: 0,
-            last_activity_frame_digest: [0; 4],
             last_completed_gpu_time_ns: 0,
-            last_pressure: None,
-            last_throttle: None,
-            last_work: None,
+            last_activity: None,
             v11,
             sleep_plan: *entry.phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(

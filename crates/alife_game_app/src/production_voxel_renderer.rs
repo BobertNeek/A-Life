@@ -91,12 +91,11 @@ use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
     production_voxel_save_with_population, CreatureAnimationState, CreatureExpressionState,
-    CreatureVisualSnapshot, Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab,
-    Fvr05ProductionOverlayKind, Fvr05ProductionUxSettings, Fvr11ProductionTerrainLayer,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, GameAppShellError,
-    ProductionFrontendProfileBudget, ProductionFrontendProfileId, ProductionSaveMetadata,
-    ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
-    PRODUCTION_VOXEL_RENDERER_PROFILE,
+    CreatureVisualSnapshot, Fvr05ProductionInspectorTab, Fvr05ProductionOverlayKind,
+    Fvr05ProductionUxSettings, Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainSceneResource,
+    Fvr11TerrainSurfaceRole, GameAppShellError, ProductionFrontendProfileBudget,
+    ProductionFrontendProfileId, ProductionSaveMetadata, ProductionVoxelLaunchSummary,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION, PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
 use crate::{
     terrain_dressing::{
@@ -1504,7 +1503,6 @@ pub struct Fvr05ProductionUxStateResource {
     pub unavailable_reason: String,
     pub renderer_profile: String,
     pub state_trace: String,
-    pub authority: Fvr05ProductionDebugAuthorityReport,
     pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
@@ -1555,7 +1553,6 @@ impl Fvr05ProductionUxStateResource {
                 .unwrap_or_else(|| "None".to_string()),
             renderer_profile: summary.renderer_profile.clone(),
             state_trace: summary.state_labels().join(">"),
-            authority: summary.debug_authority.clone(),
             gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
@@ -5918,7 +5915,7 @@ fn sync_fvr05_right_inspector_panel(
     });
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
-            "{}\n\nPRESENTATION DETAIL\n{}\n\nDEBUG AUTHORITY\n{}",
+            "{}\n\nPRESENTATION DETAIL\n{}",
             fvr04_live_creature_inspector_text(
                 selection.selected,
                 &creatures,
@@ -5931,7 +5928,6 @@ fn sync_fvr05_right_inspector_panel(
                 .and_then(|id| creatures.sample_for_stable_id(id))
                 .map(v0_selected_creature_text)
                 .unwrap_or_else(|| "unavailable".to_string()),
-            ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {
             scene.tile_panel_text(selection.selected.or(selection.hovered))

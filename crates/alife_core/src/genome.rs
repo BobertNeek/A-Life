@@ -1561,70 +1561,6 @@ pub enum EndocrineConstantKind {
     DevelopmentHormoneBaseline = 7,
 }
 
-impl EndocrineConstantKind {
-    pub const fn raw(self) -> u8 {
-        match self {
-            Self::DopamineBaseline => 0,
-            Self::SerotoninBaseline => 1,
-            Self::CortisolBaseline => 2,
-            Self::OxytocinBaseline => 3,
-            Self::AdrenalineBaseline => 4,
-            Self::AcetylcholineBaseline => 5,
-            Self::BrainAtpBaseline => 6,
-            Self::DevelopmentHormoneBaseline => 7,
-        }
-    }
-    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
-        match raw {
-            0 => Ok(Self::DopamineBaseline),
-            1 => Ok(Self::SerotoninBaseline),
-            2 => Ok(Self::CortisolBaseline),
-            3 => Ok(Self::OxytocinBaseline),
-            4 => Ok(Self::AdrenalineBaseline),
-            5 => Ok(Self::AcetylcholineBaseline),
-            6 => Ok(Self::BrainAtpBaseline),
-            7 => Ok(Self::DevelopmentHormoneBaseline),
-            _ => Err(ScaffoldContractError::PhenotypeCompile),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct EndocrineConstantGene {
-    pub kind: EndocrineConstantKind,
-    pub value: f32,
-}
-
-impl EndocrineConstantGene {
-    pub fn baseline_defaults() -> Vec<Self> {
-        vec![
-            Self {
-                kind: EndocrineConstantKind::DopamineBaseline,
-                value: 1.0,
-            },
-            Self {
-                kind: EndocrineConstantKind::SerotoninBaseline,
-                value: 1.0,
-            },
-            Self {
-                kind: EndocrineConstantKind::CortisolBaseline,
-                value: 0.2,
-            },
-            Self {
-                kind: EndocrineConstantKind::BrainAtpBaseline,
-                value: 1.0,
-            },
-        ]
-    }
-}
-
-impl Validate for EndocrineConstantGene {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_finite(self.value)?;
-        Ok(())
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DriveThresholdKind {
@@ -1635,63 +1571,6 @@ pub enum DriveThresholdKind {
     Loneliness = 4,
     Curiosity = 5,
     Reproduction = 6,
-}
-
-impl DriveThresholdKind {
-    pub const fn raw(self) -> u8 {
-        match self {
-            Self::Hunger => 0,
-            Self::Fatigue => 1,
-            Self::Fear => 2,
-            Self::Pain => 3,
-            Self::Loneliness => 4,
-            Self::Curiosity => 5,
-            Self::Reproduction => 6,
-        }
-    }
-    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
-        match raw {
-            0 => Ok(Self::Hunger),
-            1 => Ok(Self::Fatigue),
-            2 => Ok(Self::Fear),
-            3 => Ok(Self::Pain),
-            4 => Ok(Self::Loneliness),
-            5 => Ok(Self::Curiosity),
-            6 => Ok(Self::Reproduction),
-            _ => Err(ScaffoldContractError::PhenotypeCompile),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct DriveThresholdGene {
-    pub kind: DriveThresholdKind,
-    pub threshold: NormalizedScalar,
-}
-
-impl DriveThresholdGene {
-    pub fn baseline_defaults() -> Vec<Self> {
-        vec![
-            Self {
-                kind: DriveThresholdKind::Hunger,
-                threshold: NormalizedScalar(0.4),
-            },
-            Self {
-                kind: DriveThresholdKind::Fatigue,
-                threshold: NormalizedScalar(0.7),
-            },
-            Self {
-                kind: DriveThresholdKind::Curiosity,
-                threshold: NormalizedScalar(0.25),
-            },
-        ]
-    }
-}
-
-impl Validate for DriveThresholdGene {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_normalized(self.threshold)
-    }
 }
 
 #[repr(u8)]

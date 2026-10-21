@@ -25,12 +25,6 @@ pub const CA13_FIXED_SIM_TICK_HZ: u32 = alife_world::WORLD_TICKS_PER_SECOND;
 pub const CA13_TARGET_RENDER_FRAME_HZ: u32 = 60;
 pub const CA13_MAX_CATCH_UP_TICKS_PER_FRAME: u32 = 4;
 pub const CA13_MAX_ACCUMULATOR_MICROS: u64 = 250_000;
-pub const CA14_MOTOR_RING_PRESENTATION_SCHEMA: &str =
-    "alife.ca14.motor_ring_arbitration_presentation.v1";
-pub const CA14_MOTOR_RING_PRESENTATION_SCHEMA_VERSION: u16 = 1;
-pub const CA14_MAX_MOTOR_RING_CHANNELS: usize = 6;
-pub const CA16_EAT_REACH_DISTANCE: f32 = 1.25;
-
 pub const CA32_REALTIME_WGSL_TELEMETRY_SCHEMA: &str = "alife.ca32.realtime_wgsl_telemetry.v1";
 pub const CA32_REALTIME_WGSL_TELEMETRY_SCHEMA_VERSION: u16 = 1;
 pub const CA33_BATCHED_GPU_RUNTIME_SCHEMA: &str = "alife.ca33.batched_gpu_runtime.v1";

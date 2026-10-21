@@ -8,12 +8,11 @@ mod task3_causal_genome_and_routing_red_tests {
         ActivationFunction, ActiveTilePolicy, AlphaStoragePolicy, BiologicalPriority,
         BrainCapacityClass, BrainGenome, BrainPhenotype, CandidateActionFamily, CompiledProjection,
         CompiledSynapseKind, CriticalPeriod, DecoderHeadKind, DevelopmentStage, DevelopmentState,
-        DriveThresholdKind, EndocrineConstantKind, LegacyLobeKindV1, LobeKind, LobeRatioOverride,
-        LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask, MotorAffordanceGene,
-        MotorAffordanceKind, NormalizedScalar, PhenotypeCompiler, ProjectionAlphaOverride,
-        ProjectionKey, ProjectionType, ScaffoldContractError, SensorChannelGene, SensorChannelKind,
-        SensorEncoderSourceGroup, SensorProfile, SparseDensityPrior, Tick, UpdateCadence,
-        CANDIDATE_FEATURE_COUNT,
+        LegacyLobeKindV1, LobeKind, LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef,
+        MacroConnectomeMask, MotorAffordanceGene, MotorAffordanceKind, NormalizedScalar,
+        PhenotypeCompiler, ProjectionAlphaOverride, ProjectionKey, ProjectionType,
+        ScaffoldContractError, SensorChannelGene, SensorChannelKind, SensorEncoderSourceGroup,
+        SensorProfile, SparseDensityPrior, Tick, UpdateCadence, CANDIDATE_FEATURE_COUNT,
     };
 
     const TEST_SEED: u64 = 0xCA55_A11E;
@@ -807,33 +806,6 @@ mod task3_causal_genome_and_routing_red_tests {
                 assert!(<$ty>::try_from_raw($invalid).is_err());
             }};
         }
-        assert_mapping!(
-            EndocrineConstantKind,
-            [
-                (EndocrineConstantKind::DopamineBaseline, 0),
-                (EndocrineConstantKind::SerotoninBaseline, 1),
-                (EndocrineConstantKind::CortisolBaseline, 2),
-                (EndocrineConstantKind::OxytocinBaseline, 3),
-                (EndocrineConstantKind::AdrenalineBaseline, 4),
-                (EndocrineConstantKind::AcetylcholineBaseline, 5),
-                (EndocrineConstantKind::BrainAtpBaseline, 6),
-                (EndocrineConstantKind::DevelopmentHormoneBaseline, 7),
-            ],
-            8
-        );
-        assert_mapping!(
-            DriveThresholdKind,
-            [
-                (DriveThresholdKind::Hunger, 0),
-                (DriveThresholdKind::Fatigue, 1),
-                (DriveThresholdKind::Fear, 2),
-                (DriveThresholdKind::Pain, 3),
-                (DriveThresholdKind::Loneliness, 4),
-                (DriveThresholdKind::Curiosity, 5),
-                (DriveThresholdKind::Reproduction, 6),
-            ],
-            7
-        );
         assert_mapping!(
             SensorChannelKind,
             [

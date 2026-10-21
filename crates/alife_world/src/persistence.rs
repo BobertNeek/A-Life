@@ -24,7 +24,7 @@ use crate::{
     ecology::EcologyState,
     grounded_sensing::GroundedPhysicalProperties,
     habitat::{HabitatAuthority, HabitatAuthorityError, HabitatId},
-    headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
+    headless::{HeadlessWorld, WorldObject, WorldObjectKind},
     organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry},
     persistent_voxel::{
         migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
@@ -1078,7 +1078,7 @@ pub struct WorldSaveState {
     pub voxel_backend: Option<PersistentVoxelWorldSaveState>,
     pub habitats: HabitatAuthority,
     #[serde(skip)]
-    habitat_authority_was_missing: bool,
+    pub(crate) habitat_authority_was_missing: bool,
 }
 
 #[derive(Deserialize)]
@@ -1406,12 +1406,11 @@ impl PortableSaveFile {
         assets: AssetManifest,
         creatures: Vec<CreatureSaveState>,
     ) -> Result<Self, PersistenceError> {
-        let parts = world.persistence_parts();
         let generated_weight_asset_refs = creatures
             .iter()
             .filter_map(|creature| creature.weights.generated_weight_asset_id.clone())
             .collect();
-        let mut world_state = WorldSaveState::from_parts(parts);
+        let mut world_state = world.save_state();
         world_state.populate_default_habitat_memberships_if_unassigned(&creatures)?;
         world_state.voxel_backend = Some(
             migrated_voxel_backend_for_world(
@@ -1774,7 +1773,7 @@ impl PortableSaveFile {
             });
         }
         let voxel_backend = self.world.voxel_backend.clone();
-        let mut candidate = WorldSaveState::from_parts(world.persistence_parts());
+        let mut candidate = world.save_state();
         candidate.voxel_backend = voxel_backend;
         candidate.populate_default_habitat_memberships_if_unassigned(&self.creatures)?;
         candidate.validate()?;
@@ -2112,57 +2111,6 @@ impl WorldSaveState {
         Ok(())
     }
 
-    fn from_parts(parts: HeadlessWorldPersistenceParts) -> Self {
-        let mut organism_records = parts.organism_records;
-        if let Some(records) = &mut organism_records {
-            records.sort_unstable_by_key(|record| record.organism_id().raw());
-        }
-        let external_actor_ids = organism_records.as_ref().map(|records| {
-            let registered_ids = records
-                .iter()
-                .map(|record| record.organism_id().raw())
-                .collect::<BTreeSet<_>>();
-            parts
-                .objects
-                .iter()
-                .filter(|object| object.kind == WorldObjectKind::Agent)
-                .filter_map(|object| object.organism_id.map(OrganismId::raw))
-                .filter(|id| !registered_ids.contains(id))
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .map(OrganismId)
-                .collect()
-        });
-        Self {
-            seed: parts.seed,
-            disable_age_death: parts.disable_age_death,
-            terrain: parts.terrain,
-            terrain_state: parts.terrain_state,
-            tick: parts.tick,
-            next_entity_id: parts.next_entity_id,
-            next_organism_id: parts.next_organism_id,
-            next_spawn_sequence: parts.next_spawn_sequence,
-            next_utterance_id: parts.next_utterance_id,
-            objects: parts
-                .objects
-                .into_iter()
-                .map(WorldObjectSaveState::from)
-                .collect(),
-            last_touched_entities: parts.last_touched_entities,
-            audible_utterances: parts.audible_utterances,
-            last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
-            pending_player_care: parts.pending_player_care,
-            ingestion_observations: parts.ingestion_observations,
-            player_hold: parts.player_hold,
-            organism_records,
-            external_actor_ids,
-            ecology: parts.ecology,
-            voxel_backend: None,
-            habitats: parts.habitats,
-            habitat_authority_was_missing: false,
-        }
-    }
-
     fn validate_organism_records(&self) -> Result<(), PersistenceError> {
         let max_present_organism_id = self
             .objects
@@ -2383,33 +2331,7 @@ impl WorldSaveState {
 
     fn restore(&self) -> Result<HeadlessWorld, PersistenceError> {
         self.validate()?;
-        let parts = HeadlessWorldPersistenceParts {
-            seed: self.seed,
-            disable_age_death: self.disable_age_death,
-            terrain: self.terrain,
-            terrain_state: self.terrain_state.clone(),
-            tick: self.tick,
-            next_entity_id: self.next_entity_id,
-            next_organism_id: self.next_organism_id,
-            next_spawn_sequence: self.next_spawn_sequence,
-            next_utterance_id: self.next_utterance_id,
-            objects: self
-                .objects
-                .iter()
-                .cloned()
-                .map(WorldObject::from)
-                .collect(),
-            last_touched_entities: self.last_touched_entities.clone(),
-            ecology: self.ecology.clone(),
-            audible_utterances: self.audible_utterances.clone(),
-            last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
-            pending_player_care: self.pending_player_care.clone(),
-            ingestion_observations: self.ingestion_observations.clone(),
-            player_hold: self.player_hold.clone(),
-            habitats: self.habitats.clone(),
-            organism_records: self.organism_records.clone(),
-        };
-        Ok(HeadlessWorld::from_persistence_parts(parts)?)
+        Ok(HeadlessWorld::from_save_state(self)?)
     }
 }
 
@@ -2765,8 +2687,8 @@ mod terrain_persistence_tests {
             .unwrap();
         // Scenario agents without full organism records normalize the legacy
         // organism allocator during save. Start from that canonical baseline.
-        world = HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
-        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        world = HeadlessWorld::from_save_state(&world.save_state()).unwrap();
+        let saved = world.save_state();
         let mut decoded: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
         let mut restored = decoded.restore().unwrap();
@@ -2820,7 +2742,7 @@ mod terrain_persistence_tests {
     fn island_binding_roundtrips_and_rejects_incompatible_geometry() {
         let mut world = crate::HeadlessScenarioBuilder::new(71).build().unwrap();
         world.enable_island_for_new_game().unwrap();
-        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let saved = world.save_state();
         let mut restored: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
         assert_eq!(
@@ -2842,8 +2764,7 @@ mod terrain_persistence_tests {
     #[test]
     fn terrainless_fixture_save_roundtrips() {
         let world = crate::HeadlessScenarioBuilder::new(72).build().unwrap();
-        let value =
-            serde_json::to_value(WorldSaveState::from_parts(world.persistence_parts())).unwrap();
+        let value = serde_json::to_value(world.save_state()).unwrap();
         let restored: WorldSaveState = serde_json::from_value(value).unwrap();
         assert_eq!(restored.restore().unwrap().terrain_binding(), None);
     }
@@ -2860,7 +2781,7 @@ mod terrain_persistence_tests {
         let id = world.entity_id("walker").unwrap();
         let original = world.entity(id).unwrap().position;
         world.begin_player_hold(id).unwrap();
-        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let saved = world.save_state();
         let mut decoded: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
         let mut restored = decoded.restore().unwrap();
@@ -2874,8 +2795,7 @@ mod terrain_persistence_tests {
         assert!(decoded.restore().is_err());
         decoded.player_hold.as_mut().unwrap().last_ground = Vec3f::new(-500.0, 0.0, -600.0);
         assert!(decoded.restore().is_err());
-        let mut legacy =
-            serde_json::to_value(WorldSaveState::from_parts(restored.persistence_parts())).unwrap();
+        let mut legacy = serde_json::to_value(restored.save_state()).unwrap();
         legacy.as_object_mut().unwrap().remove("player_hold");
         let legacy: WorldSaveState = serde_json::from_value(legacy).unwrap();
         assert_eq!(legacy.restore().unwrap().player_held_object(), None);

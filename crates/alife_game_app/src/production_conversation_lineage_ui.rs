@@ -2970,10 +2970,6 @@ fn sync_production_conversation_lineage_ui(
         return;
     }
     for (mut text, mut visibility) in &mut panels.p0() {
-        let next_text = speech_entry_text(&state);
-        if text.0 != next_text {
-            text.0 = next_text;
-        }
         let next_visibility = if state.input_open {
             Visibility::Visible
         } else {
@@ -2982,20 +2978,19 @@ fn sync_production_conversation_lineage_ui(
         if *visibility != next_visibility {
             *visibility = next_visibility;
         }
+        if !state.input_open {
+            continue;
+        }
+        let next_text = speech_entry_text(&state);
+        if text.0 != next_text {
+            text.0 = next_text;
+        }
     }
     for (mut text, mut visibility) in &mut panels.p1() {
         if !state.developer_overlay {
-            // Keep failed speech visible without exposing worker/runtime details.
-            let needs_attention = ["failed", "unavailable", "busy"]
-                .iter()
-                .any(|word| state.status.contains(word));
-            let _ = needs_attention;
-            *visibility = Visibility::Hidden;
-            text.0 = if state.status.starts_with("Speech failed: ") {
-                state.status.clone()
-            } else {
-                "Speech needs attention. F3 for details.".to_string()
-            };
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
             continue;
         }
         *visibility = Visibility::Visible;
@@ -3012,8 +3007,13 @@ fn sync_production_conversation_lineage_ui(
             text.0 = next_text;
         }
     }
-    let codebook = LanguageCodebookV1::canonical();
     for (mut text, mut visibility) in &mut panels.p2() {
+        if !state.developer_overlay {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
+            continue;
+        }
         let receipt = state
             .last_creature_receipt
             .as_ref()
@@ -3050,7 +3050,7 @@ fn sync_production_conversation_lineage_ui(
         if text.0 != next_text {
             text.0 = next_text;
         }
-        let next_visibility = if state.developer_overlay && receipt.is_some() {
+        let next_visibility = if receipt.is_some() {
             Visibility::Visible
         } else {
             Visibility::Hidden
@@ -3096,6 +3096,7 @@ fn sync_production_conversation_lineage_ui(
             receipt.literal_text.clone()
         };
         if state.developer_overlay && state.raw_tokens_visible {
+            let codebook = LanguageCodebookV1::canonical();
             next_text.push_str(&format!(
                 "\n[{}]",
                 receipt

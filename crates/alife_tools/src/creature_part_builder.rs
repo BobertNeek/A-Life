@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use std::path::{Component, Path, PathBuf};
 
 use alife_game_app::{
@@ -9,9 +9,9 @@ use alife_game_app::{
     GeneForgePartAssetDefinition, SocketFrame,
 };
 use alife_world::CreaturePartSlotKey;
-use flate2::bufread::ZlibDecoder;
 use image::ImageDecoder;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 const SLOT_PRIORITY: [CreaturePartSlot; 7] = [
@@ -207,7 +207,6 @@ struct GeneForgeBuildReceipt {
     donor_count: usize,
     asset_count: usize,
     lods: Vec<String>,
-    worker_execution: GeneForgeWorkerExecution,
     sources: Vec<GeneForgeSourceBuildReceipt>,
     outputs: BTreeMap<String, String>,
     assembly_preparation: StagedAssemblyPreparationReceipt,
@@ -219,12 +218,6 @@ struct GeneForgeSourceBuildReceipt {
     asset_count: usize,
     output_count: usize,
     outputs: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GeneForgeWorkerExecution {
-    strategy: String,
-    max_workers: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -403,7 +396,6 @@ struct GroupTransformValidationContext<'a> {
     cross_torso: bool,
     target_manifest: Option<&'a StagedSocketManifest>,
     observed_geometry: &'a BTreeMap<String, &'a StagedGeometryPreparation>,
-    catalog: &'a GeneForgeCreaturePartCatalog,
 }
 
 impl SourceObjMesh {
@@ -752,8 +744,6 @@ pub fn validate_geneforge_staging(
         || receipt.donor_count != 3
         || receipt.asset_count != 14
         || receipt.lods != ["full", "compact", "impostor"]
-        || receipt.worker_execution.strategy != "bounded-parallel-donor-workers"
-        || receipt.worker_execution.max_workers != catalog.sources.len().min(3)
         || receipt.assembly_preparation.schema != preparation_contract.schema
         || receipt.assembly_preparation.augmentor_version != preparation_contract.augmentor_version
         || receipt.assembly_preparation.schema_digest != preparation_contract.schema_digest
@@ -950,21 +940,18 @@ pub fn validate_geneforge_staging(
                 "external catalog digest drift for {relative}: expected {expected}, found {actual}"
             )));
         }
-    }
-
-    for (relative, expected) in &receipt.outputs {
-        let path = confined_existing_staged_path(&canonical_staging_root, relative)?;
-        let bytes = fs::read(path)
-            .map_err(|error| fail(format!("failed reading {relative} for digest: {error}")))?;
-        let actual = sha256_hex(&bytes);
-        if !expected.eq_ignore_ascii_case(&actual) {
+        let receipt_digest = receipt
+            .outputs
+            .get(relative)
+            .ok_or_else(|| fail(format!("missing receipt output digest for {relative}")))?;
+        if !receipt_digest.eq_ignore_ascii_case(&actual) {
             return Err(fail(format!(
-                "digest drift for {relative}: expected {expected}, found {actual}"
+                "digest drift for {relative}: expected {receipt_digest}, found {actual}"
             )));
         }
     }
+
     validate_stable_hash_receipt(
-        &canonical_staging_root,
         &receipt.assembly_preparation.stable_hashes,
         &obj_contracts,
         &mask_contracts,
@@ -1222,7 +1209,6 @@ fn validate_matrix_target_distinctness(
 }
 
 fn validate_stable_hash_receipt(
-    staging_root: &Path,
     stable: &StagedStableHashes,
     obj_contracts: &BTreeMap<String, (usize, usize)>,
     mask_contracts: &BTreeMap<String, (usize, usize)>,
@@ -1245,13 +1231,6 @@ fn validate_stable_hash_receipt(
             if !lower_sha256(digest) || receipt_outputs.get(relative) != Some(digest) {
                 return Err(fail(format!(
                     "stable {kind} hash receipt digest drift for {relative}"
-                )));
-            }
-            let path = confined_existing_staged_path(staging_root, relative)?;
-            let actual = sha256_hex(&fs::read(path).map_err(|error| fail(error.to_string()))?);
-            if actual != *digest {
-                return Err(fail(format!(
-                    "stable {kind} output hash drift for {relative}"
                 )));
             }
         }
@@ -1457,7 +1436,6 @@ fn validate_staged_obj(
         match fields.next().unwrap_or_default() {
             "v" => {
                 let value = parse_vector::<3>(fields, line_number, "position")?;
-                extend_bounds(&mut [bounds.min, bounds.max], value);
                 for (axis, coordinate) in value.into_iter().enumerate() {
                     bounds.min[axis] = bounds.min[axis].min(coordinate);
                     bounds.max[axis] = bounds.max[axis].max(coordinate);
@@ -2067,7 +2045,6 @@ fn validate_assembly_preparations(
                 cross_torso: false,
                 target_manifest: target_manifest.as_ref(),
                 observed_geometry: &observed_geometry,
-                catalog,
             },
             &mut evidence.matrix_records,
         )?;
@@ -2199,11 +2176,6 @@ fn validate_assembly_preparations(
             {
                 return Err(fail("cross-torso fit or seam transform drift".to_string()));
             }
-            let observed_geometry = manifest
-                .bridge_geometry
-                .iter()
-                .map(|geometry| (geometry.socket.clone(), geometry))
-                .collect::<BTreeMap<_, _>>();
             let keys = validate_group_transforms(
                 GroupTransformValidationContext {
                     manifest,
@@ -2215,7 +2187,6 @@ fn validate_assembly_preparations(
                     cross_torso: true,
                     target_manifest: Some(&target_manifest),
                     observed_geometry: &observed_geometry,
-                    catalog,
                 },
                 &mut evidence.matrix_records,
             )?;
@@ -2252,7 +2223,6 @@ fn validate_group_transforms(
         cross_torso,
         target_manifest,
         observed_geometry,
-        catalog,
     } = context;
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
     let expected_groups: &[(&str, &str)] = match asset.logical_slot {
@@ -2447,7 +2417,6 @@ fn validate_group_transforms(
             "assembly group transforms are not deterministically ordered".into(),
         ));
     }
-    let _ = catalog;
     Ok(keys)
 }
 
@@ -2590,7 +2559,7 @@ fn near(left: f64, right: f64) -> bool {
     (left - right).abs() <= 1.0e-6
 }
 
-fn decode_deterministic_rgba8_png(
+fn decode_mask_rgba8_png(
     label: &str,
     kind: &str,
     bytes: &[u8],
@@ -2598,145 +2567,25 @@ fn decode_deterministic_rgba8_png(
     const WIDTH: usize = 64;
     const HEIGHT: usize = 64;
     const PIXEL_BYTES: usize = WIDTH * HEIGHT * 4;
-    const FILTERED_BYTES: usize = HEIGHT * (1 + WIDTH * 4);
     let fail =
         |reason: String| CreaturePartBuilderError::Staging(format!("{kind} {label} {reason}"));
-    let compressed = deterministic_png_idat(bytes).map_err(fail)?;
-    let filtered = inflate_zlib_bounded(&compressed, FILTERED_BYTES).map_err(fail)?;
-    if filtered.len() != FILTERED_BYTES {
-        return Err(fail(format!(
-            "has invalid decoded row length: expected {FILTERED_BYTES}, found {}",
-            filtered.len()
-        )));
-    }
-    for row in 0..HEIGHT {
-        if filtered[row * (1 + WIDTH * 4)] != 0 {
-            return Err(fail("must use deterministic filter zero rows".to_string()));
-        }
-    }
-
-    let decoder = image::codecs::png::PngDecoder::new(Cursor::new(bytes))
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(WIDTH as u32);
+    limits.max_image_height = Some(HEIGHT as u32);
+    limits.max_alloc = Some(1024 * 1024);
+    let decoder = image::codecs::png::PngDecoder::with_limits(Cursor::new(bytes), limits)
         .map_err(|error| fail(format!("is not a valid PNG: {error}")))?;
     if decoder.dimensions() != (WIDTH as u32, HEIGHT as u32)
         || decoder.color_type() != image::ColorType::Rgba8
         || decoder.total_bytes() != PIXEL_BYTES as u64
     {
-        return Err(fail(
-            "must be exactly 64x64 native deterministic RGBA8".to_string(),
-        ));
+        return Err(fail("must be exactly 64x64 native RGBA8".to_string()));
     }
     let mut pixels = vec![0; PIXEL_BYTES];
     decoder
         .read_image(&mut pixels)
         .map_err(|error| fail(format!("failed native RGBA8 decode: {error}")))?;
-    if pixels.len() != PIXEL_BYTES {
-        return Err(fail("has an invalid decoded pixel length".to_string()));
-    }
     Ok(pixels)
-}
-
-fn deterministic_png_idat(bytes: &[u8]) -> Result<Vec<u8>, String> {
-    const SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
-    if bytes.len() < SIGNATURE.len() || &bytes[..8] != SIGNATURE {
-        return Err("is not a PNG".to_string());
-    }
-    let mut offset = 8_usize;
-    let mut saw_ihdr = false;
-    let mut saw_iend = false;
-    let mut compressed = Vec::new();
-    while offset < bytes.len() {
-        if bytes.len() - offset < 12 {
-            return Err("has a truncated PNG chunk".to_string());
-        }
-        let length = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
-        let chunk_end = offset
-            .checked_add(12)
-            .and_then(|value| value.checked_add(length))
-            .ok_or_else(|| "has an overflowing PNG chunk".to_string())?;
-        if chunk_end > bytes.len() {
-            return Err("has a truncated PNG chunk payload".to_string());
-        }
-        let chunk_kind = &bytes[offset + 4..offset + 8];
-        let payload = &bytes[offset + 8..offset + 8 + length];
-        let expected_crc = u32::from_be_bytes(
-            bytes[offset + 8 + length..offset + 12 + length]
-                .try_into()
-                .unwrap(),
-        );
-        if png_chunk_crc32(chunk_kind, payload) != expected_crc {
-            return Err("has an invalid PNG chunk checksum".to_string());
-        }
-        if !saw_ihdr && chunk_kind != b"IHDR" {
-            return Err("must begin with IHDR".to_string());
-        }
-        match chunk_kind {
-            b"IHDR" => {
-                if saw_ihdr || length != 13 {
-                    return Err("has invalid IHDR structure".to_string());
-                }
-                saw_ihdr = true;
-                let width = u32::from_be_bytes(payload[0..4].try_into().unwrap());
-                let height = u32::from_be_bytes(payload[4..8].try_into().unwrap());
-                if width != 64 || height != 64 || payload[8..] != [8, 6, 0, 0, 0] {
-                    return Err("must be exactly 64x64 native deterministic RGBA8".to_string());
-                }
-            }
-            b"IDAT" => {
-                if !saw_ihdr {
-                    return Err("has IDAT before IHDR".to_string());
-                }
-                if compressed.len() + payload.len() > 512 * 1024 {
-                    return Err("has oversized compressed PNG data".to_string());
-                }
-                compressed.extend_from_slice(payload);
-            }
-            b"IEND" => {
-                if length != 0 {
-                    return Err("has invalid IEND structure".to_string());
-                }
-                saw_iend = true;
-                offset = chunk_end;
-                break;
-            }
-            _ => {}
-        }
-        offset = chunk_end;
-    }
-    if !saw_ihdr || !saw_iend || compressed.is_empty() {
-        return Err("is missing required PNG chunks".to_string());
-    }
-    if offset != bytes.len() {
-        return Err("has trailing bytes after IEND".to_string());
-    }
-    Ok(compressed)
-}
-
-fn png_chunk_crc32(kind: &[u8], payload: &[u8]) -> u32 {
-    let mut crc = u32::MAX;
-    for byte in kind.iter().chain(payload) {
-        crc ^= u32::from(*byte);
-        for _ in 0..8 {
-            crc = (crc >> 1) ^ (0xedb8_8320 & 0_u32.wrapping_sub(crc & 1));
-        }
-    }
-    !crc
-}
-
-fn inflate_zlib_bounded(data: &[u8], output_limit: usize) -> Result<Vec<u8>, String> {
-    let decoder = ZlibDecoder::new(Cursor::new(data));
-    let mut bounded = decoder.take((output_limit + 1) as u64);
-    let mut output = Vec::with_capacity(output_limit);
-    bounded
-        .read_to_end(&mut output)
-        .map_err(|error| format!("has invalid zlib/DEFLATE data: {error}"))?;
-    let decoder = bounded.into_inner();
-    if output.len() > output_limit {
-        return Err("exceeds the bounded PNG decode size".to_string());
-    }
-    if decoder.total_in() != data.len() as u64 {
-        return Err("has a truncated stream or trailing zlib data".to_string());
-    }
-    Ok(output)
 }
 
 fn validate_semantic_mask_png_bytes(
@@ -2745,7 +2594,7 @@ fn validate_semantic_mask_png_bytes(
     expected_colors: &BTreeSet<[u8; 3]>,
 ) -> Result<(), CreaturePartBuilderError> {
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
-    let pixels = decode_deterministic_rgba8_png(label, "semantic mask", bytes)?;
+    let pixels = decode_mask_rgba8_png(label, "semantic mask", bytes)?;
     let mut semantic_colors = BTreeSet::new();
     let mut microdetail = BTreeSet::new();
     for pixel in pixels.as_chunks::<4>().0 {
@@ -2775,12 +2624,12 @@ fn validate_anatomy_mask_png_bytes(
     logical_slot: CreaturePartSlotKey,
 ) -> Result<(), CreaturePartBuilderError> {
     let fail = |message: String| CreaturePartBuilderError::Staging(message);
-    let semantic = decode_deterministic_rgba8_png(
+    let semantic = decode_mask_rgba8_png(
         label,
         "semantic mask paired with anatomy mask",
         semantic_bytes,
     )?;
-    let anatomy = decode_deterministic_rgba8_png(label, "anatomy mask", anatomy_bytes)?;
+    let anatomy = decode_mask_rgba8_png(label, "anatomy mask", anatomy_bytes)?;
     let (required, allowed) = anatomy_channels_for_slot(logical_slot);
     let mut used = BTreeSet::new();
     for (&semantic_pixel, &anatomy_pixel) in semantic
@@ -3245,72 +3094,7 @@ fn python_json_float(value: f64) -> Result<String, CreaturePartBuilderError> {
 }
 
 pub fn sha256_hex(input: &[u8]) -> String {
-    const INITIAL: [u32; 8] = [
-        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
-        0x5be0cd19,
-    ];
-    const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
-    ];
-    let bit_len = (input.len() as u64) * 8;
-    let mut padded = input.to_vec();
-    padded.push(0x80);
-    while padded.len() % 64 != 56 {
-        padded.push(0);
-    }
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-    let mut hash = INITIAL;
-    for chunk in padded.as_chunks::<64>().0 {
-        let mut words = [0_u32; 64];
-        for (index, bytes) in chunk.as_chunks::<4>().0.iter().enumerate() {
-            words[index] = u32::from_be_bytes(*bytes);
-        }
-        for index in 16..64 {
-            let s0 = words[index - 15].rotate_right(7)
-                ^ words[index - 15].rotate_right(18)
-                ^ (words[index - 15] >> 3);
-            let s1 = words[index - 2].rotate_right(17)
-                ^ words[index - 2].rotate_right(19)
-                ^ (words[index - 2] >> 10);
-            words[index] = words[index - 16]
-                .wrapping_add(s0)
-                .wrapping_add(words[index - 7])
-                .wrapping_add(s1);
-        }
-        let [mut a, mut b, mut c, mut d, mut e, mut f, mut g, mut h] = hash;
-        for index in 0..64 {
-            let sum1 = h
-                .wrapping_add(e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25))
-                .wrapping_add((e & f) ^ (!e & g))
-                .wrapping_add(K[index])
-                .wrapping_add(words[index]);
-            let sum0 = (a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22))
-                .wrapping_add((a & b) ^ (a & c) ^ (b & c));
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(sum1);
-            d = c;
-            c = b;
-            b = a;
-            a = sum0.wrapping_add(sum1);
-        }
-        for (state, value) in hash.iter_mut().zip([a, b, c, d, e, f, g, h]) {
-            *state = state.wrapping_add(value);
-        }
-    }
-    hash.into_iter()
-        .map(|value| format!("{value:08x}"))
-        .collect()
+    format!("{:x}", Sha256::digest(input))
 }
 
 pub fn slice_creature_mesh(
@@ -4099,6 +3883,26 @@ f 22/1/1 23/2/1 24/3/1
     fn malformed_obj_indices_are_rejected() {
         let malformed = "v 0 0 0\nvt 0 0\nvn 0 1 0\nf 0/1/1 1/1/1 1/1/1\n";
         assert!(SourceObjMesh::parse(malformed).is_err());
+    }
+
+    #[test]
+    fn mask_decode_accepts_standard_png_filters_and_bounds_dimensions() {
+        let image = RgbaImage::from_fn(64, 64, |x, y| {
+            Rgba([230, 92, 88, 32 + ((x + y) % 192) as u8])
+        });
+        let mut bytes = Vec::new();
+        PngEncoder::new_with_quality(&mut bytes, CompressionType::Best, FilterType::Sub)
+            .write_image(image.as_raw(), 64, 64, ExtendedColorType::Rgba8)
+            .unwrap();
+        assert_eq!(
+            decode_mask_rgba8_png("mask.png", "semantic mask", &bytes).unwrap(),
+            image.as_raw().as_slice()
+        );
+        let mut oversized = Vec::new();
+        PngEncoder::new(&mut oversized)
+            .write_image(&vec![0; 65 * 64 * 4], 65, 64, ExtendedColorType::Rgba8)
+            .unwrap();
+        assert!(decode_mask_rgba8_png("oversized.png", "semantic mask", &oversized).is_err());
     }
 
     #[test]

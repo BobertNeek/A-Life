@@ -337,6 +337,17 @@ fn actual_ui_focus_clicks_repeated_cancel_and_held_dismissal_keep_world_capture(
         assert_eq!(app.world().resource::<InputFocus>().0, Some(prior));
         assert!(app
             .world()
+            .get::<AccessibilityNode>(entry)
+            .unwrap()
+            .is_hidden());
+        app.world_mut().clear_trackers();
+        adapt(app.world_mut());
+        let hidden_entry = app.world().entity(entry);
+        assert!(!hidden_entry.get_ref::<Text>().unwrap().is_changed());
+        assert!(!hidden_entry.get_ref::<Node>().unwrap().is_changed());
+
+        assert!(app
+            .world()
             .resource::<ProductionConversationLineageUiState>()
             .blocks_world_shortcuts());
         focus_cursor(app.world_mut(), Vec2::new(2.0, 2.0));
@@ -360,6 +371,12 @@ fn actual_ui_focus_clicks_repeated_cancel_and_held_dismissal_keep_world_capture(
             .resource_mut::<ProductionConversationLineageUiState>()
             .prepare_typed_speech_fixture("é猫");
         adapt(app.world_mut());
+        assert_eq!(app.world().get::<Text>(entry).unwrap().0, "é猫|");
+        assert!(!app
+            .world()
+            .get::<AccessibilityNode>(entry)
+            .unwrap()
+            .is_hidden());
         app.update();
     }
 }

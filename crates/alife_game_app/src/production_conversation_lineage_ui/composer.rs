@@ -479,6 +479,43 @@ pub(crate) fn composer_height(world: &World, size: Vec2) -> Option<f32> {
 }
 pub(crate) fn adapt(world: &mut World) {
     naming::sync_ime_window(world);
+    if !world
+        .resource::<ProductionConversationLineageUiState>()
+        .input_open
+    {
+        let mut newly_hidden = false;
+        for (mut visible, mut a11y) in world
+            .query_filtered::<(&mut Visibility, &mut AccessibilityNode), With<ProductionSpeechComposerBounds>>()
+            .iter_mut(world)
+        {
+            if *visible != Visibility::Hidden || !a11y.is_hidden() {
+                *visible = Visibility::Hidden;
+                a11y.set_hidden();
+                newly_hidden = true;
+            }
+        }
+        if newly_hidden {
+            for mut a11y in world
+                .query_filtered::<&mut AccessibilityNode, Or<(
+                    With<ProductionSpeechEntryPanel>,
+                    With<Help>,
+                    With<Control>,
+                    With<Status>,
+                )>>()
+                .iter_mut(world)
+            {
+                a11y.set_hidden();
+            }
+            for mut scroll in world
+                .query_filtered::<&mut ScrollPosition, With<DraftViewport>>()
+                .iter_mut(world)
+            {
+                scroll.0.y = 0.0;
+            }
+        }
+        sync_focus(world, false, false);
+        return;
+    }
     let size = world
         .query_filtered::<&Window, With<bevy::window::PrimaryWindow>>()
         .iter(world)
@@ -637,6 +674,18 @@ pub(crate) fn adapt(world: &mut World) {
     sync_focus(world, open, help);
 }
 fn sync_focus(world: &mut World, open: bool, help: bool) {
+    let owns = world.resource::<InputState>().owns_focus;
+    if !open {
+        if owns {
+            let previous = world
+                .resource::<InputState>()
+                .previous_focus
+                .filter(|e| world.get_entity(*e).is_ok());
+            world.resource_mut::<InputFocus>().0 = previous;
+            world.resource_mut::<InputState>().owns_focus = false;
+        }
+        return;
+    }
     let target = if help {
         world
             .query::<(Entity, &Control)>()
@@ -648,22 +697,12 @@ fn sync_focus(world: &mut World, open: bool, help: bool) {
             .iter(world)
             .next()
     };
-    let current = world.resource::<InputFocus>().0;
-    let owns = world.resource::<InputState>().owns_focus;
-    if open {
-        if !owns {
-            world.resource_mut::<InputState>().previous_focus = current;
-        }
-        world.resource_mut::<InputState>().owns_focus = true;
-        world.resource_mut::<InputFocus>().0 = target;
-    } else if owns {
-        let previous = world
-            .resource::<InputState>()
-            .previous_focus
-            .filter(|e| world.get_entity(*e).is_ok());
-        world.resource_mut::<InputFocus>().0 = previous;
-        world.resource_mut::<InputState>().owns_focus = false;
+    if !owns {
+        let current = world.resource::<InputFocus>().0;
+        world.resource_mut::<InputState>().previous_focus = current;
     }
+    world.resource_mut::<InputState>().owns_focus = true;
+    world.resource_mut::<InputFocus>().0 = target;
 }
 
 #[cfg(test)]

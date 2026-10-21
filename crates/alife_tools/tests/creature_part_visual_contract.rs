@@ -866,12 +866,11 @@ fn staged_validator_binds_each_receipt_source_to_its_exact_donor_outputs() {
 
 #[test]
 #[ignore = "requires generated Geneforge staging"]
-fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
+fn staged_validator_requires_rgba8_and_valid_png_structure() {
     for (name, color_type, filter) in [
         ("semantic-rgb", 2_u8, 0_u8),
         ("semantic-indexed", 3_u8, 0_u8),
         ("semantic-grayscale", 0_u8, 0_u8),
-        ("semantic-filter-sub", 6_u8, 1_u8),
     ] {
         let root = mutation_root(name);
         copy_tree(&fixture_staging(), &root);
@@ -879,12 +878,7 @@ fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
         let rgba = image::open(&mask).unwrap().to_rgba8().into_raw();
         fs::write(&mask, test_png_bytes(64, 64, color_type, filter, &rgba)).unwrap();
         rewrite_receipt_digest(&root, &mask);
-        let expected = if filter == 0 {
-            "deterministic RGBA8"
-        } else {
-            "filter zero"
-        };
-        assert_rejected(&root, expected);
+        assert_rejected(&root, "RGBA8");
     }
 
     let root = mutation_root("semantic-chunk-before-ihdr");
@@ -896,7 +890,7 @@ fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
     reordered.extend_from_slice(&original[8..]);
     fs::write(&mask, reordered).unwrap();
     rewrite_receipt_digest(&root, &mask);
-    assert_rejected(&root, "begin with IHDR");
+    assert_rejected(&root, "PNG");
 }
 
 #[test]
