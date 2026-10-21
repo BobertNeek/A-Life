@@ -58,6 +58,37 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
+    let mut compact_bytes = 0;
+    let mut pretty_bytes = 0;
+    for name in [
+        "collection-compiler-inputs.json",
+        "collection-actor-checkpoint.json",
+        "initial-value-checkpoint.json",
+        "collector-checkpoint.json",
+        "compiler-inputs.json",
+        "training-handoff.json",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+    ] {
+        let bytes = fs::read(first.join(name)).unwrap();
+        let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let pretty = serde_json::to_vec_pretty(&document).unwrap();
+        assert!(bytes.len() < pretty.len(), "{name} retains formatting bulk");
+        compact_bytes += bytes.len();
+        pretty_bytes += pretty.len();
+    }
+    println!(
+        "CPU fixture recovery JSON: {compact_bytes} compact bytes; {pretty_bytes} pretty bytes"
+    );
+    let handoff: alife_training::FoundationTrainingHandoffV1 =
+        serde_json::from_slice(&fs::read(first.join("training-handoff.json")).unwrap()).unwrap();
+    handoff.validate().unwrap();
+    let actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&fs::read(first.join("actor-checkpoint.json")).unwrap()).unwrap();
+    let value: alife_training::PpoValueHeadCheckpoint =
+        serde_json::from_slice(&fs::read(first.join("value-checkpoint.json")).unwrap()).unwrap();
+    assert_eq!(handoff.actor, actor);
+    assert_eq!(handoff.value, value);
     let source_before = snapshot_tree(&first);
     let forbidden_outputs = vec![
         first.clone(),
@@ -116,6 +147,16 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
     for (name, bytes) in names.iter().zip(&before) {
         assert_eq!(&fs::read(first.join(name)).unwrap(), bytes);
     }
+    // Compact recovery must restore all learned coordinates, moments and exact
+    // integer ages, not merely the receipt's optimizer step counters.
+    let restored_actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&fs::read(second.join("collection-actor-checkpoint.json")).unwrap())
+            .unwrap();
+    let restored_value: alife_training::PpoValueHeadCheckpoint =
+        serde_json::from_slice(&fs::read(second.join("initial-value-checkpoint.json")).unwrap())
+            .unwrap();
+    assert_eq!(restored_actor, actor);
+    assert_eq!(restored_value, value);
     let a: serde_json::Value = serde_json::from_slice(&before[1]).unwrap();
     let b: serde_json::Value =
         serde_json::from_slice(&fs::read(second.join("cpu-cycle.json")).unwrap()).unwrap();
