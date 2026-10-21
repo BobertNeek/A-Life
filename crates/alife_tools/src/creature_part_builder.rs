@@ -3900,7 +3900,7 @@ f 22/1/1 23/2/1 24/3/1
         );
         let mut oversized = Vec::new();
         PngEncoder::new(&mut oversized)
-            .write_image(&vec![0; 65 * 64 * 4], 65, 64, ExtendedColorType::Rgba8)
+            .write_image(&[0; 65 * 64 * 4], 65, 64, ExtendedColorType::Rgba8)
             .unwrap();
         assert!(decode_mask_rgba8_png("oversized.png", "semantic mask", &oversized).is_err());
     }

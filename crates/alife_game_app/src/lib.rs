@@ -19,9 +19,8 @@ mod prelude {
         FVR06_GPU_RUNTIME_STATE_SCHEMA, FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION,
     };
     pub(crate) use alife_world::{
-        CreatureAppearanceGenome, CreatureWorldAnchor, EcologyMetrics, EcologyZoneId,
-        HeadlessWorld, PersistentVoxelProfileId, PersistentVoxelWorldBackend, TerrainZoneKind,
-        WorldObjectKind,
+        CreatureAppearanceGenome, CreatureWorldAnchor, EcologyZoneId, PersistentVoxelProfileId,
+        PersistentVoxelWorldBackend, TerrainZoneKind, WorldObjectKind,
     };
     pub(crate) use serde::{Deserialize, Serialize};
     pub(crate) use thiserror::Error;
