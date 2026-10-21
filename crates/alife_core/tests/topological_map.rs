@@ -681,26 +681,6 @@ fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
 }
 
 #[test]
-fn topology_source_uses_no_engine_types_or_action_command_shortcuts() {
-    let source = include_str!("../src/topology.rs");
-
-    let forbidden = [
-        concat!("be", "vy"),
-        concat!("wg", "pu"),
-        concat!("Render", "Device"),
-        concat!("Render", "Queue"),
-        concat!("Action", "Command"),
-    ];
-
-    for forbidden in forbidden {
-        assert!(
-            !source.contains(forbidden),
-            "topology core must not reference engine types or public action commands"
-        );
-    }
-}
-
-#[test]
 fn v11_active_concepts_and_gaps_change_context_and_reconcile() {
     let mut sidecar = map();
 

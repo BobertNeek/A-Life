@@ -11,8 +11,7 @@ use alife_world::{
 use serde::{Deserialize, Serialize};
 
 const GOLDEN_TRACE_SCHEMA: &str = "alife.p19.golden_trace.v3";
-// v1/v2 remain historical evidence. v3 adds activity-hold and steering state
-// to world identity without relaxing the existing physical outcome checks.
+// v3 includes activity-hold and steering state in world identity.
 const GOLDEN_TRACE_SCHEMA_VERSION: u16 = 3;
 const STOCHASTIC_SEED_FIELD: &str = "scenario.seed";
 

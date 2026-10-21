@@ -1,10 +1,6 @@
 # Current implementation map
 
-> **SUPERSEDED AS ARCHITECTURE:** This file is a non-normative map of the
-> current implementation. The sole controlling architecture is
-> `architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
-> Current crates, GPU placement, layouts, adapters, constants, and gaps do not
-> amend v2.0.
+> This guide maps the current implementation. The [organism and gameplay design](architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) describes the intended behavior; current layouts and constants remain replaceable.
 
 ## Authority model
 

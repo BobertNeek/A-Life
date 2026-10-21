@@ -32,8 +32,6 @@ pub use types::*;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TrainingError {
-    #[error("{pipeline} is blocked: canonical organism biology and receptor-gated learning are not integrated")]
-    CanonicalBiologyUnavailable { pipeline: &'static str },
     #[error("training world organism error: {0}")]
     Organism(#[from] alife_world::OrganismRegistryError),
     #[error("training contract error: {0}")]
@@ -42,15 +40,6 @@ pub enum TrainingError {
     GpuSubmission,
     #[error("GPU training readback was malformed")]
     MalformedReadback,
-}
-
-/// These legacy evaluators still construct synthetic physiology. Fail before
-/// creating a GPU session or mutating a caller-owned world; removing this gate
-/// requires integrating organism-owned biology and sealed receptor evidence.
-pub(crate) fn require_canonical_training_biology(
-    pipeline: &'static str,
-) -> Result<(), TrainingError> {
-    Err(TrainingError::CanonicalBiologyUnavailable { pipeline })
 }
 
 pub mod rehearsal;

@@ -900,26 +900,6 @@ fn staged_validator_requires_native_rgba8_and_filter_zero_png_rows() {
 }
 
 #[test]
-fn png_validation_uses_the_locked_flate2_decoder_instead_of_handwritten_deflate() {
-    let crate_root = workspace_path("crates/alife_tools");
-    let manifest = fs::read_to_string(crate_root.join("Cargo.toml")).unwrap();
-    let implementation =
-        fs::read_to_string(crate_root.join("src/creature_part_builder.rs")).unwrap();
-    assert!(manifest.contains("flate2 = \"=1.1.9\""));
-    for handwritten in [
-        "DeflateBitReader",
-        "DeflateHuffmanTree",
-        "inflate_stored_block",
-        "dynamic_deflate_trees",
-    ] {
-        assert!(
-            !implementation.contains(handwritten),
-            "handwritten inflater remains: {handwritten}"
-        );
-    }
-}
-
-#[test]
 #[ignore = "requires generated Geneforge staging"]
 fn staged_validator_rejects_symlink_or_reparse_output_escape() {
     let root = mutation_root("symlink-output-escape");

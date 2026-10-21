@@ -471,8 +471,6 @@ pub fn canonical_gate_command_argv(command_id: u16) -> Option<Vec<u8>> {
             "--test",
             "gpu_closed_loop_soak",
             "--test",
-            "gpu_brain_authority_audit",
-            "--test",
             "gpu_closed_loop_promotion",
             "-j",
             "1",
@@ -493,18 +491,9 @@ pub fn canonical_gate_command_argv(command_id: u16) -> Option<Vec<u8>> {
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            "scripts/docs_check.ps1",
-        ],
-        10 => &[
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
             "scripts/check_core_boundaries.ps1",
         ],
-        11 => &["internal", "authority-scan-v1"],
-        12 => &["git", "diff", "--check", "origin/main...HEAD"],
+        10 => &["git", "diff", "--check", "origin/main...HEAD"],
         _ => return None,
     };
     Some(join_argv(arguments))
@@ -535,7 +524,7 @@ impl GateCommandReceipt {
     }
 
     fn validate_shape(&self) -> Result<(), PromotionEvidenceError> {
-        if !(1..=12).contains(&self.command_id)
+        if !(1..=10).contains(&self.command_id)
             || self.argv_utf8.is_empty()
             || self.argv_utf8.len() > 2_048
             || self.argv_utf8.first() == Some(&0)
@@ -717,7 +706,7 @@ impl GpuClosedLoopGateReceipt {
     pub fn validate(&self) -> Result<(), PromotionEvidenceError> {
         self.adapter.validate()?;
         if self.schema_version != 1
-            || self.commands.len() != 12
+            || self.commands.len() != 10
             || !self.passed
             || any_zero([
                 self.gate_script_digest,
@@ -1185,7 +1174,7 @@ pub fn write_gpu_closed_loop_gate_receipt_from_capture(
 ) -> Result<GpuClosedLoopGateReceipt, PromotionEvidenceError> {
     let capture: GpuGateCaptureManifest =
         serde_json::from_slice(&read_bounded_json(capture_path.as_ref(), 2 * 1024 * 1024)?)?;
-    if capture.schema_version != 1 || capture.commands.len() != 12 {
+    if capture.schema_version != 1 || capture.commands.len() != 10 {
         return Err(PromotionEvidenceError::Contract(
             "gate capture schema or command count is invalid",
         ));

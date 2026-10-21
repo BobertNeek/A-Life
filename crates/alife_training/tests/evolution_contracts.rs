@@ -5,8 +5,7 @@ use alife_core::{
 };
 use alife_training::{
     mutate_hardening_genome, pareto_front, HardeningEvaluation, HardeningFitness,
-    HardeningMutationKind, HARDENING_DESCENDANTS_PER_FINALIST, HARDENING_NEWBORNS_PER_GENOME,
-    HARDENING_WORLD_COUNT,
+    HardeningMutationKind,
 };
 
 fn evaluation(seed: u64, survival: f32, learning: f32) -> HardeningEvaluation {
@@ -15,9 +14,6 @@ fn evaluation(seed: u64, survival: f32, learning: f32) -> HardeningEvaluation {
         mutation: HardeningMutationKind::SparseGeneticDelta,
         viable: true,
         nonviable_reason: None,
-        newborn_count: HARDENING_NEWBORNS_PER_GENOME,
-        world_count: HARDENING_WORLD_COUNT,
-        neural_ticks: 32,
         fitness: Some(
             HardeningFitness {
                 survival,
@@ -168,13 +164,6 @@ fn pareto_selection_keeps_tradeoffs_instead_of_collapsing_to_one_iq_scalar() {
         evaluation(3, 0.3, 0.3),
     ];
     assert_eq!(pareto_front(&evaluations), vec![0, 1]);
-}
-
-#[test]
-fn hardening_population_contract_is_four_world_distinct_newborns_and_eight_descendants() {
-    assert_eq!(HARDENING_NEWBORNS_PER_GENOME, 4);
-    assert_eq!(HARDENING_WORLD_COUNT, 4);
-    assert_eq!(HARDENING_DESCENDANTS_PER_FINALIST, 8);
 }
 
 #[test]

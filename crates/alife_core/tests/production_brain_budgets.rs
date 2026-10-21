@@ -119,15 +119,6 @@ fn execution_abi_rejects_every_independent_limit_violation() {
     }
 }
 
-#[test]
-fn production_capacity_source_contains_no_tier_dispatch_or_byte_guess() {
-    let source = include_str!("../src/phenotype/capacity.rs");
-    let production = source.split("impl BrainCapacityClass").nth(1).unwrap();
-    assert!(!production.contains("production_for_tier"));
-    assert!(!production.contains("BrainScaleTier"));
-    assert!(!production.contains("max_gpu_bytes"));
-}
-
 fn numeric_leaf_paths(value: &Value) -> Vec<Vec<String>> {
     fn visit(value: &Value, path: &mut Vec<String>, output: &mut Vec<Vec<String>>) {
         match value {

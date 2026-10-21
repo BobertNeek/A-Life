@@ -1,21 +1,9 @@
-# alife_tools Instructions
+# alife_tools
 
-Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
-implementation guardrails; they do not amend the controlling v2.0 architecture.
+Own developer tools, asset authoring, benchmarks, and offline evidence inspection.
+Keep tools out of simulation runtime dependencies and keep gameplay/neural behavior
+in their owning crates.
 
-This crate controls developer tooling hooks, Graphify helpers, docs validation,
-and spec consistency checks.
-
-Rules:
-
-- Tooling must not become a runtime dependency for simulation crates.
-- Own GPU-only populated benchmark artifacts and their honest
-  Completed/Missed/Unavailable statuses; never substitute host fixtures or
-  inferred results for promotion evidence.
-- The canonical v1 p95 matrix measures the corrected full causal tick,
-  including eligibility capture and post-outcome plasticity. Do not replace it
-  with timing from the earlier under-executing diagnostic path.
-- Graphify is optional; cargo build/check/test must work without Graphify installed.
-- Prefer checks that catch architecture drift: Unity/HLSL, fixed 2048-only assumptions,
-  dense neural buffers, and hidden teacher injection.
-- Do not put game or neural runtime behavior in this crate.
+Benchmark the complete causal tick, including learning. Distinguish measured
+hardware work from fixtures and estimates. Graphify remains optional. Prefer
+checks that expose real corruption or gameplay regressions over prose rules.

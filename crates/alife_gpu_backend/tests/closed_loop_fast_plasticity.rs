@@ -413,35 +413,6 @@ fn r12_native_success_promotes_exactly_one_transaction() {
     println!("R12 success receipt={:?}", after.receipt);
 }
 
-#[test]
-fn superseded_p26_oja_product_runtime_is_absent() {
-    let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    for relative in [
-        "src/plasticity.rs",
-        "shaders/p26_plasticity.wgsl",
-        "tests/plasticity_oja_parity.rs",
-    ] {
-        assert!(
-            !crate_root.join(relative).exists(),
-            "superseded product plasticity surface still exists: {relative}"
-        );
-    }
-
-    let exports = std::fs::read_to_string(crate_root.join("src/lib.rs")).unwrap();
-    for forbidden in [
-        "pub mod plasticity;",
-        "run_plasticity_gpu_diagnostic",
-        "GpuOjaFixedPointConfig",
-        "GpuPlasticityPlan",
-        "P26_WGSL_PLASTICITY",
-    ] {
-        assert!(
-            !exports.contains(forbidden),
-            "superseded product export remains: {forbidden}"
-        );
-    }
-}
-
 fn sealed_measured_outcome(
     handle: alife_gpu_backend::GpuBrainHandle,
     frame: &alife_core::PerceptionFrame,

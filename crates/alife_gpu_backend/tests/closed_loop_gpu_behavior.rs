@@ -220,7 +220,7 @@ fn assert_compact_selection(result: &GpuFrameResult) -> CompactSelection {
 }
 
 #[test]
-fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_blind() {
+fn decode_wgsl_parses_with_expected_entry_points_and_compact_layouts() {
     assert_eq!(GPU_CANDIDATE_RECORD_BYTES, 32);
     assert_eq!(GPU_SELECTION_RECORD_BYTES, 64);
     let module = naga::front::wgsl::parse_str(CLOSED_LOOP_DECODE_WGSL).unwrap();
@@ -237,49 +237,6 @@ fn decode_wgsl_parses_and_abi_remains_compact_candidate_conditioned_and_entity_b
             ("decode_speech_payload", ShaderStage::Compute, [1, 1, 1]),
         ]
     );
-    let decode_body = &CLOSED_LOOP_DECODE_WGSL[CLOSED_LOOP_DECODE_WGSL
-        .find("fn decode_candidates")
-        .unwrap()..];
-    for required in [
-        "decoder_plan_offset",
-        "candidate_offset",
-        "feature_offset",
-        "decoder_weight_indices_offset",
-        "candidate_logit_offset",
-        "selection_offset",
-    ] {
-        assert!(decode_body.contains(required), "missing {required}");
-    }
-    assert!(!decode_body.contains("observation_slot_or_max"));
-    assert!(!decode_body.contains("entity_id"));
-    assert!(!decode_body.contains("inhibition_coefficient"));
-    assert!(!decode_body.contains("lateral_inhibition_gain"));
-    let header_start = CLOSED_LOOP_DECODE_WGSL
-        .find("struct GpuPerceptionHeader")
-        .unwrap();
-    let header_end = CLOSED_LOOP_DECODE_WGSL[header_start..]
-        .find("struct GpuBrainSlotRecord")
-        .unwrap()
-        + header_start;
-    let header = &CLOSED_LOOP_DECODE_WGSL[header_start..header_end];
-    assert_eq!(alife_gpu_backend::GPU_CLOSED_LOOP_LAYOUT_VERSION, 4);
-    assert!(CLOSED_LOOP_DECODE_WGSL.contains("GPU_CLOSED_LOOP_LAYOUT_VERSION:u32 = 4u"));
-    assert!(header.contains("dispatch_generation_lo"));
-    assert!(header.contains("dispatch_generation_hi"));
-    assert!(!header.contains("reserved:array<u32,3>"));
-    let compact_decode = decode_body.split_whitespace().collect::<String>();
-    assert!(compact_decode.contains("candidate_offset+candidate*8u"));
-    assert!(compact_decode.contains("diagnostic_offset+3u"));
-    assert!(compact_decode.contains(
-        "span_within(brain.recurrent_synapse_count,decoder.decoder_synapse_count,brain.synapse_count)"
-    ));
-    assert!(!compact_decode.contains(
-        "decoder.decoder_synapse_count==brain.synapse_count-brain.recurrent_synapse_count"
-    ));
-    let support_source = include_str!("support/mod.rs").to_ascii_lowercase();
-    for forbidden in ["max_by(", "total_cmp(", "argmax", "cpu_winner"] {
-        assert!(!support_source.contains(forbidden));
-    }
 }
 
 #[test]

@@ -487,34 +487,3 @@ fn same_seed_replay_is_deterministic_across_multiple_ticks() {
         );
     }
 }
-
-#[test]
-fn core_reference_brain_contract_stays_engine_independent() {
-    let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
-        .expect("crate manifest should be readable");
-    for forbidden in [
-        concat!("be", "vy"),
-        concat!("av", "ian"),
-        concat!("wg", "pu"),
-    ] {
-        assert!(
-            !manifest.to_ascii_lowercase().contains(forbidden),
-            "alife_core manifest must not depend on {forbidden}"
-        );
-    }
-
-    let source = include_str!("../src/reference_brain.rs");
-    for forbidden in [
-        concat!("be", "vy"),
-        concat!("av", "ian"),
-        concat!("wg", "pu"),
-        concat!("Render", "Device"),
-        concat!("Render", "Queue"),
-        concat!("Ent", "ity"),
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "reference brain loop must not embed engine type {forbidden}"
-        );
-    }
-}

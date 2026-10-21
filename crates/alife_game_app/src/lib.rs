@@ -119,18 +119,6 @@ pub use survival_loop::*;
 mod ecology_loop;
 pub use ecology_loop::*;
 
-mod feedback_polish;
-pub use feedback_polish::*;
-
-mod population_performance;
-pub use population_performance::*;
-
-mod longrun_balance;
-pub use longrun_balance::*;
-
-mod onboarding_help;
-pub use onboarding_help::*;
-
 mod runtime_prereq_diagnostics;
 pub use runtime_prereq_diagnostics::*;
 
@@ -243,9 +231,6 @@ pub use graphical_ecology::*;
 mod production_assets;
 pub use production_assets::*;
 
-mod behavior_tuning;
-pub use behavior_tuning::*;
-
 mod population_social;
 pub use population_social::*;
 
@@ -278,9 +263,6 @@ pub use gpu_closed_loop_promotion::*;
 
 mod world_editor;
 pub use world_editor::*;
-
-mod cognition_debug_timeline;
-pub use cognition_debug_timeline::*;
 
 mod save_load_ux;
 pub use save_load_ux::*;

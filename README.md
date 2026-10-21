@@ -48,18 +48,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 - The voxel UI provides camera, selection, care dock, inspector, naming, speech, save, load, pause, speed, and overlays.
 - The renderer projects tick-bound runtime transforms, births, and retirement events without owning simulation truth.
 - Read [current status](docs/STATUS.md) before treating a feature as integrated or proven.
-- Read the [v2.0 controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) before treating any current implementation choice as a permanent requirement.
+- Read the [organism and gameplay design](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) before treating any current implementation choice as a permanent requirement.
 
 ## Project map
 
 - [Vision](docs/VISION.md) — what the project is trying to become
-- [Controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) — the single normative source and `AOA-*` compliance standard
+- [Organism and gameplay design](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) — organism behavior, gameplay goals, and longer-term research
 - [Status](docs/STATUS.md) — implemented, integrated, visible, and proven state
-- [Current implementation map](docs/ARCHITECTURE.md) — non-normative ownership and production data flow
+- [Current implementation map](docs/ARCHITECTURE.md) — ownership and production data flow
 - [Roadmap](docs/ROADMAP.md) — the shortest path from here to the aspiration
 - [Development](docs/DEVELOPMENT.md) — supported Windows workflows and gates
 - [Evidence](docs/EVIDENCE.md) — receipts, source binding, EI0, and EI1
-- [Current implementation reference](docs/REFERENCE.md) — non-normative technical conventions and evidence terms
+- [Current implementation reference](docs/REFERENCE.md) — technical conventions and evidence terms
 
 ## Current implementation boundaries
 

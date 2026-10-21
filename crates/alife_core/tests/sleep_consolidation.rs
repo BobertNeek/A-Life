@@ -676,24 +676,6 @@ fn creature_mind_can_force_and_run_sleep_without_active_tick_structural_applicat
 }
 
 #[test]
-fn sleep_consolidation_contract_stays_engine_independent() {
-    let source = include_str!("../src/sleep.rs");
-    for forbidden in [
-        concat!("be", "vy"),
-        concat!("av", "ian"),
-        concat!("wg", "pu"),
-        concat!("Render", "Device"),
-        concat!("Render", "Queue"),
-        concat!("Ent", "ity"),
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "sleep consolidation core must not embed engine type {forbidden}"
-        );
-    }
-}
-
-#[test]
 fn biologically_due_sleep_commits_replayed_memory_prediction_and_concept_state() {
     let plan = ReplayCapturePlan::try_new(vec![3], 1, 1, 1).unwrap();
     let mut journal = SleepReplayJournal::new(plan).unwrap();

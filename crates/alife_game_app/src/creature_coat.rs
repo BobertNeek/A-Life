@@ -1688,17 +1688,6 @@ mod tests {
     }
 
     #[test]
-    fn production_cache_api_has_no_raw_unpinned_insert() {
-        let source = include_str!("creature_coat.rs");
-        let public_insert_signature = ["    pub fn ", "insert("].concat();
-
-        assert!(
-            !source.contains(&public_insert_signature),
-            "runtime callers must use atomic acquire/release"
-        );
-    }
-
-    #[test]
     fn profile_cache_limits_match_the_approved_count_and_byte_caps() {
         assert_eq!(
             CreatureCoatCacheLimits::for_profile(

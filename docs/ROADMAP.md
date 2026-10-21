@@ -1,7 +1,7 @@
 # Roadmap
 
 Updated 14 October 2026. The immediate priority is the persistent creature game
-described in section 1.1 of the controlling v2.0 architecture: care, useful
+described in section 1.1 of the organism and gameplay design: care, useful
 learning, and save/load first; breeding and practical breed promotion next.
 
 The [core game loop delivery plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/core-game-loop-plan-2026-09-20.md) contains the

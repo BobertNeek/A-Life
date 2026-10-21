@@ -6,8 +6,8 @@ The user's 19 October 2026, 23:17:19 UTC instruction authorized “create a cpu
 backend that we can offload some training to the cloud with” alongside larger
 groups. The root and crate guardrails now record this explicit offline scope.
 AOA-ADM-007 makes processor placement an implementation mechanism and
-AOA-TIME-006 describes GPU placement as a reference mechanism. The controlling
-architecture is unchanged. Normal gameplay retains its GPU default and rejects
+AOA-TIME-006 describes GPU placement as a reference mechanism. The design
+reference is unchanged. Normal gameplay retains its GPU default and rejects
 CPU policy saves.
 
 ## Executable boundary

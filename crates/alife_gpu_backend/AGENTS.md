@@ -1,50 +1,15 @@
-# alife_gpu_backend Instructions
+# alife_gpu_backend
 
-Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
-implementation guardrails; they do not amend the controlling v2.0 architecture.
+Own wgpu resources, WGSL packaging, sparse neural execution, and device state.
+Use the shared runtime for consumers; keep world legality and presentation outside
+this crate. Gameplay remains GPU-authoritative; device loss stops neural actions.
+Opt-in offline CPU training is a separate execution path.
 
-This crate controls wgpu resource planning, WGSL shader packaging, compute
-backend traits, buffer descriptors, dispatch scheduling, and production neural
-pipelines.
+Validate host/shader layouts, buffer ranges, and slot ownership before dispatch.
+Resolve logical addresses to local packed offsets without changing durable
+identity. Preserve lifetime/fast weights, eligibility, and private recurrent state
+across capture/restore. Complete or discard each outcome-bound learning
+transaction before the next tick or retirement.
 
-Rules:
-
-- Source shaders must be WGSL; do not add HLSL production shaders.
-- Production gameplay neural execution is GPU-authoritative WGSL; do not add a live CPU
-  shadow, parity gate, or automatic CPU neural fallback.
-- Keep CPU neural helpers in this crate test-only or developer-only. The authorized
-  offline CPU training implementation belongs in `alife_training`; shared contracts
-  must retain distinct CPU/GPU evidence domains.
-- World code enumerates unscored candidates and remains authoritative for
-  legality and outcomes.
-- Promote only N512, N1024, and N2048 until larger tiers pass the documented
-  causal and performance gates.
-- This crate owns the only production neural execution backend and the real
-  Vulkan allocation, activity, learning, sleep, and replay evidence it emits.
-- Neural `Vocalize` payload selection remains GPU-authoritative.
-- Training-only WGSL and optimizer state stay out of production game binaries
-  and saves.
-- N4096 may enter this backend only through the sealed research-growth path with
-  same-adapter equivalence and rollback receipts; normal insertion stays promoted-only.
-- Persistent logical addresses must be resolved to runtime-local packed offsets
-  before dispatch; packed offsets are never durable identity.
-- Use sparse class-bucketed storage concepts, not dense `[M, N, N]` buffers.
-- Keep GPU backend replaceable behind narrow traits.
-- No raw host pointers may cross into shader-visible contracts.
-- GPU candidate index records contain only the `ActionCandidate` head. Reserved
-  N2048 speech and memory decoder weights remain in the single immutable
-  authoritative payload but cannot enter candidate arbitration before their
-  dedicated reviewed WGSL passes are implemented.
-- Closed-loop layout v3 stores lifetime weights, fast weights, recurrent
-  eligibility, and decoder eligibility in separate double banks. Every slot
-  extension and learning-state offset must be host-validated against its exact
-  immutable or mutable arena before upload or dispatch.
-- A successful waking dispatch owns exactly one pending eligibility transaction.
-  The matching sealed outcome must apply it, or the caller must explicitly
-  discard it, before another tick or slot retirement.
-- Fixed class chunks are independent arenas. Admission may append an arena but
-  must never grow, copy, or rebind a live arena's neural buffers.
-- The one-thread row prepass validates the complete activity schedule and its
-  checksum-bound tile/synapse receipt. Parallel recurrent and eligibility
-  kernels consume only the prevalidated sentinel and direct route-mask words;
-  do not restore per-neuron diagnostic atomics or repeated digest scans.
+Keep training-only shaders and optimizer state outside normal game binaries and
+saves. Measure real device work before claiming GPU correctness or performance.

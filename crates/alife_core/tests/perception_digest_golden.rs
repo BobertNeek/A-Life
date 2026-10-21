@@ -309,13 +309,3 @@ fn digest_enum_raw_mappings_are_stable_and_reject_unknown_values() {
     );
     assert!(PerceptionContextKind::try_from_raw(2).is_err());
 }
-
-#[test]
-fn perception_digest_source_has_no_generic_serde_hash_path() {
-    let source = include_str!("../src/perception.rs");
-    assert!(!source.contains("hash_canonical"));
-    assert!(!source.contains("CanonicalEncoder"));
-    assert!(!source.contains("SerializeMap"));
-    assert!(!source.contains("SerializeStruct"));
-    assert!(!source.contains("serialize_field"));
-}

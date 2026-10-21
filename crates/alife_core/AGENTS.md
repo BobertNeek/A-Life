@@ -1,56 +1,15 @@
-# alife_core Instructions
+# alife_core
 
-Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
-implementation guardrails; they do not amend the controlling v2.0 architecture.
+Own engine-independent organism, genome, phenotype, chemistry, learning, language,
+and persistence contracts. Keep Bevy, wgpu, UI, and provider integration outside
+this crate. Brain classes scale; `Standard2048` is a reference class.
 
-This crate controls engine-agnostic cognitive contracts: IDs, brain class
-registry, lobe layout, routing masks, genome, chemistry, ExperiencePatch,
-ActionCommand, sensory/action ABIs, profiles, lineage, and backend traits.
+Preserve stable logical identity across storage/compiler changes. Packed GPU
+offsets are runtime lookups, not durable identity. Genetic birth does not inherit
+lifetime weights, memories, learned language, eligibility, or transient state.
+Loading chemical state must not reinitialize stored concentrations.
 
-Rules:
-
-- Do not depend on Bevy, wgpu, renderer types, OS handles, or LLM providers.
-- Do not reintroduce a fixed global 2048-neuron brain invariant.
-- `Standard2048` may appear only as one `BrainScaleTier` reference class.
-- Prefer explicit versioned structs for cross-layer contracts.
-- Production gameplay neural execution is GPU-authoritative WGSL; do not add a live CPU
-  shadow, parity gate, or automatic CPU neural fallback.
-- Keep CPU neural helpers in this crate test-only or developer-only. The authorized
-  offline CPU training implementation belongs in `alife_training`; shared contracts
-  must retain distinct CPU/GPU evidence domains.
-- World code enumerates unscored candidates and remains authoritative for
-  legality and outcomes.
-- Promote only N512, N1024, and N2048 until larger tiers pass the documented
-  causal and performance gates.
-- Own canonical capacity, phenotype, budget, and evidence-digest contracts;
-  app/tool layers may ingest them but may not redefine their meanings.
-- Own foundation, language-codebook, persistent-address, checkpoint, and
-  archive-provenance contracts.
-- `evaluation.rs` owns the fixed-size passive life-statistics and exact
-  15-challenge battery contracts. Missing exposure is `Unknown`, never zero.
-- Never equate a language token ID with a neuron or packed GPU offset.
-- Genetic birth must not inherit lifetime weights, memories, learned lexicon
-  bindings, eligibility, or transient state.
-- Material chemical reserves initialize and relax toward their inherited basal
-  concentrations. Regulatory baselines retain developmental expression scaling;
-  loading stored concentrations must not reinitialize either kind.
-- Nano512 readout candidates use a separate foundation identity and canonical
-  asset bytes. Their first admission supports only the fixed legacy source
-  graph and ActionCandidate genetic weights. Preserve old builtin admission
-  and exact compiler-input reconstruction; this is not default promotion.
-- Runtime GPU kernels do not belong here.
-- `foundation.rs`, `language.rs`, and `phenotype/persistent_address.rs` own the
-  frozen N2048 layout/route/plasticity ABI, `LanguageCodebookV1`, and the
-  BLAKE3-256 logical address map. Packed indices may appear only as validated
-  runtime lookup metadata and are excluded from the persistent map digest.
-- N2048 compiles exactly 24,576 recurrent, 4,096 action (3,072 candidate plus
-  1,024 reserved speech), and 4,096 memory-decoder synapses. N512/N1024 remain
-  valid independent procedural phenotypes until their own foundations exist.
-- `phenotype/migration.rs` owns the research-only, persistent-address-preserving
-  N2048-to-N4096 compiler; production class lookup must continue rejecting N4096.
-- Phenotypes own versioned receptor, bounded replay-capture, and sleep plans.
-  The replay identity ceiling is the shared `MAX_REPLAY_CAPTURE_SYNAPSES`
-  contract; GPU crates must not duplicate that value.
-- Topology is an organism-owned, diagnostic-only `TopologySidecar`. It consumes
-  sealed episodic keys, binds objects only by `TrackedObjectId`, degrades
-  deterministically at capacity, and never returns action or score authority.
+Use the existing foundation and checkpoint codecs. Keep genetic assets separate
+from acquired state, and preserve native founder reconstruction and save/load.
+World actions remain subject to world validation; diagnostic memory/topology
+sidecars do not select actions.

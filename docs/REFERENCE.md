@@ -1,10 +1,6 @@
 # Current implementation reference
 
-> **NON-NORMATIVE:** This file records current implementation conventions and
-> evidence terminology. The sole controlling architecture is
-> `architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
-> If this file conflicts with v2.0, v2.0 controls and this file records an
-> implementation gap.
+> This guide describes current implementation conventions and evidence terminology. See the [organism and gameplay design](architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) for the intended behavior.
 
 It is not a claim that every feature is integrated or proven. See
 [status](STATUS.md).

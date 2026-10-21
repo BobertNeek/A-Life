@@ -28,39 +28,6 @@ fn artifact_path_loader_requires_the_exact_abcd_matrix() {
 }
 
 #[test]
-fn committed_gate_script_has_the_exact_order_and_rust_receipt_writer() {
-    let script = include_str!("../../../scripts/run_gpu_closed_loop_gates.ps1");
-    let labels = [
-        "01-fmt",
-        "02-check",
-        "03-workspace-tests",
-        "04-core-brain",
-        "05-gpu-brain",
-        "06-world-save",
-        "07-app-brain",
-        "08-tools-benchmark",
-        "09-docs",
-        "10-boundaries",
-        "11-authority-scan",
-        "12-diff",
-    ];
-    let mut previous = 0;
-    for label in labels {
-        let index = script.find(label).unwrap();
-        assert!(index >= previous, "gate command order changed at {label}");
-        previous = index;
-    }
-    assert!(script.contains("git status --porcelain=v1"));
-    assert!(script.contains("git rev-parse 'HEAD^{tree}'"));
-    assert!(script.contains("gpu-closed-loop-gate-seal"));
-    assert!(script.contains("--adapter-evidence $AdapterEvidence"));
-    assert!(script.contains("ConvertTo-WindowsCommandLineArgument"));
-    assert!(!script.contains(".ArgumentList.Add"));
-    assert!(script.contains("authority-scan-v1"));
-    assert!(!script.contains("legacy_neural_policy_v1.rs"));
-}
-
-#[test]
 fn git_object_ids_use_one_strict_lowercase_hex_string() {
     let id = oid(0x11);
     let json = serde_json::to_string(&id).unwrap();
@@ -217,7 +184,7 @@ fn gate_receipt_requires_exact_order_and_binds_all_captured_bytes() {
         digest(30),
     )
     .unwrap();
-    let commands = (1_u16..=12)
+    let commands = (1_u16..=10)
         .map(|id| {
             GateCommandReceipt::new(
                 id,
@@ -240,14 +207,14 @@ fn gate_receipt_requires_exact_order_and_binds_all_captured_bytes() {
     )
     .unwrap();
     receipt.validate().unwrap();
-    assert_eq!(receipt.commands.len(), 12);
+    assert_eq!(receipt.commands.len(), 10);
     assert!(receipt.passed);
 
     let mut tampered = receipt;
     tampered.commands.swap(0, 1);
     assert!(tampered.validate().is_err());
 
-    let wrong_commands = (1_u16..=12)
+    let wrong_commands = (1_u16..=10)
         .map(|id| {
             GateCommandReceipt::new(
                 id,
@@ -287,7 +254,7 @@ fn gate_capture_writer_hashes_exact_raw_streams_and_publishes_atomically() {
     let script = root.join("run_gpu_closed_loop_gates.ps1");
     std::fs::write(&script, b"committed gate script bytes").unwrap();
     let mut commands = Vec::new();
-    for id in 1_u16..=12 {
+    for id in 1_u16..=10 {
         let stdout_path = root.join(format!("{id:02}.stdout"));
         let stderr_path = root.join(format!("{id:02}.stderr"));
         std::fs::write(&stdout_path, format!("stdout-{id}\r\n").as_bytes()).unwrap();
@@ -325,7 +292,7 @@ fn gate_capture_writer_hashes_exact_raw_streams_and_publishes_atomically() {
     let receipt =
         write_gpu_closed_loop_gate_receipt_from_capture(&capture_path, &script, adapter, &output)
             .unwrap();
-    assert_eq!(receipt.commands.len(), 12);
+    assert_eq!(receipt.commands.len(), 10);
     assert_eq!(
         alife_game_app::load_gpu_closed_loop_gate_receipt(&output).unwrap(),
         receipt

@@ -33,7 +33,6 @@ Run the smallest check that can falsify the changed behavior:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1 --quick
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check_core_boundaries.ps1
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/docs_check.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1
 ```
 
@@ -48,7 +47,7 @@ cargo check --workspace --all-features --all-targets
 cargo test --workspace --all-features --all-targets
 ```
 
-Record outputs under ignored `target/artifacts/` paths when a gate requires a durable receipt.
+Record the relevant commands and results with the change. Keep generated outputs under ignored `target/artifacts/` paths.
 
 ## Focused content and persistence checks
 

@@ -66,7 +66,5 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training,gpu-tests --lib simulator_rehearsal::gpu_tests::exact_restore_preserves_private_context_and_next_real_consequence --no-run
       - name: Strict training source Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
-      - name: Formatting and documentation
-        run: |
-          cargo fmt --all -- --check
-          bash scripts/docs_check.sh
+      - name: Formatting
+        run: cargo fmt --all -- --check

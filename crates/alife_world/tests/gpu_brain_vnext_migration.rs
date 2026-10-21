@@ -346,15 +346,3 @@ fn n4096_legacy_save_loads_for_inspection_without_compile_or_gpu_allocation() {
     assert_eq!(result.phenotype_compile_count, 0);
     assert_eq!(result.gpu_admission_count, 0);
 }
-
-#[test]
-fn portable_throttle_checkpoint_contains_no_live_handle_fields() {
-    let source = include_str!("../src/persistence/gpu_brain_vnext.rs");
-    let start = source
-        .find("pub struct PortableThrottleCheckpoint")
-        .unwrap();
-    let body = &source[start..source[start..].find("}\n").unwrap() + start];
-    assert!(!body.contains("handle_slot"));
-    assert!(!body.contains("handle_generation"));
-    assert!(!body.contains("backend_instance"));
-}

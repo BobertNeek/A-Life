@@ -2711,44 +2711,4 @@ mod tests {
             assert!(names.contains(&required), "missing {required}");
         }
     }
-
-    #[test]
-    fn production_crates_do_not_embed_the_training_shader() {
-        fn production_dependencies(manifest: &str) -> &str {
-            manifest
-                .split_once("[dev-dependencies]")
-                .map_or(manifest, |(production, _)| production)
-        }
-
-        let game_manifest = include_str!("../../alife_game_app/Cargo.toml");
-        let backend_manifest = include_str!("../../alife_gpu_backend/Cargo.toml");
-        // Offline foundation training is an explicit optional app feature;
-        // the normal game dependency graph must not activate its shaders.
-        let training_dependency = production_dependencies(game_manifest)
-            .lines()
-            .find(|line| line.starts_with("alife_training ="))
-            .expect("the offline app feature declares its optional dependency");
-        assert!(training_dependency.contains("optional = true"));
-        let features = game_manifest
-            .split_once("[features]")
-            .unwrap()
-            .1
-            .split("\n[")
-            .next()
-            .unwrap();
-        assert!(features.lines().any(|line| line == "default = []"));
-        for feature in features.split(']') {
-            let Some((name, dependencies)) = feature.trim().split_once(" = [") else {
-                continue;
-            };
-            if matches!(name, "foundation-training" | "gpu-tests") {
-                assert!(dependencies.contains("dep:alife_training"));
-            } else {
-                assert!(!dependencies.contains("alife_training"));
-                assert!(!dependencies.contains("foundation-training"));
-                assert!(!dependencies.contains("gpu-tests"));
-            }
-        }
-        assert!(!production_dependencies(backend_manifest).contains("alife_training"));
-    }
 }

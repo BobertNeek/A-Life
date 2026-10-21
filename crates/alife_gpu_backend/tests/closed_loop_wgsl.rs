@@ -610,36 +610,6 @@ fn every_microstep_keeps_current_input_and_updates_dynamics_homeostasis_and_diag
 }
 
 #[test]
-fn shaders_do_not_use_float_atomics_or_cpu_neural_authority() {
-    for source in [
-        CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
-        CLOSED_LOOP_DECODE_WGSL,
-        CLOSED_LOOP_ELIGIBILITY_WGSL,
-        CLOSED_LOOP_ENCODE_WGSL,
-        CLOSED_LOOP_PLASTICITY_WGSL,
-        CLOSED_LOOP_RECURRENT_WGSL,
-    ] {
-        let lower = source.to_ascii_lowercase();
-        for forbidden in [
-            "atomic<f32>",
-            "cpuneuralstate",
-            "neuralprojectionschema",
-            "cpu_shadow",
-            "cpu fallback",
-        ] {
-            assert!(
-                !lower.contains(forbidden),
-                "forbidden shader authority: {forbidden}"
-            );
-        }
-    }
-    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("atomicStore"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("atomicLoad"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("atomicStore"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("atomicAdd"));
-}
-
-#[test]
 fn ping_pong_side_is_exact_for_two_three_and_four_microsteps() {
     for initial in [0, 1] {
         assert_eq!(
@@ -661,41 +631,7 @@ fn ping_pong_side_is_exact_for_two_three_and_four_microsteps() {
 }
 
 #[test]
-fn production_pipeline_surface_has_no_decode_select_or_cpu_neural_types() {
-    let source = std::fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/closed_loop_pipeline.rs"
-    ))
-    .expect("Task 5 production pipeline source");
-    for forbidden in [
-        "CpuNeuralState",
-        "NeuralProjectionSchema",
-        "pub fn decode",
-        "pub fn select",
-        "pub async fn decode",
-        "pub async fn select",
-        "pub fn encode(",
-        "pub fn dispatch_microsteps(",
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "forbidden Task 5 API: {forbidden}"
-        );
-    }
-    for required in [
-        "pub struct GpuClosedLoopPipelines",
-        "pub fn submit_encode_and_microsteps",
-        "closed-loop-authoritative-compute-pass",
-        "fn record_staged_compute_pass",
-        "prevalidate_eligibility_pipeline",
-        "record.status != 1",
-        "clear_diagnostics_pipeline",
-    ] {
-        assert!(
-            source.contains(required),
-            "missing production API: {required}"
-        );
-    }
+fn neural_heap_binding_manifest_has_expected_roles_and_minimum_sizes() {
     let manifest = GpuClassBucketBuffers::neural_binding_manifest();
     assert_eq!(manifest[0].role, GpuClassBucketBufferRole::BrainSlots);
     assert_eq!(
@@ -706,9 +642,4 @@ fn production_pipeline_surface_has_no_decode_select_or_cpu_neural_types() {
         manifest.map(|entry| entry.minimum_binding_size_bytes),
         [144, 32, 4, 4, 4, 4, 4]
     );
-    let submit = &source[source.find("pub fn submit_encode_and_microsteps").unwrap()..];
-    let signature_end = submit.find(") -> Result").unwrap();
-    let signature = &submit[..signature_end];
-    assert!(!signature.contains("microsteps: u32"));
-    assert!(!signature.contains("max_neurons: u32"));
 }

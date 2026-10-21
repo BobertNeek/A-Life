@@ -11,7 +11,7 @@ The older capability matrix below is a historical baseline, not a fresh HEAD val
 - **Grounded Priors and Newborn Nociception**: Distant `GroundedTerrainVisionV1` objects supply contact-gated chemical lanes, so Approach uses the neutral 0.75 geometry scale there. Recalled target valence enters through the separate learned-memory decoder, not the innate function. Legacy `GroundedObjectSlotsV1` chemistry and fractional-contact behavior retain their existing semantics. Avoid keeps its noncontact spatial fallback; newborn pain remains enabled. These mechanisms do not establish correct learned hazard avoidance under combined drives.
 - **Batched Multi-Creature GPU Training Capture**: `capture_training_states` captures each cohort before and after inference through bounded staging packets, with streamed `zstd` cohort replay.
 
-The legacy `N2048EvolutionHardener`, `N2048ActiveBatteryRunner`, and `Era1TrialRunner` remain **Blocked** on canonical organism biology and receptor-gated learning integration. This does not block the foundation trainer or the production organism loop.
+The old synthetic-physiology evolution, active-battery, and Era 1 runners have been removed. The foundation trainer and production organism loop remain the current execution paths.
 
 ## Honest headline
 

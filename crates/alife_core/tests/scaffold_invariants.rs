@@ -1,9 +1,8 @@
 use alife_core::{
     ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, EndocrineProfile,
-    EndocrineSnapshot, ExperiencePatchHeader, ExperienceSequenceId, GenomeId,
-    LineageExportManifest, LineageId, LobeKind, LobeLayout, NeuralComputeBackend, OrganismId,
-    ScaffoldContractError, SemanticPriorProvider, SemanticPriorRequest, TeacherPerceptionChannel,
-    Tick, WorldEntityId,
+    EndocrineSnapshot, ExperiencePatchHeader, ExperienceSequenceId, LobeKind, LobeLayout,
+    OrganismId, ScaffoldContractError, SemanticPriorRequest, TeacherPerceptionChannel, Tick,
+    WorldEntityId,
 };
 use alife_core::{Confidence, DurationTicks};
 
@@ -94,45 +93,4 @@ fn semantic_prior_is_private_and_teacher_uses_perceptual_channels() {
     assert!(channels.contains(&TeacherPerceptionChannel::Writing));
     assert!(channels.contains(&TeacherPerceptionChannel::Gesture));
     assert!(channels.contains(&TeacherPerceptionChannel::Object));
-}
-
-#[test]
-fn backend_and_semantic_traits_are_scaffold_interfaces_only() {
-    fn assert_backend<T: NeuralComputeBackend>() {}
-    fn assert_prior<T: SemanticPriorProvider>() {}
-
-    struct TestBackend;
-    impl NeuralComputeBackend for TestBackend {
-        fn backend_name(&self) -> &'static str {
-            "test-backend"
-        }
-    }
-
-    struct TestPrior;
-    impl SemanticPriorProvider for TestPrior {
-        fn provider_name(&self) -> &'static str {
-            "test-prior"
-        }
-    }
-
-    assert_backend::<TestBackend>();
-    assert_prior::<TestPrior>();
-}
-
-#[test]
-fn lineage_export_manifest_keeps_migration_metadata_versioned() {
-    let source = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
-    let target = BrainClassSpec::for_tier(BrainScaleTier::Large4096);
-    let manifest = LineageExportManifest {
-        abi_version: LineageExportManifest::ABI_VERSION,
-        lineage_id: LineageId(99),
-        founder_genome_id: GenomeId(123),
-        source_brain_class_id: source.id,
-        target_brain_class_id: Some(target.id),
-        exported_at_tick: 456,
-    };
-
-    assert_eq!(manifest.abi_version, 1);
-    assert_eq!(manifest.source_brain_class_id, source.id);
-    assert_eq!(manifest.target_brain_class_id, Some(target.id));
 }

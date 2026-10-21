@@ -85,14 +85,14 @@ default mode needs 66 instead of 82, with 64 pool snapshots. These are source-
 derived counts, not measured runs or speedups. A previous capture measured
 9.6569 seconds; multiplying it by removed exports does not measure saved time.
 
-For the parent's short hardware qualification, append `--qualify`: four attempts
+For a bounded hardware qualification, append `--qualify`: four attempts
 of eight decisions and two eight-decision holdouts. Collection admits work for
 240 seconds from source entry, including setup/captures; a separate 360-second
 whole-run allowance covers updates, holdouts, release and finalization. These are
-planning allowances, not measured completion guarantees. Follow the serial execution and
-external safety-stop instructions in
-[Short qualification handoff](SIMULATOR_REHEARSAL_QUALIFICATION.md); do not run the
-default comparison during the PC's Minecraft workload.
+planning allowances, not measured completion guarantees. Run hardware work only in
+an explicitly available resource window, with an external stop for calls that an
+in-process clock cannot interrupt. The qualification recipe below is separate
+from default comparison mode.
 
 Append `--control-fresh` for newly constructed scenes only. Append `--compare` to
 run that control and varied rehearsal from the same source, with the same
@@ -140,27 +140,62 @@ CPU tests exercise actual canonical world branching/metabolism, near-food geomet
 invalid-state rejection, pool diversity, policy-version rejection, seed partitioning
 and sequence masks. They do not certify neural gameplay. GPU restore continuity,
 end-to-end source continuation and matched learning comparisons require a supported
-hardware session. The private policy7400 Library identity exists and the PC
-verified the upload/manifest. Cloud consumer byte validation is blocked by proxy
-CONNECT 403. The cloud has no hardware GPU. The parent owns coordination of any
-short PC execution; this document starts no workload or provisioning.
-
-Standalone delivery requires the current-main checks, R2 review, final-head CI,
-exact-restore hardware continuity and accepted policy7400 source-to-update-to-own-
-continuation qualification without resetting either Adam state. A matched
-discovery/retention comparison is required before claiming benefit; it is not an
-additional merge gate for this opt-in experiment. No founder is promoted here.
+hardware session. Accepted-source continuation and matched learning comparisons remain unqualified
+on current source. An earlier private policy7400 package was validated locally,
+while cloud byte transfer failed; that transfer failure does not qualify or
+invalidate neural learning. Do not publish private package identities or URLs.
+A matched discovery/retention comparison is needed before claiming benefit.
+This guide does not authorize training, hardware use, or founder promotion.
 
 The existing gameplay choice `--new-game --founder
 n2048:OUTPUT/trained.alife-foundation` loads the canonical genetic asset. Gameplay
 does not import the offline Adam optimizers or a rehearsing individual's private
 state. Ordinary care resume and CPU/group common admission remain separate,
-unimplemented routes and do not gate standalone delivery. The full ancestry
+unimplemented routes. The full ancestry
 follow-on remains preserved at `691ba2c84524ccaf110e97875d19afa016791847`;
 only its own-package validation is integrated here.
 
-Relevant controlling requirements: AOA-INV-009 (same causal step), AOA-BIO-026
+Relevant design references: AOA-INV-009 (same causal step), AOA-BIO-026
 (measured biology), AOA-CTX-002 (canonical interoception), AOA-FOUND-004 (world
 variation), AOA-FOUND-006 (deployment mechanisms), AOA-SLEEP-007 (replay identity).
-Implementation evidence belongs in the dated verification receipt, not the
-controlling architecture.
+Describe measured results and remaining limitations alongside the relevant change.
+
+## Bounded hardware qualification
+
+Build the runner, checkpoint inspector, and single restore test separately from
+hardware execution:
+
+```text
+cargo build --locked -p alife_game_app --features foundation-training --bin rehearse_n2048_care --bin inspect_archived_success
+cargo test --locked -p alife_game_app --features foundation-training,gpu-tests --lib simulator_rehearsal::gpu_tests::exact_restore_preserves_private_context_and_next_real_consequence --no-run --message-format=json
+```
+
+Record the actual source and test executable from Cargo output. The test runs
+five neural decisions and checks exact restoration of private context and the
+next consequence; it does not establish a learning benefit. It needs a supported
+GPU and `RUST_MIN_STACK=33554432`. Run it with `--ignored --exact --test-threads=1`.
+Zero selected tests, a timeout, or partial output is not success.
+
+Before an update, inspect the source with
+`inspect_archived_success --validate-checkpoint SOURCE --expected-policy POLICY`.
+Use a fresh output and admitted diagnostic seed:
+
+```text
+rehearse_n2048_care SOURCE QUALIFY_A POLICY SEED_A --qualify
+rehearse_n2048_care QUALIFY_A QUALIFY_B NEXT_POLICY SEED_B --qualify
+```
+
+Run B only after A completed and its continuation validates. Both updates retain
+source hashes, private state, complete actor/value Adam state, and exact integer
+ages. Inspect actual attempt/holdout counts, trainable rows, updated policy, stage
+times, resource release, and the validated continuation package. A marker alone
+cannot admit partial work. Keep consumed seeds and original packages intact;
+never reset an optimizer to make admission pass.
+
+Historical qualification: source `e21749e8` passed the restore test in 28.653
+seconds including cleanup. Its subsequent policy7400 A attempt failed collection
+admission after 28.706 seconds, with no completed attempt, update, or continuation;
+B did not run. Those results are source-specific. The accepted package's actor/
+value ages were 16684/19800; an actual one-step update would advance each by one.
+Do not treat these values as a requirement for other source packages. Preserve
+failed-run artifacts and seed consumption when investigating a retry.

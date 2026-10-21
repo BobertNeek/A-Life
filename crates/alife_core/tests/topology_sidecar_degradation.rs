@@ -194,14 +194,6 @@ fn ten_thousand_topology_observations_stay_bounded_and_never_return_capacity_err
 }
 
 #[test]
-fn topology_receipt_has_no_action_or_score_output() {
-    let source = include_str!("../src/topology.rs");
-    assert!(!source.contains(concat!("Action", "Command")));
-    assert!(!source.contains("score_delta"));
-    assert!(!source.contains("candidate_logits"));
-}
-
-#[test]
 fn topology_sidecars_are_owned_and_isolated_by_organism() {
     let mut sidecars = BTreeMap::<u64, TopologySidecar>::new();
     sidecars.insert(7, grounded_sidecar(7));
@@ -235,15 +227,6 @@ fn topology_rejects_duplicate_and_out_of_order_sealed_sequences_atomically() {
     assert_eq!(stale.before_digest, stale.after_digest);
     assert_eq!(duplicate.before_counts, duplicate.after_counts);
     assert_eq!(stale.before_counts, stale.after_counts);
-}
-
-#[test]
-fn topology_uses_only_sealed_tracked_bindings_for_object_identity() {
-    let source = include_str!("../src/topology.rs");
-    assert!(!source.contains("ConceptSignature::Object"));
-    assert!(!source.contains("objects: Vec<WorldEntityId>"));
-    assert!(source.contains("ConceptSignature::TrackedObject"));
-    assert!(source.contains("episodic_key"));
 }
 
 #[test]

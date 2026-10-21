@@ -1,22 +1,9 @@
-# alife_semantic Instructions
+# alife_semantic
 
-Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
-implementation guardrails; they do not amend the controlling v2.0 architecture.
+Own bounded semantic-prior and translation providers. The internal SLM is a
+private subconscious prior, not an actor or external teacher. It cannot choose
+actions, targets, rewards, weights, or creature-authored speech.
 
-This crate controls bounded internal semantic-prior and speech-translation
-provider interfaces.
-
-Rules:
-
-- Internal SLM is a private subconscious semantic prior, not an actor.
-- It may bias attention, lexicon/concept activity, recall, or bounded plasticity modulation.
-- It may not issue actions, bypass action arbitration, directly rewrite weights, or act as a teacher.
-- `SemanticPriorRequest` and `SpeechTranslationRequest` remain separate schemas.
-- Translation may map or render bounded raw tokens; it may not author creature
-  thought or speech.
-- Unknown concepts remain novel tokens, and uncertain rendering remains visibly
-  uncertain.
-- Deterministic tokenization may never label a receipt SLM-assisted. Assisted
-  receipts require a successful bounded provider response that passes content
-  validation.
-- Keep provider traits vendor-neutral.
+Keep prior and translation requests distinct. Preserve novel concepts and visible
+uncertainty rather than inventing meanings. Report assistance only when a real,
+validated provider response contributed. Keep provider traits replaceable.

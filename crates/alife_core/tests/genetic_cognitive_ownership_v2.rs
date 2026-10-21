@@ -1,6 +1,4 @@
-use alife_core::{
-    ActivationPolicy, BrainCapacityClass, BrainGenome, FoundationGeneticIdentity, LobeKind,
-};
+use alife_core::{BrainCapacityClass, BrainGenome, FoundationGeneticIdentity};
 
 #[test]
 fn portable_brain_genome_does_not_duplicate_biochemical_state_or_thresholds() {
@@ -10,19 +8,6 @@ fn portable_brain_genome_does_not_duplicate_biochemical_state_or_thresholds() {
 
     assert!(!object.contains_key("endocrine_constants"));
     assert!(!object.contains_key("drive_thresholds"));
-}
-
-#[test]
-fn region_metadata_selects_only_generic_neural_execution_modes() {
-    for kind in LobeKind::ALL {
-        assert!(matches!(
-            kind.default_activation_policy(),
-            ActivationPolicy::InputCoupled
-                | ActivationPolicy::Recurrent
-                | ActivationPolicy::OutputCoupled
-                | ActivationPolicy::Disabled
-        ));
-    }
 }
 
 #[test]

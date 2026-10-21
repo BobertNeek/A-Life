@@ -1,24 +1,10 @@
-# alife_world Instructions
+# alife_world
 
-Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
-implementation guardrails; they do not amend the controlling v2.0 architecture.
+Own engine-independent ecology, organisms, resources, physiology, perception, and
+action outcomes. Keep Bevy, GPU resources, renderer state, and teacher-private
+state outside this crate.
 
-This crate controls Bevy-independent world concepts: ecology, organisms,
-resources, drives, lesson-world APIs, and sensory extraction contracts.
-
-Rules:
-
-- Do not depend on Bevy, wgpu, renderer types, or OS handles.
-- Bevy ECS ownership belongs only to adapter/app layers.
-- Keep the world layer authoritative for action legality and outcomes.
-- Keep every candidate unscored and derived from the same authoritative world
-  snapshot bound into promotion evidence.
-- Use stable IDs and core ABI types rather than Bevy ECS internals.
-- Do not store renderer, GPU backend, or teacher-private state here.
-- Do not let neural outputs bypass world validation.
-- Player, creature, and teacher speech are spatial world perception.
-- `Vocalize` is an unscored opportunity whose payload is selected by the GPU
-  brain during gameplay. Explicit offline CPU training uses its sealed CPU neural
-  selection; world validation and spatial speech perception remain authoritative.
-- Death archiving completes before GPU retirement and despawn.
-- Implement reviewed world behavior through focused modules and stable contracts.
+Enumerate unscored opportunities from the authoritative world; validate neural
+commands before execution. Player, creature, and teacher speech share spatial
+perception. Preserve organism/private state on save/load and complete death
+archiving before GPU retirement or despawn.

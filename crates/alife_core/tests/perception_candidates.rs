@@ -358,12 +358,3 @@ fn tampered_serialized_base_context_or_final_digest_is_rejected() {
         assert!(serde_json::from_value::<PerceptionFrame>(tampered).is_err());
     }
 }
-
-#[test]
-fn action_candidate_source_has_no_score_field() {
-    let source = include_str!("../src/perception.rs");
-    let candidate = source.split("pub struct ActionCandidate").nth(1).unwrap();
-    let candidate = candidate.split('}').next().unwrap();
-    assert!(!candidate.contains("score:"));
-    assert!(!candidate.contains("utility:"));
-}

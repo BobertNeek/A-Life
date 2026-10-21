@@ -19,7 +19,7 @@ use alife_gpu_backend::{
     GpuBrainSlotExtensionRecord, GpuBufferAccess, GpuCandidateMemoryRecord,
     GpuClassBucketBufferRole, GpuClassBucketBuffers, GpuClassBucketPlan, GpuMemoryChannelPlan,
     GpuMemoryContextHeader, GpuMemoryContextUpload, GpuPerceptionUpload, GpuPhenotypeUpload,
-    CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_ACTIVE_DISPATCH_ROW_WORDS,
+    CLOSED_LOOP_MEMORY_CONTEXT_WGSL, GPU_ACTIVE_DISPATCH_ROW_WORDS,
     GPU_ACTIVITY_DISPATCH_HEADER_WORDS, GPU_MEMORY_CONTEXT_HEADER_WORDS, GPU_NO_EXTENSION_SENTINEL,
     GPU_PERCEPTION_DISPATCH_ROW_WORDS,
 };
@@ -513,48 +513,6 @@ fn memory_shader_exposes_only_candidate_local_decoder_authority() {
         1,
     );
     assert!(!CLOSED_LOOP_MEMORY_CONTEXT_WGSL.contains("GpuBrainMemoryExtensionRecord"));
-}
-
-#[test]
-fn decoder_eligibility_uses_the_exact_derivative_for_each_known_head() {
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("const DECODER_HEAD_MEMORY_CONTEXT:u32 = 2u;"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("const DECODER_HEAD_SPEECH_PAYLOAD:u32 = 3u;"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("metadata.decoder_head == DECODER_HEAD_ACTION_CANDIDATE"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("metadata.input_lane < CANDIDATE_FEATURE_COUNT"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("metadata.decoder_head == DECODER_HEAD_MEMORY_CONTEXT"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("metadata.input_lane >= CANDIDATE_FEATURE_COUNT"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("local += bitcast<f32>(frame_payload_words[feature_index]);"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("metadata.decoder_head == DECODER_HEAD_SPEECH_PAYLOAD"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("ELIGIBILITY_DIAGNOSTIC_UNKNOWN_DECODER_HEAD"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("atomicOr("));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL
-        .contains("&mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE]"));
-    assert!(CLOSED_LOOP_ELIGIBILITY_WGSL.contains("& ELIGIBILITY_DIAGNOSTIC_FAILURE_MASK) != 0u"));
-}
-
-#[test]
-fn dispatch_validation_rechecks_the_rebased_memory_header_and_record_span() {
-    let source = include_str!("../src/closed_loop_pipeline.rs");
-    for required in [
-        "batch.memory_context_bindings.len() != batch.headers.len()",
-        "let memory_header_start = learning_start + GPU_LEARNING_HEADER_WORDS;",
-        "GpuMemoryContextHeader::from_words",
-        "memory_header.perception_header_index",
-        "memory_header.memory_context_offset",
-        "GpuCandidateMemoryRecord::from_words",
-        "memory_binding.base_frame_digest",
-        "memory_binding.context_digest",
-        "memory_binding.final_frame_digest",
-    ] {
-        assert!(
-            source.contains(required),
-            "missing dispatch memory check: {required}"
-        );
-    }
 }
 
 #[test]

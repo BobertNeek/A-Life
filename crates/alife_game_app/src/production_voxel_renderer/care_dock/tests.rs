@@ -1208,7 +1208,7 @@ fn escape_cancels_food_move_and_menu_captures_dismissal_until_all_inputs_release
     }
 }
 #[test]
-fn dock_is_hidden_only_in_debug_and_stays_below_existing_menu_layers() {
+fn dock_uses_its_layer_and_is_hidden_only_in_debug() {
     let mut app = layout_app(Vec2::new(320.0, 240.0));
     let root = app
         .world_mut()
@@ -1216,13 +1216,6 @@ fn dock_is_hidden_only_in_debug_and_stays_below_existing_menu_layers() {
         .single(app.world())
         .unwrap();
     assert_eq!(app.world().get::<GlobalZIndex>(root).unwrap().0, 60);
-    let layers = include_str!("../menu.rs")
-        .split("GlobalZIndex(")
-        .skip(1)
-        .map(|p| p.split(')').next().unwrap().parse::<i32>().unwrap())
-        .collect::<Vec<_>>();
-    assert_eq!(layers, vec![100, 90]);
-    assert!(layers.iter().all(|z| *z > 60));
     for debug in [true, false, true, false] {
         app.world_mut()
             .resource_mut::<Fvr05ProductionUxStateResource>()

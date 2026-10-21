@@ -33,60 +33,6 @@ impl LobeKind {
         LobeKind::FlexibleReserve,
     ];
 
-    // Temporary source compatibility for pre-v2 callers. Durable v1 IDs use
-    // `LegacyLobeKindV1`; these aliases never create additional regions.
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SensoryGrounding: Self = Self::PerceptualIntegration;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const MetabolicDrive: Self = Self::InteroceptiveMotivational;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const AuditorySpeech: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const GlyphVision: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const LexiconConcept: Self = Self::MultimodalAssociation;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const CoreAssociation: Self = Self::TemporalPredictive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const EpisodicMemory: Self = Self::MemoryInterface;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const WorkingMemory: Self = Self::WorkingContextExecutive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const MotorArbitration: Self = Self::ActionPlanning;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const HomeostaticRegulation: Self = Self::FlexibleReserve;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const LanguageExpansion: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const MathQuantity: Self = Self::MultimodalAssociation;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const NarrativeHistory: Self = Self::TemporalPredictive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SocialReasoning: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SelfCriticUncertainty: Self = Self::WorkingContextExecutive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const PlanningDream: Self = Self::TemporalPredictive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SpeechWritingMotor: Self = Self::ActionPlanning;
-
     pub const fn stable_id(self) -> LobeIndex {
         LobeIndex(self.raw())
     }
