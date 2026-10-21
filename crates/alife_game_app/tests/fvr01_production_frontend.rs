@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::process::Command;
 
 use alife_game_app::{
     default_environment_manifest_path, select_environment_scenario, ProductionFrontendProfileId,
@@ -11,18 +8,12 @@ use alife_game_app::{
 use alife_game_app::{
     run_production_voxel_frontend_dry_run, ProductionAppState, FVR01_PRODUCTION_FRONTEND_SCHEMA,
 };
+#[cfg(feature = "gpu-runtime")]
+use alife_world::FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA;
 
 #[cfg(feature = "gpu-runtime")]
 #[path = "support/current_production_launch.rs"]
 mod current_production_launch;
-
-fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("alife_game_app should live under crates/")
-        .to_path_buf()
-}
 
 #[test]
 fn fvr01_profile_registry_exposes_minimum_default_and_scale_up_profiles() {
@@ -166,6 +157,7 @@ fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
     let mut launch = fixture.launch.clone();
     launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
     launch.population = Some(30);
+    launch.dry_run = true;
     let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
     assert_eq!(
         summary.profile_id,
@@ -179,6 +171,20 @@ fn fvr01_minimum_profile_is_available_as_hard_fallback_floor() {
         "MinimumSettings30x30"
     );
     assert!(summary.profile_budget.hard_floor);
+    assert_eq!(
+        summary.save_metadata.voxel_backend_schema.as_deref(),
+        Some(FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA)
+    );
+    assert!(summary.save_metadata.voxel_visible_chunk_signatures > 0);
+    assert!(summary.save_metadata.voxel_materialized_chunks > 0);
+    assert!(summary.save_metadata.voxel_resource_hazard_refs > 0);
+    assert!(
+        summary.save_metadata.voxel_stable_selection_refs >= summary.save_metadata.creature_count
+    );
+    assert!(
+        summary.save_metadata.voxel_dirty_region_count
+            <= summary.save_metadata.voxel_visible_chunk_signatures
+    );
 }
 
 #[test]
@@ -200,29 +206,4 @@ fn fvr01_cli_help_names_production_command_and_profiles() {
     assert!(stdout.contains("HighSpecScaleUp"));
     assert!(stdout.contains("ResearchScale"));
     assert!(!stdout.contains("A-Life GPU Alpha Playground"));
-}
-
-#[test]
-fn fvr01_windows_scripts_default_to_production_voxel_frontend() {
-    let root = workspace_root();
-    let production =
-        std::fs::read_to_string(root.join("scripts/run_production_voxel_frontend.ps1")).unwrap();
-    assert!(production.contains("production-voxel"));
-    assert!(production.contains("MinSpecComfort1080p"));
-    assert!(production.contains("$FeatureList = \"production-voxel-frontend\""));
-    let cargo = std::fs::read_to_string(root.join("crates/alife_game_app/Cargo.toml")).unwrap();
-    let production_feature = cargo
-        .split("production-voxel-frontend = [")
-        .nth(1)
-        .unwrap()
-        .split(']')
-        .next()
-        .unwrap();
-    for feature in ["bevy-app", "gpu-runtime", "production-assets", "vfx-hanabi"] {
-        assert!(production_feature.contains(&format!("\"{feature}\"")));
-    }
-    assert!(production.contains("A-Life Voxel Frontend"));
-    assert!(production.contains("-DryRun"));
-
-    assert!(!root.join("scripts/run_graphical_playground.ps1").exists());
 }

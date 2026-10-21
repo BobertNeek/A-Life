@@ -112,8 +112,29 @@ fn save_runtime(app: &mut App, path: &Path, asset_root: &Path) -> PortableSaveFi
 }
 
 fn load_runtime(app: &mut App, path: &Path) {
+    use bevy::input::{
+        keyboard::{Key, KeyboardInput},
+        ButtonState,
+    };
+
     set_runtime_save_path(app, path);
     press_key(app, KeyCode::KeyL);
+    run_render_updates(app, 1);
+    press_key(app, KeyCode::ArrowDown);
+    app.world_mut()
+        .resource_mut::<bevy::ecs::message::Messages<KeyboardInput>>()
+        .write(KeyboardInput {
+            key_code: KeyCode::Enter,
+            logical_key: Key::Enter,
+            state: ButtonState::Pressed,
+            text: Some("\r".into()),
+            repeat: false,
+            window: bevy::prelude::Entity::PLACEHOLDER,
+        });
+    press_key(app, KeyCode::Enter);
+    run_render_updates(app, 1);
+    press_key(app, KeyCode::Escape);
+    run_render_updates(app, 1);
 }
 
 fn tamper_required_embodiment(source: &Path, target: &Path) {
@@ -324,30 +345,46 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     app.world_mut().despawn(window_entity);
     println!("PASS arrows, window-edge input, Home snap, follow release, terrain streaming: {mesh_counts:?}");
     let before_action = save_runtime(&mut app, &before_action_path, &asset_root);
-    let selected_tile = VoxelTileCoord::new(2, 2);
-    let existing_food_id = before_action
+    let existing_food = before_action
         .world
         .objects
         .iter()
         .find(|object| object.kind == WorldObjectKind::Food)
-        .expect("canonical New Game contains one world-owned food resource")
-        .id;
+        .expect("canonical New Game contains one world-owned food resource");
+    let existing_food_id = existing_food.id;
+    let selected_tile = VoxelTileCoord::new(
+        existing_food.position.x.floor() as i32,
+        existing_food.position.z.floor() as i32,
+    );
+    let x = selected_tile.x as f32 + 0.5;
+    let z = selected_tile.z as f32 + 0.5;
+    let y = before_action
+        .restore_headless_world()
+        .unwrap()
+        .terrain()
+        .unwrap()
+        .surface()
+        .height(x, z)
+        .expect("the selected food tile lies on the island terrain");
     app.world_mut()
         .resource_mut::<Fvr03ProductionVoxelSelectionResource>()
         .selected = Some(StableVoxelObjectRef {
         kind: StableVoxelRefKind::Resource,
         stable_id: Some(existing_food_id),
         chunk: VoxelChunkCoord::for_tile(16, selected_tile),
-        tile: Some(selected_tile),
+        tile: None,
     });
     press_key(&mut app, KeyCode::KeyE);
     {
         let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
         assert_eq!(
             ux.last_action,
-            "Food placement rejected; world left unchanged"
+            "Food placement rejected; world authority declined the request"
         );
-        assert!(ux.last_error.is_some());
+        assert!(ux
+            .last_error
+            .as_ref()
+            .is_some_and(|error| error.contains("select a visible terrain tile first")));
     }
     let after_non_tile_path = root.join("player-after-non-tile-selection.json");
     let after_non_tile = save_runtime(&mut app, &after_non_tile_path, &asset_root);
@@ -368,7 +405,7 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     {
         let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
         assert!(ux.last_error.is_none());
-        assert!(ux.last_action.starts_with("Placed canonical food "));
+        assert_eq!(ux.last_action, "Food placed");
     }
 
     let baseline_path = root.join("player-baseline.json");
@@ -384,18 +421,11 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
         .iter()
         .find(|object| object.label.starts_with("player-food-"))
         .expect("the player action persists a canonical food object");
-    assert_eq!(
-        placed_food.label,
-        format!(
-            "player-food-t{}-x{:08x}-z{:08x}",
-            before_action.world.tick.raw(),
-            2.5_f32.to_bits(),
-            2.5_f32.to_bits()
-        ),
-        "the same canonical tick and terrain position derive the same stable label"
-    );
+    assert!(placed_food
+        .label
+        .starts_with(&format!("player-food-t{}-", before_action.world.tick.raw())));
     assert_eq!(placed_food.kind, WorldObjectKind::Food);
-    assert_eq!(placed_food.position, alife_core::Vec3f::new(2.5, 0.0, 2.5));
+    assert_eq!(placed_food.position, alife_core::Vec3f::new(x, y, z));
     assert_eq!(placed_food.radius, 0.5);
     assert!(placed_food.nutrition > 0.0);
     assert_eq!(placed_food.hazard_pain, 0.0);
@@ -403,18 +433,47 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
     press_key(&mut app, KeyCode::KeyE);
     {
         let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
-        assert_eq!(
-            ux.last_action,
-            "Food placement rejected; world left unchanged"
-        );
-        assert!(ux.last_error.is_some());
+        assert_eq!(ux.last_action, "Food placed");
+        assert!(ux.last_error.is_none());
     }
-    let after_rejected_duplicate_path = root.join("player-after-rejected-duplicate.json");
-    let after_rejected_duplicate =
-        save_runtime(&mut app, &after_rejected_duplicate_path, &asset_root);
+    let repeated_path = root.join("player-after-repeated-placement.json");
+    let repeated = save_runtime(&mut app, &repeated_path, &asset_root);
+    assert_eq!(repeated.world.tick, baseline.world.tick);
     assert_eq!(
-        after_rejected_duplicate, baseline,
-        "a repeated same-tick placement must fail atomically"
+        repeated.world.objects.len(),
+        baseline.world.objects.len() + 1
+    );
+    for existing in &baseline.world.objects {
+        assert_eq!(
+            repeated
+                .world
+                .objects
+                .iter()
+                .find(|object| object.id == existing.id),
+            Some(existing),
+            "repeated placement must preserve existing world objects"
+        );
+    }
+    let repeated_food = repeated
+        .world
+        .objects
+        .iter()
+        .find(|object| {
+            !baseline
+                .world
+                .objects
+                .iter()
+                .any(|existing| existing.id == object.id)
+        })
+        .expect("repeated placement persists a new world object");
+    assert_ne!(repeated_food.id, placed_food.id);
+    assert_ne!(repeated_food.label, placed_food.label);
+    assert_eq!(repeated_food.kind, WorldObjectKind::Food);
+    assert_eq!(repeated_food.position, placed_food.position);
+    assert_eq!(repeated.creatures, baseline.creatures);
+    assert_eq!(
+        repeated.world.organism_records,
+        baseline.world.organism_records
     );
     assert!(baseline.world.tick > Tick::ZERO);
     assert!(baseline.creatures.iter().all(|creature| {
@@ -441,6 +500,12 @@ fn production_save_load_restores_every_authority_and_rejects_missing_embodiment_
         })
         .collect::<BTreeMap<_, Blake3Digest>>();
 
+    press_key(&mut app, KeyCode::F3);
+    assert!(
+        app.world()
+            .resource::<Fvr05ProductionUxStateResource>()
+            .debug_mode
+    );
     press_key(&mut app, KeyCode::KeyN);
     press_key(&mut app, KeyCode::KeyN);
     let mutated_path = root.join("player-mutated.json");

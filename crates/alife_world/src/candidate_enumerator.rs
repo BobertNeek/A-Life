@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use alife_core::{
-    ActionCandidate, ActionKind, ActionTarget, AffordanceBits, CandidateActionFamily,
+    ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, CandidateActionFamily,
     CandidateFeatureVector, CandidateObservationRef, Confidence, DurationTicks, NormalizedScalar,
     ScaffoldContractError, SensorProfile, Validate, Vec3f, CANDIDATE_FEATURE_COUNT,
     MAX_ACTION_CANDIDATES,
@@ -29,356 +29,291 @@ pub const CANDIDATE_FEATURE_RESERVED_START_LANE: usize = 18;
 // Activation and gripping use separate existing readout families. All 24 object
 // features keep their physical meanings, including angular speed in lane 20.
 const INTRINSIC_CANDIDATE_COUNT: usize = 3;
+const OBJECT_ACTIONS: [(ActionId, ActionKind, CandidateActionFamily, f32); 6] = [
+    (
+        ActionKind::Inspect.canonical_id(),
+        ActionKind::Inspect,
+        CandidateActionFamily::Inspect,
+        0.1,
+    ),
+    (
+        HeadlessActionIds::APPROACH,
+        ActionKind::Move,
+        CandidateActionFamily::Approach,
+        0.3,
+    ),
+    (
+        HeadlessActionIds::FLEE,
+        ActionKind::Move,
+        CandidateActionFamily::Avoid,
+        0.3,
+    ),
+    (
+        HeadlessActionIds::EAT,
+        ActionKind::Interact,
+        CandidateActionFamily::Ingest,
+        0.2,
+    ),
+    (
+        HeadlessActionIds::GRAB,
+        ActionKind::Interact,
+        CandidateActionFamily::Contact,
+        0.2,
+    ),
+    (
+        HeadlessActionIds::PLAY,
+        ActionKind::Interact,
+        CandidateActionFamily::Other,
+        0.2,
+    ),
+];
 const MAX_CANDIDATE_OBJECTS: usize = (MAX_ACTION_CANDIDATES - INTRINSIC_CANDIDATE_COUNT) / 6;
 const KNOWN_AFFORDANCE_MASK: u32 = (1 << CANDIDATE_FEATURE_AFFORDANCE_COUNT) - 1;
 
-pub trait CandidateEnumerator {
-    fn enumerate_candidates(
-        &self,
-        report: &HeadlessSensoryReport,
-        profile: SensorProfile,
-    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError>;
+pub fn enumerate_privileged_candidates(
+    report: &HeadlessSensoryReport,
+    profile: SensorProfile,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    if profile != SensorProfile::PrivilegedAffordanceV1 {
+        return Err(ScaffoldContractError::SensorProfileMismatch);
+    }
+    validate_report(report)?;
+
+    let mut visible = report.visible_entities.iter().collect::<Vec<_>>();
+    visible.sort_by(|left, right| {
+        left.distance
+            .total_cmp(&right.distance)
+            .then_with(|| left.id.raw().cmp(&right.id.raw()))
+    });
+    visible.truncate(MAX_CANDIDATE_OBJECTS);
+
+    let mut candidates = Vec::with_capacity(INTRINSIC_CANDIDATE_COUNT + visible.len() * 6);
+    push_intrinsic_candidates(&mut candidates)?;
+
+    for entity in visible {
+        let features = features_for(report, entity)?;
+        let target_position = add(
+            report.core_snapshot.observer_position,
+            entity.relative_position,
+        );
+        let target = ActionTarget::new(Some(entity.id), Some(target_position));
+        let observation = CandidateObservationRef::None;
+        for (action_id, kind, family, effort) in OBJECT_ACTIONS {
+            candidates.push(ActionCandidate::new(
+                u16::try_from(candidates.len())
+                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                action_id,
+                kind,
+                family,
+                observation,
+                target,
+                features,
+                Confidence::new(1.0)?,
+                NormalizedScalar::new(effort)?,
+                DurationTicks::new(1),
+                DurationTicks::new(1),
+            )?);
+        }
+    }
+    Ok(candidates)
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct HeadlessCandidateEnumerator;
+/// Reserves at most one already observed, calibrated contact opportunity.
+/// The caller may nominate a physically held target from the same snapshot;
+/// hidden, occluded, or non-contact targets cannot enter the candidate set.
+pub fn enumerate_grounded_candidates(
+    grounded: &GroundedSensingFrame,
+    profile: SensorProfile,
+    active_contact: Option<alife_core::WorldEntityId>,
+) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
+    if !matches!(
+        profile,
+        SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1
+    ) {
+        return Err(ScaffoldContractError::SensorProfileMismatch);
+    }
+    if grounded.slots().len() != grounded.transports().len()
+        || grounded.slots().len() > alife_core::MAX_GROUNDED_OBJECT_SLOTS
+    {
+        return Err(ScaffoldContractError::InvalidPerceptionFrame);
+    }
 
-impl CandidateEnumerator for HeadlessCandidateEnumerator {
-    fn enumerate_candidates(
-        &self,
-        report: &HeadlessSensoryReport,
-        profile: SensorProfile,
-    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
-        if profile != SensorProfile::PrivilegedAffordanceV1 {
-            return Err(ScaffoldContractError::SensorProfileMismatch);
+    let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
+    let object_limit = if terrain_vision {
+        // Leave room for locomotion, body/head orientation, and an explicit
+        // hold-gaze command within the frozen 32-candidate foundation ABI.
+        3
+    } else {
+        MAX_CANDIDATE_OBJECTS
+    };
+    let mut candidates = Vec::with_capacity(
+        INTRINSIC_CANDIDATE_COUNT
+            + grounded.slots().len().min(object_limit) * 6
+            + 3
+            + if terrain_vision { 7 } else { 0 },
+    );
+    push_intrinsic_candidates(&mut candidates)?;
+
+    if terrain_vision {
+        for (action_id, kind, family, bearing_sin, bearing_cos) in [
+            (
+                HeadlessActionIds::STEP_FORWARD,
+                ActionKind::Move,
+                CandidateActionFamily::Approach,
+                0.0,
+                1.0,
+            ),
+            (
+                HeadlessActionIds::TURN_LEFT,
+                ActionKind::Look,
+                CandidateActionFamily::Inspect,
+                1.0,
+                0.0,
+            ),
+            (
+                HeadlessActionIds::TURN_RIGHT,
+                ActionKind::Look,
+                CandidateActionFamily::Inspect,
+                -1.0,
+                0.0,
+            ),
+        ] {
+            let mut features = [0.0; CANDIDATE_FEATURE_COUNT];
+            features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
+            features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
+            // Distinguish body primitives from head gaze and object descriptors.
+            features[CANDIDATE_FEATURE_RESERVED_START_LANE + 1] = 1.0;
+            candidates.push(ActionCandidate::new(
+                u16::try_from(candidates.len())
+                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                action_id,
+                kind,
+                family,
+                CandidateObservationRef::None,
+                ActionTarget::NONE,
+                CandidateFeatureVector(features).with_intrinsic_action_basis(kind),
+                Confidence::new(1.0)?,
+                NormalizedScalar::new(0.1)?,
+                DurationTicks::new(1),
+                DurationTicks::new(1),
+            )?);
         }
-        validate_report(report)?;
+        for (action_id, bearing_sin, bearing_cos) in [
+            (HeadlessActionIds::LOOK_LEFT, 1.0, 0.0),
+            (HeadlessActionIds::LOOK_RIGHT, -1.0, 0.0),
+            (HeadlessActionIds::LOOK_CENTER, 0.0, 1.0),
+            (HeadlessActionIds::HOLD_GAZE, 0.0, 0.0),
+        ] {
+            // The GPU decoder scores features, not ActionId. Without a
+            // distinct feature vectors the gaze choices would tie forever.
+            let mut look_features = [0.0; CANDIDATE_FEATURE_COUNT];
+            look_features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
+            look_features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
+            look_features[CANDIDATE_FEATURE_RESERVED_START_LANE] = 1.0;
+            candidates.push(ActionCandidate::new(
+                u16::try_from(candidates.len())
+                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                action_id,
+                ActionKind::Look,
+                CandidateActionFamily::Inspect,
+                CandidateObservationRef::None,
+                ActionTarget::NONE,
+                CandidateFeatureVector(look_features).with_intrinsic_action_basis(ActionKind::Look),
+                Confidence::new(1.0)?,
+                NormalizedScalar::new(0.02)?,
+                DurationTicks::new(1),
+                DurationTicks::new(1),
+            )?);
+        }
+    }
 
-        let mut visible = report.visible_entities.iter().collect::<Vec<_>>();
-        visible.sort_by(|left, right| {
-            left.distance
-                .total_cmp(&right.distance)
-                .then_with(|| left.id.raw().cmp(&right.id.raw()))
-        });
-        visible.truncate(MAX_CANDIDATE_OBJECTS);
-
-        let mut candidates = Vec::with_capacity(INTRINSIC_CANDIDATE_COUNT + visible.len() * 6);
-        push_intrinsic_candidates(&mut candidates)?;
-
-        for entity in visible {
-            let features = features_for(report, entity)?;
-            let target_position = add(
-                report.core_snapshot.observer_position,
-                entity.relative_position,
-            );
-            let target = ActionTarget::new(Some(entity.id), Some(target_position));
-            let observation = CandidateObservationRef::None;
-            for (action_id, kind, family, effort) in [
-                (
-                    ActionKind::Inspect.canonical_id(),
-                    ActionKind::Inspect,
-                    CandidateActionFamily::Inspect,
-                    0.1,
-                ),
-                (
-                    HeadlessActionIds::APPROACH,
-                    ActionKind::Move,
-                    CandidateActionFamily::Approach,
-                    0.3,
-                ),
-                (
-                    HeadlessActionIds::FLEE,
-                    ActionKind::Move,
-                    CandidateActionFamily::Avoid,
-                    0.3,
-                ),
-                (
-                    HeadlessActionIds::EAT,
-                    ActionKind::Interact,
-                    CandidateActionFamily::Ingest,
-                    0.2,
-                ),
-                (
-                    HeadlessActionIds::GRAB,
-                    ActionKind::Interact,
-                    CandidateActionFamily::Contact,
-                    0.2,
-                ),
-                (
-                    HeadlessActionIds::PLAY,
-                    ActionKind::Interact,
-                    CandidateActionFamily::Other,
-                    0.2,
-                ),
-            ] {
-                candidates.push(ActionCandidate::new(
-                    u16::try_from(candidates.len())
-                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-                    action_id,
-                    kind,
-                    family,
-                    observation,
-                    target,
-                    features,
-                    Confidence::new(1.0)?,
-                    NormalizedScalar::new(effort)?,
-                    DurationTicks::new(1),
-                    DurationTicks::new(1),
-                )?);
+    let mut selected = (0..grounded.slots().len().min(object_limit)).collect::<Vec<_>>();
+    if let Some(index) = grounded
+        .transports()
+        .iter()
+        .position(|transport| Some(transport.transport_entity) == active_contact)
+        .filter(|index| grounded.slots()[*index].contact > 0.0)
+    {
+        if !selected.contains(&index) {
+            if let Some(last) = selected.last_mut() {
+                *last = index;
             }
         }
-        Ok(candidates)
     }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct GroundedCandidateEnumerator;
-
-impl GroundedCandidateEnumerator {
-    pub fn enumerate_candidates(
-        &self,
-        grounded: &GroundedSensingFrame,
-        profile: SensorProfile,
-    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
-        self.enumerate_candidates_with_active_contact(grounded, profile, None)
-    }
-
-    /// Reserves at most one already observed, calibrated contact opportunity.
-    /// The caller may nominate a physically held target from the same snapshot;
-    /// hidden, occluded, or non-contact targets cannot enter the candidate set.
-    pub fn enumerate_candidates_with_active_contact(
-        &self,
-        grounded: &GroundedSensingFrame,
-        profile: SensorProfile,
-        active_contact: Option<alife_core::WorldEntityId>,
-    ) -> Result<Vec<ActionCandidate>, ScaffoldContractError> {
-        if !matches!(
-            profile,
-            SensorProfile::GroundedObjectSlotsV1 | SensorProfile::GroundedTerrainVisionV1
-        ) {
-            return Err(ScaffoldContractError::SensorProfileMismatch);
-        }
-        if grounded.slots().len() != grounded.transports().len()
-            || grounded.slots().len() > alife_core::MAX_GROUNDED_OBJECT_SLOTS
-        {
+    for index in selected {
+        let slot = &grounded.slots()[index];
+        let transport = &grounded.transports()[index];
+        if slot.slot_index != transport.slot_index {
             return Err(ScaffoldContractError::InvalidPerceptionFrame);
         }
-
-        let terrain_vision = profile == SensorProfile::GroundedTerrainVisionV1;
-        let object_limit = if terrain_vision {
-            // Leave room for locomotion, body/head orientation, and an explicit
-            // hold-gaze command within the frozen 32-candidate foundation ABI.
-            3
-        } else {
-            MAX_CANDIDATE_OBJECTS
-        };
-        let mut candidates = Vec::with_capacity(
-            INTRINSIC_CANDIDATE_COUNT
-                + grounded.slots().len().min(object_limit) * 6
-                + 3
-                + if terrain_vision { 7 } else { 0 },
+        let features = slot.candidate_features()?;
+        let target = ActionTarget::new(
+            Some(transport.transport_entity),
+            Some(transport.target_position),
         );
-        push_intrinsic_candidates(&mut candidates)?;
-
-        if terrain_vision {
-            for (action_id, kind, family, bearing_sin, bearing_cos) in [
-                (
-                    HeadlessActionIds::STEP_FORWARD,
-                    ActionKind::Move,
-                    CandidateActionFamily::Approach,
-                    0.0,
-                    1.0,
-                ),
-                (
-                    HeadlessActionIds::TURN_LEFT,
-                    ActionKind::Look,
-                    CandidateActionFamily::Inspect,
-                    1.0,
-                    0.0,
-                ),
-                (
-                    HeadlessActionIds::TURN_RIGHT,
-                    ActionKind::Look,
-                    CandidateActionFamily::Inspect,
-                    -1.0,
-                    0.0,
-                ),
-            ] {
-                let mut features = [0.0; CANDIDATE_FEATURE_COUNT];
-                features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
-                features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
-                // Distinguish body primitives from head gaze and object descriptors.
-                features[CANDIDATE_FEATURE_RESERVED_START_LANE + 1] = 1.0;
-                candidates.push(ActionCandidate::new(
-                    u16::try_from(candidates.len())
-                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-                    action_id,
-                    kind,
-                    family,
-                    CandidateObservationRef::None,
-                    ActionTarget::NONE,
-                    CandidateFeatureVector(features).with_intrinsic_action_basis(kind),
-                    Confidence::new(1.0)?,
-                    NormalizedScalar::new(0.1)?,
-                    DurationTicks::new(1),
-                    DurationTicks::new(1),
-                )?);
-            }
-            for (action_id, bearing_sin, bearing_cos) in [
-                (HeadlessActionIds::LOOK_LEFT, 1.0, 0.0),
-                (HeadlessActionIds::LOOK_RIGHT, -1.0, 0.0),
-                (HeadlessActionIds::LOOK_CENTER, 0.0, 1.0),
-                (HeadlessActionIds::HOLD_GAZE, 0.0, 0.0),
-            ] {
-                // The GPU decoder scores features, not ActionId. Without a
-                // distinct feature vectors the gaze choices would tie forever.
-                let mut look_features = [0.0; CANDIDATE_FEATURE_COUNT];
-                look_features[CANDIDATE_FEATURE_BEARING_SIN_LANE] = bearing_sin;
-                look_features[CANDIDATE_FEATURE_BEARING_COS_LANE] = bearing_cos;
-                look_features[CANDIDATE_FEATURE_RESERVED_START_LANE] = 1.0;
-                candidates.push(ActionCandidate::new(
-                    u16::try_from(candidates.len())
-                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-                    action_id,
-                    ActionKind::Look,
-                    CandidateActionFamily::Inspect,
-                    CandidateObservationRef::None,
-                    ActionTarget::NONE,
-                    CandidateFeatureVector(look_features)
-                        .with_intrinsic_action_basis(ActionKind::Look),
-                    Confidence::new(1.0)?,
-                    NormalizedScalar::new(0.02)?,
-                    DurationTicks::new(1),
-                    DurationTicks::new(1),
-                )?);
-            }
+        let observation = CandidateObservationRef::ObjectSlot(slot.slot_index);
+        for (action_id, kind, family, effort) in OBJECT_ACTIONS {
+            candidates.push(ActionCandidate::new(
+                u16::try_from(candidates.len())
+                    .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+                action_id,
+                kind,
+                family,
+                observation,
+                target,
+                features,
+                slot.confidence,
+                NormalizedScalar::new(effort)?,
+                DurationTicks::new(1),
+                DurationTicks::new(1),
+            )?);
         }
-
-        let mut selected = (0..grounded.slots().len().min(object_limit)).collect::<Vec<_>>();
-        if let Some(index) = grounded
-            .transports()
-            .iter()
-            .position(|transport| Some(transport.transport_entity) == active_contact)
-            .filter(|index| grounded.slots()[*index].contact > 0.0)
-        {
-            if !selected.contains(&index) {
-                if let Some(last) = selected.last_mut() {
-                    *last = index;
-                }
-            }
-        }
-        for index in selected {
-            let slot = &grounded.slots()[index];
-            let transport = &grounded.transports()[index];
-            if slot.slot_index != transport.slot_index {
-                return Err(ScaffoldContractError::InvalidPerceptionFrame);
-            }
-            let features = slot.candidate_features()?;
-            let target = ActionTarget::new(
-                Some(transport.transport_entity),
-                Some(transport.target_position),
-            );
-            let observation = CandidateObservationRef::ObjectSlot(slot.slot_index);
-            for (action_id, kind, family, effort) in [
-                (
-                    ActionKind::Inspect.canonical_id(),
-                    ActionKind::Inspect,
-                    CandidateActionFamily::Inspect,
-                    0.1,
-                ),
-                (
-                    HeadlessActionIds::APPROACH,
-                    ActionKind::Move,
-                    CandidateActionFamily::Approach,
-                    0.3,
-                ),
-                (
-                    HeadlessActionIds::FLEE,
-                    ActionKind::Move,
-                    CandidateActionFamily::Avoid,
-                    0.3,
-                ),
-                (
-                    HeadlessActionIds::EAT,
-                    ActionKind::Interact,
-                    CandidateActionFamily::Ingest,
-                    0.2,
-                ),
-                (
-                    HeadlessActionIds::GRAB,
-                    ActionKind::Interact,
-                    CandidateActionFamily::Contact,
-                    0.2,
-                ),
-                (
-                    HeadlessActionIds::PLAY,
-                    ActionKind::Interact,
-                    CandidateActionFamily::Other,
-                    0.2,
-                ),
-            ] {
-                candidates.push(ActionCandidate::new(
-                    u16::try_from(candidates.len())
-                        .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-                    action_id,
-                    kind,
-                    family,
-                    observation,
-                    target,
-                    features,
-                    slot.confidence,
-                    NormalizedScalar::new(effort)?,
-                    DurationTicks::new(1),
-                    DurationTicks::new(1),
-                )?);
-            }
-        }
-        // A visible object must not force movement, rest, or manipulation. These
-        // targetless choices remain in the existing motor channels.
-        candidates.push(ActionCandidate::new(
-            u16::try_from(candidates.len())
-                .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-            HeadlessActionIds::NO_LOCOMOTION,
-            ActionKind::Move,
-            CandidateActionFamily::Approach,
-            CandidateObservationRef::None,
-            ActionTarget::NONE,
-            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Move),
-            Confidence::new(1.0)?,
-            NormalizedScalar::new(0.0)?,
-            DurationTicks::new(1),
-            DurationTicks::new(1),
-        )?);
-        candidates.push(ActionCandidate::new(
-            u16::try_from(candidates.len())
-                .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-            HeadlessActionIds::NO_MANIPULATION,
-            ActionKind::Interact,
-            CandidateActionFamily::Contact,
-            CandidateObservationRef::None,
-            ActionTarget::NONE,
-            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Interact),
-            Confidence::new(1.0)?,
-            NormalizedScalar::new(0.0)?,
-            DurationTicks::new(1),
-            DurationTicks::new(1),
-        )?);
-        candidates.push(ActionCandidate::new(
-            u16::try_from(candidates.len())
-                .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
-            HeadlessActionIds::NO_POSTURE,
-            ActionKind::Hold,
-            CandidateActionFamily::Other,
-            CandidateObservationRef::None,
-            ActionTarget::NONE,
-            CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Hold),
-            Confidence::new(1.0)?,
-            NormalizedScalar::new(0.0)?,
-            DurationTicks::new(1),
-            DurationTicks::new(1),
-        )?);
-        Ok(candidates)
     }
+    // A visible object must not force movement, rest, or manipulation. These
+    // targetless choices remain in the existing motor channels.
+    candidates.push(ActionCandidate::new(
+        u16::try_from(candidates.len())
+            .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+        HeadlessActionIds::NO_LOCOMOTION,
+        ActionKind::Move,
+        CandidateActionFamily::Approach,
+        CandidateObservationRef::None,
+        ActionTarget::NONE,
+        CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Move),
+        Confidence::new(1.0)?,
+        NormalizedScalar::new(0.0)?,
+        DurationTicks::new(1),
+        DurationTicks::new(1),
+    )?);
+    candidates.push(ActionCandidate::new(
+        u16::try_from(candidates.len())
+            .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+        HeadlessActionIds::NO_MANIPULATION,
+        ActionKind::Interact,
+        CandidateActionFamily::Contact,
+        CandidateObservationRef::None,
+        ActionTarget::NONE,
+        CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Interact),
+        Confidence::new(1.0)?,
+        NormalizedScalar::new(0.0)?,
+        DurationTicks::new(1),
+        DurationTicks::new(1),
+    )?);
+    candidates.push(ActionCandidate::new(
+        u16::try_from(candidates.len())
+            .map_err(|_| ScaffoldContractError::InvalidActionCandidate)?,
+        HeadlessActionIds::NO_POSTURE,
+        ActionKind::Hold,
+        CandidateActionFamily::Other,
+        CandidateObservationRef::None,
+        ActionTarget::NONE,
+        CandidateFeatureVector::zero().with_intrinsic_action_basis(ActionKind::Hold),
+        Confidence::new(1.0)?,
+        NormalizedScalar::new(0.0)?,
+        DurationTicks::new(1),
+        DurationTicks::new(1),
+    )?);
+    Ok(candidates)
 }
 
 fn push_intrinsic_candidates(

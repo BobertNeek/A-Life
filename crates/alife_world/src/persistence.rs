@@ -1,4 +1,4 @@
-//! P34 persistence, runtime config, and asset manifest contracts.
+//! Portable saves, runtime configuration, and asset manifests.
 //!
 //! These portable records intentionally store stable IDs, summaries, and asset
 //! references. Engine-local handles and bulk tensors stay outside save files.
@@ -24,7 +24,7 @@ use crate::{
     ecology::EcologyState,
     grounded_sensing::GroundedPhysicalProperties,
     habitat::{HabitatAuthority, HabitatAuthorityError, HabitatId},
-    headless::{HeadlessWorld, HeadlessWorldPersistenceParts, WorldObject, WorldObjectKind},
+    headless::{HeadlessWorld, WorldObject, WorldObjectKind},
     organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry},
     persistent_voxel::{
         migrated_voxel_backend_for_world, PersistentVoxelProfileId, PersistentVoxelWorldSaveState,
@@ -47,9 +47,7 @@ pub const P34_RUNTIME_CONFIG_SCHEMA: &str = "alife.p34.runtime_config.v1";
 pub const P34_RUNTIME_CONFIG_SCHEMA_VERSION: u16 = 1;
 pub const P34_ASSET_MANIFEST_SCHEMA: &str = "alife.p34.asset_manifest.v1";
 pub const P34_ASSET_MANIFEST_SCHEMA_VERSION: u16 = 1;
-pub const P34_MIGRATION_HOOK_SCHEMA_VERSION: u16 = 1;
 pub const BRAIN_POLICY_CONFIG_SCHEMA_VERSION: u16 = 1;
-pub const P34_MAX_INLINE_SAVE_BYTES: u64 = 64 * 1024;
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA: &str = "alife.fvr06.gpu_runtime_state.v1";
 pub const FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION: u16 = 1;
 pub const WORLD_OBJECT_SAVE_SCHEMA_VERSION: u16 = 2;
@@ -93,8 +91,6 @@ pub enum PersistenceError {
         expected: String,
         actual: String,
     },
-    #[error("engine-local id leaked through {field}: {value}")]
-    EngineLocalIdLeak { field: &'static str, value: String },
     #[error("asset reference {asset_id} is not present in the manifest")]
     MissingAssetReference { asset_id: String },
     #[error("genetic fixed layer cannot be mutable in default portable saves")]
@@ -106,8 +102,6 @@ pub enum PersistenceError {
     },
     #[error("architecture migration failed: {0}")]
     ArchitectureMigration(#[from] ArchitectureMigrationError),
-    #[error("inline save payload is too large: {bytes} bytes")]
-    HugeInlinePayload { bytes: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -600,7 +594,7 @@ impl GpuRuntimeSaveState {
         {
             return Err(PersistenceError::InvalidConfig {
                 field: "gpu_runtime",
-                message: "FVR06 GPU runtime descriptor is incomplete",
+                message: "GPU runtime descriptor is incomplete",
             });
         }
         if self.authority.authoritative
@@ -635,13 +629,6 @@ impl GpuRuntimeSaveState {
             return Err(PersistenceError::InvalidConfig {
                 field: "gpu_runtime.compact_action_readback_bytes_per_creature",
                 message: "compact action readback budget must be bounded and nonzero",
-            });
-        }
-        let json = serde_json::to_string(self)?;
-        if contains_engine_local_runtime_token(&json) {
-            return Err(PersistenceError::EngineLocalIdLeak {
-                field: "gpu_runtime",
-                value: "engine-local token".to_string(),
             });
         }
         Ok(())
@@ -844,7 +831,7 @@ impl RuntimeConfig {
         if self.school.save_teacher_private_state {
             return Err(PersistenceError::InvalidConfig {
                 field: "school.save_teacher_private_state",
-                message: "teacher-private state is not part of portable P34 saves",
+                message: "teacher-private state is not part of portable saves",
             });
         }
         if self.semantic.required && self.semantic.provider.is_none() {
@@ -1078,7 +1065,7 @@ pub struct WorldSaveState {
     pub voxel_backend: Option<PersistentVoxelWorldSaveState>,
     pub habitats: HabitatAuthority,
     #[serde(skip)]
-    habitat_authority_was_missing: bool,
+    pub(crate) habitat_authority_was_missing: bool,
 }
 
 #[derive(Deserialize)]
@@ -1391,13 +1378,6 @@ pub struct PortableSaveFile {
     pub packed_log_schema_version: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct MigrationHook {
-    pub schema_version: u16,
-    pub from_schema_version: u16,
-    pub to_schema_version: u16,
-}
-
 impl PortableSaveFile {
     pub fn from_headless_world(
         save_id: impl Into<String>,
@@ -1406,12 +1386,11 @@ impl PortableSaveFile {
         assets: AssetManifest,
         creatures: Vec<CreatureSaveState>,
     ) -> Result<Self, PersistenceError> {
-        let parts = world.persistence_parts();
         let generated_weight_asset_refs = creatures
             .iter()
             .filter_map(|creature| creature.weights.generated_weight_asset_id.clone())
             .collect();
-        let mut world_state = WorldSaveState::from_parts(parts);
+        let mut world_state = world.save_state();
         world_state.populate_default_habitat_memberships_if_unassigned(&creatures)?;
         world_state.voxel_backend = Some(
             migrated_voxel_backend_for_world(
@@ -1488,13 +1467,7 @@ impl PortableSaveFile {
     }
 
     pub fn to_json_string_pretty(&self) -> Result<String, PersistenceError> {
-        let json = serde_json::to_string_pretty(self)?;
-        if json.len() as u64 > P34_MAX_INLINE_SAVE_BYTES {
-            return Err(PersistenceError::HugeInlinePayload {
-                bytes: json.len() as u64,
-            });
-        }
-        Ok(json)
+        Ok(serde_json::to_string_pretty(self)?)
     }
 
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
@@ -1774,7 +1747,7 @@ impl PortableSaveFile {
             });
         }
         let voxel_backend = self.world.voxel_backend.clone();
-        let mut candidate = WorldSaveState::from_parts(world.persistence_parts());
+        let mut candidate = world.save_state();
         candidate.voxel_backend = voxel_backend;
         candidate.populate_default_habitat_memberships_if_unassigned(&self.creatures)?;
         candidate.validate()?;
@@ -1840,22 +1813,6 @@ impl PortableSaveFile {
     }
 }
 
-impl MigrationHook {
-    pub fn reject_premature_migration(&self) -> Result<(), PersistenceError> {
-        if self.schema_version != P34_MIGRATION_HOOK_SCHEMA_VERSION {
-            return Err(PersistenceError::SchemaVersion {
-                schema: "alife.p34.migration_hook.v1",
-                expected: P34_MIGRATION_HOOK_SCHEMA_VERSION,
-                actual: self.schema_version,
-            });
-        }
-        Err(PersistenceError::MigrationUnsupported {
-            from_schema_version: self.from_schema_version,
-            to_schema_version: self.to_schema_version,
-        })
-    }
-}
-
 impl CreatureSaveState {
     fn validate(&self, assets: &AssetManifest, world_seed: u64) -> Result<(), PersistenceError> {
         self.organism_id.validate()?;
@@ -1878,7 +1835,7 @@ impl CreatureSaveState {
         if self.learning.lamarckian_mode_enabled {
             return Err(PersistenceError::InvalidConfig {
                 field: "learning.lamarckian_mode_enabled",
-                message: "portable P34 saves keep Lamarckian inheritance default-off",
+                message: "portable saves do not support Lamarckian inheritance",
             });
         }
         if let Some(gpu_brain) = &self.gpu_brain {
@@ -2041,8 +1998,6 @@ impl AdapterRemapTable {
                     message: "namespace and slot are required",
                 });
             }
-            reject_engine_local_token("adapter_namespace", &entry.adapter_namespace)?;
-            reject_engine_local_token("adapter_slot", &entry.adapter_slot)?;
             if !stable_ids.insert(entry.stable_world_entity_id.raw()) {
                 return Err(PersistenceError::InvalidConfig {
                     field: "adapter_remap",
@@ -2110,57 +2065,6 @@ impl WorldSaveState {
             self.habitat_authority_was_missing = false;
         }
         Ok(())
-    }
-
-    fn from_parts(parts: HeadlessWorldPersistenceParts) -> Self {
-        let mut organism_records = parts.organism_records;
-        if let Some(records) = &mut organism_records {
-            records.sort_unstable_by_key(|record| record.organism_id().raw());
-        }
-        let external_actor_ids = organism_records.as_ref().map(|records| {
-            let registered_ids = records
-                .iter()
-                .map(|record| record.organism_id().raw())
-                .collect::<BTreeSet<_>>();
-            parts
-                .objects
-                .iter()
-                .filter(|object| object.kind == WorldObjectKind::Agent)
-                .filter_map(|object| object.organism_id.map(OrganismId::raw))
-                .filter(|id| !registered_ids.contains(id))
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .map(OrganismId)
-                .collect()
-        });
-        Self {
-            seed: parts.seed,
-            disable_age_death: parts.disable_age_death,
-            terrain: parts.terrain,
-            terrain_state: parts.terrain_state,
-            tick: parts.tick,
-            next_entity_id: parts.next_entity_id,
-            next_organism_id: parts.next_organism_id,
-            next_spawn_sequence: parts.next_spawn_sequence,
-            next_utterance_id: parts.next_utterance_id,
-            objects: parts
-                .objects
-                .into_iter()
-                .map(WorldObjectSaveState::from)
-                .collect(),
-            last_touched_entities: parts.last_touched_entities,
-            audible_utterances: parts.audible_utterances,
-            last_creature_utterance_ticks: parts.last_creature_utterance_ticks,
-            pending_player_care: parts.pending_player_care,
-            ingestion_observations: parts.ingestion_observations,
-            player_hold: parts.player_hold,
-            organism_records,
-            external_actor_ids,
-            ecology: parts.ecology,
-            voxel_backend: None,
-            habitats: parts.habitats,
-            habitat_authority_was_missing: false,
-        }
     }
 
     fn validate_organism_records(&self) -> Result<(), PersistenceError> {
@@ -2383,33 +2287,7 @@ impl WorldSaveState {
 
     fn restore(&self) -> Result<HeadlessWorld, PersistenceError> {
         self.validate()?;
-        let parts = HeadlessWorldPersistenceParts {
-            seed: self.seed,
-            disable_age_death: self.disable_age_death,
-            terrain: self.terrain,
-            terrain_state: self.terrain_state.clone(),
-            tick: self.tick,
-            next_entity_id: self.next_entity_id,
-            next_organism_id: self.next_organism_id,
-            next_spawn_sequence: self.next_spawn_sequence,
-            next_utterance_id: self.next_utterance_id,
-            objects: self
-                .objects
-                .iter()
-                .cloned()
-                .map(WorldObject::from)
-                .collect(),
-            last_touched_entities: self.last_touched_entities.clone(),
-            ecology: self.ecology.clone(),
-            audible_utterances: self.audible_utterances.clone(),
-            last_creature_utterance_ticks: self.last_creature_utterance_ticks.clone(),
-            pending_player_care: self.pending_player_care.clone(),
-            ingestion_observations: self.ingestion_observations.clone(),
-            player_hold: self.player_hold.clone(),
-            habitats: self.habitats.clone(),
-            organism_records: self.organism_records.clone(),
-        };
-        Ok(HeadlessWorld::from_persistence_parts(parts)?)
+        Ok(HeadlessWorld::from_save_state(self)?)
     }
 }
 
@@ -2694,46 +2572,6 @@ fn validate_relative_path(asset_id: &str, path: &Path) -> Result<(), Persistence
     Ok(())
 }
 
-fn reject_engine_local_token(field: &'static str, value: &str) -> Result<(), PersistenceError> {
-    let lower = value.to_ascii_lowercase();
-    let leaks = [
-        "entity(",
-        "bevy::",
-        "avian::",
-        "wgpu::",
-        "windowhandle",
-        "rendererhandle",
-        "oswindow",
-    ];
-    if leaks.iter().any(|needle| lower.contains(needle)) {
-        Err(PersistenceError::EngineLocalIdLeak {
-            field,
-            value: value.to_string(),
-        })
-    } else {
-        Ok(())
-    }
-}
-
-fn contains_engine_local_runtime_token(value: &str) -> bool {
-    let lower = value.to_ascii_lowercase();
-    [
-        "entity(",
-        "bevy::",
-        "avian::",
-        "wgpu::",
-        "windowhandle",
-        "rendererhandle",
-        "oswindow",
-        "handle<",
-        "mesh3d",
-        "standardmaterial",
-        "egui",
-    ]
-    .iter()
-    .any(|needle| lower.contains(needle))
-}
-
 #[cfg(test)]
 mod terrain_persistence_tests {
     use super::*;
@@ -2765,8 +2603,8 @@ mod terrain_persistence_tests {
             .unwrap();
         // Scenario agents without full organism records normalize the legacy
         // organism allocator during save. Start from that canonical baseline.
-        world = HeadlessWorld::from_persistence_parts(world.persistence_parts()).unwrap();
-        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        world = HeadlessWorld::from_save_state(&world.save_state()).unwrap();
+        let saved = world.save_state();
         let mut decoded: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
         let mut restored = decoded.restore().unwrap();
@@ -2820,7 +2658,7 @@ mod terrain_persistence_tests {
     fn island_binding_roundtrips_and_rejects_incompatible_geometry() {
         let mut world = crate::HeadlessScenarioBuilder::new(71).build().unwrap();
         world.enable_island_for_new_game().unwrap();
-        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let saved = world.save_state();
         let mut restored: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
         assert_eq!(
@@ -2842,8 +2680,7 @@ mod terrain_persistence_tests {
     #[test]
     fn terrainless_fixture_save_roundtrips() {
         let world = crate::HeadlessScenarioBuilder::new(72).build().unwrap();
-        let value =
-            serde_json::to_value(WorldSaveState::from_parts(world.persistence_parts())).unwrap();
+        let value = serde_json::to_value(world.save_state()).unwrap();
         let restored: WorldSaveState = serde_json::from_value(value).unwrap();
         assert_eq!(restored.restore().unwrap().terrain_binding(), None);
     }
@@ -2860,7 +2697,7 @@ mod terrain_persistence_tests {
         let id = world.entity_id("walker").unwrap();
         let original = world.entity(id).unwrap().position;
         world.begin_player_hold(id).unwrap();
-        let saved = WorldSaveState::from_parts(world.persistence_parts());
+        let saved = world.save_state();
         let mut decoded: WorldSaveState =
             serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
         let mut restored = decoded.restore().unwrap();
@@ -2874,8 +2711,7 @@ mod terrain_persistence_tests {
         assert!(decoded.restore().is_err());
         decoded.player_hold.as_mut().unwrap().last_ground = Vec3f::new(-500.0, 0.0, -600.0);
         assert!(decoded.restore().is_err());
-        let mut legacy =
-            serde_json::to_value(WorldSaveState::from_parts(restored.persistence_parts())).unwrap();
+        let mut legacy = serde_json::to_value(restored.save_state()).unwrap();
         legacy.as_object_mut().unwrap().remove("player_hold");
         let legacy: WorldSaveState = serde_json::from_value(legacy).unwrap();
         assert_eq!(legacy.restore().unwrap().player_held_object(), None);

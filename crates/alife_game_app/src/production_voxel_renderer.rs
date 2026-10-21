@@ -1,18 +1,18 @@
-//! FVR03 production voxel renderer.
-//!
-//! This module is Bevy-facing presentation code. It mirrors the persistent
-//! voxel truth owned by `alife_world` into selectable chunk/tile meshes without
-//! moving renderer handles, Bevy entities, or wgpu state into core/world data.
+//! Bevy terrain, creature, controls, and UI presentation of the live world.
 
+#[cfg(feature = "gpu-runtime")]
+use std::io::Read;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::Read,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
 
-use alife_bevy_adapter::BevyEntityMap;
+#[cfg(feature = "gpu-runtime")]
+use bevy::prelude::{NonSend, NonSendMut};
+
+use crate::BevyEntityMap;
 use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
 use alife_world::CreatureAppearanceGenome;
 use alife_world::{
@@ -34,10 +34,9 @@ use bevy::{
         default, AlphaMode, App, Assets, BackgroundColor, ButtonInput, Camera, ChildOf, Children,
         Color, Commands, Component, Cuboid, DetectChanges, DirectionalLight, Entity, EulerRot,
         GlobalTransform, Handle, Image, KeyCode, Local, Mesh, Mesh3d, MeshMaterial3d,
-        MessageReader, MessageWriter, MouseButton, Name, Node, NonSend, NonSendMut, ParamSet,
-        PositionType, Projection, Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d,
-        TextColor, TextFont, Time, Torus, Transform, Update, Val, Vec3, ViewVisibility, Visibility,
-        Window, With, Without, World,
+        MessageReader, MessageWriter, MouseButton, Name, Node, ParamSet, PositionType, Projection,
+        Quat, Res, ResMut, Resource, StandardMaterial, Text, Text2d, TextColor, TextFont, Time,
+        Torus, Transform, Update, Val, Vec3, Visibility, Window, With, Without, World,
     },
     render::{
         render_resource::PrimitiveTopology,
@@ -61,12 +60,7 @@ use crate::LiveBrainTickSummary;
 use crate::ProductionConversationLineageUiState;
 #[cfg(feature = "gpu-runtime")]
 use crate::RuntimePlaybackState;
-#[cfg(test)]
-use crate::SocketFrame;
-use crate::{
-    creature_part_pose, creature_root_pose, grounded_root_height, CreaturePartSlot,
-    CreatureVisualBounds,
-};
+use crate::{creature_root_pose, grounded_root_height, CreatureVisualBounds};
 
 mod camera_navigation;
 pub(crate) mod care_dock;
@@ -95,12 +89,11 @@ use crate::{
     creature_visual_snapshot_from_parts_with_appearance,
     production_terrain::{ProductionTerrainSample, ProductionTerrainSampleMap},
     production_voxel_save_with_population, CreatureAnimationState, CreatureExpressionState,
-    CreatureVisualSnapshot, Fvr05ProductionDebugAuthorityReport, Fvr05ProductionInspectorTab,
-    Fvr05ProductionOverlayKind, Fvr05ProductionUxSettings, Fvr11ProductionTerrainLayer,
-    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, GameAppShellError,
-    ProductionFrontendProfileBudget, ProductionFrontendProfileId, ProductionSaveMetadata,
-    ProductionVoxelLaunchSummary, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
-    PRODUCTION_VOXEL_RENDERER_PROFILE,
+    CreatureVisualSnapshot, Fvr05ProductionInspectorTab, Fvr05ProductionOverlayKind,
+    Fvr05ProductionUxSettings, Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainSceneResource,
+    Fvr11TerrainSurfaceRole, GameAppShellError, ProductionFrontendProfileBudget,
+    ProductionFrontendProfileId, ProductionSaveMetadata, ProductionVoxelLaunchSummary,
+    FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION, PRODUCTION_VOXEL_RENDERER_PROFILE,
 };
 use crate::{
     terrain_dressing::{
@@ -134,17 +127,9 @@ pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA: &str =
 pub const FVR04_PRODUCTION_CREATURE_RENDERER_SCHEMA_VERSION: u16 = 1;
 pub const FVR10_RENDERER_BACKEND_ID: &str =
     "fvr10-layered-grid-terrain+modular-heritable-creatures";
-pub const FVR09_NATURAL_MATERIAL_PALETTE_VERSION: &str = "fvr09-natural-materials-v1";
-pub const FVR09_CUTE_BIPED_VISUAL_PROFILE: &str = "fvr09-cute-biped-v1";
-pub const FVR09_CUTE_BIPED_MATERIAL_VERSION: &str = "fvr09-soft-biped-materials-v1";
 pub const FVR10_VISIBLE_SURFACE_VARIATION_VERSION: &str = "fvr10-visible-surface-variation-v1";
 pub const FVR10_CUTE_BIPED_VISUAL_PROFILE: &str = "approved-hearthling-skinned-v2";
 pub const FVR10_CUTE_BIPED_MATERIAL_VERSION: &str = "approved-blender-vertex-color-v2";
-pub const FVR10_SURFACE_DETAIL_VERSION: &str = "fvr10-screenshot-visible-surface-detail-v2";
-/// Dynamic overlay geometry still comes from the scene snapshot. See `docs/STATUS.md`.
-pub const FVR05_DYNAMIC_OVERLAYS_TRACK_LIVE_STATE: bool = false;
-/// Legacy scene VFX remain snapshot-driven; live sleep feedback is reconciled separately.
-pub const FVR07_VFX_TRIGGERS_TRACK_LIVE_STATE: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fvr09MesherMode {
@@ -587,7 +572,7 @@ pub struct Fvr04ProductionCreatureSceneResource {
     pub mesh_pool_count: usize,
     pub lod: Fvr04CreatureLod,
     pub stable_lookup_by_raw_id: BTreeMap<u64, usize>,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub expression_buffer_is_read_only_projection: bool,
     pub visual_profile: &'static str,
     pub mesh_material_version: &'static str,
@@ -670,7 +655,7 @@ pub struct Fvr03ProductionVoxelSceneResource {
     pub draw_radius_chunks: u16,
     pub target_fps: u16,
     pub performance_artifact_path: Option<PathBuf>,
-    pub no_renderer_authority_over_world_truth: bool,
+
     pub material_counts: BTreeMap<Fvr03ProductionVoxelMaterialKind, usize>,
     pub average_resource_bias: f32,
     pub average_hazard_pressure: f32,
@@ -843,13 +828,20 @@ pub struct Fvr03ProductionVoxelScreenshotResource {
     pub measurement_start_frame: u32,
     pub measurement_started_at: Option<Instant>,
     pub measurement_written: bool,
-    pub requested: bool,
     pub path: PathBuf,
-    pub product_screenshot_captured: bool,
+    pub product_screenshot_requested: bool,
     pub fvr05_capture_index: usize,
     pub fvr05_next_capture_frame: u32,
     pub fvr05_sequence_complete: bool,
     pub developer_overlay: bool,
+    failure_started: Option<Instant>,
+}
+
+impl Fvr03ProductionVoxelScreenshotResource {
+    fn fail(&mut self, message: String) {
+        eprintln!("PRODUCTION_CAPTURE_ERROR {message}");
+        self.failure_started.get_or_insert_with(Instant::now);
+    }
 }
 
 const PHASE31_PERFORMANCE_SCHEMA: &str = "alife.phase31.performance-baseline.v4";
@@ -1078,67 +1070,6 @@ pub(crate) enum ProductionVoxelPresentationSet {
     RootReaders,
 }
 
-#[derive(Debug, Clone, PartialEq, Component)]
-pub struct ProductionCreaturePartMarker {
-    pub stable_id: alife_core::WorldEntityId,
-    pub family: alife_world::CreaturePartFamilyId,
-    pub asset_id: crate::CreaturePartAssetId,
-    pub slot: CreaturePartSlot,
-    pub runtime_group: String,
-    pub authored_matrix: [f64; 16],
-    pub animation: CreatureAnimationState,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-struct ProductionCreaturePartRestTransform(Transform);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Component)]
-pub struct ProductionCreatureJoinCoverMarker {
-    pub stable_id: alife_core::WorldEntityId,
-    pub cover_kind: &'static str,
-    pub display_only: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr09CuteBipedCreatureMarker {
-    pub stable_id: alife_core::WorldEntityId,
-    pub visual_profile: &'static str,
-    pub two_legs: bool,
-    pub visible_face: bool,
-    pub eye_markers: u8,
-    pub front_back_orientation: bool,
-    pub real_state_driven: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr09CreatureFaceFeatureMarker {
-    pub stable_id: alife_core::WorldEntityId,
-    pub feature: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr10CreatureSurfaceDetailMarker {
-    pub stable_id: alife_core::WorldEntityId,
-    pub species_archetype: u8,
-    pub detail_role: &'static str,
-    pub anchor_slot: CreaturePartSlot,
-    pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
-    pub high_contrast_marking: bool,
-    pub heritable: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Component)]
-pub struct Fvr10CreatureSpeciesMarker {
-    pub stable_id: alife_core::WorldEntityId,
-    pub species_archetype: u8,
-    pub species_label: &'static str,
-    pub body_plan_signature: &'static str,
-    pub bipedal: bool,
-    pub caveman_furry_design: bool,
-    pub heritable_appearance: bool,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
 pub struct Fvr03ProductionVoxelSelectionMarker;
 
@@ -1170,7 +1101,6 @@ pub enum Fvr07ProductionDressingKind {
     PebbleCluster,
     NestMarker,
     FoodResource,
-    CorpseMarker,
     FlowerPatch,
     ReedCluster,
     LichenRock,
@@ -1189,7 +1119,6 @@ impl Fvr07ProductionDressingKind {
             Self::PebbleCluster => "pebble-cluster",
             Self::NestMarker => "nest-marker",
             Self::FoodResource => "food-resource",
-            Self::CorpseMarker => "corpse-marker",
             Self::FlowerPatch => "flower-patch",
             Self::ReedCluster => "reed-cluster",
             Self::LichenRock => "lichen-rock",
@@ -1204,41 +1133,26 @@ impl Fvr07ProductionDressingKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Fvr07ProductionVfxKind {
-    PheromoneTrail,
     SporeDrift,
-    SleepGlow,
     DangerHazardParticles,
-    EatingResourceEffect,
-    BirthDeathEffect,
     WaterDecayAmbient,
-    SelectedCreatureNeuralPulse,
 }
 
 impl Fvr07ProductionVfxKind {
     pub const fn label(self) -> &'static str {
         match self {
-            Self::PheromoneTrail => "pheromone-trail",
             Self::SporeDrift => "spore-drift",
-            Self::SleepGlow => "sleep-glow",
             Self::DangerHazardParticles => "danger-hazard-particles",
-            Self::EatingResourceEffect => "eating-resource-effect",
-            Self::BirthDeathEffect => "birth-death-effect",
             Self::WaterDecayAmbient => "water-decay-ambient",
-            Self::SelectedCreatureNeuralPulse => "selected-creature-neural-pulse",
         }
     }
 
     #[cfg(not(feature = "vfx-hanabi"))]
     const fn pulse_speed(self) -> f32 {
         match self {
-            Self::PheromoneTrail => 1.4,
             Self::SporeDrift => 0.9,
-            Self::SleepGlow => 0.55,
             Self::DangerHazardParticles => 3.4,
-            Self::EatingResourceEffect => 2.2,
-            Self::BirthDeathEffect => 1.8,
             Self::WaterDecayAmbient => 0.8,
-            Self::SelectedCreatureNeuralPulse => 2.7,
         }
     }
 
@@ -1246,8 +1160,6 @@ impl Fvr07ProductionVfxKind {
     const fn bob_height(self) -> f32 {
         match self {
             Self::DangerHazardParticles => 0.16,
-            Self::SelectedCreatureNeuralPulse => 0.11,
-            Self::SleepGlow => 0.05,
             _ => 0.08,
         }
     }
@@ -1258,7 +1170,6 @@ pub struct Fvr07ProductionVisualDressing {
     pub kind: Fvr07ProductionDressingKind,
     pub tile: VoxelTileCoord,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -1266,9 +1177,8 @@ pub struct Fvr07ProductionGpuVfxMarker {
     pub kind: Fvr07ProductionVfxKind,
     pub tile: Option<VoxelTileCoord>,
     pub stable_id: Option<alife_core::WorldEntityId>,
-    pub follows_creature: bool,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub budget_state: &'static str,
     pub base_translation: Vec3,
     pub base_scale: Vec3,
@@ -1280,9 +1190,8 @@ pub struct Fvr07ProductionGpuVfxMarker {
 pub struct Fvr07ProductionHanabiVfxEmitter {
     pub kind: Fvr07ProductionVfxKind,
     pub stable_id: Option<alife_core::WorldEntityId>,
-    pub follows_creature: bool,
     pub display_only: bool,
-    pub no_renderer_authority_over_actions_or_cognition: bool,
+
     pub budget_state: &'static str,
 }
 
@@ -1470,7 +1379,6 @@ struct Fvr07VfxSpawn {
     kind: Fvr07ProductionVfxKind,
     tile: Option<VoxelTileCoord>,
     stable_id: Option<alife_core::WorldEntityId>,
-    follows_creature: bool,
     translation: Vec3,
     scale: Vec3,
     color: [f32; 4],
@@ -1509,7 +1417,6 @@ pub struct Fvr05ProductionUxStateResource {
     pub unavailable_reason: String,
     pub renderer_profile: String,
     pub state_trace: String,
-    pub authority: Fvr05ProductionDebugAuthorityReport,
     pub gpu_runtime_state: GpuRuntimeSaveState,
     pub last_action: String,
     pub last_error: Option<String>,
@@ -1560,7 +1467,6 @@ impl Fvr05ProductionUxStateResource {
                 .unwrap_or_else(|| "None".to_string()),
             renderer_profile: summary.renderer_profile.clone(),
             state_trace: summary.state_labels().join(">"),
-            authority: summary.debug_authority.clone(),
             gpu_runtime_state: summary.gpu_runtime_state.clone(),
             last_action: "Ready: production voxel world loaded from validated save".to_string(),
             last_error: summary.ui_settings_load_error.clone(),
@@ -2158,13 +2064,11 @@ pub fn spawn_fvr03_production_voxel_scene(
         Update,
         (
             animate_fvr04_creatures,
-            animate_fvr04_creature_parts,
             hearthling::animate,
             landscape::reveal_creatures,
             creature_grounding::ground_creatures
                 .after(hearthling::animate)
-                .after(animate_fvr04_creatures)
-                .after(animate_fvr04_creature_parts),
+                .after(animate_fvr04_creatures),
         )
             .in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
     )
@@ -2202,18 +2106,7 @@ pub fn spawn_fvr03_production_voxel_scene(
     #[cfg(not(feature = "vfx-hanabi"))]
     app.add_systems(
         Update,
-        sync_fvr07_attached_fallback_vfx
-            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
-    )
-    .add_systems(
-        Update,
         animate_fvr07_production_vfx.in_set(ProductionVoxelPresentationSet::ProceduralAnimation),
-    );
-    #[cfg(feature = "vfx-hanabi")]
-    app.add_systems(
-        Update,
-        sync_fvr07_attached_hanabi_vfx
-            .in_set(ProductionVoxelPresentationSet::AuthoritativeProjection),
     );
     #[cfg(feature = "gpu-runtime")]
     app.add_systems(
@@ -2284,13 +2177,13 @@ pub fn spawn_fvr03_production_voxel_scene(
             measurement_start_frame: 0,
             measurement_started_at: None,
             measurement_written: false,
-            requested: false,
             path: screenshot_path,
-            product_screenshot_captured: false,
+            product_screenshot_requested: false,
             fvr05_capture_index: 0,
             fvr05_next_capture_frame: 0,
             fvr05_sequence_complete: false,
             developer_overlay: summary.developer_overlay,
+            failure_started: None,
         })
         .add_systems(Update, request_fvr03_recorded_screenshot);
     }
@@ -2486,8 +2379,6 @@ fn procedural_config_from_snapshot(
         activation_radius_chunks: i32::from(snapshot.profile_budget.activation_radius_chunks),
         max_active_chunks: usize::from(snapshot.profile_budget.active_chunk_cap),
         max_active_content_candidates: usize::from(snapshot.profile_budget.max_content_candidates),
-        neighborhood_radius_tiles: i32::from(snapshot.profile_budget.neighborhood_radius_tiles),
-        max_neighborhood_samples: usize::from(snapshot.profile_budget.max_neighborhood_samples),
         virtual_half_extent_chunks: snapshot.profile_budget.virtual_half_extent_chunks,
     }
 }
@@ -2582,7 +2473,6 @@ fn prepare_fvr04_runtime_scene_candidate(
             crate::production_terrain::TerrainAtlasLayout::PRODUCTION,
         )
     };
-    let selected = fvr04_runtime_scene_selection(&runtime_state, &visible_tiles);
     let overlay_spawns = Fvr05ProductionOverlayKind::all()
         .iter()
         .copied()
@@ -2593,7 +2483,6 @@ fn prepare_fvr04_runtime_scene_candidate(
                 &settings,
                 &tile_summaries_by_tile,
                 &visible_chunks,
-                &runtime_state.creatures,
                 snapshot.profile_budget.chunk_tile_size,
             ),
             visible: ux_settings.show_overlays && ux_settings.enabled_overlays.contains(&kind),
@@ -2633,12 +2522,7 @@ fn prepare_fvr04_runtime_scene_candidate(
     let vfx_spawns = if runtime_state.terrain.is_some() {
         Vec::new()
     } else {
-        fvr07_vfx_spawns(
-            &settings,
-            &tile_summaries_by_tile,
-            &runtime_state.creatures,
-            selected,
-        )
+        fvr07_vfx_spawns(&settings, &tile_summaries_by_tile)
     };
     Ok(Fvr04RuntimeSceneCandidate {
         runtime_state,
@@ -2851,7 +2735,6 @@ fn spawn_fvr04_prepared_lighting(world: &mut World, lighting: Fvr04PreparedLight
                 tile: shadow.tile,
                 stable_id: shadow.stable_id,
                 display_only: true,
-                no_renderer_authority_over_world_actions_or_cognition: true,
             },
             Fvr04ProductionRuntimeSceneRoot,
         ));
@@ -3006,7 +2889,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         water_layer_count: terrain_receipt.water_layer_count,
         confetti_detail_quad_count: terrain_receipt.confetti_detail_quad_count,
         display_only: true,
-        no_renderer_authority_over_world_actions_or_cognition: true,
     };
     let creature_scene = spawn_fvr04_prepared_creature_batch(world, creatures);
     god_hand::spawn(world);
@@ -3059,7 +2941,6 @@ fn spawn_fvr04_runtime_scene_candidate(
         draw_radius_chunks: settings.draw_radius_chunks,
         target_fps: settings.target_fps,
         performance_artifact_path: None,
-        no_renderer_authority_over_world_truth: true,
         material_counts,
         average_resource_bias: fvr05_average_resource_bias(&tile_summaries_by_tile),
         average_hazard_pressure: fvr05_average_hazard_pressure(&tile_summaries_by_tile),
@@ -3269,7 +3150,6 @@ fn spawn_fvr11_layered_terrain_meshes(
             material,
             source_tile_count,
             display_only: true,
-            no_renderer_authority_over_world_actions_or_cognition: true,
         };
         if matches!(
             role,
@@ -3405,7 +3285,6 @@ fn fvr05_overlay_cells(
     settings: &Fvr03ProductionVoxelRendererSettings,
     tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
     visible_chunks: &BTreeSet<VoxelChunkCoord>,
-    creatures: &[Fvr04CreatureVisualRecord],
     chunk_tile_size: u16,
 ) -> Vec<Fvr05OverlayCell> {
     let tile_footprint = f32::from(settings.tile_stride.max(1)) * 0.96;
@@ -3420,52 +3299,9 @@ fn fvr05_overlay_cells(
             .filter(|tile| tile.hazard_pressure >= 0.30)
             .map(|tile| fvr05_tile_overlay_cell(tile, tile_footprint, 0.070))
             .collect(),
-        Fvr05ProductionOverlayKind::Pheromones => tile_summaries
-            .values()
-            .filter(|tile| {
-                (tile.resource_bias * 0.65 + tile.hazard_pressure * 0.35) >= 0.34
-                    && (tile.tile.x + tile.tile.z).rem_euclid(2) == 0
-            })
-            .map(|tile| fvr05_tile_overlay_cell(tile, tile_footprint, 0.085))
-            .collect(),
-        Fvr05ProductionOverlayKind::Energy => creatures
+        Fvr05ProductionOverlayKind::ChunkBoundaries => visible_chunks
             .iter()
-            .filter(|creature| creature.visual.cues.energy.value >= 0.45)
-            .map(|creature| fvr05_creature_overlay_cell(creature, 0.92, 1.88))
-            .collect(),
-        Fvr05ProductionOverlayKind::Age => creatures
-            .iter()
-            .filter(|creature| creature.visual.cues.sleep_pressure.value >= 0.35)
-            .map(|creature| fvr05_creature_overlay_cell(creature, 0.74, 2.04))
-            .collect(),
-        Fvr05ProductionOverlayKind::Fertility => creatures
-            .iter()
-            .filter(|creature| creature.reproductive_drive >= 0.35)
-            .map(|creature| fvr05_creature_overlay_cell(creature, 0.80, 2.18))
-            .collect(),
-        Fvr05ProductionOverlayKind::Territory => creatures
-            .iter()
-            .filter(|creature| creature.social_affinity.abs() >= 0.20)
-            .map(|creature| fvr05_creature_overlay_cell(creature, 1.42, 0.10))
-            .collect(),
-        Fvr05ProductionOverlayKind::Neural => creatures
-            .iter()
-            .filter(|creature| {
-                creature.visual.endocrine.dopamine >= 0.25
-                    || creature.visual.endocrine.cortisol >= 0.25
-            })
-            .map(|creature| fvr05_creature_overlay_cell(creature, 0.58, 2.34))
-            .collect(),
-        Fvr05ProductionOverlayKind::Residency => creatures
-            .iter()
-            .map(|creature| fvr05_creature_overlay_cell(creature, 0.46, 2.50))
-            .collect(),
-        Fvr05ProductionOverlayKind::BackendTiming
-        | Fvr05ProductionOverlayKind::ChunkBoundaries
-        | Fvr05ProductionOverlayKind::LodBudget
-        | Fvr05ProductionOverlayKind::Persistence => visible_chunks
-            .iter()
-            .map(|chunk| fvr05_chunk_overlay_cell(*chunk, chunk_tile_size, kind))
+            .map(|chunk| fvr05_chunk_overlay_cell(*chunk, chunk_tile_size))
             .collect(),
     }
 }
@@ -3483,36 +3319,12 @@ fn fvr05_tile_overlay_cell(
     }
 }
 
-fn fvr05_creature_overlay_cell(
-    creature: &Fvr04CreatureVisualRecord,
-    footprint: f32,
-    y: f32,
-) -> Fvr05OverlayCell {
-    Fvr05OverlayCell {
-        center_x: creature.tile.x as f32 + 0.5,
-        center_z: creature.tile.z as f32 + 0.5,
-        y,
-        footprint,
-    }
-}
-
-fn fvr05_chunk_overlay_cell(
-    chunk: VoxelChunkCoord,
-    chunk_tile_size: u16,
-    kind: Fvr05ProductionOverlayKind,
-) -> Fvr05OverlayCell {
+fn fvr05_chunk_overlay_cell(chunk: VoxelChunkCoord, chunk_tile_size: u16) -> Fvr05OverlayCell {
     let size = f32::from(chunk_tile_size);
-    let y = match kind {
-        Fvr05ProductionOverlayKind::ChunkBoundaries => 0.05,
-        Fvr05ProductionOverlayKind::LodBudget => 0.12,
-        Fvr05ProductionOverlayKind::BackendTiming => 0.18,
-        Fvr05ProductionOverlayKind::Persistence => 0.24,
-        _ => 0.08,
-    };
     Fvr05OverlayCell {
         center_x: chunk.x as f32 * size + size * 0.5,
         center_z: chunk.z as f32 * size + size * 0.5,
-        y,
+        y: 0.05,
         footprint: size * 0.94,
     }
 }
@@ -3521,17 +3333,7 @@ fn fvr05_overlay_material(kind: Fvr05ProductionOverlayKind) -> StandardMaterial 
     let rgba = match kind {
         Fvr05ProductionOverlayKind::Resources => [0.40, 1.00, 0.76, 0.34],
         Fvr05ProductionOverlayKind::Danger => [1.00, 0.15, 0.18, 0.36],
-        Fvr05ProductionOverlayKind::Pheromones => [0.96, 0.42, 0.72, 0.28],
-        Fvr05ProductionOverlayKind::Energy => [1.00, 0.86, 0.18, 0.40],
-        Fvr05ProductionOverlayKind::Age => [0.62, 0.82, 1.00, 0.34],
-        Fvr05ProductionOverlayKind::Fertility => [0.76, 0.54, 1.00, 0.36],
-        Fvr05ProductionOverlayKind::Territory => [0.18, 0.95, 0.84, 0.30],
-        Fvr05ProductionOverlayKind::Neural => [0.94, 0.28, 0.90, 0.38],
-        Fvr05ProductionOverlayKind::Residency => [0.46, 0.72, 1.00, 0.36],
-        Fvr05ProductionOverlayKind::BackendTiming => [0.20, 0.86, 1.00, 0.22],
         Fvr05ProductionOverlayKind::ChunkBoundaries => [1.00, 1.00, 1.00, 0.18],
-        Fvr05ProductionOverlayKind::LodBudget => [0.54, 1.00, 0.38, 0.20],
-        Fvr05ProductionOverlayKind::Persistence => [0.96, 0.96, 0.80, 0.22],
     };
     StandardMaterial {
         base_color: Color::srgba(rgba[0], rgba[1], rgba[2], rgba[3]),
@@ -3597,8 +3399,6 @@ fn spawn_fvr07_production_visual_polish(
                 kind: spawn.kind,
                 tile: spawn.tile,
                 display_only: spawn.display_only,
-                no_renderer_authority_over_actions_or_cognition: spawn
-                    .no_renderer_authority_over_actions_or_cognition,
             },
             Fvr04ProductionRuntimeSceneRoot,
         ));
@@ -3625,9 +3425,7 @@ fn spawn_fvr07_production_visual_polish(
                     kind: spawn.kind,
                     tile: spawn.tile,
                     stable_id: spawn.stable_id,
-                    follows_creature: spawn.follows_creature,
                     display_only: true,
-                    no_renderer_authority_over_actions_or_cognition: true,
                     budget_state: settings.production_vfx_budget_state,
                     base_translation: spawn.translation,
                     base_scale: spawn.scale,
@@ -3655,14 +3453,9 @@ fn fvr07_vfx_materials(
     world: &mut World,
 ) -> BTreeMap<Fvr07ProductionVfxKind, Handle<StandardMaterial>> {
     [
-        Fvr07ProductionVfxKind::PheromoneTrail,
         Fvr07ProductionVfxKind::SporeDrift,
-        Fvr07ProductionVfxKind::SleepGlow,
         Fvr07ProductionVfxKind::DangerHazardParticles,
-        Fvr07ProductionVfxKind::EatingResourceEffect,
-        Fvr07ProductionVfxKind::BirthDeathEffect,
         Fvr07ProductionVfxKind::WaterDecayAmbient,
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
     ]
     .into_iter()
     .map(|kind| {
@@ -3689,16 +3482,12 @@ fn fvr07_vfx_material(kind: Fvr07ProductionVfxKind) -> StandardMaterial {
 fn fvr07_vfx_spawns(
     settings: &Fvr03ProductionVoxelRendererSettings,
     tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
-    creatures: &[Fvr04CreatureVisualRecord],
-    selected: Option<StableVoxelObjectRef>,
 ) -> Vec<Fvr07VfxSpawn> {
     let mut spawns = Vec::with_capacity(settings.production_vfx_marker_cap);
     let per_kind = (settings.production_vfx_marker_cap / 8).clamp(1, 12);
     for kind in [
-        Fvr07ProductionVfxKind::PheromoneTrail,
         Fvr07ProductionVfxKind::SporeDrift,
         Fvr07ProductionVfxKind::DangerHazardParticles,
-        Fvr07ProductionVfxKind::EatingResourceEffect,
         Fvr07ProductionVfxKind::WaterDecayAmbient,
     ] {
         for tile in fvr07_tiles_for_vfx(kind, tile_summaries)
@@ -3706,44 +3495,6 @@ fn fvr07_vfx_spawns(
             .take(per_kind)
         {
             fvr07_push_tile_vfx(&mut spawns, settings, kind, tile);
-        }
-    }
-
-    for creature in fvr07_creatures_for_vfx(Fvr07ProductionVfxKind::BirthDeathEffect, creatures)
-        .into_iter()
-        .take(per_kind)
-    {
-        fvr07_push_creature_vfx(
-            &mut spawns,
-            settings,
-            Fvr07ProductionVfxKind::BirthDeathEffect,
-            creature,
-        );
-    }
-
-    let neural_tile = selected
-        .and_then(|selection| selection.tile)
-        .and_then(|tile| tile_summaries.get(&tile))
-        .or_else(|| tile_summaries.values().next());
-    if let Some(tile) = neural_tile {
-        fvr07_push_tile_vfx(
-            &mut spawns,
-            settings,
-            Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
-            tile,
-        );
-    }
-    if spawns
-        .iter()
-        .all(|spawn| spawn.kind != Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse)
-    {
-        if let Some(creature) = creatures.first() {
-            fvr07_push_creature_vfx(
-                &mut spawns,
-                settings,
-                Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
-                creature,
-            );
         }
     }
     spawns.truncate(settings.production_vfx_marker_cap);
@@ -3754,13 +3505,9 @@ fn fvr07_tiles_for_vfx(
     kind: Fvr07ProductionVfxKind,
     tile_summaries: &BTreeMap<VoxelTileCoord, Fvr05ProductionTileSummary>,
 ) -> Vec<&Fvr05ProductionTileSummary> {
-    let mut tiles = tile_summaries
+    let tiles = tile_summaries
         .values()
         .filter(|tile| match kind {
-            Fvr07ProductionVfxKind::PheromoneTrail => {
-                tile.resource_bias * 0.65 + tile.hazard_pressure * 0.35 >= 0.34
-                    && (tile.tile.x + tile.tile.z).rem_euclid(2) == 0
-            }
             Fvr07ProductionVfxKind::SporeDrift => {
                 matches!(
                     tile.material,
@@ -3776,10 +3523,6 @@ fn fvr07_tiles_for_vfx(
                             | Fvr03ProductionVoxelMaterialKind::Decay
                     )
             }
-            Fvr07ProductionVfxKind::EatingResourceEffect => {
-                matches!(tile.material, Fvr03ProductionVoxelMaterialKind::Resource)
-                    || tile.resource_bias >= 0.42
-            }
             Fvr07ProductionVfxKind::WaterDecayAmbient => {
                 matches!(
                     tile.material,
@@ -3787,42 +3530,9 @@ fn fvr07_tiles_for_vfx(
                         | Fvr03ProductionVoxelMaterialKind::Decay
                 )
             }
-            Fvr07ProductionVfxKind::SleepGlow
-            | Fvr07ProductionVfxKind::BirthDeathEffect
-            | Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => false,
         })
         .collect::<Vec<_>>();
-    if tiles.is_empty() {
-        if let Some(tile) = tile_summaries.values().next() {
-            tiles.push(tile);
-        }
-    }
     tiles
-}
-
-fn fvr07_creatures_for_vfx(
-    kind: Fvr07ProductionVfxKind,
-    creatures: &[Fvr04CreatureVisualRecord],
-) -> Vec<&Fvr04CreatureVisualRecord> {
-    let mut candidates = creatures
-        .iter()
-        .filter(|creature| match kind {
-            Fvr07ProductionVfxKind::BirthDeathEffect => {
-                creature.reproductive_drive >= 0.28
-                    || matches!(
-                        creature.visual.animation,
-                        CreatureAnimationState::Hurt | CreatureAnimationState::Afraid
-                    )
-            }
-            _ => false,
-        })
-        .collect::<Vec<_>>();
-    if candidates.is_empty() && kind == Fvr07ProductionVfxKind::BirthDeathEffect {
-        if let Some(creature) = creatures.first() {
-            candidates.push(creature);
-        }
-    }
-    candidates
 }
 
 fn fvr07_push_tile_vfx(
@@ -3839,7 +3549,6 @@ fn fvr07_push_tile_vfx(
         kind,
         tile: Some(tile.tile),
         stable_id: tile.stable_ref.stable_id,
-        follows_creature: false,
         translation: Vec3::new(
             tile.tile.x as f32 + 0.5,
             tile.height_units + fvr07_vfx_y_offset(kind),
@@ -3851,42 +3560,11 @@ fn fvr07_push_tile_vfx(
     });
 }
 
-fn fvr07_push_creature_vfx(
-    spawns: &mut Vec<Fvr07VfxSpawn>,
-    settings: &Fvr03ProductionVoxelRendererSettings,
-    kind: Fvr07ProductionVfxKind,
-    creature: &Fvr04CreatureVisualRecord,
-) {
-    if spawns.len() >= settings.production_vfx_marker_cap {
-        return;
-    }
-    let phase = fvr07_hash_phase(creature.tile);
-    spawns.push(Fvr07VfxSpawn {
-        kind,
-        tile: Some(creature.tile),
-        stable_id: Some(creature.visual.stable_id),
-        follows_creature: true,
-        translation: Vec3::new(
-            creature.tile.x as f32 + 0.5,
-            2.08,
-            creature.tile.z as f32 + 0.5,
-        ),
-        scale: fvr07_vfx_scale(kind, settings),
-        color: fvr07_vfx_color(kind),
-        phase,
-    });
-}
-
 fn fvr07_vfx_y_offset(kind: Fvr07ProductionVfxKind) -> f32 {
     match kind {
-        Fvr07ProductionVfxKind::PheromoneTrail => 0.28,
         Fvr07ProductionVfxKind::SporeDrift => 0.72,
         Fvr07ProductionVfxKind::DangerHazardParticles => 0.62,
-        Fvr07ProductionVfxKind::EatingResourceEffect => 0.48,
         Fvr07ProductionVfxKind::WaterDecayAmbient => 0.34,
-        Fvr07ProductionVfxKind::SleepGlow => 0.58,
-        Fvr07ProductionVfxKind::BirthDeathEffect => 0.70,
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => 0.76,
     }
 }
 
@@ -3896,28 +3574,18 @@ fn fvr07_vfx_scale(
 ) -> Vec3 {
     let profile_scale = if settings.minimum_floor { 0.96 } else { 1.08 };
     let base = match kind {
-        Fvr07ProductionVfxKind::PheromoneTrail => Vec3::new(1.00, 0.06, 0.30),
         Fvr07ProductionVfxKind::SporeDrift => Vec3::new(0.36, 0.36, 0.36),
-        Fvr07ProductionVfxKind::SleepGlow => Vec3::new(0.14, 0.040, 0.14),
         Fvr07ProductionVfxKind::DangerHazardParticles => Vec3::new(0.46, 0.52, 0.46),
-        Fvr07ProductionVfxKind::EatingResourceEffect => Vec3::new(0.34, 0.44, 0.34),
-        Fvr07ProductionVfxKind::BirthDeathEffect => Vec3::new(0.22, 0.050, 0.22),
         Fvr07ProductionVfxKind::WaterDecayAmbient => Vec3::new(0.64, 0.07, 0.64),
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => Vec3::new(0.28, 0.045, 0.28),
     };
     base * profile_scale
 }
 
 fn fvr07_vfx_color(kind: Fvr07ProductionVfxKind) -> [f32; 4] {
     match kind {
-        Fvr07ProductionVfxKind::PheromoneTrail => [0.95, 0.30, 0.74, 0.58],
         Fvr07ProductionVfxKind::SporeDrift => [0.62, 0.95, 0.70, 0.54],
-        Fvr07ProductionVfxKind::SleepGlow => [0.95, 0.66, 0.18, 0.24],
         Fvr07ProductionVfxKind::DangerHazardParticles => [1.00, 0.10, 0.24, 0.68],
-        Fvr07ProductionVfxKind::EatingResourceEffect => [1.00, 0.82, 0.20, 0.62],
-        Fvr07ProductionVfxKind::BirthDeathEffect => [0.74, 0.38, 0.86, 0.30],
         Fvr07ProductionVfxKind::WaterDecayAmbient => [0.18, 0.70, 0.92, 0.48],
-        Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse => [0.98, 0.82, 0.22, 0.34],
     }
 }
 
@@ -4065,9 +3733,7 @@ fn spawn_fvr07_hanabi_gpu_vfx_emitters(
             Fvr07ProductionHanabiVfxEmitter {
                 kind: spawn.kind,
                 stable_id: spawn.stable_id,
-                follows_creature: spawn.follows_creature,
                 display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: settings.production_vfx_budget_state,
             },
             Fvr04ProductionRuntimeSceneRoot,
@@ -4255,20 +3921,13 @@ fn fvr04_creature_root_bundle(
     tile: VoxelTileCoord,
     transform: Transform,
     mut visual: Fvr04ProductionCreatureVisualMarker,
-    mut cute: Fvr09CuteBipedCreatureMarker,
-    mut species: Fvr10CreatureSpeciesMarker,
     display_only: bool,
 ) -> impl bevy::ecs::bundle::Bundle {
     visual.stable_id = stable_id;
     visual.organism_id = organism_id;
     visual.tile = tile;
-    cute.stable_id = stable_id;
-    species.stable_id = stable_id;
     (
-        Name::new(format!(
-            "A-Life modular creature assembly stable {}",
-            stable_id.raw()
-        )),
+        Name::new(format!("A-Life creature stable {}", stable_id.raw())),
         transform,
         Visibility::Inherited,
         Fvr03ProductionVoxelCreatureMarker { stable_id, tile },
@@ -4279,8 +3938,6 @@ fn fvr04_creature_root_bundle(
             display_only,
         },
         Fvr04ProductionRuntimeSceneRoot,
-        cute,
-        species,
     )
 }
 
@@ -4319,24 +3976,6 @@ fn spawn_fvr04_prepared_creature_batch(
                 creature.record.tile,
                 creature.root_transform,
                 creature.root_visual,
-                Fvr09CuteBipedCreatureMarker {
-                    stable_id: visual.stable_id,
-                    visual_profile: "approved-hearthling-skinned-v2",
-                    two_legs: true,
-                    visible_face: true,
-                    eye_markers: 2,
-                    front_back_orientation: true,
-                    real_state_driven: true,
-                },
-                Fvr10CreatureSpeciesMarker {
-                    stable_id: visual.stable_id,
-                    species_archetype: visual.appearance.species_archetype,
-                    species_label: visual.appearance.species_label(),
-                    body_plan_signature: visual.appearance.body_plan_signature(),
-                    bipedal: true,
-                    caveman_furry_design: true,
-                    heritable_appearance: true,
-                },
                 true,
             ))
             .id();
@@ -4387,7 +4026,6 @@ fn spawn_fvr04_prepared_creature_batch(
         mesh_pool_count: scene_mesh_handles.len(),
         lod: settings.lod,
         stable_lookup_by_raw_id,
-        no_renderer_authority_over_actions_or_cognition: true,
         expression_buffer_is_read_only_projection: true,
         visual_profile: "approved-hearthling-skinned-v2",
         mesh_material_version: "approved-blender-vertex-color-v2",
@@ -4401,44 +4039,6 @@ fn spawn_fvr04_prepared_creature_batch(
         production_visuals_display_only: true,
         expression_buffer,
     }
-}
-
-#[cfg(test)]
-fn socket_translation_to_bevy([x, depth, height]: [f32; 3]) -> Vec3 {
-    Vec3::new(x, height, -depth)
-}
-
-#[cfg(test)]
-fn canonical_vec_to_bevy(vector: Vec3) -> Vec3 {
-    Vec3::new(vector.x, vector.z, -vector.y)
-}
-
-#[cfg(test)]
-fn socket_rotation_to_bevy([x, depth, height, w]: [f32; 4]) -> Quat {
-    let canonical = Quat::from_xyzw(x, depth, height, w);
-    let rotate_basis = |basis| canonical_vec_to_bevy(canonical * basis);
-    Quat::from_mat3(&bevy::math::Mat3::from_cols(
-        rotate_basis(Vec3::X),
-        rotate_basis(Vec3::Z),
-        rotate_basis(Vec3::NEG_Y),
-    ))
-    .normalize()
-}
-
-#[cfg(test)]
-fn socket_scale_to_bevy([x, depth, height]: [f32; 3]) -> Vec3 {
-    Vec3::new(x, height, depth)
-}
-
-#[cfg(test)]
-fn socket_transform_to_bevy(
-    _slot: CreaturePartSlot,
-    socket: SocketFrame,
-    local_scale: [f32; 3],
-) -> Transform {
-    Transform::from_translation(socket_translation_to_bevy(socket.translation))
-        .with_rotation(socket_rotation_to_bevy(socket.rotation_xyzw))
-        .with_scale(socket_scale_to_bevy(socket.scale) * socket_scale_to_bevy(local_scale))
 }
 
 fn project_authoritative_creature_root_transform(
@@ -4601,44 +4201,6 @@ fn animate_fvr04_creatures(
     }
 }
 
-fn animate_fvr04_creature_parts(
-    time: Res<Time>,
-    ux: Option<Res<Fvr05ProductionUxStateResource>>,
-    mut animation_seconds: Local<f32>,
-    mut parts: bevy::prelude::Query<(
-        &mut Transform,
-        &ProductionCreaturePartMarker,
-        &ProductionCreaturePartRestTransform,
-        &ViewVisibility,
-    )>,
-) {
-    let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
-    let speed = ux.as_ref().map(|ux| ux.animation_speed).unwrap_or(1.0);
-    let seconds =
-        advance_fvr04_animation_phase(*animation_seconds, time.delta_secs(), speed, paused);
-    *animation_seconds = seconds;
-    if paused {
-        return;
-    }
-    for (mut transform, marker, rest_transform, view_visibility) in &mut parts {
-        if !view_visibility.get() {
-            continue;
-        }
-        let phase = (marker.stable_id.raw() % 31) as f32 * 0.19;
-        let wave = (seconds * 3.8 + phase).sin();
-        let pose = creature_part_pose(marker.animation, marker.slot, wave);
-        transform.translation = rest_transform.0.translation + Vec3::from_array(pose.translation);
-        transform.rotation = rest_transform.0.rotation
-            * Quat::from_euler(
-                EulerRot::XYZ,
-                pose.rotation_xyz[0],
-                pose.rotation_xyz[1],
-                pose.rotation_xyz[2],
-            );
-        transform.scale = rest_transform.0.scale * Vec3::from_array(pose.scale);
-    }
-}
-
 fn fvr04_animation_speed(animation: CreatureAnimationState) -> f32 {
     match animation {
         CreatureAnimationState::Idle => 1.7,
@@ -4728,65 +4290,6 @@ fn sync_fvr11_creature_contact_shadows(
 }
 
 #[cfg(not(feature = "vfx-hanabi"))]
-fn sync_fvr07_attached_fallback_vfx(
-    mut commands: Commands,
-    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
-    frame: Option<Res<LiveBrainPresentationFrameResource>>,
-    mut markers: bevy::prelude::Query<(Entity, &mut Transform, &mut Fvr07ProductionGpuVfxMarker)>,
-) {
-    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
-        return;
-    };
-    for (entity, mut transform, mut marker) in &mut markers {
-        if !marker.follows_creature {
-            continue;
-        }
-        let Some(stable_id) = marker.stable_id else {
-            continue;
-        };
-        let Some((tile, position)) =
-            live_agent_ground_position(&frame, stable_id, highlands.is_some())
-        else {
-            commands.entity(entity).despawn();
-            continue;
-        };
-        marker.tile = Some(tile);
-        marker.base_translation.x = position.x;
-        marker.base_translation.z = position.z;
-        transform.translation.x = position.x;
-        transform.translation.z = position.z;
-    }
-}
-
-#[cfg(feature = "vfx-hanabi")]
-fn sync_fvr07_attached_hanabi_vfx(
-    mut commands: Commands,
-    highlands: Option<Res<creature_grounding::SelectedTerrain>>,
-    frame: Option<Res<LiveBrainPresentationFrameResource>>,
-    mut emitters: bevy::prelude::Query<(Entity, &mut Transform, &Fvr07ProductionHanabiVfxEmitter)>,
-) {
-    let Some(frame) = frame.filter(|frame| frame.is_changed()) else {
-        return;
-    };
-    for (entity, mut transform, emitter) in &mut emitters {
-        if !emitter.follows_creature {
-            continue;
-        }
-        let Some(stable_id) = emitter.stable_id else {
-            continue;
-        };
-        let Some((_, position)) =
-            live_agent_ground_position(&frame, stable_id, highlands.is_some())
-        else {
-            commands.entity(entity).despawn();
-            continue;
-        };
-        transform.translation.x = position.x;
-        transform.translation.z = position.z;
-    }
-}
-
-#[cfg(not(feature = "vfx-hanabi"))]
 fn animate_fvr07_production_vfx(
     time: Res<Time>,
     ux: Option<Res<Fvr05ProductionUxStateResource>>,
@@ -4794,7 +4297,7 @@ fn animate_fvr07_production_vfx(
     mut markers: bevy::prelude::Query<(
         &mut Transform,
         &Fvr07ProductionGpuVfxMarker,
-        &ViewVisibility,
+        &bevy::prelude::ViewVisibility,
     )>,
 ) {
     let paused = ux.as_ref().is_some_and(|ux| ux.settings.paused);
@@ -5187,6 +4690,14 @@ fn sync_v0_player_control_strip(
     if !ux.is_changed() && !authority_changed {
         return;
     }
+    if !ux.show_help && !ux.debug_mode {
+        for (_, mut visibility, _) in &mut strips {
+            if *visibility != Visibility::Hidden {
+                *visibility = Visibility::Hidden;
+            }
+        }
+        return;
+    }
     let mut text = if ux.show_help {
         "F1 Close help | Space Pause | 1 1x | 2 Max | 3 Headless max (closes window) | S Save | L Load\nClick Select | E Food on ground | G Move food | C Gentle touch | J Offer play | K Praise reward\nEnter Speak | Y Lineage | Arrows/Edges Pan | Home Find creature | F Follow | PgUp/PgDn Next creature | R Reset view\nF6 Speech text | F7 Narration | F8 Translation | F3 Debug".to_string()
     } else {
@@ -5204,8 +4715,7 @@ fn sync_v0_player_control_strip(
     if simulation_failed {
         text.push_str("\nSimulation stopped. F3 for details.");
     } else if let Some(error) = ux.last_error.as_deref() {
-        // Show only bounded, player-facing explanations here. The original
-        // error and action (including paths) remain in the debug panel.
+        // Keep detailed errors and file paths in the debug panel.
         let message = match error {
             "select a visible terrain tile first" => {
                 "Click a ground tile, then press E to place food."
@@ -5625,7 +5135,7 @@ fn fvr05_overlay_key_pressed(
     let shifted_mappings = [
         (KeyCode::Digit1, Fvr05ProductionOverlayKind::Resources),
         (KeyCode::Digit2, Fvr05ProductionOverlayKind::Danger),
-        (KeyCode::Digit3, Fvr05ProductionOverlayKind::Pheromones),
+        (KeyCode::Digit3, Fvr05ProductionOverlayKind::ChunkBoundaries),
     ];
     if fvr05_overlay_modifier_pressed(keyboard) {
         if let Some(kind) = shifted_mappings
@@ -5635,21 +5145,9 @@ fn fvr05_overlay_key_pressed(
             return Some(kind);
         }
     }
-    let mappings = [
-        (KeyCode::Digit4, Fvr05ProductionOverlayKind::Energy),
-        (KeyCode::Digit5, Fvr05ProductionOverlayKind::Age),
-        (KeyCode::Digit6, Fvr05ProductionOverlayKind::Fertility),
-        (KeyCode::Digit7, Fvr05ProductionOverlayKind::Territory),
-        (KeyCode::Digit8, Fvr05ProductionOverlayKind::Neural),
-        (KeyCode::Digit9, Fvr05ProductionOverlayKind::Residency),
-        (KeyCode::KeyB, Fvr05ProductionOverlayKind::BackendTiming),
-        (KeyCode::KeyC, Fvr05ProductionOverlayKind::ChunkBoundaries),
-        (KeyCode::KeyD, Fvr05ProductionOverlayKind::LodBudget),
-        (KeyCode::KeyV, Fvr05ProductionOverlayKind::Persistence),
-    ];
-    mappings
-        .iter()
-        .find_map(|(key, kind)| keyboard.just_pressed(*key).then_some(*kind))
+    keyboard
+        .just_pressed(KeyCode::KeyC)
+        .then_some(Fvr05ProductionOverlayKind::ChunkBoundaries)
 }
 
 fn fvr05_overlay_modifier_pressed(keyboard: &ButtonInput<KeyCode>) -> bool {
@@ -5842,7 +5340,7 @@ fn sync_fvr05_left_control_panel(
         .map(|error| format!("\nERROR\n{error}\n"))
         .unwrap_or_default();
     let text = format!(
-        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1 1x | 2 Max | 3 Headless max\nHeadless closes the window; stop file path prints in launch log\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3, 4-9, B/C/D/V overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nRUN MODE\n{}\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
+        "SIMULATION ({menu})\nSpace/P play-pause: {}\nN step once | 1 1x | 2 Max | 3 Headless max\nHeadless closes the window; stop file path prints in launch log\nS save world + UX | L load\nM menu | G settings | H overlays\nTab inspector | Q next profile\nShift+1-3 or C terrain overlays\n\nQUICK CONTROLS\nfollow selection: {}\npause on focus loss: {}\noverlays: {}\n\nRUN MODE\n{}\n\nLIVE / STARTUP ESTIMATES\nlive creatures {}\nstartup chunks loaded {}\nstartup chunks resident {}\nstartup tiles sampled {}\nstartup mesher {} quads {} face reduction {:.2}x\nconfigured remesh budget {} snapshot dirty {} estimated cached {} deferred {}\nmaterial atlas {}\ncreature visual {}\nbackend {}\n{}LAST ACTION\n{}{}",
         if ux.settings.paused {
             "paused"
         } else {
@@ -5933,7 +5431,7 @@ fn sync_fvr05_right_inspector_panel(
     });
     let body = match ux.settings.active_inspector_tab {
         Fvr05ProductionInspectorTab::Creature => format!(
-            "{}\n\nPRESENTATION DETAIL\n{}\n\nDEBUG AUTHORITY\n{}",
+            "{}\n\nPRESENTATION DETAIL\n{}",
             fvr04_live_creature_inspector_text(
                 selection.selected,
                 &creatures,
@@ -5946,7 +5444,6 @@ fn sync_fvr05_right_inspector_panel(
                 .and_then(|id| creatures.sample_for_stable_id(id))
                 .map(v0_selected_creature_text)
                 .unwrap_or_else(|| "unavailable".to_string()),
-            ux.authority.compact_line()
         ),
         Fvr05ProductionInspectorTab::Tile => {
             scene.tile_panel_text(selection.selected.or(selection.hovered))
@@ -5987,7 +5484,7 @@ fn sync_fvr05_bottom_overlay_toolbar(
     let first = labels[..labels.len().min(7)].join(" | ");
     let second = labels[labels.len().min(7)..].join(" | ");
     let text = format!(
-        "OVERLAYS\n{}\n{}\nkeys: Shift+1 Resources Shift+2 Danger Shift+3 Pheromones 4 Energy 5 Age 6 Fertility 7 Territory 8 Neural 9 Residency B Backend C Chunks D LOD V Persistence",
+        "OVERLAYS\n{}\n{}\nkeys: Shift+1 terrain resources, Shift+2 terrain danger, Shift+3 or C chunk boundaries",
         first, second
     );
     for mut panel in &mut panels {
@@ -6552,9 +6049,43 @@ fn request_fvr03_recorded_screenshot(
         ResMut<ProductionConversationLineageUiState>,
     >,
     #[cfg(feature = "gpu-runtime")] phase31: Option<Res<Phase31PerformanceMetricsResource>>,
+    #[cfg(feature = "gpu-runtime")] mut runtime: Option<
+        NonSendMut<ProductionGpuBrainRuntimeResource>,
+    >,
+    #[cfg(feature = "gpu-runtime")] mut schedule: Option<
+        ResMut<ProductionGpuBrainTickScheduleResource>,
+    >,
     mut overlay_batches: bevy::prelude::Query<&mut Visibility, With<Fvr05ProductionOverlayBatch>>,
     mut exits: MessageWriter<AppExit>,
 ) {
+    if let Some(started) = capture.failure_started {
+        #[cfg(feature = "gpu-runtime")]
+        {
+            if let Some(schedule) = schedule.as_deref_mut() {
+                schedule.pause();
+            }
+            if let Some(runtime) = runtime.as_deref_mut() {
+                if let Err(error) = runtime.runtime.poll_persistence_for_shutdown() {
+                    eprintln!("PRODUCTION_CAPTURE_PERSISTENCE_ERROR {error}");
+                }
+                if !runtime.runtime.persistence_terminal_for_shutdown()
+                    && started.elapsed() < PHASE31_PERSISTENCE_DRAIN_TIMEOUT
+                {
+                    return;
+                }
+                if !runtime.runtime.persistence_terminal_for_shutdown() {
+                    eprintln!(
+                        "PRODUCTION_CAPTURE_DRAIN_TIMEOUT {}",
+                        runtime.runtime.persistence_shutdown_diagnostics()
+                    );
+                }
+            }
+        }
+        #[cfg(not(feature = "gpu-runtime"))]
+        let _ = started;
+        exits.write(AppExit::Error(std::num::NonZeroU8::new(1).unwrap()));
+        return;
+    }
     #[cfg(feature = "gpu-runtime")]
     let legacy_capture_controls_lifetime =
         fvr03_legacy_capture_controls_lifetime(phase31.is_some());
@@ -6575,14 +6106,17 @@ fn request_fvr03_recorded_screenshot(
         if let Some(started_at) = capture.measurement_started_at {
             let elapsed_seconds = started_at.elapsed().as_secs_f64().max(0.001);
             let measured_fps = f64::from(capture.measurement_sample_frames) / elapsed_seconds;
-            let _ = write_fvr03_performance_artifact(
+            if let Err(error) = write_fvr03_performance_artifact(
                 &scene,
                 Some((
                     measured_fps,
                     capture.measurement_sample_frames,
                     elapsed_seconds,
                 )),
-            );
+            ) {
+                capture.fail(error.to_string());
+                return;
+            }
         }
         capture.measurement_written = true;
     }
@@ -6594,13 +6128,14 @@ fn request_fvr03_recorded_screenshot(
     ) {
         return;
     }
-    if !capture.product_screenshot_captured {
+    if !capture.product_screenshot_requested {
         if let Some(parent) = capture.path.parent() {
-            if fs::create_dir_all(parent).is_err() {
-                capture.requested = true;
-                if legacy_capture_controls_lifetime {
-                    exits.write(AppExit::Success);
-                }
+            if let Err(error) = fs::create_dir_all(parent) {
+                let message = format!(
+                    "cannot create screenshot directory {}: {error}",
+                    parent.display()
+                );
+                capture.fail(message);
                 return;
             }
         }
@@ -6610,7 +6145,7 @@ fn request_fvr03_recorded_screenshot(
             ux.settings.show_settings = false;
             ux.settings.show_overlays = false;
             ux.last_action =
-                "Capture-mode selection (non-input evidence); recorded clean product screenshot"
+                "Capture-mode selection (non-input evidence); requested clean product screenshot"
                     .to_string();
         }
         for mut visibility in &mut overlay_batches {
@@ -6618,8 +6153,8 @@ fn request_fvr03_recorded_screenshot(
         }
         commands
             .spawn(Screenshot::primary_window())
-            .observe(save_to_disk(capture.path.clone()));
-        capture.product_screenshot_captured = true;
+            .observe(save_recorded_screenshot(capture.path.clone()));
+        capture.product_screenshot_requested = true;
         capture.fvr05_next_capture_frame =
             capture.frame.saturating_add(FVR05_SCREENSHOT_SETTLE_FRAMES);
         if !capture.developer_overlay {
@@ -6632,7 +6167,6 @@ fn request_fvr03_recorded_screenshot(
             && capture.measurement_written
             && capture.frame >= capture.fvr05_next_capture_frame
         {
-            capture.requested = true;
             exits.write(AppExit::Success);
         }
         return;
@@ -6646,11 +6180,12 @@ fn request_fvr03_recorded_screenshot(
         return;
     };
     if let Some(parent) = capture.path.parent() {
-        if fs::create_dir_all(parent).is_err() {
-            capture.requested = true;
-            if legacy_capture_controls_lifetime {
-                exits.write(AppExit::Success);
-            }
+        if let Err(error) = fs::create_dir_all(parent) {
+            let message = format!(
+                "cannot create screenshot directory {}: {error}",
+                parent.display()
+            );
+            capture.fail(message);
             return;
         }
     }
@@ -6662,7 +6197,7 @@ fn request_fvr03_recorded_screenshot(
         ux.settings.show_overlays = show_developer_surfaces;
         ux.settings.active_inspector_tab = tab;
         ux.last_action = format!(
-            "Capture-mode selection (non-input evidence); recorded {} tab",
+            "Capture-mode selection (non-input evidence); requested {} tab",
             tab.label()
         );
     }
@@ -6677,11 +6212,38 @@ fn request_fvr03_recorded_screenshot(
     let path = fvr05_screenshot_path(&capture.path, suffix);
     commands
         .spawn(Screenshot::primary_window())
-        .observe(save_to_disk(path));
+        .observe(save_recorded_screenshot(path));
     capture.fvr05_capture_index = capture.fvr05_capture_index.saturating_add(1);
     capture.fvr05_next_capture_frame = capture.frame.saturating_add(FVR05_SCREENSHOT_SETTLE_FRAMES);
     if fvr05_screenshot_step(capture.fvr05_capture_index).is_none() {
         capture.fvr05_sequence_complete = true;
+    }
+}
+
+fn save_recorded_screenshot(
+    path: PathBuf,
+) -> impl FnMut(
+    bevy::prelude::On<bevy::render::view::screenshot::ScreenshotCaptured>,
+    ResMut<Fvr03ProductionVoxelScreenshotResource>,
+) {
+    move |screenshot, mut capture| {
+        let result = screenshot
+            .image
+            .clone()
+            .try_into_dynamic()
+            .map_err(|error| error.to_string())
+            .and_then(|image| {
+                image
+                    .to_rgb8()
+                    .save_with_format(&path, image::ImageFormat::Png)
+                    .map_err(|error| error.to_string())
+            });
+        if let Err(error) = result {
+            capture.fail(format!(
+                "cannot save screenshot {}: {error}",
+                path.display()
+            ));
+        }
     }
 }
 
@@ -7263,69 +6825,6 @@ mod tests {
         }
     }
 
-    fn empty_scene() -> Fvr03ProductionVoxelSceneResource {
-        Fvr03ProductionVoxelSceneResource {
-            schema: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
-            schema_version: FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA_VERSION,
-            snapshot_schema: FVR02_PERSISTENT_VOXEL_WORLD_SCHEMA.to_string(),
-            profile_id: ProductionFrontendProfileId::MinimumSettings30x30,
-            population: 30,
-            renderer_profile: PRODUCTION_VOXEL_RENDERER_PROFILE.to_string(),
-            backend_id: FVR10_RENDERER_BACKEND_ID,
-            uses_internal_voxel_terrain_mesh: true,
-            visible_chunk_count: 1,
-            resident_chunk_count: 1,
-            tile_mesh_count: 4,
-            creature_render_count: 1,
-            creature_material_bucket_count: 1,
-            creature_lod: Fvr04CreatureLod::CompactVoxel,
-            creature_root_count: 1,
-            creature_part_entity_count: CreaturePartSlot::ALL.len(),
-            creature_join_cover_count: 0,
-            creature_part_family_count: 1,
-            creature_mixed_assembly_count: 0,
-            creature_shared_mesh_handle_count: CreaturePartSlot::ALL.len(),
-            selection_ref_count: 1,
-            dirty_chunk_count: 0,
-            estimated_resident_bytes: 128 * 1024,
-            draw_radius_chunks: 2,
-            target_fps: 30,
-            performance_artifact_path: None,
-            no_renderer_authority_over_world_truth: true,
-            material_counts: BTreeMap::new(),
-            average_resource_bias: 0.0,
-            average_hazard_pressure: 0.0,
-            production_dressing_count: 4,
-            production_vfx_marker_count: 8,
-            production_gpu_vfx_emitter_count: 0,
-            production_vfx_budget_state: "conservative",
-            production_visuals_display_only: true,
-            production_vfx_uses_hanabi_gpu_particles: cfg!(feature = "vfx-hanabi"),
-            mesh_stats: Fvr09TerrainMeshStats {
-                mode: Fvr09MesherMode::LayeredGridQuads,
-                visible_voxels: 4,
-                naive_visible_faces: 24,
-                emitted_quads: 18,
-                face_reduction_ratio: 1.333,
-                remesh_time_micros: 0,
-                dirty_chunks: 0,
-                cached_chunks: 1,
-                skipped_chunks: 0,
-                remesh_budget_chunks_per_frame: 4,
-                material_palette_version: FVR10_VISIBLE_SURFACE_VARIATION_VERSION,
-                vertex_color_face_variation: true,
-                top_side_color_separation: true,
-                variation_bucket_count: 4,
-                cache_key: "test-profile;palette=fvr10-visible-surface-variation-v1".to_string(),
-            },
-            visible_tiles: BTreeSet::new(),
-            visible_chunks: BTreeSet::from([VoxelChunkCoord { x: 0, z: 0 }]),
-            tile_summaries_by_tile: BTreeMap::new(),
-            creature_refs_by_tile: BTreeMap::new(),
-            selection_positions_by_raw_id: BTreeMap::new(),
-        }
-    }
-
     #[cfg(feature = "gpu-runtime")]
     #[test]
     fn production_runtime_load_request_is_one_shot() {
@@ -7351,12 +6850,10 @@ mod tests {
         ));
         world.spawn((
             Fvr07ProductionGpuVfxMarker {
-                kind: Fvr07ProductionVfxKind::SleepGlow,
+                kind: Fvr07ProductionVfxKind::SporeDrift,
                 tile: None,
                 stable_id: None,
-                follows_creature: false,
                 display_only: true,
-                no_renderer_authority_over_actions_or_cognition: true,
                 budget_state: "test",
                 base_translation: Vec3::ZERO,
                 base_scale: Vec3::ONE,
@@ -7438,21 +6935,6 @@ mod tests {
     }
 
     #[test]
-    fn fvr05_overlay_toggles_do_not_change_scene_signature() {
-        let scene = empty_scene();
-        let before = scene.stable_sim_signature();
-        let mut overlays = Fvr05ProductionOverlayKind::default_enabled_for_profile(
-            ProductionFrontendProfileId::MinimumSettings30x30,
-        );
-        overlays.retain(|kind| *kind != Fvr05ProductionOverlayKind::Danger);
-        overlays.push(Fvr05ProductionOverlayKind::ChunkBoundaries);
-        overlays.sort();
-        assert_eq!(scene.stable_sim_signature(), before);
-        assert!(scene.no_renderer_authority_over_world_truth);
-        assert!(scene.production_visuals_display_only);
-    }
-
-    #[test]
     fn ambient_gpu_vfx_budget_stays_subtle_at_floor_profiles() {
         let minimum = fvr07_hanabi_budget(ProductionFrontendProfileId::MinimumSettings30x30);
         let comfort = fvr07_hanabi_budget(ProductionFrontendProfileId::MinSpecComfort1080p);
@@ -7483,6 +6965,50 @@ mod tests {
         assert_eq!(comfort.production_dressing_cap, 224);
         assert!(comfort.production_dressing_cap < high.production_dressing_cap);
         assert!(high.production_dressing_cap <= 384);
+    }
+
+    #[test]
+    fn recorded_screenshot_observer_retains_write_failure() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let blocker = std::env::temp_dir().join(format!(
+            "alife-capture-blocker-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::write(&blocker, b"preserve this file").unwrap();
+        let path = blocker.join("capture.png");
+        let mut world = World::new();
+        world.insert_resource(Fvr03ProductionVoxelScreenshotResource {
+            frame: 0,
+            capture_after_frame: 0,
+            measurement_sample_frames: 1,
+            measurement_start_frame: 0,
+            measurement_started_at: None,
+            measurement_written: false,
+            path: path.clone(),
+            product_screenshot_requested: false,
+            fvr05_capture_index: 0,
+            fvr05_next_capture_frame: 0,
+            fvr05_sequence_complete: false,
+            developer_overlay: false,
+            failure_started: None,
+        });
+        let entity = world.spawn_empty().id();
+        world
+            .entity_mut(entity)
+            .observe(save_recorded_screenshot(path));
+        world.trigger(bevy::render::view::screenshot::ScreenshotCaptured {
+            entity,
+            image: Image::default(),
+        });
+        assert!(world
+            .resource::<Fvr03ProductionVoxelScreenshotResource>()
+            .failure_started
+            .is_some());
+        assert_eq!(fs::read(&blocker).unwrap(), b"preserve this file");
+        fs::remove_file(blocker).unwrap();
     }
 
     #[test]
@@ -7749,24 +7275,6 @@ mod tests {
                 panic!("durable checkpoint notification must not project as pre-commit: {other:?}")
             }
         }
-    }
-
-    #[test]
-    fn socket_transform_preserves_catalog_translation_rotation_and_scale() {
-        let half_turn = std::f32::consts::FRAC_PI_4;
-        let transform = socket_transform_to_bevy(
-            CreaturePartSlot::LeftArm,
-            SocketFrame {
-                translation: [-0.08, 0.2, 0.3],
-                rotation_xyzw: [0.0, 0.0, half_turn.sin(), half_turn.cos()],
-                scale: [2.0, 3.0, 4.0],
-            },
-            [0.5, 0.25, 0.125],
-        );
-
-        assert!((transform.translation - Vec3::new(-0.08, 0.3, -0.2)).length() < 1.0e-5);
-        assert!((transform.scale - Vec3::new(1.0, 0.5, 0.75)).length() < 1.0e-5);
-        assert!((transform.rotation * Vec3::X - Vec3::NEG_Z).length() < 1.0e-5);
     }
 
     fn presentation_frame(

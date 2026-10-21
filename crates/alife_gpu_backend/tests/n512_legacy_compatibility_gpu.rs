@@ -137,6 +137,12 @@ fn canonical_v2_control_ticks_under_the_same_profile() {
     let development =
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
     let phenotype = PhenotypeCompiler::compile(&genome, &capacity, &development, profile).unwrap();
+    GpuClassBucketPlan::for_phenotype(&phenotype)
+        .unwrap()
+        .slot_allocation_receipt()
+        .unwrap()
+        .validate_contract()
+        .unwrap();
     let organism = alife_core::OrganismId(51_200_003);
     let physiology = support::test_physiology(51_200_003, &phenotype).unwrap();
     let mut backend =

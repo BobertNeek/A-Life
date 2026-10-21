@@ -215,7 +215,6 @@ fn place(
             kind: Fvr07ProductionDressingKind::LeafPatch,
             tile,
             display_only: true,
-            no_renderer_authority_over_actions_or_cognition: true,
         },
     ));
     if name.starts_with("Oak_") {
@@ -247,10 +246,10 @@ pub(super) fn reveal_creatures(
                 && t < 1.0
                 && (center - camera.translation - sight * t).length_squared() < radius * radius
         });
-        *visibility = if obscures {
+        visibility.set_if_neq(if obscures {
             Visibility::Hidden
         } else {
             Visibility::Inherited
-        };
+        });
     }
 }

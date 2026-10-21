@@ -1,11 +1,7 @@
-//! Engine-neutral sleep scheduling, durable GPU consolidation transactions,
-//! and legacy offline consolidation diagnostics.
-//!
-//! Sleep consolidation is an explicit offline/sleep-phase path. It may drain
-//! plastic traces and stage structural edit candidates, but it does not resize
-//! active tick neural structures or mutate inherited genetic weights by default.
+//! Sleep scheduling, durable GPU consolidation, and bounded memory, predictor,
+//! and topology replay. Legacy report types remain readable for checkpoints.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
@@ -17,9 +13,9 @@ pub use replay::*;
 use crate::{
     predictive::GroundedSuccessorPredictor, require_current_version, validate_finite,
     CanonicalDigestBuilder, ChemistryModulation, Confidence, DurationTicks, HomeostaticParameters,
-    HomeostaticSnapshot, LobeKind, MemoryBank, MemoryId, NeuralProjectionSchema, NormalizedScalar,
-    ProjectionRoutingRef, RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions,
-    SparseTilePayload, SynapseWeightSplit, Tick, TopologicalMap, TopologySidecar, Validate,
+    HomeostaticSnapshot, MemoryBank, MemoryId, NormalizedScalar, ProjectionRoutingRef,
+    RecoveryTrigger, ScaffoldContractError, SchemaKind, SchemaVersions, Tick, TopologicalMap,
+    TopologySidecar, Validate,
 };
 
 pub const SLEEP_CONSOLIDATION_SCHEMA_VERSION: u16 = SchemaVersions::CURRENT.sleep_consolidation.0;
@@ -178,21 +174,10 @@ pub struct SleepConsolidationConfig {
     pub fatigue_threshold: NormalizedScalar,
     pub sleep_pressure_threshold: NormalizedScalar,
     pub entering_duration: DurationTicks,
-    pub consolidation_duration: DurationTicks,
     pub waking_duration: DurationTicks,
     pub forced_recovery_min_duration: DurationTicks,
-    pub h_shadow_drain_rate: NormalizedScalar,
-    pub h_shadow_decay_rate: NormalizedScalar,
-    pub lifetime_staging_rate: NormalizedScalar,
     pub memory_max_records_after: usize,
     pub concept_simplex_consolidation_limit: usize,
-    pub structural_edit_candidate_limit: usize,
-    pub stable_trait_promotion_threshold: u32,
-    pub stable_trait_strength_threshold: NormalizedScalar,
-    pub stable_trait_variance_threshold: NormalizedScalar,
-    pub allow_lamarckian_inheritance: bool,
-    pub reset_alpha_after_lifetime_staging: bool,
-    pub weight_abs_limit: f32,
 }
 
 impl SleepConsolidationConfig {
@@ -202,21 +187,10 @@ impl SleepConsolidationConfig {
             fatigue_threshold: NormalizedScalar(0.9),
             sleep_pressure_threshold: NormalizedScalar(0.85),
             entering_duration: DurationTicks(3),
-            consolidation_duration: DurationTicks(16),
             waking_duration: DurationTicks(3),
             forced_recovery_min_duration: DurationTicks(8),
-            h_shadow_drain_rate: NormalizedScalar(0.25),
-            h_shadow_decay_rate: NormalizedScalar(0.1),
-            lifetime_staging_rate: NormalizedScalar(0.1),
             memory_max_records_after: 64,
             concept_simplex_consolidation_limit: 64,
-            structural_edit_candidate_limit: 32,
-            stable_trait_promotion_threshold: 3,
-            stable_trait_strength_threshold: NormalizedScalar(0.6),
-            stable_trait_variance_threshold: NormalizedScalar(0.05),
-            allow_lamarckian_inheritance: false,
-            reset_alpha_after_lifetime_staging: false,
-            weight_abs_limit: 4.0,
         }
     }
 }
@@ -226,21 +200,11 @@ impl Validate for SleepConsolidationConfig {
         require_current_version(SchemaKind::SleepConsolidation, self.schema_version)?;
         NormalizedScalar::new(self.fatigue_threshold.raw())?;
         NormalizedScalar::new(self.sleep_pressure_threshold.raw())?;
-        NormalizedScalar::new(self.h_shadow_drain_rate.raw())?;
-        NormalizedScalar::new(self.h_shadow_decay_rate.raw())?;
-        NormalizedScalar::new(self.lifetime_staging_rate.raw())?;
-        NormalizedScalar::new(self.stable_trait_strength_threshold.raw())?;
-        NormalizedScalar::new(self.stable_trait_variance_threshold.raw())?;
-        validate_finite(self.weight_abs_limit)?;
         if self.entering_duration.raw() == 0
-            || self.consolidation_duration.raw() == 0
             || self.waking_duration.raw() == 0
             || self.forced_recovery_min_duration.raw() == 0
             || self.memory_max_records_after == 0
             || self.concept_simplex_consolidation_limit == 0
-            || self.structural_edit_candidate_limit == 0
-            || self.stable_trait_promotion_threshold == 0
-            || self.weight_abs_limit <= 0.0
         {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
@@ -559,130 +523,6 @@ impl Validate for SleepController {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum StableLifetimeTraitKind {
-    MotorHabit,
-    HomeostaticRecovery,
-    MemoryCorrelation,
-    TopologyCorrelation,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct LifetimeTraitEvidence {
-    pub trait_id: u64,
-    pub kind: StableLifetimeTraitKind,
-    pub strength: NormalizedScalar,
-    pub variance: NormalizedScalar,
-    pub cycle_index: u32,
-}
-
-impl LifetimeTraitEvidence {
-    pub fn new(
-        trait_id: u64,
-        kind: StableLifetimeTraitKind,
-        strength: NormalizedScalar,
-        variance: NormalizedScalar,
-        cycle_index: u32,
-    ) -> Result<Self, ScaffoldContractError> {
-        let evidence = Self {
-            trait_id,
-            kind,
-            strength,
-            variance,
-            cycle_index,
-        };
-        evidence.validate_contract()?;
-        Ok(evidence)
-    }
-}
-
-impl Validate for LifetimeTraitEvidence {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.trait_id == 0 || self.cycle_index == 0 {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        NormalizedScalar::new(self.strength.raw())?;
-        NormalizedScalar::new(self.variance.raw())?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct StableLifetimeTrait {
-    pub trait_id: u64,
-    pub kind: StableLifetimeTraitKind,
-    pub strength: NormalizedScalar,
-    pub confidence: Confidence,
-    pub source_cycle_count: u32,
-    pub promoted_at_tick: Tick,
-}
-
-impl Validate for StableLifetimeTrait {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.trait_id == 0 || self.source_cycle_count == 0 {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        NormalizedScalar::new(self.strength.raw())?;
-        Confidence::new(self.confidence.raw())?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LifetimeTraitLedger {
-    max_evidence: usize,
-    evidence: Vec<LifetimeTraitEvidence>,
-    promoted_traits: Vec<StableLifetimeTrait>,
-}
-
-impl LifetimeTraitLedger {
-    pub fn new(max_evidence: usize) -> Result<Self, ScaffoldContractError> {
-        if max_evidence == 0 {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        Ok(Self {
-            max_evidence,
-            evidence: Vec::new(),
-            promoted_traits: Vec::new(),
-        })
-    }
-
-    pub fn observe(
-        &mut self,
-        evidence: LifetimeTraitEvidence,
-    ) -> Result<(), ScaffoldContractError> {
-        evidence.validate_contract()?;
-        if self.evidence.len() == self.max_evidence {
-            self.evidence.remove(0);
-        }
-        self.evidence.push(evidence);
-        Ok(())
-    }
-
-    pub fn promoted_traits(&self) -> &[StableLifetimeTrait] {
-        &self.promoted_traits
-    }
-
-    pub fn has_promoted_traits(&self) -> bool {
-        !self.promoted_traits.is_empty()
-    }
-}
-
-impl Validate for LifetimeTraitLedger {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        if self.max_evidence == 0 || self.evidence.len() > self.max_evidence {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        for evidence in &self.evidence {
-            evidence.validate_contract()?;
-        }
-        for stable_trait in &self.promoted_traits {
-            stable_trait.validate_contract()?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TraitPromotionReport {
     pub promoted_count: u32,
@@ -964,7 +804,15 @@ impl StructuralEditBatch {
         if max_candidates == 0 || candidates.len() > max_candidates {
             return Err(ScaffoldContractError::ScalarOutOfRange);
         }
-        candidates.sort_by_key(candidate_sort_key);
+        candidates.sort_by_key(|candidate| {
+            (
+                candidate.candidate_id,
+                candidate.kind,
+                candidate.reason,
+                candidate.projection.source_lobe.raw(),
+                candidate.projection.target_lobe.raw(),
+            )
+        });
         let batch = Self {
             schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
             tick,
@@ -1152,156 +1000,6 @@ impl SleepConsolidator {
         Ok(receipt)
     }
 
-    pub fn promote_stable_traits(
-        &self,
-        ledger: &mut LifetimeTraitLedger,
-        tick: Tick,
-    ) -> Result<TraitPromotionReport, ScaffoldContractError> {
-        ledger.validate_contract()?;
-        let mut groups: BTreeMap<(u64, StableLifetimeTraitKind), Vec<LifetimeTraitEvidence>> =
-            BTreeMap::new();
-        for evidence in &ledger.evidence {
-            groups
-                .entry((evidence.trait_id, evidence.kind))
-                .or_default()
-                .push(*evidence);
-        }
-
-        let already_promoted: BTreeSet<(u64, StableLifetimeTraitKind)> = ledger
-            .promoted_traits
-            .iter()
-            .map(|stable_trait| (stable_trait.trait_id, stable_trait.kind))
-            .collect();
-
-        let mut report = TraitPromotionReport::default();
-        for ((trait_id, kind), evidence) in groups {
-            if already_promoted.contains(&(trait_id, kind)) {
-                continue;
-            }
-            if evidence.len() < self.config.stable_trait_promotion_threshold as usize {
-                report.insufficient_evidence_count =
-                    report.insufficient_evidence_count.saturating_add(1);
-                continue;
-            }
-            let max_variance = evidence
-                .iter()
-                .map(|sample| sample.variance.raw())
-                .fold(0.0_f32, f32::max);
-            if max_variance > self.config.stable_trait_variance_threshold.raw() {
-                report.rejected_variance_count = report.rejected_variance_count.saturating_add(1);
-                continue;
-            }
-            let strength_sum: f32 = evidence.iter().map(|sample| sample.strength.raw()).sum();
-            let strength = strength_sum / evidence.len() as f32;
-            if strength < self.config.stable_trait_strength_threshold.raw() {
-                report.insufficient_evidence_count =
-                    report.insufficient_evidence_count.saturating_add(1);
-                continue;
-            }
-            let confidence = (strength
-                * (evidence.len() as f32 / self.config.stable_trait_promotion_threshold as f32))
-                .clamp(0.0, 1.0);
-            let stable_trait = StableLifetimeTrait {
-                trait_id,
-                kind,
-                strength: NormalizedScalar::new(strength.clamp(0.0, 1.0))?,
-                confidence: Confidence::new(confidence)?,
-                source_cycle_count: evidence.len() as u32,
-                promoted_at_tick: tick,
-            };
-            stable_trait.validate_contract()?;
-            ledger.promoted_traits.push(stable_trait);
-            report.promoted_count = report.promoted_count.saturating_add(1);
-        }
-        ledger.promoted_traits.sort_by_key(|stable_trait| {
-            (
-                stable_trait.trait_id,
-                stable_trait.kind,
-                stable_trait.promoted_at_tick.raw(),
-            )
-        });
-        Ok(report)
-    }
-
-    pub fn consolidate_neural_schema(
-        &self,
-        schema: &mut NeuralProjectionSchema,
-        ledger: &mut LifetimeTraitLedger,
-        tick: Tick,
-    ) -> Result<HTraceDrainReport, ScaffoldContractError> {
-        schema.validate()?;
-        let promotion = self.promote_stable_traits(ledger, tick)?;
-        let lifetime_enabled = ledger.has_promoted_traits();
-        let mut report = HTraceDrainReport {
-            schema_version: SLEEP_CONSOLIDATION_SCHEMA_VERSION,
-            genetic_layer_unchanged: true,
-            promoted_trait_count: promotion.promoted_count,
-            ..HTraceDrainReport::default()
-        };
-
-        for projection in &mut schema.projections {
-            let mut tile_touched = false;
-            for tile in &mut projection.tiles {
-                let before_tile_synapses = report.active_synapses;
-                match &mut tile.payload {
-                    SparseTilePayload::Dense(dense) => {
-                        for weights in &mut dense.weights {
-                            update_sleep_weight(
-                                weights,
-                                self.config,
-                                lifetime_enabled,
-                                &mut report,
-                            )?;
-                        }
-                    }
-                    SparseTilePayload::Coo(coo) => {
-                        for entry in &mut coo.entries {
-                            update_sleep_weight(
-                                &mut entry.weights,
-                                self.config,
-                                lifetime_enabled,
-                                &mut report,
-                            )?;
-                        }
-                    }
-                    SparseTilePayload::RowRunUnsupported
-                    | SparseTilePayload::ColumnRunUnsupported => {
-                        return Err(ScaffoldContractError::UnsupportedSparseTileFormat);
-                    }
-                }
-                if report.active_synapses > before_tile_synapses {
-                    tile_touched = true;
-                }
-            }
-            if tile_touched {
-                report.active_tiles = report.active_tiles.saturating_add(1);
-            }
-        }
-        report.validate_contract()?;
-        Ok(report)
-    }
-
-    pub fn compress_memory_bank(
-        &self,
-        bank: &mut MemoryBank,
-    ) -> Result<MemoryCompressionReport, ScaffoldContractError> {
-        let input_records = bank.len();
-        let mut records = bank.records_chronological();
-        let output_records = input_records.min(self.config.memory_max_records_after);
-        if input_records > output_records {
-            let start = input_records - output_records;
-            records = records.split_off(start);
-        }
-        let retained: Vec<_> = records.into_iter().cloned().collect();
-        let retained_source_memory_ids = retained.iter().map(|record| record.memory_id).collect();
-        bank.replace_with_consolidated_records(retained)?;
-        Ok(MemoryCompressionReport {
-            input_records,
-            output_records,
-            retained_source_memory_ids,
-        })
-    }
-
     pub fn consolidate_topology(
         &self,
         topology: &mut TopologicalMap,
@@ -1328,138 +1026,10 @@ impl SleepConsolidator {
         topology.refresh_diagnostics_after_map_mutation()?;
         Ok(report)
     }
-
-    pub fn generate_structural_edit_batch(
-        &self,
-        schema: &NeuralProjectionSchema,
-        topology: &TopologicalMap,
-        tick: Tick,
-    ) -> Result<StructuralEditBatch, ScaffoldContractError> {
-        schema.validate()?;
-        topology.validate_contract()?;
-        let mut candidates = Vec::new();
-        for (index, bias) in topology.curiosity_biases().into_iter().enumerate() {
-            if candidates.len() == self.config.structural_edit_candidate_limit {
-                break;
-            }
-            let projection = schema.projections[index % schema.projections.len()].routing_ref;
-            candidates.push(StructuralEditCandidate::new(
-                (index + 1) as u64,
-                projection,
-                StructuralEditKind::SynaptogenesisCandidate,
-                StructuralEditReason::TopologyCorrelation,
-                bias.salience,
-                bias.confidence,
-                16,
-            )?);
-        }
-        if candidates.is_empty() {
-            let projection = schema.projections[0].routing_ref;
-            candidates.push(StructuralEditCandidate::new(
-                1,
-                projection,
-                StructuralEditKind::PruneMarker,
-                StructuralEditReason::LowSalience,
-                NormalizedScalar::new(0.1)?,
-                Confidence::new(0.25)?,
-                16,
-            )?);
-        }
-        StructuralEditBatch::new(
-            tick,
-            candidates,
-            self.config.structural_edit_candidate_limit,
-        )
-    }
-
-    pub fn reject_active_tick_structural_application(
-        &self,
-        batch: &StructuralEditBatch,
-    ) -> Result<(), ScaffoldContractError> {
-        batch.validate_contract()?;
-        Err(ScaffoldContractError::InvalidSparseProjectionSchema)
-    }
 }
 
 impl Validate for SleepConsolidator {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
         self.config.validate_contract()
     }
-}
-
-fn update_sleep_weight(
-    weights: &mut SynapseWeightSplit,
-    config: SleepConsolidationConfig,
-    lifetime_enabled: bool,
-    report: &mut HTraceDrainReport,
-) -> Result<(), ScaffoldContractError> {
-    let before = *weights;
-    validate_weight_split(before)?;
-    if before.h_shadow == 0.0
-        && before.h_operational == 0.0
-        && before.lifetime_consolidated == 0.0
-        && before.genetic_fixed == 0.0
-    {
-        return Ok(());
-    }
-
-    let drain = validate_finite(before.h_shadow * config.h_shadow_drain_rate.raw())?;
-    weights.h_operational = clamp_weight(before.h_operational + drain, config.weight_abs_limit)?;
-    let after_drain_shadow = validate_finite(before.h_shadow - drain)?;
-    weights.h_shadow = clamp_weight(
-        after_drain_shadow * (1.0 - config.h_shadow_decay_rate.raw()),
-        config.weight_abs_limit,
-    )?;
-    report.h_operational_delta_l1 += drain.abs();
-    report.h_shadow_decay_l1 += (before.h_shadow - weights.h_shadow).abs();
-
-    if lifetime_enabled {
-        let lifetime_delta = validate_finite(drain * config.lifetime_staging_rate.raw())?;
-        weights.lifetime_consolidated = clamp_weight(
-            before.lifetime_consolidated + lifetime_delta,
-            config.weight_abs_limit,
-        )?;
-        report.lifetime_delta_l1 += lifetime_delta.abs();
-        if config.reset_alpha_after_lifetime_staging && lifetime_delta != 0.0 {
-            weights.alpha = 0.0;
-            report.alpha_reset_count = report.alpha_reset_count.saturating_add(1);
-        }
-    }
-
-    if weights.genetic_fixed != before.genetic_fixed {
-        report.genetic_layer_unchanged = false;
-        return Err(ScaffoldContractError::LamarckianInheritanceRequiresOptIn);
-    }
-    validate_weight_split(*weights)?;
-    report.active_synapses = report.active_synapses.saturating_add(1);
-    Ok(())
-}
-
-fn validate_weight_split(weights: SynapseWeightSplit) -> Result<(), ScaffoldContractError> {
-    validate_finite(weights.genetic_fixed)?;
-    validate_finite(weights.lifetime_consolidated)?;
-    NormalizedScalar::new(weights.alpha)?;
-    validate_finite(weights.h_operational)?;
-    validate_finite(weights.h_shadow)?;
-    Ok(())
-}
-
-fn clamp_weight(value: f32, limit: f32) -> Result<f32, ScaffoldContractError> {
-    validate_finite(value).map(|value| value.clamp(-limit, limit))
-}
-
-fn candidate_sort_key(
-    candidate: &StructuralEditCandidate,
-) -> (u64, StructuralEditKind, StructuralEditReason, u16, u16) {
-    (
-        candidate.candidate_id,
-        candidate.kind,
-        candidate.reason,
-        lobe_sort_key(candidate.projection.source_lobe),
-        lobe_sort_key(candidate.projection.target_lobe),
-    )
-}
-
-fn lobe_sort_key(lobe: LobeKind) -> u16 {
-    lobe.stable_id().raw()
 }

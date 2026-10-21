@@ -22,24 +22,6 @@
       "kind": "portable-save",
       "relative_path": "crates/alife_world/tests/fixtures/production_voxel/tiny_save.json",
       "required": true
-    },
-    {
-      "id": "p34-config",
-      "kind": "runtime-config",
-      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_config.json",
-      "required": true
-    },
-    {
-      "id": "p34-assets",
-      "kind": "asset-manifest",
-      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json",
-      "required": true
-    },
-    {
-      "id": "p34-save",
-      "kind": "portable-save",
-      "relative_path": "crates/alife_world/tests/fixtures/p34/tiny_save.json",
-      "required": true
     }
   ],
   "shader_assets": [
@@ -94,23 +76,8 @@
       "required": true
     },
     {
-      "id": "p24-contract",
-      "relative_path": "crates/alife_gpu_backend/shaders/p24_contract.wgsl",
-      "required": true
-    },
-    {
       "id": "closed-loop-plasticity",
       "relative_path": "crates/alife_gpu_backend/shaders/closed_loop_plasticity.wgsl",
-      "required": true
-    },
-    {
-      "id": "p27-supertile-routing",
-      "relative_path": "crates/alife_gpu_backend/shaders/p27_supertile_routing.wgsl",
-      "required": true
-    },
-    {
-      "id": "p28-recompaction-autophagy",
-      "relative_path": "crates/alife_gpu_backend/shaders/p28_recompaction_autophagy.wgsl",
       "required": true
     }
   ]

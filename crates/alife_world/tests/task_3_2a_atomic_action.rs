@@ -603,43 +603,6 @@ fn registered_specialized_events_preserve_physical_and_physiological_fields() {
     assert_eq!(rest.action_result.body_event.sleep_recovery, 1.0);
     assert_eq!(rest.action_result.body_event.mating_opportunity, 0.0);
 
-    let mut hazard_world = HeadlessScenarioBuilder::new(32_007)
-        .agent("agent", ORGANISM_ID, Vec3f::ZERO)
-        .hazard("hazard", Vec3f::new(0.8, 0.0, 0.0), 0.7)
-        .build()
-        .unwrap();
-    let hazard_agent = hazard_world.entity_id("agent").unwrap();
-    let hazard = hazard_world.entity_id("hazard").unwrap();
-    register(&mut hazard_world, hazard_agent);
-    let hazard_receipt = hazard_world
-        .apply_registered_command(
-            &HeadlessWorldCommand::approach(ORGANISM_ID, hazard).unwrap(),
-            hazard_agent,
-            Tick(1),
-        )
-        .unwrap();
-    assert_eq!(hazard_receipt.action_result.body_event.energy, -0.08);
-    assert_eq!(
-        hazard_receipt
-            .action_result
-            .observation
-            .reward_valence
-            .raw(),
-        0.0
-    );
-    assert_eq!(hazard_receipt.action_result.body_event.damage, 0.7);
-    assert_eq!(
-        hazard_receipt.action_result.body_event.temperature_stress,
-        0.0
-    );
-    assert_eq!(hazard_receipt.action_result.body_event.nutrition, 0.0);
-    assert_eq!(hazard_receipt.action_result.body_event.social_contact, 0.0);
-    assert_eq!(hazard_receipt.action_result.body_event.sleep_recovery, 0.0);
-    assert_eq!(
-        hazard_receipt.action_result.body_event.mating_opportunity,
-        0.0
-    );
-
     for (seed, affinity, expected_contact) in [
         (32_008, 0.6_f32, PEER_TOUCH_PER_INTERVAL),
         (32_009, -0.6_f32, PEER_TOUCH_PER_INTERVAL),
@@ -805,29 +768,35 @@ fn registered_neural_command_seals_gpu_speech_with_biology() {
     zero_only_event(receipt.action_result.body_event, -0.01);
 }
 
-#[test]
-fn registered_transaction_rejects_wrong_tick_without_mutation() {
-    let (mut world, agent) = world_with_agent();
-    register(&mut world, agent);
+fn assert_registered_idle_rejected_without_mutation(
+    world: &mut HeadlessWorld,
+    target: WorldEntityId,
+    tick: Tick,
+) {
     let before_signature = world.canonical_signature_digest().unwrap();
-    let before_record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
-
+    let before_record = world.organism_registry().get(ORGANISM_ID).cloned();
     assert!(world
         .apply_registered_command(
             &HeadlessWorldCommand::idle(ORGANISM_ID).unwrap(),
-            agent,
-            Tick(2)
+            target,
+            tick,
         )
         .is_err());
-
     assert_eq!(
         world.canonical_signature_digest().unwrap(),
         before_signature
     );
     assert_eq!(
         world.organism_registry().get(ORGANISM_ID),
-        Some(&before_record)
+        before_record.as_ref()
     );
+}
+
+#[test]
+fn registered_transaction_rejects_wrong_tick_without_mutation() {
+    let (mut world, agent) = world_with_agent();
+    register(&mut world, agent);
+    assert_registered_idle_rejected_without_mutation(&mut world, agent, Tick(2));
 }
 
 #[test]
@@ -840,44 +809,13 @@ fn registered_transaction_rejects_mismatched_identity_without_mutation() {
     let agent = world.entity_id("agent").unwrap();
     let food = world.entity_id("food").unwrap();
     register(&mut world, agent);
-    let before_signature = world.canonical_signature_digest().unwrap();
-    let before_record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
-
-    assert!(world
-        .apply_registered_command(
-            &HeadlessWorldCommand::idle(ORGANISM_ID).unwrap(),
-            food,
-            Tick(1)
-        )
-        .is_err());
-
-    assert_eq!(
-        world.canonical_signature_digest().unwrap(),
-        before_signature
-    );
-    assert_eq!(
-        world.organism_registry().get(ORGANISM_ID),
-        Some(&before_record)
-    );
+    assert_registered_idle_rejected_without_mutation(&mut world, food, Tick(1));
 }
 
 #[test]
 fn registered_transaction_rejects_missing_record_without_mutation() {
     let (mut world, agent) = world_with_agent();
-    let before_signature = world.canonical_signature_digest().unwrap();
-
-    assert!(world
-        .apply_registered_command(
-            &HeadlessWorldCommand::idle(ORGANISM_ID).unwrap(),
-            agent,
-            Tick(1)
-        )
-        .is_err());
-
-    assert_eq!(
-        world.canonical_signature_digest().unwrap(),
-        before_signature
-    );
+    assert_registered_idle_rejected_without_mutation(&mut world, agent, Tick(1));
     assert!(world.organism_registry().is_empty());
 }
 
@@ -887,23 +825,5 @@ fn registered_transaction_rejects_dead_record_without_mutation() {
     let mut dead = record(agent);
     dead.mark_dead(Tick::ZERO).unwrap();
     world.register_organism_record(dead).unwrap();
-    let before_signature = world.canonical_signature_digest().unwrap();
-    let before_record = world.organism_registry().get(ORGANISM_ID).unwrap().clone();
-
-    assert!(world
-        .apply_registered_command(
-            &HeadlessWorldCommand::idle(ORGANISM_ID).unwrap(),
-            agent,
-            Tick(1)
-        )
-        .is_err());
-
-    assert_eq!(
-        world.canonical_signature_digest().unwrap(),
-        before_signature
-    );
-    assert_eq!(
-        world.organism_registry().get(ORGANISM_ID),
-        Some(&before_record)
-    );
+    assert_registered_idle_rejected_without_mutation(&mut world, agent, Tick(1));
 }

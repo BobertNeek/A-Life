@@ -1,4 +1,4 @@
-//! Contract-only candidate-conditioned episodic query and retrieval-context records.
+//! Candidate-conditioned episodic queries and retrieval context.
 
 use std::ops::Range;
 
@@ -647,8 +647,6 @@ fn validate_query_fields(query: &CandidateMemoryQueryV2) -> Result<(), ScaffoldC
         .action_id
         .validate()
         .map_err(|_| ScaffoldContractError::InvalidMemoryQuery)?;
-    ActionKind::try_from_raw(query.action_kind.raw())?;
-    CandidateActionFamily::try_from_raw(query.action_family.raw())?;
     if !query.action_family.is_compatible_with(query.action_kind) {
         return Err(ScaffoldContractError::InvalidMemoryQuery);
     }

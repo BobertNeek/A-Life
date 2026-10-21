@@ -1,4 +1,4 @@
-//! Split from the original playable-sim app shell during R13 remediation.
+//! Creature animation and expression derived from world state.
 
 use crate::prelude::*;
 use crate::*;
@@ -104,7 +104,6 @@ pub struct CreatureVisualSnapshot {
     pub appearance: CreatureAppearanceGenome,
     pub cues: CreatureVisualCueSet,
     pub endocrine: EndocrineSnapshot,
-    pub debug_summary: String,
 }
 
 impl CreatureVisualSnapshot {
@@ -154,43 +153,6 @@ impl CreatureVisualSnapshot {
             self.cues.energy.value
         )
     }
-}
-
-pub fn creature_visual_snapshot_from_presentation(
-    presentation: &VisibleWorldPresentation,
-    organism_id: OrganismId,
-    mind: &CreatureMind,
-    last_tick: Option<&LiveBrainTickSummary>,
-) -> Result<CreatureVisualSnapshot, GameAppShellError> {
-    let creature = presentation
-        .objects
-        .iter()
-        .find(|object| {
-            object.kind == WorldObjectKind::Agent && object.organism_id == Some(organism_id)
-        })
-        .ok_or(GameAppShellError::VisibleWorldMismatch {
-            message: "visible presentation must include the creature agent",
-        })?;
-    let target = last_tick.and_then(|summary| summary.target_entity);
-    let target_position = target.and_then(|target_id| {
-        presentation
-            .objects
-            .iter()
-            .find(|object| object.stable_id == target_id)
-            .map(|object| object.position)
-    });
-    let snapshot = creature_visual_snapshot_from_parts(
-        organism_id,
-        creature.stable_id,
-        creature.position,
-        target,
-        target_position,
-        mind.homeostasis(),
-        mind.sleep_state().phase,
-        last_tick.and_then(|summary| summary.selected_action_kind),
-    )?;
-    snapshot.validate()?;
-    Ok(snapshot)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -267,14 +229,6 @@ pub fn creature_visual_snapshot_from_parts_with_appearance(
         appearance,
         cues,
         endocrine: homeostasis.hormones,
-        debug_summary: format!(
-            "organism={} animation={} expression={} action={:?} sleep={:?}",
-            organism_id.raw(),
-            animation.label(),
-            expression.label(),
-            selected_action_kind,
-            sleep_phase
-        ),
     };
     snapshot.validate()?;
     Ok(snapshot)
@@ -297,7 +251,7 @@ fn creature_visual_cues(
     })
 }
 
-fn creature_animation_state(
+pub(crate) fn creature_animation_state(
     sleep_phase: SleepPhase,
     homeostasis: &HomeostaticSnapshot,
     action_kind: Option<ActionKind>,
@@ -335,7 +289,7 @@ fn creature_animation_state(
     }
 }
 
-fn creature_expression_state(
+pub(crate) fn creature_expression_state(
     sleep_phase: SleepPhase,
     homeostasis: &HomeostaticSnapshot,
 ) -> CreatureExpressionState {
@@ -421,32 +375,9 @@ fn bounded01(value: f32) -> Result<f32, ScaffoldContractError> {
     NormalizedScalar::new(value.clamp(0.0, 1.0)).map(|bounded| bounded.raw())
 }
 
-pub(crate) fn wrap_degrees(value: f32) -> f32 {
-    let wrapped = value.rem_euclid(360.0);
-    if wrapped == 360.0 {
-        0.0
-    } else {
-        wrapped
-    }
-}
-
 fn validate_rgba(rgba: [f32; 4]) -> Result<(), ScaffoldContractError> {
     for channel in rgba {
         NormalizedScalar::new(channel)?;
     }
     Ok(())
-}
-
-pub fn run_creature_visual_smoke(
-    launch: &AppShellLaunchConfig,
-) -> Result<CreatureVisualSnapshot, GameAppShellError> {
-    let presentation = load_visible_world_from_p34_save(launch)?;
-    let mut live = LiveBrainLoop::from_p34_launch(launch)?;
-    let mut summaries = live.update(LiveBrainTickControl::step_once())?;
-    let summary = summaries
-        .pop()
-        .ok_or(GameAppShellError::VisibleWorldMismatch {
-            message: "step once must produce one live brain tick for G04 visuals",
-        })?;
-    live.creature_visual_snapshot(&presentation, Some(&summary))
 }

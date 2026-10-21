@@ -1,8 +1,6 @@
-//! P29 runtime integration contracts for required GPU execution.
+//! GPU adapter admission and device probing.
 
-use alife_core::{validate_finite, LobeKind, ScaffoldContractError};
-
-use crate::{GPU_BUFFER_CONTRACT_SCHEMA_VERSION, GPU_CLOSED_LOOP_STORAGE_BINDINGS};
+use crate::closed_loop_runtime::{required_device_features, required_device_limits};
 
 pub const P29_RUNTIME_SCHEMA_VERSION: u16 = 1;
 
@@ -95,86 +93,6 @@ impl GpuRuntimeHardwareProbe {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuRuntimeBackendStatus {
-    pub schema_version: u16,
-    pub requested: GpuRuntimeBackendKind,
-    pub selected: GpuRuntimeBackendKind,
-    pub authoritative: bool,
-    pub unavailable_reason: Option<&'static str>,
-    pub no_active_gameplay_readback: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuRuntimeBackendConfig {
-    pub requested: GpuRuntimeBackendKind,
-    pub gpu_feature_enabled: bool,
-    pub hardware_available: bool,
-    pub validation_passed: bool,
-}
-
-impl Default for GpuRuntimeBackendConfig {
-    fn default() -> Self {
-        Self {
-            requested: GpuRuntimeBackendKind::GpuAuthoritative,
-            gpu_feature_enabled: true,
-            hardware_available: false,
-            validation_passed: true,
-        }
-    }
-}
-
-impl GpuRuntimeBackendConfig {
-    pub fn request(requested: GpuRuntimeBackendKind) -> Self {
-        Self {
-            requested,
-            ..Self::default()
-        }
-    }
-
-    pub const fn with_gpu_feature_enabled(mut self, gpu_feature_enabled: bool) -> Self {
-        self.gpu_feature_enabled = gpu_feature_enabled;
-        self
-    }
-
-    pub const fn with_hardware_available(mut self, hardware_available: bool) -> Self {
-        self.hardware_available = hardware_available;
-        self
-    }
-
-    pub const fn with_validation_passed(mut self, validation_passed: bool) -> Self {
-        self.validation_passed = validation_passed;
-        self
-    }
-
-    pub fn select_backend(self) -> Result<GpuRuntimeBackendStatus, ScaffoldContractError> {
-        if !self.gpu_feature_enabled {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        if !self.hardware_available {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        if !self.validation_passed {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-
-        Ok(GpuRuntimeBackendStatus {
-            schema_version: P29_RUNTIME_SCHEMA_VERSION,
-            requested: self.requested,
-            selected: self.requested,
-            authoritative: true,
-            unavailable_reason: None,
-            no_active_gameplay_readback: true,
-        })
-    }
-}
-
-pub fn probe_local_wgpu_runtime(
-    requested_backend: GpuRuntimeBackendKind,
-) -> GpuRuntimeHardwareProbe {
-    probe_local_wgpu_runtime_with_backends(requested_backend, None)
-}
-
 pub fn probe_local_wgpu_runtime_for_graphics_backend(
     requested_backend: GpuRuntimeBackendKind,
     graphics_backend: &str,
@@ -185,13 +103,6 @@ pub fn probe_local_wgpu_runtime_for_graphics_backend(
         "auto" | "existing" | "" => None,
         _ => None,
     };
-    probe_local_wgpu_runtime_with_backends(requested_backend, backends)
-}
-
-pub fn probe_local_wgpu_runtime_with_backends(
-    requested_backend: GpuRuntimeBackendKind,
-    backends: Option<wgpu::Backends>,
-) -> GpuRuntimeHardwareProbe {
     pollster::block_on(probe_local_wgpu_runtime_async(requested_backend, backends))
 }
 
@@ -225,31 +136,23 @@ async fn probe_local_wgpu_runtime_async(
 
     let info = adapter.get_info();
     let limits = adapter.limits();
-    let required_storage_buffers = required_storage_buffers(requested_backend);
-    if limits.max_storage_buffers_per_shader_stage < required_storage_buffers {
-        let exposed_storage_buffers = limits.max_storage_buffers_per_shader_stage;
+    if let Some(error) =
+        adapter_admission_error(info.device_type, info.backend, adapter.features(), &limits)
+    {
         return GpuRuntimeHardwareProbe::from_adapter(
             requested_backend,
             info,
             limits,
             false,
-            Some(format!(
-                "adapter exposes {} storage buffers per shader stage, but {:?} requires {}",
-                exposed_storage_buffers, requested_backend, required_storage_buffers
-            )),
+            Some(error),
         );
     }
-
-    let mut required_limits = wgpu::Limits::downlevel_defaults();
-    required_limits.max_storage_buffers_per_shader_stage = required_limits
-        .max_storage_buffers_per_shader_stage
-        .max(required_storage_buffers);
 
     match adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("alife-local-gpu-runtime-probe-device"),
-            required_features: wgpu::Features::empty(),
-            required_limits,
+            required_features: required_device_features(),
+            required_limits: required_device_limits(),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
@@ -269,488 +172,55 @@ async fn probe_local_wgpu_runtime_async(
     }
 }
 
-pub const fn required_storage_buffers(backend: GpuRuntimeBackendKind) -> u32 {
-    match backend {
-        GpuRuntimeBackendKind::GpuAuthoritative => GPU_CLOSED_LOOP_STORAGE_BINDINGS,
+pub fn required_storage_buffers(_backend: GpuRuntimeBackendKind) -> u32 {
+    required_device_limits().max_storage_buffers_per_shader_stage
+}
+
+fn adapter_admission_error(
+    device_type: wgpu::DeviceType,
+    backend: wgpu::Backend,
+    features: wgpu::Features,
+    limits: &wgpu::Limits,
+) -> Option<String> {
+    if device_type == wgpu::DeviceType::Cpu || backend == wgpu::Backend::Noop {
+        return Some("gameplay requires a hardware GPU adapter".into());
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuRuntimeBoundary {
-    ActiveTick,
-    TickActionSummary,
-    FrameBoundary,
-    SleepBoundary,
-    DiagnosticExport,
-    ManualValidation,
-    PerformanceReport,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuRuntimeReadbackGuard {
-    pub boundary: GpuRuntimeBoundary,
-}
-
-impl GpuRuntimeReadbackGuard {
-    pub const fn active_tick() -> Self {
-        Self {
-            boundary: GpuRuntimeBoundary::ActiveTick,
-        }
+    if !features.contains(required_device_features()) {
+        return Some("adapter does not support the timestamp queries required by gameplay".into());
     }
-
-    pub const fn after_frame_boundary() -> Self {
-        Self {
-            boundary: GpuRuntimeBoundary::FrameBoundary,
-        }
-    }
-
-    pub const fn permits_boundary(self, requested: GpuRuntimeBoundary) -> bool {
-        match self.boundary {
-            GpuRuntimeBoundary::ActiveTick => {
-                matches!(requested, GpuRuntimeBoundary::TickActionSummary)
-            }
-            GpuRuntimeBoundary::FrameBoundary
-            | GpuRuntimeBoundary::SleepBoundary
-            | GpuRuntimeBoundary::ManualValidation
-            | GpuRuntimeBoundary::PerformanceReport
-            | GpuRuntimeBoundary::DiagnosticExport => matches!(
-                requested,
-                GpuRuntimeBoundary::TickActionSummary
-                    | GpuRuntimeBoundary::FrameBoundary
-                    | GpuRuntimeBoundary::SleepBoundary
-                    | GpuRuntimeBoundary::DiagnosticExport
-                    | GpuRuntimeBoundary::ManualValidation
-                    | GpuRuntimeBoundary::PerformanceReport
-            ),
-            GpuRuntimeBoundary::TickActionSummary => {
-                matches!(requested, GpuRuntimeBoundary::TickActionSummary)
-            }
-        }
-    }
-
-    pub const fn permits_bulk_neural_readback(self) -> bool {
-        false
-    }
-
-    pub const fn permits_per_synapse_readback(self) -> bool {
-        false
-    }
-
-    pub const fn permits_per_lobe_readback(self) -> bool {
-        false
-    }
-
-    pub const fn permits_weight_readback(self) -> bool {
-        false
-    }
-
-    pub fn validate_export_request(
-        self,
-        requested: GpuRuntimeBoundary,
-    ) -> Result<(), ScaffoldContractError> {
-        if !self.permits_boundary(requested)
-            || matches!(
-                requested,
-                GpuRuntimeBoundary::ActiveTick | GpuRuntimeBoundary::TickActionSummary
-            )
-        {
-            return Err(ScaffoldContractError::BackendParity);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GpuRuntimeTimingBudget {
-    pub target_frame_budget_ms: f32,
-    pub gpu_neural_budget_ms: f32,
-    pub fallback_update_frequency_hz: f32,
-}
-
-impl GpuRuntimeTimingBudget {
-    pub fn validate(self) -> Result<(), ScaffoldContractError> {
-        validate_finite(self.target_frame_budget_ms)?;
-        validate_finite(self.gpu_neural_budget_ms)?;
-        validate_finite(self.fallback_update_frequency_hz)?;
-        if self.target_frame_budget_ms <= 0.0
-            || self.gpu_neural_budget_ms <= 0.0
-            || self.fallback_update_frequency_hz <= 0.0
-        {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GpuRuntimeTimingSample {
-    pub measured_gpu_neural_ms: f32,
-    pub measured_frame_ms: f32,
-}
-
-impl GpuRuntimeTimingSample {
-    pub fn validate(self) -> Result<(), ScaffoldContractError> {
-        validate_finite(self.measured_gpu_neural_ms)?;
-        validate_finite(self.measured_frame_ms)?;
-        if self.measured_gpu_neural_ms < 0.0 || self.measured_frame_ms < 0.0 {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuThrottleLevel {
-    None,
-    DecimateNonEssential,
-    WarmCadenceFallback,
-    SleepOnlyNonEssential,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuThrottleReason {
-    WithinBudget,
-    GpuNeuralOverBudget,
-    FrameOverBudget,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GpuRuntimeThrottleDecision {
-    pub level: GpuThrottleLevel,
-    pub reason: GpuThrottleReason,
-    pub nonessential_decimation_factor: u32,
-    pub sensory_motor_protected: bool,
-    pub fallback_update_frequency_hz: f32,
-    pub protected_lobes: Vec<LobeKind>,
-    pub decimated_lobes: Vec<LobeKind>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GpuRuntimeThrottlingPolicy {
-    pub decimate_ratio: f32,
-    pub warm_ratio: f32,
-    pub sleep_only_ratio: f32,
-}
-
-impl GpuRuntimeThrottlingPolicy {
-    pub const fn reference() -> Self {
-        Self {
-            decimate_ratio: 1.0,
-            warm_ratio: 2.0,
-            sleep_only_ratio: 3.0,
-        }
-    }
-
-    pub fn decide(
-        self,
-        budget: GpuRuntimeTimingBudget,
-        sample: GpuRuntimeTimingSample,
-    ) -> Result<GpuRuntimeThrottleDecision, ScaffoldContractError> {
-        budget.validate()?;
-        sample.validate()?;
-        validate_finite(self.decimate_ratio)?;
-        validate_finite(self.warm_ratio)?;
-        validate_finite(self.sleep_only_ratio)?;
-        if self.decimate_ratio <= 0.0
-            || self.decimate_ratio > self.warm_ratio
-            || self.warm_ratio > self.sleep_only_ratio
-        {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-
-        let gpu_ratio = sample.measured_gpu_neural_ms / budget.gpu_neural_budget_ms;
-        let frame_ratio = sample.measured_frame_ms / budget.target_frame_budget_ms;
-        let reason = if frame_ratio > 1.0 && frame_ratio >= gpu_ratio {
-            GpuThrottleReason::FrameOverBudget
-        } else if gpu_ratio > self.decimate_ratio {
-            GpuThrottleReason::GpuNeuralOverBudget
-        } else {
-            GpuThrottleReason::WithinBudget
-        };
-        let level = if gpu_ratio <= self.decimate_ratio && frame_ratio <= 1.0 {
-            GpuThrottleLevel::None
-        } else if gpu_ratio >= self.sleep_only_ratio {
-            GpuThrottleLevel::SleepOnlyNonEssential
-        } else if gpu_ratio >= self.warm_ratio {
-            GpuThrottleLevel::WarmCadenceFallback
-        } else {
-            GpuThrottleLevel::DecimateNonEssential
-        };
-        let factor = match level {
-            GpuThrottleLevel::None => 1,
-            GpuThrottleLevel::DecimateNonEssential => 2,
-            GpuThrottleLevel::WarmCadenceFallback => 4,
-            GpuThrottleLevel::SleepOnlyNonEssential => 8,
-        };
-        Ok(GpuRuntimeThrottleDecision {
-            level,
-            reason,
-            nonessential_decimation_factor: factor,
-            sensory_motor_protected: true,
-            fallback_update_frequency_hz: budget.fallback_update_frequency_hz,
-            protected_lobes: protected_lobes(),
-            decimated_lobes: if level == GpuThrottleLevel::None {
-                Vec::new()
-            } else {
-                nonessential_lobes()
-            },
-        })
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GpuRuntimeDiagnosticExport {
-    pub schema_version: u16,
-    pub boundary: GpuRuntimeBoundary,
-    pub backend: GpuRuntimeBackendStatus,
-    pub timing: GpuRuntimeTimingSample,
-    pub run_notes: String,
-}
-
-impl GpuRuntimeDiagnosticExport {
-    pub fn new(
-        schema_version: u16,
-        boundary: GpuRuntimeBoundary,
-        backend: GpuRuntimeBackendStatus,
-        timing: GpuRuntimeTimingSample,
-        run_notes: impl Into<String>,
-    ) -> Result<Self, ScaffoldContractError> {
-        if schema_version != P29_RUNTIME_SCHEMA_VERSION
-            || backend.schema_version != P29_RUNTIME_SCHEMA_VERSION
-        {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        GpuRuntimeReadbackGuard { boundary }
-            .validate_export_request(GpuRuntimeBoundary::DiagnosticExport)?;
-        timing.validate()?;
-        Ok(Self {
-            schema_version,
-            boundary,
-            backend,
-            timing,
-            run_notes: run_notes.into(),
-        })
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GpuRuntimeCapabilityManifest {
-    pub schema_version: u16,
-    pub gpu_buffer_schema_version: u16,
-    pub authoritative_closed_loop_available: bool,
-    pub routing_masks_available: bool,
-    pub sleep_recompaction_available: bool,
-    pub product_gpu_required_default: bool,
-    pub closed_loop_storage_bindings: u32,
-    pub no_active_gameplay_neural_readback: bool,
-}
-
-impl GpuRuntimeCapabilityManifest {
-    pub const fn current_contract() -> Self {
-        Self {
-            schema_version: P29_RUNTIME_SCHEMA_VERSION,
-            gpu_buffer_schema_version: GPU_BUFFER_CONTRACT_SCHEMA_VERSION,
-            authoritative_closed_loop_available: true,
-            routing_masks_available: true,
-            sleep_recompaction_available: true,
-            product_gpu_required_default: true,
-            closed_loop_storage_bindings: GPU_CLOSED_LOOP_STORAGE_BINDINGS,
-            no_active_gameplay_neural_readback: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuTierPopulation {
-    One,
-    Ten,
-    Thirty,
-    Fifty,
-    OneHundred,
-    TwoHundredFifty,
-    FiveHundred,
-}
-
-impl GpuTierPopulation {
-    pub const fn required() -> [Self; 7] {
-        [
-            Self::One,
-            Self::Ten,
-            Self::Thirty,
-            Self::Fifty,
-            Self::OneHundred,
-            Self::TwoHundredFifty,
-            Self::FiveHundred,
-        ]
-    }
-
-    pub const fn count(self) -> u16 {
-        match self {
-            Self::One => 1,
-            Self::Ten => 10,
-            Self::Thirty => 30,
-            Self::Fifty => 50,
-            Self::OneHundred => 100,
-            Self::TwoHundredFifty => 250,
-            Self::FiveHundred => 500,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuPerformanceTargetStatus {
-    Met,
-    Missed,
-    Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GpuTierMeasurement {
-    pub population: GpuTierPopulation,
-    pub backend: GpuRuntimeBackendKind,
-    pub tick_time_ms: Option<f32>,
-    pub gpu_neural_time_ms: Option<f32>,
-    pub patch_throughput_per_second: Option<f32>,
-    pub memory_topology_update_ms: Option<f32>,
-    pub sleep_recompaction_ms: Option<f32>,
-    pub active_synapses: u32,
-    pub active_tiles: u32,
-    pub skipped_supertiles: u32,
-    pub skipped_tiles: u32,
-    pub target_60_fps: GpuPerformanceTargetStatus,
-    pub notes: String,
-}
-
-impl GpuTierMeasurement {
-    pub fn unavailable_report(
-        backend: GpuRuntimeBackendStatus,
-        notes: impl Into<String>,
-    ) -> GpuTierPerformanceReport {
-        let notes = notes.into();
-        GpuTierPerformanceReport {
-            schema_version: P29_RUNTIME_SCHEMA_VERSION,
-            backend,
-            hardware_identifier: None,
-            feature_flags: vec!["gpu-unavailable".to_string()],
-            measurements: GpuTierPopulation::required()
-                .into_iter()
-                .map(|population| Self {
-                    population,
-                    backend: backend.selected,
-                    tick_time_ms: None,
-                    gpu_neural_time_ms: None,
-                    patch_throughput_per_second: None,
-                    memory_topology_update_ms: None,
-                    sleep_recompaction_ms: None,
-                    active_synapses: 0,
-                    active_tiles: 0,
-                    skipped_supertiles: 0,
-                    skipped_tiles: 0,
-                    target_60_fps: GpuPerformanceTargetStatus::Unknown,
-                    notes: notes.clone(),
-                })
-                .collect(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct GpuTierPerformanceReport {
-    pub schema_version: u16,
-    pub backend: GpuRuntimeBackendStatus,
-    pub hardware_identifier: Option<String>,
-    pub feature_flags: Vec<String>,
-    pub measurements: Vec<GpuTierMeasurement>,
-}
-
-impl GpuTierPerformanceReport {
-    pub fn validate(&self) -> Result<(), ScaffoldContractError> {
-        if self.schema_version != P29_RUNTIME_SCHEMA_VERSION
-            || self.backend.schema_version != P29_RUNTIME_SCHEMA_VERSION
-            || self.measurements.len() != GpuTierPopulation::required().len()
-        {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        for (actual, expected) in self.measurements.iter().zip(GpuTierPopulation::required()) {
-            if actual.population != expected {
-                return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-            }
-            for value in [
-                actual.tick_time_ms,
-                actual.gpu_neural_time_ms,
-                actual.patch_throughput_per_second,
-                actual.memory_topology_update_ms,
-                actual.sleep_recompaction_ms,
-            ]
-            .into_iter()
-            .flatten()
-            {
-                validate_finite(value)?;
-                if value < 0.0 {
-                    return Err(ScaffoldContractError::ScalarOutOfRange);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn to_markdown(&self) -> String {
-        let mut out = String::new();
-        out.push_str("# P29 GPU runtime performance report\n\n");
-        out.push_str(&format!(
-            "- Backend requested: {:?}\n- Backend selected: {:?}\n- Unavailable reason: {:?}\n- Hardware: {}\n- Feature flags/evidence: {}\n- No active gameplay neural readback: {}\n\n",
-            self.backend.requested,
-            self.backend.selected,
-            self.backend.unavailable_reason,
-            self.hardware_identifier.as_deref().unwrap_or("unknown"),
-            if self.feature_flags.is_empty() {
-                "none".to_string()
-            } else {
-                self.feature_flags.join(", ")
-            },
-            self.backend.no_active_gameplay_readback,
+    let required = required_device_limits();
+    if !required.check_limits(limits) {
+        return Some(format!(
+            "adapter limits do not meet gameplay requirements (storage buffers per stage: {} required, {} available)",
+            required.max_storage_buffers_per_shader_stage,
+            limits.max_storage_buffers_per_shader_stage,
         ));
-        out.push_str(
-            "| Population | Backend | Tick ms | GPU neural ms | 60 FPS target | Notes |\n",
-        );
-        out.push_str("|---:|---|---:|---:|---|---|\n");
-        for measurement in &self.measurements {
-            out.push_str(&format!(
-                "| {} | {:?} | {} | {} | {:?} | {} |\n",
-                measurement.population.count(),
-                measurement.backend,
-                optional_ms(measurement.tick_time_ms),
-                optional_ms(measurement.gpu_neural_time_ms),
-                measurement.target_60_fps,
-                measurement.notes,
-            ));
-        }
-        out.push_str("\n## Boundary policy\n\n");
-        out.push_str("- No active gameplay neural readback.\n");
-        out.push_str("- Diagnostics/export snapshots are frame, sleep, manual, or performance-report boundary scoped.\n");
-        out
     }
+    None
 }
 
-fn protected_lobes() -> Vec<LobeKind> {
-    vec![
-        LobeKind::PerceptualIntegration,
-        LobeKind::InteroceptiveMotivational,
-        LobeKind::ActionPlanning,
-        LobeKind::FlexibleReserve,
-    ]
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn nonessential_lobes() -> Vec<LobeKind> {
-    vec![
-        LobeKind::SocialCommunication,
-        LobeKind::MultimodalAssociation,
-        LobeKind::TemporalPredictive,
-        LobeKind::MemoryInterface,
-        LobeKind::WorkingContextExecutive,
-    ]
-}
-
-fn optional_ms(value: Option<f32>) -> String {
-    value.map_or_else(|| "unknown".to_string(), |value| format!("{value:.3}"))
+    #[test]
+    fn probe_admits_only_devices_that_meet_gameplay_requirements() {
+        let limits = required_device_limits();
+        let hardware = wgpu::DeviceType::DiscreteGpu;
+        let backend = wgpu::Backend::Vulkan;
+        let features = required_device_features();
+        assert!(adapter_admission_error(hardware, backend, features, &limits).is_none());
+        assert!(
+            adapter_admission_error(wgpu::DeviceType::Cpu, backend, features, &limits).is_some()
+        );
+        assert!(
+            adapter_admission_error(hardware, wgpu::Backend::Noop, features, &limits).is_some()
+        );
+        assert!(
+            adapter_admission_error(hardware, backend, wgpu::Features::empty(), &limits).is_some()
+        );
+        let mut insufficient = limits;
+        insufficient.max_storage_buffers_per_shader_stage -= 1;
+        assert!(adapter_admission_error(hardware, backend, features, &insufficient).is_some());
+    }
 }

@@ -17,11 +17,6 @@ fn finite_eligibility(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
 }
 
-fn immutable_span_within(start:u32, count:u32) -> bool {
-  let limit = arrayLength(&immutable_plan_words);
-  return start <= limit && count <= limit - start;
-}
-
 fn dispatch_span_within(start:u32, count:u32) -> bool {
   let limit = arrayLength(&dispatch_header_words);
   return start <= limit && count <= limit - start;
@@ -50,22 +45,6 @@ fn pending_row_is_zero(base:u32) -> bool {
     index += 1u;
   }
   return true;
-}
-
-fn receptor_is_valid(receptor:GpuPlasticityReceptorRecord) -> bool {
-  return finite_eligibility(receptor.eligibility_decay)
-    && finite_eligibility(receptor.learning_rate)
-    && finite_eligibility(receptor.sleep_replay_rate)
-    && finite_eligibility(receptor.normalization_rate)
-    && finite_eligibility(receptor.fast_min)
-    && finite_eligibility(receptor.fast_max)
-    && receptor.eligibility_decay >= 0.0 && receptor.eligibility_decay <= 1.0
-    && receptor.learning_rate >= 0.0 && receptor.learning_rate <= 1.0
-    && receptor.sleep_replay_rate >= 0.0 && receptor.sleep_replay_rate <= 1.0
-    && receptor.normalization_rate >= 0.0 && receptor.normalization_rate <= 1.0
-    && receptor.fast_min >= -8.0 && receptor.fast_max <= 8.0
-    && receptor.fast_min < receptor.fast_max
-    && all(receptor.reserved == vec2<f32>(0.0));
 }
 
 fn replay_trace_clock_is_valid(learning:GpuSlotLearningStateRecord, tick:vec2<u32>) -> bool {

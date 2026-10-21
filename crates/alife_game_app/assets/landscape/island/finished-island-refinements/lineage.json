@@ -6,7 +6,7 @@
     "sha256": "e5e6b20c438d5b63cdd6c7f1b9155e74be2068696adb65de99b83288243e47f5"
   },
   "integration_base": "326a674538bba255936e0360236329938eaeee63",
-  "decision": "Retain later saved refinements; all six repository assets were still Oct 1 originals. The saved Oct 4 source-pack baseline is a distinct geometry refinement, not an exact installed baseline. Both are pinned separately.",
+  "decision": "Editable sources retain the current refinements. Source-pack baselines preserve the exact GLB layout required by the exporter.",
   "assets": [
     {
       "name": "Flowers",
@@ -16,11 +16,6 @@
         "filename": "A-Life-Flowers-biocolor-v2-2026-10-09.zip",
         "bytes": 3573730,
         "sha256": "4c090fff264c2582315cc806d8aca2fec871f8bb34f4cc6613988cb443400c4e"
-      },
-      "preintegration": {
-        "file": "Flowers.preintegration.glb",
-        "bytes": 105464,
-        "sha256": "2de88ffa1540e857f0e37619c7b9fcc274732a26570312c075d37a2b1b92008b"
       },
       "source_pack_baseline": {
         "file": "Flowers.source-pack-baseline.glb",
@@ -119,11 +114,6 @@
         "bytes": 10985203,
         "sha256": "a3aa8b4469cf8e7cc3547611d31c5d314e043b3378cafe2dfc5eec364cf2cb8a"
       },
-      "preintegration": {
-        "file": "BoulderA.preintegration.glb",
-        "bytes": 35724,
-        "sha256": "78b320983f93bb9ef82558a64445fd3bb3ad1fb812251daec84f79a5176f3460"
-      },
       "source_pack_baseline": {
         "file": "BoulderA.source-pack-baseline.glb",
         "bytes": 35576,
@@ -220,11 +210,6 @@
         "filename": "A-Life-Boulders-basalt-v2-2026-10-09.zip",
         "bytes": 10985203,
         "sha256": "a3aa8b4469cf8e7cc3547611d31c5d314e043b3378cafe2dfc5eec364cf2cb8a"
-      },
-      "preintegration": {
-        "file": "BoulderB.preintegration.glb",
-        "bytes": 36180,
-        "sha256": "ef1ce571573a3d86b0f971369f1ec4b68ea5577aaba1ef3b21825d7abcc40878"
       },
       "source_pack_baseline": {
         "file": "BoulderB.source-pack-baseline.glb",
@@ -323,11 +308,6 @@
         "bytes": 10985203,
         "sha256": "a3aa8b4469cf8e7cc3547611d31c5d314e043b3378cafe2dfc5eec364cf2cb8a"
       },
-      "preintegration": {
-        "file": "BoulderC.preintegration.glb",
-        "bytes": 35948,
-        "sha256": "cd80f4323a310d8cd04cfea967507d89f97a539f3afd796fbd48893838f78289"
-      },
       "source_pack_baseline": {
         "file": "BoulderC.source-pack-baseline.glb",
         "bytes": 35800,
@@ -425,11 +405,6 @@
         "bytes": 4404124,
         "sha256": "f1c5af56178e6fd2db1bd7ccb35acfbb3bd0aa258b9e1cdb1f566dbee5ee3f3c"
       },
-      "preintegration": {
-        "file": "Grass.preintegration.glb",
-        "bytes": 35396,
-        "sha256": "02d9a004309c63c968d8ebb23913e684620048f1d5726f23dfc99a7813cce876"
-      },
       "source_pack_baseline": {
         "file": "Grass.source-pack-baseline.glb",
         "bytes": 43032,
@@ -526,11 +501,6 @@
         "filename": "A-Life-Cliff-sea-gray-v1-2026-10-09.zip",
         "bytes": 3480052,
         "sha256": "a0b175409d1c95a38d6a3e99f1cd5b9eaa2a7de82a107a2cf2dcb56c7ba87f5f"
-      },
-      "preintegration": {
-        "file": "Cliff.preintegration.glb",
-        "bytes": 82300,
-        "sha256": "620b62e0c365476ee68e89cc4aa7c9106115665e9200dec9fb5c2a77cdc5151c"
       },
       "source_pack_baseline": {
         "file": "Cliff.source-pack-baseline.glb",

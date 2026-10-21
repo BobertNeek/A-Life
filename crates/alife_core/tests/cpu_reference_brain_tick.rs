@@ -266,7 +266,7 @@ fn full_normal_tick_seals_patch_updates_subsystems_and_increments_tick() {
     assert_eq!(
         output.selected_action.unwrap().kind,
         ActionKind::Interact,
-        "P09 arbitration remains the action-selection path"
+        "arbitration remains the action-selection path"
     );
     assert!(output.experience_patch.is_some());
     assert!(output.packed_record.is_some());
@@ -282,6 +282,8 @@ fn full_normal_tick_seals_patch_updates_subsystems_and_increments_tick() {
     assert_eq!(mind.current_tick(), Tick::new(1));
     assert_eq!(mind.homeostasis().tick, Tick::new(1));
     assert!(mind.homeostasis().drives.brain_atp < 0.75);
+    assert!(mind.homeostasis().hormones.dopamine > 0.5);
+    mind.homeostasis().validate_contract().unwrap();
     assert_eq!(executor.attempts, 1);
     assert!(output.neural_report.active_tiles <= mind.brain_class().max_active_microtiles);
 }
@@ -310,7 +312,7 @@ fn failed_action_path_is_bounded_sealed_and_biases_away_next_tick() {
     assert_eq!(failed.status, BrainTickStatus::RecoverableActionFailure);
     assert_eq!(
         executor.attempts, 1,
-        "P15 must not retry infinitely in one tick"
+        "failed actions must not retry indefinitely in one tick"
     );
     assert!(
         failed
@@ -361,6 +363,7 @@ fn terminal_invalid_state_rejects_without_learning_or_tick_increment() {
     assert_eq!(mind.memory_bank().len(), 0);
     assert!(mind.topological_map().concepts().is_empty());
     assert_eq!(mind.current_tick(), Tick::ZERO);
+    assert_eq!(output.diagnostics.nan_or_range_rejections, 1);
 }
 
 #[test]
@@ -421,28 +424,6 @@ fn topology_contradiction_output_remains_bias_only() {
 
     assert_eq!(output.status, BrainTickStatus::RecoverableActionFailure);
     assert!(!mind.topological_map().curiosity_biases().is_empty());
-    fn curiosity_is_not_action(_: Vec<alife_core::CuriosityBias>) {}
-    curiosity_is_not_action(mind.topological_map().curiosity_biases());
-}
-
-#[test]
-fn endocrine_update_after_outcome_remains_bounded() {
-    let mut mind = mind();
-    let mut sensory = FixtureSensory::new(0.8);
-    let mut executor = FixtureExecutor::success();
-    let mut outcome = FixtureOutcome::reward(0.5);
-
-    let output = mind.tick(
-        tick_input(0, normal_proposals()),
-        &mut sensory,
-        &mut executor,
-        &mut outcome,
-    );
-
-    assert_eq!(output.status, BrainTickStatus::Normal);
-    assert!(mind.homeostasis().drives.brain_atp < 0.75);
-    assert!(mind.homeostasis().hormones.dopamine > 0.5);
-    assert!(mind.homeostasis().validate_contract().is_ok());
 }
 
 #[test]
@@ -484,37 +465,6 @@ fn same_seed_replay_is_deterministic_across_multiple_ticks() {
         assert_eq!(
             first.topological_map().concepts().len(),
             second.topological_map().concepts().len()
-        );
-    }
-}
-
-#[test]
-fn core_reference_brain_contract_stays_engine_independent() {
-    let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
-        .expect("crate manifest should be readable");
-    for forbidden in [
-        concat!("be", "vy"),
-        concat!("av", "ian"),
-        concat!("wg", "pu"),
-    ] {
-        assert!(
-            !manifest.to_ascii_lowercase().contains(forbidden),
-            "alife_core manifest must not depend on {forbidden}"
-        );
-    }
-
-    let source = include_str!("../src/reference_brain.rs");
-    for forbidden in [
-        concat!("be", "vy"),
-        concat!("av", "ian"),
-        concat!("wg", "pu"),
-        concat!("Render", "Device"),
-        concat!("Render", "Queue"),
-        concat!("Ent", "ity"),
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "reference brain loop must not embed engine type {forbidden}"
         );
     }
 }

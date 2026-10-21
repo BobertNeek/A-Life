@@ -1,4 +1,4 @@
-//! v0 scaffold: engine-neutral sensory ABI, context streams, and perception refs.
+//! Engine-neutral sensory ABI, context streams, and perception references.
 
 use core::ops::{BitOr, BitOrAssign};
 
@@ -42,103 +42,6 @@ impl SensoryAbiVersion {
 impl Default for SensoryAbiVersion {
     fn default() -> Self {
         Self::CURRENT
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ChannelGroupKind {
-    VisualAffordance,
-    AuditoryAcoustic,
-    SmellChemistry,
-    TactileContact,
-    PainNovelty,
-    NearbyAffordanceBitfield,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ChannelBounds {
-    NormalizedUnit,
-    Bitfield,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum ChannelExtensionPolicy {
-    FrozenForVersion,
-    AppendOnlyWithVersionBump,
-    OptionalSideBuffer,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ChannelGroupSpec {
-    pub kind: ChannelGroupKind,
-    pub channel_count: usize,
-    pub semantics: &'static str,
-    pub bounds: ChannelBounds,
-    pub extension_policy: ChannelExtensionPolicy,
-}
-
-pub const SENSORY_ABI_CHANNEL_GROUPS: [ChannelGroupSpec; 6] = [
-    ChannelGroupSpec {
-        kind: ChannelGroupKind::VisualAffordance,
-        channel_count: SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
-        semantics: "profile-bound egocentric visual cues: privileged V1 uses affordance salience; grounded terrain vision V1 uses 16 nearest solid-surface range samples across its view, with no food or hazard labels",
-        bounds: ChannelBounds::NormalizedUnit,
-        extension_policy: ChannelExtensionPolicy::AppendOnlyWithVersionBump,
-    },
-    ChannelGroupSpec {
-        kind: ChannelGroupKind::AuditoryAcoustic,
-        channel_count: SENSORY_AUDITORY_CHANNEL_COUNT,
-        semantics: "auditory loudness, token/phoneme confidence, speaker salience, prosody, and acoustic noise",
-        bounds: ChannelBounds::NormalizedUnit,
-        extension_policy: ChannelExtensionPolicy::AppendOnlyWithVersionBump,
-    },
-    ChannelGroupSpec {
-        kind: ChannelGroupKind::SmellChemistry,
-        channel_count: SENSORY_SMELL_CHANNEL_COUNT,
-        semantics: "smell and local chemistry cues including food, pheromone, danger, decay, and resource gradients",
-        bounds: ChannelBounds::NormalizedUnit,
-        extension_policy: ChannelExtensionPolicy::AppendOnlyWithVersionBump,
-    },
-    ChannelGroupSpec {
-        kind: ChannelGroupKind::TactileContact,
-        channel_count: SENSORY_TACTILE_CHANNEL_COUNT,
-        semantics: "contact pressure, collision, grip, ground, fluid, temperature contact, and touch cues",
-        bounds: ChannelBounds::NormalizedUnit,
-        extension_policy: ChannelExtensionPolicy::AppendOnlyWithVersionBump,
-    },
-    ChannelGroupSpec {
-        kind: ChannelGroupKind::PainNovelty,
-        channel_count: SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
-        semantics: "bounded pain and novelty signals that can modulate attention without bypassing action arbitration",
-        bounds: ChannelBounds::NormalizedUnit,
-        extension_policy: ChannelExtensionPolicy::FrozenForVersion,
-    },
-    ChannelGroupSpec {
-        kind: ChannelGroupKind::NearbyAffordanceBitfield,
-        channel_count: 0,
-        semantics: "nearby affordance presence bits carried as a stable bitfield beside normalized numeric channels",
-        bounds: ChannelBounds::Bitfield,
-        extension_policy: ChannelExtensionPolicy::OptionalSideBuffer,
-    },
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SensoryAbiDescriptor {
-    pub version: SensoryAbiVersion,
-    pub channel_groups: &'static [ChannelGroupSpec],
-}
-
-impl SensoryAbiDescriptor {
-    pub const V1: Self = Self {
-        version: SensoryAbiVersion::CURRENT,
-        channel_groups: &SENSORY_ABI_CHANNEL_GROUPS,
-    };
-
-    pub fn total_channel_count(&self) -> usize {
-        self.channel_groups
-            .iter()
-            .map(|group| group.channel_count)
-            .sum()
     }
 }
 
@@ -733,18 +636,6 @@ impl Validate for SensorySnapshot {
         }
         Ok(())
     }
-}
-
-pub trait SensorySnapshotFromAdapter<T>: Sized {
-    fn sensory_from_adapter(value: T) -> Result<Self, ScaffoldContractError>;
-}
-
-pub trait SensorySnapshotSource {
-    fn sensory_snapshot(
-        &self,
-        organism_id: OrganismId,
-        tick: Tick,
-    ) -> Result<SensorySnapshot, ScaffoldContractError>;
 }
 
 fn validate_option_array<T: Validate, const N: usize>(

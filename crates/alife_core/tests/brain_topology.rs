@@ -1,25 +1,10 @@
 use alife_core::{
-    ActiveTilePolicy, BiologicalPriority, BrainClassRegistry, BrainScaleTier, LobeKind,
+    ActiveTilePolicy, BiologicalPriority, BrainClassId, BrainClassSpec, BrainScaleTier, LobeKind,
     ProjectionType, ScaffoldContractError, UpdateCadence,
 };
 
 #[test]
-fn canonical_registry_exposes_scalable_class_budgets() {
-    let tiers = BrainClassRegistry::canonical_tiers();
-    assert_eq!(
-        tiers,
-        &[
-            BrainScaleTier::Nano512,
-            BrainScaleTier::Small1024,
-            BrainScaleTier::Standard2048,
-            BrainScaleTier::Large4096,
-            BrainScaleTier::Cognitive32768,
-            BrainScaleTier::Student131k,
-            BrainScaleTier::Ascended1M,
-            BrainScaleTier::Ascended5M,
-        ]
-    );
-
+fn reference_classes_have_scalable_budgets() {
     let expected_budgets = [
         (BrainScaleTier::Nano512, 512, 8_192, 64),
         (BrainScaleTier::Small1024, 1_024, 16_384, 128),
@@ -28,7 +13,7 @@ fn canonical_registry_exposes_scalable_class_budgets() {
     ];
 
     for (tier, neurons, active_synapses, active_tiles) in expected_budgets {
-        let spec = BrainClassRegistry::spec_for_tier(tier).unwrap();
+        let spec = BrainClassSpec::try_for_tier(tier).unwrap();
         assert_eq!(spec.neuron_count, neurons);
         assert_eq!(spec.compute_budget.max_active_synapses, active_synapses);
         assert_eq!(spec.compute_budget.max_active_tiles, active_tiles);
@@ -39,7 +24,7 @@ fn canonical_registry_exposes_scalable_class_budgets() {
 
 #[test]
 fn standard2048_lobe_topology_matches_reference_boundaries() {
-    let spec = BrainClassRegistry::spec_for_tier(BrainScaleTier::Standard2048).unwrap();
+    let spec = BrainClassSpec::try_for_tier(BrainScaleTier::Standard2048).unwrap();
     let layout = &spec.lobe_layout;
 
     let expected = [
@@ -87,7 +72,17 @@ fn standard2048_lobe_topology_matches_reference_boundaries() {
 
 #[test]
 fn all_canonical_layouts_cover_neurons_without_overlap_and_align() {
-    for spec in BrainClassRegistry::canonical_specs() {
+    for tier in [
+        BrainScaleTier::Nano512,
+        BrainScaleTier::Small1024,
+        BrainScaleTier::Standard2048,
+        BrainScaleTier::Large4096,
+        BrainScaleTier::Cognitive32768,
+        BrainScaleTier::Student131k,
+        BrainScaleTier::Ascended1M,
+        BrainScaleTier::Ascended5M,
+    ] {
+        let spec = BrainClassSpec::try_for_tier(tier).unwrap();
         spec.validate().unwrap();
         assert_eq!(spec.microtile_edge, 16);
         assert_eq!(spec.supertile_edge, 128);
@@ -108,7 +103,7 @@ fn all_canonical_layouts_cover_neurons_without_overlap_and_align() {
 
 #[test]
 fn routing_matrix_references_enabled_lobes_and_uses_budget_metadata() {
-    let spec = BrainClassRegistry::spec_for_tier(BrainScaleTier::Standard2048).unwrap();
+    let spec = BrainClassSpec::try_for_tier(BrainScaleTier::Standard2048).unwrap();
     let routing = &spec.routing_matrix;
     routing.validate_for_layout(&spec.lobe_layout).unwrap();
 
@@ -157,7 +152,7 @@ fn routing_matrix_references_enabled_lobes_and_uses_budget_metadata() {
 
 #[test]
 fn routing_validation_rejects_missing_founder_lobe_references() {
-    let spec = BrainClassRegistry::spec_for_tier(BrainScaleTier::Nano512).unwrap();
+    let spec = BrainClassSpec::try_for_tier(BrainScaleTier::Nano512).unwrap();
     let mut invalid_layout = spec.lobe_layout.clone();
     invalid_layout
         .regions
@@ -166,5 +161,24 @@ fn routing_validation_rejects_missing_founder_lobe_references() {
     assert_eq!(
         spec.routing_matrix.validate_for_layout(&invalid_layout),
         Err(ScaffoldContractError::RoutingReferencesDisabledLobe)
+    );
+}
+
+#[test]
+fn custom_layout_arithmetic_handles_full_u32_neuron_range() {
+    let neurons = u32::MAX - 15;
+    let spec = BrainClassSpec::research_custom(BrainClassId(100), neurons).unwrap();
+    spec.validate().unwrap();
+    assert_eq!(spec.lobe_layout.total_neurons(), neurons);
+    assert_eq!(spec.lobe_layout.regions.last().unwrap().end(), neurons);
+}
+
+#[test]
+fn malformed_layout_lengths_return_an_error_without_overflowing() {
+    let mut layout = BrainClassSpec::for_tier(BrainScaleTier::Nano512).lobe_layout;
+    layout.regions[0].len = u32::MAX - 15;
+    assert_eq!(
+        layout.validate_for_neuron_count(512),
+        Err(ScaffoldContractError::LobeTotalMismatch)
     );
 }

@@ -14,8 +14,7 @@ fn founder(seed: u64) -> CreatureGenome {
     .unwrap()
 }
 
-// Exercise the persisted gene boundary. Before the implementation, the unknown
-// floor is ignored and the actual newborn damage response remains zero (RED).
+// Set the inherited expression floor through the persisted gene format.
 fn with_pain_floor(genome: &CreatureGenome, floor: f32) -> CreatureGenome {
     let graph = genome.chemistry.graph.expressed();
     let pain = graph

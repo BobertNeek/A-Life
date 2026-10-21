@@ -618,11 +618,12 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
         ),
         ("selection_cleared", None, false),
     ];
+    let fixture_path = std::env::var("ALIFE_HUD_CPU_FIXTURE").ok();
     let mut fixtures = Vec::new();
     let mut embedded_assets = Vec::new();
     for size in VIEWPORTS {
         let mut app = layout_app(size);
-        if embedded_assets.is_empty() {
+        if fixture_path.is_some() && embedded_assets.is_empty() {
             for (name, handle) in &app.world().resource::<Icons>().0 {
                 let image = app.world().resource::<Assets<Image>>().get(handle).unwrap();
                 assert!(
@@ -670,19 +671,21 @@ fn cpu_layout_fits_supported_viewports_and_exports_source_derived_fixtures() {
                     .as_ref()
                     .map_or_else(String::new, |r| format!("#{}", r.stable_id))
             );
-            fixtures.push(
-                json!({"case": name, "viewport": [size.x, size.y], "debug": debug,
+            if fixture_path.is_some() {
+                fixtures.push(
+                    json!({"case": name, "viewport": [size.x, size.y], "debug": debug,
                 "stable_id": readout.as_ref().map(|r| r.stable_id.to_string()),
                 "input_values": readout.as_ref().map(|r| r.values),
                 "holding_food": readout.as_ref().is_some_and(|r| r.holding_food),
                 "nodes": export_nodes(app.world_mut())}),
-            );
+                );
+            }
         }
     }
-    if let Ok(path) = std::env::var("ALIFE_HUD_CPU_FIXTURE") {
+    if let Some(path) = fixture_path {
         let receipt = json!({"evidence_kind": "source-derived CPU Bevy UiSurface layout",
             "is_screenshot": false, "glyph_bounds_measured": false,
-            "limitations": "Synthetic readout inputs; no renderer, simulation, GPU, font shaping, or screenshot. Text values/font styles are actual ECS components; text computed boxes do not establish glyph fit. Visibility is resolved from actual ancestor Visibility components. Warning badges may overlay their own card icons.",
+            "limitations": "CPU Bevy layout with synthetic readouts, actual ECS text styles, and ancestor visibility. Warning badges may overlap their icons; text boxes do not establish rendered glyph fit.",
             "quantity_order": QUANTITIES.map(Quantity::name), "embedded_assets": embedded_assets,
             "fixtures": fixtures});
         std::fs::write(path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
@@ -769,7 +772,7 @@ fn status_count_and_playback_follow_source_state_with_pause_precedence() {
 }
 
 #[test]
-fn only_rename_control_can_capture_input_and_hud_stays_below_menu_layers() {
+fn only_rename_control_can_capture_input() {
     let mut world = World::new();
     spawn(&mut world);
     for entity in world.query_filtered::<Entity, With<Node>>().iter(&world) {
@@ -783,23 +786,6 @@ fn only_rename_control_can_capture_input_and_hud_stays_below_menu_layers() {
             "only the explicit naming control owns pointer interaction"
         );
     }
-    let menu = include_str!("../menu.rs");
-    let layers = menu
-        .split("GlobalZIndex(")
-        .skip(1)
-        .map(|part| part.split(')').next().unwrap().parse::<i32>().unwrap())
-        .collect::<Vec<_>>();
-    assert_eq!(
-        layers,
-        vec![100, 90],
-        "source-order guard uses the existing modal and entry layers"
-    );
-    for z in world.query::<&GlobalZIndex>().iter(&world) {
-        assert_eq!(z.0, 30);
-        assert!(layers.iter().all(|menu_layer| *menu_layer > z.0));
-    }
-    // This is an explicit source z-order/component guard, not combined live
-    // picking-dispatch, modal compositing, or full-app collision evidence.
 }
 
 #[test]

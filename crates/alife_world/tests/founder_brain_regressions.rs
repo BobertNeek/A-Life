@@ -452,9 +452,7 @@ fn play_and_grab_keep_all_physical_features_and_have_distinct_readouts() {
             Vec3f::new(0.0, angular * GROUNDED_VELOCITY_CEILING, 0.0);
         let mut tracker = TrackedObjectRegistry::new(world.seed(), 64).unwrap();
         let sensed = GroundedSensorExtractor::extract(&snapshot, &mut tracker).unwrap();
-        let choices = GroundedCandidateEnumerator
-            .enumerate_candidates(&sensed, PROFILE)
-            .unwrap();
+        let choices = enumerate_grounded_candidates(&sensed, PROFILE, None).unwrap();
         let grab = choices
             .iter()
             .find(|c| c.action_id == HeadlessActionIds::GRAB)

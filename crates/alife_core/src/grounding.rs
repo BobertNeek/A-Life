@@ -1,4 +1,4 @@
-//! Contract-only grounded sensor-profile provenance and object-slot records.
+//! Grounded sensor-profile provenance and object-slot records.
 
 use serde::{Deserialize, Serialize};
 

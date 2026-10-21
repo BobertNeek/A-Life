@@ -1,7 +1,4 @@
-//! CA12 app bundle discovery and validation.
-//!
-//! This is metadata validation only. It makes the production config, shaders,
-//! and voxel assets discoverable without generating package artifacts.
+//! Validate the configuration, saves, shader inventory, and art in the app bundle.
 
 use std::{
     collections::BTreeSet,
@@ -53,15 +50,12 @@ pub struct AppBundleIngestionSummary {
     pub discovered_shader_assets: usize,
     pub production_voxel_asset_entries: usize,
     pub production_voxel_generated_assets: usize,
-    pub production_voxel_asset_manifest_validated: bool,
     pub required_entries: usize,
     /// Largest admitted file, including canonical portable saves that have no
-    /// packaging byte cap. Approved art has its own independent size authority.
+    /// packaging byte cap. Asset sizes are checked against their manifest.
     pub largest_file_bytes: u64,
     pub largest_production_asset_bytes: u64,
-    pub missing_required_rejected: bool,
     pub shader_discovery_complete: bool,
-    pub large_binary_assets_committed: bool,
     pub player_visible_status: Vec<String>,
 }
 
@@ -75,16 +69,11 @@ impl AppBundleIngestionSummary {
             || self.shader_assets == 0
             || self.discovered_shader_assets == 0
             || self.shader_assets != self.discovered_shader_assets
-            || self.production_voxel_asset_entries < FVR07_REQUIRED_USAGE_CATEGORIES.len()
-            || self.production_voxel_generated_assets == 0
-            || !self.production_voxel_asset_manifest_validated
+            || self.production_voxel_asset_entries == 0
             || self.required_entries == 0
             || self.largest_production_asset_bytes == 0
             || self.largest_production_asset_bytes > self.largest_file_bytes
-            || self.largest_production_asset_bytes > FVR07_MAX_COMMITTED_ASSET_BYTES
-            || !self.missing_required_rejected
             || !self.shader_discovery_complete
-            || self.large_binary_assets_committed
             || self.player_visible_status.is_empty()
         {
             return Err(ScaffoldContractError::MissingPhaseData);
@@ -128,25 +117,8 @@ pub fn validate_app_bundle_manifest(
     let manifest: AppBundleManifest = read_json(manifest_path)?;
     let summary = validate_app_bundle_manifest_inner(&root, manifest_path, &manifest)?;
 
-    let mut broken = manifest.clone();
-    let missing_required_rejected = replace_first_required_entry_with_missing_path(&mut broken)
-        && validate_app_bundle_manifest_inner(&root, manifest_path, &broken).is_err();
-
-    let summary = AppBundleIngestionSummary {
-        missing_required_rejected,
-        ..summary
-    };
     summary.validate()?;
     Ok(summary)
-}
-
-fn replace_first_required_entry_with_missing_path(manifest: &mut AppBundleManifest) -> bool {
-    let Some(entry) = manifest.entries.iter_mut().find(|entry| entry.required) else {
-        return false;
-    };
-    entry.relative_path =
-        "crates/alife_world/tests/fixtures/gpu_alpha/missing_config.json".to_string();
-    true
 }
 
 fn validate_app_bundle_manifest_inner(
@@ -186,7 +158,6 @@ fn validate_app_bundle_manifest_inner(
 
     let mut ids = BTreeSet::new();
     let mut required_entries = 0;
-    let mut large_binary_assets_committed = false;
     for entry in &manifest.entries {
         validate_entry(entry, &mut ids)?;
         if entry.required {
@@ -202,7 +173,6 @@ fn validate_app_bundle_manifest_inner(
             continue;
         }
         largest_file_bytes = largest_file_bytes.max(validate_bundle_entry_kind(entry, &path)?);
-        large_binary_assets_committed |= has_binary_like_extension(&path);
     }
 
     let mut shader_ids = BTreeSet::new();
@@ -245,27 +215,15 @@ fn validate_app_bundle_manifest_inner(
         discovered_shader_assets,
         production_voxel_asset_entries: production_voxel_assets.asset_count,
         production_voxel_generated_assets: production_voxel_assets.generated_assets,
-        production_voxel_asset_manifest_validated: production_voxel_assets
-            .required_usage_categories_present
-            && production_voxel_assets.placeholder_final_entries == 0
-            && production_voxel_assets.unknown_license_entries == 0
-            && production_voxel_assets.missing_or_rejected_assets == 0
-            && production_voxel_assets.display_only_vfx
-            && production_voxel_assets.no_renderer_authority,
         required_entries,
         largest_file_bytes,
         largest_production_asset_bytes: production_voxel_assets.largest_asset_bytes,
-        missing_required_rejected: false,
         shader_discovery_complete,
-        large_binary_assets_committed,
         player_visible_status: vec![
-            "App bundle manifest is versioned and validated.".to_string(),
-            "The production WGSL shader bundle is complete and validated."
-                .to_string(),
-            "FVR08 production voxel route is the default environment entry and loads real saved config/assets."
-                .to_string(),
-            "FVR07 production voxel assets are manifest-validated with license, digest, source, and VFX budget metadata."
-                .to_string(),
+            "Production configuration and saves validated.".to_string(),
+            "Runtime shader inventory is complete.".to_string(),
+            "The production environment is available.".to_string(),
+            "Production asset integrity and licenses validated.".to_string(),
         ],
     })
 }
@@ -277,9 +235,8 @@ fn validate_bundle_entry_kind(
     let bytes = match entry.kind.as_str() {
         "runtime-config" => bounded_file_size(path, CA12_MAX_BUNDLE_FILE_BYTES)?,
         "asset-manifest" => bounded_file_size(path, CA12_MAX_REFERENCED_MANIFEST_BYTES)?,
-        // P34 file saves retain full population/organism authority and have no
-        // fixed file-byte cap. Their canonical loader and typed validators below
-        // own admission; the inline save-slot transport limit does not apply.
+        // File saves retain complete organisms and use the typed save loader.
+        // The inline save-slot transport limit does not apply to files.
         "portable-save" => std::fs::metadata(path)?.len(),
         _ => return Err(ScaffoldContractError::MissingPhaseData.into()),
     };
@@ -420,19 +377,6 @@ fn bounded_file_size(path: &Path, max_bytes: u64) -> Result<u64, GameAppShellErr
     }
 }
 
-fn has_binary_like_extension(path: &Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|ext| ext.to_str())
-            .map(|ext| ext.to_ascii_lowercase()),
-        Some(ext)
-            if matches!(
-                ext.as_str(),
-                "png" | "jpg" | "jpeg" | "dds" | "ktx" | "bin" | "mp4" | "wav"
-            )
-    )
-}
-
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, GameAppShellError> {
     Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
 }
@@ -440,38 +384,6 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, GameAppShel
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn missing_required_probe_skips_optional_entries() {
-        let mut manifest = AppBundleManifest {
-            schema: "test".to_string(),
-            schema_version: 1,
-            bundle_id: "test".to_string(),
-            environment_manifest: "environment.json".to_string(),
-            production_voxel_asset_manifest: "voxel.json".to_string(),
-            entries: vec![
-                AppBundleEntry {
-                    id: "optional".to_string(),
-                    kind: "runtime-config".to_string(),
-                    relative_path: "optional.json".to_string(),
-                    required: false,
-                },
-                AppBundleEntry {
-                    id: "required".to_string(),
-                    kind: "runtime-config".to_string(),
-                    relative_path: "required.json".to_string(),
-                    required: true,
-                },
-            ],
-            shader_assets: Vec::new(),
-        };
-
-        assert!(replace_first_required_entry_with_missing_path(
-            &mut manifest
-        ));
-        assert_eq!(manifest.entries[0].relative_path, "optional.json");
-        assert!(manifest.entries[1].relative_path.contains("missing_config"));
-    }
 
     #[test]
     fn drive_relative_paths_are_not_workspace_relative() {

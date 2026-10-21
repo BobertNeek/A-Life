@@ -43,7 +43,6 @@ required-features = ["foundation-training"]
 accesskit = { version = "=0.21.1", optional = true }
 alife_core = { path = "../alife_core" }
 alife_archive = { path = "../alife_archive", optional = true }
-alife_bevy_adapter = { path = "../alife_bevy_adapter", optional = true }
 alife_gpu_backend = { path = "../alife_gpu_backend", optional = true }
 alife_runtime = { path = "../alife_runtime", optional = true }
 alife_school = { path = "../alife_school" }
@@ -53,9 +52,6 @@ alife_world = { path = "../alife_world" }
 blake3.workspace = true
 bincode.workspace = true
 bevy = { workspace = true, optional = true }
-bevy-inspector-egui = { version = "=0.36.0", default-features = false, optional = true }
-bevy_asset_loader = { version = "=0.26.0", default-features = false, optional = true }
-bevy_egui = { version = "=0.39.0", default-features = false, optional = true }
 bevy_hanabi = { version = "=0.18.0", default-features = false, optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 serde.workspace = true
@@ -77,7 +73,6 @@ windows-sys = { version = "0.61.2", features = [
 default = []
 bevy-app = [
     "dep:accesskit",
-    "dep:alife_bevy_adapter",
     "dep:bevy",
     "bevy/default_app",
     "bevy/default_platform",
@@ -109,24 +104,9 @@ gpu-tests = [
     "alife_gpu_backend/gpu-tests",
     "alife_runtime/gpu-tests",
 ]
-licensed-assets = [
-    "bevy-app",
-    "dep:bevy_asset_loader",
-]
-production-assets = ["licensed-assets"]
 vfx-hanabi = ["bevy-app", "dep:bevy_hanabi", "bevy_hanabi/3d"]
-debug-tools = [
-    "bevy-app",
-    "dep:bevy_egui",
-    "dep:bevy-inspector-egui",
-    "bevy_egui/render",
-    "bevy_egui/bevy_ui",
-    "bevy_egui/picking",
-    "bevy-inspector-egui/bevy",
-]
 production-voxel-frontend = [
     "bevy-app",
     "gpu-runtime",
-    "production-assets",
     "vfx-hanabi",
 ]

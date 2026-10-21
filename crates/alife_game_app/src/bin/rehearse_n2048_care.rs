@@ -1,4 +1,4 @@
-//! Explicit offline tool, never linked into the ordinary game executable.
+//! Offline care rehearsal command.
 use alife_game_app::simulator_rehearsal::SimulatorRehearsalConfig;
 use std::path::PathBuf;
 

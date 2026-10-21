@@ -1013,6 +1013,65 @@ fn quota_downgrades_automatic_capture_but_never_blocks_genetic_archive_or_pin() 
 }
 
 #[test]
+fn reused_checkpoint_must_retain_every_original_page() {
+    for missing in [false, true] {
+        let root = temp_root("corrupt-shared-checkpoint");
+        let mut library =
+            LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+        let (genome, phenotype) = fixture(523, 23);
+        let birth = library
+            .archive_birth(GeneticArchiveInput {
+                source_run_id: "run-checkpoint-reuse",
+                organism_id: OrganismId(23),
+                birth_tick: Tick::ZERO,
+                genome: &genome,
+                phenotype: &phenotype,
+                foundation_asset_bytes: None,
+            })
+            .unwrap();
+        let mut statistics = PassiveLifeStatistics::new(OrganismId(23), Tick::ZERO).unwrap();
+        statistics.finalize(Tick(10), "fixture retirement").unwrap();
+        let statistics_bytes = serde_json::to_vec(&statistics).unwrap();
+        let checkpoint_bytes = vec![5_u8; ARCHIVE_PAGE_BYTES + 1];
+        let input = || LifeArchiveInput {
+            birth_manifest_digest: birth,
+            death_tick: Tick(10),
+            final_experience_sequence: None,
+            statistics_bytes: &statistics_bytes,
+            learned_checkpoint_bytes: Some(&checkpoint_bytes),
+            checkpoint_retention: ArchiveCheckpointRetention::Pinned,
+        };
+        let receipt = library.archive_life(input()).unwrap();
+        let manifest = library
+            .load_manifest(receipt.committed_manifest_digest)
+            .unwrap();
+        let checkpoint = match manifest.life.unwrap().checkpoint {
+            ArchiveCheckpointDisposition::Stored(reference) => reference,
+            other => panic!("expected stored checkpoint, got {other:?}"),
+        };
+        let page = root
+            .join("checkpoints")
+            .join(digest_hex_for_test(checkpoint.digest))
+            .join(format!(
+                "00000000-{}.zst",
+                digest_hex_for_test(checkpoint.pages[0].digest)
+            ));
+        if missing {
+            fs::remove_file(&page).unwrap();
+        } else {
+            fs::write(&page, b"damaged acquired state").unwrap();
+        }
+        let committed_before = library.manifest_count().unwrap();
+
+        assert!(library.archive_life(input()).is_err());
+        assert_eq!(library.manifest_count().unwrap(), committed_before);
+        assert!(library.read_checkpoint(&checkpoint).is_err());
+        drop(library);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
 fn shared_checkpoint_content_keeps_each_manifest_reference_in_the_index() {
     let root = temp_root("shared-checkpoint-index");
     let mut config = LineageLibraryConfig::profile_default(&root);
@@ -1404,27 +1463,6 @@ fn composite_birth_batch_prepare_rejects_a_curated_receipt_mismatch_without_writ
     let fixture = curated_n512_fixture(904, SensorProfile::GroundedObjectSlotsV1);
     let other = curated_n512_fixture(905, SensorProfile::GroundedObjectSlotsV1);
     let mut input = fixture.input("batch-receipt-mismatch", OrganismId(904), Tick::new(14));
-    input.projection_receipt = other.projection_receipt.as_ref();
-    let before = snapshot_archive_state(&library, &root);
-
-    let error = library.prepare_composite_birth_batch(&[input]).unwrap_err();
-    assert!(matches!(
-        error,
-        alife_archive::ArchiveError::Contract(_) | alife_archive::ArchiveError::Integrity(_)
-    ));
-    assert_eq!(snapshot_archive_state(&library, &root), before);
-
-    drop(library);
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn composite_birth_batch_prepare_rejects_projection_provenance_mismatch_without_writes() {
-    let root = temp_root("batch-receipt-provenance");
-    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
-    let fixture = curated_n512_fixture(914, SensorProfile::GroundedObjectSlotsV1);
-    let other = curated_n512_fixture(915, SensorProfile::GroundedObjectSlotsV1);
-    let mut input = fixture.input("batch-receipt-provenance", OrganismId(914), Tick::new(20));
     input.projection_receipt = other.projection_receipt.as_ref();
     let before = snapshot_archive_state(&library, &root);
 

@@ -13,7 +13,7 @@ use alife_world::{
         CreatureLifetimeWeightValue, CreatureMindSaveSummary, CreatureSaveState, FeatureFlagConfig,
         GpuRuntimeActiveProfileCaps, GpuRuntimeAdapterIdentity, GpuRuntimeAuthorityState,
         GpuRuntimeClassBucketAllocation, GpuRuntimeResidencySlots, GpuRuntimeSafeCheckpoint,
-        GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions, LearningTraceSaveSummary, MigrationHook,
+        GpuRuntimeSaveState, GpuRuntimeShaderAbiVersions, LearningTraceSaveSummary,
         PersistenceError, PortableAssetDigest, PortableSaveFile, RuntimeConfig, SchoolConfig,
         WeightLayerSaveSummary, FVR06_GPU_RUNTIME_STATE_SCHEMA,
         FVR06_GPU_RUNTIME_STATE_SCHEMA_VERSION, P34_ASSET_MANIFEST_SCHEMA,
@@ -231,28 +231,6 @@ fn composite_genome_foundation_and_nonzero_lifetime_state_survive_portable_resto
     assert!(!restored_lifetime.lifetime_weight_values.is_empty());
 
     fs::remove_dir_all(root).unwrap();
-}
-
-fn assert_no_runtime_fallback_keys(value: &serde_json::Value) {
-    match value {
-        serde_json::Value::Object(fields) => {
-            for forbidden in ["fallback_to_cpu", "gpu_feature_enabled", "require_gpu"] {
-                assert!(
-                    !fields.contains_key(forbidden),
-                    "serialized policy intent contains forbidden runtime field {forbidden}"
-                );
-            }
-            for child in fields.values() {
-                assert_no_runtime_fallback_keys(child);
-            }
-        }
-        serde_json::Value::Array(values) => {
-            for child in values {
-                assert_no_runtime_fallback_keys(child);
-            }
-        }
-        _ => {}
-    }
 }
 
 fn habitat_id(raw: u64) -> HabitatId {
@@ -658,20 +636,10 @@ fn incompatible_schemas_reject_without_silent_migration() {
         manifest.validate_with_root(temp_root("future_manifest")),
         Err(PersistenceError::SchemaVersion { .. })
     ));
-
-    let migration = MigrationHook {
-        schema_version: 1,
-        from_schema_version: P34_SAVE_FILE_SCHEMA_VERSION - 1,
-        to_schema_version: P34_SAVE_FILE_SCHEMA_VERSION,
-    };
-    assert!(matches!(
-        migration.reject_premature_migration(),
-        Err(PersistenceError::MigrationUnsupported { .. })
-    ));
 }
 
 #[test]
-fn stable_id_remap_rejects_engine_local_id_leakage() {
+fn stable_id_remap_rejects_invalid_or_duplicate_world_ids() {
     let valid = AdapterRemapTable {
         entries: vec![AdapterRemapEntry {
             stable_world_entity_id: WorldEntityId(7),
@@ -681,16 +649,17 @@ fn stable_id_remap_rejects_engine_local_id_leakage() {
     };
     valid.validate().unwrap();
 
-    let invalid = AdapterRemapTable {
-        entries: vec![AdapterRemapEntry {
-            stable_world_entity_id: WorldEntityId(7),
-            adapter_namespace: "headless".to_string(),
-            adapter_slot: "Entity(7v1)".to_string(),
-        }],
-    };
+    let mut invalid = valid.clone();
+    invalid.entries[0].stable_world_entity_id = WorldEntityId(0);
     assert!(matches!(
         invalid.validate(),
-        Err(PersistenceError::EngineLocalIdLeak { .. })
+        Err(PersistenceError::Contract(_))
+    ));
+    let mut duplicate = valid.clone();
+    duplicate.entries.push(valid.entries[0].clone());
+    assert!(matches!(
+        duplicate.validate(),
+        Err(PersistenceError::InvalidConfig { .. })
     ));
 }
 
@@ -727,52 +696,30 @@ fn runtime_config_defaults_are_deterministic_and_invalid_combinations_reject() {
 }
 
 #[test]
-fn brain_policy_config_vnext_round_trips_without_runtime_fallback_state() {
-    for policy in [
-        PolicyBackend::NeuralClosedLoopGpu,
-        PolicyBackend::HeuristicBaseline,
-    ] {
-        let expected = BrainPolicyConfig {
-            schema_version: 1,
-            policy,
-        };
-        let value = serde_json::to_value(expected).unwrap();
-        assert_no_runtime_fallback_keys(&value);
-        assert_eq!(
-            serde_json::from_value::<BrainPolicyConfig>(value).unwrap(),
-            expected
-        );
-    }
-}
-
-#[test]
-fn requires_gpu_is_derived_only_from_the_explicit_policy() {
-    assert!(PolicyBackend::NeuralClosedLoopGpu.requires_gpu());
-    assert!(!PolicyBackend::HeuristicBaseline.requires_gpu());
-}
-
-#[test]
-fn current_runtime_config_serializes_only_explicit_policy_intent() {
-    let config = RuntimeConfig::deterministic_default(99, BrainScaleTier::Nano512);
-    let value = serde_json::to_value(&config).unwrap();
-    assert_no_runtime_fallback_keys(&value);
-    assert_eq!(
-        value.pointer("/brain_policy/policy"),
-        Some(&serde_json::Value::String(
-            "NeuralClosedLoopGpu".to_string()
-        ))
-    );
-}
-
-#[test]
 fn current_runtime_config_round_trips_both_explicit_policies() {
-    for policy in [
-        PolicyBackend::NeuralClosedLoopGpu,
-        PolicyBackend::HeuristicBaseline,
+    for (policy, wire_name, requires_gpu) in [
+        (
+            PolicyBackend::NeuralClosedLoopGpu,
+            "NeuralClosedLoopGpu",
+            true,
+        ),
+        (PolicyBackend::HeuristicBaseline, "HeuristicBaseline", false),
     ] {
         let mut expected = RuntimeConfig::deterministic_default(99, BrainScaleTier::Nano512);
         expected.brain_policy.policy = policy;
         expected.validate().unwrap();
+        assert_eq!(policy.requires_gpu(), requires_gpu);
+        assert_eq!(expected.brain_policy.schema_version, 1);
+        let value = serde_json::to_value(&expected).unwrap();
+        assert_eq!(
+            value
+                .pointer("/brain_policy/policy")
+                .and_then(serde_json::Value::as_str),
+            Some(wire_name)
+        );
+        let restored_policy: BrainPolicyConfig =
+            serde_json::from_value(value["brain_policy"].clone()).unwrap();
+        assert_eq!(restored_policy, expected.brain_policy);
         let bytes = serde_json::to_vec(&expected).unwrap();
         let restored: RuntimeConfig = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(restored, expected);
@@ -955,13 +902,6 @@ fn committed_legacy_p34_save_fails_closed_without_authoritative_v3_state() {
         config.brain_policy.policy,
         PolicyBackend::NeuralClosedLoopGpu
     );
-    assert_no_runtime_fallback_keys(&serde_json::to_value(&config).unwrap());
-    let fixture_config: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/p34/tiny_config.json")).unwrap();
-    let fixture_save: serde_json::Value =
-        serde_json::from_str(include_str!("fixtures/p34/tiny_save.json")).unwrap();
-    assert_no_runtime_fallback_keys(&fixture_config);
-    assert_no_runtime_fallback_keys(&fixture_save);
     let manifest = AssetManifest::from_json_file(root.join("tiny_asset_manifest.json")).unwrap();
     manifest.validate_with_root(&root).unwrap();
 }

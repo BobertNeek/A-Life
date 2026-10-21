@@ -1,8 +1,7 @@
-//! FVR02 runtime contract: renderer-independent persistent voxel world backend.
+//! Renderer-independent persistent voxel world state.
 //!
-//! This module owns saved voxel terrain truth for later Bevy renderers. It
-//! deliberately stores stable IDs, chunk coordinates, material summaries,
-//! dirty regions, and profile budgets, never Bevy/wgpu/renderer handles.
+//! Stores stable IDs, chunk coordinates, material summaries, dirty regions,
+//! and profile budgets independently of renderer handles.
 
 use std::collections::BTreeSet;
 
@@ -16,7 +15,6 @@ use crate::{
         procedural_chunk_summary, CreatureWorldAnchor, ProceduralBiomeKind, ProceduralChunkCoord,
         ProceduralTerrainMaterial, ProceduralTileCoord, ProceduralWorldConfig,
         ProceduralWorldContentKind, DEFAULT_MAX_ACTIVE_CONTENT_CANDIDATES,
-        DEFAULT_MAX_NEIGHBORHOOD_SAMPLES, DEFAULT_NEIGHBORHOOD_RADIUS_TILES,
         DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS,
     },
     WorldObjectKind, WorldObjectSaveState, WorldSaveState,
@@ -171,8 +169,6 @@ impl PersistentVoxelProfileId {
                 activation_radius_chunks: 2,
                 active_chunk_cap: 128,
                 max_content_candidates: 512,
-                neighborhood_radius_tiles: 6,
-                max_neighborhood_samples: 96,
                 virtual_half_extent_chunks: DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS,
                 hot_brain_slots: 4,
                 warm_brain_slots: 12,
@@ -186,8 +182,6 @@ impl PersistentVoxelProfileId {
                 activation_radius_chunks: 4,
                 active_chunk_cap: 256,
                 max_content_candidates: 768,
-                neighborhood_radius_tiles: 8,
-                max_neighborhood_samples: 128,
                 virtual_half_extent_chunks: DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS,
                 hot_brain_slots: 8,
                 warm_brain_slots: 16,
@@ -201,8 +195,6 @@ impl PersistentVoxelProfileId {
                 activation_radius_chunks: 5,
                 active_chunk_cap: 384,
                 max_content_candidates: 1024,
-                neighborhood_radius_tiles: 10,
-                max_neighborhood_samples: 160,
                 virtual_half_extent_chunks: DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS,
                 hot_brain_slots: 12,
                 warm_brain_slots: 24,
@@ -216,8 +208,6 @@ impl PersistentVoxelProfileId {
                 activation_radius_chunks: 8,
                 active_chunk_cap: 768,
                 max_content_candidates: 2048,
-                neighborhood_radius_tiles: 12,
-                max_neighborhood_samples: 256,
                 virtual_half_extent_chunks: DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS * 2,
                 hot_brain_slots: 24,
                 warm_brain_slots: 64,
@@ -231,8 +221,6 @@ impl PersistentVoxelProfileId {
                 activation_radius_chunks: 10,
                 active_chunk_cap: 1024,
                 max_content_candidates: 4096,
-                neighborhood_radius_tiles: 16,
-                max_neighborhood_samples: 384,
                 virtual_half_extent_chunks: DEFAULT_VIRTUAL_HALF_EXTENT_CHUNKS * 4,
                 hot_brain_slots: 32,
                 warm_brain_slots: 128,
@@ -251,8 +239,6 @@ pub struct PersistentVoxelProfileBudget {
     pub activation_radius_chunks: u16,
     pub active_chunk_cap: u16,
     pub max_content_candidates: u16,
-    pub neighborhood_radius_tiles: u16,
-    pub max_neighborhood_samples: u16,
     pub virtual_half_extent_chunks: i32,
     pub hot_brain_slots: u16,
     pub warm_brain_slots: u16,
@@ -269,10 +255,6 @@ impl PersistentVoxelProfileBudget {
             max_active_chunks: usize::from(self.active_chunk_cap),
             max_active_content_candidates: usize::from(self.max_content_candidates)
                 .max(DEFAULT_MAX_ACTIVE_CONTENT_CANDIDATES.min(usize::from(self.active_chunk_cap))),
-            neighborhood_radius_tiles: i32::from(self.neighborhood_radius_tiles)
-                .max(DEFAULT_NEIGHBORHOOD_RADIUS_TILES),
-            max_neighborhood_samples: usize::from(self.max_neighborhood_samples)
-                .max(DEFAULT_MAX_NEIGHBORHOOD_SAMPLES.min(usize::from(self.active_chunk_cap))),
             virtual_half_extent_chunks: self.virtual_half_extent_chunks,
         }
     }
@@ -552,10 +534,6 @@ impl PersistentVoxelWorldBackend {
     pub fn virtual_chunk_count(&self) -> u64 {
         let width = i64::from(self.state.profile_budget.virtual_half_extent_chunks) * 2 + 1;
         (width * width) as u64
-    }
-
-    pub const fn allocates_far_chunks(&self) -> bool {
-        false
     }
 
     pub fn apply_tile_edit(&mut self, edit: VoxelTileEdit) -> Result<(), ScaffoldContractError> {

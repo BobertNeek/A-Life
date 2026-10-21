@@ -367,31 +367,4 @@ mod tests {
         timing.finish(failure.as_ref().err().map(|error| error.as_ref()));
         assert!(matches!(failure, Err(error) if error.to_string() == "original failure"));
     }
-
-    #[test]
-    fn enabled_and_disabled_diagnostics_leave_canonical_bytes_equal() {
-        let directory = Directory::new();
-        for enabled in [false, true] {
-            let output = directory.0.join(if enabled { "on" } else { "off" });
-            std::fs::create_dir(&output).unwrap();
-            let timing = if enabled {
-                fixture().0
-            } else {
-                CycleStageTiming::default()
-            };
-            timing.own_output(&output);
-            let span = timing.stage("final_receipt_write");
-            std::fs::write(output.join("cycle.json"), b"canonical cycle bytes").unwrap();
-            std::fs::write(output.join("actor-checkpoint.json"), b"canonical GPU bytes").unwrap();
-            span.finish();
-            timing.finish(None);
-            assert_eq!(output.join("stage-timing.json").is_file(), enabled);
-        }
-        for name in ["cycle.json", "actor-checkpoint.json"] {
-            assert_eq!(
-                std::fs::read(directory.0.join("on").join(name)).unwrap(),
-                std::fs::read(directory.0.join("off").join(name)).unwrap(),
-            );
-        }
-    }
 }

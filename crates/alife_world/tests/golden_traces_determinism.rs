@@ -1,8 +1,7 @@
 use std::{fs, path::PathBuf};
 
 use alife_core::{
-    ActionKind, ExperiencePatchBuilder, ExperiencePatchPhase, ExperienceSequenceId,
-    ScaffoldContractError, SchemaVersions, SleepPhase, Validate, WorldEntityId,
+    ActionKind, ExperiencePatchPhase, SchemaVersions, SleepPhase, Validate, WorldEntityId,
 };
 use alife_world::{
     ActionLegality, ActionLegalityChecker, HeadlessWorldCommand, ScenarioAssertions,
@@ -11,8 +10,7 @@ use alife_world::{
 use serde::{Deserialize, Serialize};
 
 const GOLDEN_TRACE_SCHEMA: &str = "alife.p19.golden_trace.v3";
-// v1/v2 remain historical evidence. v3 adds activity-hold and steering state
-// to world identity without relaxing the existing physical outcome checks.
+// v3 includes activity-hold and steering state in world identity.
 const GOLDEN_TRACE_SCHEMA_VERSION: u16 = 3;
 const STOCHASTIC_SEED_FIELD: &str = "scenario.seed";
 
@@ -78,7 +76,6 @@ struct GoldenState {
     curiosity_bias_count: usize,
     sleep_phase: String,
     sleep_cycle_count: u32,
-    pending_structural_edit_count: usize,
     final_drive_milli: Vec<u16>,
     final_hormone_milli: Vec<u16>,
 }
@@ -127,6 +124,9 @@ fn same_seed_replay_produces_identical_golden_trace_summary() {
             "same-seed replay drifted for {}",
             scenario_key(name)
         );
+        assert_eq!(first.patch_summaries, second.patch_summaries, "{name:?}");
+        assert_eq!(first.world_signature, second.world_signature, "{name:?}");
+        assert_eq!(first.summary, second.summary, "{name:?}");
     }
 }
 
@@ -171,13 +171,6 @@ fn bounded_randomized_scenario_loops_preserve_learning_invariants() {
         assert_valid_ids_and_actions(&fixture, &run, case_index);
         assert_sealed_patch_consumers_only_observe_sealed_patches(&run, case_index);
     }
-}
-
-#[test]
-fn partial_experience_builders_reject_snapshot_update_inputs_before_seal() {
-    let sequence = ExperienceSequenceId::new(1).unwrap();
-    let error = ExperiencePatchBuilder::new(sequence).seal().unwrap_err();
-    assert_eq!(error, ScaffoldContractError::MissingPhaseData);
 }
 
 fn read_golden_trace(key: &str) -> GoldenTrace {
@@ -444,7 +437,6 @@ impl GoldenTrace {
                 curiosity_bias_count: run.curiosity_biases.len(),
                 sleep_phase: sleep_phase_name(run.sleep_phase).to_string(),
                 sleep_cycle_count: run.sleep_cycle_count,
-                pending_structural_edit_count: run.pending_structural_edit_count,
                 final_drive_milli: run
                     .final_homeostasis
                     .drives

@@ -126,3 +126,14 @@ fn no_incumbent_preserves_raw_salience_order_and_canonical_ties() {
     assert_eq!(attention.focal_targets, vec![identity(2), identity(3)]);
     attention.validate_contract().unwrap();
 }
+
+#[test]
+fn nonadjacent_duplicate_focus_identities_are_rejected() {
+    let mut attention = select(
+        &[summary(1, 0.9), summary(2, 0.8), summary(3, 0.7)],
+        HysteresisState::default(),
+        3,
+    );
+    attention.focal_targets[2] = attention.focal_targets[0];
+    assert!(attention.validate_contract().is_err());
+}

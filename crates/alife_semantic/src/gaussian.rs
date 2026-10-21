@@ -1,4 +1,4 @@
-//! v0 scaffold: optional Gaussian cluster observations and egocentric hashing.
+//! Optional Gaussian cluster observations and egocentric hashing.
 
 use alife_core::{
     Confidence, ContextFeatureFlags, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry,
@@ -123,9 +123,6 @@ pub fn build_gaussian_context(
     }
 
     let confidence = Confidence::new(confidence)?;
-    if confidence.raw() == 0.0 {
-        return Ok(None);
-    }
 
     entries.sort_by(|lhs, rhs| {
         rhs.salience

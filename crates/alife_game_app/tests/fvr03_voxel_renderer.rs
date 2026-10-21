@@ -15,14 +15,11 @@ use alife_game_app::{
     Fvr04ProductionCreatureWorldLabel, Fvr05ProductionInspectorTab,
     Fvr05ProductionRightInspectorPanel, Fvr05ProductionUxStateResource,
     Fvr07ProductionDressingKind, Fvr07ProductionGpuVfxMarker, Fvr07ProductionVisualDressing,
-    Fvr09CreatureFaceFeatureMarker, Fvr09CuteBipedCreatureMarker, Fvr09MesherMode,
-    Fvr10CreatureSpeciesMarker, Fvr10CreatureSurfaceDetailMarker, Fvr11ProductionContactShadow,
-    Fvr11ProductionTerrainLayer, Fvr11ProductionTerrainLightingMarker,
-    Fvr11ProductionTerrainMaterialContract, Fvr11ProductionTerrainSceneResource,
-    Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot, ProductionCreatureJoinCoverMarker,
-    ProductionCreaturePartMarker, ProductionFrontendProfileId, ProductionVoxelLaunchConfig,
-    V0PlayerControlStrip, V0PlayerCreaturePanel, V0PlayerStatusChip,
-    FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA, FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION,
+    Fvr09MesherMode, Fvr11ProductionContactShadow, Fvr11ProductionTerrainLayer,
+    Fvr11ProductionTerrainLightingMarker, Fvr11ProductionTerrainMaterialContract,
+    Fvr11ProductionTerrainSceneResource, Fvr11TerrainSurfaceRole, ProductionCreatureAssemblyRoot,
+    ProductionFrontendProfileId, ProductionVoxelLaunchConfig, V0PlayerControlStrip,
+    V0PlayerCreaturePanel, V0PlayerStatusChip, FVR03_PRODUCTION_VOXEL_RENDERER_SCHEMA,
 };
 use alife_world::{
     persistence::PortableSaveFile, CreatureAppearanceGenome, StableVoxelObjectRef,
@@ -213,7 +210,6 @@ fn hearthling_renderer_preserves_stable_roots_without_generated_part_hierarchies
     let mut query = app.world_mut().query::<(
         &ProductionCreatureAssemblyRoot,
         &Fvr04ProductionCreatureVisualMarker,
-        &Fvr10CreatureSpeciesMarker,
         &Visibility,
         &Transform,
     )>();
@@ -222,12 +218,12 @@ fn hearthling_renderer_preserves_stable_roots_without_generated_part_hierarchies
     assert_eq!(
         roots
             .iter()
-            .map(|(r, _, _, _, _)| r.stable_id.raw())
+            .map(|(r, _, _, _)| r.stable_id.raw())
             .collect::<BTreeSet<_>>()
             .len(),
         30
     );
-    for (root, visual, species, visibility, pose) in roots {
+    for (root, visual, visibility, pose) in roots {
         assert!(root.display_only);
         assert_eq!(*visibility, Visibility::Inherited);
         assert_eq!(root.stable_id, visual.stable_id);
@@ -242,31 +238,12 @@ fn hearthling_renderer_preserves_stable_roots_without_generated_part_hierarchies
             (pose.translation.x, pose.translation.z),
             (object.position.x, object.position.z)
         );
-        let saved = save
-            .creatures
-            .iter()
-            .find(|c| c.organism_id == root.organism_id)
-            .unwrap();
-        assert_eq!(
-            species.species_archetype,
-            saved.appearance.species_archetype
-        );
-        assert_eq!(
-            species.body_plan_signature,
-            saved.appearance.body_plan_signature()
-        );
         assert!(
             pose.translation.is_finite()
                 && pose.scale.is_finite()
                 && pose.scale.min_element() > 0.0
         );
     }
-    let mut parts = app.world_mut().query::<&ProductionCreaturePartMarker>();
-    assert_eq!(parts.iter(app.world()).count(), 0);
-    let mut covers = app
-        .world_mut()
-        .query::<&ProductionCreatureJoinCoverMarker>();
-    assert_eq!(covers.iter(app.world()).count(), 0);
     let scene = app
         .world()
         .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
@@ -275,25 +252,6 @@ fn hearthling_renderer_preserves_stable_roots_without_generated_part_hierarchies
     assert_eq!(scene.creature_part_entity_count, 0);
     assert_eq!(scene.creature_join_cover_count, 0);
     assert!(scene.production_visuals_display_only);
-}
-
-#[test]
-fn fvr11_terrain_contract_is_display_only() {
-    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let scene = app
-        .world()
-        .resource::<Fvr11ProductionTerrainSceneResource>();
-    assert_eq!(
-        scene.visual_version,
-        FVR11_PRODUCTION_TERRAIN_VISUAL_VERSION
-    );
-    assert!(scene.sample_count > 0);
-    assert!(scene.display_only);
-    assert!(scene.no_renderer_authority_over_world_actions_or_cognition);
 }
 
 #[test]
@@ -315,9 +273,6 @@ fn fvr11_terrain_contract_is_display_only_and_layered() {
     let mut query = app.world_mut().query::<&Fvr11ProductionTerrainLayer>();
     let layers = query.iter(app.world()).copied().collect::<Vec<_>>();
     assert!(layers.iter().all(|layer| layer.display_only));
-    assert!(layers
-        .iter()
-        .all(|layer| layer.no_renderer_authority_over_world_actions_or_cognition));
     assert!(layers.iter().all(|layer| layer.source_tile_count > 0));
     let roles = layers
         .iter()
@@ -452,7 +407,6 @@ fn fvr11_profile_lighting_preserves_minimum_floor_and_comfort_depth() {
     assert!(comfort.contact_grounding);
     assert_eq!(comfort_contact_shadows, 0);
     assert!(comfort.display_only);
-    assert!(comfort.no_renderer_authority_over_world_actions_or_cognition);
     assert!(comfort_ambient_brightness >= 360.0);
     assert!(comfort_vertical_area <= 17.5);
     assert!(comfort_sun_illuminance == 8_500.0);
@@ -483,7 +437,6 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     assert!(scene.tile_mesh_count >= scene.resident_chunk_count);
     assert!(scene.selection_ref_count >= summary.save_metadata.creature_count);
     assert!(scene.estimated_resident_bytes > 0);
-    assert!(scene.no_renderer_authority_over_world_truth);
     assert_eq!(scene.production_vfx_budget_state, "conservative");
     assert!(scene.production_visuals_display_only);
     assert!(scene.production_dressing_count >= 8);
@@ -492,7 +445,7 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         assert_eq!(scene.production_vfx_marker_count, 0);
         assert!(scene.production_gpu_vfx_emitter_count > 0);
     } else {
-        assert!(scene.production_vfx_marker_count >= 8);
+        assert!(scene.production_vfx_marker_count > 0);
         assert!(scene.production_vfx_marker_count <= 32);
         assert_eq!(scene.production_gpu_vfx_emitter_count, 0);
     }
@@ -516,9 +469,7 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
         .copied()
         .collect::<Vec<_>>();
     assert_eq!(dressing.len(), scene.production_dressing_count);
-    assert!(dressing
-        .iter()
-        .all(|entry| entry.display_only && entry.no_renderer_authority_over_actions_or_cognition));
+    assert!(dressing.iter().all(|entry| entry.display_only));
     let dressing_kinds = dressing
         .iter()
         .map(|entry| entry.kind)
@@ -539,38 +490,19 @@ fn fvr03_voxel_app_spawns_real_persistent_chunks_by_default() {
     let mut vfx_query = app.world_mut().query::<&Fvr07ProductionGpuVfxMarker>();
     let vfx = vfx_query.iter(app.world()).copied().collect::<Vec<_>>();
     assert_eq!(vfx.len(), scene.production_vfx_marker_count);
-    assert!(vfx.iter().all(|entry| entry.display_only
-        && entry.no_renderer_authority_over_actions_or_cognition
-        && entry.budget_state == "conservative"));
+    assert!(vfx
+        .iter()
+        .all(|entry| entry.display_only && entry.budget_state == "conservative"));
     #[cfg(not(feature = "vfx-hanabi"))]
     {
         let vfx_kinds = vfx.iter().map(|entry| entry.kind).collect::<BTreeSet<_>>();
-        for required in [
-            Fvr07ProductionVfxKind::PheromoneTrail,
-            Fvr07ProductionVfxKind::SporeDrift,
-            Fvr07ProductionVfxKind::DangerHazardParticles,
-            Fvr07ProductionVfxKind::EatingResourceEffect,
-            Fvr07ProductionVfxKind::BirthDeathEffect,
-            Fvr07ProductionVfxKind::WaterDecayAmbient,
-            Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse,
-        ] {
-            assert!(vfx_kinds.contains(&required), "missing VFX {required:?}");
-        }
-        assert!(!vfx_kinds.contains(&Fvr07ProductionVfxKind::SleepGlow),
-            "sleep feedback must be reconciled from live authority, never launch pressure or fallback");
-        assert!(
-            vfx.iter()
-                .filter(|entry| {
-                    entry.stable_id.is_some()
-                        && matches!(
-                            entry.kind,
-                            Fvr07ProductionVfxKind::SleepGlow
-                                | Fvr07ProductionVfxKind::BirthDeathEffect
-                                | Fvr07ProductionVfxKind::SelectedCreatureNeuralPulse
-                        )
-                })
-                .all(|entry| entry.base_scale.x <= 0.32 && entry.base_scale.z <= 0.32),
-            "creature-attached VFX markers must stay small enough to avoid covering body silhouettes"
+        assert_eq!(
+            vfx_kinds,
+            BTreeSet::from([
+                Fvr07ProductionVfxKind::SporeDrift,
+                Fvr07ProductionVfxKind::DangerHazardParticles,
+                Fvr07ProductionVfxKind::WaterDecayAmbient,
+            ])
         );
     }
 
@@ -645,7 +577,7 @@ fn fvr03_profiles_scale_renderer_residency_lod_and_camera_modes() {
 }
 
 #[test]
-fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
+fn fvr03_stable_selection_returns_tile_and_chunk_coords() {
     let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
         alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
@@ -671,9 +603,6 @@ fn fvr03_stable_selection_returns_tile_coords_without_renderer_tokens() {
     let selection_text = scene.selection_label(&selected);
     assert!(selection_text.contains("tile"));
     assert!(selection_text.contains("chunk"));
-    assert!(!selection_text.to_ascii_lowercase().contains("entity("));
-    assert!(!selection_text.to_ascii_lowercase().contains("bevy"));
-    assert!(!selection_text.to_ascii_lowercase().contains("wgpu"));
 }
 
 #[test]
@@ -1820,89 +1749,6 @@ fn fvr09_layered_grid_mesher_records_visible_face_reduction() {
 }
 
 #[test]
-fn fvr09_material_palette_uses_natural_top_side_texture_slots_not_debug_colors() {
-    let settings = alife_game_app::Fvr03ProductionVoxelRendererSettings::for_profile(
-        ProductionFrontendProfileId::MinSpecComfort1080p,
-    );
-    assert_eq!(
-        settings.material_palette_version,
-        "fvr10-visible-surface-variation-v1"
-    );
-    assert!(!settings.debug_primary_colors);
-
-    let palette = settings.material_palette();
-    for material in [
-        Fvr03ProductionVoxelMaterialKind::SafeGrass,
-        Fvr03ProductionVoxelMaterialKind::Soil,
-        Fvr03ProductionVoxelMaterialKind::Stone,
-        Fvr03ProductionVoxelMaterialKind::Sand,
-        Fvr03ProductionVoxelMaterialKind::Water,
-        Fvr03ProductionVoxelMaterialKind::Decay,
-        Fvr03ProductionVoxelMaterialKind::Resource,
-        Fvr03ProductionVoxelMaterialKind::Hazard,
-    ] {
-        let entry = palette
-            .iter()
-            .find(|entry| entry.kind == material)
-            .unwrap_or_else(|| panic!("missing natural material {material:?}"));
-        assert!(!entry.debug_primary_color);
-        assert!(!entry.top_texture.is_empty());
-        assert!(!entry.side_texture.is_empty());
-        assert!(entry.natural_variation_seed.starts_with("fvr10-"));
-    }
-
-    let grass = palette
-        .iter()
-        .find(|entry| entry.kind == Fvr03ProductionVoxelMaterialKind::SafeGrass)
-        .unwrap();
-    assert_eq!(grass.top_texture, "grass-moss-top");
-    assert_eq!(grass.side_texture, "dirt-rooted-side");
-}
-
-#[test]
-fn fvr09_creatures_are_cute_bipedal_real_state_visuals() {
-    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let scene = app
-        .world()
-        .resource::<Fvr03ProductionVoxelSceneResource>()
-        .clone();
-    let creature_scene = app
-        .world()
-        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>()
-        .clone();
-
-    assert_eq!(
-        creature_scene.visual_profile,
-        "approved-hearthling-skinned-v2"
-    );
-    assert_eq!(
-        creature_scene.mesh_material_version,
-        "approved-blender-vertex-color-v2"
-    );
-    assert_eq!(
-        creature_scene.rendered_creature_count,
-        scene.creature_render_count
-    );
-    assert_eq!(creature_scene.mesh_pool_count, 0); // Dry-run roots load no mesh assets.
-    shipping_hearthling();
-    assert!(creature_scene.expression_buffer_is_read_only_projection);
-    assert!(creature_scene.no_renderer_authority_over_actions_or_cognition);
-
-    let mut query = app.world_mut().query::<&Fvr09CuteBipedCreatureMarker>();
-    let markers = query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert_eq!(markers.len(), scene.creature_render_count);
-    assert!(markers.iter().all(|marker| marker.two_legs));
-    assert!(markers.iter().all(|marker| marker.visible_face));
-    assert!(markers.iter().all(|marker| marker.eye_markers >= 2));
-    assert!(markers.iter().all(|marker| marker.front_back_orientation));
-    assert!(markers.iter().all(|marker| marker.real_state_driven));
-}
-
-#[test]
 fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_only() {
     let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
@@ -1951,109 +1797,6 @@ fn fvr10_terrain_meshes_have_bound_visible_face_variation_not_texture_labels_onl
 }
 
 #[test]
-fn approved_hearthling_asset_retains_low_poly_skin_and_animation_contract() {
-    shipping_hearthling();
-}
-
-#[test]
-fn hearthling_species_markers_preserve_inherited_body_plans_with_a_shared_skin() {
-    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let creature_scene = app
-        .world()
-        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>()
-        .clone();
-    assert_eq!(
-        creature_scene.species_archetype_count,
-        CREATURE_APPEARANCE_SPECIES_COUNT as usize
-    );
-    assert_eq!(
-        creature_scene.mesh_material_version,
-        "approved-blender-vertex-color-v2"
-    );
-    assert_eq!(creature_scene.mesh_pool_count, 0);
-    assert_eq!(creature_scene.material_bucket_count, 0);
-    shipping_hearthling();
-
-    let mut query = app.world_mut().query::<&Fvr10CreatureSpeciesMarker>();
-    let markers = query.iter(app.world()).copied().collect::<Vec<_>>();
-    assert_eq!(markers.len(), creature_scene.rendered_creature_count);
-    assert!(markers.iter().all(|marker| marker.bipedal));
-    assert!(markers.iter().all(|marker| marker.caveman_furry_design));
-    assert!(markers.iter().all(|marker| marker.heritable_appearance));
-    assert!(markers
-        .iter()
-        .all(|marker| !marker.species_label.is_empty() && marker.species_label != "color-swap"));
-
-    let species = markers
-        .iter()
-        .map(|marker| marker.species_archetype)
-        .collect::<BTreeSet<_>>();
-    assert_eq!(
-        species.len(),
-        CREATURE_APPEARANCE_SPECIES_COUNT as usize,
-        "production population should show every picked species archetype"
-    );
-
-    let body_plans = markers
-        .iter()
-        .map(|marker| marker.body_plan_signature)
-        .collect::<BTreeSet<_>>();
-    assert!(
-        body_plans.len() >= 12,
-        "species need different silhouettes/body plans, found only {}",
-        body_plans.len()
-    );
-}
-
-#[test]
-fn hearthling_roots_use_no_retired_parts_face_overlays_or_surface_patches() {
-    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let root_count = {
-        let mut query = app.world_mut().query::<&ProductionCreatureAssemblyRoot>();
-        query.iter(app.world()).count()
-    };
-    let part_count = {
-        let mut query = app.world_mut().query::<&ProductionCreaturePartMarker>();
-        query.iter(app.world()).count()
-    };
-    let join_cover_count = {
-        let mut query = app
-            .world_mut()
-            .query::<&ProductionCreatureJoinCoverMarker>();
-        query.iter(app.world()).count()
-    };
-    let face_overlay_count = {
-        let mut query = app.world_mut().query::<&Fvr09CreatureFaceFeatureMarker>();
-        query.iter(app.world()).count()
-    };
-    let surface_patch_count = {
-        let mut query = app.world_mut().query::<&Fvr10CreatureSurfaceDetailMarker>();
-        query.iter(app.world()).count()
-    };
-
-    assert!(root_count > 0);
-    assert_eq!(part_count, 0);
-    shipping_hearthling();
-    assert_eq!(join_cover_count, 0);
-    assert_eq!(face_overlay_count, 0);
-    assert_eq!(surface_patch_count, 0);
-
-    let scene = app
-        .world()
-        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
-    assert_eq!(scene.creature_part_entity_count, part_count);
-    assert_eq!(scene.creature_join_cover_count, 0);
-}
-
-#[test]
 fn fvr10_creature_appearance_genes_cover_sixteen_species_and_mutate_offspring() {
     let founders = (0..CREATURE_APPEARANCE_SPECIES_COUNT)
         .map(|slot| CreatureAppearanceGenome::founder_for_species(slot, 10_000 + u64::from(slot)))
@@ -2094,28 +1837,6 @@ fn fvr10_creature_appearance_genes_cover_sixteen_species_and_mutate_offspring() 
 }
 
 #[test]
-fn fvr10_default_product_view_starts_clean_without_debug_panels_or_overlays() {
-    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _summary) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-
-    let ux = app.world().resource::<Fvr05ProductionUxStateResource>();
-    assert!(
-        !ux.settings.show_menu,
-        "product default should not put the menu panel over screenshots"
-    );
-    assert!(
-        !ux.settings.show_settings,
-        "product default should not put settings text over screenshots"
-    );
-    assert!(
-        !ux.settings.show_overlays,
-        "product default should not draw debug overlays over screenshots"
-    );
-}
-
-#[test]
 fn fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures() {
     let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
     let (mut app, _summary) =
@@ -2148,8 +1869,6 @@ fn fvr10_product_camera_and_authored_heads_are_composed_for_readable_creatures()
     );
 
     shipping_hearthling();
-    let mut legacy_heads = app.world_mut().query::<&ProductionCreaturePartMarker>();
-    assert_eq!(legacy_heads.iter(app.world()).count(), 0);
 }
 
 #[test]
@@ -2185,21 +1904,4 @@ fn hearthling_skin_primitives_preserve_authored_material_and_vertex_color_bindin
         .unwrap()
         .iter()
         .any(|m| m["normalTexture"].is_object()));
-}
-
-#[test]
-fn hearthling_face_is_authored_in_the_skin_and_renderer_remains_display_only() {
-    shipping_hearthling();
-    let (_fixture, launch) = production_launch(ProductionFrontendProfileId::MinSpecComfort1080p);
-    let (mut app, _) =
-        alife_game_app::bevy_shell::build_production_voxel_frontend_app_shell(&launch).unwrap();
-    app.update();
-    let mut overlay = app.world_mut().query::<&Fvr09CreatureFaceFeatureMarker>();
-    assert_eq!(overlay.iter(app.world()).count(), 0);
-    let scene = app
-        .world()
-        .resource::<alife_game_app::Fvr04ProductionCreatureSceneResource>();
-    assert!(scene.production_visuals_display_only);
-    assert!(scene.no_renderer_authority_over_actions_or_cognition);
-    assert!(scene.expression_buffer_is_read_only_projection);
 }

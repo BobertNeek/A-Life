@@ -181,19 +181,6 @@ pub(super) fn compile_encoder(
             assignment.source_index(),
         )
     });
-    if assignments.windows(2).any(|rows| {
-        (
-            rows[0].target_neuron(),
-            rows[0].source_group().raw(),
-            rows[0].source_index(),
-        ) == (
-            rows[1].target_neuron(),
-            rows[1].source_group().raw(),
-            rows[1].source_index(),
-        )
-    }) {
-        return Err(compile_error());
-    }
     SensorEncoderPlan::try_new(profile, assignments)
 }
 

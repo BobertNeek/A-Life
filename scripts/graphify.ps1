@@ -13,7 +13,6 @@ $graphifyPath = if ($graphifyCommand) { $graphifyCommand.Source } else {
 }
 
 if (-not (Test-Path -LiteralPath $graphifyPath -PathType Leaf)) {
-    if ($Command -eq "hook-check") { exit 0 }
     Write-Error "Graphify is not installed. Run: uv tool install graphifyy"
     exit 127
 }
@@ -23,7 +22,6 @@ try {
     switch ($Command) {
         "update" { & $graphifyPath update . @CommandArgs }
         "extract" { & $graphifyPath extract . @CommandArgs }
-        "hook-check" { & $graphifyPath check-update . @CommandArgs }
         default { & $graphifyPath $Command @CommandArgs }
     }
     $graphifyExitCode = $LASTEXITCODE

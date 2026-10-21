@@ -202,7 +202,7 @@ fn sealed_patch() -> alife_core::ExperiencePatch {
 }
 
 #[test]
-fn valid_three_phase_patch_seals_and_exposes_learning_view() {
+fn valid_three_phase_patch_preserves_causal_evidence() {
     let patch = sealed_patch();
 
     assert_eq!(patch.header().phase, ExperiencePatchPhase::Sealed);
@@ -216,21 +216,21 @@ fn valid_three_phase_patch_seals_and_exposes_learning_view() {
         ]
     );
 
-    let view = patch.as_learning_view();
-    assert_eq!(view.pre_action().organism_id, organism());
-    assert_eq!(view.pre_action().sensory().semantic_context, None);
-    assert_eq!(view.pre_action().sensory().gaussian_context, None);
-    assert_eq!(view.decision().selected_action.action_id, ActionId(400));
+    assert_eq!(patch.pre_action().organism_id, organism());
+    assert_eq!(patch.pre_action().sensory().semantic_context, None);
+    assert_eq!(patch.pre_action().sensory().gaussian_context, None);
+    assert_eq!(patch.decision().selected_action.action_id, ActionId(400));
     assert_eq!(
-        view.decision()
+        patch
+            .decision()
             .heuristic_evidence()
             .unwrap()
             .proposals
             .len(),
         2
     );
-    assert!(view.outcome().success);
-    assert_eq!(view.outcome().reward_valence.raw(), 0.25);
+    assert!(patch.outcome().success);
+    assert_eq!(patch.outcome().reward_valence.raw(), 0.25);
     assert!(patch.validate_contract().is_ok());
 }
 

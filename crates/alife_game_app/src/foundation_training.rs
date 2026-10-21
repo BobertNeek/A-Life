@@ -1,5 +1,4 @@
-//! Offline orchestration over the ordinary game runtime and existing trainer.
-//! No alternate world step, neural policy, or biological update lives here.
+//! Offline training and evaluation through the game runtime and shared trainer.
 
 use std::{ops::Range, path::Path, time::Instant};
 
@@ -47,7 +46,6 @@ fn invalid() -> ScaffoldContractError {
 
 pub(crate) fn prime_foundation_lesson_prior(
     runtime: &mut GpuLiveBrainRuntime,
-    _output: &Path,
     lesson: Option<FoundationTeacherLesson>,
 ) -> Result<()> {
     if matches!(
@@ -58,7 +56,6 @@ pub(crate) fn prime_foundation_lesson_prior(
                 | FoundationTeacherLesson::GrabFood
         )
     ) {
-        // Grounded senses and ordinary organism contracts remain mandatory.
         runtime.require_foundation_rich_information()?;
     }
     runtime.prime_foundation_semantic_prior()?;
@@ -390,8 +387,7 @@ fn foundation_replay_sequence_with_upload(
         }
         let effects = step
             .memory_upload
-            .neural_receptor_effects
-            .as_ref()
+            .neural_receptor_effects()
             .ok_or_else(invalid)?;
         effects.validate_contract()?;
         if effects.source_tick != step.frame.tick() {
@@ -842,7 +838,7 @@ fn foundation_pilot_sampling(seed: u64, temperature: f32) -> Result<GpuTrainingS
 }
 
 /// A fixed founder asset acts without a demonstrator or offline optimizer updates.
-/// Normal in-world lifetime learning, biology, sleep and audited cognition remain active.
+/// In-world lifetime learning, biology, sleep, and cognition remain active.
 pub fn run_foundation_evaluation_pilot(
     output: &Path,
     world_seed: u64,
@@ -1818,7 +1814,7 @@ fn run_foundation_training_pilot_with_request(
             .transpose()?
     };
     close_foundation_navigation_gate(&mut runtime, &scenario)?;
-    prime_foundation_lesson_prior(&mut runtime, output, scenario_lesson)?;
+    prime_foundation_lesson_prior(&mut runtime, scenario_lesson)?;
     let started = Instant::now();
     let mut steps = Vec::with_capacity(tick_count);
     let mut held_food_possession_frames = Vec::new();
@@ -1862,7 +1858,7 @@ fn run_foundation_training_pilot_with_request(
                         | FoundationTeacherLesson::GrabFood
                 )
             ) {
-                prime_foundation_lesson_prior(&mut runtime, output, scenario_lesson)?;
+                prime_foundation_lesson_prior(&mut runtime, scenario_lesson)?;
             }
         }
         let held_food_before =
@@ -2589,7 +2585,7 @@ fn run_foundation_training_pilot_with_request(
     Ok(receipt)
 }
 
-fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
+pub(crate) fn teacher_step_consumed(step: &crate::FoundationTrainingStep) -> bool {
     let outcome = step.patch.outcome();
     outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
         || outcome.joint.as_ref().is_some_and(|joint| {

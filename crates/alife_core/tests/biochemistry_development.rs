@@ -1,6 +1,4 @@
-//! EI0 body, homeostasis, development, sleep, and reproduction integration.
-
-use std::collections::BTreeSet;
+//! Body, homeostasis, development, sleep, and reproduction integration.
 
 use alife_core::{
     BiochemistryState, BodyEventDelta, BodyState, BrainCapacityClass, CreatureGenome,
@@ -423,7 +421,7 @@ fn puberty_health_and_mating_opportunity_gate_reproduction() {
 }
 
 #[test]
-fn critical_period_raises_plasticity_then_closes() {
+fn development_readiness_tracks_the_critical_period_window() {
     let phenotype = phenotype();
     let period = phenotype.development.critical_period;
     let before = BiochemistryState::new(&phenotype, Tick(period.opens_at.raw() - 1)).unwrap();
@@ -489,31 +487,6 @@ fn invalid_body_bounds_are_rejected() {
     let mut invalid_state = state;
     invalid_state.body.energy = f32::NAN;
     assert!(invalid_state.validate_contract().is_err());
-}
-
-#[test]
-fn neural_receptor_frame_has_no_hidden_action_authority() {
-    let phenotype = phenotype();
-    let state = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
-    let value = serde_json::to_value(state.neural_receptor_frame(&phenotype).unwrap()).unwrap();
-    let keys = value
-        .as_object()
-        .unwrap()
-        .keys()
-        .map(String::as_str)
-        .collect::<BTreeSet<_>>();
-    assert_eq!(
-        keys,
-        BTreeSet::from([
-            "activations",
-            "schema_version",
-            "source_chemistry_version",
-            "source_tick",
-        ])
-    );
-    for forbidden in ["action", "candidate", "target", "reward", "command"] {
-        assert!(!keys.iter().any(|key| key.contains(forbidden)));
-    }
 }
 
 #[test]

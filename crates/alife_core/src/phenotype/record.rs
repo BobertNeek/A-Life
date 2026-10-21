@@ -1,4 +1,4 @@
-//! Contract-only immutable aggregate for one compiler-authored production phenotype.
+//! Immutable aggregate for one compiled production phenotype.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -81,18 +81,6 @@ impl CognitiveArchitecturePlan {
     }
     pub const fn sleep_consolidation_rate(&self) -> f32 {
         self.parameters.sleep_consolidation_rate()
-    }
-    pub const fn attention_learning_rate(&self) -> f32 {
-        self.parameters.attention_learning_rate()
-    }
-    pub const fn concept_learning_rate(&self) -> f32 {
-        self.parameters.concept_learning_rate()
-    }
-    pub const fn motor_learning_rate(&self) -> f32 {
-        self.parameters.motor_learning_rate()
-    }
-    pub const fn structural_learning_rate(&self) -> f32 {
-        self.parameters.structural_learning_rate()
     }
 
     pub(crate) fn validate_against(
@@ -705,7 +693,6 @@ impl BrainPhenotype {
             || !self.neuron_count.is_multiple_of(16)
             || !(execution.microstep_range().0..=execution.microstep_range().1)
                 .contains(&self.microstep_count)
-            || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()
             || self.projections.is_empty()
             || self.synapses.is_empty()
             || self.plasticity_receptors.is_empty()
@@ -992,8 +979,6 @@ impl BrainPhenotype {
                 .validate_against(self, capacity)
                 .is_err()
             || self.sleep_consolidation_plan.validate_contract().is_err()
-            || self.persistent_address_map.digest()
-                != self.persistent_address_map.recompute_digest()?
             || self.persistent_address_map.validate_against(self).is_err()
             || self.recompute_phenotype_hash()? != self.phenotype_hash
         {

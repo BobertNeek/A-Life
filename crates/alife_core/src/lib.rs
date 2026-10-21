@@ -1,9 +1,7 @@
-//! Engine-agnostic A-Life cognitive contracts.
+//! Engine-independent A-Life cognition and biology.
 
 pub mod action;
-pub mod action_abi;
 pub mod activity;
-pub mod adapter;
 pub mod archive;
 pub mod attention;
 pub mod biochemical_graph;
@@ -20,7 +18,6 @@ pub mod cognitive_work;
 pub mod dendritic;
 pub mod diagnostics;
 pub mod embodiment;
-pub mod era1_evaluation;
 pub mod error;
 pub mod evaluation;
 pub mod evidence_digest;
@@ -49,7 +46,6 @@ pub use factorized_selection::{
 };
 pub use genome::ActionCandidateCreditProfileV1;
 pub use nano512_readout_candidate::{Nano512ActionCreditCandidateV2, Nano512ReadoutCandidateV1};
-pub mod lineage;
 pub mod lobe;
 pub mod math;
 pub mod memory;
@@ -81,14 +77,12 @@ pub use action::{
     MotorPayloadKind, MotorPayloadRef, RankedActionProposal, SuppressedProposal, SuppressionReason,
     TeacherLessonMetadata, TeacherLessonResponseChannel,
 };
-pub use action_abi::ActionAbiVersion;
 pub use activity::{
     BrainActivityPolicyV1, BrainAtpCostModel, BrainDispatchIdentity, BrainWorkCounters,
     BrainWorkReceipt, GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision,
     NeuralThrottleLevel, BRAIN_ACTIVITY_POLICY_VERSION, BRAIN_ACTIVITY_SCHEMA_VERSION,
     BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX, BRAIN_ATP_SLEEP_RECOVERY_Q16,
 };
-pub use adapter::{CoreFromAdapter, CoreIntoAdapter, WorldEntityIdMapper};
 pub use archive::{
     ArchiveAssetKind, ArchiveAssetRef, ArchiveCheckpointDisposition, ArchiveCheckpointRef,
     ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy, ArchivePageRef,
@@ -119,16 +113,14 @@ pub use biochemistry::{
     MAX_BIOCHEMISTRY_CATCH_UP_STEPS, ORGAN_KIND_COUNT,
 };
 pub use blake3_digest::Blake3Digest;
-pub use brain_class::{
-    BrainClassRegistry, BrainClassSpec, BrainComputeBudget, BrainScaleTier, LegacyBrainClassAdapter,
-};
+pub use brain_class::{BrainClassSpec, BrainComputeBudget, BrainScaleTier};
 pub use canonical_digest::CanonicalDigestBuilder;
 pub use checkpoint::{BrainCheckpointMode, BRAIN_CHECKPOINT_MODE_SCHEMA_VERSION};
 pub use chemistry::{
     BiologicalValueProfile, ChemistryModulation, DriveDelta, DriveSnapshot, EndocrineDelta,
-    EndocrineProfile, EndocrineSnapshot, HomeostaticCadence, HomeostaticCadenceBand,
-    HomeostaticDelta, HomeostaticParameters, HomeostaticSnapshot, RecoveryAssessment,
-    RecoveryTrigger, DRIVE_EXTENSION_SLOTS, ENDOCRINE_EXTENSION_SLOTS,
+    EndocrineProfile, EndocrineSnapshot, HomeostaticDelta, HomeostaticParameters,
+    HomeostaticSnapshot, RecoveryAssessment, RecoveryTrigger, DRIVE_EXTENSION_SLOTS,
+    ENDOCRINE_EXTENSION_SLOTS,
 };
 pub use cognitive_context::{
     CognitiveBudgetView, CognitiveConceptActivation, CognitiveConceptView, CognitiveContextFrame,
@@ -152,16 +144,10 @@ pub use embodiment::{
     SensorPortDescriptor, EMBODIMENT_STATE_SCHEMA_VERSION, MAX_BODY_SCHEMA_VALUES,
     MAX_EMBODIMENT_PORTS,
 };
-pub use era1_evaluation::{
-    Era1Ability, Era1AssistanceKind, Era1Control, Era1EvidencePartition, Era1MatchedComparison,
-    Era1PlateauWindow, Era1TrialIdentity, Era1TrialReceipt, ERA1_ABILITY_COUNT, ERA1_CONTROL_COUNT,
-    ERA1_EVALUATION_SCHEMA_VERSION,
-};
 pub use error::ScaffoldContractError;
 pub use evaluation::{
-    ActiveBatteryReceipt, ActiveChallengeKind, ActiveChallengeResult, EnvironmentalRegime,
-    MetricReading, PassiveLifeEvent, PassiveLifeStatistics, PassiveMetricKind,
-    ACTIVE_BATTERY_SCHEMA_VERSION, ACTIVE_CHALLENGE_COUNT, PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION,
+    EnvironmentalRegime, MetricReading, PassiveLifeEvent, PassiveLifeStatistics, PassiveMetricKind,
+    PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION,
 };
 pub use evidence_digest::{
     lobe_layout_evidence_digest, projection_plan_evidence_digest, synapse_payload_evidence_digest,
@@ -184,11 +170,11 @@ pub use evolutionary_genetics::{
 };
 pub use experience::{
     ConceptHint, DecisionEvidence, DecisionSnapshot, EvidenceKind, ExperiencePatch,
-    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, ExperiencePatchView,
-    HeuristicDecisionEvidence, HeuristicPreActionEvidence, JointPhysicalOutcome,
-    MeasuredPhysiologyTransition, MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence,
-    PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence,
-    PreActionSnapshot, TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
+    ExperiencePatchBuilder, ExperiencePatchHeader, ExperiencePatchPhase, HeuristicDecisionEvidence,
+    HeuristicPreActionEvidence, JointPhysicalOutcome, MeasuredPhysiologyTransition,
+    MemoryExpectancySnapshot, MemoryHint, NeuralDecisionEvidence, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, PreActionBrainEvidence, PreActionSnapshot,
+    TeacherFeedbackObservation, V11_EXPERIENCE_ABI_VERSION,
 };
 pub use foundation::{
     FoundationAbiBinding, FoundationCompatibilityFamilyId, FoundationId, FoundationLayoutId,
@@ -199,16 +185,15 @@ pub use foundation::{
 pub use genome::{
     AlphaMask, AlphaStoragePolicy, BrainGenome, CriticalPeriod, CrossoverPolicy,
     DecoderLifetimeRatePolicyV1, DevelopmentStage, DevelopmentState, DevelopmentalMilestone,
-    DevelopmentalSchedule, DriveThresholdGene, DriveThresholdKind, EffectiveWeightSample,
-    EndocrineConstantGene, EndocrineConstantKind, GenomeSeedSet, HOperational, HShadow,
-    InheritancePolicy, InnatePriorityGenes, LifetimeConsolidationDelta, LobeAlphaOverride,
-    LobeRatioOverride, LobeRatioPlan, LobeRatioRegistryRef, MacroConnectomeMask,
-    MotorAffordanceGene, MotorAffordanceKind, MutationRates, PlasticityGenomeParameters,
-    PlasticityMask, ProjectionAlphaOverride, ProjectionKey, ProjectionPlasticityMask,
-    SensorChannelGene, SensorChannelKind, SensorLayoutGene, SparseDensityPrior, SynapseAddress,
-    SynapseAlphaOverride, TileAddress, TileAlphaOverride, WEffective, WGeneticFixed,
-    WLifetimeConsolidated, WeightLayerDescriptor, WeightLayerKind, WeightSplitContract,
-    WeightStorageSemantics,
+    DevelopmentalSchedule, DriveThresholdKind, EffectiveWeightSample, EndocrineConstantKind,
+    GenomeSeedSet, HOperational, HShadow, InheritancePolicy, InnatePriorityGenes,
+    LifetimeConsolidationDelta, LobeAlphaOverride, LobeRatioOverride, LobeRatioPlan,
+    LobeRatioRegistryRef, MacroConnectomeMask, MotorAffordanceGene, MotorAffordanceKind,
+    MutationRates, PlasticityGenomeParameters, PlasticityMask, ProjectionAlphaOverride,
+    ProjectionKey, ProjectionPlasticityMask, SensorChannelGene, SensorChannelKind,
+    SensorLayoutGene, SparseDensityPrior, SynapseAddress, SynapseAlphaOverride, TileAddress,
+    TileAlphaOverride, WEffective, WGeneticFixed, WLifetimeConsolidated, WeightLayerDescriptor,
+    WeightLayerKind, WeightSplitContract, WeightStorageSemantics,
 };
 pub use grounding::{
     GroundedObjectSlotV1, SensorProfileId, SensorProfileIdentity, SensorProfileProvenance,
@@ -238,7 +223,6 @@ pub use legacy_nano512_compatibility::{
     MigratedN2048FoundationV1Descriptor, ProductionRuntimeAbiId, ProductionRuntimePath,
     LEGACY_NANO512_V1_COORDINATE_SEED,
 };
-pub use lineage::LineageExportManifest;
 pub use lobe::{
     ActivationPolicy, LegacyLobeKindV1, LobeEssentiality, LobeKind, LobeLayout, LobeRegion,
     LobeThrottlePriority, PlasticityPolicy, UpdateCadence,
@@ -306,7 +290,7 @@ pub use perception::{
     CandidateFeatureVector, CandidateObservationRef, NeuralActionSelection, PerceptionBaseDigest,
     PerceptionContextBlock, PerceptionContextDigest, PerceptionContextKind, PerceptionFrame,
     PerceptionFrameDigest, PerceptionFrameDraft, PolicyBackend, SensorProfile,
-    CANDIDATE_FEATURE_COUNT, CONTACT_ACTIVATION_FEATURE_LANE, MAX_ACTION_CANDIDATES,
+    CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 pub use phenotype::{
     AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
@@ -341,14 +325,13 @@ pub use routing::{
     ActiveTilePolicy, BiologicalPriority, ProjectionType, RoutingMask, RoutingMatrix,
 };
 pub use sensory_abi::{
-    AffordanceBits, ChannelBounds, ChannelExtensionPolicy, ChannelGroupKind, ChannelGroupSpec,
-    CompressedSemanticCode, ContextFeatureFlags, ContextStreams, EnvironmentStreamEntry,
-    GaussianContextRef, GaussianSalienceEntry, HeardToken, LanguageContextSnapshot,
-    SemanticContextRef, SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion,
-    SensoryChannels, SensorySnapshot, SensorySnapshotFromAdapter, SensorySnapshotSource,
-    SocialAgentSnapshot, SocialContextSnapshot, SocialProximityEntry, TeacherPerceptionChannel,
-    VocalizedToken, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
-    SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
+    AffordanceBits, CompressedSemanticCode, ContextFeatureFlags, ContextStreams,
+    EnvironmentStreamEntry, GaussianContextRef, GaussianSalienceEntry, HeardToken,
+    LanguageContextSnapshot, SemanticContextRef, SemanticSalienceEntry, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SocialAgentSnapshot, SocialContextSnapshot,
+    SocialProximityEntry, TeacherPerceptionChannel, VocalizedToken, MAX_HEARD_TOKENS,
+    MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS, SENSORY_ABI_CHANNEL_COUNT,
+    SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_PAIN_NOVELTY_CHANNEL_COUNT,
     SENSORY_SMELL_CHANNEL_COUNT, SENSORY_TACTILE_CHANNEL_COUNT,
     SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
@@ -358,10 +341,9 @@ pub use sleep::{
     decode_replay_eligibility_q15, encode_replay_eligibility_q15, BoundedReplayBatch,
     ConceptConsolidationReport, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationJobId,
     ConsolidationStagedOutput, ConsolidationState, GpuConsolidationRequest, HTraceDrainReport,
-    LifetimeTraitEvidence, LifetimeTraitLedger, MemoryCompressionReport, ReplayEligibilitySample,
-    ReplaySynapseSpan, SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator,
-    SleepController, SleepPhase, SleepReplayEvent, SleepReplayJournal, SleepState, SleepTransition,
-    SleepTrigger, StableLifetimeTrait, StableLifetimeTraitKind, StructuralEditApplicationStatus,
+    MemoryCompressionReport, ReplayEligibilitySample, ReplaySynapseSpan, SleepConsolidationConfig,
+    SleepConsolidationReport, SleepConsolidator, SleepController, SleepPhase, SleepReplayEvent,
+    SleepReplayJournal, SleepState, SleepTransition, SleepTrigger, StructuralEditApplicationStatus,
     StructuralEditBatch, StructuralEditCandidate, StructuralEditKind, StructuralEditReason,
     TraitPromotionReport, BOUNDED_REPLAY_BATCH_SCHEMA_VERSION,
     GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION, SLEEP_CONSOLIDATION_SCHEMA_VERSION,
@@ -383,9 +365,8 @@ pub use topology::{
     TopologySidecarDiagnostics, TopologyUpdate, UnresolvedGap, UnresolvedGapId,
 };
 pub use traits::{
-    NeuralComputeBackend, SemanticPriorPacket, SemanticPriorProvider, SemanticPriorRequest,
-    SEMANTIC_PRIOR_MAX_GAIN, SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS,
-    SEMANTIC_PRIOR_MAX_PACKET_TICKS,
+    SemanticPriorPacket, SemanticPriorRequest, SEMANTIC_PRIOR_MAX_GAIN,
+    SEMANTIC_PRIOR_MAX_LEXICON_BIAS_SLOTS, SEMANTIC_PRIOR_MAX_PACKET_TICKS,
 };
 
 pub use language::{basic_vocabulary_bindings, BASIC_VOCABULARY_V1, FOUNDATION_LESSON_VOCABULARY};
@@ -393,7 +374,7 @@ pub use units::{
     Confidence, DurationTicks, FixedPointScale, Intensity, NormalizedScalar, Seconds,
     SignedValence, Tick,
 };
-pub use validation::{ensure_current_version, Validate, Validated};
+pub use validation::{ensure_current_version, Validate};
 pub use version::{
     require_current_version, require_version, ContractVersion, SchemaKind, SchemaVersions,
 };

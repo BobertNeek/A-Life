@@ -19,10 +19,6 @@ fn consolidate_finite(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
 }
 
-fn consolidate_pair_equal(lo:u32, hi:u32, expected_lo:u32, expected_hi:u32) -> bool {
-  return lo == expected_lo && hi == expected_hi;
-}
-
 fn consolidate_array8_equal(left:array<u32,8>, right:array<u32,8>) -> bool {
   for (var index=0u; index<8u; index+=1u) {
     if (left[index] != right[index]) { return false; }

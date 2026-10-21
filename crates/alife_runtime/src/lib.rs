@@ -44,6 +44,4 @@ pub enum GpuRuntimeError {
     InvalidProductionFrontend { message: String },
 }
 
-// The moved codecs used this local name before the runtime crate existed.
-// Keep it private so the implementation can remain byte-for-byte stable.
 type GameAppShellError = GpuRuntimeError;

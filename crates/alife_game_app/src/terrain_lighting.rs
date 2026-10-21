@@ -32,7 +32,6 @@ pub struct Fvr11ProductionTerrainLightingMarker {
     pub cool_ambient_fill: bool,
     pub contact_grounding: bool,
     pub display_only: bool,
-    pub no_renderer_authority_over_world_actions_or_cognition: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Component)]
@@ -41,7 +40,6 @@ pub struct Fvr11ProductionContactShadow {
     pub tile: VoxelTileCoord,
     pub stable_id: Option<alife_core::WorldEntityId>,
     pub display_only: bool,
-    pub no_renderer_authority_over_world_actions_or_cognition: bool,
 }
 
 pub(crate) fn production_shadow_cascade_count(
@@ -126,7 +124,6 @@ pub(crate) fn spawn_production_terrain_camera(
             cool_ambient_fill: true,
             contact_grounding: true,
             display_only: true,
-            no_renderer_authority_over_world_actions_or_cognition: true,
         },
     ));
 }

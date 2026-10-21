@@ -1,4 +1,6 @@
 //! GPU-authoritative live cognition for the explicit neural policy.
+#[cfg(test)]
+use alife_core::MotorChannel;
 use alife_runtime::canonical_preparation::*;
 
 // Crate-private reset, presentation, and performance entrypoints below have
@@ -74,25 +76,20 @@ use alife_archive::{GeneticArchiveInput, LifeArchiveInput, LineageLibrary, Linea
 use alife_core::cognitive_work::{CognitiveWorkCostPolicy, CognitiveWorkCounters};
 use alife_core::predictive::{GroundedSuccessorPredictor, SuccessorPrediction};
 use alife_core::sleep::{SleepReplayEvidence, SleepWorkReceipt};
-#[cfg(test)]
 use alife_core::{
-    finalized_memory_attention_evidence, AttentionFrame, CandidateObservationRef,
-    NeuralReceptorPhenotype, SemanticStateVector,
-};
-use alife_core::{
-    select_focal_targets, ArchiveCheckpointRetention, ArchiveLearnedCapturePolicy,
-    ArchiveRetirementReceipt, AttentionSelectionPolicy, BiochemistryState, Blake3Digest,
-    BodyEventDelta, BoundedReplayBatch, BrainCapacityClass, BrainGenome, BrainScaleTier,
-    BrainTickStatus, BrainWorkCounters, BrainWorkReceipt, CanonicalDigestBuilder,
-    CognitiveConceptActivation, CognitiveContextFrame, CognitiveGapActivation,
-    CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent, ConsolidationIntent,
-    ConsolidationState, DecisionSnapshot, DevelopmentState, EnvironmentalRegime, ExperiencePatch,
-    ExperienceSequenceId, FinalizedMemoryRecall, FoundationCompatibilityFamilyId,
-    FoundationGeneticIdentity, FoundationId, FoundationVersion, FoundationWeightApplication,
-    FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot, JointMotorCondition,
-    LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId, MemoryBankConfig,
-    MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt, MemorySidecarState,
-    MemoryUpdateReceipt, MotorChannel, MotorCommandBundle, N512FounderFoundationProjection,
+    factorized_motor_bundle_for_candidates, select_focal_targets, ArchiveCheckpointRetention,
+    ArchiveLearnedCapturePolicy, ArchiveRetirementReceipt, AttentionSelectionPolicy,
+    BiochemistryState, Blake3Digest, BodyEventDelta, BoundedReplayBatch, BrainCapacityClass,
+    BrainGenome, BrainScaleTier, BrainTickStatus, BrainWorkCounters, BrainWorkReceipt,
+    CanonicalDigestBuilder, CognitiveConceptActivation, CognitiveContextFrame,
+    CognitiveGapActivation, CognitiveWorkReceipt, Confidence, ConsolidationDriverEvent,
+    ConsolidationIntent, ConsolidationState, DecisionSnapshot, DevelopmentState,
+    EnvironmentalRegime, ExperiencePatch, ExperienceSequenceId, FinalizedMemoryRecall,
+    FoundationCompatibilityFamilyId, FoundationGeneticIdentity, FoundationId, FoundationVersion,
+    FoundationWeightApplication, FoundationWeightAsset, HomeostaticParameters, HomeostaticSnapshot,
+    JointMotorCondition, LanguageGroundingLedger, LegacyNano512CompatibilityReceipt, LineageId,
+    MemoryBankConfig, MemoryCompactionCheckpoint, MemoryCompactionReceipt, MemoryRecallReceipt,
+    MemorySidecarState, MemoryUpdateReceipt, MotorCommandBundle, N512FounderFoundationProjection,
     NeuralActionSelection, NeuralEmission, NeuralEmissionClass, NeuralEmissionFrame,
     NeuralReceptorEffects, NeuralReceptorFrame, NormalizedScalar, OrganismId, PassiveLifeEvent,
     PassiveLifeStatistics, PerceptionFrame, PerceptionFrameDraft, PhenotypeCompiler,
@@ -102,6 +99,11 @@ use alife_core::{
     SleepState, SleepTransition, Tick, TopologicalMapConfig, TopologyObservationReceipt,
     TopologySidecar, UtteranceSourceKind, Validate, Vec3f, WorldEntityId,
     LEGACY_NANO512_V1_COORDINATE_SEED, MAX_ACTIVE_CONCEPTS, MAX_ACTIVE_GAPS,
+};
+#[cfg(test)]
+use alife_core::{
+    finalized_memory_attention_evidence, AttentionFrame, CandidateObservationRef,
+    NeuralReceptorPhenotype, SemanticStateVector,
 };
 #[cfg(feature = "gpu-tests")]
 use alife_gpu_backend::GpuExactPopulationCaptureMetricsV1;
@@ -114,7 +116,7 @@ use alife_gpu_backend::{
     GpuExactPopulationCaptureTicketV1, GpuExactPopulationCaptureV1, GpuLearningReceipt,
     GpuMemoryContextUpload, GpuV11WorkReceipt, PendingEligibilityDiscardReceipt,
     PendingEligibilityIdentity, PendingEligibilityReceipt, GPU_CLOSED_LOOP_TICK_READBACK_BYTES,
-    GPU_FAST_PLASTICITY_COMMIT_BYTES, GPU_MOTOR_CHANNEL_SLOT_COUNT,
+    GPU_FAST_PLASTICITY_COMMIT_BYTES,
 };
 use alife_runtime::{
     DurableGpuCheckpointMonotonicityPermit, DurableGpuCheckpointRef, GpuAuthoritativeSession,
@@ -151,8 +153,7 @@ use crate::{
     GpuCheckpointAssetStore, GpuDurableSaveManifest, GpuLoadedSaveManifest,
     GpuSleepConsolidationDriver, GpuSleepScheduleEvent, GpuSleepScheduler, LiveBrainCausalStage,
     LiveBrainTickSummary, LiveCognitivePresentationSnapshot, RetainedLearningCapture,
-    WorldEditCommand, WorldEditorConfig, CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA,
-    G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
+    CURATED_FOUNDER_RESET_POLICY, G03_LIVE_BRAIN_LOOP_SCHEMA, G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
 };
 #[cfg(test)]
 use alife_core::channel_command_for_action;
@@ -1178,8 +1179,7 @@ struct SleepJournalPublicationWorkerOwnerV1 {
     incremental_entry_count: usize,
 }
 
-// The final worker message stays owned inline through polling and shutdown;
-// keep this ownership boundary unchanged during lint-only cleanup.
+// Polling and shutdown retain ownership of the final worker message.
 #[allow(clippy::large_enum_variant)]
 enum SleepJournalPublicationWorkerPollV1 {
     Pending,
@@ -2428,8 +2428,6 @@ struct PreparedLiveSelection {
     decision: DecisionSnapshot,
     motor_bundle: MotorCommandBundle,
     frozen_prediction: Option<SuccessorPrediction>,
-    speech_payload: Option<alife_core::SpeechMotorPayload>,
-    speech_prompted: bool,
     neural_receptors: NeuralReceptorFrame,
 }
 
@@ -2448,8 +2446,6 @@ struct PreparedSealInput {
     decision: DecisionSnapshot,
     motor_bundle: MotorCommandBundle,
     frozen_prediction: Option<SuccessorPrediction>,
-    speech_payload: Option<alife_core::SpeechMotorPayload>,
-    speech_prompted: bool,
 }
 
 struct SealedWorldSelection {
@@ -3219,14 +3215,12 @@ pub(crate) enum CuratedFounderResetDispatchResult {
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
 pub(crate) trait CuratedFounderResetRuntimePort {
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn dispatch_attempt(
         &mut self,
         intent: LiveAgentResetIntent,
     ) -> CuratedFounderResetRuntimeResult;
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn dispatch_retry(&mut self) -> CuratedFounderResetRuntimeResult;
 }
@@ -3703,7 +3697,6 @@ fn curated_founder_gpu_residency_state(
 }
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-// Preserve inline publication/recovery evidence in the error contract.
 #[allow(clippy::result_large_err)]
 fn attempt_curated_founder_reset_with_owned_authorities(
     checkpoint_durability: &mut Option<GpuLiveCheckpointDurability>,
@@ -3727,7 +3720,6 @@ fn attempt_curated_founder_reset_with_owned_authorities(
 }
 
 #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-// Preserve inline publication/recovery evidence in the error contract.
 #[allow(clippy::result_large_err)]
 // Keep the separately owned world, persistence, archive, and retry authorities explicit.
 #[allow(clippy::too_many_arguments)]
@@ -3962,15 +3954,6 @@ fn validate_replacement_policy(
     Ok(())
 }
 
-fn commit_staged_runtime<T, E, F>(live: &mut T, staged: Result<T, E>, commit: F) -> Result<(), E>
-where
-    F: FnOnce(&mut T, T),
-{
-    let candidate = staged?;
-    commit(live, candidate);
-    Ok(())
-}
-
 // Archive attachment validates and commits these distinct runtime authorities together.
 #[allow(clippy::too_many_arguments)]
 fn attach_lineage_archive_with_owned_authorities(
@@ -4149,34 +4132,6 @@ fn validate_restore_checkpoint_coverage(
     Ok(())
 }
 
-// Preserve the exact factorized motor-selection inputs forwarded to the core contract.
-#[allow(clippy::too_many_arguments)]
-fn factorized_motor_bundle_for_candidates(
-    organism_id: OrganismId,
-    sequence_id: ExperienceSequenceId,
-    tick: Tick,
-    frame: &PerceptionFrame,
-    candidate_slots: [u16; GPU_MOTOR_CHANNEL_SLOT_COUNT],
-    channels: &[MotorChannel],
-    compatibility_command: &alife_core::ActionCommand,
-    selected_candidate_index: u16,
-    speech_payload: Option<&alife_core::SpeechMotorPayload>,
-    speech_prompted: bool,
-) -> Result<MotorCommandBundle, ScaffoldContractError> {
-    alife_core::factorized_motor_bundle_for_candidates(
-        organism_id,
-        sequence_id,
-        tick,
-        frame,
-        candidate_slots,
-        channels,
-        compatibility_command,
-        selected_candidate_index,
-        speech_payload,
-        speech_prompted,
-    )
-}
-
 fn cognitive_work_receipt(
     context: &CognitiveContextFrame,
     memory: &MemoryRecallReceipt,
@@ -4272,13 +4227,6 @@ fn apply_cognitive_work_cost(
     Ok(())
 }
 
-fn replace_canonical_organism_record(
-    world: &mut HeadlessWorld,
-    replacement: WorldOrganismRecord,
-) -> Result<(), ScaffoldContractError> {
-    world.replace_organism_record_exact(replacement)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorldMutationRollback {
     #[cfg(test)]
@@ -4310,8 +4258,6 @@ fn seal_prepared_selection_core(
         decision,
         motor_bundle,
         frozen_prediction,
-        speech_payload: _speech_payload,
-        speech_prompted: _speech_prompted,
     } = prepared;
     let resident = residents
         .get_mut(&organism_id.raw())
@@ -4470,7 +4416,7 @@ fn seal_prepared_selection_core(
         .map_err(|error| GameAppShellError::InvalidProductionFrontend {
             message: error.to_string(),
         })?;
-    replace_canonical_organism_record(world, record)?;
+    world.replace_organism_record_exact(record)?;
     let biology_after = *world
         .organism_registry()
         .get(organism_id)
@@ -4917,15 +4863,14 @@ impl GpuLiveBrainRuntime {
             Ok(candidate)
         });
 
-        commit_staged_runtime(self, staged, |live, candidate| {
-            let lineage_library = live.lineage_library.take();
-            let _old_runtime = std::mem::replace(live, candidate);
-            live.lineage_library = lineage_library;
-        })
+        let candidate = staged?;
+        let lineage_library = self.lineage_library.take();
+        let _old_runtime = std::mem::replace(self, candidate);
+        self.lineage_library = lineage_library;
+        Ok(())
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn build_live_agent_reset_request(
         &self,
@@ -4977,7 +4922,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_live_agent_reset(
         &mut self,
@@ -4988,7 +4932,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn attempt_curated_founder_reset(
         &mut self,
@@ -5017,7 +4960,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn retry_curated_founder_reset(
         &mut self,
@@ -5044,11 +4986,8 @@ impl GpuLiveBrainRuntime {
         Ok(result)
     }
 
-    /// Consumes the retained exact 4a projection only after every app-side
-    /// resident and sidecar candidate is ready. The four maps publish only
-    /// after the backend returns a completed residency receipt.
+    /// Publishes prepared resident and sidecar maps after GPU residency completes.
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     pub(crate) fn commit_retained_curated_founder_gpu_residency(
         &mut self,
@@ -5243,7 +5182,6 @@ impl GpuLiveBrainRuntime {
     }
 
     #[cfg_attr(not(feature = "bevy-app"), allow(dead_code))]
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn note_curated_founder_durable_checkpoint(
         &mut self,
@@ -5787,6 +5725,29 @@ impl GpuLiveBrainRuntime {
         options: GpuLiveRuntimeConstructionOptions,
         lineage_archive: Option<(LineageLibrary, String, ArchiveLearnedCapturePolicy)>,
     ) -> Result<Self, GameAppShellError> {
+        let mut runtime = Self::empty_profiled_with_parameters_and_archive(
+            backend,
+            world,
+            deterministic_seed,
+            brain_class,
+            sensor_profile,
+            options,
+            lineage_archive,
+        )?;
+        runtime.reconcile_population()?;
+        Ok(runtime)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn empty_profiled_with_parameters_and_archive(
+        backend: GpuClosedLoopBackend,
+        world: HeadlessWorld,
+        deterministic_seed: u64,
+        brain_class: BrainScaleTier,
+        sensor_profile: SensorProfile,
+        options: GpuLiveRuntimeConstructionOptions,
+        lineage_archive: Option<(LineageLibrary, String, ArchiveLearnedCapturePolicy)>,
+    ) -> Result<Self, GameAppShellError> {
         if deterministic_seed == 0 || brain_class.neuron_count().is_none() {
             return Err(GameAppShellError::Core(
                 ScaffoldContractError::PhenotypeCompile,
@@ -5806,7 +5767,7 @@ impl GpuLiveBrainRuntime {
         } else {
             consumer
         };
-        let mut runtime = Self {
+        let runtime = Self {
             audited_cognition: options.audited_cognition,
             semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
                 deterministic_seed,
@@ -5901,7 +5862,6 @@ impl GpuLiveBrainRuntime {
             #[cfg(any(test, feature = "gpu-tests"))]
             forced_late_advance_failure: false,
         };
-        runtime.reconcile_population()?;
         Ok(runtime)
     }
 
@@ -5975,10 +5935,6 @@ impl GpuLiveBrainRuntime {
         checkpoints: &[GpuBrainSaveState],
         options: GpuLiveRuntimeConstructionOptions,
     ) -> Result<Self, GameAppShellError> {
-        #[cfg(feature = "foundation-training")]
-        let training = options.training_sampling.is_some();
-        #[cfg(not(feature = "foundation-training"))]
-        let training = false;
         if deterministic_seed == 0 || brain_class.neuron_count().is_none() {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
@@ -6030,111 +5986,15 @@ impl GpuLiveBrainRuntime {
         }
         validate_restore_checkpoint_coverage(&world, &checkpoint_index.keys().copied().collect())?;
         let world_tick = world.tick();
-        let mut runtime = Self {
-            semantic_prior: semantic_prior::RuntimeSemanticPrior::from_environment(
-                deterministic_seed,
-                training,
-            )?,
-            #[cfg(feature = "foundation-training")]
-            training_sampling: options.training_sampling,
-            #[cfg(feature = "foundation-training")]
-            training_demonstrator: None,
-            #[cfg(feature = "foundation-training")]
-            last_foundation_training_steps: Vec::new(),
-            #[cfg(feature = "foundation-training")]
-            recent_foundation_activity: BTreeMap::new(),
-            #[cfg(feature = "foundation-training")]
-            last_foundation_terminal_biology: BTreeMap::new(),
-            backend: GpuAuthoritativeSession::new(
-                backend,
-                if training {
-                    GpuSessionConsumerKind::Training
-                } else {
-                    GpuSessionConsumerKind::Gameplay
-                },
-            ),
-            handles: BTreeMap::new(),
-            residents: BTreeMap::new(),
-            appearances: CreatureAppearanceCache::default(),
-            memories: BTreeMap::new(),
-            topologies: BTreeMap::new(),
-            sleep_journal_neural_authorities: BTreeMap::new(),
-            pending_recovery_sleep_edges: BTreeMap::new(),
-            pending_exact_sleep_journal_entries: Vec::new(),
-            sleep_journal_publication_worker: None,
-            pending_sleep_journal_entries: Vec::new(),
-            sleep_journal_capacity: SleepJournalCapacity::default(),
-            #[cfg(all(test, feature = "gpu-tests"))]
-            sleep_journal_capacity_override: None,
-            #[cfg(all(test, feature = "gpu-tests"))]
-            sleep_journal_durable_capacity_override: None,
-            #[cfg(all(test, feature = "gpu-tests"))]
-            next_checkpoint_worker_start_gate: None,
-            exact_checkpoint_waiting_for_sleep_journal: false,
-            manual_checkpoint_waiting_for_sleep_journal: None,
-            post_irreversible_gpu_commit_fail_stop_armed: false,
-            retained_learning: BTreeMap::new(),
+        let mut runtime = Self::empty_profiled_with_parameters_and_archive(
+            backend,
             world,
             deterministic_seed,
             brain_class,
             sensor_profile,
-            audited_cognition: options.audited_cognition,
-            homeostatic_parameters: HomeostaticParameters::reference(),
-            cognitive_work_cost_policy: GpuLiveRuntimeConstructionOptions::production()
-                .cognitive_work_cost_policy,
-            schedule_sleep: true,
-            sealed_patches: Vec::new(),
-            sealed_patch_count: 0,
-            restored_replay_patches: Vec::new(),
-            last_sealed_patches: Vec::new(),
-            observe_sidecars: true,
-            // Restore the bounded production policy. Pending replay remains
-            // in restored_replay_patches and the backend-owned replay batch.
-            retain_sealed_patch_history: false,
-            last_learning_receipts: Vec::new(),
-            last_gpu_authority_receipts: Vec::new(),
-            last_activity_work_receipts: Vec::new(),
-            last_cognitive_work_receipts: Vec::new(),
-            last_memory_recall_receipts: Vec::new(),
-            last_memory_update_receipts: Vec::new(),
-            last_cognitive_context_digests: Vec::new(),
-            last_memory_compaction_receipts: Vec::new(),
-            last_memory_preparation_errors: Vec::new(),
-            last_memory_observation_errors: Vec::new(),
-            last_topology_observations: Vec::new(),
-            #[cfg(feature = "gpu-tests")]
-            forced_memory_preparation_failures: BTreeSet::new(),
-            #[cfg(feature = "gpu-tests")]
-            last_sleep_memory_compaction_preparation_count: 0,
-            last_eligibility_discard_receipts: Vec::new(),
-            last_pre_seal_discard_failures: Vec::new(),
-            last_post_seal_learning_failures: Vec::new(),
-            last_gpu_metrics: GpuLiveBrainEvidenceMetrics::default(),
-            performance_metrics: GpuLivePerformanceMetrics::default(),
-            performance_measurement_enabled: false,
-            exact_checkpoint_transaction_started_at: None,
-            checkpoint_durability: None,
-            canonical_save_id: None,
-            manual_checkpoint_status: GpuManualCheckpointStatus::Idle,
-            exact_checkpoint_coordinator: ExactPopulationCheckpointCoordinatorV1::default(),
-            exact_checkpoint_work: ExactPopulationCheckpointRuntimeWorkV1::Idle,
-            lineage_library: None,
-            lineage_run_id: None,
-            retained_curated_founder_operation: None,
-            retained_curated_founder_gpu_residency_plan: None,
-            retained_curated_founder_gpu_residency_receipt: None,
-            curated_first_tick_pending: false,
-            archive_learned_capture_policy: ArchiveLearnedCapturePolicy::GeneticOnly,
-            archive_birth_manifests: BTreeMap::new(),
-            archive_retirement_receipts: BTreeMap::new(),
-            presentation_retirements: BTreeSet::new(),
-            #[cfg(test)]
-            forced_retirement_post_receipt_failure: false,
-            #[cfg(test)]
-            retirement_backend_removal_count: 0,
-            #[cfg(any(test, feature = "gpu-tests"))]
-            forced_late_advance_failure: false,
-        };
+            options,
+            None,
+        )?;
         let mut tracked_object_states = Vec::new();
         for raw in live_ids {
             let organism_id = OrganismId(raw);
@@ -6530,8 +6390,7 @@ impl GpuLiveBrainRuntime {
         Ok(host)
     }
 
-    // Retain the exact V11-only constructor during this lint-only cleanup.
-    // Live persistence uses the private-prior-aware constructor above.
+    // V11 fixtures omit the private-prior state captured by live persistence.
     #[allow(dead_code)]
     fn exact_cognitive_state_for_checkpoint_with_v11(
         organism_id: OrganismId,
@@ -6582,10 +6441,7 @@ impl GpuLiveBrainRuntime {
         })
     }
 
-    /// Attaches the runtime-owned durable save boundary to an already
-    /// materialized canonical world. The base save is validated and published
-    /// through the existing portable-save manifest before the live runtime
-    /// adopts its content-addressed store and durable reference.
+    /// Archives each world-authoritative death before retiring its GPU resident.
     fn retire_dead_organisms(&mut self) -> Result<(), GameAppShellError> {
         let mut dead_ids = self
             .world
@@ -7396,11 +7252,7 @@ impl GpuLiveBrainRuntime {
                 return Err(reject());
             }
         }
-        if self.curated_first_tick_pending {
-            Ok(Some(receipt))
-        } else {
-            Ok(None)
-        }
+        Ok(Some(receipt))
     }
 
     pub fn tick(&mut self) -> Result<Vec<LiveBrainTickSummary>, GameAppShellError> {
@@ -7749,9 +7601,6 @@ impl GpuLiveBrainRuntime {
                 };
                 Ok(GpuManualCheckpointRequestDisposition::Coalesced)
             }
-            ExactCheckpointRequestDispositionV1::Busy => {
-                Err(ScaffoldContractError::ConsolidationGenerationMismatch.into())
-            }
             _ => Err(ScaffoldContractError::ConsolidationGenerationMismatch.into()),
         }
     }
@@ -8047,23 +7896,20 @@ impl GpuLiveBrainRuntime {
 
     /// Authorizes structured education against the live world's habitat authority.
     pub fn authorize_structured_education(
-        &mut self,
+        &self,
         organism_id: OrganismId,
         habitat_id: HabitatId,
         actor: HabitatActor,
     ) -> Result<HabitatPermissionReceipt, HabitatAuthorityError> {
-        let world = self.world_snapshot();
-        let tick = world.tick();
-        let authority = world.habitat_authority().clone();
-        let receipt = authority.authorize_operation(HabitatOperationRequest {
-            habitat_id,
-            organism_id,
-            operation: HabitatOperation::StructuredEducation,
-            actor,
-            tick,
-        })?;
-        self.replace_habitat_authority(authority)?;
-        Ok(receipt)
+        self.world
+            .habitat_authority()
+            .authorize_operation(HabitatOperationRequest {
+                habitat_id,
+                organism_id,
+                operation: HabitatOperation::StructuredEducation,
+                actor,
+                tick: self.world.tick(),
+            })
     }
 
     /// Executes an authorized school action against the live learner and GPU
@@ -8130,6 +7976,7 @@ impl GpuLiveBrainRuntime {
         Ok(summaries)
     }
 
+    #[cfg(feature = "bevy-app")]
     pub(crate) fn replace_habitat_authority(
         &mut self,
         authority: alife_world::HabitatAuthority,
@@ -8549,36 +8396,15 @@ impl GpuLiveBrainRuntime {
         tick_after: Tick,
         sealed_patch_count: usize,
     ) -> LiveBrainTickSummary {
-        LiveBrainTickSummary {
-            schema: G03_LIVE_BRAIN_LOOP_SCHEMA,
-            schema_version: G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
-            organism_id,
-            tick_before,
-            tick_after,
-            world_tick_before: tick_before,
-            world_tick_after: tick_after,
-            status: BrainTickStatus::TerminalInvalidState,
-            selected_action_kind: None,
-            selected_action_id: None,
-            target_entity: None,
-            patch_sealed: false,
-            patch_sequence_id: None,
-            patch_success: None,
-            physical_contact: None,
-            action_failure: None,
-            motor_execution: None,
-            sealed_patch_count,
-            packed_record_count: 0,
-            memory_updates: 0,
-            topology_updates: 0,
-            learning_updates: 0,
-            invalid_or_rejected_action_count: 1,
-            last_diagnostic: None,
-            causal_stages: vec![
-                LiveBrainCausalStage::GatherSensory,
-                LiveBrainCausalStage::RecallMemory,
-            ],
-        }
+        let mut summary =
+            Self::sleeping_tick_summary(organism_id, tick_before, tick_after, sealed_patch_count);
+        summary.status = BrainTickStatus::TerminalInvalidState;
+        summary.invalid_or_rejected_action_count = 1;
+        summary.causal_stages = vec![
+            LiveBrainCausalStage::GatherSensory,
+            LiveBrainCausalStage::RecallMemory,
+        ];
+        summary
     }
 
     fn retained_learning_summary(
@@ -8587,33 +8413,10 @@ impl GpuLiveBrainRuntime {
         tick_after: Tick,
         sealed_patch_count: usize,
     ) -> LiveBrainTickSummary {
-        LiveBrainTickSummary {
-            schema: G03_LIVE_BRAIN_LOOP_SCHEMA,
-            schema_version: G03_LIVE_BRAIN_LOOP_SCHEMA_VERSION,
-            organism_id,
-            tick_before,
-            tick_after,
-            world_tick_before: tick_before,
-            world_tick_after: tick_after,
-            status: BrainTickStatus::SafeIdle,
-            selected_action_kind: None,
-            selected_action_id: None,
-            target_entity: None,
-            patch_sealed: false,
-            patch_sequence_id: None,
-            patch_success: None,
-            physical_contact: None,
-            action_failure: None,
-            motor_execution: None,
-            sealed_patch_count,
-            packed_record_count: 0,
-            memory_updates: 0,
-            topology_updates: 0,
-            learning_updates: 0,
-            invalid_or_rejected_action_count: 0,
-            last_diagnostic: None,
-            causal_stages: vec![LiveBrainCausalStage::ApplyLearning],
-        }
+        let mut summary =
+            Self::sleeping_tick_summary(organism_id, tick_before, tick_after, sealed_patch_count);
+        summary.causal_stages = vec![LiveBrainCausalStage::ApplyLearning];
+        summary
     }
 
     fn sleeping_tick_summary(
@@ -8983,8 +8786,6 @@ impl GpuLiveBrainRuntime {
             decision,
             motor_bundle,
             frozen_prediction,
-            speech_payload: gpu_tick.speech_payload,
-            speech_prompted,
             neural_receptors,
         })
     }
@@ -9009,8 +8810,6 @@ impl GpuLiveBrainRuntime {
             decision,
             motor_bundle,
             frozen_prediction,
-            speech_payload,
-            speech_prompted,
             neural_receptors,
         } = prepared;
         let organism_id = handle.organism_id();
@@ -9041,8 +8840,6 @@ impl GpuLiveBrainRuntime {
                 decision,
                 motor_bundle,
                 frozen_prediction,
-                speech_payload,
-                speech_prompted,
             },
         )?;
         Ok(SealedLiveSelection {
@@ -9261,7 +9058,7 @@ impl GpuLiveBrainRuntime {
                 brain_digest,
                 memory_digest,
             )?;
-            replace_canonical_organism_record(&mut self.world, record)?;
+            self.world.replace_organism_record_exact(record)?;
         }
         self.last_gpu_authority_receipts.extend(authority_receipts);
         self.performance_metrics.cognitive_authority_seal_wall_ns = self
@@ -9471,10 +9268,12 @@ impl GpuLiveBrainRuntime {
         self.world.tick()
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_completed_dispatch_count(&self) -> u64 {
         self.backend.completed_dispatch_count()
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_sleep_state(
         &self,
         organism_id: OrganismId,
@@ -9509,10 +9308,12 @@ impl GpuLiveBrainRuntime {
 
     /// Offline challenge-world mutation between sealed ticks. This cannot
     /// mutate candidates or outcomes during an active neural transaction.
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_world_mut(&mut self) -> &mut HeadlessWorld {
         &mut self.world
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_memory_sidecar(
         &self,
         organism_id: OrganismId,
@@ -9520,6 +9321,7 @@ impl GpuLiveBrainRuntime {
         self.memories.get(&organism_id.raw())
     }
 
+    #[cfg(feature = "gpu-tests")]
     pub(crate) fn evidence_topology_sidecar(
         &self,
         organism_id: OrganismId,
@@ -10039,42 +9841,18 @@ pub(crate) fn compile_gpu_birth_components(
     }
     organism_id.validate()?;
     let capacity = BrainCapacityClass::production_for_id(brain_class.default_class_id())?;
-    if capacity.id() == BrainCapacityClass::N2048_ID {
-        let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
-        let genome = BrainGenome::scaffold(birth_seed, capacity.id());
-        let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
-        let (phenotype, _) = compile_gpu_components_from_genome(
-            genome.clone(),
-            development.clone(),
-            sensor_profile,
-        )?;
-        return Ok((phenotype, genome, development));
-    }
-
-    if capacity.id() == BrainCapacityClass::N512_ID {
-        let genome = BrainGenome::scaffold(LEGACY_NANO512_V1_COORDINATE_SEED, capacity.id());
-        let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(1.0)?);
-        let (phenotype, _) = compile_gpu_components_from_genome(
-            genome.clone(),
-            development.clone(),
-            sensor_profile,
-        )?;
-        return Ok((phenotype, genome, development));
-    }
-
-    if capacity.id() == BrainCapacityClass::N1024_ID {
-        let birth_seed = deterministic_seed ^ organism_id.raw().rotate_left(17);
-        let genome = BrainGenome::scaffold(birth_seed, capacity.id());
-        let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(0.35)?);
-        let (phenotype, _) = compile_gpu_components_from_genome(
-            genome.clone(),
-            development.clone(),
-            sensor_profile,
-        )?;
-        return Ok((phenotype, genome, development));
-    }
-
-    Err(ScaffoldContractError::UnsupportedProductionBrainClass)
+    let (birth_seed, maturation) = match capacity.id() {
+        BrainCapacityClass::N512_ID => (LEGACY_NANO512_V1_COORDINATE_SEED, 1.0),
+        BrainCapacityClass::N1024_ID | BrainCapacityClass::N2048_ID => {
+            (deterministic_seed ^ organism_id.raw().rotate_left(17), 0.35)
+        }
+        _ => return Err(ScaffoldContractError::UnsupportedProductionBrainClass),
+    };
+    let genome = BrainGenome::scaffold(birth_seed, capacity.id());
+    let development = DevelopmentState::new(genome.id, tick, NormalizedScalar::new(maturation)?);
+    let (phenotype, _) =
+        compile_gpu_components_from_genome(genome.clone(), development.clone(), sensor_profile)?;
+    Ok((phenotype, genome, development))
 }
 
 fn validate_player_resource_position(
@@ -10085,6 +9863,9 @@ fn validate_player_resource_position(
     request.validate()?;
     // Terrain worlds are Y-up; only legacy flat worlds require Z = 0.
     // Ground height and terrain bounds remain owned by world insertion below.
+    if position.x.abs() > 512.0 || position.y.abs() > 512.0 || position.z.abs() > 512.0 {
+        return Err(ScaffoldContractError::ScalarOutOfRange);
+    }
     if world.terrain().is_none() && position.z != 0.0 {
         return Err(ScaffoldContractError::ScalarOutOfRange);
     }
@@ -10103,14 +9884,6 @@ fn move_food_in_world(
             object.kind == WorldObjectKind::Food && !object.consumed && object.carried_by.is_none()
         })
         .ok_or(ScaffoldContractError::InvalidId)?;
-    WorldEditCommand::Move {
-        stable_id: source,
-        position,
-    }
-    .validate(WorldEditorConfig {
-        world_bound: 512.0,
-        ..WorldEditorConfig::default()
-    })?;
     let mut candidate = world.clone();
     candidate.editor_move_object(source, position)?;
     candidate.validate_organism_bindings()?;
@@ -10143,23 +9916,14 @@ fn place_food_in_world(
 ) -> Result<PlayerResourcePlacementReceipt, GameAppShellError> {
     validate_player_resource_position(world, position)?;
 
-    let config = WorldEditorConfig {
-        world_bound: 512.0,
-        ..WorldEditorConfig::default()
-    };
-    if world.object_count() >= config.max_objects {
-        return Err(ScaffoldContractError::ScalarOutOfRange.into());
-    }
     // Repeated placement at the same tick and tile must still have a fresh identity.
-    let label = (0..=config.max_objects)
+    let label = (0..=world.object_count())
         .map(|suffix| format!("player-food-t{}-{suffix}", world.tick().raw()))
         .find(|label| world.entity_id(label).is_none())
         .ok_or(ScaffoldContractError::InvalidId)?;
     let variety =
         alife_world::FoodVariety::from_seed(world.seed().wrapping_add(world.object_count() as u64));
     let nutrition = variety.nutrition();
-    let command = WorldEditCommand::place_food(&label, position, nutrition);
-    command.validate(config)?;
 
     let mut candidate = world.clone();
     let world_entity_id = candidate.editor_spawn_object(WorldEditorSpawnSpec {
@@ -10228,6 +9992,33 @@ mod tests {
         persistence::{AssetManifest, PortableSaveFile, RuntimeConfig},
         HeadlessScenarioBuilder, HeadlessWorld, HeadlessWorldCommand, WorldOrganismRecord,
     };
+
+    #[test]
+    fn player_food_placement_outgrows_the_old_sandbox_limit_without_label_collisions() {
+        let mut builder = HeadlessScenarioBuilder::new(7);
+        for suffix in 0..20 {
+            builder = builder.food(
+                &format!("player-food-t0-{suffix}"),
+                Vec3f::new(0.5, 0.0, 0.0),
+                0.5,
+            );
+        }
+        let mut world = builder.build().unwrap();
+        let existing = world.object_snapshots();
+        let position = Vec3f::new(2.5, 0.0, 0.0);
+        let first = place_food_in_world(&mut world, position).unwrap();
+        let second = place_food_in_world(&mut world, position).unwrap();
+
+        assert_eq!(world.object_count(), 22);
+        assert_ne!(first.world_entity_id, second.world_entity_id);
+        assert_ne!(first.label, second.label);
+        assert!(existing
+            .iter()
+            .all(|object| world.entity(object.id) == Some(object)));
+        assert_eq!(first.position, position);
+        assert_eq!(second.position, position);
+        assert_eq!(world.tick(), Tick::ZERO);
+    }
 
     #[test]
     fn player_food_repeated_placement_uses_xy_ground_and_distinct_ids() {
@@ -10554,8 +10345,6 @@ mod tests {
         );
         let sleep = sleep_consolidation_config_for(&phenotype).unwrap();
         assert_eq!(sleep.sleep_pressure_threshold.raw(), 0.41);
-        assert_eq!(sleep.lifetime_staging_rate.raw(), 0.62);
-        assert_eq!(sleep.structural_edit_candidate_limit, 4);
 
         let neural = BrainWorkCounters {
             neuron_updates: 11,
@@ -10733,7 +10522,6 @@ mod tests {
                     &mut summaries,
                     0.0,
                     &memory_evidence,
-                    &context,
                     &topology_evidence,
                     receptors,
                 )
@@ -10822,21 +10610,21 @@ mod tests {
                 .unwrap()
                 .bind_neural_receptor_effects(receptors)
                 .unwrap();
-                assert!(!upload.cognitive_records.is_empty());
+                assert!(!upload.cognitive_records().is_empty());
                 let words = upload
-                    .header
+                    .header()
                     .words()
                     .iter()
                     .copied()
                     .chain(
                         upload
-                            .records
+                            .records()
                             .iter()
                             .flat_map(|row| row.words().iter().copied()),
                     )
                     .chain(
                         upload
-                            .cognitive_records
+                            .cognitive_records()
                             .iter()
                             .flat_map(|row| row.words().iter().copied()),
                     )
@@ -10974,7 +10762,6 @@ mod tests {
             &mut base_summaries,
             body_need,
             &memory_evidence,
-            &baseline_context,
             &topology_evidence,
             NeuralReceptorEffects::from_frame(
                 &receptors,
@@ -11090,14 +10877,14 @@ mod tests {
         );
         assert_ne!(base_frame.base_digest(), changed_frame.base_digest());
         assert_ne!(base_frame.frame_digest(), changed_frame.frame_digest());
-        assert_eq!(base_upload.final_frame_digest, base_frame.frame_digest());
+        assert_eq!(base_upload.final_frame_digest(), base_frame.frame_digest());
         assert_eq!(
-            changed_upload.final_frame_digest,
+            changed_upload.final_frame_digest(),
             changed_frame.frame_digest()
         );
         assert_ne!(
-            base_upload.final_frame_digest,
-            changed_upload.final_frame_digest
+            base_upload.final_frame_digest(),
+            changed_upload.final_frame_digest()
         );
 
         let summary = |id: u64, intensity: f32| PeripheralSummary {
@@ -11410,20 +11197,6 @@ mod tests {
         ));
 
         fs::remove_dir_all(asset_root).unwrap();
-    }
-
-    #[test]
-    fn failed_staged_runtime_commit_leaves_live_state_unchanged() {
-        let mut live = (7_u64, BTreeMap::from([(11_u64, "old")]));
-        let before = live.clone();
-        let result = commit_staged_runtime(
-            &mut live,
-            Err("checkpoint staging failed"),
-            |live, candidate| *live = candidate,
-        );
-
-        assert_eq!(result, Err("checkpoint staging failed"));
-        assert_eq!(live, before);
     }
 
     #[test]
@@ -11978,7 +11751,6 @@ mod tests {
         ));
     }
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority(
         fixture: &mut CuratedRuntimeAuthorityFixture,
@@ -11998,7 +11770,6 @@ mod tests {
         )
     }
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_plan(
         fixture: &mut CuratedRuntimeAuthorityFixture,
@@ -12018,7 +11789,6 @@ mod tests {
         )
     }
 
-    // Preserve inline publication/recovery evidence in the error contract.
     #[allow(clippy::result_large_err)]
     fn run_curated_runtime_authority_with_refresh_failure(
         fixture: &mut CuratedRuntimeAuthorityFixture,
@@ -12049,19 +11819,6 @@ mod tests {
         world.advance_tick();
         competing.replace_headless_world_snapshot(&world).unwrap();
         competing
-    }
-
-    fn assert_runtime_owned_curated_reset_call(
-        runtime: &mut GpuLiveBrainRuntime,
-        request: CuratedFounderResetRequest,
-    ) {
-        let _ = runtime.attempt_curated_founder_reset(request);
-    }
-
-    #[test]
-    fn curated_reset_runtime_owned_call_seam_exists() {
-        let _ = assert_runtime_owned_curated_reset_call
-            as fn(&mut GpuLiveBrainRuntime, CuratedFounderResetRequest);
     }
 
     #[test]
@@ -13071,94 +12828,6 @@ mod tests {
         }
     }
 
-    #[derive(Default)]
-    #[cfg(feature = "gpu-tests")]
-    struct CompletingSleepDriver {
-        intents: Vec<alife_core::ConsolidationIntent>,
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    impl GpuSleepConsolidationDriver for CompletingSleepDriver {
-        fn progress(
-            &mut self,
-            _organism_id: OrganismId,
-            state: alife_core::SleepState,
-            intent: Option<alife_core::ConsolidationIntent>,
-        ) -> Result<Option<alife_core::ConsolidationDriverEvent>, alife_core::ScaffoldContractError>
-        {
-            if let Some(intent) = intent {
-                self.intents.push(intent);
-                return Ok(Some(
-                    alife_core::ConsolidationDriverEvent::ReplayAssetPersisted {
-                        intent,
-                        replay_digest: [11, 12, 13, 14],
-                        replay_event_count: 1,
-                        replay_eligibility_sample_count: 1,
-                    },
-                ));
-            }
-            let event = match state.consolidation {
-                alife_core::ConsolidationState::Pending {
-                    intent,
-                    replay_digest,
-                    replay_event_count,
-                    replay_eligibility_sample_count,
-                } => {
-                    let mut request = alife_core::GpuConsolidationRequest {
-                        schema_version: alife_core::GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
-                        request_flags: 0,
-                        cycle_id: intent.cycle_id,
-                        phenotype_hash: alife_core::PhenotypeHash([21, 22, 23, 24]),
-                        input_generation: 1,
-                        expected_output_generation: 2,
-                        input_digest: [31, 32, 33, 34],
-                        replay_digest,
-                        max_replay_events: replay_event_count.max(1),
-                        max_replay_eligibility_samples: replay_eligibility_sample_count.max(1),
-                        request_digest: [0; 4],
-                    };
-                    request.request_digest = request.recompute_request_digest()?;
-                    alife_core::ConsolidationDriverEvent::Prepared { request }
-                }
-                alife_core::ConsolidationState::Prepared { request } => {
-                    alife_core::ConsolidationDriverEvent::Submitted {
-                        request,
-                        job_id: alife_core::ConsolidationJobId::try_from_raw(1)?,
-                    }
-                }
-                alife_core::ConsolidationState::Submitted { request, job_id } => {
-                    let mut staged = alife_core::ConsolidationStagedOutput {
-                        job_id,
-                        output_generation: request.expected_output_generation,
-                        output_weight_bank: 1,
-                        output_digest: [41, 42, 43, 44],
-                        eligibility_reset_generation: 2,
-                        output_eligibility_bank: 0,
-                        eligibility_output_digest: [51, 52, 53, 54],
-                        replay_journal_generation: 2,
-                        replay_journal_cursor: 0,
-                        replay_journal_event_count: 0,
-                        replay_journal_output_digest: [61, 62, 63, 64],
-                        staging_digest: [0; 4],
-                        promoted_fast_l1_bits: 0.25_f32.to_bits(),
-                        replay_induced_fast_l1_bits: 0.125_f32.to_bits(),
-                    };
-                    staged.staging_digest = staged.recompute_staging_digest(&request, 1, 1)?;
-                    alife_core::ConsolidationDriverEvent::Completed { request, staged }
-                }
-                alife_core::ConsolidationState::Completed { request, staged } => {
-                    alife_core::ConsolidationDriverEvent::Committed {
-                        cycle_id: request.cycle_id,
-                        output_generation: staged.output_generation,
-                        output_digest: staged.output_digest,
-                    }
-                }
-                _ => return Ok(None),
-            };
-            Ok(Some(event))
-        }
-    }
-
     #[test]
     #[cfg(feature = "gpu-tests")]
     fn live_runtime_binds_canonical_atp_before_each_neural_dispatch() {
@@ -13230,8 +12899,7 @@ mod tests {
             .agent("two", OrganismId(2), Vec3f::new(2.0, 0.0, 0.0))
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 91, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 91);
         let retired = runtime.handle_for(OrganismId(1)).unwrap();
         let retired_frame = runtime
             .world
@@ -13263,14 +12931,8 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 90, BrainScaleTier::Nano512).unwrap();
-        let resident = runtime.residents.get_mut(&1).unwrap();
-        let mut drives = alife_core::DriveSnapshot::baseline();
-        drives.fatigue = 0.99;
-        let mut hormones = alife_core::EndocrineSnapshot::baseline();
-        hormones.sleep_pressure = 0.99;
-        resident.homeostasis = HomeostaticSnapshot::new(Tick::ZERO, drives, hormones).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 90);
+        make_test_organism_sleepy(&mut runtime, OrganismId(1));
         let mut driver = NoProgressSleepDriver;
 
         let summaries = runtime.tick_with_sleep_driver(&mut driver).unwrap();
@@ -13306,14 +12968,8 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 901, BrainScaleTier::Nano512).unwrap();
-        let resident = runtime.residents.get_mut(&1).unwrap();
-        let mut drives = alife_core::DriveSnapshot::baseline();
-        drives.fatigue = 0.99;
-        let mut hormones = alife_core::EndocrineSnapshot::baseline();
-        hormones.sleep_pressure = 0.99;
-        resident.homeostasis = HomeostaticSnapshot::new(Tick::ZERO, drives, hormones).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 901);
+        make_test_organism_sleepy(&mut runtime, OrganismId(1));
         let mut driver = NoProgressSleepDriver;
 
         let summaries = runtime.tick_with_sleep_driver(&mut driver).unwrap();
@@ -13334,75 +12990,6 @@ mod tests {
 
     #[test]
     #[cfg(feature = "gpu-tests")]
-    fn completed_sleep_cycle_wakes_once_and_dispatch_resumes_next_tick() {
-        let backend = GpuClosedLoopBackend::new_required(
-            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
-        )
-        .expect("required GPU");
-        let world = HeadlessScenarioBuilder::new(902)
-            .agent("sleeper", OrganismId(1), Vec3f::ZERO)
-            .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
-            .build()
-            .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 902, BrainScaleTier::Nano512).unwrap();
-        let resident = runtime.residents.get_mut(&1).unwrap();
-        let mut drives = alife_core::DriveSnapshot::baseline();
-        drives.fatigue = 0.99;
-        let mut hormones = alife_core::EndocrineSnapshot::baseline();
-        hormones.sleep_pressure = 0.99;
-        resident.homeostasis = HomeostaticSnapshot::new(Tick::ZERO, drives, hormones).unwrap();
-        let mut driver = CompletingSleepDriver::default();
-
-        let mut woke = false;
-        for _ in 0..32 {
-            let summaries = runtime.tick_with_sleep_driver(&mut driver).unwrap();
-            assert_eq!(summaries.len(), 1);
-            assert_eq!(summaries[0].status, BrainTickStatus::SafeIdle);
-            assert_eq!(summaries[0].selected_action_id, None);
-            assert!(!summaries[0].patch_sealed);
-            assert_eq!(runtime.backend.completed_dispatch_count(), 0);
-            let state = runtime.residents.get(&1).unwrap().sleep_scheduler.state();
-            if state.phase == alife_core::SleepPhase::Awake && state.last_consolidated_cycle_id == 1
-            {
-                woke = true;
-                break;
-            }
-        }
-
-        assert!(woke);
-        assert_eq!(driver.intents.len(), 1);
-        assert!(
-            runtime
-                .world
-                .organism_registry()
-                .get(OrganismId(1))
-                .unwrap()
-                .biochemistry()
-                .body
-                .sleeping
-        );
-
-        let summaries = runtime.tick_with_sleep_driver(&mut driver).unwrap();
-
-        assert_eq!(summaries[0].status, BrainTickStatus::Normal);
-        assert!(summaries[0].patch_sealed);
-        assert_eq!(runtime.backend.completed_dispatch_count(), 1);
-        assert_eq!(driver.intents.len(), 1);
-        assert!(
-            !runtime
-                .world
-                .organism_registry()
-                .get(OrganismId(1))
-                .unwrap()
-                .biochemistry()
-                .body
-                .sleeping
-        );
-    }
-
-    #[test]
-    #[cfg(feature = "gpu-tests")]
     fn gpu_tick_executes_and_seals_neural_evidence_before_world_advance() {
         let backend = GpuClosedLoopBackend::new_required(
             alife_gpu_backend::GpuRuntimeProfile::production_v1(),
@@ -13413,8 +13000,7 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 92, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 92);
         let handle = runtime.handle_for(OrganismId(1)).unwrap();
 
         let summaries = runtime.tick().unwrap();
@@ -13482,6 +13068,39 @@ mod tests {
                 )
                 .unwrap(),
             )
+            .unwrap();
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn registered_test_runtime(
+        backend: GpuClosedLoopBackend,
+        mut world: HeadlessWorld,
+        seed: u64,
+    ) -> GpuLiveBrainRuntime {
+        for (organism_id, _) in world.organism_entity_ids() {
+            register_sealing_test_organism(&mut world, organism_id);
+        }
+        GpuLiveBrainRuntime::new(backend, world, seed, BrainScaleTier::Nano512).unwrap()
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn make_test_organism_sleepy(runtime: &mut GpuLiveBrainRuntime, organism_id: OrganismId) {
+        let record = runtime.world.organism_registry().get(organism_id).unwrap();
+        let mut biology = *record.biochemistry();
+        biology.homeostasis.drives.fatigue = 0.99;
+        biology.homeostasis.hormones.sleep_pressure = 0.99;
+        let replacement = WorldOrganismRecord::new(
+            organism_id,
+            record.world_entity_id(),
+            record.genome().clone(),
+            record.phenotype().clone(),
+            biology,
+            record.birth_tick(),
+        )
+        .unwrap();
+        runtime
+            .world
+            .replace_organism_record_exact(replacement)
             .unwrap();
     }
 
@@ -13728,8 +13347,6 @@ mod tests {
             )
             .unwrap(),
             frozen_prediction: None,
-            speech_payload: None,
-            speech_prompted: false,
         };
         struct TestAuthority {
             world: HeadlessWorld,
@@ -13959,8 +13576,7 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 93, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 93);
         let handle = runtime.handle_for(OrganismId(1)).unwrap();
         runtime.residents.get_mut(&1).unwrap().next_sequence = 0;
 
@@ -13989,8 +13605,7 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 9_306, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 9_306);
         let handle = runtime.handle_for(OrganismId(1)).unwrap();
         runtime.residents.get_mut(&1).unwrap().next_sequence = 0;
         runtime.backend.force_discard_rejections_for_test(1);
@@ -14025,8 +13640,7 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 9_307, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 9_307);
         let handle = runtime.handle_for(organism_id).unwrap();
         let world_entity_id = runtime
             .world
@@ -14045,7 +13659,18 @@ mod tests {
             )
             .unwrap();
         let recall = runtime.memories[&1].recall_frame(&draft).unwrap();
-        let (frame, memory_recall) = recall.finalize(draft).unwrap();
+        let context = cognitive_context_for_recall(
+            organism_id,
+            ExperienceSequenceId(1),
+            &recall,
+            &runtime.topologies[&organism_id.raw()],
+        )
+        .unwrap();
+        let (frame, memory_recall) = recall
+            .with_cognitive_context(context)
+            .unwrap()
+            .finalize(draft)
+            .unwrap();
         let canonical = runtime.world.organism_registry().get(organism_id).unwrap();
         let neural_receptors = canonical
             .biochemistry()
@@ -14101,8 +13726,7 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 94, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 94);
         let one = runtime.handle_for(OrganismId(1)).unwrap();
         let two = runtime.handle_for(OrganismId(2)).unwrap();
         runtime.residents.get_mut(&1).unwrap().next_sequence = 0;
@@ -14132,8 +13756,7 @@ mod tests {
             .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
             .build()
             .unwrap();
-        let mut runtime =
-            GpuLiveBrainRuntime::new(backend, world, 95, BrainScaleTier::Nano512).unwrap();
+        let mut runtime = registered_test_runtime(backend, world, 95);
         let handle = runtime.handle_for(OrganismId(1)).unwrap();
         let world_entity_id = runtime
             .world
@@ -14172,7 +13795,18 @@ mod tests {
         )
         .unwrap();
         let prepared_recall = runtime.memories[&1].recall_frame(&draft).unwrap();
-        let (frame, memory_recall) = prepared_recall.finalize(draft).unwrap();
+        let context = cognitive_context_for_recall(
+            OrganismId(1),
+            ExperienceSequenceId(1),
+            &prepared_recall,
+            &runtime.topologies[&1],
+        )
+        .unwrap();
+        let (frame, memory_recall) = prepared_recall
+            .with_cognitive_context(context)
+            .unwrap()
+            .finalize(draft)
+            .unwrap();
         let canonical = runtime
             .world
             .organism_registry()
@@ -14214,7 +13848,7 @@ mod tests {
         let patch = runtime.sealed_patches().last().unwrap();
         let credit = OutcomeCreditPacket::from_sealed_patch(patch).unwrap();
 
-        assert!(summary.action_failure.is_some());
+        assert_eq!(summary.patch_success, Some(false));
         assert_eq!(summary.learning_updates, 1);
         assert!(!patch.outcome().success);
         assert!(credit.modulator().homeostatic_improvement() < 0.0);

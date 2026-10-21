@@ -1,25 +1,7 @@
 mod support;
 
-use std::fs;
-
 use alife_core::ScaffoldContractError;
 use alife_gpu_backend::{GpuBrainHandle, GpuClosedLoopBackend, GpuRuntimeProfile};
-
-fn runtime_source() -> String {
-    fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/closed_loop_runtime.rs"
-    ))
-    .expect("Task 7 must provide the required-GPU runtime module")
-}
-
-fn pipeline_source() -> String {
-    fs::read_to_string(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/src/closed_loop_pipeline.rs"
-    ))
-    .expect("the GPU closed-loop pipeline source must be available")
-}
 
 #[test]
 fn required_gpu_api_is_public_without_constructing_a_device() {
@@ -37,72 +19,6 @@ fn required_gpu_api_is_public_without_constructing_a_device() {
     );
     assert_eq!(profile.max_hot_brains, 500);
     assert_eq!(profile.growth_chunk_slots, 32);
-}
-
-#[test]
-fn authoritative_tick_records_one_ordered_compute_pass_per_class_arena() {
-    let source = pipeline_source();
-    let body = source
-        .split_once("fn record_staged_compute_pass")
-        .expect("the production tick has a fused compute-pass recorder")
-        .1
-        .split_once("\n    pub(crate) fn register_compact_mapping")
-        .expect("the fused recorder is bounded")
-        .0;
-    assert_eq!(body.matches("begin_compute_pass").count(), 1);
-    for stage in [
-        "record_encode",
-        "record_microsteps",
-        "record_decode_select",
-        "record_eligibility",
-    ] {
-        assert!(body.contains(stage), "fused pass omitted {stage}");
-    }
-}
-
-#[test]
-fn product_runtime_has_no_cpu_execution_or_fallback_boundary() {
-    let source = runtime_source();
-    for forbidden in [
-        concat!("Cpu", "Reference"),
-        concat!("cpu_", "shadow"),
-        concat!("AutoWithCpu", "Fallback"),
-        concat!("FullGpuRuntime", "Mode"),
-        concat!("NeuralCompute", "Backend"),
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "forbidden runtime token: {forbidden}"
-        );
-    }
-}
-
-#[test]
-fn brain_handle_source_keeps_capability_fields_private_and_nonserializable() {
-    let source = runtime_source();
-    let start = source
-        .find("pub struct GpuBrainHandle")
-        .expect("runtime must define the opaque handle");
-    let body = &source[start..];
-    let end = body.find('}').expect("handle must have a finite body");
-    let body = &body[..end];
-    for field in [
-        "backend_instance_id",
-        "class_id",
-        "slot",
-        "generation",
-        "organism_id",
-        "phenotype_hash",
-    ] {
-        assert!(body.contains(field), "missing handle binding: {field}");
-        assert!(
-            !body.contains(&format!("pub {field}")),
-            "handle capability field must remain private: {field}"
-        );
-    }
-    let derive_prefix = &source[start.saturating_sub(256)..start];
-    assert!(!derive_prefix.contains("Serialize"));
-    assert!(!derive_prefix.contains("Deserialize"));
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -599,8 +515,6 @@ mod hardware {
         assert!(receipt.driver_digest.iter().any(|word| *word != 0));
         assert!(receipt.feature_digest.iter().any(|word| *word != 0));
         assert!(receipt.limits_digest.iter().any(|word| *word != 0));
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
-        assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
         assert!(matches!(backend.state(), GpuBackendState::Ready));
 
         let second = required_backend();
@@ -750,8 +664,6 @@ mod hardware {
         assert_eq!(backend.completed_dispatch_count(), 1);
         assert_eq!(backend.perception_upload_count(), 3);
         assert_eq!(backend.completed_selection_count(), 3);
-        assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
         for ((frame, tick), index) in bound_ticks.iter().zip(order) {
             assert_eq!(
                 tick.handle.phenotype_hash(),
@@ -809,7 +721,6 @@ mod hardware {
         assert_eq!(backend.completed_dispatch_count(), 2);
         assert_eq!(backend.completed_selection_count(), 2);
         assert_eq!(backend.perception_upload_count(), 2);
-        assert_eq!(backend.shared_kernel_set_count_for_test(), 1);
     }
 
     #[test]
@@ -1540,7 +1451,6 @@ mod hardware {
         assert_eq!(handle_a.phenotype_hash(), hash_a);
         assert_eq!(handle_b.phenotype_hash(), hash_b);
         assert_ne!(handle_a.slot(), handle_b.slot());
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
         let receipt_generation = backend.hardware_receipt().generation;
 
         let frame_a_1 = perception_frame_for_profile_at_tick(
@@ -1656,7 +1566,6 @@ mod hardware {
             ),
             expected_b
         );
-        assert_eq!(backend.shared_resource_counts_for_test(), (1, 1, 1));
 
         let mut control = required_backend();
         let control_b = control

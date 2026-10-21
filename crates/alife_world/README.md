@@ -1,14 +1,17 @@
 # alife_world
 
-Bevy-independent world and ecology contracts.
+Engine-independent world simulation and ecology.
 
 Canonical New Game accepts 1–8 founders. A single founder supports a focused
 creature-care playtest; the default population remains six.
 
-This crate should define authoritative world-side legality, sensory extraction interfaces, organism/world concepts, and future headless harness boundaries. It may depend on `alife_core` but should not become the Bevy ECS adapter.
+`HeadlessWorld` runs world physics, perception, physiology, ecology, and action
+validation for both graphical and headless hosts. It uses `alife_core` and keeps
+rendering and engine handles outside saved world state.
 
 Habitat authority stores one deterministic habitat membership per creature and
-an append-only transfer ledger with typed provenance. Wild, Reserve, Managed,
+a transfer ledger with typed provenance. Retirement removes that creature's
+entries while preserving surviving sequence IDs. Wild, Reserve, Managed,
 and School change world permissions only. They all retain
 `PolicyBackend::NeuralClosedLoopGpu` as the cognition identity.
 

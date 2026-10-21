@@ -683,9 +683,7 @@ fn indexed_nonvisual_duplicate_membership_can_only_choose_an_earlier_full_scan()
     }
 }
 
-// Append-only tests for the rebuilt candidate's existing nonvisual unit module.
-// These exercise a reused index, unlike assert_packet_matches, which rebuilds it.
-// No production behavior or index invalidation contract is changed here.
+// Reuse the existing index; assert_packet_matches rebuilds it for each capture.
 
 fn live_read_register_observer(world: &mut HeadlessWorld) {
     let genome = alife_core::CreatureGenome::early_mammal_founder(

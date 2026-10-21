@@ -1,4 +1,4 @@
-//! Contract-only checked per-route and global phenotype budget receipts.
+//! Checked per-route and global phenotype budgets.
 
 use serde::{Deserialize, Serialize};
 

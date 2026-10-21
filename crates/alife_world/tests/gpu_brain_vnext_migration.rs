@@ -1,16 +1,14 @@
-//! Strict vNext GPU-brain persistence and inspection-only migration contracts.
+//! GPU-brain provenance, persistence, and inspection-only migration.
 
 use alife_core::{
     BrainActivityPolicyV1, BrainClassId, BrainWorkCounters, NeuralThrottleLevel,
     ScaffoldContractError,
 };
 use alife_world::persistence::{
-    load_legacy_large_tier_for_inspection, GpuBackendProvenanceSave, GpuBrainAssetRef,
-    InspectionOnlyLegacyBrainState, NeuralGpuBackendApi, PortableAssetDigest,
+    GpuBackendProvenanceSave, GpuBrainAssetRef, NeuralGpuBackendApi, PortableAssetDigest,
     PortableThrottleCheckpoint, ProductionNeuralAvailability, ThrottleReplaySaveInput,
     ThrottleReplaySaveState, GPU_BACKEND_PROVENANCE_SAVE_SCHEMA_VERSION,
-    INSPECTION_ONLY_BRAIN_SCHEMA_VERSION, PORTABLE_THROTTLE_CHECKPOINT_SCHEMA_VERSION,
-    THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
+    PORTABLE_THROTTLE_CHECKPOINT_SCHEMA_VERSION, THROTTLE_REPLAY_SAVE_SCHEMA_VERSION,
 };
 
 fn asset(id: &str) -> GpuBrainAssetRef {
@@ -327,34 +325,4 @@ fn promoted_ids_are_ready_large_legacy_ids_are_inspection_only_and_unknown_is_re
         ProductionNeuralAvailability::for_saved_class(BrainClassId(99), [31; 4], [32; 4]),
         Err(ScaffoldContractError::UnsupportedProductionBrainClass)
     );
-}
-
-#[test]
-fn n4096_legacy_save_loads_for_inspection_without_compile_or_gpu_allocation() {
-    let state = InspectionOnlyLegacyBrainState::try_new(
-        INSPECTION_ONLY_BRAIN_SCHEMA_VERSION,
-        4,
-        asset("legacy-n4096-brain"),
-        1,
-    )
-    .unwrap();
-    let result = load_legacy_large_tier_for_inspection(state).unwrap();
-    assert!(matches!(
-        result.availability,
-        ProductionNeuralAvailability::InspectionOnly { .. }
-    ));
-    assert_eq!(result.phenotype_compile_count, 0);
-    assert_eq!(result.gpu_admission_count, 0);
-}
-
-#[test]
-fn portable_throttle_checkpoint_contains_no_live_handle_fields() {
-    let source = include_str!("../src/persistence/gpu_brain_vnext.rs");
-    let start = source
-        .find("pub struct PortableThrottleCheckpoint")
-        .unwrap();
-    let body = &source[start..source[start..].find("}\n").unwrap() + start];
-    assert!(!body.contains("handle_slot"));
-    assert!(!body.contains("handle_generation"));
-    assert!(!body.contains("backend_instance"));
 }

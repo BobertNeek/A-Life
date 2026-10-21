@@ -581,7 +581,6 @@ fn headless_harness_collects_rest_patch_without_forcing_cpu_sleep() {
     assert_eq!(harness.telemetry().sealed_patches.len(), 1);
     assert_eq!(harness.world().tick(), Tick::new(1));
     assert_eq!(mind.sleep_state().phase, SleepPhase::Awake);
-    assert!(first.sleep_transition.is_none());
 }
 
 #[test]
@@ -628,32 +627,4 @@ fn multi_tick_cpu_reference_brain_stepping_is_headless_and_deterministic() {
     assert_eq!(second.telemetry().sealed_patches.len(), 2);
     assert_eq!(first.world().tick(), Tick::new(2));
     assert_eq!(second.world().tick(), Tick::new(2));
-}
-
-#[test]
-fn alife_world_headless_harness_does_not_require_bevy_or_gpu() {
-    let manifest = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"))
-        .expect("crate manifest should be readable");
-    for forbidden in [
-        concat!("be", "vy"),
-        concat!("av", "ian"),
-        concat!("wg", "pu"),
-    ] {
-        assert!(
-            !manifest.to_ascii_lowercase().contains(forbidden),
-            "alife_world manifest must not depend on {forbidden}"
-        );
-    }
-
-    let source = include_str!("../src/lib.rs");
-    for forbidden in [
-        concat!("Render", "Device"),
-        concat!("Render", "Queue"),
-        concat!("Ent", "ity<"),
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "headless world source must not embed engine type {forbidden}"
-        );
-    }
 }

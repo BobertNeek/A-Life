@@ -101,13 +101,14 @@ pub(super) fn atomic_write_receipt<T: Serialize>(
             "serialized GPU evidence exceeds its artifact bound",
         ));
     }
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&temporary)?;
     let write_result = (|| -> Result<(), GpuEvidenceError> {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
+        drop(file);
         fs::rename(&temporary, path)?;
         Ok(())
     })();
@@ -115,4 +116,30 @@ pub(super) fn atomic_write_receipt<T: Serialize>(
         let _ = fs::remove_file(&temporary);
     }
     write_result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colliding_temporary_receipt_is_preserved() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-evidence-temp-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let output = root.join("receipt.json");
+        let temporary = root.join(format!(".receipt.json.{}.tmp", std::process::id()));
+        fs::write(&temporary, b"another writer's receipt").unwrap();
+
+        assert!(atomic_write_receipt(&output, &serde_json::json!({"complete": true})).is_err());
+        assert_eq!(fs::read(&temporary).unwrap(), b"another writer's receipt");
+        assert!(!output.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
 }

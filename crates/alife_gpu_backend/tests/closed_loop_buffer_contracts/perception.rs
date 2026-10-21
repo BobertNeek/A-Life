@@ -2,9 +2,8 @@ use alife_core::{
     BrainCapacityClass, CandidateObservationRef, CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 use alife_gpu_backend::{
-    GpuBufferAccess, GpuCandidateRecord, GpuClassBucketBufferRole, GpuClassBucketBuffers,
-    GpuClassBucketPlan, GpuClosedLoopError, GpuOffsetDomain, GpuPerceptionHeader,
-    GpuPerceptionUpload,
+    GpuBufferAccess, GpuClassBucketBufferRole, GpuClassBucketBuffers, GpuClassBucketPlan,
+    GpuClosedLoopError, GpuOffsetDomain, GpuPerceptionUpload,
 };
 
 use super::support::{compile, perception_fixture};
@@ -91,20 +90,6 @@ fn perception_upload_translates_the_validated_same_tick_frame_without_scores() {
     assert_eq!(upload.header.dispatch_generation_lo, 0);
     assert_eq!(upload.header.dispatch_generation_hi, 0);
     assert_eq!(upload.header.reserved, 0);
-
-    assert_eq!(upload.dispatch_header_words.len(), 16 + 2 * 8);
-    assert_eq!(
-        GpuPerceptionHeader::from_words(&upload.dispatch_header_words[..16]).unwrap(),
-        upload.header
-    );
-    for (index, expected) in upload.candidates.iter().enumerate() {
-        let start = 16 + index * 8;
-        assert_eq!(
-            GpuCandidateRecord::from_words(&upload.dispatch_header_words[start..start + 8])
-                .unwrap(),
-            *expected
-        );
-    }
 
     let mut expected_payload = Vec::new();
     expected_payload.extend(frame.sensory().channels.as_flat_array().map(f32::to_bits));
@@ -216,9 +201,9 @@ fn dynamic_upload_validation_rejects_activation_side_offsets_counts_and_reserved
     reserved.header.reserved = 1;
     assert!(reserved.validate_against(&frame, &slot).is_err());
 
-    let mut packed_candidate = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
-    packed_candidate.dispatch_header_words[16] = 0;
-    assert!(packed_candidate.validate_against(&frame, &slot).is_err());
+    let mut action = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
+    action.candidates[0].action_id ^= 1;
+    assert!(action.validate_against(&frame, &slot).is_err());
 
     let mut nonfinite_payload = GpuPerceptionUpload::try_from_frame(&frame, &slot, 0).unwrap();
     nonfinite_payload.frame_payload_words[77] = f32::NAN.to_bits();

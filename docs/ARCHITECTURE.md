@@ -1,10 +1,6 @@
 # Current implementation map
 
-> **SUPERSEDED AS ARCHITECTURE:** This file is a non-normative map of the
-> current implementation. The sole controlling architecture is
-> `architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
-> Current crates, GPU placement, layouts, adapters, constants, and gaps do not
-> amend v2.0.
+> This guide maps the current implementation. The [organism and gameplay design](architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) describes the intended behavior; current layouts and constants remain replaceable.
 
 ## Authority model
 
@@ -25,9 +21,9 @@ world perception + unscored legal candidates
 
 - `alife_world` owns perception facts, legality, candidate construction, action execution, outcomes, ecology, speech events, persistence, and world identity.
 - `alife_gpu_backend` owns gameplay neural state and WGSL execution.
-- The approved offline CPU cloud trainer in `alife_training/cpu-backend` executes
-  native graph/learning semantics in an explicit CPU evidence domain. This placement
-  follows AOA-ADM-007 and AOA-TIME-006; gameplay GPU authority remains unchanged.
+- The opt-in offline CPU trainer in `alife_training/cpu-backend` executes native
+  graph and learning semantics. Its results identify CPU execution separately
+  from the gameplay GPU path.
   Native handoffs preserve weights, moments and exact integer ages; qualification
   limits are recorded in the [CPU backend report](performance/20261019-native-cpu-training-backend.md).
 - `alife_game_app` schedules the live loop and translates authoritative state into player-facing surfaces.
@@ -39,15 +35,14 @@ world perception + unscored legal candidates
 | --- | --- |
 | `alife_core` | Engine-neutral ABI, genomes, phenotypes, foundations, capacity, memory, language, and reference helpers |
 | `alife_world` | Authoritative world, ecology, perception, candidates, actions, outcomes, speech, persistence, and voxel snapshot data |
-| `alife_gpu_backend` | GPU buffers, WGSL pipelines, selection, plasticity, memory, topology, sleep, and closed-loop runtime |
+| `alife_gpu_backend` | GPU buffers, WGSL neural execution, plasticity, sleep, and state capture |
 | `alife_runtime` | Shared GPU session and checkpoint authority |
 | `alife_archive` | Immutable birth/life manifests, content-addressed assets, lineage, and learned checkpoints |
-| `alife_school` | Teacher, curriculum, nursery, readiness, and verification contracts |
+| `alife_school` | In-world language nursery and speech exposure |
 | `alife_semantic` | Private local SLM prior and bounded speech translation |
-| `alife_training` | Offline training, evaluation, and evolution tools |
-| `alife_bevy_adapter` | Bevy-facing identity and integration helpers |
-| `alife_tools` | Developer tools and durable machine-readable reports |
-| `alife_game_app` | CLI, headless smokes, production Bevy shell, GPU live runtime, controls, and voxel presentation |
+| `alife_training` | Offline neural training, replay, and CPU/GPU state handoff |
+| `alife_tools` | Developer asset tools, persistence validators, and GPU diagnostics |
+| `alife_game_app` | CLI, headless smokes, production Bevy shell, GPU live runtime, controls, stable render identity, and voxel presentation |
 
 ## Neural tick
 
@@ -69,7 +64,7 @@ records per channel. Concept summaries and quiet topology observations run
 every ten ticks. Immediate senses, neural selection and GPU outcome learning
 remain at tick rate. Each candidate receives a fresh current-frame decision key,
 even when its expectancy is cached. Foundation training retains the audited
-per-frame path with batched GPU mutable-state capture (`capture_training_state_batch`).
+per-frame path with batched GPU mutable-state capture (`capture_training_states`).
 Candidate memory admits consequences, surprises, manipulation, blocked attempts,
 and first novel inspection rather than routine movement ticks.
 

@@ -437,7 +437,7 @@ fn run_foundation_imitation_warmup_in_owned_output(
         "n2048-imitation-warmup-next",
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
         GpuTrainingSamplingConfig {
-            seed: manifest.founder_seed_base as u32 + 1,
+            seed: (manifest.founder_seed_base as u32).wrapping_add(1),
             counter: 0,
             temperature: 1.0,
             demonstrator: None,

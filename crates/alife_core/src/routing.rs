@@ -1,4 +1,4 @@
-//! v0 scaffold: lobe-to-lobe routing masks for future sparse projection schemas.
+//! Lobe-to-lobe routing masks and sparse projection policies.
 
 use serde::{Deserialize, Serialize};
 

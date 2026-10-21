@@ -380,7 +380,7 @@ impl LineageLibrary {
             selection.validate_contract()?;
             let manifest = self.load_manifest(selection.source_manifest_digest)?;
             validate_supported_manifest(&manifest)?;
-            let genome_bytes = read_archive_asset(self, &manifest.genetic.genome_asset)?;
+            let genome_bytes = self.read_archive_asset(&manifest.genetic.genome_asset)?;
             let archived_genome = serde_json::from_slice::<BrainGenome>(&genome_bytes)?;
             archived_genome.validate_contract()?;
             if archived_genome.id != manifest.genetic.genome_id
@@ -391,8 +391,10 @@ impl LineageLibrary {
                 ));
             }
             let genome = match selection.mode {
-                FounderMode::GeneticOffspring { mutation_seed } => {
-                    deterministic_offspring_genome(&archived_genome, mutation_seed)?
+                FounderMode::GeneticOffspring { .. } => {
+                    return Err(ArchiveError::Integrity(
+                        "genetic offspring require composite reproduction; archived brain-only offspring are unsupported".to_string(),
+                    ));
                 }
                 FounderMode::GeneticFounder | FounderMode::MindStateClone { .. } => archived_genome,
             };
@@ -400,7 +402,7 @@ impl LineageLibrary {
                 .genetic
                 .foundation_asset
                 .as_ref()
-                .map(|asset| read_archive_asset(self, asset))
+                .map(|asset| self.read_archive_asset(asset))
                 .transpose()?;
             if let Some(bytes) = &foundation_bytes {
                 let foundation = FoundationWeightAsset::decode_canonical(bytes)?;
@@ -474,8 +476,7 @@ impl LineageLibrary {
                 }
                 None => None,
             };
-            let remap =
-                deterministic_remap(deterministic_seed, index as u64, &manifest, &selection.mode)?;
+            let remap = deterministic_remap(deterministic_seed, index as u64, &manifest)?;
             let provenance = FounderProvenance {
                 source_run_id: manifest.genetic.source_run_id.clone(),
                 source_manifest_digest: selection.source_manifest_digest,
@@ -884,7 +885,6 @@ fn deterministic_remap(
     seed: u64,
     index: u64,
     manifest: &CreatureArchiveManifest,
-    mode: &FounderMode,
 ) -> Result<FounderIdentityRemap, ArchiveError> {
     fn lane(seed: u64, index: u64, label: &[u8]) -> u64 {
         let mut hasher = blake3::Hasher::new();
@@ -896,63 +896,18 @@ fn deterministic_remap(
         bytes.copy_from_slice(&hasher.finalize().as_bytes()[..8]);
         u64::from_le_bytes(bytes).max(1)
     }
-    let target_genome_id = match mode {
-        FounderMode::GeneticFounder | FounderMode::MindStateClone { .. } => {
-            GenomeId(lane(seed, index, b"genome"))
-        }
-        FounderMode::GeneticOffspring { mutation_seed } => {
-            GenomeId(lane(seed ^ mutation_seed, index, b"offspring-genome"))
-        }
-    };
     let value = FounderIdentityRemap {
         source_organism_id: manifest.genetic.organism_id,
         source_genome_id: manifest.genetic.genome_id,
         source_lineage_id: manifest.genetic.lineage_id,
         target_organism_id: OrganismId(lane(seed, index, b"organism")),
-        target_genome_id,
+        target_genome_id: GenomeId(lane(seed, index, b"genome")),
         target_lineage_id: LineageId(lane(seed, index, b"lineage")),
         target_name_id: lane(seed, index, b"name"),
         target_social_id: lane(seed, index, b"social"),
     };
     value.validate_contract()?;
     Ok(value)
-}
-
-fn deterministic_offspring_genome(
-    parent: &BrainGenome,
-    mutation_seed: u64,
-) -> Result<BrainGenome, ArchiveError> {
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"alife-genetic-offspring-v1");
-    hasher.update(&parent.species_seed.to_le_bytes());
-    hasher.update(&mutation_seed.to_le_bytes());
-    let mut bytes = [0_u8; 8];
-    bytes.copy_from_slice(&hasher.finalize().as_bytes()[..8]);
-    let species_seed = u64::from_le_bytes(bytes).max(1);
-    let mut child = BrainGenome::scaffold(species_seed, parent.brain_class_id);
-    child.parent_genome_ids = vec![parent.id];
-    child.lineage_id = parent.lineage_id;
-    child.validate_contract()?;
-    Ok(child)
-}
-
-fn read_archive_asset(
-    library: &LineageLibrary,
-    reference: &alife_core::ArchiveAssetRef,
-) -> Result<Vec<u8>, ArchiveError> {
-    let path = library
-        .config
-        .root
-        .join("assets")
-        .join(digest_hex(reference.digest))
-        .join("payload.bin");
-    let bytes = fs::read(path)?;
-    if bytes.len() as u64 != reference.size_bytes || digest_bytes(&bytes) != reference.digest {
-        return Err(ArchiveError::Integrity(
-            "archive asset digest mismatch".to_string(),
-        ));
-    }
-    Ok(bytes)
 }
 
 fn validate_bundle_graph(
@@ -1493,15 +1448,8 @@ mod tests {
                     mode: FounderMode::GeneticOffspring { mutation_seed: 77 },
                 }],
             )
-            .unwrap();
-        assert_ne!(
-            offspring.founders[0].genome.id,
-            genetic.founders[0].genome.id
-        );
-        assert_eq!(
-            offspring.founders[0].genome.parent_genome_ids,
-            vec![genetic.founders[0].genome.id]
-        );
+            .unwrap_err();
+        assert!(offspring.to_string().contains("composite reproduction"));
 
         let checkpoint_digest = checkpoint_digest.unwrap();
         let learned = imported.resolve_founder_cohort(

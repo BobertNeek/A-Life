@@ -1,18 +1,7 @@
-# Automatic code review, powered by Jules — matched to Codex's branch workflow.
-#
-# Codex never opens PRs; it pushes directly to codex/** branches. So this
-# workflow fires on:
-#   1. push that CREATES a branch under codex/** -> one review per new branch,
-#      covering the branch's full diff against main. Throttled to creation so
-#      Codex's rapid follow-up pushes don't each spawn a Jules session.
-#   2. pull_request opened/synchronize/reopened  -> kept for completeness.
-#   3. workflow_dispatch                         -> manual re-review of any branch.
-#
-# The review is posted as a commit comment on the branch head (PR comment for
-# PRs) — the same place Bob posts findings for Codex.
-#
-# One-time setup (already done): repo connected at https://jules.google.com,
-# JULES_API_KEY repo secret set.
+# Review pull requests, newly created codex/** branches, or a manually selected
+# branch. Follow-up pushes to an existing branch do not start another review.
+# Results are posted to the PR or branch-head commit.
+# Requires a connected Jules source and the JULES_API_KEY repository secret.
 
 name: Jules review
 
@@ -47,31 +36,38 @@ jobs:
     steps:
       - name: Resolve review target
         id: target
+        env:
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_REF: ${{ github.event.pull_request.head.ref }}
+          PR_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          INPUT_BRANCH: ${{ inputs.branch }}
+          PUSH_REF: ${{ github.ref_name }}
+          PUSH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          REPO="${{ github.repository }}"
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "pull_request" ]; then
             MODE=pr
-            REF="${{ github.event.pull_request.head.ref }}"
-            SHA="${{ github.event.pull_request.head.sha }}"
-            BASE="${{ github.event.pull_request.base.ref }}"
-            DIFF_URL="https://github.com/$REPO/pull/${{ github.event.pull_request.number }}.diff"
-            TITLE="PR #${{ github.event.pull_request.number }} review"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            MODE=branch
-            REF="${{ inputs.branch }}"
-            SHA="$(gh api "repos/$REPO/commits/$REF" -q .sha)"
-            BASE="main"
-            DIFF_URL="https://github.com/$REPO/compare/main...$REF.diff"
-            TITLE="Branch $REF review (manual)"
+            REF="$PR_REF"
+            SHA="$PR_SHA"
+            BASE="$PR_BASE"
+            TITLE="PR #$PR_NUMBER review"
           else
             MODE=branch
-            REF="${{ github.ref_name }}"
-            SHA="${{ github.sha }}"
-            BASE="main"
-            DIFF_URL="https://github.com/$REPO/compare/main...$REF.diff"
+            if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+              REF="$INPUT_BRANCH"
+              git check-ref-format --branch "$REF" >/dev/null
+              SHA="$(gh api "repos/$REPO/commits/$REF" -q .sha)"
+            else
+              REF="$PUSH_REF"
+              SHA="$PUSH_SHA"
+            fi
+            BASE="$(gh api "repos/$REPO/commits/main" -q .sha)"
             TITLE="Branch $REF review"
           fi
+          DIFF_URL="https://github.com/$REPO/compare/$BASE...$SHA.diff"
           {
             echo "mode=$MODE"
             echo "ref=$REF"
@@ -89,6 +85,7 @@ jobs:
           DIFF_URL: ${{ steps.target.outputs.diff_url }}
           REF: ${{ steps.target.outputs.ref }}
           BASE: ${{ steps.target.outputs.base }}
+          SHA: ${{ steps.target.outputs.sha }}
           TITLE: ${{ steps.target.outputs.title }}
           REPO: ${{ github.repository }}
         run: |
@@ -97,7 +94,7 @@ jobs:
             echo "::error::JULES_API_KEY secret is not set. Add it under Settings > Secrets and variables > Actions."
             exit 1
           fi
-          SOURCE="$(curl -sS -H "X-Goog-Api-Key: $JULES_API_KEY" \
+          SOURCE="$(curl -fsS -H "X-Goog-Api-Key: $JULES_API_KEY" \
             'https://jules.googleapis.com/v1alpha/sources?pageSize=100' | \
             jq -r --arg repo "$REPO" \
             '.sources[] | select((.githubRepo.owner + "/" + .githubRepo.repo) == $repo) | .name' | head -n 1)"
@@ -105,9 +102,12 @@ jobs:
             echo "::error::No Jules source connected for $REPO. Connect it at https://jules.google.com first."
             exit 1
           fi
-          PROMPT="You are performing an automated code review of branch $REF in $REPO.
-          1. Fetch the diff of the branch against $BASE:
-             curl -sL $DIFF_URL
+          PROMPT="Review commit $SHA of branch $REF in $REPO against base commit $BASE.
+          1. Fetch and check out that exact commit, then read its immutable diff:
+             git fetch origin $SHA
+             git checkout --detach $SHA
+             curl -fsSL $DIFF_URL
+          Review repository changes at those commits, not files generated by your own review tools.
           2. Review every changed hunk for:
              - correctness bugs and logic errors
              - non-exhaustive matches and unhandled enum variants
@@ -119,11 +119,10 @@ jobs:
                (physics/contact math, genetics, biochemistry, learning) — flag world bugs, not just test bugs
           3. Be specific: file path and line number for each finding, with a brief quote of the offending code.
           4. Skip style nitpicks unless they signal a real problem. No filler praise.
-          Write your review as plain markdown. Start with exactly one verdict line:
-          VERDICT: APPROVE or VERDICT: NEEDS WORK
-          Then a '## Findings' section listing each issue (or 'No issues found' if clean).
+          Write concise markdown with concrete findings and their impact.
+          If no actionable issue is found, say so and identify material unverified behavior.
           Review only. Do not open pull requests, push branches, or modify any code."
-          RESPONSE="$(curl -sS -X POST \
+          RESPONSE="$(curl -fsS -X POST \
             -H 'Content-Type: application/json' \
             -H "X-Goog-Api-Key: $JULES_API_KEY" \
             -d "$(jq -n --arg prompt "$PROMPT" --arg source "$SOURCE" \
@@ -149,7 +148,7 @@ jobs:
           set -euo pipefail
           STATE=""
           for i in $(seq 1 60); do
-            STATE="$(curl -sS -H "X-Goog-Api-Key: $JULES_API_KEY" \
+            STATE="$(curl -fsS -H "X-Goog-Api-Key: $JULES_API_KEY" \
               "https://jules.googleapis.com/v1alpha/$SESSION_NAME" | jq -r '.state // empty')"
             echo "Poll $i: state=$STATE"
             case "$STATE" in
@@ -173,17 +172,23 @@ jobs:
         run: |
           set -euo pipefail
           REVIEW=""
-          if [ -n "$SESSION_NAME" ]; then
-            ACTIVITIES="$(curl -sS -H "X-Goog-Api-Key: $JULES_API_KEY" \
-              "https://jules.googleapis.com/v1alpha/$SESSION_NAME/activities?pageSize=100" || true)"
-            REVIEW="$(echo "$ACTIVITIES" | jq -r '
-              [.activities[]? | .. | objects
-              | (.description // .text // empty)
-              | select(type == "string")
-              | select(length > 80)] | last // empty')"
+          if [ "$FINAL_STATE" = "COMPLETED" ] && [ -n "$SESSION_NAME" ]; then
+            PAGE_TOKEN=""
+            : > /tmp/jules-activities.jsonl
+            while :; do
+              ACTIVITIES="$(curl -fsS -G -H "X-Goog-Api-Key: $JULES_API_KEY" \
+                --data-urlencode 'pageSize=100' --data-urlencode "pageToken=$PAGE_TOKEN" \
+                "https://jules.googleapis.com/v1alpha/$SESSION_NAME/activities")"
+              echo "$ACTIVITIES" | jq -c '.activities[]?' >> /tmp/jules-activities.jsonl
+              PAGE_TOKEN="$(echo "$ACTIVITIES" | jq -r '.nextPageToken // empty')"
+              [ -n "$PAGE_TOKEN" ] || break
+            done
+            REVIEW="$(jq -sr 'sort_by(.createTime) | [.[].agentMessaged.agentMessage
+              | select(type == "string" and length > 0)] | last // empty' /tmp/jules-activities.jsonl)"
           fi
           {
             echo "## Jules code review (automated)"
+            echo "Commit: \`$SHA\`"
             echo ""
             if [ -n "$REVIEW" ]; then
               echo "$REVIEW"

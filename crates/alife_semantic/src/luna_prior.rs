@@ -1,8 +1,6 @@
-//! Optional Codex CLI-backed semantic hints (AOA-SLM-001 through AOA-SLM-006).
-//!
-//! Authentication is owned entirely by the installed official Codex CLI. This
-//! adapter never reads credentials, logs in, installs anything, or uses private
-//! inference endpoints. It sends only validated bounded context on stdin.
+//! Optional semantic hints through the installed Codex CLI.
+//! The CLI owns authentication; this adapter sends bounded context on stdin
+//! without reading credentials.
 
 use std::{
     fs::{self, File, OpenOptions},
@@ -31,10 +29,8 @@ const MAX_FINAL_BYTES: u64 = 8_192;
 const POLL_INTERVAL: Duration = Duration::from_millis(10);
 static RUN_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Values contain configuration and provenance, never authentication material.
-/// `executable` must refer to a trusted official Codex installation. Arguments
-/// are fixed by this adapter; arbitrary command lines and shell wrappers are not
-/// supported. Changing a model does not change the bounded hint interface.
+/// Configuration for a trusted Codex installation, without credentials.
+/// The adapter supplies fixed arguments rather than a shell command.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LunaPriorConfig {
@@ -230,8 +226,7 @@ impl LunaPriorProvider {
     }
 
     fn parse_output(&self, raw: &str) -> Result<LocalSlmPriorOutput, String> {
-        // Typed deserialization rejects duplicate and unknown fields at every
-        // level; the shared parser then applies all CA27 authority/content gates.
+        // Reject duplicate/unknown fields before validating hint content.
         let strict: StrictHint = serde_json::from_str(raw).map_err(|_| {
             "Codex prior must return exactly the bounded four-field JSON schema".to_string()
         })?;

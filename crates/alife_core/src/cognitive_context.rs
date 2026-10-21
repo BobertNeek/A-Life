@@ -1,4 +1,4 @@
-//! Bounded cognitive context assembled before a v1.1 decision.
+//! Bounded cognitive context assembled before a decision.
 
 use serde::{Deserialize, Serialize};
 
@@ -49,7 +49,12 @@ impl Validate for CognitiveFocalView {
         for identity in &self.identities {
             validate_focus_identity(*identity)?;
         }
-        if self.identities.windows(2).any(|pair| pair[0] == pair[1]) {
+        if self
+            .identities
+            .iter()
+            .enumerate()
+            .any(|(index, identity)| self.identities[..index].contains(identity))
+        {
             return Err(ScaffoldContractError::InvalidDecisionEvidence);
         }
         for salience in &self.salience {

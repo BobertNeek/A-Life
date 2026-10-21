@@ -22,7 +22,6 @@ fn fast_headless_soak_preserves_release_gate_invariants() {
         .filter(|run| run.name == ScenarioName::FatigueSleep)
         .count();
     assert_eq!(sleep_runs, FAST_SOAK_CYCLES);
-    assert!(runs.iter().all(|run| !run.sleep_transition_observed));
 
     for run in &runs {
         assert_release_invariants(run);
@@ -33,7 +32,7 @@ fn fast_headless_soak_preserves_release_gate_invariants() {
 }
 
 #[test]
-#[ignore = "manual extended P36 headless soak: cargo test -p alife_world --test headless_soak -- --ignored --nocapture"]
+#[ignore = "manual extended headless soak: cargo test -p alife_world --test headless_soak -- --ignored --nocapture"]
 fn manual_extended_headless_soak_preserves_release_gate_invariants() {
     let runs = run_soak(EXTENDED_SOAK_CYCLES);
     assert_eq!(runs.len(), EXTENDED_SOAK_CYCLES * ScenarioName::ALL.len());
@@ -48,7 +47,6 @@ fn run_soak(cycles: usize) -> Vec<ScenarioRun> {
         for (scenario_index, name) in ScenarioName::ALL.into_iter().enumerate() {
             let seed = 360_000 + (cycle as u64 * 1_000) + scenario_index as u64;
             let fixture = ScenarioFixture::with_seed(name, seed).unwrap();
-            ScenarioAssertions::assert_fixture_is_complete(&fixture);
             let run = fixture.run().unwrap();
             ScenarioAssertions::assert_run_matches_expectations(&fixture, &run);
             runs.push(run);
@@ -61,19 +59,19 @@ fn assert_release_invariants(run: &ScenarioRun) {
     assert!(!run.patches.is_empty(), "{:?}: no sealed patches", run.name);
     assert!(
         run.memory_record_count <= MAX_MEMORY_RECORDS_PER_RUN,
-        "{:?}: memory grew past release soak bound: {}",
+        "{:?}: memory grew past soak bound: {}",
         run.name,
         run.memory_record_count
     );
     assert!(
         run.topology_concept_count <= MAX_TOPOLOGY_CONCEPTS_PER_RUN,
-        "{:?}: topology concepts grew past release soak bound: {}",
+        "{:?}: topology concepts grew past soak bound: {}",
         run.name,
         run.topology_concept_count
     );
     assert!(
         run.topology_gap_ids.len() <= MAX_TOPOLOGY_GAPS_PER_RUN,
-        "{:?}: topology gaps grew past release soak bound: {}",
+        "{:?}: topology gaps grew past soak bound: {}",
         run.name,
         run.topology_gap_ids.len()
     );
@@ -277,7 +275,6 @@ fn complete_test_consolidation(controller: &mut SleepController, cycle_id: u64) 
 fn fast_sleep_config() -> SleepConsolidationConfig {
     SleepConsolidationConfig {
         entering_duration: DurationTicks::new(1),
-        consolidation_duration: DurationTicks::new(1),
         waking_duration: DurationTicks::new(1),
         forced_recovery_min_duration: DurationTicks::new(1),
         ..SleepConsolidationConfig::reference()

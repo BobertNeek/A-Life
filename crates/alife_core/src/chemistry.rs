@@ -1,4 +1,4 @@
-//! v0 scaffold: bounded endocrine and drive modulation contracts.
+//! Bounded endocrine and drive dynamics.
 
 use serde::{Deserialize, Serialize};
 
@@ -643,38 +643,6 @@ impl Validate for HomeostaticParameters {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HomeostaticCadenceBand {
-    Hot,
-    Warm,
-    Cold,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HomeostaticCadence {
-    pub min_hz: u8,
-    pub max_hz: u8,
-}
-
-impl HomeostaticCadence {
-    pub const fn for_band(band: HomeostaticCadenceBand) -> Self {
-        match band {
-            HomeostaticCadenceBand::Hot => Self {
-                min_hz: 10,
-                max_hz: 30,
-            },
-            HomeostaticCadenceBand::Warm => Self {
-                min_hz: 2,
-                max_hz: 10,
-            },
-            HomeostaticCadenceBand::Cold => Self {
-                min_hz: 0,
-                max_hz: 1,
-            },
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EndocrineProfile {
     pub baseline: EndocrineSnapshot,
@@ -687,10 +655,6 @@ impl EndocrineProfile {
             baseline: EndocrineSnapshot::baseline(),
             parameters: HomeostaticParameters::reference(),
         }
-    }
-
-    pub const fn modulator_count(&self) -> usize {
-        EndocrineSnapshot::CHANNEL_COUNT
     }
 }
 
@@ -753,27 +717,8 @@ impl RecoveryAssessment {
 pub struct ChemistryModulation;
 
 impl ChemistryModulation {
-    pub fn threshold_scale(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<f32, ScaffoldContractError> {
+    pub fn learning_rate_scale(state: &HomeostaticSnapshot) -> Result<f32, ScaffoldContractError> {
         state.validate_contract()?;
-        parameters.validate_contract()?;
-        validate_finite(clamp01(
-            0.45 + 0.18 * state.hormones.cortisol
-                + 0.12 * state.drives.fear
-                + 0.12 * state.drives.pain
-                + 0.08 * state.drives.fatigue
-                - 0.05 * state.hormones.dopamine,
-        ))
-    }
-
-    pub fn learning_rate_scale(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<f32, ScaffoldContractError> {
-        state.validate_contract()?;
-        parameters.validate_contract()?;
         let stress_penalty = 1.0 - 0.55 * state.hormones.cortisol;
         let reward_gain = 0.5 + 0.5 * state.hormones.dopamine;
         let energy_gate = 0.25 + 0.75 * state.drives.brain_atp;
@@ -782,12 +727,8 @@ impl ChemistryModulation {
         ))
     }
 
-    pub fn salience_weight(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<f32, ScaffoldContractError> {
+    pub fn salience_weight(state: &HomeostaticSnapshot) -> Result<f32, ScaffoldContractError> {
         state.validate_contract()?;
-        parameters.validate_contract()?;
         validate_finite(clamp01(
             0.15 + 0.18 * state.drives.curiosity
                 + 0.18 * state.drives.fear
@@ -801,10 +742,8 @@ impl ChemistryModulation {
     pub fn motor_confidence(
         base_confidence: Confidence,
         state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
     ) -> Result<Confidence, ScaffoldContractError> {
         state.validate_contract()?;
-        parameters.validate_contract()?;
         let fatigue_penalty = 1.0 - 0.35 * state.drives.fatigue;
         let pain_penalty = 1.0 - 0.25 * state.drives.pain;
         let fear_penalty = 1.0 - 0.2 * state.drives.fear;
@@ -840,13 +779,6 @@ impl ChemistryModulation {
             pain_frustration_spike,
             safe_idle_fallback,
         })
-    }
-
-    pub fn should_enter_sleep(
-        state: &HomeostaticSnapshot,
-        parameters: HomeostaticParameters,
-    ) -> Result<bool, ScaffoldContractError> {
-        Ok(Self::recovery_triggers(state, parameters)?.fatigue_sleep_entry)
     }
 }
 

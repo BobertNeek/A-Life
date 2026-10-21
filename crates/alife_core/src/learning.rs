@@ -1,8 +1,6 @@
-//! Patch-gated three-factor learning contracts.
+//! Three-factor learning evidence and replay protection for sealed experience.
 //!
-//! This module owns only engine-independent evidence and replay contracts. GPU
-//! storage and WGSL updates live in `alife_gpu_backend`; no CPU neural update is
-//! performed here.
+//! GPU storage and weight updates live in `alife_gpu_backend`.
 
 use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 
@@ -138,19 +136,6 @@ impl NeuromodulatorSample {
         frustration: f32,
         novelty: f32,
     ) -> Result<Self, ScaffoldContractError> {
-        let components = [
-            prediction_residual,
-            pain,
-            homeostatic_improvement,
-            frustration,
-            novelty,
-        ];
-        if components.iter().any(|value| !value.is_finite()) {
-            return Err(ScaffoldContractError::NonFiniteFloat);
-        }
-        if components.iter().any(|value| !(-1.0..=1.0).contains(value)) {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
         let frame = NeuromodulatoryFrame::try_new([
             prediction_residual,
             pain,

@@ -31,7 +31,7 @@ pub struct SimulatorRehearsalConfig {
     pub decisions_per_attempt: usize,
     pub burn_in: usize,
     pub collection_wall_limit_seconds: u64,
-    /// The standalone qualification profile only; ordinary modes retain their budgets.
+    /// Optional allowance for the complete invocation, including resource release.
     #[serde(default)]
     pub qualification_wall_limit_seconds: Option<u64>,
     pub control_fresh: bool,
@@ -46,15 +46,18 @@ impl SimulatorRehearsalConfig {
         {
             return Err("invalid rehearsal budget (4..32 attempts, 8..32 decisions, 1..8 burn-in, 1..3600 seconds)".into());
         }
-        if self.qualification_wall_limit_seconds.is_some()
-            && (self.qualification_wall_limit_seconds != Some(360)
-                || self.collection_wall_limit_seconds != 240
-                || self.attempts != 4
-                || self.decisions_per_attempt != 8
-                || self.burn_in != 2
-                || self.control_fresh)
+        if self
+            .qualification_wall_limit_seconds
+            .is_some_and(|seconds| {
+                seconds == 0
+                    || Instant::now()
+                        .checked_add(std::time::Duration::from_secs(seconds))
+                        .is_none()
+            })
         {
-            return Err("qualification requires 4x8 attempts, 2x8 holdouts, burn-in 2, 240/360-second allowances and no comparison/control".into());
+            return Err(
+                "total rehearsal allowance must be positive and fit the monotonic clock".into(),
+            );
         }
         self.expected_source_policy
             .checked_add(2)
@@ -1175,6 +1178,9 @@ mod tests {
         invalid = config();
         invalid.burn_in = 7;
         assert!(invalid.validate().is_err());
+        invalid = config();
+        invalid.qualification_wall_limit_seconds = Some(0);
+        assert!(invalid.validate().is_err());
         let output =
             std::env::temp_dir().join(format!("alife-rehearsal-missing-{}", std::process::id()));
         assert!(!output.exists());
@@ -1183,45 +1189,6 @@ mod tests {
         );
         assert!(!output.exists());
     }
-    #[test]
-    fn qualification_cannot_expand_decisions_or_start_comparison() {
-        let mut qualify = config();
-        qualify.collection_wall_limit_seconds = 240;
-        qualify.qualification_wall_limit_seconds = Some(360);
-        qualify.validate().unwrap();
-        assert_eq!((qualify.attempts + 2) * qualify.decisions_per_attempt, 48);
-        for field in [
-            "attempts",
-            "decisions",
-            "burn",
-            "collection",
-            "total",
-            "control",
-        ] {
-            let mut changed = qualify.clone();
-            match field {
-                "attempts" => changed.attempts += 1,
-                "decisions" => changed.decisions_per_attempt += 1,
-                "burn" => changed.burn_in += 1,
-                "collection" => changed.collection_wall_limit_seconds += 1,
-                "total" => changed.qualification_wall_limit_seconds = Some(361),
-                _ => changed.control_fresh = true,
-            }
-            assert!(changed.validate().is_err(), "{field}");
-        }
-        let output = std::env::temp_dir().join(format!(
-            "alife-rehearsal-no-qualification-compare-{}",
-            std::process::id()
-        ));
-        assert!(
-            compare_simulator_rehearsal(&output.join("missing"), &output, qualify)
-                .unwrap_err()
-                .to_string()
-                .contains("cannot start a comparison")
-        );
-        assert!(!output.exists());
-    }
-
     #[test]
     fn zero_row_budget_exit_keeps_real_attempt_receipt() {
         let output =
@@ -1275,9 +1242,6 @@ pub fn compare_simulator_rehearsal(
     mut config: SimulatorRehearsalConfig,
 ) -> Result<serde_json::Value> {
     config.validate()?;
-    if config.qualification_wall_limit_seconds.is_some() {
-        return Err("qualification cannot start a comparison".into());
-    }
     continuation::inspect(source, config.expected_source_policy)?;
     std::fs::create_dir(output)?;
     config.control_fresh = true;

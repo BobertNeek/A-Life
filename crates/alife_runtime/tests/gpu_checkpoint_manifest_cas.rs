@@ -1,4 +1,4 @@
-//! Durable GPU checkpoint save-manifest compare-and-swap contracts.
+//! Durable GPU checkpoint publication and compare-and-swap tests.
 use std::{fs, path::Path};
 
 use alife_core::{
@@ -262,7 +262,14 @@ fn journal_generations_advance_while_the_exact_save_anchor_stays_stable() {
         .publish_sleep_transaction_journal(&first, &journal_one)
         .unwrap();
     let second = durable.load().unwrap();
+    assert_eq!(first.authority_generation(), Some(1));
     assert_eq!(second.authority_generation(), Some(2));
+    assert_eq!(second.save, first.save);
+    assert_ne!(second.digest, first.digest);
+    assert!(matches!(
+        durable.publish_sleep_transaction_journal(&first, &journal_one),
+        Err(GpuRuntimeError::GpuCheckpointManifestConflict { .. })
+    ));
     assert_eq!(
         save_artifact_count(),
         exact_save_artifacts_before,
@@ -372,49 +379,6 @@ fn authority_missing_or_tampered_named_artifacts_fail_closed() {
         assert!(GpuDurableSaveManifest::open(&save_path, &root).is_err());
         fs::remove_dir_all(root).unwrap();
     }
-}
-
-#[test]
-fn journal_only_publication_advances_authority_and_rejects_the_stale_generation() {
-    let root = std::env::temp_dir().join(format!(
-        "alife-gpu-authority-journal-generation-{}",
-        std::process::id()
-    ));
-    if root.exists() {
-        fs::remove_dir_all(&root).unwrap();
-    }
-    fs::create_dir_all(&root).unwrap();
-    let save_path = root.join("current.json");
-    GpuDurableSaveManifest::publish_snapshot(
-        &save_path,
-        &root,
-        &current_save("authority-journal-generation"),
-    )
-    .unwrap();
-    let durable = GpuDurableSaveManifest::open(&save_path, &root).unwrap();
-    let generation_one = durable.load().unwrap();
-    let journal = GpuSleepTransactionJournalV2::empty(&generation_one).unwrap();
-
-    durable
-        .publish_sleep_transaction_journal(&generation_one, &journal)
-        .unwrap();
-    let generation_two = durable.load().unwrap();
-    assert_eq!(generation_one.authority_generation(), Some(1));
-    assert_eq!(generation_two.authority_generation(), Some(2));
-    assert_eq!(generation_two.save, generation_one.save);
-    assert_ne!(generation_two.digest, generation_one.digest);
-    assert!(matches!(
-        durable.publish_sleep_transaction_journal(&generation_one, &journal),
-        Err(GpuRuntimeError::GpuCheckpointManifestConflict { .. })
-    ));
-
-    let refreshed_journal = GpuSleepTransactionJournalV2::empty(&generation_two).unwrap();
-    durable
-        .publish_sleep_transaction_journal(&generation_two, &refreshed_journal)
-        .unwrap();
-    assert_eq!(durable.load().unwrap().authority_generation(), Some(3));
-
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

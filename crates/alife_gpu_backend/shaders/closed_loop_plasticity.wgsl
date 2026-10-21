@@ -126,21 +126,6 @@ fn array8_equal(left:array<u32,8>, right:array<u32,8>) -> bool {
   return true;
 }
 
-fn receptor_valid_for_plasticity(receptor:GpuPlasticityReceptorRecord) -> bool {
-  return finite_plasticity(receptor.eligibility_decay)
-    && finite_plasticity(receptor.learning_rate)
-    && finite_plasticity(receptor.sleep_replay_rate)
-    && finite_plasticity(receptor.normalization_rate)
-    && finite_plasticity(receptor.fast_min)
-    && finite_plasticity(receptor.fast_max)
-    && receptor.eligibility_decay >= 0.0 && receptor.eligibility_decay <= 1.0
-    && receptor.learning_rate >= 0.0 && receptor.learning_rate <= 1.0
-    && receptor.normalization_rate >= 0.0 && receptor.normalization_rate <= 1.0
-    && receptor.fast_min >= -8.0 && receptor.fast_max <= 8.0
-    && receptor.fast_min < receptor.fast_max
-    && all(receptor.reserved == vec2<f32>(0.0));
-}
-
 fn project_third_factor(receptor:GpuPlasticityReceptorRecord, outcome:GpuOutcomeCreditRecord) -> f32 {
   let lanes = array<f32,8>(
     outcome.prediction_residual,outcome.pain,outcome.homeostatic_improvement,outcome.frustration,

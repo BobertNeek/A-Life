@@ -215,8 +215,7 @@ impl CpuCanonicalHost {
     pub fn world(&self) -> &HeadlessWorld {
         &self.world
     }
-    /// Lawful simulator variations can mutate the branched world through its
-    /// ordinary world APIs; no method exposes a reward or neural input override.
+    /// Scene variations use ordinary world APIs without reward or neural overrides.
     pub fn world_mut(&mut self) -> &mut HeadlessWorld {
         &mut self.world
     }
@@ -1238,24 +1237,21 @@ fn structural_sleep_evidence(
             let synapse = p
                 .synapses()
                 .get(usize::try_from(span.local_synapse_id).ok()?)?;
-            Some((
-                synapse.source(),
-                synapse.target(),
-                synapse.route_index(),
-                eligibility,
-            ))
+            Some((synapse.source(), synapse.target(), eligibility))
         })
         .take(32)
         .collect::<Vec<_>>();
+    // Local growth proposals are anchored in replay eligibility. Unit
+    // coactivation is proposal support, not an observed firing count.
+    const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
     let mut structural_evidence = Vec::new();
     for pair in active.windows(2).take(32) {
-        let (source, target, route, eligibility) = (pair[0].0, pair[1].1, pair[0].2, pair[0].3);
+        let (source, target, eligibility) = (pair[0].0, pair[1].1, pair[0].2);
         if source == target || base_pairs.contains(&(source, target)) {
             continue;
         }
-        let region = route;
         structural_evidence.push(CoactivationEvidence {
-            region,
+            region: CANONICAL_SLEEP_STRUCTURAL_REGION,
             source,
             target,
             coactivation: 1,
@@ -1264,16 +1260,15 @@ fn structural_sleep_evidence(
         });
     }
     if structural_evidence.is_empty() {
-        if let Some((source, target, route, eligibility)) = active.first().copied() {
+        if let Some((source, target, eligibility)) = active.first().copied() {
             for offset in 1..=8_u32 {
                 let candidate_target =
                     (target % p.neuron_count()).wrapping_add(offset) % p.neuron_count();
                 if candidate_target == source || base_pairs.contains(&(source, candidate_target)) {
                     continue;
                 }
-                let region = route;
                 structural_evidence.push(CoactivationEvidence {
-                    region,
+                    region: CANONICAL_SLEEP_STRUCTURAL_REGION,
                     source,
                     target: candidate_target,
                     coactivation: 1,
@@ -1283,10 +1278,6 @@ fn structural_sleep_evidence(
                 break;
             }
         }
-    }
-    const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
-    for item in &mut structural_evidence {
-        item.region = CANONICAL_SLEEP_STRUCTURAL_REGION;
     }
     structural_evidence
 }

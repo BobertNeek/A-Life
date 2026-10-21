@@ -474,6 +474,25 @@ impl GpuClosedLoopBackend {
         request: &GpuConsolidationRequest,
         staged: &ConsolidationStagedOutput,
     ) -> Result<GpuSleepConsolidationReceipt, ScaffoldContractError> {
+        let mut submission_started = false;
+        let result =
+            self.commit_sleep_consolidation_inner(handle, request, staged, &mut submission_started);
+        if result.is_err() && submission_started {
+            // The device may already own the new banks. Retrying against old host
+            // generations could replay learning or overwrite acquired state.
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        result
+    }
+
+    fn commit_sleep_consolidation_inner(
+        &mut self,
+        handle: GpuBrainHandle,
+        request: &GpuConsolidationRequest,
+        staged: &ConsolidationStagedOutput,
+        submission_started: &mut bool,
+    ) -> Result<GpuSleepConsolidationReceipt, ScaffoldContractError> {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         request.validate_contract()?;
@@ -538,12 +557,14 @@ impl GpuClosedLoopBackend {
                 &job.header,
                 &job.payload_words,
                 job.reset_word_count,
+                submission_started,
             )
         };
-        if dispatch_result.is_err() || self.device_lost.load(std::sync::atomic::Ordering::Acquire) {
+        if self.device_lost.load(std::sync::atomic::Ordering::Acquire) {
             self.mark_device_lost();
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
         }
+        dispatch_result.map_err(map_gpu_contract_error)?;
 
         let words = self.read_slot_mutable_words(handle, &snapshot.ranges)?;
         let completion = completion_from_slot_words(&words, &snapshot.ranges)?;

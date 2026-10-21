@@ -50,8 +50,8 @@ pub enum FoundationTrainingBackendV1 {
 pub enum FoundationContinuationKindV1 {
     FreshCohort,
 }
-/// Training-only package. It contains no creature decisions or hardware claims;
-/// normal gameplay can consume the canonical asset through its existing codec.
+/// Founder and optimizer continuation package, separate from organism state.
+/// Gameplay reads only the foundation asset through its normal codec.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FoundationTrainingHandoffV1 {
@@ -98,6 +98,10 @@ impl FoundationTrainingHandoffV1 {
         Ok(handoff)
     }
     pub fn validate(&self) -> Result<(), TrainingError> {
+        self.validated_phenotype().map(|_| ())
+    }
+
+    fn validated_phenotype(&self) -> Result<BrainPhenotype, TrainingError> {
         let invalid = || TrainingError::Contract(ScaffoldContractError::InvalidDecisionEvidence);
         if self.schema_version != 1
             || self.policy_version == 0
@@ -127,14 +131,10 @@ impl FoundationTrainingHandoffV1 {
         {
             return Err(invalid());
         }
-        Ok(())
+        Ok(phenotype)
     }
     pub fn admit(self) -> Result<AdmittedFoundationTrainingHandoff, TrainingError> {
-        self.validate()?;
-        let phenotype = PhenotypeCompiler::compile_validated(
-            &self.compiler_inputs,
-            &BrainCapacityClass::n2048(),
-        )?;
+        let phenotype = self.validated_phenotype()?;
         let foundation = self
             .compiler_inputs
             .n2048_candidate_asset()
@@ -149,9 +149,8 @@ impl FoundationTrainingHandoffV1 {
             value: self.value,
         })
     }
-    /// Import into the real existing GPU Training session. No CPU decisions are
-    /// relabeled, and neither optimizer is reinitialized. A real GPU owner must
-    /// execute this path; CPU-only callers can validate/admit without a device.
+    /// Restores founder and optimizer state into a GPU training session.
+    /// Device-free validation is available through `admit`.
     pub fn into_gpu_training_session(
         self,
         session: alife_runtime::GpuAuthoritativeSession,

@@ -1,8 +1,8 @@
-//! Engine-neutral orchestration seam for automatic GPU-authoritative sleep.
+//! Automatic GPU sleep scheduling.
 
 use alife_core::sleep::SleepWorkReceipt;
 use alife_core::{
-    ActionId, BodyEventDelta, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
+    BodyEventDelta, ConsolidationDriverEvent, ConsolidationIntent, ConsolidationState,
     HomeostaticParameters, HomeostaticSnapshot, OrganismId, ScaffoldContractError,
     SleepConsolidationConfig, SleepController, SleepPhase, SleepState, SleepTransition,
     SleepTrigger, Tick, Validate,
@@ -95,9 +95,8 @@ pub trait GpuSleepConsolidationDriver {
 
     /// Runs the due bounded core sleep transaction.
     ///
-    /// Implementations should call `SleepConsolidator::run_bounded_transaction`
-    /// and return its validated receipt. The default keeps the legacy GPU-only
-    /// caller source-compatible; the organism-aware path requires a receipt.
+    /// Organism-aware scheduling requires the completed core transaction receipt.
+    /// The default reports no core work.
     fn run_bounded_sleep_transaction(
         &mut self,
         _organism_id: OrganismId,
@@ -113,7 +112,7 @@ pub trait GpuSleepConsolidationDriver {
     /// memory, predictor, concept, and structural sleep work.
     ///
     /// Empty newborn replay is an explicit no-work state. Nonempty replay
-    /// remains subject to the complete fail-closed transaction contract.
+    /// still requires a validated transaction.
     fn has_bounded_sleep_phase_data(
         &mut self,
         _organism_id: OrganismId,
@@ -130,7 +129,6 @@ pub struct GpuSleepScheduleEvent {
     pub cycle_id: u64,
     pub transition: Option<SleepTransition>,
     pub consolidation_kind_raw: u16,
-    pub selected_action: Option<ActionId>,
     pub motor_eligible: bool,
     pub sleep_work_units: u64,
     pub phase_receipt: SleepPhaseReceipt,
@@ -508,7 +506,6 @@ impl GpuSleepScheduler {
             cycle_id,
             transition,
             consolidation_kind_raw: state.consolidation.kind_raw(),
-            selected_action: None,
             motor_eligible,
             sleep_work_units: work_units,
             phase_receipt: SleepPhaseReceipt {

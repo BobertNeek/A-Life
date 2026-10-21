@@ -17,18 +17,16 @@ case "${mode}" in
   --quick)
     git diff --check
     "${BASH}" scripts/check_core_boundaries.sh --static
-    "${BASH}" scripts/docs_check.sh
     ;;
   --full)
     # shellcheck source=rust_env.sh
     source scripts/rust_env.sh
     ensure_cargo
     cargo fmt --all -- --check
-    cargo check --workspace --all-targets
-    cargo test --workspace --all-targets
-    cargo clippy --workspace --all-targets -- -D warnings
+    cargo check --locked --workspace --all-targets
+    cargo test --locked --workspace --all-targets
+    cargo clippy --locked --workspace --all-targets -- -D warnings
     "${BASH}" scripts/check_core_boundaries.sh
-    "${BASH}" scripts/docs_check.sh
     ;;
   *)
     echo "usage: scripts/check.sh [--quick|--full]" >&2

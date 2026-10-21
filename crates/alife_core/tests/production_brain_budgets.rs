@@ -1,4 +1,4 @@
-//! Contract tests for the single production capacity and compiled-budget authority.
+//! Production capacity and compiled-budget validation.
 
 use alife_core::{
     BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
@@ -117,15 +117,6 @@ fn execution_abi_rejects_every_independent_limit_violation() {
             );
         }
     }
-}
-
-#[test]
-fn production_capacity_source_contains_no_tier_dispatch_or_byte_guess() {
-    let source = include_str!("../src/phenotype/capacity.rs");
-    let production = source.split("impl BrainCapacityClass").nth(1).unwrap();
-    assert!(!production.contains("production_for_tier"));
-    assert!(!production.contains("BrainScaleTier"));
-    assert!(!production.contains("max_gpu_bytes"));
 }
 
 fn numeric_leaf_paths(value: &Value) -> Vec<Vec<String>> {

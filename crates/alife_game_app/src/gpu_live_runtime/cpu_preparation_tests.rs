@@ -1008,7 +1008,6 @@ fn legacy_serial_reference(job: &CpuPreparationJob<'_>) -> CpuPreparationOutcome
             &mut peripheral_summaries,
             body_need,
             &memory_evidence,
-            &baseline_context,
             &topology_evidence,
             receptor_effects,
         )?;

@@ -1,5 +1,4 @@
-//! Passive lesson diagnostics from already-resident CPU receipts.
-//! No world queries, neural readbacks, or changes to policy/outcome contracts.
+//! Passive lesson diagnostics from existing CPU-side action and outcome records.
 
 use alife_core::{DecisionSnapshot, MotorCommandBundle, PerceptionFrame, PostActionOutcome};
 use alife_gpu_backend::GpuTrainingRolloutReceipt;
@@ -651,57 +650,6 @@ mod tests {
         assert!(
             std::panic::catch_unwind(|| assert_fixture(&missing_nullable)).is_err(),
             "fixture admitted a missing nullable semantic_context"
-        );
-    }
-
-    #[test]
-    fn additive_fields_preserve_the_previous_lesson_step_shape() {
-        let (frame, behavior, decision, outcome) = fixture(0.0);
-        let mut trace = serialize_step(&frame, &behavior, &decision, None, &outcome, Some(false));
-        let object = trace.as_object_mut().unwrap();
-        for added in [
-            "organism_id",
-            "sequence_id",
-            "decision_tick",
-            "outcome_tick",
-            "frame_digest",
-            "dispatch_generation",
-            "behavior",
-            "sampling",
-        ] {
-            assert!(
-                object.remove(added).is_some(),
-                "missing additive field {added}"
-            );
-        }
-        assert_eq!(
-            trace,
-            json!({
-                "tick": 7, "lesson_target_held_before_decision": false,
-                "global_grip_before_decision": 0.0,
-                "position": frame.body().pose.translation,
-                "gaze_rotation": frame.body().pose.rotation,
-                "terrain_ranges": frame.sensory().channels.visual_affordance,
-                "heard_tokens": frame.sensory().language_context.heard_tokens,
-                "vocalized_token": frame.sensory().language_context.vocalized_token,
-                "semantic_context": frame.sensory().semantic_context,
-                "chosen_action": 101, "chosen_target": 3, "chosen_family": "Approach",
-                "object_slots": frame.grounded_object_slots(),
-                "selected_commands": null,
-                "representative_mask": behavior.representative_mask,
-                "motor_masks": behavior.motor_masks, "motor_indices": behavior.motor_indices,
-                "candidates": [
-                    {"index": 0, "action": 101, "family": "Approach", "target": 3,
-                     "observation": {"ObjectSlot": 0}, "target_position": TARGET_POSITION, "logit": -1.25},
-                    {"index": 1, "action": 211, "family": "Other", "target": 3,
-                     "observation": {"ObjectSlot": 0}, "target_position": TARGET_POSITION, "logit": 0.5},
-                    {"index": 2, "action": 1, "family": "Idle", "target": null,
-                     "observation": "None", "target_position": null, "logit": 0.0},
-                ],
-                "success": false, "frustration_delta": 0.25, "prediction_error": 0.875,
-                "physical": outcome.physical, "channel_outcomes": null,
-                "experienced_valence": outcome.experienced_valence(), "physiology": null,
-            })
         );
     }
 }

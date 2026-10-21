@@ -1,10 +1,9 @@
-//! EI0 diploid genome, reproduction, and causal expression contracts.
+//! Diploid inheritance, reproduction, and causal expression.
 
 use alife_core::{
     AlleleDominance, BodyFrame, BrainCapacityClass, ChromosomeKind, ContinuousLocus,
     CreatureGenome, DiscreteAllele, DiscreteExpression, DiscreteLocus, FoundationGeneticIdentity,
-    MatePreference, MutationRecord, ScaffoldContractError, StarterVocabularyProfile, Tick,
-    Validate, MAX_CROSSOVER_SEGMENTS,
+    MutationRecord, ScaffoldContractError, Tick, Validate, MAX_CROSSOVER_SEGMENTS,
 };
 
 fn foundation(
@@ -109,7 +108,7 @@ fn malformed_locus_bounds_are_rejected() {
 }
 
 #[test]
-fn mutation_delta_above_the_ei0_limit_is_rejected_as_overflow() {
+fn mutation_delta_above_the_supported_limit_is_rejected_as_overflow() {
     let mut genome = early_mammal(0xE10_0002);
     genome.reproduction.max_mutation_delta = ContinuousLocus::mean(0.30, 0.30).unwrap();
     assert_eq!(
@@ -190,25 +189,6 @@ fn seeded_discrete_mutation_changes_only_declared_domains_and_records_provenance
     let one = CreatureGenome::reproduce(&maternal, &paternal, 0xD15C_0001).unwrap();
     let two = CreatureGenome::reproduce(&maternal, &paternal, 0xD15C_0001).unwrap();
     assert_eq!(one, two);
-
-    assert!(matches!(
-        one.body.frame.maternal.value,
-        BodyFrame::Light | BodyFrame::Balanced | BodyFrame::Sturdy
-    ));
-    assert!(matches!(
-        one.body.frame.paternal.value,
-        BodyFrame::Light | BodyFrame::Balanced | BodyFrame::Sturdy
-    ));
-    assert!(matches!(
-        one.reproduction.mate_preference.maternal.value,
-        MatePreference::Novelty | MatePreference::Similarity | MatePreference::Health
-    ));
-    assert!(matches!(
-        one.predisposition.starter_vocabulary.paternal.value,
-        StarterVocabularyProfile::Minimal
-            | StarterVocabularyProfile::Foraging
-            | StarterVocabularyProfile::Social
-    ));
 
     let discrete_chromosomes = one
         .provenance
@@ -313,39 +293,14 @@ fn reproduction_rejects_incompatible_brain_classes_and_foundation_families() {
 }
 
 #[test]
-fn offspring_serialization_round_trip_keeps_dna_and_excludes_acquired_mind_state() {
+fn offspring_serialization_round_trip_keeps_dna() {
     let maternal = early_mammal(0xE10_0401);
     let paternal = early_mammal(0xE10_0402);
     let offspring = CreatureGenome::reproduce(&maternal, &paternal, 0x5A9E_0001).unwrap();
     let wire = serde_json::to_value(&offspring).unwrap();
-    let decoded: CreatureGenome = serde_json::from_value(wire.clone()).unwrap();
+    let decoded: CreatureGenome = serde_json::from_value(wire).unwrap();
     decoded.validate_contract().unwrap();
     assert_eq!(decoded, offspring);
-
-    let keys = wire
-        .as_object()
-        .unwrap()
-        .keys()
-        .map(String::as_str)
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(
-        keys,
-        std::collections::BTreeSet::from([
-            "body",
-            "brain",
-            "chemistry",
-            "conception_seed",
-            "development",
-            "foundation",
-            "id",
-            "lineage_id",
-            "parent_genome_ids",
-            "predisposition",
-            "provenance",
-            "reproduction",
-            "schema_version",
-        ])
-    );
 }
 
 #[test]
@@ -537,7 +492,7 @@ fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutatio
             .with_reaction_rate(side, 0, 0.9)
             .unwrap();
     }
-    // Custom construction parameters must not reset to scaffold defaults at birth.
+    // Birth must preserve inherited construction parameters.
     let architecture = alife_core::genome::CognitiveArchitectureGenomeParameters::try_new_v1(
         1, 4, 2, 16, 0.37, 4, 16, 16, 8, 2, 0.4, 0.2, 0.2, 0.3, 0.3, 0.3, 0.3,
     )
@@ -590,7 +545,7 @@ fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutatio
     );
     assert!(
         (expressed.chemistry.biochemical.value_profile().energy
-            - (0.8 + profile_default_energy()) * 0.5)
+            - (0.8 + alife_core::BiologicalValueProfile::default().energy) * 0.5)
             .abs()
             < 1e-6
     );
@@ -612,7 +567,4 @@ fn homologous_chemistry_and_brain_settings_recombine_and_survive_extreme_mutatio
             serde_json::from_slice(&serde_json::to_vec(&child).unwrap()).unwrap();
         assert_eq!(restored.express().unwrap(), child.express().unwrap());
     }
-}
-fn profile_default_energy() -> f32 {
-    alife_core::BiologicalValueProfile::default().energy
 }

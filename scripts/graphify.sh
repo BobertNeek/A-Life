@@ -26,7 +26,6 @@ find_graphify() {
 if ! graphify_bin="$(find_graphify)"; then
   echo "Graphify is optional and not installed."
   echo "Install with: uv tool install graphifyy"
-  echo "Then run: graphify install --project --platform codex"
   exit 0
 fi
 
@@ -34,9 +33,6 @@ command="${1:-update}"
 shift || true
 
 case "${command}" in
-  hook-check)
-    "${graphify_bin}" check-update . "$@"
-    ;;
   update)
     "${graphify_bin}" update . "$@"
     ;;

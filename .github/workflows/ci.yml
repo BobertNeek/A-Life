@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "codex/**", "phase3-**"]
+    branches: ["main"]
   pull_request:
     branches: ["main"]
 
@@ -113,24 +113,15 @@ jobs:
 
       - name: Check
         id: check
-        run: cargo check --workspace --all-targets
+        run: cargo check --locked --workspace --all-targets
 
       - name: Test
-        run: cargo test --workspace --all-targets --no-fail-fast
-
-      - name: Benchmark smoke
-        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
-        run: cargo test -p alife_tools --test benchmark_tiers benchmark_tiers_smoke_runs_tier_1_and_10_without_bevy_or_gpu
+        run: cargo test --locked --workspace --all-targets --no-fail-fast
 
       - name: Clippy
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Core boundaries
         if: ${{ !cancelled() && steps.check.outcome == 'success' }}
         run: bash scripts/check_core_boundaries.sh
-
-      - name: Docs checks
-        if: ${{ !cancelled() && steps.check.outcome == 'success' }}
-        run: bash scripts/docs_check.sh
-

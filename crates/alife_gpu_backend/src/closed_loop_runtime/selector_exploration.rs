@@ -1,7 +1,4 @@
-//! Scalar reconstruction for explicitly requested selector diagnostics only.
-//!
-//! This module never reads neural state, chooses a live action, or substitutes
-//! for GPU arbitration. Ordinary ticks do not construct or validate this data.
+//! Opt-in scalar reconstruction of captured GPU selector diagnostics.
 
 use super::{
     GpuMemoryContextUpload, GpuSelectorCandidateDiagnostic, GpuSelectorDiagnosticReceipt,

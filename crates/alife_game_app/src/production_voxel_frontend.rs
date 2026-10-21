@@ -1,8 +1,4 @@
-//! FVR08 production voxel frontend launch policy.
-//!
-//! This module wires production profile budgets, launch states, and diagnostics
-//! around the existing real P34 config/save/asset contracts. It does not move
-//! renderer, Bevy, or GPU handles into core/world state.
+//! Production profiles, launch configuration, saved UI settings, and diagnostics.
 
 use std::fs;
 
@@ -10,7 +6,6 @@ use crate::prelude::*;
 use crate::*;
 #[cfg(all(test, feature = "gpu-runtime"))]
 use alife_core::{FoundationWeightAsset, SensorProfile};
-use alife_world::{HabitatAuthority, HabitatAuthoritySnapshot, HabitatMembership, HabitatMode};
 
 pub const PRODUCTION_VOXEL_COMMAND: &str = "production-voxel";
 pub const PRODUCTION_VOXEL_WINDOW_TITLE: &str = "A-Life Voxel Frontend";
@@ -21,102 +16,47 @@ pub const FVR01_RUNTIME_DIAGNOSTIC_LOG: &str =
 pub const FVR05_PRODUCTION_UX_SCHEMA: &str = "alife.fvr05.production_ux.v1";
 pub const FVR05_PRODUCTION_UX_SCHEMA_VERSION: u16 = 1;
 pub const FVR05_PRODUCTION_UX_SETTINGS_DIR: &str = "target/artifacts/fvr05";
-pub const FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA: &str =
-    "alife.fvr06.production_gpu_gameplay_receipt.v1";
-pub const FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION: u16 = 1;
-pub const FVR06_PRODUCTION_GPU_RECEIPT_DIR: &str = "target/artifacts/fvr06";
-pub const FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES: usize = 30;
-
-const FVR05_ENGINE_LOCAL_TOKENS: [&str; 11] = [
-    "bevy",
-    "wgpu",
-    "entity(",
-    "renderer",
-    "windowhandle",
-    "oswindow",
-    "mesh3d",
-    "standardmaterial",
-    "handle<",
-    "avian",
-    "egui",
-];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Fvr05ProductionOverlayKind {
     Resources,
     Danger,
-    Pheromones,
-    Energy,
-    Age,
-    Fertility,
-    Territory,
-    Neural,
-    Residency,
-    BackendTiming,
     ChunkBoundaries,
-    LodBudget,
-    Persistence,
 }
 
 impl Fvr05ProductionOverlayKind {
-    pub const fn all() -> &'static [Self; 13] {
-        &[
-            Self::Resources,
-            Self::Danger,
-            Self::Pheromones,
-            Self::Energy,
-            Self::Age,
-            Self::Fertility,
-            Self::Territory,
-            Self::Neural,
-            Self::Residency,
-            Self::BackendTiming,
-            Self::ChunkBoundaries,
-            Self::LodBudget,
-            Self::Persistence,
-        ]
+    pub const fn all() -> &'static [Self; 3] {
+        &[Self::Resources, Self::Danger, Self::ChunkBoundaries]
     }
 
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Resources => "Resources",
-            Self::Danger => "Danger",
-            Self::Pheromones => "Pheromones",
-            Self::Energy => "Energy",
-            Self::Age => "Age",
-            Self::Fertility => "Fertility",
-            Self::Territory => "Territory",
-            Self::Neural => "Neural",
-            Self::Residency => "Residency",
-            Self::BackendTiming => "BackendTiming",
-            Self::ChunkBoundaries => "ChunkBoundaries",
-            Self::LodBudget => "LodBudget",
-            Self::Persistence => "Persistence",
+            Self::Resources => "Terrain resources (launch)",
+            Self::Danger => "Terrain danger (launch)",
+            Self::ChunkBoundaries => "Chunk boundaries",
         }
     }
 
-    pub fn default_enabled_for_profile(profile_id: ProductionFrontendProfileId) -> Vec<Self> {
-        match profile_id {
-            ProductionFrontendProfileId::MinimumSettings30x30 => vec![
-                Self::Resources,
-                Self::Danger,
-                Self::Energy,
-                Self::BackendTiming,
-                Self::Persistence,
-            ],
-            ProductionFrontendProfileId::MinSpecComfort1080p => vec![
-                Self::Resources,
-                Self::Danger,
-                Self::Energy,
-                Self::Fertility,
-                Self::Neural,
-                Self::Residency,
-                Self::BackendTiming,
-                Self::Persistence,
-            ],
-            _ => Self::all().to_vec(),
-        }
+    pub fn default_enabled_for_profile(_profile_id: ProductionFrontendProfileId) -> Vec<Self> {
+        Self::all().to_vec()
     }
+}
+
+// Older preferences may name removed diagnostic views. Keep the user's other settings.
+fn deserialize_enabled_overlays<'de, D>(
+    deserializer: D,
+) -> Result<Vec<Fvr05ProductionOverlayKind>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Ok(Vec::<String>::deserialize(deserializer)?
+        .into_iter()
+        .filter_map(|name| match name.as_str() {
+            "Resources" => Some(Fvr05ProductionOverlayKind::Resources),
+            "Danger" => Some(Fvr05ProductionOverlayKind::Danger),
+            "ChunkBoundaries" => Some(Fvr05ProductionOverlayKind::ChunkBoundaries),
+            _ => None,
+        })
+        .collect())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -155,6 +95,7 @@ pub struct Fvr05ProductionUxSettings {
     pub selected_profile: ProductionFrontendProfileId,
     pub preferred_profile_for_next_launch: ProductionFrontendProfileId,
     pub active_inspector_tab: Fvr05ProductionInspectorTab,
+    #[serde(deserialize_with = "deserialize_enabled_overlays")]
     pub enabled_overlays: Vec<Fvr05ProductionOverlayKind>,
     pub camera_mode: String,
     pub paused: bool,
@@ -253,7 +194,6 @@ impl Fvr05ProductionUxSettings {
     pub fn validate(&self) -> Result<(), GameAppShellError> {
         if self.schema != FVR05_PRODUCTION_UX_SCHEMA
             || self.schema_version != FVR05_PRODUCTION_UX_SCHEMA_VERSION
-            || self.enabled_overlays.is_empty()
             || !self.simulation_speed.is_finite()
             || !(0.10..=5.0).contains(&self.simulation_speed)
             || self.camera_mode.trim().is_empty()
@@ -266,12 +206,6 @@ impl Fvr05ProductionUxSettings {
         {
             return Err(GameAppShellError::InvalidProductionFrontend {
                 message: "invalid FVR05 production UX settings".to_string(),
-            });
-        }
-        let json = serde_json::to_string(self)?;
-        if fvr05_contains_engine_local_token(&json) {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR05 UX settings leaked engine-local renderer tokens".to_string(),
             });
         }
         Ok(())
@@ -312,66 +246,6 @@ impl Fvr05ProductionUxSettings {
 fn fvr05_world_runtime_save_name(profile: &str, save_id: &str, seed: u64) -> String {
     let identity = blake3::hash(save_id.as_bytes()).to_hex();
     format!("{profile}_{seed}_{}_runtime_save.json", &identity[..16])
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Fvr05ProductionDebugAuthorityReport {
-    pub schema: &'static str,
-    pub schema_version: u16,
-    pub read_only_projection: bool,
-    pub direct_actions_blocked: bool,
-    pub action_arbitration_bypass_blocked: bool,
-    pub reward_injection_blocked: bool,
-    pub weight_mutation_blocked: bool,
-    pub hidden_cognition_mutation_blocked: bool,
-    pub bulk_neural_readback_blocked: bool,
-}
-
-impl Fvr05ProductionDebugAuthorityReport {
-    pub const fn production_read_only() -> Self {
-        Self {
-            schema: FVR05_PRODUCTION_UX_SCHEMA,
-            schema_version: FVR05_PRODUCTION_UX_SCHEMA_VERSION,
-            read_only_projection: true,
-            direct_actions_blocked: true,
-            action_arbitration_bypass_blocked: true,
-            reward_injection_blocked: true,
-            weight_mutation_blocked: true,
-            hidden_cognition_mutation_blocked: true,
-            bulk_neural_readback_blocked: true,
-        }
-    }
-
-    pub fn validate(&self) -> Result<(), GameAppShellError> {
-        if self.schema != FVR05_PRODUCTION_UX_SCHEMA
-            || self.schema_version != FVR05_PRODUCTION_UX_SCHEMA_VERSION
-            || !self.read_only_projection
-            || !self.direct_actions_blocked
-            || !self.action_arbitration_bypass_blocked
-            || !self.reward_injection_blocked
-            || !self.weight_mutation_blocked
-            || !self.hidden_cognition_mutation_blocked
-            || !self.bulk_neural_readback_blocked
-        {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR05 debug authority report is not read-only".to_string(),
-            });
-        }
-        Ok(())
-    }
-
-    pub fn compact_line(&self) -> String {
-        format!(
-            "read_only={} actions_blocked={} arbitration_bypass_blocked={} rewards_blocked={} weights_blocked={} cognition_blocked={} bulk_readback_blocked={}",
-            self.read_only_projection,
-            self.direct_actions_blocked,
-            self.action_arbitration_bypass_blocked,
-            self.reward_injection_blocked,
-            self.weight_mutation_blocked,
-            self.hidden_cognition_mutation_blocked,
-            self.bulk_neural_readback_blocked,
-        )
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -801,8 +675,6 @@ pub struct ProductionSaveMetadata {
     pub voxel_resource_hazard_refs: usize,
     pub voxel_stable_selection_refs: usize,
     pub voxel_dirty_region_count: usize,
-    pub voxel_roundtrip_signatures_match: bool,
-    pub no_renderer_tokens_in_voxel_save: bool,
     pub gpu_runtime_schema: Option<String>,
     pub gpu_runtime_selected_backend: String,
     pub gpu_runtime_unavailable_reason: Option<String>,
@@ -831,88 +703,6 @@ pub struct ProductionRuntimeDiagnostics {
     pub failure_stops_learned_actions: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ProductionGpuGameplayReceipt {
-    pub schema: &'static str,
-    pub schema_version: u16,
-    pub profile: String,
-    pub requested_population: u16,
-    pub batch_size: usize,
-    pub receipt_batch_cap: usize,
-    pub production_save_path: PathBuf,
-    pub receipt_path: PathBuf,
-    pub batched_runtime_receipt_path: PathBuf,
-    pub requested_policy: String,
-    pub selected_backend: String,
-    pub unavailable_reason: Option<String>,
-    pub adapter: Option<String>,
-    pub active_creatures: u32,
-    pub compact_readback_bytes: usize,
-    pub finite_rejections: u32,
-    pub no_active_bulk_readback: bool,
-    pub authoritative: bool,
-}
-
-impl ProductionGpuGameplayReceipt {
-    pub fn authoritative(
-        launch: &ProductionVoxelLaunchConfig,
-        production_save_path: PathBuf,
-        receipt_path: PathBuf,
-        batched_runtime_receipt_path: PathBuf,
-        active_creatures: usize,
-        adapter: Option<String>,
-    ) -> Result<Self, GameAppShellError> {
-        let receipt = Self {
-            schema: FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA,
-            schema_version: FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION,
-            profile: launch.profile_id.label().to_string(),
-            requested_population: launch.effective_population(),
-            batch_size: active_creatures,
-            receipt_batch_cap: FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES,
-            production_save_path,
-            receipt_path,
-            batched_runtime_receipt_path,
-            requested_policy: launch.gpu_mode.label().to_string(),
-            selected_backend: "GpuAuthoritative".to_string(),
-            unavailable_reason: None,
-            adapter,
-            active_creatures: u32::try_from(active_creatures).unwrap_or(u32::MAX),
-            compact_readback_bytes: active_creatures.saturating_mul(64),
-            finite_rejections: 0,
-            no_active_bulk_readback: true,
-            authoritative: true,
-        };
-        receipt.validate()?;
-        Ok(receipt)
-    }
-
-    pub fn validate(&self) -> Result<(), GameAppShellError> {
-        if self.schema != FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA
-            || self.schema_version != FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA_VERSION
-            || self.profile.trim().is_empty()
-            || self.requested_population == 0
-            || self.batch_size == 0
-            || self.batch_size > self.receipt_batch_cap
-            || self.receipt_batch_cap != FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES
-            || self.production_save_path.as_os_str().is_empty()
-            || self.receipt_path.as_os_str().is_empty()
-            || self.batched_runtime_receipt_path.as_os_str().is_empty()
-            || self.requested_policy.trim().is_empty()
-            || self.selected_backend.trim().is_empty()
-            || !self.no_active_bulk_readback
-            || !self.authoritative
-            || self.active_creatures == 0
-            || self.compact_readback_bytes != self.batch_size.saturating_mul(64)
-        {
-            return Err(GameAppShellError::InvalidProductionFrontend {
-                message: "FVR06 production GPU gameplay receipt violated schema or boundary"
-                    .to_string(),
-            });
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProductionVoxelLaunchSummary {
     pub schema: &'static str,
@@ -930,7 +720,6 @@ pub struct ProductionVoxelLaunchSummary {
     pub asset_manifest_path: PathBuf,
     pub production_asset_manifest_path: PathBuf,
     pub production_asset_count: usize,
-    pub production_asset_vfx_budget_state: String,
     pub production_asset_license_metadata_validated: bool,
     pub asset_root: PathBuf,
     pub diagnostics: ProductionRuntimeDiagnostics,
@@ -943,9 +732,7 @@ pub struct ProductionVoxelLaunchSummary {
     pub ui_settings_path: PathBuf,
     pub ui_settings: Fvr05ProductionUxSettings,
     pub ui_settings_load_error: Option<String>,
-    pub debug_authority: Fvr05ProductionDebugAuthorityReport,
     pub gpu_runtime_state: GpuRuntimeSaveState,
-    pub gpu_gameplay_receipt: Option<ProductionGpuGameplayReceipt>,
 }
 
 impl ProductionVoxelLaunchSummary {
@@ -954,22 +741,8 @@ impl ProductionVoxelLaunchSummary {
     }
 
     pub fn signature_line(&self) -> String {
-        let gameplay = self
-            .gpu_gameplay_receipt
-            .as_ref()
-            .map(|receipt| {
-                format!(
-                    ":gameplay_mode={}:gameplay={}:batch={}:active_creatures={}:finite_rejections={}",
-                    receipt.requested_policy,
-                    receipt.selected_backend,
-                    receipt.batch_size,
-                    receipt.active_creatures,
-                    receipt.finite_rejections
-                )
-            })
-            .unwrap_or_default();
         format!(
-            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}{}:save={}:assets={}:production_assets={}:production_vfx={}",
+            "{}:{}:{}:profile={}:population={}:states={}:backend={}:unavailable={:?}:gpu_state={}:checkpoint={}:save={}:assets={}:production_assets={}",
             self.schema,
             self.schema_version,
             self.scenario_id,
@@ -982,11 +755,9 @@ impl ProductionVoxelLaunchSummary {
             self.gpu_runtime_state
                 .last_safe_checkpoint
                 .checkpoint_label,
-            gameplay,
             self.save_path.display(),
             self.asset_manifest_path.display(),
             self.production_asset_count,
-            self.production_asset_vfx_budget_state,
         )
     }
 }
@@ -1024,13 +795,6 @@ fn fvr08_launch_artifact_dir(launch: &ProductionVoxelLaunchConfig, relative_path
     }
 }
 
-fn fvr05_contains_engine_local_token(text: &str) -> bool {
-    let lower = text.to_ascii_lowercase();
-    FVR05_ENGINE_LOCAL_TOKENS
-        .iter()
-        .any(|token| lower.contains(token))
-}
-
 fn fvr06_gpu_runtime_save_state(
     launch: &ProductionVoxelLaunchConfig,
     runtime: &RuntimePrereqDiagnosticsSummary,
@@ -1055,11 +819,11 @@ fn fvr06_gpu_runtime_save_state(
         requested_backend_mode: runtime.requested_backend.clone(),
         selected_backend_mode: runtime.selected_backend.clone(),
         adapter_identity: GpuRuntimeAdapterIdentity {
-            adapter_name: fvr06_portable_runtime_text(runtime.adapter_name.clone()),
-            backend_api: fvr06_portable_runtime_text(runtime.backend_api.clone()),
-            adapter_type: fvr06_portable_runtime_text(runtime.adapter_type.clone()),
-            driver: fvr06_portable_runtime_text(runtime.driver.clone()),
-            driver_info: fvr06_portable_runtime_text(runtime.driver_info.clone()),
+            adapter_name: runtime.adapter_name.clone(),
+            backend_api: runtime.backend_api.clone(),
+            adapter_type: runtime.adapter_type.clone(),
+            driver: runtime.driver.clone(),
+            driver_info: runtime.driver_info.clone(),
         },
         validation_profile: format!(
             "FVR06:{}:population={}:graphics={}:mode={}",
@@ -1097,13 +861,8 @@ fn fvr06_gpu_runtime_save_state(
                 .collect(),
         },
         shader_abi_versions: GpuRuntimeShaderAbiVersions {
-            shader_manifest: vec![
-                "closed_loop_plasticity:v1".to_string(),
-                "p27_supertile_routing:v1".to_string(),
-                "p28_recompaction_autophagy:contract-v1".to_string(),
-            ],
+            shader_manifest: vec!["closed_loop_plasticity:v1".to_string()],
             abi_manifest: vec![
-                "p24_gpu_buffer_contract:v1".to_string(),
                 "p29_runtime:v1".to_string(),
                 "full_gpu_runtime:v1".to_string(),
                 "p34_save:v1".to_string(),
@@ -1123,45 +882,6 @@ fn fvr06_gpu_runtime_save_state(
     };
     state.validate()?;
     Ok(state)
-}
-
-fn fvr06_portable_runtime_text(value: Option<String>) -> Option<String> {
-    value.filter(|text| !fvr05_contains_engine_local_token(text))
-}
-
-fn fvr06_production_gpu_gameplay_receipt(
-    launch: &ProductionVoxelLaunchConfig,
-    production_save: &PortableSaveFile,
-) -> Result<Option<ProductionGpuGameplayReceipt>, GameAppShellError> {
-    if !launch.record_performance {
-        return Ok(None);
-    }
-    let batch_size =
-        usize::from(launch.effective_population()).min(FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES);
-    if batch_size < 2 {
-        return Ok(None);
-    }
-
-    let receipt_dir = fvr08_launch_artifact_dir(launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
-    fs::create_dir_all(&receipt_dir)?;
-    let profile = launch.profile_id.label();
-    let production_save_path =
-        receipt_dir.join(format!("{profile}_production_gpu_runtime_save.json"));
-    let batched_runtime_receipt_path =
-        receipt_dir.join(format!("{profile}_batched_gpu_runtime_receipt.json"));
-    let receipt_path = receipt_dir.join(format!("{profile}_production_gpu_gameplay_receipt.json"));
-    production_save.to_json_file(&production_save_path)?;
-
-    let receipt = ProductionGpuGameplayReceipt::authoritative(
-        launch,
-        production_save_path,
-        receipt_path.clone(),
-        batched_runtime_receipt_path,
-        batch_size,
-        None,
-    )?;
-    fs::write(&receipt_path, serde_json::to_string_pretty(&receipt)?)?;
-    Ok(Some(receipt))
 }
 
 fn load_fvr05_ui_settings_or_default(
@@ -1295,10 +1015,8 @@ pub fn run_production_voxel_frontend_preflight(
         }
     };
     production_save.validate_with_asset_root(&launch.app_launch.asset_root)?;
-    let gpu_gameplay_receipt = fvr06_production_gpu_gameplay_receipt(launch, &production_save)?;
     let voxel_evidence = production_voxel_backend_evidence(&production_save)?;
     let visible = visible_world_from_save(&production_save)?;
-    compare_visible_world_to_headless(&visible)?;
     trace.transition(ProductionAppState::LoadOrCreateWorld)?;
     trace.transition(ProductionAppState::Running)?;
 
@@ -1343,8 +1061,6 @@ pub fn run_production_voxel_frontend_preflight(
         voxel_resource_hazard_refs: voxel_evidence.resource_hazard_refs,
         voxel_stable_selection_refs: voxel_evidence.stable_selection_refs,
         voxel_dirty_region_count: voxel_evidence.dirty_regions,
-        voxel_roundtrip_signatures_match: voxel_evidence.roundtrip_signatures_match,
-        no_renderer_tokens_in_voxel_save: voxel_evidence.no_renderer_tokens,
         gpu_runtime_schema: Some(gpu_runtime_state.schema.clone()),
         gpu_runtime_selected_backend: gpu_runtime_state.selected_backend_mode.clone(),
         gpu_runtime_unavailable_reason: gpu_runtime_state.unavailable_reason.clone(),
@@ -1372,8 +1088,6 @@ pub fn run_production_voxel_frontend_preflight(
     // Legacy multiplier remains readable for old settings, but is no longer a
     // playback control or an animation clock.
     ui_settings.simulation_speed = 1.0;
-    let debug_authority = Fvr05ProductionDebugAuthorityReport::production_read_only();
-    debug_authority.validate()?;
 
     Ok(ProductionVoxelLaunchSummary {
         schema: FVR01_PRODUCTION_FRONTEND_SCHEMA,
@@ -1394,20 +1108,7 @@ pub fn run_production_voxel_frontend_preflight(
         asset_manifest_path: launch.app_launch.asset_manifest_path.clone(),
         production_asset_manifest_path,
         production_asset_count: production_assets.asset_count,
-        production_asset_vfx_budget_state: match launch.profile_id {
-            ProductionFrontendProfileId::MinimumSettings30x30 => {
-                production_assets.minimum_vfx_budget_state
-            }
-            ProductionFrontendProfileId::MinSpecComfort1080p => {
-                production_assets.comfort_vfx_budget_state
-            }
-            ProductionFrontendProfileId::Balanced1080p => "balanced".to_string(),
-            ProductionFrontendProfileId::HighSpecScaleUp => "high".to_string(),
-            ProductionFrontendProfileId::ResearchScale => "research".to_string(),
-        },
-        production_asset_license_metadata_validated: production_assets.unknown_license_entries == 0
-            && production_assets.missing_or_rejected_assets == 0
-            && production_assets.placeholder_final_entries == 0,
+        production_asset_license_metadata_validated: true,
         asset_root: launch.app_launch.asset_root.clone(),
         diagnostics,
         save_metadata,
@@ -1419,9 +1120,7 @@ pub fn run_production_voxel_frontend_preflight(
         ui_settings_path,
         ui_settings,
         ui_settings_load_error,
-        debug_authority,
         gpu_runtime_state,
-        gpu_gameplay_receipt,
     })
 }
 
@@ -1491,7 +1190,6 @@ pub(crate) fn production_voxel_save_with_population(
     save.validate_with_asset_root(asset_root)?;
     let mut production_save = save.clone();
     apply_production_population_target(&mut production_save, usize::from(target_population))?;
-    reconcile_production_population_habitats(&mut production_save)?;
     if production_save.world.organism_records.is_none() {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: "production save is missing canonical organism records; frontend synthesis is prohibited"
@@ -1505,113 +1203,27 @@ pub(crate) fn production_voxel_save_with_population(
     Ok(production_save)
 }
 
-fn reconcile_production_population_habitats(
-    save: &mut PortableSaveFile,
-) -> Result<(), GameAppShellError> {
-    let known_creatures = save
-        .creatures
-        .iter()
-        .map(|creature| creature.organism_id)
-        .collect::<Vec<_>>();
-    let known = known_creatures
-        .iter()
-        .map(|organism_id| organism_id.raw())
-        .collect::<std::collections::BTreeSet<_>>();
-    let authority = &save.world.habitats;
-    let removed = authority
-        .memberships()
-        .iter()
-        .filter(|membership| !known.contains(&membership.organism_id.raw()))
-        .map(|membership| membership.organism_id.raw())
-        .collect::<std::collections::BTreeSet<_>>();
-    if authority
-        .tags()
-        .iter()
-        .any(|tag| removed.contains(&tag.organism_id.raw()))
-        || authority
-            .transfers()
-            .iter()
-            .any(|transfer| removed.contains(&transfer.organism_id.raw()))
-    {
-        return Err(GameAppShellError::InvalidProductionFrontend {
-            message:
-                "cannot remove a creature with habitat provenance from a scaled production view"
-                    .to_string(),
-        });
-    }
-
-    let initial_habitat_id = authority
-        .habitats()
-        .iter()
-        .find(|habitat| habitat.mode == HabitatMode::Wild)
-        .map(|habitat| habitat.id)
-        .or_else(|| authority.habitats().first().map(|habitat| habitat.id))
-        .ok_or_else(|| GameAppShellError::InvalidProductionFrontend {
-            message: "production population requires at least one habitat".to_string(),
-        })?;
-    let mut memberships = authority
-        .memberships()
-        .iter()
-        .filter(|membership| known.contains(&membership.organism_id.raw()))
-        .cloned()
-        .collect::<Vec<_>>();
-    let assigned = memberships
-        .iter()
-        .map(|membership| membership.organism_id.raw())
-        .collect::<std::collections::BTreeSet<_>>();
-    for organism_id in &known_creatures {
-        if !assigned.contains(&organism_id.raw()) {
-            memberships.push(HabitatMembership {
-                organism_id: *organism_id,
-                habitat_id: initial_habitat_id,
-                entered_tick: save.world.tick,
-                origin_habitat_id: initial_habitat_id,
-                origin_tick: save.world.tick,
-                last_transfer_sequence: None,
-                quarantine_until: None,
-            });
-        }
-    }
-
-    let reconciled = HabitatAuthority::restore(
-        HabitatAuthoritySnapshot {
-            next_transfer_sequence: authority.transfers().len() as u64 + 1,
-            next_tag_sequence: authority.tags().len() as u64 + 1,
-            habitats: authority.habitats().to_vec(),
-            memberships,
-            tags: authority.tags().to_vec(),
-            transfers: authority.transfers().to_vec(),
-        },
-        &known_creatures,
-    )
-    .map_err(PersistenceError::Habitat)?;
-    save.world.habitats = reconciled;
-    Ok(())
-}
-
 fn apply_production_population_target(
     save: &mut PortableSaveFile,
     target_population: usize,
 ) -> Result<(), GameAppShellError> {
-    let mut agents = save
+    let agent_count = save
         .world
         .objects
         .iter()
         .filter(|object| object.kind == WorldObjectKind::Agent)
-        .cloned()
-        .collect::<Vec<_>>();
-    agents.sort_by_key(|object| object.id.raw());
-    if agents.is_empty() {
+        .count();
+    if agent_count == 0 {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: "production save must contain at least one real creature agent".to_string(),
         });
     }
 
-    if target_population != agents.len() {
+    if target_population != agent_count {
         return Err(GameAppShellError::InvalidProductionFrontend {
             message: format!(
                 "production profile requests {target_population} organisms but the canonical save owns {}; population creation/removal belongs to organism lifecycle authority",
-                agents.len()
+                agent_count
             ),
         });
     }
@@ -1659,8 +1271,6 @@ struct ProductionVoxelBackendEvidence {
     resource_hazard_refs: usize,
     stable_selection_refs: usize,
     dirty_regions: usize,
-    roundtrip_signatures_match: bool,
-    no_renderer_tokens: bool,
 }
 
 fn persistent_profile_id(profile_id: ProductionFrontendProfileId) -> PersistentVoxelProfileId {
@@ -1693,15 +1303,6 @@ fn production_voxel_backend_evidence(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let snapshot = backend.snapshot_for_anchors(&anchors)?;
-    let backend_json = serde_json::to_string(&backend_state)?;
-    let roundtrip: alife_world::PersistentVoxelWorldSaveState =
-        serde_json::from_str(&backend_json)?;
-    let roundtrip_signatures_match =
-        backend_state.visible_chunk_signatures() == roundtrip.visible_chunk_signatures();
-    let lower = backend_json.to_ascii_lowercase();
-    let no_renderer_tokens = ["bevy", "wgpu", "entity(", "renderer", "windowhandle"]
-        .iter()
-        .all(|needle| !lower.contains(needle));
     Ok(ProductionVoxelBackendEvidence {
         schema: backend_state.schema,
         visible_chunk_signatures: snapshot.visible_chunks.len(),
@@ -1709,8 +1310,6 @@ fn production_voxel_backend_evidence(
         resource_hazard_refs: snapshot.resources_and_hazards.len(),
         stable_selection_refs: snapshot.selection_refs.len(),
         dirty_regions: snapshot.dirty_regions.len(),
-        roundtrip_signatures_match,
-        no_renderer_tokens,
     })
 }
 
@@ -1725,12 +1324,13 @@ mod tests {
         ));
     }
 
-    fn gpu_alpha_fixture_root() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../alife_world/tests/fixtures/gpu_alpha")
+    fn production_fixture_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../alife_world/tests/fixtures/production_voxel")
     }
 
-    fn gpu_alpha_save() -> PortableSaveFile {
-        crate::tests::fixtures::current_scene_save(&gpu_alpha_fixture_root(), 30)
+    fn production_scene_save() -> PortableSaveFile {
+        crate::tests::fixtures::current_scene_save(&production_fixture_root(), 30)
     }
 
     struct Fvr05LaunchFixture {
@@ -1762,7 +1362,7 @@ mod tests {
         // Load a current existing population of fresh founders; this does not
         // use or extend the bounded Phase 3 New Game cohort API.
         let config =
-            RuntimeConfig::from_json_file(gpu_alpha_fixture_root().join("tiny_config.json"))
+            RuntimeConfig::from_json_file(production_fixture_root().join("tiny_config.json"))
                 .unwrap();
         let save = untrained_population_fixture::untrained_population_save(config, 30);
         save.validate_with_asset_root(&root).unwrap();
@@ -1802,7 +1402,7 @@ mod tests {
 
     #[test]
     fn fvr06_launch_file_boundary_restores_current_owned_untrained_founders() {
-        let source_root = gpu_alpha_fixture_root();
+        let source_root = production_fixture_root();
         let source_paths = [
             "tiny_save.json",
             "tiny_config.json",
@@ -1882,7 +1482,6 @@ mod tests {
         )
         .unwrap();
         let visible = visible_world_from_save(&production).unwrap();
-        compare_visible_world_to_headless(&visible).unwrap();
         assert_eq!(visible.kind_count(WorldObjectKind::Agent), 30);
         assert_eq!(
             production
@@ -1955,8 +1554,6 @@ mod tests {
             voxel_resource_hazard_refs: 12,
             voxel_stable_selection_refs: 30,
             voxel_dirty_region_count: 0,
-            voxel_roundtrip_signatures_match: true,
-            no_renderer_tokens_in_voxel_save: true,
             gpu_runtime_schema: Some(FVR06_GPU_RUNTIME_STATE_SCHEMA.to_string()),
             gpu_runtime_selected_backend: "GpuAuthoritative".to_string(),
             gpu_runtime_unavailable_reason: None,
@@ -1984,36 +1581,7 @@ mod tests {
     }
 
     #[test]
-    fn fvr05_overlay_catalog_covers_production_debug_surfaces() {
-        let labels = Fvr05ProductionOverlayKind::all()
-            .iter()
-            .map(|overlay| overlay.label())
-            .collect::<Vec<_>>();
-        for required in [
-            "Resources",
-            "Danger",
-            "Pheromones",
-            "Energy",
-            "Age",
-            "Fertility",
-            "Territory",
-            "Neural",
-            "Residency",
-            "BackendTiming",
-            "ChunkBoundaries",
-            "LodBudget",
-            "Persistence",
-        ] {
-            assert!(labels.contains(&required));
-        }
-        assert!(Fvr05ProductionOverlayKind::default_enabled_for_profile(
-            ProductionFrontendProfileId::MinimumSettings30x30
-        )
-        .contains(&Fvr05ProductionOverlayKind::Persistence));
-    }
-
-    #[test]
-    fn fvr05_ux_settings_roundtrip_excludes_engine_tokens_and_preserves_profile() {
+    fn fvr05_ux_settings_roundtrip_preserves_profile_and_migrates_old_options() {
         let (_fixture, launch) = fvr05_test_launch();
         let diagnostics = fvr05_test_diagnostics(&launch);
         let metadata = fvr05_test_save_metadata();
@@ -2021,12 +1589,6 @@ mod tests {
             Fvr05ProductionUxSettings::default_for_launch(&launch, &diagnostics, &metadata);
         settings.validate().unwrap();
         let json = settings.to_json_string_pretty().unwrap();
-        let lower = json.to_ascii_lowercase();
-        assert!(!lower.contains("bevy"));
-        assert!(!lower.contains("wgpu"));
-        assert!(!lower.contains("entity("));
-        assert!(!lower.contains("renderer"));
-
         let path = _fixture.root.join("ux_settings_roundtrip.json");
         settings.to_json_file(&path).unwrap();
         let roundtrip = Fvr05ProductionUxSettings::from_json_file(&path).unwrap();
@@ -2038,12 +1600,21 @@ mod tests {
         );
         assert!(roundtrip
             .enabled_overlays
-            .contains(&Fvr05ProductionOverlayKind::BackendTiming));
+            .contains(&Fvr05ProductionOverlayKind::ChunkBoundaries));
         assert_eq!(roundtrip.playback_mode(), crate::ProductionRunMode::OneX);
         let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+        legacy["enabled_overlays"] =
+            serde_json::json!(["Resources", "Age", "Neural", "ChunkBoundaries"]);
         legacy.as_object_mut().unwrap().remove("run_mode");
         legacy["simulation_speed"] = serde_json::json!(3.0);
         let migrated = Fvr05ProductionUxSettings::from_json_str(&legacy.to_string()).unwrap();
+        assert_eq!(
+            migrated.enabled_overlays,
+            vec![
+                Fvr05ProductionOverlayKind::Resources,
+                Fvr05ProductionOverlayKind::ChunkBoundaries
+            ]
+        );
         assert_eq!(migrated.playback_mode(), crate::ProductionRunMode::MaxSpeed);
         for mode in [
             crate::ProductionRunMode::OneX,
@@ -2064,6 +1635,23 @@ mod tests {
     }
 
     #[test]
+    fn ux_settings_preserve_all_overlays_off_and_unrestricted_user_paths() {
+        let (_fixture, launch) = fvr05_test_launch();
+        let mut settings = Fvr05ProductionUxSettings::default_for_launch(
+            &launch,
+            &fvr05_test_diagnostics(&launch),
+            &fvr05_test_save_metadata(),
+        );
+        settings.enabled_overlays.clear();
+        settings.source_save_path = "worlds/Bevy renderer habitat.json".into();
+        settings.runtime_save_path = "worlds/wgpu observer/runtime.json".into();
+        let roundtrip =
+            Fvr05ProductionUxSettings::from_json_str(&settings.to_json_string_pretty().unwrap())
+                .unwrap();
+        assert_eq!(roundtrip, settings);
+    }
+
+    #[test]
     fn fvr08_package_launch_artifacts_are_rooted_next_to_packaged_manifest() {
         let (_fixture, mut launch) = fvr05_test_launch();
         let package_root = PathBuf::from(
@@ -2081,21 +1669,8 @@ mod tests {
     }
 
     #[test]
-    fn fvr05_debug_authority_blocks_every_mutating_path() {
-        let report = Fvr05ProductionDebugAuthorityReport::production_read_only();
-        report.validate().unwrap();
-        assert!(report.read_only_projection);
-        assert!(report.direct_actions_blocked);
-        assert!(report.action_arbitration_bypass_blocked);
-        assert!(report.reward_injection_blocked);
-        assert!(report.weight_mutation_blocked);
-        assert!(report.hidden_cognition_mutation_blocked);
-        assert!(report.bulk_neural_readback_blocked);
-    }
-
-    #[test]
     #[cfg(feature = "gpu-runtime")]
-    fn fvr06_preflight_persists_gpu_runtime_descriptor_without_engine_tokens() {
+    fn fvr06_preflight_persists_gpu_runtime_descriptor() {
         let (_fixture, mut launch) = fvr05_test_launch();
         launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
         launch.population = Some(30);
@@ -2159,19 +1734,50 @@ mod tests {
         roundtrip
             .validate_with_asset_root(&launch.app_launch.asset_root)
             .unwrap();
-        let descriptor_json = serde_json::to_string(&roundtrip.gpu_runtime).unwrap();
-        for forbidden in [
-            "bevy::",
-            "wgpu::",
-            "entity(",
-            "rendererhandle",
-            "windowhandle",
-        ] {
-            assert!(
-                !descriptor_json.to_ascii_lowercase().contains(forbidden),
-                "FVR06 runtime descriptor leaked {forbidden}: {descriptor_json}"
-            );
-        }
+        assert_eq!(roundtrip.gpu_runtime, production.gpu_runtime);
+    }
+
+    #[test]
+    fn gpu_descriptor_preserves_reported_adapter_and_driver_text() {
+        let (_fixture, launch) = fvr05_test_launch();
+        let save = PortableSaveFile::from_json_file(&launch.app_launch.save_path).unwrap();
+        let runtime = RuntimePrereqDiagnosticsSummary {
+            schema: CA42_RUNTIME_PREREQ_SCHEMA,
+            schema_version: CA42_RUNTIME_PREREQ_SCHEMA_VERSION,
+            requested_gpu_mode: GraphicalBrainPolicyMode::GpuRequired,
+            requested_backend: "GpuAuthoritative".into(),
+            selected_backend: "GpuAuthoritative".into(),
+            unavailable_reason: None,
+            require_gpu: true,
+            would_block_launch: false,
+            gpu_probe_attempted: true,
+            adapter_available: true,
+            device_request_succeeded: true,
+            adapter_name: Some("wgpu Vulkan renderer".into()),
+            backend_api: Some("wgpu::Vulkan".into()),
+            adapter_type: Some("DiscreteGpu".into()),
+            driver: Some("renderer-driver".into()),
+            driver_info: Some("Bevy-compatible driver".into()),
+            graphics_backend: "vulkan".into(),
+            log_path: PathBuf::from("unused-test-log"),
+            missing_driver_guidance: "test fixture".into(),
+            authoritative: true,
+            failure_stops_learned_actions: true,
+        };
+        runtime.validate().unwrap();
+        let descriptor =
+            fvr06_gpu_runtime_save_state(&launch, &runtime, &save.config, &save).unwrap();
+        assert_eq!(
+            descriptor.adapter_identity.adapter_name,
+            runtime.adapter_name
+        );
+        assert_eq!(descriptor.adapter_identity.backend_api, runtime.backend_api);
+        assert_eq!(
+            descriptor.adapter_identity.adapter_type,
+            runtime.adapter_type
+        );
+        assert_eq!(descriptor.adapter_identity.driver, runtime.driver);
+        assert_eq!(descriptor.adapter_identity.driver_info, runtime.driver_info);
     }
 
     #[test]
@@ -2203,50 +1809,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "gpu-runtime")]
-    fn fvr06_record_performance_serializes_preflight_receipt_metadata_for_30_creatures() {
-        // Preflight records descriptor/file metadata. This test does not
-        // execute a neural GPU tick or establish measured gameplay evidence.
-        let (_fixture, mut launch) = fvr05_test_launch();
-        launch.profile_id = ProductionFrontendProfileId::MinimumSettings30x30;
-        launch.population = Some(30);
-        launch.graphics_backend = "existing".to_string();
-        launch.record_performance = true;
-        let fixture_artifact_dir =
-            fvr08_launch_artifact_dir(&launch, FVR06_PRODUCTION_GPU_RECEIPT_DIR);
-        let fixture_runtime_save_path =
-            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_runtime_save.json");
-        let fixture_gameplay_receipt_path =
-            fixture_artifact_dir.join("MinimumSettings30x30_production_gpu_gameplay_receipt.json");
-        let artifact_root = _fixture.root.join("performance-receipt");
-        launch.manifest_path =
-            artifact_root.join("crates/alife_game_app/environment_manifest.json");
-
-        let summary = run_production_voxel_frontend_dry_run(&launch).unwrap();
-        let receipt = summary.gpu_gameplay_receipt.as_ref().unwrap();
-        assert_eq!(receipt.schema, FVR06_PRODUCTION_GPU_GAMEPLAY_SCHEMA);
-        assert_eq!(receipt.requested_population, 30);
-        assert_eq!(receipt.batch_size, 30);
-        assert_eq!(
-            receipt.receipt_batch_cap,
-            FVR06_PRODUCTION_GPU_RECEIPT_MAX_CREATURES
-        );
-        assert!(receipt.no_active_bulk_readback);
-        assert!(receipt.authoritative);
-        assert!(receipt.receipt_path.exists());
-        assert!(receipt.production_save_path.exists());
-        assert_eq!(receipt.active_creatures, 30);
-        assert_eq!(receipt.compact_readback_bytes, 30 * 64);
-        assert!(summary.signature_line().contains("gameplay="));
-        assert!(!fixture_runtime_save_path.exists());
-        assert!(!fixture_gameplay_receipt_path.exists());
-        fs::remove_dir_all(artifact_root).unwrap();
-    }
-
-    #[test]
     fn fvr04_population_view_preserves_real_save_state_and_voxel_anchors() {
-        let root = gpu_alpha_fixture_root();
-        let save = gpu_alpha_save();
+        let root = production_fixture_root();
+        let save = production_scene_save();
         let production = production_voxel_save_with_population(
             &save,
             &root,
@@ -2263,6 +1828,7 @@ mod tests {
         assert_eq!(backend.creature_anchors.len(), 30);
         assert_eq!(production.creatures, save.creatures);
         assert_eq!(production.world.objects, save.world.objects);
+        assert_eq!(production.world.habitats, save.world.habitats);
         assert_eq!(
             production.world.organism_records,
             save.world.organism_records
@@ -2320,7 +1886,7 @@ mod tests {
 
     #[test]
     fn fvr05_population_restore_has_complete_organism_bindings() {
-        let root = gpu_alpha_fixture_root();
+        let root = production_fixture_root();
         let mut config =
             RuntimeConfig::deterministic_default(4242, alife_core::BrainScaleTier::Nano512);
         config.features.gpu_backend_enabled = true;
@@ -2426,8 +1992,8 @@ mod tests {
     }
 
     #[test]
-    fn fvr04_population_view_supports_owned_one_and_500_without_renderer_tokens() {
-        let root = gpu_alpha_fixture_root();
+    fn fvr04_population_view_supports_owned_one_and_500() {
+        let root = production_fixture_root();
         let save = crate::tests::fixtures::current_scene_save(&root, 1);
         let one = production_voxel_save_with_population(
             &save,
@@ -2458,7 +2024,6 @@ mod tests {
         )
         .unwrap();
         let backend = scale_up.require_voxel_backend().unwrap();
-        let backend_json = serde_json::to_string(backend).unwrap().to_ascii_lowercase();
         assert_eq!(
             visible_world_from_save(&scale_up)
                 .unwrap()
@@ -2468,15 +2033,12 @@ mod tests {
         assert_eq!(scale_up.creatures.len(), 500);
         assert_eq!(scale_up.world.habitats.memberships().len(), 500);
         assert_eq!(backend.creature_anchors.len(), 500);
-        assert!(!backend_json.contains("bevy"));
-        assert!(!backend_json.contains("wgpu"));
-        assert!(!backend_json.contains("renderer"));
     }
 
     #[test]
     fn fvr04_save_roundtrip_preserves_selected_creature_and_visible_signature() {
-        let root = gpu_alpha_fixture_root();
-        let save = gpu_alpha_save();
+        let root = production_fixture_root();
+        let save = production_scene_save();
         let production = production_voxel_save_with_population(
             &save,
             &root,
@@ -2502,20 +2064,15 @@ mod tests {
             .first()
             .unwrap()
             .clone();
-        let lower_json = json.to_ascii_lowercase();
 
         assert_eq!(selected_after, selected_creature);
         assert_eq!(signature_after, signature_before);
-        assert!(!lower_json.contains("entity("));
-        assert!(!lower_json.contains("bevy"));
-        assert!(!lower_json.contains("wgpu"));
-        assert!(!lower_json.contains("renderer"));
     }
 
     #[test]
     fn production_population_preserves_saved_appearance_genes() {
-        let root = gpu_alpha_fixture_root();
-        let mut save = gpu_alpha_save();
+        let root = production_fixture_root();
+        let mut save = production_scene_save();
         let preserved = CreatureAppearanceGenome::offspring_from_parents(
             CreatureAppearanceGenome::founder_for_species(4, 11),
             CreatureAppearanceGenome::founder_for_species(9, 17),

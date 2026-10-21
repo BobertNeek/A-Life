@@ -99,15 +99,15 @@
 <g id="node8" class="node">
 <title>assimilate</title>
 <path fill="#fff4d9" stroke="#355070" d="M402.5,-122C402.5,-122 203.5,-122 203.5,-122 197.5,-122 191.5,-116 191.5,-110 191.5,-110 191.5,-98 191.5,-98 191.5,-92 197.5,-86 203.5,-86 203.5,-86 402.5,-86 402.5,-86 408.5,-86 414.5,-92 414.5,-98 414.5,-98 414.5,-110 414.5,-110 414.5,-116 408.5,-122 402.5,-122"/>
-<text text-anchor="middle" x="303" y="-107" font-family="Lato" font-size="10.00">Sanitizing Assimilation</text>
-<text text-anchor="middle" x="303" y="-96" font-family="Lato" font-size="10.00">cohort distillation, compression, leakage checks</text>
+<text text-anchor="middle" x="303" y="-107" font-family="Lato" font-size="10.00">Breed Promotion</text>
+<text text-anchor="middle" x="303" y="-96" font-family="Lato" font-size="10.00">retain skills, clear personal records</text>
 </g>
 <!-- adult&#45;&gt;assimilate -->
 <g id="edge7" class="edge">
 <title>adult&#45;&gt;assimilate</title>
 <path fill="none" stroke="#556270" d="M303,-171.6C303,-159.35 303,-142.8 303,-129.26"/>
 <polygon fill="#556270" stroke="#556270" points="305.45,-129.1 303,-122.1 300.55,-129.1 305.45,-129.1"/>
-<text text-anchor="middle" x="333.5" y="-144.8" font-family="Lato" font-size="9.00">selected cohort</text>
+<text text-anchor="middle" x="350" y="-144.8" font-family="Lato" font-size="9.00">individual or cohort</text>
 </g>
 <!-- assimilate&#45;&gt;genome -->
 <g id="edge9" class="edge">

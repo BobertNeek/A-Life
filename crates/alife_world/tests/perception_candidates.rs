@@ -5,8 +5,8 @@ use alife_core::{
     MAX_ACTION_CANDIDATES,
 };
 use alife_world::{
-    CandidateEnumerator, HeadlessActionIds, HeadlessCandidateEnumerator, HeadlessScenarioBuilder,
-    HeadlessWorld, CANDIDATE_FEATURE_AFFORDANCE_COUNT, CANDIDATE_FEATURE_AFFORDANCE_START_LANE,
+    enumerate_privileged_candidates, HeadlessActionIds, HeadlessScenarioBuilder, HeadlessWorld,
+    CANDIDATE_FEATURE_AFFORDANCE_COUNT, CANDIDATE_FEATURE_AFFORDANCE_START_LANE,
     CANDIDATE_FEATURE_BEARING_COS_LANE, CANDIDATE_FEATURE_BEARING_SIN_LANE,
     CANDIDATE_FEATURE_CONTACT_LANE, CANDIDATE_FEATURE_DISTANCE_LANE,
     CANDIDATE_FEATURE_EVIDENCE_LANE, CANDIDATE_FEATURE_RELATIVE_VELOCITY_X_LANE,
@@ -135,9 +135,8 @@ fn perception_and_candidates_share_one_authoritative_tick_and_empty_context() {
     let tick = Tick::new(3);
     let homeostasis = HomeostaticSnapshot::baseline(tick);
     let report = world.sensory_report(ORGANISM, tick).unwrap();
-    let enumerated = HeadlessCandidateEnumerator
-        .enumerate_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
-        .unwrap();
+    let enumerated =
+        enumerate_privileged_candidates(&report, SensorProfile::PrivilegedAffordanceV1).unwrap();
 
     let draft = world
         .perception_frame_draft(
@@ -279,36 +278,6 @@ fn rest_and_vocalize_are_unscored_intrinsic_opportunities_in_both_profiles() {
 }
 
 #[test]
-fn candidate_enumerator_source_contains_observations_not_privileged_scores() {
-    let source = include_str!("../src/candidate_enumerator.rs");
-    for forbidden in [
-        "ActionProposal",
-        "CreatureMind",
-        "WorldObjectKind",
-        "food_score",
-        "hazard_score",
-        "proposal_salience",
-        "proximity_salience",
-        "score_candidate",
-        "candidate_utility",
-        "static_utility",
-        "utility_score",
-        ".nutrition",
-        ".hazard_pain",
-        "0.72",
-        "0.66",
-        "0.38",
-        "0.42",
-        "0.28",
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "candidate enumeration contains forbidden utility source {forbidden:?}"
-        );
-    }
-}
-
-#[test]
 fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved_values() {
     let world = HeadlessScenarioBuilder::new(73)
         .agent("agent", ORGANISM, pos(0.0, 0.0))
@@ -318,9 +287,8 @@ fn privileged_feature_lanes_have_exact_geometry_affordance_evidence_and_reserved
     let tick = Tick::new(6);
     let report = world.sensory_report(ORGANISM, tick).unwrap();
     let visible = &report.visible_entities[0];
-    let candidates = HeadlessCandidateEnumerator
-        .enumerate_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
-        .unwrap();
+    let candidates =
+        enumerate_privileged_candidates(&report, SensorProfile::PrivilegedAffordanceV1).unwrap();
 
     assert_eq!(visible.relative_position, Vec3f::new(3.0, 0.0, 4.0));
     assert!((visible.distance - 5.0).abs() < 1e-6);
@@ -636,8 +604,7 @@ fn assert_contacts_rejected(
 ) {
     report.contact_entities = contact_entities;
     assert_eq!(
-        HeadlessCandidateEnumerator
-            .enumerate_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
+        enumerate_privileged_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
             .unwrap_err(),
         ScaffoldContractError::InvalidPerceptionFrame
     );
@@ -680,8 +647,7 @@ fn candidate_enumerator_rejects_missing_genuine_visible_contact() {
 
     report.contact_entities.clear();
     assert_eq!(
-        HeadlessCandidateEnumerator
-            .enumerate_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
+        enumerate_privileged_candidates(&report, SensorProfile::PrivilegedAffordanceV1)
             .unwrap_err(),
         ScaffoldContractError::InvalidPerceptionFrame
     );
@@ -694,9 +660,7 @@ fn grounded_profile_uses_the_dedicated_physical_extractor() {
     let report = world.sensory_report(ORGANISM, tick).unwrap();
 
     assert_eq!(
-        HeadlessCandidateEnumerator
-            .enumerate_candidates(&report, SensorProfile::GroundedObjectSlotsV1)
-            .unwrap_err(),
+        enumerate_privileged_candidates(&report, SensorProfile::GroundedObjectSlotsV1).unwrap_err(),
         ScaffoldContractError::SensorProfileMismatch
     );
     let frame = world

@@ -1,4 +1,4 @@
-//! Engine-neutral passive life statistics and bounded active-battery contracts.
+//! Engine-neutral passive life statistics.
 
 use serde::{Deserialize, Serialize};
 
@@ -8,8 +8,6 @@ use crate::{
 };
 
 pub const PASSIVE_LIFE_STATISTICS_SCHEMA_VERSION: u16 = 1;
-pub const ACTIVE_BATTERY_SCHEMA_VERSION: u16 = 1;
-pub const ACTIVE_CHALLENGE_COUNT: usize = 15;
 const Q16_ONE: u32 = 65_535;
 const ENVIRONMENTAL_REGIME_COUNT: usize = 6;
 
@@ -334,27 +332,35 @@ impl PassiveLifeStatistics {
                 {
                     return Err(ScaffoldContractError::ScalarOutOfRange);
                 }
-                self.last_tick = tick;
-                self.survival_ticks = self
+                let survival_ticks = self
                     .survival_ticks
                     .checked_add(1)
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                let mut environmental_regime_ticks = self.environmental_regime_ticks;
                 if let Some(index) = regime.index() {
-                    let regime_ticks = &mut self.environmental_regime_ticks[index];
-                    *regime_ticks = regime_ticks
+                    environmental_regime_ticks[index] = environmental_regime_ticks[index]
                         .checked_add(1)
                         .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
                 }
-                self.mean_brain_atp.observe(energy_q16)?;
-                self.movement.observe(movement_distance_q16)?;
-                self.gpu_dispatches = self
+                let mut mean_brain_atp = self.mean_brain_atp;
+                mean_brain_atp.observe(energy_q16)?;
+                let mut movement = self.movement;
+                movement.observe(movement_distance_q16)?;
+                let gpu_dispatches = self
                     .gpu_dispatches
                     .checked_add(u64::from(gpu_dispatched))
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
-                self.gpu_throttled_dispatches = self
+                let gpu_throttled_dispatches = self
                     .gpu_throttled_dispatches
                     .checked_add(u64::from(gpu_throttled))
                     .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+                self.last_tick = tick;
+                self.survival_ticks = survival_ticks;
+                self.environmental_regime_ticks = environmental_regime_ticks;
+                self.mean_brain_atp = mean_brain_atp;
+                self.movement = movement;
+                self.gpu_dispatches = gpu_dispatches;
+                self.gpu_throttled_dispatches = gpu_throttled_dispatches;
             }
             PassiveLifeEvent::FoodOutcome { beneficial } => {
                 self.food_success.observe(bool_q16(beneficial))?
@@ -570,129 +576,6 @@ impl Validate for PassiveLifeStatistics {
             self.dialect_divergence,
         ] {
             metric.validate()?;
-        }
-        Ok(())
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum ActiveChallengeKind {
-    VisibleRewardNavigation = 1,
-    BlockedRouteDetour = 2,
-    DangerousShortVsSafeLong = 3,
-    RewardHazardReversal = 4,
-    DelayedChoice = 5,
-    UnfamiliarEdibility = 6,
-    PostSleepRetention = 7,
-    LayoutAppearanceGeneralization = 8,
-    InjuryFatigueRecovery = 9,
-    NameAddressedInstruction = 10,
-    WordObjectGrounding = 11,
-    ActionWordGrounding = 12,
-    WhatWhyNarration = 13,
-    PeerTaughtAlias = 14,
-    SlmDisabledDialectTransfer = 15,
-}
-
-impl ActiveChallengeKind {
-    pub const ALL: [Self; ACTIVE_CHALLENGE_COUNT] = [
-        Self::VisibleRewardNavigation,
-        Self::BlockedRouteDetour,
-        Self::DangerousShortVsSafeLong,
-        Self::RewardHazardReversal,
-        Self::DelayedChoice,
-        Self::UnfamiliarEdibility,
-        Self::PostSleepRetention,
-        Self::LayoutAppearanceGeneralization,
-        Self::InjuryFatigueRecovery,
-        Self::NameAddressedInstruction,
-        Self::WordObjectGrounding,
-        Self::ActionWordGrounding,
-        Self::WhatWhyNarration,
-        Self::PeerTaughtAlias,
-        Self::SlmDisabledDialectTransfer,
-    ];
-
-    pub const fn raw(self) -> u8 {
-        self as u8
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActiveChallengeResult {
-    pub challenge: ActiveChallengeKind,
-    pub score: MetricReading,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActiveBatteryReceipt {
-    pub schema_version: u16,
-    pub organism_id: OrganismId,
-    pub results: Vec<ActiveChallengeResult>,
-}
-
-impl ActiveBatteryReceipt {
-    pub fn empty(organism_id: OrganismId) -> Self {
-        Self {
-            schema_version: ACTIVE_BATTERY_SCHEMA_VERSION,
-            organism_id,
-            results: ActiveChallengeKind::ALL
-                .into_iter()
-                .map(|challenge| ActiveChallengeResult {
-                    challenge,
-                    score: MetricReading::Unknown,
-                })
-                .collect(),
-        }
-    }
-
-    pub fn record(
-        &mut self,
-        challenge: ActiveChallengeKind,
-        score_q16: u32,
-    ) -> Result<(), ScaffoldContractError> {
-        if score_q16 > Q16_ONE {
-            return Err(ScaffoldContractError::ScalarOutOfRange);
-        }
-        let result = self
-            .results
-            .iter_mut()
-            .find(|result| result.challenge == challenge)
-            .ok_or(ScaffoldContractError::InvalidId)?;
-        result.score = MetricReading::Measured {
-            value_q16: score_q16,
-            exposures: 1,
-        };
-        self.validate_contract()
-    }
-
-    pub fn completed_count(&self) -> usize {
-        self.results
-            .iter()
-            .filter(|result| matches!(result.score, MetricReading::Measured { .. }))
-            .count()
-    }
-
-    pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        <Self as Validate>::validate_contract(self)
-    }
-}
-
-impl Validate for ActiveBatteryReceipt {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        self.organism_id.validate()?;
-        if self.schema_version != ACTIVE_BATTERY_SCHEMA_VERSION
-            || self.results.len() != ACTIVE_CHALLENGE_COUNT
-        {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        for (expected, result) in ActiveChallengeKind::ALL.iter().zip(&self.results) {
-            if expected != &result.challenge
-                || matches!(result.score, MetricReading::Measured { value_q16, exposures } if value_q16 > Q16_ONE || exposures != 1)
-            {
-                return Err(ScaffoldContractError::InvalidId);
-            }
         }
         Ok(())
     }

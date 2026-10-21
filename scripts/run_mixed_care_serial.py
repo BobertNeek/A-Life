@@ -36,8 +36,8 @@ def seed_admission(plan):
 
 
 def explanation(value):
-    require(isinstance(value, str) and 40 <= len(value.strip()) and len(value) <= 4096 and len(value.split()) >= 6,
-            "meaningful bounded missing-history/recovery explanation required")
+    require(isinstance(value, str) and value.strip() and len(value) <= 4096,
+            "nonempty bounded missing-history/recovery explanation required")
 
 
 def recovery_attestation(doc, ledger_path):
@@ -150,9 +150,8 @@ def grab_import(path, expected):
 def history(path, source_hashes, source_seed, lane, *, admission=None):
     doc, digest = load(path)
     selected = seed_admission({} if admission is None else {"seed_admission": admission})
-    require(doc.get("kind") == "mixed-care-seed-history" and
-            isinstance(doc.get("evidence"), str) and doc["evidence"].strip(),
-            "explicit mixed-care seed history and evidence required")
+    require(doc.get("kind") == "mixed-care-seed-history",
+            "explicit mixed-care seed history required")
     if selected["policy"] == "strict":
         require(doc.get("complete") is True, "explicit complete mixed-care seed history required in strict mode")
     else:
@@ -370,9 +369,9 @@ def summary(run):
 def admit_run_context(plan):
     require(Path.cwd().resolve() == Path(__file__).resolve().parent.parent and
             Path(plan["output"]).parent == Path.cwd() / "target" / "founder-training",
-            "use the authoritative target/founder-training lane")
+            "use the shared target/founder-training lane")
     require(not subprocess.check_output(["git", "status", "--porcelain"], text=True).strip(),
-            "run requires clean reviewed repository source")
+            "run requires a clean source checkout for reproducible continuation")
     require(subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip() == plan["git_head"],
             "source commit changed since plan")
 

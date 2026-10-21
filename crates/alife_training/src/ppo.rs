@@ -1198,8 +1198,7 @@ pub struct PpoTrainingWindow {
     pub speech_targets: Vec<Option<crate::ReplaySpeechTarget>>,
 }
 
-/// Compatibility entry for an explicit single-window update. Campaigns should
-/// use train_recurrent_ppo_cohort with an effective batch of eight windows.
+/// Single-window update; use `train_recurrent_ppo_cohort` to batch windows.
 pub fn train_recurrent_ppo(
     trainer: &mut crate::FoundationTrainer,
     state: &mut PpoTrainingState,
@@ -1490,7 +1489,6 @@ pub struct ImitationTrainingDiagnostics {
 
 /// Warmup on the same recurrent graph. Labels are only consumed by the GPU
 /// objective. Adam steps once per effective batch; value parameters stay frozen.
-// Preserve the caller API with its explicit batch and optimizer controls.
 #[allow(clippy::too_many_arguments)]
 pub fn train_recurrent_imitation<F>(
     trainer: &mut crate::FoundationTrainer,
@@ -1519,7 +1517,7 @@ where
     .action_losses)
 }
 
-/// Opt-in payload telemetry; the legacy entry point performs no added readback.
+/// Imitation update with an additional speech-payload diagnostic readback.
 #[allow(clippy::too_many_arguments)]
 pub fn train_recurrent_imitation_with_diagnostics<F>(
     trainer: &mut crate::FoundationTrainer,

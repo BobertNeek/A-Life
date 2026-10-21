@@ -1,10 +1,6 @@
 # Current implementation reference
 
-> **NON-NORMATIVE:** This file records current implementation conventions and
-> evidence terminology. The sole controlling architecture is
-> `architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md`.
-> If this file conflicts with v2.0, v2.0 controls and this file records an
-> implementation gap.
+> This guide describes current implementation conventions and evidence terminology. See the [organism and gameplay design](architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) for the intended behavior.
 
 It is not a claim that every feature is integrated or proven. See
 [status](STATUS.md).
@@ -18,7 +14,7 @@ It is not a claim that every feature is integrated or proven. See
 - Gameplay CPU neural helpers: reference, test, or developer use only.
 - Explicit offline CPU cloud training: opt-in `alife_training/cpu-backend`, with
   canonical biology, distinct sealed CPU evidence and native optimizer handoffs.
-  Approved 19 October 2026; see the [backend report](performance/20261019-native-cpu-training-backend.md).
+  See the [backend report](performance/20261019-native-cpu-training-backend.md).
   GPU hardware and accepted-source qualification require their own evidence.
 - GPU unavailable: typed unavailable result, never silent CPU substitution.
 
@@ -43,7 +39,7 @@ foundations replace them with their stored signed coefficients; recurrent
 excitatory/inhibitory sign rules do not constrain mathematical decoder weights.
 Play uses the existing Other family and Grab uses Contact, preserving every
 physical feature, including angular speed in lane 20. This changes the learned
-meaning of Play and requires requalification of older policies and replay.
+meaning of Play; older policies and replay do not automatically carry that meaning.
 See the [founder regression report](performance/20261020-founder-brain-corrections.md).
 
 Visibility does not authorize ingestion. For reachable, safe, unheld food,
@@ -120,8 +116,8 @@ experiment retains its distinct qualification and credit boundary.
 
 | Class | Status |
 | --- | --- |
-| N512 | Production-admissible class; requires its own evidence |
-| N1024 | Production-admissible class; requires its own evidence |
+| N512 | Production-admissible class |
+| N1024 | Production-admissible class |
 | N2048 | Production-admissible and current trained foundation class |
 | N4096 | Research-only migration/equivalence class |
 | Larger legacy classes | Inspection, export, or research only |
@@ -158,7 +154,7 @@ An explicit durable learned founder is a separate, provenanced clone mode.
 
 ## Persistent neural identity
 
-Neurons, projections, synapses, and decoders use persistent logical addresses. Packed GPU offsets are runtime-local. Migration maps old state by persistent identity, initializes expansion dormant, and requires a sealed rollback boundary plus same-adapter behavioral equivalence before handoff.
+Neurons, projections, synapses, and decoders use persistent logical addresses. Packed GPU offsets are runtime-local. Research migration maps old state by persistent identity and initializes expansion dormant. Its handoff checks preserve a sealed rollback boundary and compare behavior on the same adapter; this does not require brain-growth experiments for ordinary gameplay changes.
 
 ## Language
 
@@ -172,7 +168,7 @@ Self-narration is a neural action. The world exposes an unscored `Vocalize` oppo
 
 Teacher content enters through ordinary hearing, vision, glyphs, gestures, demonstrations, objects, social feedback, and world consequences.
 
-The production teacher API has no hidden concept vector, direct lexicon write, weight write, plasticity delta, selected candidate, action score, entity target, private reward injection, or legality bypass. Private grading may choose a future lesson; it cannot change the evaluated action or outcome.
+The language nursery and training demonstrations use world speech, perception, and actions. Teaching does not write private concepts, weights, action scores, targets, or reward. A private lesson planner may choose a later exercise without changing the learner's evaluated action or outcome.
 
 ## Private local SLM
 
@@ -215,7 +211,3 @@ Save validation is fail-stop for invalid neural state. Checkpoint and save ident
 - Failed prerequisites are `Blocked`, not partial promotion.
 - `Implemented`, `Integrated`, `Player-visible`, and `Proven` are distinct labels.
 - Current-source proof requires current-source receipts. Historical reports retain their original scope.
-
-## Superseded policy
-
-The current GPU-authority model supersedes old production CPU consolidation authority, GPU parity-gated CPU shadows, and automatic CPU neural fallback. Compatible save safety, sparse-layout, world-authority, sealed-patch, and evidence-honesty rules remain in force.

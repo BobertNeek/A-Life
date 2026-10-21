@@ -243,19 +243,22 @@ fn pending_transaction_blocks_the_next_frame_until_gpu_discard() {
         backend.pending_eligibility(handle).unwrap(),
         Some(first.pending_eligibility)
     );
+    let blocked_frame = support::perception_frame_for_profile_at_tick(
+        1,
+        2,
+        SensorProfile::PrivilegedAffordanceV1,
+        false,
+        2,
+    );
     assert_eq!(
-        backend
-            .tick_batch(&[(
-                handle,
-                support::perception_frame_for_profile_at_tick(
-                    1,
-                    2,
-                    alife_core::SensorProfile::PrivilegedAffordanceV1,
-                    false,
-                    2,
-                )
-            )])
-            .unwrap_err(),
+        support::tick_with_receptors(
+            &mut backend,
+            handle,
+            &phenotype,
+            &physiology,
+            &blocked_frame,
+        )
+        .unwrap_err(),
         ScaffoldContractError::LearningReplayRejected
     );
 

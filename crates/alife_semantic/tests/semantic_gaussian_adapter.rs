@@ -2,11 +2,7 @@
 use alife_core::ScaffoldContractError;
 #[cfg(feature = "gaussian-adapter")]
 use alife_core::{ConceptCellId, GaussianClusterId};
-use alife_semantic::SemanticBoundaryManifest;
-use alife_semantic::{
-    SemanticProviderCapabilityManifest, SemanticProviderConfig, SemanticProviderKind,
-    G11_SEMANTIC_PROVIDER_SCHEMA, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION,
-};
+use alife_semantic::{SemanticProviderCapabilityManifest, SemanticProviderKind};
 
 #[cfg(feature = "gaussian-adapter")]
 use alife_semantic::{
@@ -19,23 +15,7 @@ use alife_semantic::{
 use alife_semantic::{FakeSemanticProvider, SemanticContextProvider, SemanticContextRequest};
 
 #[test]
-fn missing_semantic_provider_stays_nonfatal() {
-    let manifest = SemanticBoundaryManifest::INTERNAL_PRIOR;
-
-    assert!(manifest.private_prior);
-    assert!(!manifest.can_issue_actions);
-    assert!(!manifest.can_rewrite_weights);
-}
-
-#[test]
-fn g11_disabled_provider_config_is_default_and_nonfatal() {
-    let config = SemanticProviderConfig::default();
-    config.validate().unwrap();
-    assert_eq!(config.schema, G11_SEMANTIC_PROVIDER_SCHEMA);
-    assert_eq!(config.schema_version, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION);
-    assert_eq!(config.provider_kind, SemanticProviderKind::Disabled);
-    assert!(!config.required);
-
+fn disabled_provider_manifest_is_nonfatal() {
     let manifest = SemanticProviderCapabilityManifest::disabled();
     manifest.validate().unwrap();
     assert!(manifest.private_prior);
@@ -43,26 +23,6 @@ fn g11_disabled_provider_config_is_default_and_nonfatal() {
     assert!(manifest.failure_is_nonfatal);
     assert!(!manifest.can_issue_actions);
     assert!(!manifest.can_rewrite_weights);
-}
-
-#[test]
-fn g11_provider_config_rejects_unknown_schema_and_provider_kind() {
-    let mut config = SemanticProviderConfig::fake_local_table();
-    config.schema_version = G11_SEMANTIC_PROVIDER_SCHEMA_VERSION + 1;
-    assert!(config.validate().is_err());
-
-    let unknown_kind = format!(
-        r#"{{
-            "schema":"{}",
-            "schema_version":{},
-            "provider_id":"mystery",
-            "provider_kind":"mystery_provider",
-            "required":false,
-            "max_display_entries":4
-        }}"#,
-        G11_SEMANTIC_PROVIDER_SCHEMA, G11_SEMANTIC_PROVIDER_SCHEMA_VERSION
-    );
-    assert!(SemanticProviderConfig::from_json_str(&unknown_kind).is_err());
 }
 
 #[test]

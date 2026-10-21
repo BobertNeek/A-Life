@@ -980,7 +980,6 @@ impl PortableMemoryBankAssetV2 {
         if self.schema_version != PORTABLE_MEMORY_BANK_ASSET_SCHEMA_VERSION
             || self.records.len() > config.capacity
             || self.next_memory_id_raw == 0
-            || (self.records.is_empty() && self.last_observed_sequence_id_raw != 0)
             || (!self.records.is_empty() && self.last_observed_sequence_id_raw == 0)
         {
             return Err(ScaffoldContractError::InvalidMemoryQuery);

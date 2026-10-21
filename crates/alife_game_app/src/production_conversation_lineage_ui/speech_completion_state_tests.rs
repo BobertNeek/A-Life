@@ -33,7 +33,6 @@ pub(super) fn state() -> ProductionConversationLineageUiState {
         lineage_loaded: false,
         lineage_rows: Vec::new(),
         lineage_cursor: 0,
-        pending_founder_mode: FounderMode::GeneticFounder,
         cohort: Vec::new(),
         habitat_focus_id: None,
         habitat_partner_id: None,

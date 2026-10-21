@@ -7,7 +7,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alife_bevy_adapter::{AlifeBevyAdapterPlugin, BevyEntityMap};
+use crate::BevyEntityMap;
+#[cfg(feature = "gpu-runtime")]
+use alife_core::Validate;
 use alife_core::{OrganismId, Tick, WorldEntityId};
 #[cfg(feature = "gpu-runtime")]
 use alife_world::persistence::PortableSaveFile;
@@ -997,7 +999,7 @@ fn build_production_voxel_frontend_app_shell_inner(
         #[cfg(feature = "vfx-hanabi")]
         app.add_plugins(bevy_hanabi::prelude::HanabiPlugin);
     }
-    app.add_plugins(AlifeBevyAdapterPlugin)
+    app.init_resource::<BevyEntityMap>()
         .insert_resource(WinitSettings::continuous())
         .insert_resource(ClearColor(Color::srgb(0.065, 0.105, 0.090)))
         .insert_resource(ProductionVoxelFrontendResource {
@@ -1189,18 +1191,10 @@ fn reconcile_production_presentation(
         sample.social = ((row.object.social_affinity + 1.0) * 0.5).clamp(0.0, 1.0);
 
         let selected_action_kind = row.motor.as_ref().and_then(|motor| motor.action_kind);
-        if let Ok(visual) = crate::creature_visual_snapshot_from_parts(
-            row.organism_id,
-            row.world_entity_id,
-            row.object.position,
-            None,
-            None,
-            homeostasis,
-            row.sleep_phase,
-            selected_action_kind,
-        ) {
-            sample.expression = visual.expression;
-            sample.animation = visual.animation;
+        if homeostasis.validate_contract().is_ok() {
+            sample.expression = crate::creature_expression_state(row.sleep_phase, homeostasis);
+            sample.animation =
+                crate::creature_animation_state(row.sleep_phase, homeostasis, selected_action_kind);
         }
         sample.display_label = row.object.label.clone();
         true

@@ -1,14 +1,53 @@
-//! Real-hardware gate for candidate-conditioned memory in the production GPU loop.
+//! Real-hardware learning and candidate-conditioned memory checks for the production GPU loop.
 #![cfg(feature = "gpu-tests")]
 
 use std::collections::BTreeMap;
 
-use alife_core::{BrainScaleTier, OrganismId, Vec3f};
-#[cfg(feature = "gpu-tests")]
-use alife_core::{BrainTickStatus, SleepPhase};
+use alife_core::{
+    BiochemistryState, BrainCapacityClass, BrainScaleTier, BrainTickStatus, CreatureGenome,
+    FoundationGeneticIdentity, FoundationWeightAsset, OrganismId, SensorProfile, SleepPhase, Tick,
+    Vec3f,
+};
 use alife_game_app::{GpuLiveBrainRuntime, LiveBrainCausalStage};
 use alife_gpu_backend::GpuClosedLoopBackend;
-use alife_world::HeadlessScenarioBuilder;
+use alife_world::{HeadlessScenarioBuilder, HeadlessWorld, WorldOrganismRecord};
+
+fn registered_runtime(
+    backend: GpuClosedLoopBackend,
+    mut world: HeadlessWorld,
+    seed: u64,
+) -> GpuLiveBrainRuntime {
+    let asset =
+        FoundationWeightAsset::builtin_nano512_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    let manifest = asset.manifest();
+    let foundation = FoundationGeneticIdentity::new(
+        manifest.foundation_id().raw(),
+        manifest.foundation_version().raw() as u16,
+        manifest.compatibility_family_id().raw(),
+        BrainCapacityClass::N512_ID,
+    )
+    .unwrap();
+    for (organism_id, entity_id) in world.organism_entity_ids() {
+        let genome =
+            CreatureGenome::early_mammal_founder(seed ^ organism_id.raw(), foundation).unwrap();
+        let phenotype = genome.express().unwrap();
+        let biology = BiochemistryState::new(&phenotype, Tick::ZERO).unwrap();
+        world
+            .register_organism_record(
+                WorldOrganismRecord::new(
+                    organism_id,
+                    entity_id,
+                    genome,
+                    phenotype,
+                    biology,
+                    Tick::ZERO,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+    }
+    GpuLiveBrainRuntime::new(backend, world, seed, BrainScaleTier::Nano512).unwrap()
+}
 
 #[test]
 fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
@@ -20,12 +59,12 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 0.8)
         .build()
         .unwrap();
-    let mut runtime =
-        GpuLiveBrainRuntime::new(backend, world, 9_301, BrainScaleTier::Nano512).unwrap();
+    let mut runtime = registered_runtime(backend, world, 9_301);
 
     let summaries = runtime.tick().unwrap();
     let summary = &summaries[0];
     let patch = &runtime.sealed_patches()[0];
+    let learning = runtime.last_learning_receipts()[0];
     let recall = &runtime.last_memory_recall_receipts()[0];
     let update = runtime.last_memory_update_receipts()[0];
     let topology = runtime.last_topology_observations()[0]
@@ -35,16 +74,14 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
     assert_eq!(recall.organism_id_raw, 1);
     assert_eq!(recall.input_generation, 0);
     assert!(recall.runtime_approximate);
-    if recall.runtime_approximate {
-        assert!(recall.candidates.is_empty());
-        assert_eq!(recall.bank_digest, [1, 0, 0, 1]);
-    } else {
-        assert_eq!(usize::from(recall.candidate_count), recall.candidates.len());
-    }
+    assert!(recall.candidates.is_empty());
+    assert_eq!(recall.bank_digest, [1, 0, 0, 1]);
     assert_eq!(update.organism_id_raw, 1);
     assert_eq!(update.sealed_sequence_id, patch.header().sequence_id);
     assert_eq!(update.input_generation, recall.input_generation);
     assert_eq!(update.output_generation, recall.input_generation + 1);
+    assert_eq!(summary.learning_updates, 1);
+    assert_eq!(learning.sequence_id, patch.header().sequence_id);
     assert_eq!(summary.memory_updates, 1);
     assert_eq!(summary.topology_updates, 1);
     assert_eq!(topology.sealed_sequence_id, patch.header().sequence_id);
@@ -66,6 +103,10 @@ fn live_loop_recalls_before_gpu_selection_and_observes_after_learning() {
         ]
     );
 
+    let telemetry = runtime.authority_telemetry();
+    assert_eq!(telemetry.learning_updates, 1);
+    assert_eq!(telemetry.last_learning_delta, learning.max_abs_delta);
+
     runtime.tick().unwrap();
     assert_eq!(runtime.last_memory_recall_receipts()[0].input_generation, 1);
 }
@@ -81,8 +122,7 @@ fn memory_sidecars_are_isolated_by_organism_not_gpu_handle() {
         .food("food", Vec3f::ZERO, 1.0)
         .build()
         .unwrap();
-    let mut runtime =
-        GpuLiveBrainRuntime::new(backend, world, 9_302, BrainScaleTier::Nano512).unwrap();
+    let mut runtime = registered_runtime(backend, world, 9_302);
 
     let summaries = runtime.tick().unwrap();
     assert_eq!(summaries.len(), 2);
@@ -117,7 +157,6 @@ fn memory_sidecars_are_isolated_by_organism_not_gpu_handle() {
     }));
 }
 
-#[cfg(feature = "gpu-tests")]
 #[test]
 fn one_memory_preparation_rejection_does_not_abort_an_unrelated_organism() {
     let backend =
@@ -129,8 +168,7 @@ fn one_memory_preparation_rejection_does_not_abort_an_unrelated_organism() {
         .food("food", Vec3f::ZERO, 1.0)
         .build()
         .unwrap();
-    let mut runtime =
-        GpuLiveBrainRuntime::new(backend, world, 9_303, BrainScaleTier::Nano512).unwrap();
+    let mut runtime = registered_runtime(backend, world, 9_303);
     runtime.force_memory_preparation_failure_for_test(OrganismId(1));
 
     let summaries = runtime.tick().unwrap();
@@ -156,7 +194,6 @@ fn one_memory_preparation_rejection_does_not_abort_an_unrelated_organism() {
     assert_eq!(runtime.last_memory_preparation_errors()[0].0, OrganismId(1));
 }
 
-#[cfg(feature = "gpu-tests")]
 #[test]
 fn post_seal_learning_rejection_retains_credit_and_still_observes_memory_and_topology() {
     let backend =
@@ -168,8 +205,7 @@ fn post_seal_learning_rejection_retains_credit_and_still_observes_memory_and_top
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 1.0)
         .build()
         .unwrap();
-    let mut runtime =
-        GpuLiveBrainRuntime::new(backend, world, 9_304, BrainScaleTier::Nano512).unwrap();
+    let mut runtime = registered_runtime(backend, world, 9_304);
     runtime.force_learning_rejections_for_test(1);
 
     let first = runtime.tick().unwrap();
@@ -205,7 +241,6 @@ fn post_seal_learning_rejection_retains_credit_and_still_observes_memory_and_top
     assert_eq!(runtime.last_learning_receipts().len(), 2);
 }
 
-#[cfg(feature = "gpu-tests")]
 #[test]
 fn three_failed_retries_force_recovery_sleep_without_a_second_dispatch() {
     let backend =
@@ -217,8 +252,7 @@ fn three_failed_retries_force_recovery_sleep_without_a_second_dispatch() {
         .food("food", Vec3f::new(1.0, 0.0, 0.0), 1.0)
         .build()
         .unwrap();
-    let mut runtime =
-        GpuLiveBrainRuntime::new(backend, world, 9_305, BrainScaleTier::Nano512).unwrap();
+    let mut runtime = registered_runtime(backend, world, 9_305);
     runtime.force_learning_rejections_for_test(5);
 
     runtime.tick().unwrap();

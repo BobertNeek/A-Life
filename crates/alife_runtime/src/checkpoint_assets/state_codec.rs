@@ -129,12 +129,12 @@ pub fn current_backend_provenance(
 }
 
 fn portable_activity_checkpoint_from_snapshot(
-    snapshot: GpuActivityRuntimeSnapshot,
-) -> Result<(GpuActivityRuntimeSnapshot, Vec<PortableThrottleCheckpoint>), GameAppShellError> {
+    snapshot: &GpuActivityRuntimeSnapshot,
+) -> Result<Vec<PortableThrottleCheckpoint>, GameAppShellError> {
     let records = match (
         snapshot.pressure,
-        snapshot.throttle.clone(),
-        snapshot.work.clone(),
+        snapshot.throttle.as_ref(),
+        snapshot.work.as_ref(),
     ) {
         (Some(pressure), Some(throttle), Some(work)) => {
             if snapshot.next_sequence_cursor != pressure.sequence_cursor.checked_add(1).unwrap_or(0)
@@ -159,7 +159,7 @@ fn portable_activity_checkpoint_from_snapshot(
                 brain_atp_fraction_q16: pressure.brain_atp_fraction_q16,
                 level: throttle.level,
                 microsteps: throttle.microsteps,
-                enabled_route_ids: throttle.enabled_route_ids,
+                enabled_route_ids: throttle.enabled_route_ids.clone(),
                 route_schedule_digest: throttle.route_schedule_digest,
                 work: work.counters,
                 neural_cost_q24: work.neural_cost_q24,
@@ -174,7 +174,7 @@ fn portable_activity_checkpoint_from_snapshot(
         (None, None, None) if snapshot.next_sequence_cursor == 1 => Vec::new(),
         _ => return Err(ScaffoldContractError::BrainActivitySequenceMismatch.into()),
     };
-    Ok((snapshot, records))
+    Ok(records)
 }
 
 fn activity_restore_record(
@@ -442,8 +442,7 @@ impl GpuCheckpointAssetStore {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         }
 
-        let (activity, throttle_sequence) =
-            portable_activity_checkpoint_from_snapshot(activity.clone())?;
+        let throttle_sequence = portable_activity_checkpoint_from_snapshot(activity)?;
         let (saved_throttle_sequence, _): (Vec<PortableThrottleCheckpoint>, Vec<u8>) =
             self.read_json(manifest, &source.throttle_replay.sequence_asset)?;
         if saved_throttle_sequence != throttle_sequence
@@ -772,7 +771,7 @@ impl GpuCheckpointAssetStore {
             }
         };
         let checkpoint_digest = snapshot.canonical_digest();
-        let parts = snapshot.into_parts();
+        let mut parts = snapshot.into_parts();
         let pending_checkpoint = parts
             .pending_eligibility
             .map(pending_checkpoint_from_parts)
@@ -833,22 +832,22 @@ impl GpuCheckpointAssetStore {
         let synapse_count = live_topology.total_synapse_count;
         let recurrent_count = live_topology.recurrent_synapse_count;
         let decoder_count = live_topology.decoder_synapse_count;
-        let activation = activation_asset(&parts, neuron_count)?;
-        let homeostasis = homeostasis_asset(&parts, neuron_count)?;
+        let activation = activation_asset(&mut parts, neuron_count)?;
+        let homeostasis = homeostasis_asset(&mut parts, neuron_count)?;
         let lifetime = weight_asset(
-            &parts,
+            &mut parts,
             phenotype.phenotype_hash(),
             synapse_count,
             GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
         )?;
         let fast = weight_asset(
-            &parts,
+            &mut parts,
             phenotype.phenotype_hash(),
             synapse_count,
             GPU_BRAIN_WEIGHT_LAYER_FAST,
         )?;
         let eligibility = eligibility_asset(
-            &parts,
+            &mut parts,
             phenotype.phenotype_hash(),
             recurrent_count,
             decoder_count,
@@ -860,9 +859,9 @@ impl GpuCheckpointAssetStore {
             parts.replay_journal_cursor,
             parts.replay_journal_event_count,
             &PhysicalReplayParts {
-                events: parts.replay_events.clone(),
-                spans: parts.replay_spans.clone(),
-                samples: parts.replay_samples.clone(),
+                events: parts.replay_events,
+                spans: parts.replay_spans,
+                samples: parts.replay_samples,
             },
         )?;
         let replay = PortableRuntimeReplayStateV1 {
@@ -984,8 +983,7 @@ impl GpuCheckpointAssetStore {
                     )
                 }
             };
-        let (activity_snapshot, throttle_sequence) =
-            portable_activity_checkpoint_from_snapshot(activity_snapshot)?;
+        let throttle_sequence = portable_activity_checkpoint_from_snapshot(&activity_snapshot)?;
         let (throttle_sequence_asset, entry) =
             self.write_json("throttle-sequence", &throttle_sequence)?;
         entries.push(entry);
@@ -1331,7 +1329,7 @@ impl GpuCheckpointAssetStore {
             pending_eligibility: pending,
         })?;
         let request = GpuBrainRestoreRequest::try_new(checkpoint)?;
-        let receipt = match live_topology.clone() {
+        let receipt = match live_topology {
             Some(topology) => backend.restore_brain_with_live_topology(
                 state.organism_id,
                 phenotype.clone(),
@@ -1462,51 +1460,13 @@ impl GpuCheckpointAssetStore {
             }
             let staging = backend.snapshot_completed_sleep_staging(handle, &request, &staged)?;
             let staging = staging.into_parts();
-            let synapse_count = live_topology.total_synapse_count;
-            let recurrent_count = live_topology.recurrent_synapse_count;
-            let decoder_count = live_topology.decoder_synapse_count;
-            let lifetime = staged_weight_asset(
-                &staging,
-                phenotype.phenotype_hash(),
-                synapse_count,
-                GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+            self.write_completed_sleep_assets(
+                staging,
+                phenotype,
+                live_topology,
+                &mut assets,
+                entries,
             )?;
-            let fast = staged_weight_asset(
-                &staging,
-                phenotype.phenotype_hash(),
-                synapse_count,
-                GPU_BRAIN_WEIGHT_LAYER_FAST,
-            )?;
-            let eligibility = staged_eligibility_asset(
-                &staging,
-                phenotype.phenotype_hash(),
-                recurrent_count,
-                decoder_count,
-            )?;
-            let journal = encode_portable_replay(
-                phenotype.phenotype_hash(),
-                phenotype.replay_capture_plan().canonical_digest(),
-                staging.replay_journal_generation,
-                staging.replay_journal_cursor,
-                staging.replay_journal_event_count,
-                &PhysicalReplayParts {
-                    events: staging.replay_events,
-                    spans: staging.replay_spans,
-                    samples: staging.replay_samples,
-                },
-            )?;
-            let (asset, entry) = self.write_json("lifetime-staging", &lifetime)?;
-            assets.lifetime_staging = Some(asset);
-            entries.push(entry);
-            let (asset, entry) = self.write_json("fast-staging", &fast)?;
-            assets.fast_staging = Some(asset);
-            entries.push(entry);
-            let (asset, entry) = self.write_json("eligibility-staging", &eligibility)?;
-            assets.eligibility_staging = Some(asset);
-            entries.push(entry);
-            let (asset, entry) = self.write_json("replay-staging", &journal)?;
-            assets.replay_journal_staging = Some(asset);
-            entries.push(entry);
         }
         Ok(assets)
     }
@@ -1553,50 +1513,68 @@ impl GpuCheckpointAssetStore {
                 &staged,
             )?
             .into_parts();
-            let lifetime = staged_weight_asset(
-                &staging,
-                phenotype.phenotype_hash(),
-                live_topology.total_synapse_count,
-                GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+            self.write_completed_sleep_assets(
+                staging,
+                phenotype,
+                live_topology,
+                &mut assets,
+                entries,
             )?;
-            let fast = staged_weight_asset(
-                &staging,
-                phenotype.phenotype_hash(),
-                live_topology.total_synapse_count,
-                GPU_BRAIN_WEIGHT_LAYER_FAST,
-            )?;
-            let eligibility = staged_eligibility_asset(
-                &staging,
-                phenotype.phenotype_hash(),
-                live_topology.recurrent_synapse_count,
-                live_topology.decoder_synapse_count,
-            )?;
-            let journal = encode_portable_replay(
-                phenotype.phenotype_hash(),
-                phenotype.replay_capture_plan().canonical_digest(),
-                staging.replay_journal_generation,
-                staging.replay_journal_cursor,
-                staging.replay_journal_event_count,
-                &PhysicalReplayParts {
-                    events: staging.replay_events,
-                    spans: staging.replay_spans,
-                    samples: staging.replay_samples,
-                },
-            )?;
-            let (asset, entry) = self.write_json("lifetime-staging", &lifetime)?;
-            assets.lifetime_staging = Some(asset);
-            entries.push(entry);
-            let (asset, entry) = self.write_json("fast-staging", &fast)?;
-            assets.fast_staging = Some(asset);
-            entries.push(entry);
-            let (asset, entry) = self.write_json("eligibility-staging", &eligibility)?;
-            assets.eligibility_staging = Some(asset);
-            entries.push(entry);
-            let (asset, entry) = self.write_json("replay-staging", &journal)?;
-            assets.replay_journal_staging = Some(asset);
-            entries.push(entry);
         }
         Ok(assets)
+    }
+
+    fn write_completed_sleep_assets(
+        &self,
+        mut staging: GpuCompletedSleepStagingInputParts,
+        phenotype: &BrainPhenotype,
+        live_topology: &GpuLiveTopologyCheckpointV1,
+        assets: &mut GpuSleepAssetState,
+        entries: &mut Vec<AssetManifestEntry>,
+    ) -> Result<(), GameAppShellError> {
+        let lifetime = staged_weight_asset(
+            &mut staging,
+            phenotype.phenotype_hash(),
+            live_topology.total_synapse_count,
+            GPU_BRAIN_WEIGHT_LAYER_LIFETIME,
+        )?;
+        let fast = staged_weight_asset(
+            &mut staging,
+            phenotype.phenotype_hash(),
+            live_topology.total_synapse_count,
+            GPU_BRAIN_WEIGHT_LAYER_FAST,
+        )?;
+        let eligibility = staged_eligibility_asset(
+            &mut staging,
+            phenotype.phenotype_hash(),
+            live_topology.recurrent_synapse_count,
+            live_topology.decoder_synapse_count,
+        )?;
+        let journal = encode_portable_replay(
+            phenotype.phenotype_hash(),
+            phenotype.replay_capture_plan().canonical_digest(),
+            staging.replay_journal_generation,
+            staging.replay_journal_cursor,
+            staging.replay_journal_event_count,
+            &PhysicalReplayParts {
+                events: staging.replay_events,
+                spans: staging.replay_spans,
+                samples: staging.replay_samples,
+            },
+        )?;
+        let (asset, entry) = self.write_json("lifetime-staging", &lifetime)?;
+        assets.lifetime_staging = Some(asset);
+        entries.push(entry);
+        let (asset, entry) = self.write_json("fast-staging", &fast)?;
+        assets.fast_staging = Some(asset);
+        entries.push(entry);
+        let (asset, entry) = self.write_json("eligibility-staging", &eligibility)?;
+        assets.eligibility_staging = Some(asset);
+        entries.push(entry);
+        let (asset, entry) = self.write_json("replay-staging", &journal)?;
+        assets.replay_journal_staging = Some(asset);
+        entries.push(entry);
+        Ok(())
     }
 
     #[expect(
@@ -1724,7 +1702,7 @@ fn cleanup_failed_restore(
 }
 
 fn activation_asset(
-    parts: &GpuBrainCheckpointParts,
+    parts: &mut GpuBrainCheckpointParts,
     neuron_count: u32,
 ) -> Result<PortableActivationBanksV1, ScaffoldContractError> {
     let mut asset = PortableActivationBanksV1 {
@@ -1733,8 +1711,8 @@ fn activation_asset(
         neuron_count,
         active_side: parts.active_activation_side,
         logical_dispatch_generation: parts.logical_dispatch_generation,
-        activation_a_bits: parts.activation_a_bits.clone(),
-        activation_b_bits: parts.activation_b_bits.clone(),
+        activation_a_bits: std::mem::take(&mut parts.activation_a_bits),
+        activation_b_bits: std::mem::take(&mut parts.activation_b_bits),
         canonical_digest: [0; 4],
     };
     asset.canonical_digest = asset.recompute_canonical_digest()?;
@@ -1788,7 +1766,7 @@ fn validate_memory_assets(
 }
 
 fn homeostasis_asset(
-    parts: &GpuBrainCheckpointParts,
+    parts: &mut GpuBrainCheckpointParts,
     neuron_count: u32,
 ) -> Result<PortableNeuronHomeostasisV1, ScaffoldContractError> {
     let mut asset = PortableNeuronHomeostasisV1 {
@@ -1796,7 +1774,7 @@ fn homeostasis_asset(
         phenotype_hash: parts.phenotype_hash,
         neuron_count,
         lanes_per_neuron: GPU_BRAIN_HOMEOSTASIS_LANES_PER_NEURON,
-        value_bits: parts.neuron_homeostasis_bits.clone(),
+        value_bits: std::mem::take(&mut parts.neuron_homeostasis_bits),
         canonical_digest: [0; 4],
     };
     asset.canonical_digest = asset.recompute_canonical_digest()?;
@@ -1805,19 +1783,19 @@ fn homeostasis_asset(
 }
 
 fn weight_asset(
-    parts: &GpuBrainCheckpointParts,
+    parts: &mut GpuBrainCheckpointParts,
     phenotype_hash: alife_core::PhenotypeHash,
     synapse_count: u32,
     layer_raw: u16,
 ) -> Result<PortableDualWeightBankV1, ScaffoldContractError> {
     let (bank_0_bits, bank_1_bits) = match layer_raw {
         GPU_BRAIN_WEIGHT_LAYER_LIFETIME => (
-            parts.lifetime_bank_0_bits.clone(),
-            parts.lifetime_bank_1_bits.clone(),
+            std::mem::take(&mut parts.lifetime_bank_0_bits),
+            std::mem::take(&mut parts.lifetime_bank_1_bits),
         ),
         GPU_BRAIN_WEIGHT_LAYER_FAST => (
-            parts.fast_bank_0_bits.clone(),
-            parts.fast_bank_1_bits.clone(),
+            std::mem::take(&mut parts.fast_bank_0_bits),
+            std::mem::take(&mut parts.fast_bank_1_bits),
         ),
         _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch),
     };
@@ -1833,19 +1811,19 @@ fn weight_asset(
 }
 
 fn staged_weight_asset(
-    parts: &GpuCompletedSleepStagingInputParts,
+    parts: &mut GpuCompletedSleepStagingInputParts,
     phenotype_hash: alife_core::PhenotypeHash,
     synapse_count: u32,
     layer_raw: u16,
 ) -> Result<PortableDualWeightBankV1, ScaffoldContractError> {
     let (bank_0_bits, bank_1_bits) = match layer_raw {
         GPU_BRAIN_WEIGHT_LAYER_LIFETIME => (
-            parts.lifetime_bank_0_bits.clone(),
-            parts.lifetime_bank_1_bits.clone(),
+            std::mem::take(&mut parts.lifetime_bank_0_bits),
+            std::mem::take(&mut parts.lifetime_bank_1_bits),
         ),
         GPU_BRAIN_WEIGHT_LAYER_FAST => (
-            parts.fast_bank_0_bits.clone(),
-            parts.fast_bank_1_bits.clone(),
+            std::mem::take(&mut parts.fast_bank_0_bits),
+            std::mem::take(&mut parts.fast_bank_1_bits),
         ),
         _ => return Err(ScaffoldContractError::ConsolidationGenerationMismatch),
     };
@@ -1887,7 +1865,7 @@ fn make_weight_asset(
 }
 
 fn eligibility_asset(
-    parts: &GpuBrainCheckpointParts,
+    parts: &mut GpuBrainCheckpointParts,
     phenotype_hash: alife_core::PhenotypeHash,
     recurrent_count: u32,
     decoder_count: u32,
@@ -1899,15 +1877,15 @@ fn eligibility_asset(
         parts.active_eligibility_generation,
         parts.inactive_eligibility_generation,
         parts.active_eligibility_bank,
-        parts.recurrent_eligibility_bank_0_bits.clone(),
-        parts.recurrent_eligibility_bank_1_bits.clone(),
-        parts.decoder_eligibility_bank_0_bits.clone(),
-        parts.decoder_eligibility_bank_1_bits.clone(),
+        std::mem::take(&mut parts.recurrent_eligibility_bank_0_bits),
+        std::mem::take(&mut parts.recurrent_eligibility_bank_1_bits),
+        std::mem::take(&mut parts.decoder_eligibility_bank_0_bits),
+        std::mem::take(&mut parts.decoder_eligibility_bank_1_bits),
     )
 }
 
 fn staged_eligibility_asset(
-    parts: &GpuCompletedSleepStagingInputParts,
+    parts: &mut GpuCompletedSleepStagingInputParts,
     phenotype_hash: alife_core::PhenotypeHash,
     recurrent_count: u32,
     decoder_count: u32,
@@ -1919,10 +1897,10 @@ fn staged_eligibility_asset(
         parts.eligibility_reset_generation,
         0,
         parts.output_eligibility_bank,
-        parts.recurrent_eligibility_bank_0_bits.clone(),
-        parts.recurrent_eligibility_bank_1_bits.clone(),
-        parts.decoder_eligibility_bank_0_bits.clone(),
-        parts.decoder_eligibility_bank_1_bits.clone(),
+        std::mem::take(&mut parts.recurrent_eligibility_bank_0_bits),
+        std::mem::take(&mut parts.recurrent_eligibility_bank_1_bits),
+        std::mem::take(&mut parts.decoder_eligibility_bank_0_bits),
+        std::mem::take(&mut parts.decoder_eligibility_bank_1_bits),
     )
 }
 

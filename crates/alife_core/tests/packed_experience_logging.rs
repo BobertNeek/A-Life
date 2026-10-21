@@ -6,15 +6,15 @@ use alife_core::{
     ExperiencePatch, ExperiencePatchBuilder, ExperienceSequenceId, GaussianClusterId,
     GaussianContextRef, GaussianSalienceEntry, HeardToken, HomeostaticDelta, HomeostaticSnapshot,
     InMemoryPackedExperienceLog, Intensity, LobeKind, MemoryId, MotorPayloadKind, MotorPayloadRef,
-    NormalizedScalar, OrganismId, PackedExperienceFrame, PackedExperienceRecord,
-    PackedExperienceSink, PackedLogEntryRef, PackedSideBufferKind, PackedSideBufferRecord,
-    PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, PostActionOutcome,
-    ScaffoldContractError, SchemaKind, SemanticContextRef, SemanticSalienceEntry, SensorProfile,
-    SensorProfileProvenance, SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence,
-    SocialAgentSnapshot, TeacherFeedbackObservation, TeacherLessonMetadata,
-    TeacherLessonResponseChannel, TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity,
-    VocalizedToken, WeightSplitContract, WorldEntityId, PACKED_EXPERIENCE_SCHEMA_VERSION,
-    PACKED_FLAG_HAS_GAUSSIAN_CONTEXT, PACKED_FLAG_HAS_SEMANTIC_CONTEXT, PACKED_FLAG_SUCCESS,
+    NormalizedScalar, OrganismId, PackedExperienceFrame, PackedExperienceSink, PackedLogEntryRef,
+    PackedSideBufferKind, PackedSideBufferRecord, PerceptionFrame, PhysicalActionOutcome,
+    PhysicalContactKind, PostActionOutcome, ScaffoldContractError, SchemaKind, SemanticContextRef,
+    SemanticSalienceEntry, SensorProfile, SensorProfileProvenance, SensoryAbiVersion,
+    SensoryChannels, SensorySnapshot, SignedValence, SocialAgentSnapshot,
+    TeacherFeedbackObservation, TeacherLessonMetadata, TeacherLessonResponseChannel,
+    TeacherPerceptionChannel, Tick, Validate, Vec3f, Velocity, VocalizedToken, WeightSplitContract,
+    WorldEntityId, PACKED_EXPERIENCE_SCHEMA_VERSION, PACKED_FLAG_HAS_GAUSSIAN_CONTEXT,
+    PACKED_FLAG_HAS_SEMANTIC_CONTEXT, PACKED_FLAG_SUCCESS,
 };
 
 fn organism() -> OrganismId {
@@ -397,23 +397,6 @@ fn packed_frame_rejects_unknown_sensor_profile_id() {
     assert_eq!(
         frame.validate_contract(),
         Err(ScaffoldContractError::SensorProfileMismatch)
-    );
-}
-
-#[test]
-fn packer_public_api_requires_sealed_experience_patch() {
-    fn accepts_only_sealed_patch(
-        _: fn(
-            &ExperiencePacker,
-            &ExperiencePatch,
-        ) -> Result<PackedExperienceRecord, ScaffoldContractError>,
-    ) {
-    }
-
-    accepts_only_sealed_patch(ExperiencePacker::pack);
-    assert_eq!(
-        ExperiencePatchBuilder::new(sequence()).seal(),
-        Err(ScaffoldContractError::MissingPhaseData)
     );
 }
 

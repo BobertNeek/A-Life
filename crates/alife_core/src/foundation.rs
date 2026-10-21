@@ -1,4 +1,4 @@
-//! Frozen foundation ABI and N2048 trainable layout contracts.
+//! Frozen foundation ABI and N2048 trainable layouts.
 
 use std::mem::size_of;
 
@@ -576,7 +576,7 @@ impl TrainingStageManifest {
     }
 }
 
-/// Auditable promotion state. Bootstrap assets are explicit and never masquerade as trained.
+/// Distinguishes bootstrap assets from assets with evaluation and provenance evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FoundationPromotionReceipt {
     schema_version: u16,
@@ -991,8 +991,7 @@ impl FoundationWeightAsset {
         )
     }
 
-    /// Builds a production foundation whose immutable weights have passed an
-    /// explicit evaluation and provenance gate.
+    /// Builds an immutable foundation bound to evaluation and provenance evidence.
     pub fn from_promoted_weights(
         phenotype: &BrainPhenotype,
         weights: Vec<f32>,
@@ -1337,9 +1336,6 @@ impl FoundationAbiBinding {
             {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
-        }
-        if self.schema_version != 1 {
-            return Err(ScaffoldContractError::PhenotypeCompile);
         }
         Ok(())
     }

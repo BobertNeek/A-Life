@@ -1,6 +1,5 @@
-//! Isolated lower-level WGSL test, not production backend acceptance. Execute
-//! the unchanged eligibility kernels and real plasticity evaluator on compiled
-//! arena layouts. The production physical-adapter admission rule is untouched.
+//! Isolated tests of production eligibility and plasticity kernels on compiled
+//! arena layouts. These tests permit software Vulkan adapters.
 use super::*;
 use alife_gpu_backend::{GpuClassBucketPlan, CLOSED_LOOP_ELIGIBILITY_WGSL};
 use wgpu::util::DeviceExt;

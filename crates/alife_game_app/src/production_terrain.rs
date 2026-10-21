@@ -1,4 +1,4 @@
-//! Display-only contracts shared by the production terrain presentation modules.
+//! Shared terrain presentation types.
 
 use std::collections::BTreeMap;
 
@@ -81,7 +81,6 @@ pub struct Fvr11ProductionTerrainLayer {
     pub material: Fvr03ProductionVoxelMaterialKind,
     pub source_tile_count: usize,
     pub display_only: bool,
-    pub no_renderer_authority_over_world_actions_or_cognition: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Resource)]
@@ -94,7 +93,6 @@ pub struct Fvr11ProductionTerrainSceneResource {
     pub water_layer_count: usize,
     pub confetti_detail_quad_count: usize,
     pub display_only: bool,
-    pub no_renderer_authority_over_world_actions_or_cognition: bool,
 }
 
 #[cfg(test)]

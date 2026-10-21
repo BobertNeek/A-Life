@@ -8,4 +8,4 @@ cd "${repo_root}"
 source "${script_dir}/rust_env.sh"
 ensure_cargo
 
-cargo test --workspace --all-targets
+cargo test --locked --workspace --all-targets

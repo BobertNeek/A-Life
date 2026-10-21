@@ -14,6 +14,13 @@ fn exact_population_capture_failure_error(
 }
 
 impl GpuLiveBrainRuntime {
+    fn fail_exact_population_checkpoint(&mut self) {
+        self.exact_checkpoint_coordinator.fail_stop();
+        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
+        self.backend
+            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+    }
+
     pub(super) fn poll_exact_population_checkpoint(&mut self) -> Result<(), GameAppShellError> {
         let work = std::mem::take(&mut self.exact_checkpoint_work);
         match work {
@@ -68,10 +75,7 @@ impl GpuLiveBrainRuntime {
                         Ok(())
                     }
                     GpuExactPopulationCapturePollV1::Failed(failure) => {
-                        self.exact_checkpoint_coordinator.fail_stop();
-                        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                        self.backend
-                            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                        self.fail_exact_population_checkpoint();
                         Err(exact_population_capture_failure_error(failure))
                     }
                     GpuExactPopulationCapturePollV1::Ready(capture) => {
@@ -79,21 +83,13 @@ impl GpuLiveBrainRuntime {
                             .exact_checkpoint_coordinator
                             .transition(ExactPopulationCheckpointStageV1::CpuBytesReady)
                         {
-                            self.exact_checkpoint_coordinator.fail_stop();
-                            self.exact_checkpoint_work =
-                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                            self.backend
-                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            self.fail_exact_population_checkpoint();
                             return Err(error.into());
                         }
                         let Some(active) =
                             self.exact_checkpoint_coordinator.active_identity().cloned()
                         else {
-                            self.exact_checkpoint_coordinator.fail_stop();
-                            self.exact_checkpoint_work =
-                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                            self.backend
-                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            self.fail_exact_population_checkpoint();
                             return Err(
                                 ScaffoldContractError::ConsolidationGenerationMismatch.into()
                             );
@@ -103,21 +99,13 @@ impl GpuLiveBrainRuntime {
                             || active.expected_base_digest != expected_base_digest
                             || capture.capture_transaction_generation() != transaction_id
                         {
-                            self.exact_checkpoint_coordinator.fail_stop();
-                            self.exact_checkpoint_work =
-                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                            self.backend
-                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            self.fail_exact_population_checkpoint();
                             return Err(
                                 ScaffoldContractError::ConsolidationGenerationMismatch.into()
                             );
                         }
                         let Some(durability) = self.checkpoint_durability.take() else {
-                            self.exact_checkpoint_coordinator.fail_stop();
-                            self.exact_checkpoint_work =
-                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                            self.backend
-                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            self.fail_exact_population_checkpoint();
                             return Err(ScaffoldContractError::MissingPhaseData.into());
                         };
                         if let Err(error) = self
@@ -125,11 +113,7 @@ impl GpuLiveBrainRuntime {
                             .transition(ExactPopulationCheckpointStageV1::Encoding)
                         {
                             self.checkpoint_durability = Some(durability);
-                            self.exact_checkpoint_coordinator.fail_stop();
-                            self.exact_checkpoint_work =
-                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                            self.backend
-                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            self.fail_exact_population_checkpoint();
                             return Err(error.into());
                         }
                         let capture_transaction_generation =
@@ -561,10 +545,7 @@ impl GpuLiveBrainRuntime {
                     return Ok(());
                 }
                 if join_handle.join().is_err() {
-                    self.exact_checkpoint_coordinator.fail_stop();
-                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                    self.backend
-                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    self.fail_exact_population_checkpoint();
                     return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
                 }
                 self.checkpoint_durability = Some(report.durability);
@@ -577,10 +558,7 @@ impl GpuLiveBrainRuntime {
                             message: error.to_string(),
                         };
                     }
-                    self.exact_checkpoint_coordinator.fail_stop();
-                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                    self.backend
-                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    self.fail_exact_population_checkpoint();
                     return Err(error);
                 }
                 if let Some(manual) = report.manual_completion {
@@ -618,11 +596,7 @@ impl GpuLiveBrainRuntime {
                             {
                                 continue;
                             }
-                            self.exact_checkpoint_coordinator.fail_stop();
-                            self.exact_checkpoint_work =
-                                ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                            self.backend
-                                .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                            self.fail_exact_population_checkpoint();
                             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
                         };
                         let authority =
@@ -630,12 +604,7 @@ impl GpuLiveBrainRuntime {
                             {
                                 Ok(authority) => authority,
                                 Err(error) => {
-                                    self.exact_checkpoint_coordinator.fail_stop();
-                                    self.exact_checkpoint_work =
-                                        ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                                    self.backend.fail_stop(
-                                        GpuSessionFailStopCause::CheckpointRestoreFailed,
-                                    );
+                                    self.fail_exact_population_checkpoint();
                                     return Err(error.into());
                                 }
                             };
@@ -668,19 +637,13 @@ impl GpuLiveBrainRuntime {
                     .exact_checkpoint_coordinator
                     .transition(ExactPopulationCheckpointStageV1::Complete)
                 {
-                    self.exact_checkpoint_coordinator.fail_stop();
-                    self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                    self.backend
-                        .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                    self.fail_exact_population_checkpoint();
                     return Err(error.into());
                 }
                 let follow_up = match self.exact_checkpoint_coordinator.finish() {
                     Ok(follow_up) => follow_up,
                     Err(error) => {
-                        self.exact_checkpoint_coordinator.fail_stop();
-                        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                        self.backend
-                            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                        self.fail_exact_population_checkpoint();
                         return Err(error.into());
                     }
                 };
@@ -705,10 +668,7 @@ impl GpuLiveBrainRuntime {
                 }
                 if follow_up {
                     if let Err(error) = self.request_exact_population_checkpoint() {
-                        self.exact_checkpoint_coordinator.fail_stop();
-                        self.exact_checkpoint_work = ExactPopulationCheckpointRuntimeWorkV1::Failed;
-                        self.backend
-                            .fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
+                        self.fail_exact_population_checkpoint();
                         return Err(error);
                     }
                 }

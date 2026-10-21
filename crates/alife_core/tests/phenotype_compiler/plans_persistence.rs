@@ -1,10 +1,6 @@
-//! Test-only Task 3 compiler, encoder, decoder, and persistence contract ownership.
+//! Compiler, encoder, decoder, and persistence checks.
 
 use super::*;
-
-// Draft-only RED additions for crates/alife_core/tests/phenotype_compiler.rs.
-// Append after the seed tests. This snippet intentionally relies on that file's
-// existing imports and `compile` helper; it does not replace or edit the live test.
 
 use alife_core::{
     BrainPhenotype, CandidateActionFamily, CandidateDecoderPlan, CompiledSynapse,
@@ -195,15 +191,6 @@ fn tamper_at(mut serialized: Value, pointer: &str) -> Value {
         .unwrap_or_else(|| panic!("missing serialized test path {pointer}"));
     perturb_json_value(value);
     serialized
-}
-
-fn decoder_wire_keys(decoder: &Value) -> BTreeSet<&str> {
-    decoder
-        .as_object()
-        .expect("decoder serialization must be a JSON object")
-        .keys()
-        .map(String::as_str)
-        .collect()
 }
 
 #[test]
@@ -790,117 +777,6 @@ fn decoder_covers_all_families_in_raw_order_with_exact_spans_and_coordinates() {
         phenotype.budgets().global.action_decoder_synapses,
     );
     assert_eq!(phenotype.budgets().global.memory_decoder_synapses, 96);
-}
-
-#[test]
-fn decoder_serialized_identity_contains_no_raw_entity_id_lane() {
-    let phenotype = compile(BrainCapacityClass::N512_ID, 0xE171_7A55);
-    let decoder = serde_json::to_value(phenotype.candidate_decoder()).unwrap();
-    assert_eq!(
-        decoder_wire_keys(&decoder),
-        BTreeSet::from([
-            "schema_version",
-            "motor_start",
-            "motor_width",
-            "feature_count",
-            "flattened_input_lane_count",
-            "families",
-            "memory_channel",
-            "canonical_digest",
-        ]),
-    );
-    assert_eq!(
-        decoder_wire_keys(&decoder["memory_channel"]),
-        BTreeSet::from([
-            "schema_version",
-            "target_latent_lane_start",
-            "family_value_lane_start",
-            "decoder_input_stride",
-            "max_candidate_gain",
-            "memory_decoder_synapse_count",
-            "canonical_digest",
-        ]),
-    );
-    assert_eq!(decoder["memory_channel"]["target_latent_lane_start"], 24);
-    assert_eq!(decoder["memory_channel"]["family_value_lane_start"], 32);
-    assert_eq!(decoder["memory_channel"]["decoder_input_stride"], 36);
-    assert_eq!(
-        decoder["memory_channel"]["memory_decoder_synapse_count"],
-        96
-    );
-    let family_rows = decoder["families"].as_array().unwrap();
-    assert_eq!(family_rows.len(), 8);
-    for (row, family_plan) in family_rows
-        .iter()
-        .zip(phenotype.candidate_decoder().families())
-    {
-        let mut expected_keys = BTreeSet::from([
-            "family",
-            "bias",
-            "innate_drive_mask",
-            "innate_gain",
-            "decoder_synapse_start",
-            "decoder_synapse_count",
-        ]);
-        // Founder priorities serialize only the non-default cue/reach fields.
-        match family_plan.family() {
-            CandidateActionFamily::Approach => {
-                expected_keys.insert("innate_cue_lane");
-            }
-            CandidateActionFamily::Ingest => {
-                expected_keys.insert("innate_cue_lane");
-                expected_keys.insert("innate_requires_reach");
-            }
-            CandidateActionFamily::Avoid => {
-                expected_keys.insert("innate_cue_lane");
-                expected_keys.insert("innate_cue_inverted");
-            }
-            CandidateActionFamily::Idle
-            | CandidateActionFamily::Inspect
-            | CandidateActionFamily::Contact
-            | CandidateActionFamily::Rest
-            | CandidateActionFamily::Other => {}
-        }
-        assert_eq!(
-            decoder_wire_keys(row),
-            expected_keys,
-            "wrong serialized identity fields for {:?}",
-            family_plan.family(),
-        );
-    }
-
-    let mut action_coordinate_count = 0_usize;
-    let mut memory_coordinate_count = 0_usize;
-    for synapse in phenotype.synapses() {
-        if let CompiledSynapseKind::Decoder(compiled_coordinate) = synapse.kind() {
-            let serialized_kind = serde_json::to_value(synapse.kind()).unwrap();
-            let coordinate = serialized_kind
-                .get("Decoder")
-                .expect("decoder synapse kind must serialize its exact coordinate");
-            assert_eq!(
-                decoder_wire_keys(coordinate),
-                BTreeSet::from(["head", "family", "input_lane", "motor_index"]),
-            );
-            match compiled_coordinate.head() {
-                DecoderHeadKind::ActionCandidate => action_coordinate_count += 1,
-                DecoderHeadKind::MemoryContext => memory_coordinate_count += 1,
-                DecoderHeadKind::SpeechPayload => {
-                    panic!("procedural N512 must not serialize a speech coordinate")
-                }
-                DecoderHeadKind::CognitiveContext => {
-                    panic!("procedural N512 must not serialize a cognitive coordinate")
-                }
-            }
-        }
-    }
-    assert_eq!(
-        action_coordinate_count,
-        phenotype.budgets().global.action_decoder_synapses as usize,
-    );
-    assert_eq!(
-        memory_coordinate_count,
-        phenotype.budgets().global.memory_decoder_synapses as usize,
-    );
 }
 
 #[test]

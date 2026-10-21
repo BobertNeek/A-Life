@@ -1,8 +1,8 @@
 //! Typed canonical encoders for Slice A evidence identities.
 
 use alife_core::{
-    synapse_payload_evidence_digest, BrainGenome, BrainPhenotype, CanonicalDigestBuilder,
-    DevelopmentState, PhenotypeHash, PolicyBackend, Tick,
+    BrainGenome, BrainPhenotype, CanonicalDigestBuilder, DevelopmentState, PhenotypeHash,
+    PolicyBackend, Tick,
 };
 use alife_gpu_backend::GpuHardwareReceipt;
 
@@ -16,12 +16,6 @@ use super::{
 
 pub(super) fn new_artifact_digest() -> CanonicalDigestBuilder {
     CanonicalDigestBuilder::new(ARTIFACT_DOMAIN)
-}
-
-pub(super) fn synapse_payload_digest(
-    phenotype: &BrainPhenotype,
-) -> Result<[u64; 4], GpuEvidenceError> {
-    Ok(synapse_payload_evidence_digest(phenotype)?)
 }
 
 pub(super) fn adapter_identity_digest(hardware: &GpuHardwareReceipt) -> [u64; 4] {

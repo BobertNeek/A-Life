@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$ProductionFeatures = "bevy-app gpu-runtime production-assets vfx-hanabi"
+$ProductionFeatures = "production-voxel-frontend"
 
 function Resolve-InWorkspacePath {
     param([string]$Path)
@@ -101,49 +101,12 @@ function Copy-PackageFile {
     Copy-Item -LiteralPath $Source -Destination $Destination -Force
 }
 
-function Copy-PackageDirectory {
-    param(
-        [string]$RelativePath,
-        [string]$DestinationRoot
-    )
-    $Source = Join-Path $Root $RelativePath
-    if (-not (Test-Path -LiteralPath $Source -PathType Container)) {
-        throw "Required package directory is missing: $RelativePath"
-    }
-    $Destination = Join-Path $DestinationRoot $RelativePath
-    $Parent = Split-Path -Parent $Destination
-    New-Item -ItemType Directory -Force -Path $Parent | Out-Null
-    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    foreach ($Child in Get-ChildItem -LiteralPath $Source -Force) {
-        Copy-Item -LiteralPath $Child.FullName -Destination $Destination -Recurse -Force
-    }
-}
-
-function Write-ProductionOnlyEnvironmentManifest {
-    param([string]$DestinationRoot)
-
-    $EnvironmentPath = Join-Path $DestinationRoot "crates/alife_game_app/environment_manifest.json"
-    $Environment = Get-Content -Raw -LiteralPath $EnvironmentPath | ConvertFrom-Json
-    $ProductionScenarios = @(
-        $Environment.scenarios | Where-Object { $_.id -eq "production-voxel" }
-    )
-    if ($ProductionScenarios.Count -ne 1) {
-        throw "Packaged environment manifest must contain exactly one production-voxel scenario."
-    }
-    $Environment.default_scenario_id = "production-voxel"
-    $Environment.scenarios = $ProductionScenarios
-    $Json = $Environment | ConvertTo-Json -Depth 8
-    $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($EnvironmentPath, $Json + [Environment]::NewLine, $Utf8NoBom)
-}
-
 Assert-PackageName $PackageName
 $PackageRoot = Assert-TargetArtifactPath (Join-Path $OutputRoot $PackageName)
 $ZipPath = Assert-TargetArtifactPath ((Join-Path $OutputRoot "$PackageName.zip"))
 $ReleaseExe = Join-Path $Root "target/release/alife_game_app.exe"
 $PackageExe = Join-Path $PackageRoot "alife_game_app.exe"
 $PackageRunScript = Join-Path $PackageRoot "run_windows_production_voxel_package.ps1"
-$CopiedSourceLauncher = Join-Path $PackageRoot "scripts/run_production_voxel_frontend.ps1"
 $PackageManifest = Join-Path $PackageRoot "crates/alife_game_app/environment_manifest.json"
 $PackageCrashSummary = Join-Path $PackageRoot "diagnostics/fvr08_acceptance/crash_summary.md"
 
@@ -159,24 +122,40 @@ $BuildCommand = @(
     "--release"
 )
 
-$CopyFiles = @(
-    "LICENSE",
-    "scripts/run_production_voxel_frontend.ps1",
-    "crates/alife_game_app/environment_manifest.json",
-    "crates/alife_game_app/app_bundle_manifest.json",
-    "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json",
-    "crates/alife_world/tests/fixtures/production_voxel/tiny_config.json",
-    "crates/alife_world/tests/fixtures/production_voxel/tiny_asset_manifest.json",
-    "crates/alife_world/tests/fixtures/production_voxel/tiny_save.json",
-    "crates/alife_world/tests/fixtures/production_voxel/assets/tiny_generated_weights_ref.json"
-)
+$ProductionManifestPath = "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
+$ProductionManifest = Get-Content -Raw -LiteralPath (Join-Path $Root $ProductionManifestPath) | ConvertFrom-Json
+$BundleManifestPath = "crates/alife_game_app/app_bundle_manifest.json"
+$BundleManifest = Get-Content -Raw -LiteralPath (Join-Path $Root $BundleManifestPath) | ConvertFrom-Json
 
-$CopyDirectories = @(
-    "crates/alife_game_app/assets/production_voxel_v1",
-    "crates/alife_game_app/assets/creatures",
-    "crates/alife_game_app/assets/landscape",
-    "crates/alife_gpu_backend/shaders"
-)
+# Copy the files the runtime uses, including registered assets and license notices.
+# Editable sources and old map exports stay in the repository, outside the game package.
+$CopyFiles = @(
+    "LICENSE"
+    "crates/alife_game_app/environment_manifest.json"
+    $BundleManifestPath
+    $ProductionManifestPath
+    "crates/alife_game_app/assets/production_voxel_v1/models/ATTRIBUTION.md"
+    "crates/alife_game_app/assets/production_voxel_v1/models/GENEFORGE_LICENSE_RECEIPT.md"
+    foreach ($Entry in $ProductionManifest.entries) {
+        $Entry.local_path
+        $Entry.license_ref
+    }
+    foreach ($Entry in $BundleManifest.entries) {
+        if (-not $Entry.required) { continue }
+        $Entry.relative_path
+        if ($Entry.kind -eq "asset-manifest") {
+            $Assets = Get-Content -Raw -LiteralPath (Join-Path $Root $Entry.relative_path) | ConvertFrom-Json
+            foreach ($Asset in $Assets.entries) {
+                if ($Asset.presence -eq "Required") {
+                    Join-Path (Split-Path -Parent $Entry.relative_path) $Asset.relative_path
+                }
+            }
+        }
+    }
+    foreach ($Shader in $BundleManifest.shader_assets) {
+        if ($Shader.required) { $Shader.relative_path }
+    }
+) | Sort-Object -Unique
 
 Write-Host "A-Life FVR08 Windows production voxel package builder"
 Write-Host "Package root: $PackageRoot"
@@ -193,12 +172,8 @@ Write-Host "Cargo build command: $($BuildCommand -join ' ')"
 if ($DryRun) {
     Write-Host "Dry run: no build, copy, zip, or artifact writes will occur."
     Write-Host "Would copy package runner: scripts/run_windows_production_voxel_package.ps1 -> $PackageRunScript"
-    Write-Host "Would copy source launcher: scripts/run_production_voxel_frontend.ps1 -> $CopiedSourceLauncher"
     foreach ($File in $CopyFiles) {
         Write-Host "Would copy file: $File"
-    }
-    foreach ($Directory in $CopyDirectories) {
-        Write-Host "Would copy directory: $Directory"
     }
     Write-Host "Would write metadata: package_metadata.json"
     Write-Host "Would write package README: README_PACKAGE.md"
@@ -230,10 +205,6 @@ try {
     foreach ($File in $CopyFiles) {
         Copy-PackageFile -RelativePath $File -DestinationRoot $PackageRoot
     }
-    foreach ($Directory in $CopyDirectories) {
-        Copy-PackageDirectory -RelativePath $Directory -DestinationRoot $PackageRoot
-    }
-    Write-ProductionOnlyEnvironmentManifest -DestinationRoot $PackageRoot
 
     $Commit = (git rev-parse --short HEAD 2>$null)
     if ([string]::IsNullOrWhiteSpace($Commit)) {
@@ -256,7 +227,6 @@ try {
         built_at_utc = [DateTime]::UtcNow.ToString("o")
         executable = "alife_game_app.exe"
         runner = "run_windows_production_voxel_package.ps1"
-        source_launcher = "scripts/run_production_voxel_frontend.ps1"
         environment_manifest = "crates/alife_game_app/environment_manifest.json"
         production_asset_manifest = "crates/alife_game_app/assets/production_voxel_v1/production_asset_manifest.json"
         production_asset_root = "crates/alife_game_app/assets/production_voxel_v1"
@@ -276,15 +246,9 @@ try {
         release_tag_created = $false
         artifacts_must_remain_untracked = $true
         packaged_paths = @(
-            "alife_game_app.exe",
-            "run_windows_production_voxel_package.ps1",
-            "scripts/run_production_voxel_frontend.ps1",
-            "crates/alife_game_app/environment_manifest.json",
-            "crates/alife_game_app/assets/production_voxel_v1",
-            "crates/alife_world/tests/fixtures/production_voxel",
-            "crates/alife_gpu_backend/shaders",
-            "LICENSE"
-        )
+            "alife_game_app.exe"
+            "run_windows_production_voxel_package.ps1"
+        ) + $CopyFiles
     }
     $Metadata | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "package_metadata.json")
 
@@ -312,8 +276,9 @@ runtime diagnostics and generated receipts stay package-local or under
 `target/artifacts/` and must not be committed.
 
 The package includes the production voxel asset pack, production asset manifest,
-MIT project license, GPU shader sources, production environment manifest, and
-production-named fixture data. It creates no release tag.
+MIT project license, required GPU shader sources, production environment manifest,
+fixture data, and license notices. Editable Blender sources, exporters, and unused
+map exports remain in the repository. It creates no release tag.
 "@ | Set-Content -Encoding UTF8 (Join-Path $PackageRoot "README_PACKAGE.md")
 
     if (-not $NoZip) {
@@ -334,7 +299,6 @@ production-named fixture data. It creates no release tag.
         Write-Host "Zip path: $ZipPath"
     }
     Write-Host "Run script: $PackageRunScript"
-    Write-Host "Source launcher copy: $CopiedSourceLauncher"
     Write-Host "Manifest: $PackageManifest"
     Write-Host "Release tag: not created"
     exit 0

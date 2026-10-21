@@ -1,4 +1,4 @@
-//! v0 scaffold: compact validation diagnostics for logs and tests.
+//! Compact validation diagnostics for logs and tests.
 
 use serde::{Deserialize, Serialize};
 

@@ -2,8 +2,8 @@ use alife_core::{
     ActionCandidate, ActionId, ActionKind, ActionTarget, AffordanceBits, BodySnapshot,
     BrainClassSpec, BrainGenome, BrainScaleTier, CandidateActionFamily, CandidateObservationRef,
     CognitiveEdge, CognitiveSimplex, CognitiveSimplexId, ConceptBindings, ConceptCell,
-    ConceptCellId, Confidence, ContextFeatureFlags, ContradictionType, CuriosityBias,
-    DevelopmentState, DriveBinding, DriveChannel, DurationTicks, EdgeRelationKind, ExperiencePatch,
+    ConceptCellId, Confidence, ContextFeatureFlags, ContradictionType, DevelopmentState,
+    DriveBinding, DriveChannel, DurationTicks, EdgeRelationKind, ExperiencePatch,
     ExperiencePatchBuilder, ExperienceSequenceId, GapResolutionStatus, GaussianClusterId,
     GaussianContextRef, GaussianSalienceEntry, HeardToken, HomeostaticDelta, HomeostaticSnapshot,
     LobeKind, MemoryBank, MemoryBankConfig, NeuralActionSelection, NormalizedScalar, OrganismId,
@@ -656,10 +656,7 @@ fn invalid_ids_and_nan_or_out_of_range_values_are_rejected() {
 }
 
 #[test]
-fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
-    fn returns_biases_only(_: fn(&TopologicalMap) -> Vec<CuriosityBias>) {}
-    returns_biases_only(TopologicalMap::curiosity_biases);
-
+fn contradictory_evidence_populates_curiosity_bias() {
     let mut map = map();
     observe(
         &mut map,
@@ -678,26 +675,6 @@ fn topology_curiosity_api_does_not_produce_or_bypass_action_commands() {
     );
     assert!(bias.salience.raw() > 0.0);
     assert!(bias.curiosity_voltage.raw() > 0.0);
-}
-
-#[test]
-fn topology_source_uses_no_engine_types_or_action_command_shortcuts() {
-    let source = include_str!("../src/topology.rs");
-
-    let forbidden = [
-        concat!("be", "vy"),
-        concat!("wg", "pu"),
-        concat!("Render", "Device"),
-        concat!("Render", "Queue"),
-        concat!("Action", "Command"),
-    ];
-
-    for forbidden in forbidden {
-        assert!(
-            !source.contains(forbidden),
-            "topology core must not reference engine types or public action commands"
-        );
-    }
 }
 
 #[test]

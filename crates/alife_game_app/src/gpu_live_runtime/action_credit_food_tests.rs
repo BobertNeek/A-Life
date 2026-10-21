@@ -19,6 +19,7 @@ thread_local! {
     };
 }
 
+#[cfg(not(feature = "foundation-training"))]
 pub(super) fn tick_with_selector_capture(
     backend: &mut GpuAuthoritativeSession,
     memory_batch: &GpuClosedLoopMemoryBatchInput<'_>,
@@ -73,7 +74,7 @@ pub(super) fn tick_with_selector_capture(
     let tick = row.frame.tick().raw() + 1;
     let memory = row
         .memory_upload
-        .records
+        .records()
         .iter()
         .map(|record| {
             serde_json::json!({

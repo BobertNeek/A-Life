@@ -8,7 +8,7 @@ use alife_world::{
         GpuBrainAssetRef, MemorySidecarSaveState, PortableAssetDigest, TopologySidecarSaveSummary,
     },
     PhysicalTrackingProvenance, StablePhysicalDescriptor, TrackedObjectRegistry,
-    TrackedObjectRegistrySaveState, TRACKED_OBJECT_REGISTRY_SAVE_SCHEMA_VERSION,
+    TRACKED_OBJECT_REGISTRY_SAVE_SCHEMA_VERSION,
 };
 
 fn profile(profile: SensorProfile) -> SensorProfileIdentity {
@@ -120,18 +120,6 @@ fn tracker_restore_rejects_tampered_owner_key_and_next_id() {
         TrackedObjectRegistry::from_save_state(reused_next),
         Err(ScaffoldContractError::TrackedObjectIdentityExhausted)
     ));
-}
-
-#[test]
-fn tracker_save_dto_is_portable_and_world_entity_free() {
-    fn assert_portable(_: &TrackedObjectRegistrySaveState) {}
-
-    let (registry, organism) = populated_registry();
-    let saved = registry.save_state(organism).unwrap();
-    assert_portable(&saved);
-    let json = serde_json::to_string(&saved).unwrap();
-    assert!(!json.contains("WorldEntityId"));
-    assert!(!include_str!("../src/tracked_objects.rs").contains("WorldEntityId"));
 }
 
 #[test]

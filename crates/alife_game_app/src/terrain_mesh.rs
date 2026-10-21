@@ -409,41 +409,30 @@ fn append_top_surface(
         return;
     }
 
-    // One quad preserves the tile's four-corner relief. The former 4x4 grid
-    // interpolated the same bilinear surface while multiplying vertices by 16.
-    const SUBDIVISIONS: usize = 1;
-    for column in 0..SUBDIVISIONS {
-        for row in 0..SUBDIVISIONS {
-            let u0 = column as f32 / SUBDIVISIONS as f32;
-            let u1 = (column + 1) as f32 / SUBDIVISIONS as f32;
-            let v0 = row as f32 / SUBDIVISIONS as f32;
-            let v1 = (row + 1) as f32 / SUBDIVISIONS as f32;
-            let positions = [
-                terrain_top_position(sample, surface, tile_stride, u0, v0),
-                terrain_top_position(sample, surface, tile_stride, u0, v1),
-                terrain_top_position(sample, surface, tile_stride, u1, v1),
-                terrain_top_position(sample, surface, tile_stride, u1, v0),
-            ];
-            let normals = [
-                terrain_top_normal(sample, surface, tile_stride, u0, v0),
-                terrain_top_normal(sample, surface, tile_stride, u0, v1),
-                terrain_top_normal(sample, surface, tile_stride, u1, v1),
-                terrain_top_normal(sample, surface, tile_stride, u1, v0),
-            ];
-            let colors = blended_ground_colors(samples, sample, tile_stride, positions);
-            batches
-                .entry((role, sample.material))
-                .or_default()
-                .push_quad(
-                    positions,
-                    normals,
-                    positions.map(|p| [p[0] / 6.0, p[2] / 6.0]),
-                    colors,
-                    sample.tile,
-                );
-            *vertices_by_tile.entry(sample.tile).or_default() += 4;
-        }
-    }
+    let positions = [
+        terrain_top_position(sample, surface, tile_stride, 0.0, 0.0),
+        terrain_top_position(sample, surface, tile_stride, 0.0, 1.0),
+        terrain_top_position(sample, surface, tile_stride, 1.0, 1.0),
+        terrain_top_position(sample, surface, tile_stride, 1.0, 0.0),
+    ];
+    let normals = [
+        terrain_top_normal(sample, surface, tile_stride, 0.0, 0.0),
+        terrain_top_normal(sample, surface, tile_stride, 0.0, 1.0),
+        terrain_top_normal(sample, surface, tile_stride, 1.0, 1.0),
+        terrain_top_normal(sample, surface, tile_stride, 1.0, 0.0),
+    ];
+    let colors = blended_ground_colors(samples, sample, tile_stride, positions);
+    batches
+        .entry((role, sample.material))
+        .or_default()
+        .push_quad(
+            positions,
+            normals,
+            positions.map(|p| [p[0] / 6.0, p[2] / 6.0]),
+            colors,
+            sample.tile,
+        );
+    *vertices_by_tile.entry(sample.tile).or_default() += 4;
 }
 
 fn terrain_top_position(

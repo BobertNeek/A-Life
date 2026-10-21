@@ -438,10 +438,10 @@ fn validate_journal_against_exact_base(
 }
 
 fn exact_base_sleep_states(
-    base: &GpuLoadedSaveManifest,
+    save: &PortableSaveFile,
 ) -> Result<BTreeMap<u64, SleepState>, ScaffoldContractError> {
     let mut sleep_states = BTreeMap::new();
-    for creature in &base.save.creatures {
+    for creature in &save.creatures {
         if let Some(gpu_brain) = &creature.gpu_brain {
             if sleep_states
                 .insert(creature.organism_id.raw(), gpu_brain.sleep)
@@ -898,7 +898,7 @@ impl GpuDurableSaveManifest {
             }
         };
         journal.validate()?;
-        let base_sleep_states = exact_base_sleep_states(base)?;
+        let base_sleep_states = exact_base_sleep_states(&base.save)?;
         match validate_journal_against_exact_base(
             &journal,
             &base.exact_save_anchor_digest()?.0,
@@ -929,18 +929,11 @@ impl GpuDurableSaveManifest {
         }
         let journal: GpuSleepTransactionJournalV2 = serde_json::from_slice(&bytes)?;
         journal.validate()?;
-        let base = GpuLoadedSaveManifest {
-            save: save.clone(),
-            digest: GpuSaveManifestDigest::for_authority(
-                pointer.save.digest.clone(),
-                pointer.authority_digest,
-            ),
-            authority: GpuCheckpointAuthoritySource::GenerationV1(pointer.clone()),
-        };
-        let base_sleep_states = exact_base_sleep_states(&base)?;
+        let base_sleep_states = exact_base_sleep_states(save)?;
+        let exact_save_anchor = PortableAssetDigest::for_bytes(&serde_json::to_vec_pretty(save)?);
         if validate_journal_against_exact_base(
             &journal,
-            &base.exact_save_anchor_digest()?.0,
+            &exact_save_anchor.0,
             save.world.tick,
             &base_sleep_states,
         )? != SleepJournalAnchorDisposition::Current
@@ -982,7 +975,7 @@ impl GpuDurableSaveManifest {
         let mut timing = GpuSleepJournalPublicationTiming::default();
         let started = measure.then(Instant::now);
         journal.validate()?;
-        let base_sleep_states = exact_base_sleep_states(base)?;
+        let base_sleep_states = exact_base_sleep_states(&base.save)?;
         if validate_journal_against_exact_base(
             journal,
             &base.exact_save_anchor_digest()?.0,
@@ -1397,9 +1390,6 @@ impl GpuDurableSaveManifest {
                 })?;
         let save_path = parent.join(file_name);
         replacement.validate_with_asset_root(&asset_root)?;
-        // This is a durable file manifest, not the bounded in-memory save-slot
-        // payload governed by P34_MAX_INLINE_SAVE_BYTES. Bulk neural arrays are
-        // already external content-addressed assets.
         let replacement_bytes = serde_json::to_vec_pretty(replacement)?;
         let replacement_content_digest = GpuSaveManifestDigest::for_bytes(&replacement_bytes);
         let durable = Self {

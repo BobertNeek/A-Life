@@ -1,11 +1,8 @@
-//! Bounded, deterministic foundation-lesson semantic hypotheses.
+//! Deterministic semantic hypotheses from coarse observation clauses.
 //!
-//! This is a small rule provider, not an LLM or a recording of model replies.
-//! It consumes only the canonical coarse observation clauses. Word relations
-//! are candidates, not claims that their referents are present. Physical
-//! prototypes require shape AND chemistry; color, object identity, position,
-//! lesson goals, action choices, learner state and reward are never consulted.
-//! AOA-SLM-001..004: nonauthoritative text-in/hints-out, without learner access.
+//! Word relations suggest associations, not observed referents. Physical
+//! prototypes use sensed shape and chemistry, without object identity or hidden
+//! lesson labels. These are rule-generated hints, not recorded model replies.
 
 use alife_core::BASIC_VOCABULARY_V1;
 

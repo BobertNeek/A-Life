@@ -85,9 +85,15 @@ fn collect_opening(world: &mut World) -> Option<bool> {
         && buttons
             .iter()
             .any(|(e, i)| *i != Interaction::None && shown(world, *e));
-    world
-        .resource_mut::<ProductionConversationLineageUiState>()
-        .name_pointer_capture = hover;
+    if world
+        .resource::<ProductionConversationLineageUiState>()
+        .name_pointer_capture
+        != hover
+    {
+        world
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .name_pointer_capture = hover;
+    }
     if !focused
         && world
             .resource::<ProductionConversationLineageUiState>()
@@ -218,12 +224,19 @@ pub(super) fn sync_ime_window(world: &mut World) {
             .get_mut::<bevy::prelude::Window>(entity)
             .unwrap()
             .ime_enabled = true;
-    } else if let Some(draft) = world
-        .resource_mut::<ProductionConversationLineageUiState>()
+    } else if world
+        .resource::<ProductionConversationLineageUiState>()
         .naming
-        .as_mut()
+        .as_ref()
+        .is_some_and(|draft| !draft.preedit.is_empty())
     {
-        draft.preedit.clear();
+        world
+            .resource_mut::<ProductionConversationLineageUiState>()
+            .naming
+            .as_mut()
+            .expect("checked above")
+            .preedit
+            .clear();
     }
 }
 
@@ -231,6 +244,10 @@ fn collect_ordered_input(world: &mut World) {
     // Winit publishes the same ordered batch to WindowEvent after forwarding
     // per-type copies. Separate KeyboardInput/Ime readers lose cross-type order.
     // Always drain while closed/blocked too, preventing a later draft replay.
+    let naming = world
+        .resource::<ProductionConversationLineageUiState>()
+        .naming
+        .is_some();
     let messages = world.resource_scope(|world, mut input: bevy::prelude::Mut<OpenInput>| {
         world
             .get_resource::<bevy::prelude::Messages<WindowEvent>>()
@@ -238,10 +255,14 @@ fn collect_ordered_input(world: &mut World) {
                 input
                     .window_reader
                     .read(messages)
+                    .filter(|_| naming)
                     .cloned()
                     .collect::<Vec<_>>()
             })
     });
+    if !naming {
+        return;
+    }
     let blocked = world
         .get_resource::<crate::production_voxel_renderer::menu::MenuState>()
         .is_some_and(crate::production_voxel_renderer::menu::captures_input_state);

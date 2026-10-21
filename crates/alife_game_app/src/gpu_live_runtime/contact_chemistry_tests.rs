@@ -218,8 +218,6 @@ fn seal_selection(
             decision,
             motor_bundle: bundle,
             frozen_prediction: None,
-            speech_payload: None,
-            speech_prompted: false,
         },
     )
     .unwrap();

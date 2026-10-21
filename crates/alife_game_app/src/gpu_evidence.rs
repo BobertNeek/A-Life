@@ -10,7 +10,8 @@ use std::path::Path;
 
 use alife_core::{
     BrainCapacityClass, BrainClassId, BrainScaleTier, GpuPressureSample, HomeostaticSnapshot,
-    PhenotypeHash, PolicyBackend, ScaffoldContractError, SensorProfile, Tick, Validate, Vec3f,
+    PhenotypeHash, PolicyBackend, ScaffoldContractError, SensorProfile, Tick, TopologyCounts,
+    Validate, Vec3f,
 };
 pub use alife_core::{PhenotypeEvidenceManifest, GPU_PHENOTYPE_EVIDENCE_MANIFEST_SCHEMA};
 use alife_gpu_backend::{
@@ -29,10 +30,6 @@ mod canonical;
 use canonical::*;
 mod benchmark;
 pub use benchmark::*;
-mod learning_sleep;
-pub use learning_sleep::*;
-mod memory_grounding;
-pub use memory_grounding::*;
 mod soak;
 pub use soak::*;
 mod persistence;
@@ -40,7 +37,6 @@ use persistence::*;
 
 pub const GPU_SLICE_EVIDENCE_ARTIFACT_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_RAW: u16 = 1;
-pub const GPU_SLICE_B_RAW: u16 = 2;
 pub const GPU_EVIDENCE_PASSING_STATUS_RAW: u16 = 1;
 pub const GPU_SLICE_A_FIXTURE_SCHEMA: u16 = 1;
 pub const GPU_SLICE_A_MAX_TICKS: u32 = 4_096;
@@ -66,12 +62,6 @@ pub enum GpuEvidenceError {
     Git(String),
     #[error("GPU evidence does not yet define slice {0}")]
     UnsupportedSlice(u16),
-    #[error("GPU evidence stage `{stage}` failed: {source}")]
-    Stage {
-        stage: &'static str,
-        #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
-    },
     #[error(transparent)]
     Core(#[from] ScaffoldContractError),
     #[error(transparent)]
@@ -82,6 +72,12 @@ pub enum GpuEvidenceError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+}
+
+impl From<alife_world::PersistenceError> for GpuEvidenceError {
+    fn from(error: alife_world::PersistenceError) -> Self {
+        Self::App(GameAppShellError::Persistence(error))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -98,6 +94,68 @@ pub struct GpuSliceEvidenceHeader {
     pub phenotype_hash: PhenotypeHash,
     pub phenotype_manifest_digest: [u64; 4],
     pub capacity_digest: [u64; 4],
+}
+
+pub const GPU_EVIDENCE_BACKEND_API_VERSION: u16 = 1;
+pub const GPU_EVIDENCE_BACKEND_API_SLUG: &str = "gpu-closed-loop-v1";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfiledBehaviorReceiptHeader {
+    #[serde(flatten)]
+    pub common: GpuSliceEvidenceHeader,
+    pub artifact_slug: String,
+    pub backend_api_version: u16,
+    pub backend_api_slug: String,
+    pub adapter_name: String,
+    pub adapter_backend: String,
+    pub run_seed: u64,
+}
+
+impl ProfiledBehaviorReceiptHeader {
+    pub fn aggregate_key(&self) -> String {
+        let phenotype = self
+            .common
+            .phenotype_hash
+            .0
+            .map(|word| format!("{word:016x}"))
+            .join("");
+        format!(
+            "{}:{phenotype}:{}",
+            self.artifact_slug, self.common.source_tree_digest
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TopologyCapacityReceipt {
+    pub max_concepts: u32,
+    pub max_edges: u32,
+    pub max_simplexes: u32,
+    pub max_unresolved_gaps: u32,
+    pub max_bindings_per_kind: u32,
+}
+
+impl TopologyCapacityReceipt {
+    pub const fn contains(&self, counts: TopologyCounts, observed_max_bindings: u32) -> bool {
+        self.max_concepts > 0
+            && self.max_edges > 0
+            && self.max_simplexes > 0
+            && self.max_unresolved_gaps > 0
+            && self.max_bindings_per_kind > 0
+            && counts.concepts <= self.max_concepts
+            && counts.edges <= self.max_edges
+            && counts.simplexes <= self.max_simplexes
+            && counts.unresolved_gaps <= self.max_unresolved_gaps
+            && observed_max_bindings <= self.max_bindings_per_kind
+    }
+}
+
+pub fn sensor_profile_slug(profile: SensorProfile) -> &'static str {
+    match profile {
+        SensorProfile::PrivilegedAffordanceV1 => "privileged-affordance-v1",
+        SensorProfile::GroundedObjectSlotsV1 => "grounded-object-slots-v1",
+        SensorProfile::GroundedTerrainVisionV1 => "grounded-terrain-vision-v1",
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -377,9 +435,7 @@ pub fn load_gpu_slice_a_evidence(
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ValidatedGpuEvidence {
-    SliceA(GpuSliceAAcceptanceReceipt),
-    SliceB(GpuSliceBAcceptanceReceipt),
-    SliceC(Box<GpuMemoryGroundingEvidenceReceipt>),
+    SliceA(Box<GpuSliceAAcceptanceReceipt>),
     SliceD(Box<GpuClosedLoopSoakReceipt>),
 }
 
@@ -387,8 +443,6 @@ impl ValidatedGpuEvidence {
     pub const fn header(&self) -> &GpuSliceEvidenceHeader {
         match self {
             Self::SliceA(receipt) => &receipt.header,
-            Self::SliceB(receipt) => &receipt.header,
-            Self::SliceC(receipt) => &receipt.header.common,
             Self::SliceD(receipt) => &receipt.header.common,
         }
     }
@@ -396,8 +450,6 @@ impl ValidatedGpuEvidence {
     pub fn capacity_class(&self) -> &str {
         match self {
             Self::SliceA(receipt) => &receipt.capacity_class,
-            Self::SliceB(receipt) => &receipt.capacity_class,
-            Self::SliceC(receipt) => &receipt.capacity_class_slug,
             Self::SliceD(receipt) => &receipt.capacity_class_slug,
         }
     }
@@ -405,8 +457,6 @@ impl ValidatedGpuEvidence {
     pub fn backend_api(&self) -> &str {
         match self {
             Self::SliceA(receipt) => &receipt.backend_api,
-            Self::SliceB(receipt) => &receipt.backend_api,
-            Self::SliceC(receipt) => &receipt.header.adapter_backend,
             Self::SliceD(receipt) => &receipt.header.adapter_backend,
         }
     }
@@ -414,8 +464,6 @@ impl ValidatedGpuEvidence {
     pub fn adapter_name(&self) -> &str {
         match self {
             Self::SliceA(receipt) => &receipt.adapter_name,
-            Self::SliceB(receipt) => &receipt.adapter_name,
-            Self::SliceC(receipt) => &receipt.header.adapter_name,
             Self::SliceD(receipt) => &receipt.header.adapter_name,
         }
     }
@@ -423,8 +471,6 @@ impl ValidatedGpuEvidence {
     pub const fn activity_count(&self) -> u64 {
         match self {
             Self::SliceA(receipt) => receipt.neural_dispatch_count,
-            Self::SliceB(receipt) => receipt.gpu_learning_dispatches,
-            Self::SliceC(receipt) => receipt.gpu_selection_count,
             Self::SliceD(receipt) => receipt.authoritative_gpu_dispatches,
         }
     }
@@ -435,11 +481,9 @@ pub fn validate_gpu_evidence_file(
     input: impl AsRef<Path>,
 ) -> Result<ValidatedGpuEvidence, GpuEvidenceError> {
     match slice_raw {
-        GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input).map(ValidatedGpuEvidence::SliceA),
-        GPU_SLICE_B_RAW => load_gpu_slice_b_evidence(input).map(ValidatedGpuEvidence::SliceB),
-        GPU_SLICE_C_RAW => load_gpu_slice_c_evidence(input)
+        GPU_SLICE_A_RAW => load_gpu_slice_a_evidence(input)
             .map(Box::new)
-            .map(ValidatedGpuEvidence::SliceC),
+            .map(ValidatedGpuEvidence::SliceA),
         GPU_SLICE_D_RAW => load_gpu_slice_d_evidence(input)
             .map(Box::new)
             .map(ValidatedGpuEvidence::SliceD),

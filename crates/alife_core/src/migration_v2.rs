@@ -1,4 +1,4 @@
-//! Deterministic, fail-closed transitions for the v2 architecture repair.
+//! Deterministic migration of legacy architecture data.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

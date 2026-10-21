@@ -1,37 +1,13 @@
-# alife_game_app Instructions
+# alife_game_app
 
-Root [AGENTS.md](../../AGENTS.md) applies. These local rules are current
-implementation guardrails; they do not amend the controlling v2.0 architecture.
+Own the playable application, launch policy, UI, and presentation. Keep Bevy
+integration feature-gated and the default build headless. Use the shared neural
+runtime and world validation rather than a second simulation in the renderer.
 
-This crate owns the playable-sim product app shell and launch policy.
+Preserve save/load, acquired learning, founder reconstruction, and archive-before-
+retirement ordering. Apply or discard a pending learning transaction only after
+its matching world outcome is sealed. Observe outcomes in organism memory even
+when learning is rejected. Keep developer training state out of player saves.
 
-Production art uses the approved skinned Hearthling and Blender landscape props.
-Keep exported GLBs and production manifest digests together. Animation and
-inherited visual proportions remain read-only projections of organism state.
-
-Rules:
-
-- Keep the default path headless and CI-safe.
-- Keep Bevy integration feature-gated.
-- Do not put game app state, Bevy, renderer, windowing, or adapter types into
-  `alife_core`.
-- Use P34 runtime config and asset manifest validation instead of bypassing
-  persistence contracts.
-- Drive the shared `alife_runtime` GPU session, and own explicit policy
-  selection, A/B/C/D evidence ingestion, exact gate receipts, and promotion
-  derivation; never promote from configuration, an incomplete matrix, or a
-  different adapter/tree.
-- In the GPU live loop, seal the measured world outcome before applying or
-  explicitly discarding the matching pending eligibility transaction.
-- Explicit Nano512 readout candidates enter through their genome-bound canonical
-  asset and archive before GPU insertion. Reconstruct that exact foundation on
-  restore; preserve builtin admission and deployed lifetime learning.
-- Observe every sealed patch in its organism-owned memory sidecar even when
-  post-seal GPU learning is rejected. Ordinary play updates diagnostic topology
-  every ten ticks or on a significant outcome; foundation training and audited
-  diagnostics observe every patch. Sidecars supply evidence without selecting actions or aborting
-  candidate arbitration.
-- Update one fixed-size passive-statistics record per resident tick and archive
-  that typed record before GPU retirement; never scan unbounded life history.
-- Use `docs/ROADMAP.md` for product sequencing and exit gates. Do not infer
-  integration or release readiness from a historical plan label.
+Production art uses the skinned Hearthling and Blender landscape props. Update
+exported GLBs and manifest digests together; retain useful editable sources.

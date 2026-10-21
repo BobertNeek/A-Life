@@ -1,4 +1,4 @@
-//! Contract-only immutable compiler-input provenance and canonical identity.
+//! Immutable compiler-input provenance and canonical identity.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};

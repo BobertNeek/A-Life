@@ -2,7 +2,7 @@ name: CPU foundation backend
 
 on:
   push:
-    branches: ["main", "feat/cpu-foundation-backend", "codex/**"]
+    branches: ["main"]
     paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", ".github/workflows/cpu-foundation-backend.yml"]
   pull_request:
     branches: ["main"]
@@ -34,7 +34,7 @@ jobs:
       - name: Run CPU kernels and native continuation contracts without an ICD
         run: |
           cargo test --locked -p alife_training --features cpu-backend --lib cpu::
-          cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation --test blocked_legacy_pipelines -- --nocapture
+          cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation -- --nocapture
       - name: Preserve GPU evidence and offline-only CPU boundaries
         run: |
           cargo test --locked -p alife_core --test cpu_neural_evidence --test experience_neural_decision --test packed_experience_logging

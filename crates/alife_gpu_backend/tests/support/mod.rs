@@ -1,7 +1,4 @@
-//! Shared fixture construction and bounded real-GPU readback plumbing.
-//!
-//! Host code here only compiles/uploads contracts and derives structural counts. It never
-//! executes neural math, supplies a neural oracle, or falls back from GPU authority.
+//! Shared GPU fixtures and bounded readback helpers.
 #![allow(dead_code)] // Shared by integration targets that intentionally use disjoint helpers.
 
 pub mod scaling;
@@ -290,16 +287,6 @@ pub struct GpuTestBrain {
 }
 
 #[cfg(feature = "gpu-tests")]
-pub fn test_receptor_frame(patch: &alife_core::ExperiencePatch) -> alife_core::NeuralReceptorFrame {
-    alife_core::NeuralReceptorFrame {
-        schema_version: alife_core::BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
-        source_chemistry_version: alife_core::BIOCHEMICAL_GRAPH_SCHEMA_VERSION,
-        source_tick: patch.pre_action().tick,
-        activations: Vec::new(),
-    }
-}
-
-#[cfg(feature = "gpu-tests")]
 pub fn test_physiology(
     species_seed: u64,
     brain: &BrainPhenotype,
@@ -318,24 +305,15 @@ pub fn physiology_receptor_frame(
 }
 
 #[cfg(feature = "gpu-tests")]
-pub fn chemistry_receptor_effects(
-    brain: &BrainPhenotype,
-    physiology: &alife_core::CreaturePhenotype,
-    source_tick: Tick,
-) -> Result<alife_core::NeuralReceptorEffects, alife_core::ScaffoldContractError> {
-    let receptors = physiology_receptor_frame(physiology, source_tick)?;
-    let expression = alife_core::NeuralReceptorPhenotype::compile(brain)?;
-    alife_core::NeuralReceptorEffects::from_frame(&receptors, &expression)
-}
-
-#[cfg(feature = "gpu-tests")]
 pub fn bind_chemistry_receptor_effects(
     upload: alife_gpu_backend::GpuMemoryContextUpload,
     brain: &BrainPhenotype,
     physiology: &alife_core::CreaturePhenotype,
     source_tick: Tick,
 ) -> Result<alife_gpu_backend::GpuMemoryContextUpload, alife_core::ScaffoldContractError> {
-    let effects = chemistry_receptor_effects(brain, physiology, source_tick)?;
+    let receptors = physiology_receptor_frame(physiology, source_tick)?;
+    let expression = alife_core::NeuralReceptorPhenotype::compile(brain)?;
+    let effects = alife_core::NeuralReceptorEffects::from_frame(&receptors, &expression)?;
     upload
         .bind_neural_receptor_effects(effects)
         .map_err(|_| alife_core::ScaffoldContractError::InvalidPerceptionFrame)
@@ -372,16 +350,6 @@ impl GpuTestBrain {
         &mut self,
         frame: &PerceptionFrame,
     ) -> Result<alife_gpu_backend::GpuClosedLoopTick, alife_core::ScaffoldContractError> {
-        self.tick_with_frame(frame).map(|(_, tick)| tick)
-    }
-
-    pub fn tick_with_frame(
-        &mut self,
-        frame: &PerceptionFrame,
-    ) -> Result<
-        (PerceptionFrame, alife_gpu_backend::GpuClosedLoopTick),
-        alife_core::ScaffoldContractError,
-    > {
         tick_with_receptors(
             &mut self.backend,
             self.handle,
@@ -389,6 +357,7 @@ impl GpuTestBrain {
             &self.physiology,
             frame,
         )
+        .map(|(_, tick)| tick)
     }
 
     pub fn apply_sealed_outcome(
@@ -398,26 +367,6 @@ impl GpuTestBrain {
         let receptors = physiology_receptor_frame(&self.physiology, patch.pre_action().tick)?;
         self.backend
             .apply_sealed_outcome(self.handle, patch, &receptors)
-    }
-
-    pub fn submit_and_complete_sleep_consolidation(
-        &mut self,
-        intent: alife_core::ConsolidationIntent,
-    ) -> Result<alife_gpu_backend::GpuSleepConsolidationReceipt, alife_core::ScaffoldContractError>
-    {
-        let replay = self.backend.build_sleep_replay_batch(self.handle)?;
-        let request = self
-            .backend
-            .prepare_sleep_consolidation(self.handle, intent, &replay)?;
-        let job_id = self
-            .backend
-            .submit_sleep_consolidation(self.handle, &request, &replay)?;
-        let staged = self
-            .backend
-            .poll_sleep_consolidation(self.handle, job_id)?
-            .ok_or(alife_core::ScaffoldContractError::MissingPhaseData)?;
-        self.backend
-            .commit_sleep_consolidation(self.handle, &request, &staged.staged)
     }
 }
 
@@ -494,7 +443,6 @@ mod hardware {
     pub struct DecoderLesionReceipt {
         pub adapter_identity: String,
         pub changed_ranges: Vec<std::ops::Range<u32>>,
-        pub recurrent_prefixes_unchanged: bool,
     }
 
     pub struct GpuPipelineFixture {
@@ -785,17 +733,10 @@ mod hardware {
                     .any(|word| *word != 0));
                 changed_ranges.push(start..end);
             }
-            let recurrent_prefixes_unchanged =
-                changed_ranges.iter().zip(&self.slots).all(|(range, slot)| {
-                    range.start
-                        == slot.word_ranges().genetic_weight_words.start
-                            + slot.record().recurrent_synapse_count
-                });
             self.set_decoder_genetic_weights_zeroed(true);
             DecoderLesionReceipt {
                 adapter_identity: self.adapter_name.clone(),
                 changed_ranges,
-                recurrent_prefixes_unchanged,
             }
         }
 
@@ -2134,9 +2075,7 @@ mod hardware {
         });
         {
             let mut mapped = buffer.slice(..).get_mapped_range_mut();
-            let mut initial = vec![0_u8; mapped.len()];
-            initial[..bytes.len()].copy_from_slice(bytes);
-            mapped.copy_from_slice(&initial);
+            mapped.slice(..bytes.len()).copy_from_slice(bytes);
         }
         buffer.unmap();
         buffer

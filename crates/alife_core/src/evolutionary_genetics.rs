@@ -1,4 +1,4 @@
-//! Contract-only EI0 diploid genome, chromosome, and allele-expression records.
+//! Diploid genomes, chromosomes, and allele expression.
 
 use serde::{Deserialize, Serialize};
 
@@ -423,10 +423,6 @@ impl BrainChromosome {
             DiscreteExpression::Single(class_id) => {
                 BrainCapacityClass::production_for_id(class_id)?;
                 Ok(class_id)
-            }
-            DiscreteExpression::Codominant(left, right) if left == right => {
-                BrainCapacityClass::production_for_id(left)?;
-                Ok(left)
             }
             DiscreteExpression::Codominant(_, _) => {
                 Err(ScaffoldContractError::IncompatibleGeneticClass)

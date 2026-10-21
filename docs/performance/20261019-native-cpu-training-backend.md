@@ -1,14 +1,11 @@
 # Native CPU foundation training backend
 
 Dated implementation/evidence report, updated 2026-10-20. This report covers
-PR110 on `feat/cpu-foundation-backend`; it is not architecture authority.
+[PR #110](https://github.com/BobertNeek/A-Life/pull/110) on its recorded source.
 The user's 19 October 2026, 23:17:19 UTC instruction authorized “create a cpu
 backend that we can offload some training to the cloud with” alongside larger
-groups. The root and crate guardrails now record this explicit offline scope.
-AOA-ADM-007 makes processor placement an implementation mechanism and
-AOA-TIME-006 describes GPU placement as a reference mechanism. The controlling
-architecture is unchanged. Normal gameplay retains its GPU default and rejects
-CPU policy saves.
+groups. This offline backend preserves the normal gameplay GPU default and
+rejects CPU policy saves.
 
 ## Executable boundary
 
@@ -58,7 +55,7 @@ cohort with the inherited founder and retains the old individual archive. It
 never claims a terminal GPU individual restore. A CPU cohort's own full private
 checkpoint can be restored under its collection policy. Heterogeneous compiler
 graphs require per-row compilation and are rejected at this boundary. The
-separate group50 worker owns population placement/vectorized execution.
+separate `train_n2048_group50` path handles native GPU group collection.
 
 Seed allocation remains caller-owned. The CPU receipt records historical
 freshness as **Unknown** and preserves the complete source receipt and exact
@@ -146,7 +143,7 @@ Real hardware execution of the GPU import remains **Unknown** on this CPU host.
 
 ```sh
 VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --lib cpu::
-VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation --test blocked_legacy_pipelines -- --nocapture
+VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation -- --nocapture
 cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff -- -D warnings
 cargo check --locked -p alife_training --features cpu-backend,gpu-tests --test cpu_backend --test backend_handoff
 ```
@@ -174,11 +171,10 @@ and 11 rows in 0.991735 s (update 0.292100 s); its continuation collected anothe
 earlier receipts and native outputs. These executable timings precede the current
 founder corrections; current-main throughput is not inferred from them.
 These bounded fixture measurements do not establish a production speedup or
-accepted-policy behavior. Updated exact-head CI is recorded on PR110.
+accepted-policy behavior. The original CI results are recorded on PR #110.
 
-Core evidence/packed compatibility regressions pass 28 tests. CPU policy config
-and gameplay boundary tests enforce the explicit offline mode. Documentation
-checks pass 77/77. Existing legacy training/evaluation gates remain blocked.
+The recorded checks included evidence/packed compatibility and explicit
+offline-mode boundaries. These results apply to the report's source revision.
 
 ## Accepted policy qualification: Blocked
 
@@ -196,16 +192,6 @@ admission and terminal GPU individual restore are **Unknown**, pending source
 access and their respective qualification. Integer-age fixtures are numerical
 regressions, not substitutes for the unavailable package. PR113 founder corrections
 are included: CPU Adam applies inherited sign restrictions only to recurrent
-synapses, preserving signed action/speech readouts. PR112's credit-weighted Oja
-change remains unmerged at this report revision; CPU waking plasticity follows the
-current production shader and must follow that merge before new qualification.
-
-## Requirement trace
-
-| Requirement | Scope/evidence |
-| --- | --- |
-| AOA-ADM-007, AOA-TIME-006 | Explicit offline CPU placement and receipt; GPU gameplay default/boundary retained. |
-| AOA-BRAIN-006/007/009/011/014 | Native sparse/recurrent/somatic equations, gradients and formula tolerances. |
-| AOA-LEARN-002/003/005/010 | Sealed CPU physiology/receptor credit, private plasticity, actual PPO/residual critic and sleep replay. |
-| AOA-AUTH-003, AOA-INV-009 | Ordinary organism-owned world biology; score-free enumeration; no synthetic physiology in training. |
-| AOA-PERSIST-002/004 | Exact native weights/moments/integer ages and full CPU private archive; accepted package/hardware restore qualification Unknown. |
+synapses, preserving signed action/speech readouts. At this report revision, PR #112's credit-weighted Oja change had not yet
+merged. It subsequently merged; see the [Oja analysis](../reports/oja-plasticity-credit-2026-10-20.md)
+for that change. The measurements above retain their original source scope.

@@ -1,11 +1,10 @@
 use alife_core::{
-    AffordanceBits, ChannelGroupKind, CompressedSemanticCode, ContextFeatureFlags, ContextStreams,
+    AffordanceBits, CompressedSemanticCode, ContextFeatureFlags, ContextStreams,
     EnvironmentStreamEntry, GaussianClusterId, GaussianContextRef, GaussianSalienceEntry,
     HeardToken, OrganismId, ScaffoldContractError, SchemaKind, SemanticContextRef,
-    SemanticSalienceEntry, SensoryAbiDescriptor, SensoryAbiVersion, SensoryChannels,
-    SensorySnapshot, SensorySnapshotFromAdapter, SensorySnapshotSource, SocialAgentSnapshot,
-    TeacherPerceptionChannel, Tick, Validate, Vec3f, VocalizedToken, WorldEntityId,
-    MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
+    SemanticSalienceEntry, SensoryAbiVersion, SensoryChannels, SensorySnapshot,
+    SocialAgentSnapshot, TeacherPerceptionChannel, Tick, Validate, Vec3f, VocalizedToken,
+    WorldEntityId, MAX_HEARD_TOKENS, MAX_OPTIONAL_ENVIRONMENT_STREAMS, MAX_SOCIAL_AGENTS,
     SENSORY_ABI_CHANNEL_COUNT, SENSORY_AUDITORY_CHANNEL_COUNT, SENSORY_SMELL_CHANNEL_COUNT,
     SENSORY_TACTILE_CHANNEL_COUNT, SENSORY_VISUAL_AFFORDANCE_CHANNEL_COUNT,
 };
@@ -25,36 +24,7 @@ fn valid_channels() -> SensoryChannels {
 }
 
 #[test]
-fn sensory_abi_descriptor_is_versioned_and_fixed_width() {
-    let descriptor = SensoryAbiDescriptor::V1;
-
-    assert_eq!(
-        descriptor.version,
-        SensoryAbiVersion::CURRENT,
-        "P08 uses central schema versioning"
-    );
-    assert_eq!(
-        descriptor.total_channel_count(),
-        SENSORY_ABI_CHANNEL_COUNT,
-        "fixed-size ABI width must match group totals"
-    );
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::VisualAffordance));
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::AuditoryAcoustic));
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::SmellChemistry));
-    assert!(descriptor
-        .channel_groups
-        .iter()
-        .any(|group| group.kind == ChannelGroupKind::TactileContact));
-
+fn sensory_channels_flatten_to_the_runtime_width() {
     assert_eq!(
         valid_channels().as_flat_array().len(),
         SENSORY_ABI_CHANNEL_COUNT
@@ -241,47 +211,4 @@ fn social_and_language_context_use_stable_ids_and_perception_markers() {
         snapshot.validate_contract(),
         Err(ScaffoldContractError::InvalidId)
     );
-}
-
-#[test]
-fn sensory_conversion_interfaces_are_adapter_implemented_only() {
-    struct AdapterFrame;
-    struct AdapterSource;
-
-    impl SensorySnapshotFromAdapter<AdapterFrame> for SensorySnapshot {
-        fn sensory_from_adapter(value: AdapterFrame) -> Result<Self, ScaffoldContractError> {
-            let _ = value;
-            SensorySnapshot::new(
-                OrganismId(1),
-                Tick(10),
-                Vec3f::ZERO,
-                valid_channels(),
-                ContextStreams::default(),
-            )
-        }
-    }
-
-    impl SensorySnapshotSource for AdapterSource {
-        fn sensory_snapshot(
-            &self,
-            organism_id: OrganismId,
-            tick: Tick,
-        ) -> Result<SensorySnapshot, ScaffoldContractError> {
-            SensorySnapshot::new(
-                organism_id,
-                tick,
-                Vec3f::ZERO,
-                valid_channels(),
-                ContextStreams::default(),
-            )
-        }
-    }
-
-    let converted = SensorySnapshot::sensory_from_adapter(AdapterFrame).unwrap();
-    let sourced = AdapterSource
-        .sensory_snapshot(OrganismId(5), Tick(12))
-        .unwrap();
-
-    assert_eq!(converted.organism_id, OrganismId(1));
-    assert_eq!(sourced.organism_id, OrganismId(5));
 }

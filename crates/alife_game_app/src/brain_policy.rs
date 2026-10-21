@@ -1,4 +1,4 @@
-//! Explicit product brain-policy intent and required-GPU construction boundary.
+//! Neural backend selection for gameplay and headless tools.
 
 use alife_core::PolicyBackend;
 

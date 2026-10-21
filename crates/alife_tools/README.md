@@ -1,208 +1,45 @@
 # alife_tools
 
-Developer tooling contracts.
+Developer asset builders, GPU diagnostics, and persistence
+validators. Normal gameplay does not depend on this crate.
 
-This crate is for repository tooling, Graphify/DOX helpers, validation manifests, and future offline utilities. Tooling must remain optional for normal Cargo build/check/test unless a specific validation script invokes it.
+## Asset tools
 
-## Offline log tools (`p30_offline`)
-
-P30 ships a Rust CLI for offline analysis of packed logs, scenario markers, and benchmark markers.
-
-### 1) Import scenario/benchmark markers and packed records into a stable bundle
-
-```powershell
-cargo run -p alife_tools --bin p30_offline -- bundle import `
-  --record path\to\packed_records.json `
-  --scenario-fixture crates\alife_world\tests\fixtures\golden_traces\food-seeking.json `
-  --benchmark-markdown crates\alife_tools\docs\benchmark_markers.md `
-  --source "p30 smoke bundle"
-```
-
-```bash
-cargo run -p alife_tools --bin p30_offline -- bundle import \
-  --record path/to/packed_records.json \
-  --scenario-fixture crates/alife_world/tests/fixtures/golden_traces/food-seeking.json \
-  --benchmark-markdown path/to/benchmark_report.md \
-  --source "p30 smoke bundle"
-```
-
-`packed_records.json` is a JSON array of `PackedExperienceRecord` (frame + side buffers).
-
-The bundle defaults to:
+- [`creature_part_builder`](src/bin/creature_part_builder.rs) renders GeneForge
+  assembly preview sheets. The Blender importer in `scripts/` builds the assets.
+- [`terrain_atlas_builder`](src/bin/terrain_atlas_builder.rs) builds albedo, normal,
+  and ORM atlases from a source sheet and generation configuration.
 
 ```text
-target/artifacts/p30_offline_bundle.json
+cargo run -p alife_tools --bin terrain_atlas_builder -- SOURCE.png CONFIG.json OUTPUT_DIRECTORY
 ```
 
-### 2) Summarize a bundle or packed-record log
+Keep useful editable inputs alongside exported runtime assets and refresh manifest
+digests when registered outputs change.
 
-```powershell
-cargo run -p alife_tools --bin p30_offline -- summary `
-  --bundle target/artifacts/p30_offline_bundle.json `
-  --cluster-k 4 `
-  --cluster-iterations 12 `
-  --markdown target/artifacts/p30_offline_summary.md `
-  --trajectory-csv target/artifacts/p30_trajectory.csv `
-  --action-csv target/artifacts/p30_actions.csv `
-  --json target/artifacts/p30_summary.json
+## Persistence validation
+
+[`p34_persistence`](src/bin/p34_persistence.rs) validates portable save, runtime
+configuration, and asset-manifest files. It checks data contracts; it does not
+exercise the player's save/load UI.
+
+```text
+cargo run -p alife_tools --bin p34_persistence -- validate-fixtures crates/alife_world/tests/fixtures/p34
+cargo run -p alife_tools --bin p34_persistence -- validate-save crates/alife_world/tests/fixtures/p34/tiny_save.json crates/alife_world/tests/fixtures/p34
 ```
 
-```bash
-cargo run -p alife_tools --bin p30_offline -- summary \
-  --bundle target/artifacts/p30_offline_bundle.json \
-  --cluster-k 4 \
-  --cluster-iterations 12 \
-  --markdown target/artifacts/p30_offline_summary.md \
-  --trajectory-csv target/artifacts/p30_trajectory.csv \
-  --action-csv target/artifacts/p30_actions.csv \
-  --json target/artifacts/p30_summary.json
-```
+## GPU diagnostics
 
-You can also summarize direct packed-record JSON with:
+[`benchmark_tiers`](src/bin/benchmark_tiers.rs) measures actual closed-loop GPU work
+with `--backend gpu-closed-loop`, selected classes, sensor profiles, population
+rows, seed, target file, and output path. It can also write a canonical target file
+or validate an existing report. Custom target sets and selected row subsets are
+supported. Targets are comparison inputs; a planning estimate or CPU fixture is
+not a hardware measurement.
 
-```bash
-cargo run -p alife_tools --bin p30_offline -- summary \
-  --record path/to/packed_records.json
-```
+The retired EI report/lab tools and their reports remain in Git history. Current
+world reproduction, creature state, and learned checkpoints stay in their owning
+runtime/data paths.
 
-## Optional ETF/Neural Collapse tooling (`p31_offline`)
-
-P31 tooling is offline and optional. It generates optional versioned representation
-prototype tables and computes neural-collapse style summary metrics from trace data.
-It is intentionally not required for normal gameplay or runtime builds.
-
-### 1) Generate ETF simplex prototypes for fixed affordance classes
-
-```powershell
-cargo run -p alife_tools --bin p31_offline -- generate `
-  --classes 10 --dimension 64 --out target/artifacts/p31_etf_prototypes_v1.json
-```
-
-```bash
-cargo run -p alife_tools --bin p31_offline -- generate \
-  --classes 10 --dimension 64 --out target/artifacts/p31_etf_prototypes_v1.json
-```
-
-### 2) Analyze trace-style exported logs
-
-```powershell
-cargo run -p alife_tools --bin p31_offline -- analyze-trace \
-  --trace crates/alife_world/tests/fixtures/golden_traces/food-seeking.json \
-  --prototypes target/artifacts/p31_etf_prototypes_v1.json \
-  --out target/artifacts/p31_nc_summary.json
-```
-
-```bash
-cargo run -p alife_tools --bin p31_offline -- analyze-trace \
-  --trace crates/alife_world/tests/fixtures/golden_traces/food-seeking.json \
-  --prototypes target/artifacts/p31_etf_prototypes_v1.json \
-  --out target/artifacts/p31_nc_summary.json
-```
-
-### 3) Emit a versioned sensory lobe asset for P08/P14 consumers
-
-```bash
-cargo run -p alife_tools --bin p31_offline -- write-lobe-asset \
-  --prototypes target/artifacts/p31_etf_prototypes_v1.json \
-  --out target/artifacts/p31_sensory_lobe_etf_v1.json
-```
-
-## Evolution genome lab (`p33_genome_lab`)
-
-P33 keeps its legacy `BrainGenome` smoke helper in `alife_tools::p33_evolution`.
-EI0 adds two offline foundations beside it:
-
-- `p33_evaluation` scores validated packed logs without collapsing ecological,
-  cognitive, social, group, stability, efficiency, and diversity objectives.
-- `p33_selection` plans managed pairings and breeds only authoritative
-  `alife_core::CreatureGenome` parents through seeded core reproduction.
-
-The smoke command still exercises the legacy lab:
-
-```powershell
-cargo run -p alife_tools --bin p33_genome_lab -- smoke `
-  --seed 43981 `
-  --generations 1 `
-  --out target/artifacts/p33_generation_smoke.json
-```
-
-```bash
-cargo run -p alife_tools --bin p33_genome_lab -- smoke \
-  --seed 43981 \
-  --generations 1 \
-  --out target/artifacts/p33_generation_smoke.json
-```
-
-P33 does not import P32/D2NWG types. If generated weight assets are available,
-refer to them through `BirthWeightInitializerRef` with `birth_only: true`.
-
-### EI0 intelligence battery
-
-Battery evidence has permanent-anchor, procedural-breeding, and hidden-promotion
-layers. Missing exposure stays `UNKNOWN`; it is never converted to zero. Hidden
-promotion requires complete source-run, assistance, exposure, adapter, backend,
-foundation, genetic-lineage, and compute provenance. Fixed-answer reuse,
-anchor-only gains, or group free-riding blocks promotion. Persistent packs and
-randomized teams are separate evidence modes.
-
-Run the committed real fixture and write a machine-readable report with:
-
-```powershell
-cargo run -p alife_tools --bin p33_genome_lab -- evaluate-fixture `
-  --fixture crates/alife_tools/tests/fixtures/p33_ei0_real_battery.json `
-  --out crates/alife_tools/reports/ei0_real_fixture_report.json
-```
-
-The committed fixture executes real `ScenarioFixture` ticks and consumes their
-packed records. Its backend is explicitly `HeuristicBaseline`, so the report is
-deterministic tooling evidence, not hidden-promotion or GPU neural intelligence
-evidence. The fixture has no honest baseline/acquisition, transfer, reversal,
-delay, removal, or replacement variants. Those measures and their dependent
-objectives therefore remain `UNKNOWN`, and `promotion_eligible` remains false.
-
-### EI0 managed breeding
-
-`run_managed_selection` validates each managed `CreatureGenome`, preserves wild
-genomes unchanged, retains Pareto strengths, minority lineages, and declared
-specialists, then applies deterministic seeded lexicase ordering. It rejects
-shared-lineage, shared-parent, and known-ancestor pairings.
-
-A high-cognition, low-ecology exception can breed only with a robust unrelated
-mate. Two fragile exceptions can never pair. Core `CreatureGenome::reproduce`
-creates every child; core expression and `PhenotypeCompiler` compilation must
-succeed before the child is viable. Introgression creates sibling controls and
-places every child in elevated probation for cognition, ecology, transfer,
-stability/health, and development, with viable population controls.
-
-## Persistence/config/asset validator (`p34_persistence`)
-
-P34 adds a tiny validator for portable save, runtime config, and asset manifest
-fixtures. It is a smoke tool for schema/digest checks, not runtime save/load UI.
-
-```powershell
-cargo run -p alife_tools --bin p34_persistence -- validate-fixtures `
-  crates\alife_world\tests\fixtures\p34
-```
-
-```bash
-cargo run -p alife_tools --bin p34_persistence -- validate-fixtures \
-  crates/alife_world/tests/fixtures/p34
-```
-
-Individual validation commands are also available:
-
-```bash
-cargo run -p alife_tools --bin p34_persistence -- validate-save \
-  crates/alife_world/tests/fixtures/p34/tiny_save.json \
-  crates/alife_world/tests/fixtures/p34
-
-cargo run -p alife_tools --bin p34_persistence -- validate-config \
-  crates/alife_world/tests/fixtures/p34/tiny_config.json
-
-cargo run -p alife_tools --bin p34_persistence -- validate-manifest \
-  crates/alife_world/tests/fixtures/p34/tiny_asset_manifest.json \
-  crates/alife_world/tests/fixtures/p34
-```
-
-Current production launch commands and evidence rules live in
-`docs/DEVELOPMENT.md` and `docs/EVIDENCE.md`.
+See [Development](../../docs/DEVELOPMENT.md) for current launch and validation
+commands and [Evidence](../../docs/EVIDENCE.md) for retained measurements and limits.

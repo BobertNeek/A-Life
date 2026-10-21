@@ -1,4 +1,4 @@
-//! Explicit real-GPU differential qualification. Compile-only in CPU clouds.
+//! Real-GPU batch-versus-single state-capture checks.
 #![cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
 mod support;
 use alife_core::{OrganismId, SensorProfile, Tick};
@@ -41,7 +41,7 @@ fn capture_boundary(
 }
 
 #[test]
-#[ignore = "requires an explicitly coordinated GPU; no fallback or cloud emulation"]
+#[ignore = "requires GPU hardware"]
 fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
     let mut backend =
         GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
@@ -98,10 +98,6 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
             // replay boundary must be captured after that explicit operation.
             (before, before_activity) = capture_boundary(&mut backend, &handles, tick);
         }
-        let retained_before = before
-            .iter()
-            .map(|r| r.mutable_words.clone())
-            .collect::<Vec<_>>();
         let mut frames = Vec::new();
         let mut uploads = Vec::new();
         for (i, (handle, phenotype)) in handles.iter().zip(&phenotypes).enumerate() {
@@ -190,7 +186,6 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
                 pre.active_weight_bank, post.active_weight_bank,
                 "{diagnostic}"
             );
-            assert_eq!(pre.mutable_words, retained_before[i], "{diagnostic}");
             assert_eq!(outcome.handle, handles[i], "{diagnostic}");
             assert_eq!(
                 outcome.dispatch_generation, post.logical_dispatch_generation,

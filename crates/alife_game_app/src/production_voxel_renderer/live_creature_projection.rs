@@ -1,6 +1,7 @@
 //! Live authoritative creature projection into Bevy transforms and selection indexes.
 
 use super::*;
+use alife_core::Validate;
 
 pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
     let highlands = world.contains_resource::<creature_grounding::SelectedTerrain>();
@@ -13,7 +14,6 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
             if !frame.is_changed() {
                 return;
             }
-            let mut animation_by_stable_id = BTreeMap::new();
             world.resource_scope(
                 |world, mut scene: bevy::prelude::Mut<Fvr03ProductionVoxelSceneResource>| {
                     scene.creature_refs_by_tile.clear();
@@ -85,25 +85,23 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                         if let Some(row) = frame.current.organism(root.stable_id) {
                             let selected_action_kind =
                                 row.motor.as_ref().and_then(|motor| motor.action_kind);
-                            if let Ok(snapshot) = crate::creature_visual_snapshot_from_parts(
-                                row.organism_id,
-                                row.world_entity_id,
-                                row.object.position,
-                                None,
-                                None,
-                                &row.biochemistry.homeostasis,
-                                row.sleep_phase,
-                                selected_action_kind,
-                            ) {
-                                if visual.expression != snapshot.expression {
-                                    visual.expression = snapshot.expression;
+                            let homeostasis = &row.biochemistry.homeostasis;
+                            if homeostasis.validate_contract().is_ok() {
+                                let expression =
+                                    crate::creature_expression_state(row.sleep_phase, homeostasis);
+                                let animation = crate::creature_animation_state(
+                                    row.sleep_phase,
+                                    homeostasis,
+                                    selected_action_kind,
+                                );
+                                if visual.expression != expression {
+                                    visual.expression = expression;
                                 }
-                                if visual.animation != snapshot.animation {
-                                    visual.animation = snapshot.animation;
+                                if visual.animation != animation {
+                                    visual.animation = animation;
                                 }
                             }
                         }
-                        animation_by_stable_id.insert(root.stable_id.raw(), visual.animation);
                         let stable_ref = StableVoxelObjectRef {
                             kind: StableVoxelRefKind::Creature,
                             stable_id: Some(root.stable_id),
@@ -124,15 +122,6 @@ pub(super) fn project_live_world_to_fvr04_creature_roots(world: &mut World) {
                     scene.creature_root_count = rendered_count;
                 },
             );
-            let mut parts = world.query::<&mut ProductionCreaturePartMarker>();
-            for mut part in parts.iter_mut(world) {
-                if let Some(animation) = animation_by_stable_id.get(&part.stable_id.raw()) {
-                    if part.animation != *animation {
-                        part.animation = *animation;
-                    }
-                }
-            }
-
             #[cfg(feature = "gpu-runtime")]
             {
                 let pending_newborns = {

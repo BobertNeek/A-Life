@@ -6,8 +6,8 @@ use alife_gpu_backend::{
     pack_replay_eligibility_sample, unpack_replay_eligibility_sample, GpuBrainSlotExtensionRecord,
     GpuClassBucketPlan, GpuDecoderEligibilityMetadata, GpuPlasticityReceptorRecord,
     GpuReplayCaptureIdentityRecord, GpuReplayEventRecord, GpuSleepParameterRecord,
-    GpuSlotLearningStateRecord, GpuSynapseLearningMetadata, CLOSED_LOOP_DECODE_WGSL,
-    CLOSED_LOOP_RECURRENT_WGSL, GPU_NO_EXTENSION_SENTINEL, GPU_SLEEP_PARAMETER_SCHEMA_VERSION,
+    GpuSlotLearningStateRecord, GpuSynapseLearningMetadata, GPU_NO_EXTENSION_SENTINEL,
+    GPU_SLEEP_PARAMETER_SCHEMA_VERSION,
 };
 
 fn phenotype() -> alife_core::BrainPhenotype {
@@ -22,11 +22,6 @@ fn phenotype() -> alife_core::BrainPhenotype {
         SensorProfile::GroundedObjectSlotsV1,
     )
     .unwrap()
-}
-
-fn reads_bank_zero_mutable_weights_directly(source: &str) -> bool {
-    source.contains("load_state_f32(brain.lifetime_weight_offset")
-        || source.contains("load_state_f32(brain.fast_weight_offset")
 }
 
 #[test]
@@ -202,14 +197,4 @@ fn installed_extension_binds_learning_memory_plans_and_zeroed_selectors() {
         GPU_SLEEP_PARAMETER_SCHEMA_VERSION,
         u32::from(phenotype.sleep_consolidation_plan().schema_version())
     );
-}
-
-#[test]
-fn every_effective_weight_reader_uses_the_active_weight_bank_selector() {
-    for source in [CLOSED_LOOP_RECURRENT_WGSL, CLOSED_LOOP_DECODE_WGSL] {
-        assert!(source.contains("active_weight_bank"));
-        assert!(source.contains("fast_bank_1_offset"));
-        assert!(source.contains("lifetime_bank_1_offset"));
-        assert!(!reads_bank_zero_mutable_weights_directly(source));
-    }
 }

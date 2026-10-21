@@ -326,11 +326,3 @@ fn cpu_state_uses_linear_buffers_not_dense_weight_matrices() {
     );
     assert!(state.projections.is_empty());
 }
-
-#[test]
-fn alife_core_neural_projection_api_stays_engine_independent() {
-    fn assert_send_sync<T: Send + Sync>() {}
-
-    assert_send_sync::<CpuNeuralState>();
-    assert_send_sync::<NeuralProjectionSchema>();
-}

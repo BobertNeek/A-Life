@@ -1,4 +1,4 @@
-//! v0 scaffold: central schema and ABI version registry.
+//! Schema and ABI version registry.
 
 use serde::{Deserialize, Serialize};
 

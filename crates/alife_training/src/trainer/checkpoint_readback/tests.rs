@@ -107,8 +107,7 @@ fn packed_decode_is_bit_exact_to_three_read_reference_for_all_lanes() {
             .map(|i| finite[(i + 3) % finite.len()])
             .collect();
         optimizer.extend((0..count).map(|i| ages[i % ages.len()]));
-        // This is the old three-read interpretation: finite moments, finite
-        // weights, then exact integer ages. It performs no neural computation.
+        // Independent three-read interpretation: float moments/weights, integer ages.
         let reference: Vec<_> = weights
             .iter()
             .chain(&optimizer[..count * 2])

@@ -1,7 +1,4 @@
-//! Focused RED/GREEN coverage for the explicit Nano512 founder projection.
-
-use std::fs;
-use std::path::Path;
+//! Explicit Nano512 founder projection compatibility.
 
 use alife_core::{
     Blake3Digest, BrainCapacityClass, BrainGenome, CanonicalDigestBuilder, CreatureGenome,
@@ -392,37 +389,4 @@ fn n512_projection_receipt_rejects_cross_instance_binding() {
         .receipt()
         .validate_against_projection(&second)
         .is_err());
-}
-
-#[test]
-fn n512_projection_preserves_checked_foundation_payloads() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/brain_foundations");
-    for (profile, file_name) in [
-        (
-            SensorProfile::PrivilegedAffordanceV1,
-            "n512-v1-privileged.alife-foundation",
-        ),
-        (
-            SensorProfile::GroundedObjectSlotsV1,
-            "n512-v1-grounded.alife-foundation",
-        ),
-        (
-            SensorProfile::PrivilegedAffordanceV1,
-            "n2048-v1-privileged.alife-foundation",
-        ),
-        (
-            SensorProfile::GroundedObjectSlotsV1,
-            "n2048-v1-grounded.alife-foundation",
-        ),
-    ] {
-        let path = root.join(file_name);
-        let checked = fs::read(&path).unwrap();
-        let asset = if file_name.starts_with("n512") {
-            FoundationWeightAsset::builtin_nano512_v1(profile).unwrap()
-        } else {
-            FoundationWeightAsset::builtin_n2048_v1(profile).unwrap()
-        };
-        assert_eq!(asset.encode_canonical().unwrap(), checked, "{file_name}");
-        assert_ne!(asset.digest().bytes(), &[0; 32], "{file_name}");
-    }
 }

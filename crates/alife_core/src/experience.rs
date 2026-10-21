@@ -1,4 +1,4 @@
-//! Contract-only causal three-phase ExperiencePatch and policy-evidence records.
+//! Causal three-phase ExperiencePatch and neural decision evidence.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -21,9 +21,8 @@ use crate::{
     MAX_ACTION_CANDIDATES,
 };
 
-/// The v1.1 semantic spine is a deliberate ABI after the legacy/current
-/// experience ABI. The central version registry remains owned by migration
-/// work, so this source task keeps the new boundary explicit here.
+/// Cognitive-context experience extends the base header ABI; joint motor
+/// outcomes use the following version.
 pub const V11_EXPERIENCE_ABI_VERSION: u16 = ExperiencePatchHeader::ABI_VERSION + 1;
 pub const V12_EXPERIENCE_ABI_VERSION: u16 = V11_EXPERIENCE_ABI_VERSION + 1;
 
@@ -629,7 +628,7 @@ pub struct NeuralDecisionEvidence {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[allow(clippy::large_enum_variant)] // The unboxed public shape is the versioned Task 2 ABI.
+#[allow(clippy::large_enum_variant)] // Preserve the public unboxed representation.
 pub enum DecisionEvidence {
     NeuralClosedLoopGpu(NeuralDecisionEvidence),
     HeuristicBaseline(HeuristicDecisionEvidence),
@@ -1233,10 +1232,6 @@ impl JointPhysicalOutcome {
         self.validate_contract()?;
         Ok(self)
     }
-
-    pub const fn joint_reward(&self) -> Option<SignedValence> {
-        None
-    }
 }
 
 impl Validate for JointPhysicalOutcome {
@@ -1253,22 +1248,25 @@ impl Validate for JointPhysicalOutcome {
         for outcome in &self.channel_outcomes {
             outcome.validate_contract()?;
         }
-        let mut channels = self
+        if self
             .channel_observations
             .iter()
-            .map(|observation| format!("{:?}", observation.channel))
-            .collect::<Vec<_>>();
-        channels.sort();
-        if channels.windows(2).any(|pair| pair[0] == pair[1]) {
-            return Err(ScaffoldContractError::InvalidActionDecision);
-        }
-        let mut outcome_channels = self
-            .channel_outcomes
-            .iter()
-            .map(|outcome| outcome.channel.canonical_key())
-            .collect::<Vec<_>>();
-        outcome_channels.sort_unstable();
-        if outcome_channels.windows(2).any(|pair| pair[0] == pair[1]) {
+            .enumerate()
+            .any(|(index, observation)| {
+                self.channel_observations[..index]
+                    .iter()
+                    .any(|previous| previous.channel == observation.channel)
+            })
+            || self
+                .channel_outcomes
+                .iter()
+                .enumerate()
+                .any(|(index, outcome)| {
+                    self.channel_outcomes[..index]
+                        .iter()
+                        .any(|previous| previous.channel == outcome.channel)
+                })
+        {
             return Err(ScaffoldContractError::InvalidActionDecision);
         }
         Ok(())
@@ -2080,10 +2078,6 @@ impl ExperiencePatch {
             ExperiencePatchPhase::Sealed,
         ]
     }
-
-    pub const fn as_learning_view(&self) -> ExperiencePatchView<'_> {
-        ExperiencePatchView { patch: self }
-    }
 }
 
 impl Validate for ExperiencePatch {
@@ -2567,29 +2561,6 @@ fn legacy_candidate_from_command(
     )
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ExperiencePatchView<'a> {
-    patch: &'a ExperiencePatch,
-}
-
-impl<'a> ExperiencePatchView<'a> {
-    pub const fn header(self) -> &'a ExperiencePatchHeader {
-        &self.patch.header
-    }
-
-    pub const fn pre_action(self) -> &'a PreActionSnapshot {
-        &self.patch.pre_action
-    }
-
-    pub const fn decision(self) -> &'a DecisionSnapshot {
-        &self.patch.decision
-    }
-
-    pub const fn outcome(self) -> &'a PostActionOutcome {
-        &self.patch.outcome
-    }
-}
-
 fn validate_same_sequence(
     expected: ExperienceSequenceId,
     actual: ExperienceSequenceId,
@@ -2820,9 +2791,6 @@ fn validate_action_trace(trace: &ActionArbitrationTrace) -> Result<(), ScaffoldC
         validate_finite(sample.output_score)?;
         Confidence::new(sample.confidence.raw())?;
     }
-    for suppressed in &trace.suppressed_proposals {
-        validate_finite(suppressed.proposal_index as f32)?;
-    }
     if let Some(action_id) = trace.wta_result.selected_action_id {
         action_id.validate()?;
     }
@@ -2846,11 +2814,6 @@ fn validate_action_proposal(proposal: ActionProposal) -> Result<(), ScaffoldCont
     proposal.action_id.validate()?;
     validate_finite(proposal.score)?;
     Confidence::new(proposal.confidence.raw())?;
-    if let Some(source_lobe) = proposal.source_lobe {
-        if source_lobe.raw() == 0 {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-    }
     proposal.target.validate()?;
     NormalizedScalar::new(proposal.salience.raw())?;
     crate::Intensity::new(proposal.intensity.raw())?;

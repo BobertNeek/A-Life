@@ -1,4 +1,4 @@
-//! v0 scaffold: engine-independent math primitives.
+//! Engine-independent math primitives.
 
 use bytemuck::{Pod, Zeroable};
 use serde::{Deserialize, Serialize};

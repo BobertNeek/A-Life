@@ -7,8 +7,7 @@ use std::time::Duration;
 use alife_core::BrainScaleTier;
 #[cfg(feature = "gpu-tests")]
 use alife_core::{
-    BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, LegacyFoundationAbiId,
-    OrganismId, PolicyBackend, ProductionRuntimeAbiId, ProductionRuntimePath,
+    BrainCapacityClass, CreatureGenome, FoundationGeneticIdentity, OrganismId, PolicyBackend,
     ScaffoldContractError, SensorProfile, Tick, WorldEntityId,
 };
 #[cfg(feature = "production-voxel-frontend")]
@@ -485,10 +484,8 @@ fn gpu_new_game_publishes_only_exact_resident_state() {
     );
     assert!(result.exact_save.creatures.iter().all(|creature| {
         let brain = creature.gpu_brain.as_ref().unwrap();
-        let receipt = brain.legacy_nano512_compatibility_receipt.as_ref().unwrap();
-        receipt.source_abi_id() == LegacyFoundationAbiId::NANO512_V1
-            && receipt.runtime_abi_id() == ProductionRuntimeAbiId::V2
-            && receipt.runtime_path() == ProductionRuntimePath::ORDINARY_GPU_ORGANISM_V2
+        brain.exact_cognitive_state.is_some()
+            && brain.legacy_nano512_compatibility_receipt.is_none()
     }));
     let organism_genomes = result
         .exact_save
@@ -524,25 +521,9 @@ fn gpu_new_game_publishes_only_exact_resident_state() {
                 .clone()
         })
         .collect::<BTreeSet<_>>();
-    let receipts = result
-        .exact_save
-        .creatures
-        .iter()
-        .map(|creature| {
-            creature
-                .gpu_brain
-                .as_ref()
-                .unwrap()
-                .legacy_nano512_compatibility_receipt
-                .as_ref()
-                .unwrap()
-                .canonical_digest()
-        })
-        .collect::<BTreeSet<_>>();
     assert_eq!(organism_genomes.len(), 4);
-    assert_eq!(immutable_phenotypes.len(), 1);
-    assert_eq!(coordinate_inputs.len(), 1);
-    assert_eq!(receipts.len(), 1);
+    assert_eq!(immutable_phenotypes.len(), 4);
+    assert_eq!(coordinate_inputs.len(), 4);
     let reopened = PortableSaveFile::from_json_file(&result.save_path).unwrap();
     reopened
         .validate_with_asset_root(&result.asset_root)
@@ -585,7 +566,7 @@ fn gpu_new_game_publishes_only_exact_resident_state() {
             .as_ref()
             .unwrap()
             .legacy_nano512_compatibility_receipt
-            .is_some()));
+            .is_none()));
     drop(restored);
     std::fs::remove_dir_all(root).unwrap();
 }

@@ -1,12 +1,10 @@
 //! Explicit `HeuristicBaseline` comparison runtime in pure Rust.
 //!
-//! This separately labelled baseline never shadows, gates, or replaces the
-//! GPU-authoritative production neural policy. It orchestrates existing core
-//! contracts and owns no world simulation, adapters, rendering, or GPU runtime.
+//! Combines core systems for comparison; production neural execution lives in
+//! `alife_gpu_backend`.
 
 use serde::{Deserialize, Serialize};
 
-use crate::LifetimeTraitLedger;
 use crate::{
     cpu_spmv_projection, finalize_cpu_activations, heuristic_baseline_arbitrate,
     update_oja_shadow_traces, validate_finite_slice, ActionArbitrationConfig,
@@ -21,10 +19,9 @@ use crate::{
     NeuralProjectionSchema, NeuralUpdateReport, NormalizedScalar, OjaUpdateConfig, OrganismId,
     PackedExperienceRecord, PerceptionFrame, PhysicalActionOutcome, Pose, PostActionOutcome,
     PreActionSnapshot, ScaffoldContractError, SensorProfile, SensorySnapshot, SignedValence,
-    SleepConsolidationConfig, SleepConsolidationReport, SleepConsolidator, SleepController,
-    SleepPhase, SleepState, SleepTransition, SleepTrigger, StructuralEditBatch, Tick,
-    TopologicalMap, TopologicalMapConfig, TopologySidecar, TopologyUpdate, Validate, Velocity,
-    WeightSplitContract,
+    SleepConsolidationConfig, SleepController, SleepPhase, SleepState, SleepTransition,
+    SleepTrigger, Tick, TopologicalMap, TopologicalMapConfig, TopologySidecar, TopologyUpdate,
+    Validate, Velocity, WeightSplitContract,
 };
 
 const DEFAULT_MEMORY_CAPACITY: usize = 64;
@@ -239,9 +236,7 @@ pub struct BrainTickOutput {
 }
 
 impl BrainTickOutput {
-    fn terminal(error: ScaffoldContractError, diagnostics: BrainTickDiagnostics) -> Self {
-        let mut diagnostics = diagnostics;
-        diagnostics.observe_error(&error);
+    fn terminal(diagnostics: BrainTickDiagnostics) -> Self {
         Self {
             status: BrainTickStatus::TerminalInvalidState,
             selected_action: None,
@@ -423,8 +418,6 @@ pub struct CreatureMind {
     topology_sidecar: TopologySidecar,
     action_state: CreatureActionState,
     sleep_controller: SleepController,
-    lifetime_traits: LifetimeTraitLedger,
-    pending_structural_edits: Vec<StructuralEditBatch>,
     tick: Tick,
     next_sequence_id: u64,
     deterministic_seed: u64,
@@ -475,8 +468,6 @@ impl CreatureMind {
             topology_sidecar: TopologySidecar::new(organism_id, TopologicalMapConfig::default())?,
             action_state: CreatureActionState::reference(),
             sleep_controller: SleepController::new(SleepConsolidationConfig::reference())?,
-            lifetime_traits: LifetimeTraitLedger::new(64)?,
-            pending_structural_edits: Vec::new(),
             tick,
             next_sequence_id: 1,
             deterministic_seed,
@@ -518,10 +509,6 @@ impl CreatureMind {
         self.sleep_controller.state()
     }
 
-    pub fn pending_structural_edits(&self) -> &[StructuralEditBatch] {
-        &self.pending_structural_edits
-    }
-
     pub const fn diagnostics(&self) -> BrainTickDiagnostics {
         self.diagnostics
     }
@@ -556,58 +543,6 @@ impl CreatureMind {
         self.sleep_controller.force_sleep(tick, trigger)
     }
 
-    pub fn run_sleep_consolidation(
-        &mut self,
-        tick: Tick,
-    ) -> Result<SleepConsolidationReport, ScaffoldContractError> {
-        Tick::validate_monotonic(self.tick, tick)?;
-        self.sleep_controller.validate_contract()?;
-        self.neural_schema.validate()?;
-        self.memory_bank
-            .records_chronological()
-            .iter()
-            .try_for_each(|record| record.validate_contract())?;
-        self.topology_sidecar.validate_contract()?;
-
-        let consolidator = SleepConsolidator::new(self.sleep_controller.config())?;
-        let neural = consolidator.consolidate_neural_schema(
-            &mut self.neural_schema,
-            &mut self.lifetime_traits,
-            tick,
-        )?;
-        self.neural_state.projections = self.neural_schema.projections.clone();
-        let memory = consolidator.compress_memory_bank(&mut self.memory_bank)?;
-        let topology = consolidator.consolidate_topology_sidecar(&mut self.topology_sidecar, 1)?;
-        let structural_edits = consolidator.generate_structural_edit_batch(
-            &self.neural_schema,
-            self.topology_sidecar.map(),
-            tick,
-        )?;
-        self.pending_structural_edits.push(structural_edits.clone());
-        self.development_state.sleep_cycle_count =
-            self.development_state.sleep_cycle_count.saturating_add(1);
-        self.development_state.consolidation_cycle_count = self
-            .development_state
-            .consolidation_cycle_count
-            .saturating_add(1);
-        self.development_state.last_sleep_tick = Some(tick);
-        let report = SleepConsolidationReport {
-            schema_version: crate::SLEEP_CONSOLIDATION_SCHEMA_VERSION,
-            tick,
-            sleep_phase: self.sleep_controller.state().phase,
-            traits: crate::TraitPromotionReport {
-                promoted_count: neural.promoted_trait_count,
-                ..crate::TraitPromotionReport::default()
-            },
-            neural,
-            memory,
-            topology,
-            structural_edits,
-        };
-        report.validate_contract()?;
-        Ok(report)
-    }
-
     pub fn tick<S, A, O>(
         &mut self,
         input: BrainTickInput,
@@ -622,7 +557,7 @@ impl CreatureMind {
     {
         match self.try_tick(input, sensory_adapter, action_executor, outcome_observer) {
             Ok(output) => output,
-            Err((error, diagnostics)) => BrainTickOutput::terminal(error, diagnostics),
+            Err((_, diagnostics)) => BrainTickOutput::terminal(diagnostics),
         }
     }
 
@@ -796,10 +731,7 @@ impl CreatureMind {
         if input.enable_learning_trace_update {
             let learning_rate_scale = fallible(
                 &mut diagnostics,
-                ChemistryModulation::learning_rate_scale(
-                    &next_homeostasis,
-                    self.homeostatic_parameters,
-                ),
+                ChemistryModulation::learning_rate_scale(&next_homeostasis),
             )?;
             let oja_report = fallible(
                 &mut diagnostics,
@@ -875,10 +807,6 @@ impl CreatureMind {
         self.homeostasis.validate_contract()?;
         self.neural_schema.validate()?;
         self.sleep_controller.validate_contract()?;
-        self.lifetime_traits.validate_contract()?;
-        for batch in &self.pending_structural_edits {
-            batch.validate_contract()?;
-        }
         self.topology_sidecar.validate_contract()?;
         validate_finite_slice(&self.neural_state.activations)?;
         validate_finite_slice(&self.neural_state.previous_activations)?;
@@ -981,8 +909,7 @@ impl CreatureMind {
         proposals: &[ActionProposal],
         tick: Tick,
     ) -> Result<Vec<ActionProposal>, ScaffoldContractError> {
-        let salience_weight =
-            ChemistryModulation::salience_weight(&self.homeostasis, self.homeostatic_parameters)?;
+        let salience_weight = ChemistryModulation::salience_weight(&self.homeostasis)?;
         let endocrine_delta =
             (self.homeostasis.hormones.dopamine - self.homeostasis.hormones.cortisol) * 0.05;
 
@@ -996,11 +923,8 @@ impl CreatureMind {
                     + endocrine_delta
                     + self.action_state.recent_penalty_for(&proposal, tick);
                 crate::validate_finite(score_delta)?;
-                let confidence = ChemistryModulation::motor_confidence(
-                    proposal.confidence,
-                    &self.homeostasis,
-                    self.homeostatic_parameters,
-                )?;
+                let confidence =
+                    ChemistryModulation::motor_confidence(proposal.confidence, &self.homeostasis)?;
                 proposal.confidence = confidence;
                 proposal.score_bias = Some(ActionScoreBias {
                     source: ActionBiasSource::EndocrineDrive,

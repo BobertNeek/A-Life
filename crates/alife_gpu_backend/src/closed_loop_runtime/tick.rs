@@ -52,9 +52,9 @@ impl GpuClosedLoopBackend {
                 .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
             let resident = pool.resident(handle)?;
             if resident
-                .last_throttle
+                .last_activity
                 .as_ref()
-                .is_some_and(|previous| previous.tick > frame.tick().raw())
+                .is_some_and(|previous| previous.throttle.tick > frame.tick().raw())
             {
                 return Err(ScaffoldContractError::NonMonotonicTick);
             }
@@ -151,8 +151,8 @@ impl GpuClosedLoopBackend {
                         sample.validate_for(&self.activity_policy)?;
                         if sample.dispatch_identity() != identity
                             || sample.source_dispatch_generation
-                                != resident.last_activity_dispatch_generation
-                            || sample.source_frame_digest != resident.last_activity_frame_digest
+                                != resident.last_activity_source().0
+                            || sample.source_frame_digest != resident.last_activity_source().1
                         {
                             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
                         }
@@ -196,21 +196,21 @@ impl GpuClosedLoopBackend {
                         .as_ref()
                         .expect("complete preflight retained occupied slot");
                     match input.memory_upload {
-                        Some(memory_upload) => GpuFixedActiveBatchEntry::with_memory(
+                        Some(memory_upload) => GpuActiveBatchEntry::with_memory(
                             input.frame,
                             &resident.brain_slot,
                             &resident.phenotype,
                             &activity_decisions[*index],
                             memory_upload,
-                            resident.active_eligibility_generation,
-                        ),
-                        None => GpuFixedActiveBatchEntry::new(
+                        )
+                        .with_eligibility_generation(resident.active_eligibility_generation),
+                        None => GpuActiveBatchEntry::new(
                             input.frame,
                             &resident.brain_slot,
                             &resident.phenotype,
                             &activity_decisions[*index],
-                            resident.active_eligibility_generation,
-                        ),
+                        )
+                        .with_eligibility_generation(resident.active_eligibility_generation),
                     }
                 })
                 .collect::<Vec<_>>();
@@ -346,7 +346,8 @@ impl GpuClosedLoopBackend {
         }
 
         if capture_logits {
-            for dispatch in &mut dispatches {
+            for index in 0..dispatches.len() {
+                let dispatch = &mut dispatches[index];
                 let bytes = dispatch
                     .batch
                     .as_ref()
@@ -363,6 +364,7 @@ impl GpuClosedLoopBackend {
                                     dispatch.chunk_index,
                                 );
                         }
+                        self.cleanup_unsubmitted_dispatches(&mut dispatches);
                         return Err(map_gpu_contract_error(error));
                     }
                 };
@@ -1268,12 +1270,11 @@ impl GpuClosedLoopBackend {
                 .checked_add(1)
                 .expect("activity cursor was prevalidated");
             resident.brain_atp_q16 = activity_work_receipts[index].atp_after_q16;
-            resident.last_activity_dispatch_generation = dispatch_generation.get();
-            resident.last_activity_frame_digest = input.frame.frame_digest().0;
             resident.last_completed_gpu_time_ns = completed_gpu_time_ns;
-            resident.last_pressure = Some(activity_decisions[index].pressure);
-            resident.last_throttle = Some(activity_decisions[index].clone());
-            resident.last_work = Some(activity_work_receipts[index].clone());
+            resident.last_activity = Some(ResidentActivity {
+                throttle: activity_decisions[index].clone(),
+                work: activity_work_receipts[index].clone(),
+            });
             resident
                 .v11
                 .record_gpu_recurrent_work(prepared_ticks[index].v11_work);

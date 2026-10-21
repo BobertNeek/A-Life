@@ -78,7 +78,6 @@
     "curiosity_bias_count": 2,
     "sleep_phase": "Awake",
     "sleep_cycle_count": 0,
-    "pending_structural_edit_count": 0,
     "final_drive_milli": [
       270,
       220,

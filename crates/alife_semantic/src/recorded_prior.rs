@@ -1,9 +1,6 @@
-//! Frozen replay of bounded semantic-prior outputs captured at the real provider boundary.
-//!
-//! A bank indexes only the exact request context. There is no scenario, time,
-//! expected outcome, inference worker, retry, or nearest-context fallback here.
-//! Provenance is a compatibility declaration, not proof that a model produced
-//! the entries; synthetic fixtures must remain identified as such in evidence.
+//! Frozen semantic-prior responses indexed by exact request context.
+//! Misses have no fallback. Declared provenance does not authenticate model
+//! responses; synthetic fixtures remain synthetic evidence.
 
 use std::{
     collections::BTreeMap,
@@ -31,8 +28,8 @@ pub struct RecordedPriorOrigin {
     pub model: String,
     /// Exact model SHA256, or an explicit declaration that it was not verified.
     pub model_sha256: String,
-    /// Current bounded-context builder, request schema/prompt, and vocabulary
-    /// fingerprint. The runtime must supply its own expected contract.
+    /// Fingerprint of the context builder, request schema/prompt and vocabulary,
+    /// checked against the runtime's expected value.
     pub context_contract: String,
 }
 
@@ -94,9 +91,8 @@ struct BankDocument {
     entries: BTreeMap<String, LocalSlmPriorOutput>,
 }
 
-// The live output type is shared with older callers. The bank's stricter wire
-// type rejects unknown/duplicate fields instead of silently dropping commands
-// or hidden scenario information during deserialization.
+// Strict wire types reject unknown and duplicate fields rather than silently
+// dropping commands or hidden scenario information.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RecordedOutput {
@@ -207,9 +203,8 @@ impl RecordedPriorBank {
         Self::from_cache(document.origin, document.entries, expected_context_contract)
     }
 
-    /// Parse a legacy exact-context cache with the same strict output and
-    /// duplicate-key checks as a recording bank. Its source provenance must be
-    /// supplied from the original capture receipt, never inferred or fabricated.
+    /// Import an exact-context cache with strict output and duplicate-key checks.
+    /// Source provenance comes from its capture receipt.
     pub fn from_cache_json_slice(
         origin: RecordedPriorOrigin,
         bytes: &[u8],
@@ -223,8 +218,7 @@ impl RecordedPriorBank {
         Self::from_cache(origin, cache.0, expected_context_contract)
     }
 
-    /// Export preparation only: wrap outputs already captured from the provider
-    /// boundary. This function does not synthesize or obtain model responses.
+    /// Wrap previously captured provider outputs without running inference.
     pub fn from_cache(
         origin: RecordedPriorOrigin,
         entries: BTreeMap<String, LocalSlmPriorOutput>,
@@ -289,8 +283,7 @@ impl RecordedPriorBank {
         Ok(bytes)
     }
 
-    /// Explicit export only. Refuses to replace an existing file, including the
-    /// frozen bank used by a running creature. Runtime replay calls only `load`.
+    /// Export without replacing an existing file or a running creature's bank.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<(), String> {
         let bytes = self.to_json_vec()?;
         let mut file = File::options()

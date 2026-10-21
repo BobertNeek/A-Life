@@ -1,4 +1,4 @@
-//! Opt-in lifetime decoder rates and current compiler persistence contracts.
+//! Opt-in lifetime decoder rates and compiler persistence.
 use alife_core::{
     BrainCapacityClass, BrainGenome, BrainPhenotype, CandidateActionFamily as Family,
     CompiledSynapseKind, CreatureGenome, CriticalPeriod, DecoderHeadKind as Head,

@@ -1,7 +1,5 @@
 //! Backend derivation of executed GPU neural work from a validated route schedule.
 
-use std::collections::BTreeSet;
-
 use alife_core::{
     BrainExecutionBudget, BrainPhenotype, BrainWorkCounters, NeuralThrottleDecision,
     ScaffoldContractError, UpdateCadence,
@@ -44,29 +42,7 @@ impl GpuActivityDispatchHeader {
         {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
-        let mut enabled_route_mask = [0_u32; GPU_ACTIVITY_ROUTE_MASK_WORDS];
-        for route_id in &decision.enabled_route_ids {
-            let route = usize::from(*route_id);
-            if route >= GPU_ACTIVITY_ROUTE_MASK_WORDS * u32::BITS as usize {
-                return Err(ScaffoldContractError::BrainActivityPolicyMismatch);
-            }
-            enabled_route_mask[route / u32::BITS as usize] |= 1_u32 << (route % u32::BITS as usize);
-        }
-        let value = Self {
-            schema_version: u32::from(decision.schema_version),
-            policy_version: u32::from(decision.policy_version),
-            class_id: u32::from(decision.class_id_raw),
-            slot: decision.handle_slot,
-            slot_generation: decision.handle_generation,
-            brain_slot_index: slot.brain_slot_index(),
-            microsteps: u32::from(decision.microsteps),
-            enabled_route_count: u32::try_from(decision.enabled_route_ids.len())
-                .map_err(|_| ScaffoldContractError::BrainActivityPolicyMismatch)?,
-            enabled_route_mask,
-            route_schedule_digest: decision.route_schedule_digest_words(),
-        };
-        value.validate_for(decision, phenotype, execution, slot)?;
-        Ok(value)
+        Self::try_from_valid_decision(decision, slot)
     }
 
     pub fn validate_for(
@@ -186,10 +162,8 @@ pub fn derive_executed_work(
     if microsteps == 0 || enabled_route_ids.is_empty() {
         return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
     }
-    let enabled = enabled_route_ids.iter().copied().collect::<BTreeSet<_>>();
-    if enabled.len() != enabled_route_ids.len()
-        || !enabled_route_ids.windows(2).all(|pair| pair[0] < pair[1])
-        || enabled.iter().any(|route_id| {
+    if !enabled_route_ids.windows(2).all(|pair| pair[0] < pair[1])
+        || enabled_route_ids.iter().any(|route_id| {
             !phenotype
                 .projections()
                 .iter()
@@ -202,11 +176,11 @@ pub fn derive_executed_work(
     let mut tile_visits = 0_u64;
     let mut synapse_ops = 0_u64;
     for step in 0..u32::from(microsteps) {
-        for projection in phenotype
-            .projections()
-            .iter()
-            .filter(|projection| enabled.contains(&projection.route_index()))
-        {
+        for projection in phenotype.projections().iter().filter(|projection| {
+            enabled_route_ids
+                .binary_search(&projection.route_index())
+                .is_ok()
+        }) {
             if !cadence_fires(projection.update_cadence(), step) {
                 continue;
             }

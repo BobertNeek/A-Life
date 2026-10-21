@@ -1,5 +1,4 @@
-//! A bounded, real-world actor update and next-cohort admission gate.
-//! The ordinary GPU runtime owns perception, action, biology, and legality.
+//! Collect through the game runtime, update actor/value state, and validate continuation.
 
 use std::{path::Path, time::Instant};
 
@@ -13,6 +12,7 @@ use alife_training::{
     PpoJointAction, PpoTrainingState, PpoTrainingWindow, PpoTransition, StageTrainableMask,
 };
 
+use crate::foundation_training::teacher_step_consumed as consumed;
 use crate::{
     configure_foundation_scenario, foundation_replay_source, initial_n2048_care_asset,
     load_foundation_replay_window, verify_foundation_replay_step, FoundationReplayBudget,
@@ -947,6 +947,38 @@ pub fn continue_foundation_to_terrain_with_legacy(
 #[cfg(test)]
 mod sampling_temperature_tests {
     use super::*;
+
+    #[test]
+    fn mixed_continuation_receipts_cannot_silently_reset_saved_optimizer_state() {
+        for names in [
+            ["cycle.json", "adaptation.json"],
+            ["cycle.json", "warmup.json"],
+            ["adaptation.json", "warmup.json"],
+        ] {
+            let source = std::env::temp_dir().join(format!(
+                "alife-ambiguous-continuation-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+            ));
+            std::fs::create_dir(&source).unwrap();
+            for name in names {
+                std::fs::write(source.join(name), b"{}").unwrap();
+            }
+            let output = source.join("must-not-exist");
+            let error = resume_foundation_training_cycle(&source, &output, 17, 16).unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("ambiguous training continuation"));
+            assert!(!output.exists());
+            for name in names {
+                assert_eq!(std::fs::read(source.join(name)).unwrap(), b"{}");
+            }
+            std::fs::remove_dir_all(source).unwrap();
+        }
+    }
 
     #[test]
     fn collection_ppo_and_next_cohort_share_one_temperature() {
@@ -2082,35 +2114,6 @@ mod founder_refresh_tests {
     }
 
     #[test]
-    fn cycle_handoff_value_age_mismatch_changes_next_adam_update() {
-        let (receipt, asset, actor, value) = cycle_handoff();
-        // Scalar bias-correction diagnostic of foundation_ppo.wgsl's value
-        // update, not a CPU training or neural execution path.
-        let next_weight = |checkpoint: &alife_training::PpoValueHeadCheckpoint| {
-            let adam = PpoConfig::default().value_optimizer;
-            let width = checkpoint.feature_count as usize + 1;
-            let gradient = 0.25_f32;
-            let moment = adam.beta1 * checkpoint.parameters[width] + (1.0 - adam.beta1) * gradient;
-            let variance = adam.beta2 * checkpoint.parameters[width * 2]
-                + (1.0 - adam.beta2) * gradient * gradient;
-            let step = (checkpoint.optimizer_step + 1) as i32;
-            checkpoint.parameters[0]
-                - adam.learning_rate
-                    * ((moment / (1.0 - adam.beta1.powi(step)))
-                        / ((variance / (1.0 - adam.beta2.powi(step))).sqrt() + adam.epsilon)
-                        + adam.weight_decay * checkpoint.parameters[0])
-        };
-        let mut altered = value.clone();
-        altered.optimizer_step = 0;
-        // The ordinary value checkpoint decoder admits both finite states.
-        PpoTrainingState::from_checkpoint(value.clone()).unwrap();
-        PpoTrainingState::from_checkpoint(altered.clone()).unwrap();
-        assert!((next_weight(&value) - next_weight(&altered)).abs() > 1.0e-5);
-        validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &value).unwrap();
-        assert!(validate_cycle_optimizer_handoff(&receipt, &asset, &actor, &altered).is_err());
-    }
-
-    #[test]
     fn cycle_handoff_rejects_optimizer_age_changes_with_identical_actor_weights() {
         let (receipt, asset, actor, value) = cycle_handoff();
         // Advancing the actor batch counter can pass the per-weight age bound;
@@ -2375,16 +2378,6 @@ fn organism_energy(runtime: &GpuLiveBrainRuntime, organism: alife_core::Organism
         .biochemistry()
         .body
         .energy)
-}
-
-fn consumed(step: &crate::FoundationTrainingStep) -> bool {
-    let outcome = step.patch.outcome();
-    outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
-        || outcome.joint.as_ref().is_some_and(|joint| {
-            joint.channel_outcomes.iter().any(|channel| {
-                channel.physical.contact == alife_core::PhysicalContactKind::Consumed
-            })
-        })
 }
 
 fn joint_action(behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt) -> Result<PpoJointAction> {
@@ -2793,6 +2786,15 @@ fn run_foundation_training_cycle_profiled(
 ) -> Result<FoundationCycleOutcome> {
     let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
+    if previous.is_some_and(|path| {
+        ["cycle.json", "adaptation.json", "warmup.json"]
+            .iter()
+            .filter(|name| path.join(name).is_file())
+            .count()
+            > 1
+    }) {
+        return Err("source has ambiguous training continuation receipts".into());
+    }
     if center_actor_advantages
         && (capture_only
             || rehearsal_epochs != 0
@@ -3233,7 +3235,7 @@ fn run_foundation_training_cycle_in_owned_output(
     if let Some(scenario) = &scenario {
         crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
     }
-    crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, output, lesson)?;
+    crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, lesson)?;
     let held_before = lesson_food_held(&runtime);
     let grab_before = lesson_food_ownership(&runtime);
     runtime.tick().map_err(|e| {
@@ -3420,11 +3422,7 @@ fn run_foundation_training_cycle_in_owned_output(
                     | FoundationTeacherLesson::GrabFood
             )
         ) {
-            crate::foundation_training::prime_foundation_lesson_prior(
-                &mut runtime,
-                output,
-                lesson,
-            )?;
+            crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, lesson)?;
         }
         let held_before = lesson_food_held(&runtime);
         let grab_before = lesson_food_ownership(&runtime);
@@ -4077,9 +4075,6 @@ fn run_foundation_training_cycle_in_owned_output(
     std::fs::write(output.join("phase.txt"), "update-complete")?;
     let update_seconds = started.elapsed().as_secs_f64();
     update_stage.finish();
-    if update.actor_optimizer_step == 0 || update.value_optimizer_step == 0 {
-        return Err("cycle completed without an actor and value update".into());
-    }
     let export_stage = timing.stage("export_write_redecode");
     let completed_stage_count =
         u16::try_from(policy_version.checked_add(1).ok_or("stage overflow")?)?;

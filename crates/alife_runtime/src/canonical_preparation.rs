@@ -3,7 +3,7 @@
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::*;
 use alife_world::{grounded_peripheral_summaries, HeadlessWorld};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 pub fn cognitive_memory_context_for_recall(
     organism_id: OrganismId,
     sequence_id: ExperienceSequenceId,
@@ -92,7 +92,6 @@ pub fn apply_predecision_attention_evidence(
     summaries: &mut [alife_core::PeripheralSummary],
     body_need: f32,
     memory_evidence: &[FinalizedMemoryAttentionEvidence],
-    context: &CognitiveContextFrame,
     topology_evidence: &ObjectTopologyEvidence,
     receptors: NeuralReceptorEffects,
 ) -> Result<(), ScaffoldContractError> {
@@ -100,7 +99,6 @@ pub fn apply_predecision_attention_evidence(
     // Concept and gap evidence stays bound to the candidate/object that
     // produced it. A global maximum would broadcast one object's evidence to
     // every peripheral summary and create false associations.
-    context.validate_contract()?;
     for summary in summaries {
         if let alife_core::StableFocusIdentity::TrackedObject(tracked_object_id) = summary.identity
         {
@@ -249,9 +247,9 @@ pub fn tracked_object_id_for_candidate(
     }
 }
 
-pub fn target_prior_residual(
+fn target_prior_residual(
     candidate: &alife_core::CandidateMemoryContextV1,
-) -> Result<f32, ScaffoldContractError> {
+) -> Result<NormalizedScalar, ScaffoldContractError> {
     let mean_abs_latent = candidate
         .target_latent
         .iter()
@@ -260,7 +258,7 @@ pub fn target_prior_residual(
         / candidate.target_latent.len() as f32;
     let residual = candidate.target_confidence.raw() * mean_abs_latent;
     if residual.is_finite() {
-        Ok(residual.clamp(0.0, 1.0))
+        NormalizedScalar::new(residual.clamp(0.0, 1.0))
     } else {
         Err(ScaffoldContractError::NonFiniteFloat)
     }
@@ -290,7 +288,7 @@ pub fn topology_evidence_for_draft(
     Ok(evidence)
 }
 
-pub fn target_bound_topology_scores(
+fn target_bound_topology_scores(
     tracked_object_id: Option<alife_core::TrackedObjectId>,
     topology: &TopologySidecar,
 ) -> Result<(NormalizedScalar, NormalizedScalar), ScaffoldContractError> {
@@ -298,20 +296,18 @@ pub fn target_bound_topology_scores(
         return Ok((NormalizedScalar(0.0), NormalizedScalar(0.0)));
     };
     tracked_object_id.validate()?;
-    let concept_ids = topology
+    let (concept_ids, concept_match) = topology
         .map()
         .concepts()
         .iter()
         .filter(|concept| concept.bindings.objects.contains(&tracked_object_id))
-        .map(|concept| concept.id)
-        .collect::<Vec<_>>();
-    let concept_match = topology
-        .map()
-        .concepts()
-        .iter()
-        .filter(|concept| concept.bindings.objects.contains(&tracked_object_id))
-        .map(|concept| concept.confidence.raw() * concept.salience.raw())
-        .fold(0.0, f32::max);
+        .fold((Vec::new(), 0.0_f32), |(mut ids, value), concept| {
+            ids.push(concept.id);
+            (
+                ids,
+                value.max(concept.confidence.raw() * concept.salience.raw()),
+            )
+        });
     let gap_match = topology
         .map()
         .unresolved_gaps()
@@ -354,6 +350,7 @@ pub fn cognitive_projection_for_draft(
     }
 
     let forecast_available = predictor.has_acquired_state();
+    let mut object_priors = BTreeMap::<TrackedObjectId, NormalizedScalar>::new();
     let mut candidates = Vec::with_capacity(draft.candidates().len());
     for (index, candidate) in draft.candidates().iter().enumerate() {
         let expected_index =
@@ -370,9 +367,11 @@ pub fn cognitive_projection_for_draft(
                 .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?,
             None => (NormalizedScalar(0.0), NormalizedScalar(0.0)),
         };
-        let prior_residual = NormalizedScalar::new(
-            target_prior_residual(&memory_candidates[index])?.clamp(0.0, 1.0),
-        )?;
+        let prior_residual = target_prior_residual(&memory_candidates[index])?;
+        if let Some(id) = tracked_object_id {
+            let object_prior = object_priors.entry(id).or_insert(NormalizedScalar(0.0));
+            *object_prior = NormalizedScalar(object_prior.raw().max(prior_residual.raw()));
+        }
         let command = candidate.to_command(draft.organism_id(), candidate.sensor_confidence)?;
         let hypothetical_bundle =
             alife_core::arbitrate_gpu_selected_command_into_factorized_bundle(
@@ -399,29 +398,16 @@ pub fn cognitive_projection_for_draft(
         });
     }
 
-    let mut tracked_objects = BTreeSet::new();
-    for candidate in draft.candidates() {
-        if let Some(tracked_object_id) = tracked_object_id_for_candidate(draft, candidate)? {
-            tracked_objects.insert(tracked_object_id);
-        }
-    }
-    let mut objects = Vec::with_capacity(tracked_objects.len());
-    for tracked_object_id in tracked_objects {
+    let mut objects = Vec::with_capacity(object_priors.len());
+    for (tracked_object_id, prior_residual) in object_priors {
         let (concept_match, gap_match) = *topology_evidence
             .get(&tracked_object_id)
             .ok_or(ScaffoldContractError::InvalidPerceptionFrame)?;
-        let mut prior_residual: f32 = 0.0;
-        for (index, candidate) in draft.candidates().iter().enumerate() {
-            if tracked_object_id_for_candidate(draft, candidate)? == Some(tracked_object_id) {
-                prior_residual =
-                    prior_residual.max(target_prior_residual(&memory_candidates[index])?);
-            }
-        }
         objects.push(alife_core::cognitive_context::CognitiveObjectEvidence {
             tracked_object_id,
             concept_match,
             gap_match,
-            prior_residual: NormalizedScalar::new(prior_residual.clamp(0.0, 1.0))?,
+            prior_residual,
         });
     }
 
@@ -435,14 +421,14 @@ pub fn cognitive_projection_for_draft(
     Ok(projection)
 }
 
-pub fn bounded_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
+fn bounded_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
     if !value.is_finite() {
         return Err(ScaffoldContractError::NonFiniteFloat);
     }
     Ok((0.5 + 0.5 * (value / (1.0 + value.abs()))).clamp(0.0, 1.0))
 }
 
-pub fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
+fn unit_successor_scalar(value: f32) -> Result<f32, ScaffoldContractError> {
     if !value.is_finite() {
         return Err(ScaffoldContractError::NonFiniteFloat);
     }
@@ -473,7 +459,7 @@ pub fn grounded_semantic_state_from_draft(
 
 // Both sides describe the same observable quantities: position, velocity and
 // seven drives. Contact, success and physical damage remain outcome evidence.
-pub fn grounded_semantic_state(
+fn grounded_semantic_state(
     position: Vec3f,
     velocity: Vec3f,
     homeostasis: &HomeostaticSnapshot,
@@ -573,16 +559,9 @@ pub fn sleep_consolidation_config_for(
     phenotype: &alife_core::BrainPhenotype,
 ) -> Result<SleepConsolidationConfig, ScaffoldContractError> {
     let architecture = phenotype.cognitive_architecture();
-    let plan = phenotype.sleep_consolidation_plan();
     let mut config = SleepConsolidationConfig::reference();
     config.sleep_pressure_threshold =
         NormalizedScalar::new(architecture.sleep_trigger_threshold())?;
-    config.h_shadow_drain_rate = NormalizedScalar::new(plan.staging_rate())?;
-    config.h_shadow_decay_rate = NormalizedScalar::new(plan.fast_decay_rate())?;
-    config.lifetime_staging_rate = NormalizedScalar::new(architecture.sleep_consolidation_rate())?;
-    config.structural_edit_candidate_limit =
-        usize::from(architecture.structural_candidate_budget());
-    config.weight_abs_limit = plan.weight_limit();
     config.validate_contract()?;
     Ok(config)
 }
@@ -728,7 +707,6 @@ pub fn prepare_canonical_frame(
             &mut peripheral_summaries,
             body_need,
             &memory_evidence,
-            &baseline_context,
             &topology_evidence,
             receptor_effects,
         )?;
@@ -766,12 +744,15 @@ pub fn prepare_canonical_frame(
         let routed_recall = memory.recall_frame(&routed_draft)?;
         let routed_recall_ns = leaf_started.map_or(0, elapsed_ns);
         let leaf_started = measure.then(std::time::Instant::now);
-        let cognitive_context = cognitive_context_for_recall(
+        let mut cognitive_context = cognitive_memory_context_for_recall(
             input.draft.organism_id(),
             sequence_id,
             &routed_recall,
-            topology,
         )?;
+        // Topology is immutable during preparation. Focal routing changes
+        // candidate recall, while the sorted concepts and gaps remain identical.
+        cognitive_context.concept = baseline_context.concept;
+        cognitive_context.gap = baseline_context.gap;
         let cognitive_context = cognitive_context_with_attention(cognitive_context, attention)?;
         let routed_context_ns = leaf_started.map_or(0, elapsed_ns);
         preparation_stage = "cognitive projection";

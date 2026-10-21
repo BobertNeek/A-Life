@@ -4,7 +4,7 @@ use alife_core::{
 
 use super::{
     GpuBrainSlot, GpuBrainSlotRecord, GpuCandidateRecord, GpuClosedLoopError, GpuPerceptionHeader,
-    GPU_CANDIDATE_RECORD_BYTES, GPU_CLOSED_LOOP_LAYOUT_VERSION, GPU_PERCEPTION_HEADER_BYTES,
+    GPU_CLOSED_LOOP_LAYOUT_VERSION,
 };
 use crate::closed_loop_memory::GpuPerceptionFrameBinding;
 
@@ -20,7 +20,6 @@ pub enum GpuOffsetDomain {
 pub struct GpuPerceptionUpload {
     pub header: GpuPerceptionHeader,
     pub candidates: Vec<GpuCandidateRecord>,
-    pub dispatch_header_words: Vec<u32>,
     pub frame_payload_words: Vec<u32>,
     pub frame_binding: GpuPerceptionFrameBinding,
     offset_domain: GpuOffsetDomain,
@@ -75,9 +74,6 @@ impl GpuPerceptionUpload {
         };
         let mut candidates = Vec::with_capacity(frame.candidates().len());
         for (index, candidate) in frame.candidates().iter().enumerate() {
-            if candidate.features.0.iter().any(|v| !v.is_finite()) {
-                return Err(GpuClosedLoopError::NonFinitePayload);
-            }
             candidates.push(GpuCandidateRecord {
                 action_id: candidate.action_id.raw(),
                 kind: candidate.kind.raw() as u32,
@@ -93,14 +89,6 @@ impl GpuPerceptionUpload {
                 confidence_q16: (candidate.sensor_confidence.raw() * 65535.0).round() as u32,
                 effort_q16: (candidate.required_effort.raw() * 65535.0).round() as u32,
             });
-        }
-        let mut dispatch_header_words = Vec::with_capacity(
-            (GPU_PERCEPTION_HEADER_BYTES + candidates.len() * GPU_CANDIDATE_RECORD_BYTES)
-                / std::mem::size_of::<u32>(),
-        );
-        dispatch_header_words.extend_from_slice(header.words());
-        for candidate in &candidates {
-            dispatch_header_words.extend_from_slice(candidate.words());
         }
         let mut frame_payload_words = Vec::with_capacity(
             FIXED_FRAME_LANES as usize + 256 + frame.candidates().len() * decoder_input_stride,
@@ -152,7 +140,6 @@ impl GpuPerceptionUpload {
         Ok(Self {
             header,
             candidates,
-            dispatch_header_words,
             frame_payload_words,
             frame_binding: GpuPerceptionFrameBinding {
                 perception_header_index: 0,
@@ -222,12 +209,6 @@ impl GpuPerceptionUpload {
             row.feature_offset += frame_word_base;
         }
         self.frame_binding.perception_header_index = dispatch_word_base;
-        self.dispatch_header_words.clear();
-        self.dispatch_header_words
-            .extend_from_slice(self.header.words());
-        for row in &self.candidates {
-            self.dispatch_header_words.extend_from_slice(row.words());
-        }
         self.offset_domain = GpuOffsetDomain::Rebased {
             dispatch_base: dispatch_word_base,
             frame_base: frame_word_base,

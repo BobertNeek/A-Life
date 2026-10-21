@@ -2,91 +2,57 @@
 
 ## Principle
 
-Evidence supports only the claim it causally measures. A green unit test proves its contract. A preflight receipt proves preflight. A screenshot proves a rendered frame. None alone proves an end-to-end GPU organism loop.
+Evidence supports only the claim it causally measures. A green unit test supports the behavior it exercises. A preflight receipt proves preflight. A screenshot proves a rendered frame. None alone proves an end-to-end GPU organism loop.
 
-## Required binding
+## Reproducing a result
 
-A promotable or release-relevant receipt must identify, as applicable:
+Record enough context to reproduce and interpret the result: the source and
+configuration exercised, relevant inputs, command, outcome, and uncertainty.
+For hardware measurements include the device, backend, workload, timings, and
+memory use. For continuation or recovery, retain source package identities and
+the state needed to detect corruption or missing acquired learning. Existing
+codecs and logs can supply this; a new receipt schema or a documentation-authority
+manifest is not required for every change.
 
-- source commit and tree;
-- dirty-state policy;
-- configuration, seed, foundation, ABI, codebook, and sensor profile;
-- adapter, backend, driver-visible identity, and neural capacity class;
-- exact command or arguments, start/end timing, and exit code;
-- input, output, report, sidecar, and artifact digests;
-- organism, tick, sequence, candidate, action, outcome, save, and checkpoint identities;
-- completeness, corruption, unknown cells, misses, and exclusions.
+Match the check to the claim. A save/load change needs restoration behavior;
+a GPU change needs the relevant device path; a learning claim needs later
+behavior rather than a counter or a successful optimizer update. Rendered and
+player-control changes need observation through the actual application.
 
-A report bound to an older source remains valid historical evidence for that source. It does not certify current `HEAD`.
+A result from an older source remains historical evidence for that source. Reuse
+it when the relevant path and assumptions remain valid; rerun checks when a
+change could affect the result. It does not automatically certify all of current
+`HEAD`.
 
-## Evidence classes
+## Historical EI experiments
 
-- **Contract** — source or tests establish an invariant.
-- **Causal runtime** — real input flows through GPU selection, world outcome, and state change.
-- **Persistence** — a sealed save/checkpoint restores across a fresh process and preserves required identities.
-- **Performance** — measured timing and memory on a named adapter/backend and population profile.
-- **Rendered** — the authoritative state change reaches the visible product path.
-- **Behavioral** — held-out trials measure learning, retention, transfer, grounding, or control comparison.
+The retired EI0/EI1 report tools and their large self-test corpora are preserved
+in Git history rather than the active repository. These reports describe their
+original source; they are not promotion rules for current gameplay work:
 
-Promotion and release usually require several classes from the same source boundary.
+- [EI0 lifecycle and GPU battery report](https://github.com/BobertNeek/A-Life/blob/168ff7867f7b761365a67cc5320187f0fc97a1ef/crates/alife_tools/reports/ei0_exit_gate_report.json):
+  source `ab806c2c...`, eight founders, fourteen live organisms, three generations,
+  128 post-restore ticks and tamper rejection. Two final genomes completed fifteen
+  challenge worlds with 92 GPU dispatches each on RTX3050/Vulkan. It established a
+  bounded lifecycle/archive/save result, not a complete autonomous game.
+- [EI0 heuristic fixture](https://github.com/BobertNeek/A-Life/blob/168ff7867f7b761365a67cc5320187f0fc97a1ef/crates/alife_tools/reports/ei0_real_fixture_report.json):
+  deterministic `HeuristicBaseline` tooling evidence, not learned GPU intelligence.
+- [EI1 report](https://github.com/BobertNeek/A-Life/blob/168ff7867f7b761365a67cc5320187f0fc97a1ef/crates/alife_tools/reports/era1_promotion_report.json)
+  and [causal sidecar](https://github.com/BobertNeek/A-Life/blob/168ff7867f7b761365a67cc5320187f0fc97a1ef/crates/alife_tools/reports/era1_trial_evidence.jsonl.zst):
+  source `cb3c8dd...`, 2,640 descendant receipts and 52,800 GPU dispatches on
+  RTX3050/Vulkan. Its verdict was `Blocked` by `NonPositiveIntact`,
+  `ControlNotWorseForEveryCell`, and `ControlMarginBelowMinimum`; plateau was
+  unknown. The count demonstrates measured work, not positive learning or a
+  reason to impose the old campaign's rules on unrelated changes.
 
-## Retained durable artifacts
-
-The repository retains:
-
-- `crates/alife_tools/reports/ei0_exit_gate_report.json`
-- `crates/alife_tools/reports/ei0_real_fixture_report.json`
-- `crates/alife_tools/reports/era1_promotion_report.json`
-- `crates/alife_tools/reports/era1_trial_evidence.jsonl.zst`
-
-Raw build directories and source-bound trial caches are regenerable working data. The committed report and causal sidecar are the durable EI1 result.
-
-The retained report names documentation inputs from its original source commit.
-Git history preserves those exact bytes. A new EI1 run binds the current
-`docs/EVIDENCE.md`, `docs/ROADMAP.md`, and `docs/REFERENCE.md` authorities
-instead of reviving the superseded plan tree.
-
-## EI0 interpretation
-
-The EI0 exit report records:
-
-- `era0_exit_gate_passed=true`;
-- `era1_promotion_evaluated=false` and Era 1 out of scope;
-- eight founders, fourteen live organisms, and three generations;
-- 128 post-restore ticks and tamper rejection;
-- birth archive, lineage, lifetime-state separation, and habitat authority checks;
-- two final genomes completing 15 challenge worlds with 92 GPU dispatches and sealed outcomes each on RTX 3050/Vulkan.
-
-It binds to source commit `ab806c2c...`, not current `HEAD`.
-
-The separate real fixture is `HeuristicBaseline`, non-promotable, with zero hidden trials and unknown measures.
-
-Allowed claim: EI0 passed its bounded source-bound lifecycle, archive, save, and GPU battery.
-
-Prohibited inference: EI0 proves general intelligence, a complete autonomous game, current-HEAD parity, or Era 1 readiness.
-
-## EI1 interpretation
-
-The EI1 report binds to source commit `cb3c8dd...` and records:
-
-- 2,640 causal descendant receipts;
-- 52,800 GPU dispatches;
-- RTX 3050 through Vulkan;
-- a complete committed zstd causal sidecar;
-- promotion verdict `Blocked`;
-- blockers `NonPositiveIntact`, `ControlNotWorseForEveryCell`, and `ControlMarginBelowMinimum`;
-- plateau `Unknown`;
-- review eligibility and brain-class authorization `false`.
-
-Allowed claim: EI1 produced substantial, source-bound GPU evidence and an honest failed promotion result.
-
-Prohibited inference: receipt count proves positive learning, transfer, control superiority, plateau, promotion, or authorization for a larger brain.
+Historical reports may name documentation inputs from their original commits.
+Those lists are reproducibility context, not authority over current work.
 
 ## Current care and training records
 
 The [core game-loop plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/core-game-loop-plan-2026-09-20.md),
 [training regimen](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-care-training-regimen-2026-09-21.md), and
-[operator guide](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-training-operator.md) record the recent bounded checks.
+[operator guide](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/n2048-training-operator.md) record bounded checks on their original source.
 Teacher demonstrations, warm-up completion, and successful PPO handoffs do not
 establish held-out learning, retention, or autonomous care. Raw `target/` paths in
 those records refer to the originating machine and are not committed artifacts.
@@ -96,34 +62,28 @@ those records refer to the originating machine and are not committed artifacts.
 - [October 1 CPU preparation measurements](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/20261001-cpu-preparation.md):
   source-bound synthetic comparisons, retained samples and reproduction inputs.
 - [October 1 cloud candidate validation](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-10-01-cloud-validation.md):
-  current CPU/compiler results, earlier failures and unrun hardware checks.
+  CPU/compiler results on the recorded source, earlier failures and unrun hardware checks.
 - [Exact-population checkpoint decision](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/exact-population-checkpoint-design.md):
   historical transaction and failure rationale.
 - [Recovered review outcomes](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-recovered-review-outcomes.md):
   closed campaign dispositions and two unresolved design questions; static review only.
 
-## Open product evidence
+## Current product checks
 
-The September 2 baseline listed the gaps below. Later bounded checks are linked
-above; none should be read as a complete current-HEAD product certification.
-
-- complete rendered player-loop behavior beyond bounded care trials;
-- autonomous production birth/death/reproduction with archive and visible spawn/despawn;
-- truthful pause and atomic live load;
-- fresh-process player-loop restoration;
-- current-HEAD production GPU and rendered parity;
-- measured product populations 50, 100, 250, and 500 across required profiles;
-- external product playtest and release acceptance.
-
-These remain open regardless of UI completeness or historical plan status.
+Use the current implementation and the behavior affected by the change to choose
+validation. The old September gap list is historical, not a permanent set of
+failed gates. Focus on the ordinary care and learning loop, truthful controls,
+retained individual state, and performance for the population actually supported.
+Separate a missing observation from a demonstrated defect and update status when
+new observations resolve it.
 
 ## Honest failure states
 
-- `Pass` means every named gate passed for the bound claim.
+- `Pass` means the named checks passed for the stated claim.
 - `Blocked` means execution completed enough to measure a failing or missing prerequisite.
 - `Unavailable` means required hardware or service could not execute.
 - `Unknown` means the evidence does not measure the value.
-- `Missed` means a required populated evidence row was not produced.
+- `Missed` means an expected observation was not produced.
 
 Missing hardware is `Unavailable`, not fallback success.
 

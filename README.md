@@ -43,27 +43,27 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 ## What exists today
 
 - World perception, unscored candidate generation, action validation, outcomes, and sealed experience are implemented.
-- WGSL selection, signed action/speech decoding, credit-gated fast plasticity, episodic memory, topology, sleep consolidation, and batched training state capture are implemented in the GPU runtime.
+- WGSL selection, signed action/speech decoding, credit-gated fast plasticity, sleep consolidation, and batched training state capture are implemented. The runtime also coordinates organism-owned memory and topology sidecars on the CPU.
 - The production shell constructs and ticks that runtime.
 - The voxel UI provides camera, selection, care dock, inspector, naming, speech, save, load, pause, speed, and overlays.
 - The renderer projects tick-bound runtime transforms, births, and retirement events without owning simulation truth.
 - Read [current status](docs/STATUS.md) before treating a feature as integrated or proven.
-- Read the [v2.0 controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) before treating any current implementation choice as a permanent requirement.
+- Read the [organism and gameplay design](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) before treating any current implementation choice as a permanent requirement.
 
 ## Project map
 
 - [Vision](docs/VISION.md) — what the project is trying to become
-- [Controlling architecture](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) — the single normative source and `AOA-*` compliance standard
+- [Organism and gameplay design](docs/architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md) — organism behavior, gameplay goals, and longer-term research
 - [Status](docs/STATUS.md) — implemented, integrated, visible, and proven state
-- [Current implementation map](docs/ARCHITECTURE.md) — non-normative ownership and production data flow
+- [Current implementation map](docs/ARCHITECTURE.md) — ownership and production data flow
 - [Roadmap](docs/ROADMAP.md) — the shortest path from here to the aspiration
-- [Development](docs/DEVELOPMENT.md) — supported Windows workflows and gates
-- [Evidence](docs/EVIDENCE.md) — receipts, source binding, EI0, and EI1
-- [Current implementation reference](docs/REFERENCE.md) — non-normative technical conventions and evidence terms
+- [Development](docs/DEVELOPMENT.md) — Windows commands, checks, and diagnostics
+- [Evidence](docs/EVIDENCE.md) — measured results and their limits
+- [Current implementation reference](docs/REFERENCE.md) — technical conventions and evidence terms
 
 ## Current implementation boundaries
 
-These boundaries describe the current codebase. They do not amend or narrow the v2.0 architecture.
+These boundaries describe the current codebase.
 
 - Production neural execution is GPU-authoritative WGSL. There is no automatic CPU neural fallback or live CPU parity shadow.
 - The world owns legality, targets, action execution, and outcomes.

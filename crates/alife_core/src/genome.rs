@@ -1,4 +1,4 @@
-//! Genome, development, and weight-split contracts.
+//! Genome, development, and genetic/acquired weight separation.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -551,12 +551,6 @@ impl BrainGenome {
         &self.cognitive_architecture
     }
 
-    pub const fn cognitive_architecture_parameters(
-        &self,
-    ) -> &CognitiveArchitectureGenomeParameters {
-        self.cognitive_architecture()
-    }
-
     /// Replace the heritable plasticity parameters through their validated
     /// constructor boundary. This is the causal mutation/training entrypoint;
     /// callers cannot write unchecked parameter lanes.
@@ -579,13 +573,6 @@ impl BrainGenome {
         self.cognitive_architecture = parameters;
         self.validate_contract()?;
         Ok(self)
-    }
-
-    pub fn with_cognitive_architecture_parameters(
-        self,
-        parameters: CognitiveArchitectureGenomeParameters,
-    ) -> Result<Self, ScaffoldContractError> {
-        self.with_cognitive_architecture(parameters)
     }
 }
 
@@ -1047,16 +1034,14 @@ impl SynapseAddress {
 pub struct SynapseAlphaOverride {
     pub synapse: SynapseAddress,
     pub alpha: NormalizedScalar,
+    // Retained in existing compiler-input identities; explanatory text is optional.
+    #[serde(default)]
     pub exceptional_reason: String,
 }
 
 impl Validate for SynapseAlphaOverride {
     fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_normalized(self.alpha)?;
-        if self.exceptional_reason.trim().is_empty() {
-            return Err(ScaffoldContractError::InvalidId);
-        }
-        Ok(())
+        validate_normalized(self.alpha)
     }
 }
 
@@ -1315,8 +1300,7 @@ impl PlasticityGenomeParameters {
         Ok(value)
     }
 
-    /// Deterministic schema-v1 compatibility constructor. New production code
-    /// must supply an explicit multi-lane receptor profile through `try_new`.
+    /// Maps the legacy modulator sign onto the current multi-lane receptor profile.
     #[allow(clippy::too_many_arguments)]
     pub fn try_new_v1(
         eligibility_decay: f32,
@@ -1330,13 +1314,12 @@ impl PlasticityGenomeParameters {
         sleep_weight_limit: f32,
         sleep_fast_decay_rate: f32,
     ) -> Result<Self, ScaffoldContractError> {
-        let value = Self {
-            schema_version: SchemaVersions::CURRENT.learning.raw(),
+        Self::try_new(
             eligibility_decay,
             base_learning_rate,
             normalization_rate,
             sleep_replay_rate,
-            receptor_profile: crate::PlasticityReceptorProfile::try_new([
+            crate::PlasticityReceptorProfile::try_new([
                 0.2 * modulator_sign,
                 -modulator_sign,
                 1.0 * modulator_sign,
@@ -1346,16 +1329,12 @@ impl PlasticityGenomeParameters {
                 0.5 * modulator_sign,
                 -0.5 * modulator_sign,
             ])?,
-            action_candidate_credit_profile: None,
-            decoder_lifetime_rate_policy: None,
             fast_min,
             fast_max,
             sleep_staging_rate,
             sleep_weight_limit,
             sleep_fast_decay_rate,
-        };
-        value.validate_contract()?;
-        Ok(value)
+        )
     }
 
     pub(crate) fn canonical_default() -> Self {
@@ -1574,70 +1553,6 @@ pub enum EndocrineConstantKind {
     DevelopmentHormoneBaseline = 7,
 }
 
-impl EndocrineConstantKind {
-    pub const fn raw(self) -> u8 {
-        match self {
-            Self::DopamineBaseline => 0,
-            Self::SerotoninBaseline => 1,
-            Self::CortisolBaseline => 2,
-            Self::OxytocinBaseline => 3,
-            Self::AdrenalineBaseline => 4,
-            Self::AcetylcholineBaseline => 5,
-            Self::BrainAtpBaseline => 6,
-            Self::DevelopmentHormoneBaseline => 7,
-        }
-    }
-    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
-        match raw {
-            0 => Ok(Self::DopamineBaseline),
-            1 => Ok(Self::SerotoninBaseline),
-            2 => Ok(Self::CortisolBaseline),
-            3 => Ok(Self::OxytocinBaseline),
-            4 => Ok(Self::AdrenalineBaseline),
-            5 => Ok(Self::AcetylcholineBaseline),
-            6 => Ok(Self::BrainAtpBaseline),
-            7 => Ok(Self::DevelopmentHormoneBaseline),
-            _ => Err(ScaffoldContractError::PhenotypeCompile),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct EndocrineConstantGene {
-    pub kind: EndocrineConstantKind,
-    pub value: f32,
-}
-
-impl EndocrineConstantGene {
-    pub fn baseline_defaults() -> Vec<Self> {
-        vec![
-            Self {
-                kind: EndocrineConstantKind::DopamineBaseline,
-                value: 1.0,
-            },
-            Self {
-                kind: EndocrineConstantKind::SerotoninBaseline,
-                value: 1.0,
-            },
-            Self {
-                kind: EndocrineConstantKind::CortisolBaseline,
-                value: 0.2,
-            },
-            Self {
-                kind: EndocrineConstantKind::BrainAtpBaseline,
-                value: 1.0,
-            },
-        ]
-    }
-}
-
-impl Validate for EndocrineConstantGene {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_finite(self.value)?;
-        Ok(())
-    }
-}
-
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum DriveThresholdKind {
@@ -1648,63 +1563,6 @@ pub enum DriveThresholdKind {
     Loneliness = 4,
     Curiosity = 5,
     Reproduction = 6,
-}
-
-impl DriveThresholdKind {
-    pub const fn raw(self) -> u8 {
-        match self {
-            Self::Hunger => 0,
-            Self::Fatigue => 1,
-            Self::Fear => 2,
-            Self::Pain => 3,
-            Self::Loneliness => 4,
-            Self::Curiosity => 5,
-            Self::Reproduction => 6,
-        }
-    }
-    pub fn try_from_raw(raw: u8) -> Result<Self, ScaffoldContractError> {
-        match raw {
-            0 => Ok(Self::Hunger),
-            1 => Ok(Self::Fatigue),
-            2 => Ok(Self::Fear),
-            3 => Ok(Self::Pain),
-            4 => Ok(Self::Loneliness),
-            5 => Ok(Self::Curiosity),
-            6 => Ok(Self::Reproduction),
-            _ => Err(ScaffoldContractError::PhenotypeCompile),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct DriveThresholdGene {
-    pub kind: DriveThresholdKind,
-    pub threshold: NormalizedScalar,
-}
-
-impl DriveThresholdGene {
-    pub fn baseline_defaults() -> Vec<Self> {
-        vec![
-            Self {
-                kind: DriveThresholdKind::Hunger,
-                threshold: NormalizedScalar(0.4),
-            },
-            Self {
-                kind: DriveThresholdKind::Fatigue,
-                threshold: NormalizedScalar(0.7),
-            },
-            Self {
-                kind: DriveThresholdKind::Curiosity,
-                threshold: NormalizedScalar(0.25),
-            },
-        ]
-    }
-}
-
-impl Validate for DriveThresholdGene {
-    fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        validate_normalized(self.threshold)
-    }
 }
 
 #[repr(u8)]

@@ -199,13 +199,6 @@ fn live_newborn_record_and_incremental_root_use_the_same_asset_free_preparation(
         hearthling::scale(newborns[1].visual.appearance)
     );
     assert_eq!(marker.local_bounds, hearthling::LOCAL_BOUNDS);
-    assert_eq!(
-        world
-            .query::<&ProductionCreaturePartMarker>()
-            .iter(&world)
-            .count(),
-        0
-    );
 }
 
 #[test]

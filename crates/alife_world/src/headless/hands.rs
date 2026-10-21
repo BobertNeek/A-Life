@@ -91,18 +91,22 @@ impl HeadlessWorld {
             && (!mobile
                 || (self.grasp_target_is_reachable(command.organism_id, agent, target)
                     && (already_held || object.hazard_pain == 0.0)));
-        if !valid || !self.activity_grip_available(command.organism_id, target) {
+        if !valid {
             return self.hand_preparation_failure(command, target).map(Some);
         }
-        let held = self
-            .objects
-            .values()
-            .find(|object| !object.consumed && object.carried_by == Some(command.organism_id))
-            .map(|object| object.id);
+        let (held, multiple_held) = {
+            let mut held = self.objects.values().filter(|object| {
+                !object.consumed && object.carried_by == Some(command.organism_id)
+            });
+            (held.next().map(|object| object.id), held.next().is_some())
+        };
+        if multiple_held {
+            return self.hand_preparation_failure(command, target).map(Some);
+        }
         if let Some(held) = held.filter(|held| *held != target) {
-            let position = self
-                .activity_placement(command.organism_id, held)
-                .expect("validated activity placement");
+            let Some(position) = self.activity_placement(command.organism_id, held) else {
+                return self.hand_preparation_failure(command, target).map(Some);
+            };
             let previous = self.objects[&held.raw()].position;
             let object = self
                 .objects
@@ -426,13 +430,13 @@ mod tests {
         let mut json = serde_json::to_value(object).unwrap();
         json.as_object_mut().unwrap().remove("activity_hold");
         let legacy: crate::WorldObjectSaveState = serde_json::from_value(json).unwrap();
-        let mut parts = world.persistence_parts();
+        let mut parts = world.save_state();
         *parts
             .objects
             .iter_mut()
             .find(|object| object.id == ball)
-            .unwrap() = legacy.into();
-        let mut legacy = HeadlessWorld::from_persistence_parts(parts).unwrap();
+            .unwrap() = legacy;
+        let mut legacy = HeadlessWorld::from_save_state(&parts).unwrap();
         assert!(
             !legacy
                 .apply_command(&command(HeadlessActionIds::EAT, food))
@@ -594,14 +598,14 @@ mod tests {
             world.canonical_signature_digest().unwrap(),
             deliberate.canonical_signature_digest().unwrap()
         );
-        let mut parts = world.persistence_parts();
+        let mut parts = world.save_state();
         let object = parts
             .objects
             .iter_mut()
             .find(|object| object.id == ball)
             .unwrap();
         object.carried_by = None;
-        assert!(HeadlessWorld::from_persistence_parts(parts).is_err());
+        assert!(HeadlessWorld::from_save_state(&parts).is_err());
     }
 
     #[test]

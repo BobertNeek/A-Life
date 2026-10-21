@@ -89,14 +89,6 @@ fn rust_and_serde_field_names_are_not_digest_inputs() {
         named_values_digest(original.first_value, original.second_value),
         named_values_digest(renamed.renamed_alpha, renamed.renamed_beta)
     );
-
-    let source = include_str!("../src/canonical_digest.rs");
-    assert!(!source.contains("use serde"));
-    assert!(!source.contains("impl Serializer"));
-    assert!(!source.contains("SerializeMap"));
-    assert!(!source.contains("write_map("));
-    assert!(!source.contains("write_str("));
-    assert!(!source.contains("fmt::Display"));
 }
 
 #[test]

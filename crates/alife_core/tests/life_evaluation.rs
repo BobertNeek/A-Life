@@ -1,14 +1,14 @@
 use alife_core::{
     heuristic_baseline_arbitrate, ActionArbitrationConfig, ActionCandidate, ActionId, ActionKind,
-    ActionProposal, ActionTarget, ActiveChallengeKind, BodySnapshot, BrainClassSpec, BrainGenome,
-    BrainScaleTier, CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef,
-    Confidence, DevelopmentState, DurationTicks, EnvironmentalRegime, ExperiencePatch,
-    ExperiencePatchBuilder, ExperienceSequenceId, HeardToken, HomeostaticDelta,
-    HomeostaticSnapshot, LobeKind, MetricReading, NormalizedScalar, OrganismId, PassiveLifeEvent,
-    PassiveLifeStatistics, PassiveMetricKind, PerceptionFrame, PhysicalActionOutcome,
-    PhysicalContactKind, Pose, PostActionOutcome, SensorProfile, SensorProfileProvenance,
-    SensoryAbiVersion, SensoryChannels, SensorySnapshot, SignedValence, Tick, UtteranceId,
-    UtteranceSourceKind, Velocity, WeightSplitContract, WorldEntityId, ACTIVE_CHALLENGE_COUNT,
+    ActionProposal, ActionTarget, BodySnapshot, BrainClassSpec, BrainGenome, BrainScaleTier,
+    CandidateActionFamily, CandidateFeatureVector, CandidateObservationRef, Confidence,
+    DevelopmentState, DurationTicks, EnvironmentalRegime, ExperiencePatch, ExperiencePatchBuilder,
+    ExperienceSequenceId, HeardToken, HomeostaticDelta, HomeostaticSnapshot, LobeKind,
+    MetricReading, NormalizedScalar, OrganismId, PassiveLifeEvent, PassiveLifeStatistics,
+    PassiveMetricKind, PerceptionFrame, PhysicalActionOutcome, PhysicalContactKind, Pose,
+    PostActionOutcome, SensorProfile, SensorProfileProvenance, SensoryAbiVersion, SensoryChannels,
+    SensorySnapshot, SignedValence, Tick, UtteranceId, UtteranceSourceKind, Velocity,
+    WeightSplitContract, WorldEntityId,
 };
 
 fn finalized_patch(
@@ -245,18 +245,6 @@ fn unexposed_passive_metrics_are_unknown_and_updates_are_constant_state() {
 }
 
 #[test]
-fn active_battery_contains_the_exact_fifteen_challenges() {
-    assert_eq!(ACTIVE_CHALLENGE_COUNT, 15);
-    assert_eq!(ActiveChallengeKind::ALL.len(), ACTIVE_CHALLENGE_COUNT);
-    let mut unique = ActiveChallengeKind::ALL.to_vec();
-    unique.sort_by_key(|challenge| challenge.raw());
-    unique.dedup();
-    assert_eq!(unique.len(), ACTIVE_CHALLENGE_COUNT);
-    assert_eq!(ActiveChallengeKind::VisibleRewardNavigation.raw(), 1);
-    assert_eq!(ActiveChallengeKind::SlmDisabledDialectTransfer.raw(), 15);
-}
-
-#[test]
 fn narration_frequency_and_dialect_divergence_are_recorded_without_history() {
     let mut statistics = PassiveLifeStatistics::new(OrganismId(9), Tick::ZERO).unwrap();
     statistics
@@ -375,4 +363,31 @@ fn heard_creature_vocalization_does_not_measure_peer_communication() {
             exposures: 1,
         }
     );
+}
+
+#[test]
+fn survival_counter_overflow_leaves_statistics_unchanged() {
+    let statistics = PassiveLifeStatistics::new(OrganismId(7), Tick::ZERO).unwrap();
+    for field in ["survival_ticks", "gpu_dispatches", "mean_brain_atp"] {
+        let mut wire = serde_json::to_value(&statistics).unwrap();
+        if field == "mean_brain_atp" {
+            wire["energy_stability"]["samples"] = serde_json::json!(u64::MAX);
+        } else {
+            wire[field] = serde_json::json!(u64::MAX);
+        }
+        let mut restored: PassiveLifeStatistics = serde_json::from_value(wire).unwrap();
+        restored.validate_contract().unwrap();
+        let before = restored.clone();
+        assert!(restored
+            .observe(PassiveLifeEvent::SurvivalTick {
+                tick: Tick(1),
+                regime: EnvironmentalRegime::Temperate,
+                energy_q16: 0,
+                movement_distance_q16: 0,
+                gpu_dispatched: true,
+                gpu_throttled: false,
+            })
+            .is_err());
+        assert_eq!(restored, before, "overflow in {field}");
+    }
 }

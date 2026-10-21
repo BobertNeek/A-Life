@@ -1,8 +1,5 @@
-//! CA27: localhost-only internal SLM subconscious prior boundary.
-//!
-//! The local SLM prior produces bounded perception/context hints from a real
-//! local llama.cpp model. It is private prior data: no action commands, motor
-//! bypasses, hidden vectors, or weight updates are exposed.
+//! Private perception and context hints from a local llama.cpp SLM.
+//! Validated responses supply associations rather than actions or weight updates.
 
 use std::{
     collections::VecDeque,
@@ -20,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::local_llamacpp::{
-    decode_chunked_http_body, validate_local_llamacpp_host, LlamaCppServerClient,
+    llamacpp_response_body, validate_local_llamacpp_host, LlamaCppServerClient,
     CA26_DEFAULT_LLAMA_CPP_HOST,
 };
 
@@ -225,8 +222,8 @@ enum LocalSlmPriorWork {
     ),
 }
 
-/// Swappable bounded text-in/hints-out provider. It owns no learner state.
-/// Calls run only on the bounded asynchronous worker, never the organism step.
+/// Bounded text-in/hints-out provider without learner state.
+/// The runtime invokes it through the asynchronous worker.
 pub trait BoundedSlmPriorProvider: Send + 'static {
     fn generate_prior(
         &self,
@@ -235,12 +232,8 @@ pub trait BoundedSlmPriorProvider: Send + 'static {
     ) -> Result<LocalSlmPriorOutput, String>;
 }
 
-/// Bounded asynchronous worker queue for CA27 local SLM prior requests.
-///
-/// The queue is asynchronous in the app sense: enqueue is non-blocking, local
-/// model inference runs on a dedicated worker thread, and callers receive a
-/// bounded result handle. The model call itself remains a localhost llama.cpp HTTP
-/// request with explicit timeouts.
+/// Nonblocking bounded queue with inference on a dedicated worker thread.
+/// Local llama.cpp HTTP requests have explicit timeouts.
 #[derive(Debug)]
 pub struct LocalSlmPriorAsyncQueue {
     config: LlamaCppSlmPriorConfig,
@@ -547,49 +540,12 @@ struct LlamaCppChatMessage {
     content: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct LlamaCppErrorResponse {
-    error: LlamaCppErrorValue,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum LlamaCppErrorValue {
-    Message { message: String },
-    Text(String),
-    Other(Value),
-}
-
-impl LlamaCppErrorValue {
-    fn into_message(self) -> String {
-        match self {
-            Self::Message { message } => message,
-            Self::Text(text) => text,
-            Self::Other(value) => value.to_string(),
-        }
-    }
-}
-
 pub(crate) fn parse_llamacpp_chat_response(response: &str) -> Result<String, String> {
-    let (header, body) = response
-        .split_once("\r\n\r\n")
-        .ok_or_else(|| "local llama.cpp generation response missing HTTP body".to_string())?;
-    let body = if header
-        .lines()
-        .any(|line| line.eq_ignore_ascii_case("Transfer-Encoding: chunked"))
-    {
-        decode_chunked_http_body(body)?
-    } else {
-        body.to_string()
-    };
-    if !header.starts_with("HTTP/1.1 200") && !header.starts_with("HTTP/1.0 200") {
-        let message = serde_json::from_str::<LlamaCppErrorResponse>(&body)
-            .map(|err| err.error.into_message())
-            .unwrap_or_else(|_| body.trim().to_string());
-        return Err(format!(
-            "USER_ACTION_REQUIRED: local llama.cpp SLM prior request failed: {message}"
-        ));
-    }
+    let body = llamacpp_response_body(
+        response,
+        "local llama.cpp generation response missing HTTP body",
+        "USER_ACTION_REQUIRED: local llama.cpp SLM prior request failed",
+    )?;
     let response =
         serde_json::from_str::<LlamaCppChatResponse>(&body).map_err(|err| err.to_string())?;
     let content = response

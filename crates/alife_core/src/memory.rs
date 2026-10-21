@@ -307,9 +307,8 @@ impl PreparedMemoryRecall {
         Ok(())
     }
 
-    /// Bind the v1.1 context to the existing episodic lanes before the
-    /// perception frame is finalized. The projection only changes channels
-    /// backed by an actual memory source, so an empty bank remains neutral.
+    /// Bind separately assembled cognitive context before finalizing perception.
+    /// Existing episodic lanes and their encoding remain unchanged.
     pub fn with_cognitive_context(
         mut self,
         cognitive_context: CognitiveContextFrame,
@@ -1654,11 +1653,12 @@ impl MemoryBank {
         let memory_id = MemoryId(self.next_memory_id);
         let record =
             MemoryRecord::from_sealed_patch(memory_id, patch, self.config.max_feature_len)?;
-        self.insert_record(record)?;
-        self.next_memory_id = self
+        let next_memory_id = self
             .next_memory_id
             .checked_add(1)
             .ok_or(ScaffoldContractError::ScalarOutOfRange)?;
+        self.insert_record(record)?;
+        self.next_memory_id = next_memory_id;
         self.record_last_tick(organism_id, source_tick);
         Ok(memory_id)
     }
@@ -1986,6 +1986,12 @@ impl MemoryBank {
         }
         if records.len() > self.config.capacity {
             return Err(ScaffoldContractError::ScalarOutOfRange);
+        }
+        for record in &records {
+            record.validate_contract()?;
+            if record.features.len() > self.config.max_feature_len {
+                return Err(ScaffoldContractError::ScalarOutOfRange);
+            }
         }
         self.records.fill(None);
         self.next_write_index = 0;

@@ -1106,8 +1106,15 @@ impl GpuLiveBrainRuntime {
             self.exact_checkpoint_work = work;
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
         };
-        permit.validate_restored_provenance()?;
         let transaction_id = permit.transaction_id();
+        if let Err(error) = permit.validate_restored_provenance() {
+            self.retain_failed_exact_checkpoint_worker(
+                transaction_id,
+                worker,
+                ScaffoldContractError::ConsolidationGenerationMismatch.into(),
+            );
+            return Err(error.into());
+        }
         let (mut worker_promotions, queued_authorities) =
             match self.take_exact_checkpoint_journal_writes(&permit) {
                 Ok(writes) => writes,

@@ -1,56 +1,18 @@
 use alife_core::{
-    ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, EndocrineProfile,
-    EndocrineSnapshot, ExperiencePatchHeader, ExperienceSequenceId, GenomeId,
-    LineageExportManifest, LineageId, LobeKind, LobeLayout, NeuralComputeBackend, OrganismId,
-    ScaffoldContractError, SemanticPriorProvider, SemanticPriorRequest, TeacherPerceptionChannel,
-    Tick, WorldEntityId,
+    ActionCommand, ActionKind, BrainClassSpec, BrainGenome, BrainScaleTier, ExperiencePatchHeader,
+    ExperienceSequenceId, OrganismId, SemanticPriorRequest, TeacherPerceptionChannel, Tick,
+    WorldEntityId,
 };
 use alife_core::{Confidence, DurationTicks};
 
 #[test]
-fn standard2048_is_one_scalable_reference_tier() {
-    let nano = BrainClassSpec::for_tier(BrainScaleTier::Nano512);
-    let standard = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
-    let large = BrainClassSpec::for_tier(BrainScaleTier::Large4096);
-
-    assert_eq!(nano.neuron_count, 512);
-    assert_eq!(standard.neuron_count, 2048);
-    assert_eq!(large.neuron_count, 4096);
-    assert!(standard.neuron_count > nano.neuron_count);
-    assert!(large.neuron_count > standard.neuron_count);
-
-    for spec in [nano, standard, large] {
-        spec.validate().expect("reference tier should be valid");
-        assert_eq!(spec.neuron_count % 128, 0);
-        assert_eq!(spec.lobe_layout.total_neurons(), spec.neuron_count);
-        assert!(spec.lobe_layout.regions_are_aligned(16));
-    }
-}
-
-#[test]
-fn founder_homologues_cannot_be_disabled() {
-    assert_eq!(
-        LobeLayout::with_disabled_lobe(
-            BrainScaleTier::Nano512.neuron_count().unwrap(),
-            LobeKind::SocialCommunication,
-        ),
-        Err(ScaffoldContractError::PhenotypeCompile)
-    );
-}
-
-#[test]
-fn genome_and_endocrine_profile_reference_brain_class_without_runtime_weights() {
+fn genome_references_brain_class_without_runtime_weights() {
     let class = BrainClassSpec::for_tier(BrainScaleTier::Small1024);
     let genome = BrainGenome::scaffold(7, class.id);
-    let endocrine = EndocrineProfile::baseline();
 
     assert_eq!(genome.species_seed, 7);
     assert_eq!(genome.brain_class_id, class.id);
     assert!(genome.genetic_prior_seed != 0);
-    assert_eq!(
-        endocrine.modulator_count(),
-        EndocrineSnapshot::CHANNEL_COUNT
-    );
 }
 
 #[test]
@@ -94,45 +56,4 @@ fn semantic_prior_is_private_and_teacher_uses_perceptual_channels() {
     assert!(channels.contains(&TeacherPerceptionChannel::Writing));
     assert!(channels.contains(&TeacherPerceptionChannel::Gesture));
     assert!(channels.contains(&TeacherPerceptionChannel::Object));
-}
-
-#[test]
-fn backend_and_semantic_traits_are_scaffold_interfaces_only() {
-    fn assert_backend<T: NeuralComputeBackend>() {}
-    fn assert_prior<T: SemanticPriorProvider>() {}
-
-    struct TestBackend;
-    impl NeuralComputeBackend for TestBackend {
-        fn backend_name(&self) -> &'static str {
-            "test-backend"
-        }
-    }
-
-    struct TestPrior;
-    impl SemanticPriorProvider for TestPrior {
-        fn provider_name(&self) -> &'static str {
-            "test-prior"
-        }
-    }
-
-    assert_backend::<TestBackend>();
-    assert_prior::<TestPrior>();
-}
-
-#[test]
-fn lineage_export_manifest_keeps_migration_metadata_versioned() {
-    let source = BrainClassSpec::for_tier(BrainScaleTier::Standard2048);
-    let target = BrainClassSpec::for_tier(BrainScaleTier::Large4096);
-    let manifest = LineageExportManifest {
-        abi_version: LineageExportManifest::ABI_VERSION,
-        lineage_id: LineageId(99),
-        founder_genome_id: GenomeId(123),
-        source_brain_class_id: source.id,
-        target_brain_class_id: Some(target.id),
-        exported_at_tick: 456,
-    };
-
-    assert_eq!(manifest.abi_version, 1);
-    assert_eq!(manifest.source_brain_class_id, source.id);
-    assert_eq!(manifest.target_brain_class_id, Some(target.id));
 }

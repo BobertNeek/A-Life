@@ -1,4 +1,4 @@
-//! Shared required-GPU ownership and evidence contracts for the closed loop.
+//! GPU device ownership and closed-loop transaction state.
 //!
 //! The world supplies current perception and unscored candidates. This module
 //! owns the one authoritative device, fixed class arenas, generation-checked
@@ -37,20 +37,16 @@ use serde::{Deserialize, Serialize};
 use crate::closed_loop_buffers::GpuFixedSlotUpload;
 use crate::closed_loop_pipeline::{
     GpuDecodeMappedRecordsDiagnostic as PipelineDecodeMappedRecordsDiagnostic,
-    GpuDecodeMappedRecordsSubstage as PipelineDecodeMappedRecordsSubstage,
-    GpuFastPlasticityMalformedField as PipelineFastPlasticityMalformedField,
-    GpuSelectionValidationFailure as PipelineSelectionValidationFailure,
-    GpuSelectionValidationField as PipelineSelectionValidationField,
     GpuSelectorDiagnosticEnableError as PipelineSelectorDiagnosticEnableError,
     GpuSelectorDiagnosticErrorReceipt as PipelineSelectorDiagnosticErrorReceipt,
     GpuSelectorDiagnosticFailureClass as PipelineSelectorDiagnosticFailureClass,
     GPU_SELECTOR_DIAGNOSTIC_RECORD_WORDS,
 };
 use crate::{
-    derive_executed_work, AddLifetimeSynapse, GpuActiveBatchUpload, GpuAdmissionReceipt,
-    GpuAllocationEventKind, GpuAllocationEventReceipt, GpuAuthorityReceiptV1, GpuBrainSlot,
-    GpuClosedLoopError, GpuClosedLoopKernelSet, GpuClosedLoopPipelines, GpuCompactMapTicket,
-    GpuFastPlasticityBatchEntry, GpuFixedActiveBatchEntry, GpuFixedClassArenaBuffers,
+    derive_executed_work, AddLifetimeSynapse, GpuActiveBatchEntry, GpuActiveBatchUpload,
+    GpuAdmissionReceipt, GpuAllocationEventKind, GpuAllocationEventReceipt, GpuAuthorityReceiptV1,
+    GpuBrainSlot, GpuClosedLoopError, GpuClosedLoopKernelSet, GpuClosedLoopPipelines,
+    GpuCompactMapTicket, GpuFastPlasticityBatchEntry, GpuFixedClassArenaBuffers,
     GpuFixedClassArenaPlan, GpuFixedSlotRanges, GpuLearningReceipt, GpuLiveTopologyCheckpointV1,
     GpuMemoryContextDispatchReceipt, GpuMemoryContextUpload, GpuOutcomeCreditRecord,
     GpuPendingEligibilityRecord, GpuPerceptionUpload, GpuPreparedActiveBatch, GpuRuntimeBudget,
@@ -259,7 +255,7 @@ pub struct GpuHardwareReceipt {
     pub backend_version: String,
 }
 
-/// Ephemeral capture of Task 3 activity state. Runtime handle fields are
+/// Activity snapshot whose runtime handle fields are
 /// validated before the app canonicalizes this into portable world records.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuActivityRuntimeSnapshot {
@@ -455,110 +451,7 @@ pub enum GpuRuntimeApplyFastPlasticityFailureClass {
     StaleOrForeignHandle,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GpuRuntimeApplyFastPlasticityMalformedField {
-    BrainSlotIndex,
-    DuplicateSlotGeneration,
-    PendingSlot,
-    PendingSlotGeneration,
-    RecordSchemaVersion,
-    SelectionOffset,
-    SynapseCountNonZero,
-    RecurrentSynapseCountNonZero,
-    RecurrentSynapseCountLessThanTotal,
-    OutcomeSchemaVersion,
-    OutcomeActiveActivationSideRange,
-    OutcomeActiveActivationSide,
-    OutcomeOrganismId,
-    OutcomePhenotypeHash,
-    OutcomeDispatchGeneration,
-    OutcomeOriginatingTick,
-    OutcomeFrameDigest,
-    OutcomeCandidateAndFamily,
-    OutcomeActionId,
-    OutcomeCandidateFeatureDigest,
-    PendingSchemaVersion,
-    StagingEligibilityGeneration,
-    ActiveWeightGenerationNonZero,
-    ReplayGenerationNonZero,
-    TransactionGenerationNonZero,
-    ReplaySpanEndAtLeastStart,
-    ReplaySpanNonZero,
-    ReplaySpanMultipleOfFour,
-    CommitRecordWordCount,
-    CommitSchemaVersion,
-    CommitSlot,
-    CommitSlotGeneration,
-    CommitStatus,
-    CommitGuardRejected,
-    CommitInputFastGeneration,
-    CommitOutputFastGeneration,
-    CommitOutputEligibilityGeneration,
-    CommitReplayGeneration,
-    CommitTransactionGeneration,
-    CommitFastWeightsChangedRange,
-    CommitMaxAbsDeltaFinite,
-    CommitMaxAbsDeltaNonNegative,
-    CommitZeroChangeDelta,
-    CommitPositiveChangeDelta,
-}
-
-impl From<PipelineFastPlasticityMalformedField> for GpuRuntimeApplyFastPlasticityMalformedField {
-    fn from(field: PipelineFastPlasticityMalformedField) -> Self {
-        use GpuRuntimeApplyFastPlasticityMalformedField as Runtime;
-        use PipelineFastPlasticityMalformedField as Pipeline;
-        match field {
-            Pipeline::BrainSlotIndex => Runtime::BrainSlotIndex,
-            Pipeline::DuplicateSlotGeneration => Runtime::DuplicateSlotGeneration,
-            Pipeline::PendingSlot => Runtime::PendingSlot,
-            Pipeline::PendingSlotGeneration => Runtime::PendingSlotGeneration,
-            Pipeline::RecordSchemaVersion => Runtime::RecordSchemaVersion,
-            Pipeline::SelectionOffset => Runtime::SelectionOffset,
-            Pipeline::SynapseCountNonZero => Runtime::SynapseCountNonZero,
-            Pipeline::RecurrentSynapseCountNonZero => Runtime::RecurrentSynapseCountNonZero,
-            Pipeline::RecurrentSynapseCountLessThanTotal => {
-                Runtime::RecurrentSynapseCountLessThanTotal
-            }
-            Pipeline::OutcomeSchemaVersion => Runtime::OutcomeSchemaVersion,
-            Pipeline::OutcomeActiveActivationSideRange => Runtime::OutcomeActiveActivationSideRange,
-            Pipeline::OutcomeActiveActivationSide => Runtime::OutcomeActiveActivationSide,
-            Pipeline::OutcomeOrganismId => Runtime::OutcomeOrganismId,
-            Pipeline::OutcomePhenotypeHash => Runtime::OutcomePhenotypeHash,
-            Pipeline::OutcomeDispatchGeneration => Runtime::OutcomeDispatchGeneration,
-            Pipeline::OutcomeOriginatingTick => Runtime::OutcomeOriginatingTick,
-            Pipeline::OutcomeFrameDigest => Runtime::OutcomeFrameDigest,
-            Pipeline::OutcomeCandidateAndFamily => Runtime::OutcomeCandidateAndFamily,
-            Pipeline::OutcomeActionId => Runtime::OutcomeActionId,
-            Pipeline::OutcomeCandidateFeatureDigest => Runtime::OutcomeCandidateFeatureDigest,
-            Pipeline::PendingSchemaVersion => Runtime::PendingSchemaVersion,
-            Pipeline::StagingEligibilityGeneration => Runtime::StagingEligibilityGeneration,
-            Pipeline::ActiveWeightGenerationNonZero => Runtime::ActiveWeightGenerationNonZero,
-            Pipeline::ReplayGenerationNonZero => Runtime::ReplayGenerationNonZero,
-            Pipeline::TransactionGenerationNonZero => Runtime::TransactionGenerationNonZero,
-            Pipeline::ReplaySpanEndAtLeastStart => Runtime::ReplaySpanEndAtLeastStart,
-            Pipeline::ReplaySpanNonZero => Runtime::ReplaySpanNonZero,
-            Pipeline::ReplaySpanMultipleOfFour => Runtime::ReplaySpanMultipleOfFour,
-            Pipeline::CommitRecordWordCount => Runtime::CommitRecordWordCount,
-            Pipeline::CommitSchemaVersion => Runtime::CommitSchemaVersion,
-            Pipeline::CommitSlot => Runtime::CommitSlot,
-            Pipeline::CommitSlotGeneration => Runtime::CommitSlotGeneration,
-            Pipeline::CommitStatus => Runtime::CommitStatus,
-            Pipeline::CommitGuardRejected => Runtime::CommitGuardRejected,
-            Pipeline::CommitInputFastGeneration => Runtime::CommitInputFastGeneration,
-            Pipeline::CommitOutputFastGeneration => Runtime::CommitOutputFastGeneration,
-            Pipeline::CommitOutputEligibilityGeneration => {
-                Runtime::CommitOutputEligibilityGeneration
-            }
-            Pipeline::CommitReplayGeneration => Runtime::CommitReplayGeneration,
-            Pipeline::CommitTransactionGeneration => Runtime::CommitTransactionGeneration,
-            Pipeline::CommitFastWeightsChangedRange => Runtime::CommitFastWeightsChangedRange,
-            Pipeline::CommitMaxAbsDeltaFinite => Runtime::CommitMaxAbsDeltaFinite,
-            Pipeline::CommitMaxAbsDeltaNonNegative => Runtime::CommitMaxAbsDeltaNonNegative,
-            Pipeline::CommitZeroChangeDelta => Runtime::CommitZeroChangeDelta,
-            Pipeline::CommitPositiveChangeDelta => Runtime::CommitPositiveChangeDelta,
-        }
-    }
-}
+pub use crate::closed_loop_pipeline::GpuFastPlasticityMalformedField as GpuRuntimeApplyFastPlasticityMalformedField;
 
 /// Lossless identity for a rejected fast-plasticity submission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -874,43 +767,11 @@ pub enum GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureClass {
     CapacityExceeded,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage {
-    AuthorityPoisoned,
-    CompactWordCount,
-    SelectionValidation,
-    SpeechValidation,
-    FactorizedValidation,
-    PendingEligibility,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GpuRuntimeSelectorDiagnosticSelectionValidationField {
-    RecordCount,
-    Slot,
-    SlotGeneration,
-    DispatchGenerationNonZero,
-    DispatchGeneration,
-    ActiveActivationSide,
-    ActiveTilesNonZero,
-    ActiveSynapsesNonZero,
-    DendriticGatedBranches,
-    Status,
-    CandidateIndex,
-    LogitFinite,
-    CandidateRecord,
-    ConfidenceQ16,
-    EmptyCandidateIndex,
-    EmptyLogitBits,
-    EmptyConfidenceQ16,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt {
-    pub field: GpuRuntimeSelectorDiagnosticSelectionValidationField,
-    pub expected: u64,
-    pub actual: u64,
-}
+pub use crate::closed_loop_pipeline::{
+    GpuDecodeMappedRecordsSubstage as GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage,
+    GpuSelectionValidationFailure as GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt,
+    GpuSelectionValidationField as GpuRuntimeSelectorDiagnosticSelectionValidationField,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
@@ -929,7 +790,7 @@ pub struct GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
 }
 
 impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
-    const fn from_gpu_error(
+    fn from_gpu_error(
         error: GpuClosedLoopError,
         class_id: u16,
         chunk_index: usize,
@@ -957,53 +818,14 @@ impl GpuRuntimeSelectorDiagnosticDecodeMappedRecordsFailureReceipt {
             class,
             class_id,
             chunk_index,
-            substage: match diagnostic.substage {
-                Some(substage) => Some(GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
-                    substage: match substage {
-                        PipelineDecodeMappedRecordsSubstage::AuthorityPoisoned => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::AuthorityPoisoned,
-                        PipelineDecodeMappedRecordsSubstage::CompactWordCount => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::CompactWordCount,
-                        PipelineDecodeMappedRecordsSubstage::SelectionValidation => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::SelectionValidation,
-                        PipelineDecodeMappedRecordsSubstage::SpeechValidation => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::SpeechValidation,
-                        PipelineDecodeMappedRecordsSubstage::FactorizedValidation => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::FactorizedValidation,
-                        PipelineDecodeMappedRecordsSubstage::PendingEligibility => GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstage::PendingEligibility,
-                    },
+            substage: diagnostic.substage.map(|substage| {
+                GpuRuntimeSelectorDiagnosticDecodeMappedRecordsSubstageReceipt {
+                    substage,
                     expected_words: diagnostic.expected_words,
                     actual_words: diagnostic.actual_words,
-                    selection_failure: match diagnostic.selection_failure {
-                        Some(PipelineSelectionValidationFailure {
-                            field,
-                            expected,
-                            actual,
-                        }) => Some(
-                            GpuRuntimeSelectorDiagnosticSelectionValidationFailureReceipt {
-                                field: match field {
-                                    PipelineSelectionValidationField::RecordCount => GpuRuntimeSelectorDiagnosticSelectionValidationField::RecordCount,
-                                    PipelineSelectionValidationField::Slot => GpuRuntimeSelectorDiagnosticSelectionValidationField::Slot,
-                                    PipelineSelectionValidationField::SlotGeneration => GpuRuntimeSelectorDiagnosticSelectionValidationField::SlotGeneration,
-                                    PipelineSelectionValidationField::DispatchGenerationNonZero => GpuRuntimeSelectorDiagnosticSelectionValidationField::DispatchGenerationNonZero,
-                                    PipelineSelectionValidationField::DispatchGeneration => GpuRuntimeSelectorDiagnosticSelectionValidationField::DispatchGeneration,
-                                    PipelineSelectionValidationField::ActiveActivationSide => GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveActivationSide,
-                                    PipelineSelectionValidationField::ActiveTilesNonZero => GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveTilesNonZero,
-                                    PipelineSelectionValidationField::ActiveSynapsesNonZero => GpuRuntimeSelectorDiagnosticSelectionValidationField::ActiveSynapsesNonZero,
-                                    PipelineSelectionValidationField::DendriticGatedBranches => GpuRuntimeSelectorDiagnosticSelectionValidationField::DendriticGatedBranches,
-                                    PipelineSelectionValidationField::Status => GpuRuntimeSelectorDiagnosticSelectionValidationField::Status,
-                                    PipelineSelectionValidationField::CandidateIndex => GpuRuntimeSelectorDiagnosticSelectionValidationField::CandidateIndex,
-                                    PipelineSelectionValidationField::LogitFinite => GpuRuntimeSelectorDiagnosticSelectionValidationField::LogitFinite,
-                                    PipelineSelectionValidationField::CandidateRecord => GpuRuntimeSelectorDiagnosticSelectionValidationField::CandidateRecord,
-                                    PipelineSelectionValidationField::ConfidenceQ16 => GpuRuntimeSelectorDiagnosticSelectionValidationField::ConfidenceQ16,
-                                    PipelineSelectionValidationField::EmptyCandidateIndex => GpuRuntimeSelectorDiagnosticSelectionValidationField::EmptyCandidateIndex,
-                                    PipelineSelectionValidationField::EmptyLogitBits => GpuRuntimeSelectorDiagnosticSelectionValidationField::EmptyLogitBits,
-                                    PipelineSelectionValidationField::EmptyConfidenceQ16 => GpuRuntimeSelectorDiagnosticSelectionValidationField::EmptyConfidenceQ16,
-                                },
-                                expected,
-                                actual,
-                            },
-                        ),
-                        None => None,
-                    },
-                }),
-                None => None,
-            },
+                    selection_failure: diagnostic.selection_failure,
+                }
+            }),
         })
     }
 
@@ -1741,17 +1563,27 @@ pub(crate) struct ResidentBrainSlot {
     pub(crate) activity_sequence_cursor: u64,
     pub(crate) brain_atp_q16: u32,
     pub(crate) last_world_atp_tick: Option<u64>,
-    pub(crate) last_activity_dispatch_generation: u64,
-    pub(crate) last_activity_frame_digest: [u64; 4],
     pub(crate) last_completed_gpu_time_ns: u64,
-    pub(crate) last_pressure: Option<GpuPressureSample>,
-    pub(crate) last_throttle: Option<NeuralThrottleDecision>,
-    pub(crate) last_work: Option<BrainWorkReceipt>,
+    pub(crate) last_activity: Option<ResidentActivity>,
     pub(crate) v11: GpuV11CausalState,
     pub(crate) sleep_plan: alife_core::SleepConsolidationPlan,
     pub(crate) learning_sequence_guard: LearningSequenceGuard,
     pub(crate) pending_eligibility: Option<PendingEligibilityReceipt>,
     pub(crate) pending_eligibility_record: Option<GpuPendingEligibilityRecord>,
+}
+
+pub(crate) struct ResidentActivity {
+    pub(crate) throttle: NeuralThrottleDecision,
+    pub(crate) work: BrainWorkReceipt,
+}
+
+impl ResidentBrainSlot {
+    fn last_activity_source(&self) -> (u64, [u64; 4]) {
+        self.last_activity.as_ref().map_or((0, [0; 4]), |activity| {
+            let pressure = activity.throttle.pressure;
+            (pressure.dispatch_generation, pressure.frame_digest)
+        })
+    }
 }
 
 #[cfg(feature = "training-rollout")]
@@ -2017,21 +1849,6 @@ fn validate_curated_residency_cohort(
     let class_id = first.phenotype.brain_class_id();
     if class_id != BrainCapacityClass::N512_ID {
         return Err(ScaffoldContractError::UnsupportedProductionBrainClass);
-    }
-    let capacity = BrainCapacityClass::production_for_id(class_id)?;
-    validate_required_gpu_layout_version(u32::from(capacity.execution().gpu_layout_version()))?;
-    first
-        .phenotype
-        .validate_against(&capacity)
-        .map_err(|_| ScaffoldContractError::GpuLayoutMismatch)?;
-    if first.organism_id.validate().is_err()
-        || first.opaque_target_identity.raw() == 0
-        || first.exact_phenotype_hash != first.phenotype.phenotype_hash()
-        || first.exact_foundation_hash.bytes() == &[0; 32]
-        || first.phenotype.foundation_abi().foundation_payload_digest()
-            != Some(first.exact_foundation_hash)
-    {
-        return Err(ScaffoldContractError::BrainOwnershipMismatch);
     }
     let first_profile = first.phenotype.sensor_profile();
     let first_foundation = first.exact_foundation_hash;
@@ -2456,22 +2273,14 @@ fn build_selector_diagnostic(
         .zip(&capture.final_logit_bits)
         .map(|((candidate, pre_bits), final_bits)| {
             *failure_field = GpuRuntimeSelectorDiagnosticBuildFailureField::DecoderFamily;
-            let family_bias = phenotype
-                .candidate_decoder()
-                .families()
-                .iter()
-                .find(|family| family.family() == candidate.family)
-                .map(|family| {
-                    family.bias()
-                        + family.innate_contribution(frame.homeostasis().drives, candidate.features)
-                })
-                .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
             let family_plan = phenotype
                 .candidate_decoder()
                 .families()
                 .iter()
                 .find(|family| family.family() == candidate.family)
                 .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+            let family_bias = family_plan.bias()
+                + family_plan.innate_contribution(frame.homeostasis().drives, candidate.features);
             let contribution_capture = capture
                 .contributions
                 .iter()
@@ -2708,8 +2517,8 @@ fn live_pressure_sample(
         policy,
         GpuPressureSampleInput {
             identity,
-            source_dispatch_generation: resident.last_activity_dispatch_generation,
-            source_frame_digest: resident.last_activity_frame_digest,
+            source_dispatch_generation: resident.last_activity_source().0,
+            source_frame_digest: resident.last_activity_source().1,
             completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
             // The runtime waits for the submitted mixed-class batch before it
             // accepts another neural dispatch, so no older neural work is queued.
@@ -2884,8 +2693,6 @@ struct EphemeralBackendStatePlan {
     next_dispatch_generation: u64,
     next_sleep_job_id: u64,
     curated_residency_generation: u64,
-    #[cfg(test)]
-    recorded_pressure_replay_empty: bool,
 }
 
 fn new_ephemeral_backend_state_plan() -> Result<EphemeralBackendStatePlan, ScaffoldContractError> {
@@ -2897,8 +2704,6 @@ fn new_ephemeral_backend_state_plan() -> Result<EphemeralBackendStatePlan, Scaff
         next_dispatch_generation: 1,
         next_sleep_job_id: 1,
         curated_residency_generation: 0,
-        #[cfg(test)]
-        recorded_pressure_replay_empty: true,
     })
 }
 
@@ -3168,8 +2973,8 @@ impl GpuClosedLoopBackend {
             &self.activity_policy,
             GpuPressureSampleInput {
                 identity,
-                source_dispatch_generation: resident.last_activity_dispatch_generation,
-                source_frame_digest: resident.last_activity_frame_digest,
+                source_dispatch_generation: resident.last_activity_source().0,
+                source_frame_digest: resident.last_activity_source().1,
                 completed_gpu_time_ns: 0,
                 queue_depth: 0,
                 logical_heap_used: 0,
@@ -3325,24 +3130,21 @@ impl GpuClosedLoopBackend {
                 let synapse = phenotype
                     .synapses()
                     .get(usize::try_from(span.local_synapse_id).ok()?)?;
-                Some((
-                    synapse.source(),
-                    synapse.target(),
-                    synapse.route_index(),
-                    eligibility,
-                ))
+                Some((synapse.source(), synapse.target(), eligibility))
             })
             .take(32)
             .collect::<Vec<_>>();
+        // Local growth proposals are anchored in replay eligibility. Unit
+        // coactivation is proposal support, not an observed firing count.
+        const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
         let mut structural_evidence = Vec::new();
         for pair in active.windows(2).take(32) {
-            let (source, target, route, eligibility) = (pair[0].0, pair[1].1, pair[0].2, pair[0].3);
+            let (source, target, eligibility) = (pair[0].0, pair[1].1, pair[0].2);
             if source == target || base_pairs.contains(&(source, target)) {
                 continue;
             }
-            let region = route;
             structural_evidence.push(CoactivationEvidence {
-                region,
+                region: CANONICAL_SLEEP_STRUCTURAL_REGION,
                 source,
                 target,
                 coactivation: 1,
@@ -3351,7 +3153,7 @@ impl GpuClosedLoopBackend {
             });
         }
         if structural_evidence.is_empty() {
-            if let Some((source, target, route, eligibility)) = active.first().copied() {
+            if let Some((source, target, eligibility)) = active.first().copied() {
                 for offset in 1..=8_u32 {
                     let candidate_target = (target % phenotype.neuron_count()).wrapping_add(offset)
                         % phenotype.neuron_count();
@@ -3360,9 +3162,8 @@ impl GpuClosedLoopBackend {
                     {
                         continue;
                     }
-                    let region = route;
                     structural_evidence.push(CoactivationEvidence {
-                        region,
+                        region: CANONICAL_SLEEP_STRUCTURAL_REGION,
                         source,
                         target: candidate_target,
                         coactivation: 1,
@@ -3372,10 +3173,6 @@ impl GpuClosedLoopBackend {
                     break;
                 }
             }
-        }
-        const CANONICAL_SLEEP_STRUCTURAL_REGION: u16 = 0;
-        for item in &mut structural_evidence {
-            item.region = CANONICAL_SLEEP_STRUCTURAL_REGION;
         }
         self.apply_v11_structural_phase(handle, &structural_evidence)?;
         Ok(())
@@ -3697,23 +3494,13 @@ impl GpuClosedLoopBackend {
             .get(&handle.class_id.raw())
             .and_then(|pool| pool.resident(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        let all_absent = resident.last_pressure.is_none()
-            && resident.last_throttle.is_none()
-            && resident.last_work.is_none();
-        let all_present = resident.last_pressure.is_some()
-            && resident.last_throttle.is_some()
-            && resident.last_work.is_some();
-        if !(all_absent || all_present)
-            || resident.activity_sequence_cursor == 0
-            || resident.brain_atp_q16 > BRAIN_ATP_Q16_MAX
-        {
+        if resident.activity_sequence_cursor == 0 || resident.brain_atp_q16 > BRAIN_ATP_Q16_MAX {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
-        if let (Some(pressure), Some(throttle), Some(work)) = (
-            resident.last_pressure,
-            resident.last_throttle.as_ref(),
-            resident.last_work.as_ref(),
-        ) {
+        if let Some(activity) = &resident.last_activity {
+            let throttle = &activity.throttle;
+            let pressure = throttle.pressure;
+            let work = &activity.work;
             pressure.validate_for(&self.activity_policy)?;
             let capacity = capacity_for_gpu_class(handle.class_id)?;
             throttle.validate_for(&resident.phenotype, capacity.execution())?;
@@ -3727,15 +3514,10 @@ impl GpuClosedLoopBackend {
             work.validate_runtime_binding(handle.slot, handle.generation)?;
             if resident.activity_sequence_cursor
                 != pressure.sequence_cursor.checked_add(1).unwrap_or(0)
-                || resident.last_activity_dispatch_generation != pressure.dispatch_generation
-                || resident.last_activity_frame_digest != pressure.frame_digest
             {
                 return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
             }
-        } else if resident.activity_sequence_cursor != 1
-            || resident.last_activity_dispatch_generation != 0
-            || resident.last_activity_frame_digest != [0; 4]
-            || resident.last_completed_gpu_time_ns != 0
+        } else if resident.activity_sequence_cursor != 1 || resident.last_completed_gpu_time_ns != 0
         {
             return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
         }
@@ -3744,9 +3526,18 @@ impl GpuClosedLoopBackend {
             brain_atp_q16: resident.brain_atp_q16,
             last_world_atp_tick: resident.last_world_atp_tick,
             next_completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
-            pressure: resident.last_pressure,
-            throttle: resident.last_throttle.clone(),
-            work: resident.last_work.clone(),
+            pressure: resident
+                .last_activity
+                .as_ref()
+                .map(|activity| activity.throttle.pressure),
+            throttle: resident
+                .last_activity
+                .as_ref()
+                .map(|activity| activity.throttle.clone()),
+            work: resident
+                .last_activity
+                .as_ref()
+                .map(|activity| activity.work.clone()),
         })
     }
 
@@ -3835,7 +3626,7 @@ impl GpuClosedLoopBackend {
                 {
                     return Err(ScaffoldContractError::BrainActivitySequenceMismatch);
                 }
-                Some((pressure, throttle, work))
+                Some(ResidentActivity { throttle, work })
             }
             None if input.next_sequence_cursor == 1 && input.next_completed_gpu_time_ns == 0 => {
                 None
@@ -3849,28 +3640,10 @@ impl GpuClosedLoopBackend {
             .and_then(|pool| pool.resident_mut(handle).ok())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
         resident.activity_sequence_cursor = input.next_sequence_cursor;
-        match rebound {
-            Some((pressure, throttle, work)) => {
-                resident.brain_atp_q16 = input.brain_atp_q16;
-                resident.last_world_atp_tick = input.last_world_atp_tick;
-                resident.last_activity_dispatch_generation = pressure.dispatch_generation;
-                resident.last_activity_frame_digest = pressure.frame_digest;
-                resident.last_completed_gpu_time_ns = input.next_completed_gpu_time_ns;
-                resident.last_pressure = Some(pressure);
-                resident.last_throttle = Some(throttle);
-                resident.last_work = Some(work);
-            }
-            None => {
-                resident.brain_atp_q16 = input.brain_atp_q16;
-                resident.last_world_atp_tick = input.last_world_atp_tick;
-                resident.last_activity_dispatch_generation = 0;
-                resident.last_activity_frame_digest = [0; 4];
-                resident.last_completed_gpu_time_ns = 0;
-                resident.last_pressure = None;
-                resident.last_throttle = None;
-                resident.last_work = None;
-            }
-        }
+        resident.brain_atp_q16 = input.brain_atp_q16;
+        resident.last_world_atp_tick = input.last_world_atp_tick;
+        resident.last_completed_gpu_time_ns = input.next_completed_gpu_time_ns;
+        resident.last_activity = rebound;
         Ok(())
     }
 
@@ -4375,6 +4148,20 @@ impl GpuClosedLoopBackend {
         &mut self,
         batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
     ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
+        let mut published = false;
+        let result = self.apply_sealed_outcome_batch_inner(batch, &mut published);
+        if result.is_err() && published {
+            self.mark_device_lost();
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
+        result
+    }
+
+    fn apply_sealed_outcome_batch_inner(
+        &mut self,
+        batch: &[(GpuBrainHandle, &ExperiencePatch, &NeuralReceptorFrame)],
+        published: &mut bool,
+    ) -> Result<Vec<GpuLearningReceipt>, ScaffoldContractError> {
         self.last_apply_fast_plasticity_failure = None;
         self.ensure_ready()?;
         if batch.is_empty() {
@@ -4492,12 +4279,13 @@ impl GpuClosedLoopBackend {
                     }
                 })
                 .collect::<Vec<_>>();
-            let (gpu_result, malformed_receipt) = {
+            let (gpu_result, malformed_receipt, submission_started) = {
                 let bucket = self
                     .class_buckets
                     .get_mut(&class_id)
                     .and_then(|pool| pool.chunks.get_mut(chunk_index))
                     .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+                let mut submission_started = false;
                 let result = bucket.pipelines.apply_fast_plasticity(
                     &self.device,
                     &self.queue,
@@ -4508,9 +4296,10 @@ impl GpuClosedLoopBackend {
                         &self.plasticity_timestamp_resources.resolve_buffer,
                         &self.plasticity_timestamp_resources.readback_buffer,
                     ),
+                    &mut submission_started,
                 );
                 let malformed_receipt = bucket.pipelines.take_fast_plasticity_malformed_receipt();
-                (result, malformed_receipt)
+                (result, malformed_receipt, submission_started)
             };
             let gpu_timed_result = match gpu_result {
                 Ok(result) => result,
@@ -4533,10 +4322,20 @@ impl GpuClosedLoopBackend {
                             class_id,
                             chunk_index,
                             submitted_entry,
-                            malformed_field: malformed_receipt.map(|receipt| receipt.field.into()),
+                            malformed_field: malformed_receipt.map(|receipt| receipt.field),
                             expected: malformed_receipt.map(|receipt| receipt.expected),
                             actual: malformed_receipt.map(|receipt| receipt.actual),
                         });
+                    // Another row or an earlier arena may already have published its
+                    // weight bank. Host metadata cannot safely retry the whole batch.
+                    let rejected_single_row = indices.len() == 1
+                        && malformed_receipt.is_some_and(|receipt| {
+                            receipt.field == GpuRuntimeApplyFastPlasticityMalformedField::CommitGuardRejected
+                        });
+                    if *published || (submission_started && !rejected_single_row) {
+                        self.mark_device_lost();
+                        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+                    }
                     return Err(ScaffoldContractError::LearningEvidenceMismatch);
                 }
                 Err(_) => {
@@ -4544,6 +4343,7 @@ impl GpuClosedLoopBackend {
                     return Err(ScaffoldContractError::NeuralBackendUnavailable);
                 }
             };
+            *published = true;
             if gpu_timed_result.records.len() != indices.len() {
                 self.mark_device_lost();
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -5355,12 +5155,8 @@ impl GpuClosedLoopBackend {
             activity_sequence_cursor: 1,
             brain_atp_q16: BRAIN_ATP_Q16_MAX,
             last_world_atp_tick: None,
-            last_activity_dispatch_generation: 0,
-            last_activity_frame_digest: [0; 4],
             last_completed_gpu_time_ns: 0,
-            last_pressure: None,
-            last_throttle: None,
-            last_work: None,
+            last_activity: None,
             v11,
             sleep_plan: *phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
@@ -5552,17 +5348,6 @@ impl GpuClosedLoopBackend {
                     .abandon_unsubmitted_batch(batch);
             }
         }
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    pub fn shared_resource_counts_for_test(&self) -> (usize, usize, usize) {
-        let _ = (&self.adapter, &self.device, &self.queue);
-        (1, 1, 1)
-    }
-
-    #[cfg(feature = "gpu-tests")]
-    pub const fn shared_kernel_set_count_for_test(&self) -> usize {
-        1
     }
 
     #[cfg(feature = "gpu-tests")]
@@ -6160,12 +5945,8 @@ impl CuratedResidencyTransactionPort for GpuCuratedResidencyBackendPort<'_> {
             activity_sequence_cursor: 1,
             brain_atp_q16: BRAIN_ATP_Q16_MAX,
             last_world_atp_tick: None,
-            last_activity_dispatch_generation: 0,
-            last_activity_frame_digest: [0; 4],
             last_completed_gpu_time_ns: 0,
-            last_pressure: None,
-            last_throttle: None,
-            last_work: None,
+            last_activity: None,
             v11,
             sleep_plan: *entry.phenotype.sleep_consolidation_plan(),
             learning_sequence_guard: LearningSequenceGuard::new(
@@ -6484,7 +6265,7 @@ fn acquire_required_gpu(
     })
 }
 
-fn required_device_features() -> wgpu::Features {
+pub(crate) fn required_device_features() -> wgpu::Features {
     wgpu::Features::TIMESTAMP_QUERY
 }
 
@@ -6502,7 +6283,7 @@ fn validate_required_device_features(
     }
 }
 
-fn required_device_limits() -> wgpu::Limits {
+pub(crate) fn required_device_limits() -> wgpu::Limits {
     let mut required = wgpu::Limits::downlevel_defaults();
     required.max_storage_buffers_per_shader_stage =
         required.max_storage_buffers_per_shader_stage.max(10);
@@ -6560,239 +6341,6 @@ impl GpuDeviceFactory for SoftwareAdapterGpuFactory {
 }
 
 #[cfg(test)]
-#[derive(Clone)]
-struct RuntimeArenaFixtureSlot {
-    generation: u32,
-    owner: Option<(OrganismId, PhenotypeHash)>,
-    retired: bool,
-    ranges: Vec<Vec<u32>>,
-}
-
-#[cfg(test)]
-struct RuntimeArenaTestHarness {
-    backend_instance_id: NonZeroU64,
-    class_id: BrainClassId,
-    slots: Vec<RuntimeArenaFixtureSlot>,
-    state: GpuBackendState,
-    fail_next_scrub: bool,
-}
-
-#[cfg(test)]
-impl RuntimeArenaTestHarness {
-    fn n512(slot_count: usize) -> Self {
-        Self {
-            backend_instance_id: NonZeroU64::new(1).unwrap(),
-            class_id: BrainClassId(1),
-            slots: vec![
-                RuntimeArenaFixtureSlot {
-                    generation: 0,
-                    owner: None,
-                    retired: false,
-                    ranges: (0..9).map(|_| vec![0; 8]).collect(),
-                };
-                slot_count
-            ],
-            state: GpuBackendState::Ready,
-            fail_next_scrub: false,
-        }
-    }
-
-    fn insert_fixture(
-        &mut self,
-        organism_id: OrganismId,
-        phenotype_hash: PhenotypeHash,
-    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
-        let index = self
-            .slots
-            .iter()
-            .position(|slot| slot.owner.is_none() && !slot.retired)
-            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-        let next = self.slots[index]
-            .generation
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-        self.insert_at(index, organism_id, phenotype_hash, next)
-    }
-
-    fn insert_fixture_with_generation(
-        &mut self,
-        organism_id: OrganismId,
-        phenotype_hash: PhenotypeHash,
-        generation: u32,
-    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
-        let index = self
-            .slots
-            .iter()
-            .position(|slot| slot.owner.is_none() && !slot.retired)
-            .ok_or(ScaffoldContractError::NeuralBackendUnavailable)?;
-        self.insert_at(index, organism_id, phenotype_hash, generation)
-    }
-
-    fn rebind_fixture_for_restore(
-        &mut self,
-        organism_id: OrganismId,
-        phenotype_hash: PhenotypeHash,
-    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
-        if self
-            .slots
-            .iter()
-            .any(|slot| slot.owner.is_some_and(|owner| owner.0 == organism_id))
-        {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
-        self.insert_fixture(organism_id, phenotype_hash)
-    }
-
-    fn insert_at(
-        &mut self,
-        index: usize,
-        organism_id: OrganismId,
-        phenotype_hash: PhenotypeHash,
-        generation: u32,
-    ) -> Result<GpuBrainHandle, ScaffoldContractError> {
-        if !matches!(self.state, GpuBackendState::Ready) || generation == 0 {
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
-        }
-        let slot = &mut self.slots[index];
-        if slot.owner.is_some() || slot.retired {
-            return Err(ScaffoldContractError::BrainOwnershipMismatch);
-        }
-        slot.generation = generation;
-        slot.owner = Some((organism_id, phenotype_hash));
-        Ok(GpuBrainHandle {
-            backend_instance_id: self.backend_instance_id,
-            class_id: self.class_id,
-            slot: index as u32,
-            generation,
-            organism_id,
-            phenotype_hash,
-        })
-    }
-
-    fn fill_every_reserved_range(&mut self, handle: GpuBrainHandle, value: u32) {
-        assert!(self.owns(handle));
-        for range in &mut self.slots[handle.slot as usize].ranges {
-            range.fill(value);
-        }
-    }
-
-    fn remove_fixture(&mut self, handle: GpuBrainHandle) -> Result<(), ScaffoldContractError> {
-        if !matches!(self.state, GpuBackendState::Ready) || !self.owns(handle) {
-            return Err(if matches!(self.state, GpuBackendState::Ready) {
-                ScaffoldContractError::BrainOwnershipMismatch
-            } else {
-                ScaffoldContractError::NeuralBackendUnavailable
-            });
-        }
-        if self.fail_next_scrub {
-            self.fail_next_scrub = false;
-            self.state = GpuBackendState::DeviceLost {
-                last_checkpoint_digest: None,
-            };
-            return Err(ScaffoldContractError::NeuralBackendUnavailable);
-        }
-        let slot = &mut self.slots[handle.slot as usize];
-        for range in &mut slot.ranges {
-            range.fill(0);
-        }
-        slot.owner = None;
-        if slot.generation == u32::MAX {
-            slot.retired = true;
-        }
-        Ok(())
-    }
-
-    fn every_reserved_range_is_zero(&self, slot: u32) -> bool {
-        self.slots[slot as usize]
-            .ranges
-            .iter()
-            .flatten()
-            .all(|word| *word == 0)
-    }
-
-    fn slot_is_permanently_retired(&self, slot: u32) -> bool {
-        self.slots[slot as usize].retired
-    }
-
-    fn free_slot_count(&self) -> usize {
-        self.slots
-            .iter()
-            .filter(|slot| slot.owner.is_none() && !slot.retired)
-            .count()
-    }
-
-    fn fail_next_scrub_after_submit(&mut self) {
-        self.fail_next_scrub = true;
-    }
-
-    fn state(&self) -> &GpuBackendState {
-        &self.state
-    }
-
-    fn owns(&self, handle: GpuBrainHandle) -> bool {
-        handle.backend_instance_id == self.backend_instance_id
-            && handle.class_id == self.class_id
-            && self.slots.get(handle.slot as usize).is_some_and(|slot| {
-                slot.generation == handle.generation
-                    && slot.owner == Some((handle.organism_id, handle.phenotype_hash))
-            })
-    }
-
-    fn validate_frame_organism(
-        &self,
-        handle: GpuBrainHandle,
-        organism_id: OrganismId,
-    ) -> Result<(), ScaffoldContractError> {
-        if self.owns(handle) && handle.organism_id == organism_id {
-            Ok(())
-        } else {
-            Err(ScaffoldContractError::BrainOwnershipMismatch)
-        }
-    }
-}
-
-#[cfg(test)]
-#[derive(Default)]
-struct RuntimePreflightTestHarness {
-    allocated_arenas: usize,
-    counters: (u64, u64, u64),
-}
-
-#[cfg(test)]
-impl RuntimePreflightTestHarness {
-    fn validate_class(&mut self, class_id: BrainClassId) -> Result<(), ScaffoldContractError> {
-        match class_id.raw() {
-            1..=3 => Ok(()),
-            _ => Err(ScaffoldContractError::UnsupportedProductionBrainClass),
-        }
-    }
-
-    fn allocated_arena_count(&self) -> usize {
-        self.allocated_arenas
-    }
-
-    fn runtime_counters(&self) -> (u64, u64, u64) {
-        self.counters
-    }
-
-    fn perception_upload_count(&self) -> u64 {
-        self.counters.1
-    }
-
-    fn validate_frame_digest(
-        &mut self,
-        expected: PerceptionFrameDigest,
-        actual: PerceptionFrameDigest,
-    ) -> Result<(), ScaffoldContractError> {
-        if expected == actual {
-            Ok(())
-        } else {
-            Err(ScaffoldContractError::InvalidPerceptionFrame)
-        }
-    }
-}
-
-#[cfg(test)]
 #[path = "../tests/support/closed_loop_runtime_private.rs"]
 mod task7_private_tests;
 
@@ -6811,7 +6359,6 @@ mod staging_backend_tests {
             assert_eq!(staging.next_dispatch_generation, 1);
             assert_eq!(staging.next_sleep_job_id, 1);
             assert_eq!(staging.curated_residency_generation, 0);
-            assert!(staging.recorded_pressure_replay_empty);
         });
     }
 }

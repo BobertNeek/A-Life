@@ -1,4 +1,4 @@
-//! CPU-only causal input-chain regression (AOA-CON-003/004/005, AOA-EVAL-006).
+//! CPU regression for the predictor-to-gap-to-exploration input chain.
 //! No adapter, neural execution, or hand-injected concept/gap state.
 use super::*;
 use alife_core::{
@@ -364,11 +364,11 @@ fn repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local() {
     assert_eq!(stable[&object_a].1.raw(), 0.0);
     assert_eq!(changed[&object_b], stable[&object_b]);
     assert_eq!(changed[&object_b].1.raw(), 0.0);
-    assert_eq!(upload.cognitive_records.len(), frame.candidates().len());
+    assert_eq!(upload.cognitive_records().len(), frame.candidates().len());
     let mut a_count = 0;
     let mut b_count = 0;
     for (index, candidate) in projection.candidates.iter().enumerate() {
-        let row = &upload.cognitive_records[index];
+        let row = &upload.cognitive_records()[index];
         assert_eq!(row.schema_version, 1);
         assert_eq!(row.candidate_index, u32::from(candidate.candidate_index));
         assert_eq!(row.values[14], candidate.gap_match.raw());
@@ -379,19 +379,19 @@ fn repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local() {
         );
         assert_eq!(
             row.values[14],
-            cold_upload.cognitive_records[index].values[14]
+            cold_upload.cognitive_records()[index].values[14]
         );
         if candidate.tracked_object_id == Some(object_a) {
             a_count += 1;
             assert_eq!(candidate.gap_match, changed[&object_a].1);
             assert!(row.values[14] > frame.sensory().channels.novelty_signal.raw());
-            assert_eq!(stable_upload.cognitive_records[index].values[14], 0.0);
+            assert_eq!(stable_upload.cognitive_records()[index].values[14], 0.0);
             assert_eq!(
                 row.values[15],
-                stable_upload.cognitive_records[index].values[15]
+                stable_upload.cognitive_records()[index].values[15]
             );
         } else {
-            assert_eq!(row, &stable_upload.cognitive_records[index]);
+            assert_eq!(row, &stable_upload.cognitive_records()[index]);
             assert_eq!(candidate, &stable_projection.candidates[index]);
             assert_eq!(row.values[14], 0.0);
             b_count += usize::from(candidate.tracked_object_id == Some(object_b));
@@ -422,16 +422,16 @@ fn repeated_sealed_mismatch_keeps_familiar_object_gap_evidence_target_local() {
         pain: drives.pain,
     };
     let mut stable_choices = reference::pair();
-    stable_choices[0].gap_match = stable_upload.cognitive_records[b_index].values[14];
-    stable_choices[1].gap_match = stable_upload.cognitive_records[a_index].values[14];
+    stable_choices[0].gap_match = stable_upload.cognitive_records()[b_index].values[14];
+    stable_choices[1].gap_match = stable_upload.cognitive_records()[a_index].values[14];
     // Exceed the complete cold pair's perturbation bound, so the matched
     // no-gap baseline cannot change its learned winner even at extreme draws.
     let cold_pair_bound = 2.0
         * (reference::scale(state, stable_choices[0]) + reference::scale(state, stable_choices[1]));
     stable_choices[1].logit = -(cold_pair_bound + 0.01);
     let mut changed_choices = stable_choices;
-    changed_choices[0].gap_match = upload.cognitive_records[b_index].values[14];
-    changed_choices[1].gap_match = upload.cognitive_records[a_index].values[14];
+    changed_choices[0].gap_match = upload.cognitive_records()[b_index].values[14];
+    changed_choices[1].gap_match = upload.cognitive_records()[a_index].values[14];
     assert_eq!(
         reference::scale(state, stable_choices[0]),
         reference::scale(state, changed_choices[0])

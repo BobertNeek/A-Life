@@ -1,166 +1,75 @@
 # Roadmap
 
-Updated 14 October 2026. The immediate priority is the persistent creature game
-described in section 1.1 of the controlling v2.0 architecture: care, useful
-learning, and save/load first; breeding and practical breed promotion next.
+Prioritize the persistent creature game: care, useful learning, and save/load;
+then a small community, breeding, and practical breed promotion. The
+[organism and gameplay design](architecture/ALife_Complete_Organism_and_Intelligence_Architecture_v2.0_CONTROLLING.md)
+contains the longer-term ambitions. Research mechanisms are selected when they
+help that game or answer a specific learning question.
 
-The [core game loop delivery plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/core-game-loop-plan-2026-09-20.md) contains the
-current sequence, source findings, Docking Station lessons, and exit criteria.
-It also sets the minimum-test rule: use the smallest relevant existing check,
-combine acceptance into one evolving play scenario, and expand only for a
-concrete failure. This is a plan, not evidence of completed gameplay.
+## A working care loop
 
-## 1. Establish the ordinary production baseline
+Use the actual production terrain, a fresh save, and one creature to connect
+reachable food, eating, rest, recovery, readable needs, and direct care tools.
+Observe a real GPU-selected action, its world consequence, and the matching
+visible creature. Fix the observed break and preserve existing saves.
 
-Live GPU-to-voxel projection is implemented in source. Check it inside the actual
-care scenario, starting with one creature and a fresh save. Preserve existing
-saves. Repair the first observed break rather than repeating a broad audit.
+A useful lesson should change later independent behavior. Natural sleep and a
+fresh-process restore should retain the same individual and its acquired skill.
+Pause, speed, save, load, selection, follow, and new-world controls should continue
+to operate on the same runtime and presentation state. Failed load must leave a
+usable prior state; unavailable hardware should be explained clearly.
 
-Exit gate:
+## Community and generational play
 
-- a real GPU-selected action changes the authoritative world;
-- the matching voxel entity receives the resulting transform or visibility change;
-- renderer code cannot write world truth;
-- existing causal output and a short recording show the same organism through
-  input, selection, world outcome, and presentation.
+Extend that loop to a small community with useful objects, sustainable resources,
+readable social behavior, reproduction, inherited variation, development, death,
+and lasting lineage records. Offspring need fresh identities and meaningful
+inherited differences. Birth archive precedes GPU admission; final life archive
+precedes retirement. Restoring a save should restore that same family.
 
-## 2. Deliver the first playable care loop
+Practical named breed promotion should retain a useful skill in a fresh
+descendant, clear personal records, and leave the source individual unchanged.
+One selected individual is sufficient; cohort research is optional. Ordinary
+mating does not copy an acquired adult mind. The
+[historical promotion decision](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-breed-promotion-scope.md)
+explains that distinction.
 
-Validate a capable founder and connect its explicit identity to ordinary New
-Game, birth, archive, and restore. Make reachable food, eating, rest, and recovery
-work on the production terrain. Provide direct care tools, readable needs and
-consequences, and contextual help in the player view.
+## Learning questions
 
-Exit gate:
+Investigate a concrete learning problem with an appropriate comparison and later
+unprompted behavior. Preserve acquired state and report failed or missing
+observations. Historical EI campaigns remain in [Evidence](EVIDENCE.md); their
+score matrices and review eligibility do not gate a gameplay fix.
 
-- care produces visible, real physiological consequences;
-- one grounded lesson changes later independent behavior;
-- natural sleep and fresh-process save/load preserve the same individual and
-  its acquired ability;
-- ordinary controls demonstrate the connected loop, not only its components.
+## Performance: fifty individuals at 20 FPS
 
-### Controls and continuity throughout
+The user's target is i7-3770K / 32 GB / RTX 3050 8 GB at 1080p, with the existing
+20 Hz simulation/cognition schedule, useful learning, individual memory, and exact
+continuity. **Fifty creatures at 20 FPS remains unmeasured for the current source.**
 
-Pause, speed, load, save, selection, follow, and new-world commands use the same
-live runtime and projection. Preserve them during every gameplay change.
+Measure the supported play session on available hardware. Record source,
+configuration, population, brain/sensor profiles, useful neural work, progressed
+ticks, frame/tick latency, CPU/GPU memory, and the stage responsible for a real
+bottleneck. Fresh and populated memory, crowded scenes, and sleep can affect the
+result; choose comparisons relevant to the question rather than a universal
+population/profile matrix.
 
-Exit gate:
-
-- pause stops simulation and presentation at a sealed boundary;
-- load atomically replaces runtime and scene or fails without partial state;
-- save/load succeeds across a fresh process;
-- controls report unavailable neural hardware honestly;
-- disabled or diagnostic-only features are visibly labelled.
-
-## 3. Deliver a small community and generational play
-
-Extend the working loop to the default six creatures, with useful objects,
-sustainable resources, readable social behavior, and measured performance.
-
-Autonomous production lifecycle has existing world/runtime hooks. Complete the
-ordinary experience of reproduction, inherited variation, development, death,
-and lasting lineage records.
-
-Exit gate:
-
-- viable offspring have fresh identities and meaningful inherited differences;
-- birth archive precedes GPU admission, and final life archive precedes retirement;
-- stable IDs, GPU residents, and visible entities agree across lifecycle changes;
-- restarting restores the same family and lineage;
-- explicit named breed promotion retains a useful skill in a fresh descendant,
-  clears personal records, and leaves the source individual unchanged.
-
-Follow the [approved promotion scope](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-09-11-breed-promotion-scope.md).
-Ordinary mating must not silently copy an acquired adult mind.
-
-## 4. Advance EI1 research separately
-
-Treat the retained `Blocked` corpus as diagnosis, not promotion.
-
-This research promotion gate does not block repairing a small interaction or
-establishing the first playable care loop. Gameplay progress does not itself
-promote EI1.
-
-Exit gate:
-
-- the exact source, tree, adapter, backend, config, and corpus are bound;
-- intact scores are positive;
-- treatment is not worse than control in every required cell;
-- every minimum control margin passes;
-- required plateau windows are complete and valid;
-- the causal zstd sidecar streams successfully and matches every promoted receipt;
-- focused gates contain no EI1 ignores.
-
-If measured ability still fails, retain `Blocked` and improve the training design rather than relabelling the evidence.
-
-## 5. Scale by measurement when larger profiles are the target
-
-Keep brain class and population capacity as separate decisions.
-
-Measure the initial supported population in the ordinary play session. Broad
-population studies are separate work, not a prerequisite for the care milestone.
-
-Exit gate for each production class and population profile:
-
-- complete causal, learning, sleep, restore, memory, topology, and rollback evidence;
-- measured p95 tick and VRAM use on the named adapter/backend;
-- populations 1, 10, 50, 100, 250, and 500 measured for both sensor profiles where required;
-- admission, throttling, save migration, soak, and replay gates pass;
-- N4096 remains research-only until its own equivalence and rollback gate passes.
-
-### Current performance follow-up: 50 individuals at 20 FPS
-
-Target i7-3770K / 32 GB / RTX 3050 8 GB at 1080p, with the existing 20 Hz
-simulation/cognition schedule, useful learning, individual memory and exact
-continuity. **20 FPS with 50 creatures remains Unknown.** Keep the care and
-small-community milestones above in sequence; a broad population study is not
-an additional prerequisite for the first playable care loop.
-
-Source-integrated groundwork, confirmed in main and the inspected consolidation
-candidate (implementation status, not target-hardware or gameplay proof):
-
-- [x] Memory-sensitive attention without the unused preliminary finalized frame:
-  [`6aef08b1e8ded7691d2d5c111e9a5b3225e84c64`](https://github.com/BobertNeek/A-Life/commit/6aef08b1e8ded7691d2d5c111e9a5b3225e84c64)
-- [x] Bounded production CPU preparation with at most two participants and the
-  existing serial fallback: [`b24417cad91a859211ea6730948760c2582553d9`](https://github.com/BobertNeek/A-Life/commit/b24417cad91a859211ea6730948760c2582553d9)
-- [x] Redundant private topology-plan/lifecycle validation and digest work removed
-  while retaining transaction/rollback guards:
-  [`035d76fa8101c17ec5748c60e464c0c71a169122`](https://github.com/BobertNeek/A-Life/commit/035d76fa8101c17ec5748c60e464c0c71a169122) and [`994fceac4c6777b4390dc17ed1e4a7354b76930a`](https://github.com/BobertNeek/A-Life/commit/994fceac4c6777b4390dc17ed1e4a7354b76930a)
-- [x] Discarded draft/attention copies removed:
-  [`51ef0d88ab946bba75c63040348cad42d6f8be04`](https://github.com/BobertNeek/A-Life/commit/51ef0d88ab946bba75c63040348cad42d6f8be04)
-
-Remaining measurement-led work:
-
-- [ ] Bind the actual integrated source/tree, executable, configuration, adapter,
-  founder/save and workload; separately authorize the target-hardware window
-- [ ] Obtain paired 8/16/32/50-population receipts with fresh and populated personal
-  memory, spread/crowded placement, FPS, progressed TPS, due/completed cognitive
-  rows, latency tails, catch-up debt and mutually exclusive stage costs
-- [ ] Choose only the measured remaining bottleneck: exact organism-local reuse,
-  allocation/layout, world queries, transfers/waits or presentation scheduling
-  are hypotheses; retain grounded candidates, individual exceptions, bounded
-  work, GPU-authoritative actions and current cognition cadence
-- [ ] Preserve care/learning/sleep/lifecycle and fresh-process save/load in one
-  evolving ordinary play scenario; retain Unknown for missing source-bound proof
+Existing work has removed discarded preparation copies and bounded CPU
+preparation. Further reuse, world-query, allocation, transfer, or presentation
+changes should follow measurements. Preserve grounded candidates, private state,
+GPU action selection, cognition cadence, and ordinary save/load. Hardware work
+needs an available resource window; this roadmap does not schedule work on the
+user's PC.
 
 The [historical optimization plan](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/performance/20261001-fifty-creature-optimization-plan.md)
-preserves cost arithmetic, alternatives and falsification criteria with an
-explicit current consolidation context. The [bounded experiment blueprints](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/deep-planning-experiments-2026-10-01.md)
-retain matched memory and learning screens as conditional follow-ups; they do
-not launch a training campaign. The [dated skill review](https://github.com/BobertNeek/A-Life/blob/f49bc8d94b6f2733bb2fcaa59f10bd5267a079de/docs/reviews/2026-10-01-deep-planning-skill.md)
-records the reusable method. Historical work packages do not reopen the
-integrated seams or change architecture authority and the release gate.
+preserves earlier arithmetic and alternatives. Completed implementation and
+review logs remain in Git history.
 
-## 6. Release gate
+## A releasable game
 
-Release only after the product path is the proven path.
-
-Required:
-
-- current-HEAD source-bound receipts;
-- packaged Windows launch on target hardware;
-- current GPU and graphics performance measurements;
-- autonomous lifecycle and fresh-process persistence proof;
-- live rendered playtest evidence;
-- external tester feedback and resolved critical issues;
-- explicit release approval.
+Exercise the packaged Windows application on supported hardware: care and later
+learning, a complete family lifecycle, truthful controls, and retained individual
+state across restart. Measure practical graphics/cognition performance and
+resolve observed critical defects. Use player feedback to improve the experience
+before the user's release decision. The checks should support those claims
+without adding a separate reporting framework or research campaign to each fix.

@@ -55,8 +55,7 @@ impl CheckpointReadbackLayout {
         let (weights, optimizer) = bytes.split_at(n);
         let (first_moment, optimizer) = optimizer.split_at(n);
         let (second_moment, update_ages) = optimizer.split_at(n);
-        // Validate optimizer floats before weights, as the original capture
-        // did. Ages are integer words, including patterns that are NaN as f32.
+        // Ages are integer words, including patterns that are NaN as f32.
         let first_moment = decode_floats(first_moment)?;
         let second_moment = decode_floats(second_moment)?;
         let weights = decode_floats(weights)?;
@@ -70,8 +69,7 @@ impl CheckpointReadbackLayout {
 }
 
 fn words(bytes: &[u8]) -> impl Iterator<Item = u32> + '_ {
-    // No cast alignment assumption, and the same native-word interpretation
-    // as the existing bytemuck readback. The checked layout has whole words.
+    // Whole-word layout without cast alignment assumptions.
     bytes
         .as_chunks::<4>()
         .0

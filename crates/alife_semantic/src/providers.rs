@@ -1,4 +1,4 @@
-//! v0 scaffold: conversion orchestration for optional semantic/Gaussian adapters.
+//! Conversion of optional semantic and Gaussian context.
 
 use alife_core::{GaussianContextRef, ScaffoldContractError, SemanticContextRef, Vec3f};
 
@@ -16,7 +16,7 @@ use crate::{
     build_gaussian_context, build_semantic_context, EgocentricBinGrid, EgocentricBinHasher,
 };
 
-/// A small, explicit request object for optional context synthesis.
+/// Inputs for optional context synthesis.
 #[derive(Debug, Clone)]
 pub struct SemanticContextRequest {
     pub observer_offset: Vec3f,
@@ -84,7 +84,7 @@ pub struct SemanticContextBundle {
     pub semantic_context: Option<SemanticContextRef>,
 }
 
-/// Optional adapter contracts are explicit; missing sources must never fail.
+/// Optional context provider; missing sources produce no context.
 pub trait SemanticContextProvider {
     fn capability_manifest(&self) -> SemanticProviderCapabilityManifest;
 
@@ -94,7 +94,7 @@ pub trait SemanticContextProvider {
     ) -> Result<SemanticContextBundle, ScaffoldContractError>;
 }
 
-/// Keep adapters small and deterministic; this helper performs full conversion.
+/// Converts the bounded Gaussian observations and semantic bindings.
 #[cfg(feature = "fake-semantic-provider")]
 pub(crate) fn synthesize_context_bundle(
     request: &SemanticContextRequest,

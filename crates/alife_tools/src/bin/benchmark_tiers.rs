@@ -5,14 +5,10 @@ use std::{
     process::{Command, Stdio},
 };
 
-use alife_gpu_backend::{probe_local_wgpu_runtime, GpuRuntimeBackendConfig, GpuRuntimeBackendKind};
-use alife_tools::benchmark::{
-    gpu_closed_loop::{
-        adapter_identity_digest, canonical_performance_targets_v1, load_benchmark_manifest,
-        load_performance_targets, run_single_benchmark_row, GpuBenchmarkError,
-        GpuClosedLoopBenchmarkManifest, GpuPerformanceTargetRowV1,
-    },
-    BenchmarkHarness, BenchmarkHarnessConfig, GpuRuntimeBenchmarkBridge,
+use alife_tools::benchmark::gpu_closed_loop::{
+    adapter_identity_digest, canonical_performance_targets_v1, load_benchmark_manifest,
+    load_performance_targets, run_single_benchmark_row, GpuBenchmarkError,
+    GpuClosedLoopBenchmarkManifest, GpuPerformanceTargetRowV1,
 };
 
 struct BenchmarkStagingDirectory(PathBuf);
@@ -46,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         run_gpu_matrix(&args)?;
         return Ok(());
     }
-    run_legacy_benchmark(&args)
+    Err("usage: benchmark_tiers --backend gpu-closed-loop --targets PATH --classes n512,n1024,n2048 --sensor-profiles privileged-affordance-v1,grounded-object-slots-v1 --populations 1,10,50,100,250,500 [--base-seed 4404] --output PATH | --write-canonical-targets PATH | --validate PATH [--targets PATH]".into())
 }
 
 fn run_private_single_row(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
@@ -87,22 +83,26 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     let targets_path = PathBuf::from(required_value(args, "--targets")?);
     let targets = load_performance_targets(&targets_path)?;
     let requested = requested_targets(args, &targets.rows)?;
-    if requested != targets.rows {
+    if requested.is_empty() {
         return Err(GpuBenchmarkError::Contract(
-            "promotion benchmark requires the exact 36-row target matrix",
+            "no benchmark targets match the requested classes, profiles and populations",
         )
         .into());
     }
-    if required_value(args, "--base-seed")?.parse::<u64>()? != 4_404 {
-        return Err(GpuBenchmarkError::Contract("benchmark base seed must be 4404").into());
+    if let Some(seed) = value_after(args, "--base-seed") {
+        if seed.parse::<u64>()? != 4_404 {
+            return Err(
+                GpuBenchmarkError::Contract("benchmark protocol uses base seed 4404").into(),
+            );
+        }
     }
     let output = PathBuf::from(required_value(args, "--output")?);
     let provenance = clean_git_provenance()?;
     let staging = output.with_extension(format!("staging-{}", std::process::id()));
-    if staging.exists() {
-        fs::remove_dir_all(&staging)?;
+    if let Some(parent) = staging.parent() {
+        fs::create_dir_all(parent)?;
     }
-    fs::create_dir_all(&staging)?;
+    fs::create_dir(&staging)?;
     let _staging_cleanup = BenchmarkStagingDirectory(staging.clone());
     let executable = std::env::current_exe()?;
     let result = (|| -> Result<Vec<_>, Box<dyn std::error::Error>> {
@@ -140,13 +140,7 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(rows)
     })();
-    let rows = match result {
-        Ok(rows) => rows,
-        Err(error) => {
-            fs::remove_dir_all(&staging)?;
-            return Err(error);
-        }
-    };
+    let rows = result?;
     let mut observed = None;
     let mut adapter = None;
     for row in &rows {
@@ -159,7 +153,6 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Some(expected) if expected == identity => {}
                 Some(_) => {
-                    fs::remove_dir_all(&staging)?;
                     return Err(GpuBenchmarkError::Contract(
                         "benchmark children used different adapters",
                     )
@@ -182,7 +175,6 @@ fn run_gpu_matrix(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
     manifest.seal_digest()?;
     manifest.validate(&targets)?;
     atomic_write_json(&output, &manifest)?;
-    fs::remove_dir_all(&staging)?;
     println!("{}", output.display());
     Ok(())
 }
@@ -203,16 +195,25 @@ fn requested_targets(
         .split(',')
         .map(str::parse::<u32>)
         .collect::<Result<Vec<_>, _>>()?;
-    let mut requested = targets
-        .iter()
-        .copied()
-        .filter(|target| {
-            classes.contains(&target.class_id_raw)
-                && profiles.contains(&target.sensor_profile_id_raw)
-                && populations.contains(&target.population)
-        })
-        .collect::<Vec<_>>();
+    let mut requested = Vec::new();
+    for class in classes {
+        for profile in &profiles {
+            for population in &populations {
+                let key = (class, *profile, *population);
+                let target = targets
+                    .iter()
+                    .find(|target| target.key() == key)
+                    .ok_or_else(|| {
+                        GpuBenchmarkError::ContractDetail(format!(
+                            "no configured benchmark target for {key:?}"
+                        ))
+                    })?;
+                requested.push(*target);
+            }
+        }
+    }
     requested.sort_unstable();
+    requested.dedup();
     Ok(requested)
 }
 
@@ -250,13 +251,19 @@ fn atomic_write_json<T: serde::Serialize>(
         fs::create_dir_all(parent)?;
     }
     let temp = path.with_extension(format!("tmp-{}", std::process::id()));
-    let mut file = fs::File::create(&temp)?;
-    file.write_all(&serde_json::to_vec_pretty(value)?)?;
-    file.sync_all()?;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temp)?;
+    let result = (|| {
+        file.write_all(&serde_json::to_vec_pretty(value)?)?;
+        file.sync_all()?;
+        Ok::<_, Box<dyn std::error::Error>>(())
+    })();
     drop(file);
-    if let Err(error) = atomic_replace(&temp, path) {
+    if let Err(error) = result.and_then(|()| atomic_replace(&temp, path).map_err(Into::into)) {
         let _ = fs::remove_file(&temp);
-        return Err(error.into());
+        return Err(error);
     }
     Ok(())
 }
@@ -365,46 +372,4 @@ fn required_single_value<'a>(
         ));
     }
     Ok(value)
-}
-
-fn run_legacy_benchmark(args: &[String]) -> Result<(), Box<dyn std::error::Error>> {
-    let output_dir = value_after(args, "--out")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/artifacts"));
-    let config = if args.iter().any(|arg| arg == "--all") {
-        BenchmarkHarnessConfig::manual_full()
-    } else {
-        BenchmarkHarnessConfig::smoke()
-    };
-    let report = BenchmarkHarness::run(config)?;
-    println!("{}", report.write_markdown(&output_dir)?.display());
-    if args.iter().any(|arg| arg == "--gpu-runtime") {
-        let requested = GpuRuntimeBackendKind::GpuAuthoritative;
-        let probe = probe_local_wgpu_runtime(requested);
-        fs::create_dir_all(&output_dir)?;
-        let gpu_path = output_dir.join("gpu_runtime_performance.md");
-        if probe.hardware_available() && probe.error.is_none() {
-            let backend = GpuRuntimeBackendConfig::request(requested)
-                .with_hardware_available(true)
-                .with_validation_passed(true)
-                .select_backend()?;
-            let mut gpu_report = GpuRuntimeBenchmarkBridge::from_cpu_smoke(
-                &report,
-                backend,
-                "CPU smoke metrics are context only; GPU measurements remain unknown",
-            )?;
-            gpu_report.hardware_identifier = probe.hardware_identifier();
-            fs::write(&gpu_path, gpu_report.to_markdown())?;
-        } else {
-            fs::write(
-                &gpu_path,
-                format!(
-                    "# GPU runtime performance\n\nStatus: unavailable\n\nFailure policy: stop learned actions.\n\nProbe: {}\n",
-                    probe.error.as_deref().unwrap_or("adapter unavailable")
-                ),
-            )?;
-        }
-        println!("{}", gpu_path.display());
-    }
-    Ok(())
 }

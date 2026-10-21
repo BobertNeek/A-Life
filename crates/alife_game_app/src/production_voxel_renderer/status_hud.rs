@@ -834,7 +834,9 @@ pub(super) fn sync(world: &mut World) {
         .selected
         .filter(|r| r.kind == StableVoxelRefKind::Creature)
         .and_then(|r| r.stable_id);
-    let readout = selected.map(|stable_id| selected_readout(world, stable_id));
+    let readout = selected
+        .filter(|_| !debug)
+        .map(|stable_id| selected_readout(world, stable_id));
     set_readout(world, readout.as_ref(), debug);
     set_status(world, count, paused, fast);
     let size = world

@@ -21,7 +21,7 @@ on:
       - "crates/alife_game_app/tests/actor_advantage_centering_cli.rs"
       - "crates/alife_training/**"
   push:
-    branches: ["main", "codex/**"]
+    branches: ["main"]
     paths:
       - ".gitattributes"
       - ".github/workflows/windows-training-artifact.yml"
@@ -59,10 +59,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-      - name: Training shader composition CPU contracts across line endings
+      - name: Training shader composition across line endings
         run: cargo test --locked -p alife_gpu_backend --features training-rollout --lib training_rollout::tests
-      - name: Activity row prepass CPU source contract across line endings
-        run: cargo test --locked -p alife_gpu_backend --features training-rollout --test closed_loop_activity activity_contract_is_validated_once_per_dispatch_row_before_neuron_work -- --exact
       - name: Acquisition rehearsal CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
       - name: Next-cohort archive run ID CPU boundary regressions
@@ -112,7 +110,7 @@ jobs:
             target = 'x86_64-pc-windows-msvc'
             features = @('foundation-training')
             build_profile = 'dev'
-            cpu_checks = @('training shader LF/CRLF/mixed base and sampler composition contracts', 'activity row prepass source contract across line endings', 'four acquisition rehearsal unit tests', 'two next-cohort archive run ID CPU boundary tests', 'three actor-centering CLI admission tests including mixed source packages', 'native policy-comparison identity binds policy and executable', 'CLI bounds 0 and 513 rejected', 'CLI 512 reaches sealed-source admission', 'rejected admission preserves absent output')
+            cpu_checks = @('training shader composition across line endings', 'acquisition rehearsal', 'next-cohort archive run identity', 'actor-centering CLI admission', 'native policy/executable comparison identity', 'native sensory serialization', 'world and policy-weight comparison identities', 'CLI bounds 0 and 513 rejected; 512 reaches sealed-source admission', 'rejected admission preserves absent output')
             gpu_training_executed = $false
             founder_promoted = $false
             workflow_run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"

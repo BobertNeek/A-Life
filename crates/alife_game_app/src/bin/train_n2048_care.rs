@@ -1,4 +1,4 @@
-//! Training-only entry point; never linked into the ordinary game executable.
+//! Offline care training command.
 
 use std::io::Read;
 
@@ -41,27 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .ok_or("missing seed")?
             .to_string_lossy()
             .parse::<u64>()?;
-        let lesson = match args
-            .next()
-            .ok_or("missing lesson")?
-            .to_string_lossy()
-            .as_ref()
-        {
-            "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
-            "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
-            "eat_reachable_food" => alife_game_app::FoundationTeacherLesson::EatReachableFood,
-            "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
-            "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
-            "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
-            "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
-            "vision_search" => alife_game_app::FoundationTeacherLesson::VisionSearch,
-            "maze_navigation" => alife_game_app::FoundationTeacherLesson::MazeNavigation,
-            "vocabulary_reception" => alife_game_app::FoundationTeacherLesson::VocabularyReception,
-            "vocabulary_production" => {
-                alife_game_app::FoundationTeacherLesson::VocabularyProduction
-            }
-            _ => return Err("unknown lesson".into()),
-        };
+        let lesson = parse_teacher_lesson(&args.next().ok_or("missing lesson")?.to_string_lossy())?;
         if args.next().is_some() {
             return Err("unexpected adapted teacher argument".into());
         }
@@ -143,27 +123,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if mode == "--evaluate" {
         let output = std::path::PathBuf::from(args.next().ok_or("missing evaluation output")?);
         let asset_path = std::path::PathBuf::from(args.next().ok_or("missing founder asset")?);
-        let lesson = match args
-            .next()
-            .ok_or("missing evaluation lesson")?
-            .to_string_lossy()
-            .as_ref()
-        {
-            "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
-            "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
-            "eat_reachable_food" => alife_game_app::FoundationTeacherLesson::EatReachableFood,
-            "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
-            "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
-            "obstacle_navigation" => alife_game_app::FoundationTeacherLesson::ObstacleNavigation,
-            "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
-            "vision_search" => alife_game_app::FoundationTeacherLesson::VisionSearch,
-            "maze_navigation" => alife_game_app::FoundationTeacherLesson::MazeNavigation,
-            "vocabulary_reception" => alife_game_app::FoundationTeacherLesson::VocabularyReception,
-            "vocabulary_production" => {
-                alife_game_app::FoundationTeacherLesson::VocabularyProduction
-            }
-            _ => return Err("unknown evaluation lesson".into()),
-        };
+        let lesson = parse_teacher_lesson(
+            &args
+                .next()
+                .ok_or("missing evaluation lesson")?
+                .to_string_lossy(),
+        )?;
         let ticks = args
             .next()
             .ok_or("missing evaluation tick count")?
@@ -350,35 +315,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if lesson.is_some() {
                 return Err("duplicate lesson flag".into());
             }
-            lesson = Some(
-                match args
+            lesson = Some(parse_teacher_lesson(
+                &args
                     .next()
                     .ok_or("missing teacher lesson")?
-                    .to_string_lossy()
-                    .as_ref()
-                {
-                    "grab_food" => alife_game_app::FoundationTeacherLesson::GrabFood,
-                    "eat_held_food" => alife_game_app::FoundationTeacherLesson::EatHeldFood,
-                    "eat_reachable_food" => {
-                        alife_game_app::FoundationTeacherLesson::EatReachableFood
-                    }
-                    "feeding" => alife_game_app::FoundationTeacherLesson::Feeding,
-                    "hazard_avoidance" => alife_game_app::FoundationTeacherLesson::HazardAvoidance,
-                    "obstacle_navigation" => {
-                        alife_game_app::FoundationTeacherLesson::ObstacleNavigation
-                    }
-                    "recovery" => alife_game_app::FoundationTeacherLesson::Recovery,
-                    "vision_search" => alife_game_app::FoundationTeacherLesson::VisionSearch,
-                    "maze_navigation" => alife_game_app::FoundationTeacherLesson::MazeNavigation,
-                    "vocabulary_reception" => {
-                        alife_game_app::FoundationTeacherLesson::VocabularyReception
-                    }
-                    "vocabulary_production" => {
-                        alife_game_app::FoundationTeacherLesson::VocabularyProduction
-                    }
-                    _ => return Err("unknown teacher lesson".into()),
-                },
-            );
+                    .to_string_lossy(),
+            )?);
         } else {
             return Err("unexpected argument".into());
         }
@@ -577,6 +519,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+fn parse_teacher_lesson(
+    value: &str,
+) -> Result<alife_game_app::FoundationTeacherLesson, &'static str> {
+    use alife_game_app::FoundationTeacherLesson as Lesson;
+    match value {
+        "grab_food" => Ok(Lesson::GrabFood),
+        "eat_held_food" => Ok(Lesson::EatHeldFood),
+        "eat_reachable_food" => Ok(Lesson::EatReachableFood),
+        "feeding" => Ok(Lesson::Feeding),
+        "obstacle_navigation" => Ok(Lesson::ObstacleNavigation),
+        "hazard_avoidance" => Ok(Lesson::HazardAvoidance),
+        "recovery" => Ok(Lesson::Recovery),
+        "vision_search" => Ok(Lesson::VisionSearch),
+        "maze_navigation" => Ok(Lesson::MazeNavigation),
+        "vocabulary_reception" => Ok(Lesson::VocabularyReception),
+        "vocabulary_production" => Ok(Lesson::VocabularyProduction),
+        _ => Err("unknown teacher lesson"),
+    }
 }
 
 #[derive(Debug, Default)]

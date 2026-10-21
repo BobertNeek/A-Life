@@ -1,4 +1,4 @@
-//! Contract-only compiler-owned sensory/body/homeostasis encoder plan.
+//! Compiled sensory, body, and homeostatic encoder plans.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -90,7 +90,6 @@ impl SensorEncoderAssignment {
         }
     }
     fn validate_local(&self, widths: (u16, u16, u16)) -> Result<(), ScaffoldContractError> {
-        SensorEncoderSourceGroup::try_from_raw(self.source_group.raw())?;
         let width = match self.source_group {
             SensorEncoderSourceGroup::SensoryChannel => widths.0,
             SensorEncoderSourceGroup::Body => widths.1,
@@ -244,7 +243,6 @@ impl SensorEncoderPlan {
     }
     fn validate_shape(&self) -> Result<(), ScaffoldContractError> {
         if self.schema_version != ENCODER_SCHEMA_VERSION
-            || SensorProfile::try_from_raw(self.sensor_profile.raw()).is_err()
             || (
                 self.sensory_lane_count,
                 self.body_lane_count,

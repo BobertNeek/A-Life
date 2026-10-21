@@ -84,6 +84,32 @@ pub struct GpuTypedCounts {
     pub sleep_parameters: usize,
 }
 
+impl GpuTypedCounts {
+    fn from_upload(upload: &GpuPhenotypeUpload) -> Self {
+        Self {
+            encoder_plans: upload.encoder_plans.len(),
+            encoder_assignments: upload.encoder_assignments.len(),
+            encoder_target_offsets: upload.encoder_target_offsets.len(),
+            neuron_dynamics: upload.neuron_dynamics.len(),
+            projections: upload.projections.len(),
+            route_metadata: upload.route_metadata.len(),
+            target_offsets: upload.target_offsets.len(),
+            source_indices: upload.source_indices.len(),
+            route_indices: upload.route_indices.len(),
+            decoder_plans: upload.decoder_plans.len(),
+            decoder_families: upload.decoder_families.len(),
+            decoder_weight_indices: upload.decoder_weight_indices.len(),
+            memory_channel_plans: upload.memory_channel_plans.len(),
+            memory_weight_indices: upload.memory_weight_indices.len(),
+            plasticity_receptors: upload.plasticity_receptors.len(),
+            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
+            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
+            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
+            sleep_parameters: upload.sleep_parameters.len(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuSlotWordRanges {
     pub encoder_plan_words: Range<u32>,
@@ -269,27 +295,7 @@ impl GpuClassBucketPlan {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         let upload = GpuPhenotypeUpload::try_from(phenotype)?;
-        let counts = GpuTypedCounts {
-            encoder_plans: upload.encoder_plans.len(),
-            encoder_assignments: upload.encoder_assignments.len(),
-            encoder_target_offsets: upload.encoder_target_offsets.len(),
-            neuron_dynamics: upload.neuron_dynamics.len(),
-            projections: upload.projections.len(),
-            route_metadata: upload.route_metadata.len(),
-            target_offsets: upload.target_offsets.len(),
-            source_indices: upload.source_indices.len(),
-            route_indices: upload.route_indices.len(),
-            decoder_plans: upload.decoder_plans.len(),
-            decoder_families: upload.decoder_families.len(),
-            decoder_weight_indices: upload.decoder_weight_indices.len(),
-            memory_channel_plans: upload.memory_channel_plans.len(),
-            memory_weight_indices: upload.memory_weight_indices.len(),
-            plasticity_receptors: upload.plasticity_receptors.len(),
-            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
-            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
-            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
-            sleep_parameters: upload.sleep_parameters.len(),
-        };
+        let counts = GpuTypedCounts::from_upload(&upload);
 
         let p0 = u32_len(&self.immutable_plan_words)?;
         let encoder_plan_words = span(p0, counts.encoder_plans * 8)?;
@@ -819,12 +825,17 @@ fn write_dendritic_branch_plan(
     if allocated_words < expected_words || branches.branches().len() > capacity {
         return Err(GpuClosedLoopError::CapacityExceeded);
     }
-    store_words_at(
-        destination,
-        destination_base,
-        range.start,
-        &vec![0_u32; allocated_words],
-    )?;
+    let local_start = range
+        .start
+        .checked_sub(destination_base)
+        .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+    let local_end = local_start
+        .checked_add(allocated_words)
+        .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+    destination
+        .get_mut(local_start..local_end)
+        .ok_or(GpuClosedLoopError::CapacityExceeded)?
+        .fill(0);
     store_words_at(
         destination,
         destination_base,
@@ -1951,7 +1962,6 @@ pub(crate) struct GpuFixedArenaBufferSizes {
     pub(crate) dispatch_header_words: u64,
     pub(crate) frame_payload_words: u64,
     pub(crate) mutable_state_words: u64,
-    pub(crate) upload_staging: u64,
     pub(crate) compact_readback: u64,
     pub(crate) aggregate: u64,
 }
@@ -2241,17 +2251,6 @@ impl GpuFixedClassArenaPlan {
             slot_count,
             crate::GPU_COMPACT_READBACK_CAPACITY_PER_ROW_BYTES as u64,
         )?;
-        let upload_staging = immutable_plan_words
-            .checked_div(slot_count)
-            .and_then(|value| value.checked_add(immutable_weight_words / slot_count))
-            .and_then(|value| {
-                value.checked_add(
-                    (std::mem::size_of::<GpuBrainSlotRecord>()
-                        + std::mem::size_of::<GpuPhenotypeIdentityRecord>())
-                        as u64,
-                )
-            })
-            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let mut aggregate = 0_u64;
         for bytes in [
             brain_slots,
@@ -2261,7 +2260,6 @@ impl GpuFixedClassArenaPlan {
             dispatch_header_words,
             frame_payload_words,
             mutable_state_words,
-            upload_staging,
             compact_readback,
         ] {
             aggregate = aggregate
@@ -2276,7 +2274,6 @@ impl GpuFixedClassArenaPlan {
             dispatch_header_words,
             frame_payload_words,
             mutable_state_words,
-            upload_staging,
             compact_readback,
             aggregate,
         };
@@ -2440,13 +2437,8 @@ impl GpuFixedClassArenaPlan {
             .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
         let shared_class_bytes = self
             .sizes
-            .upload_staging
-            .checked_add(
-                self.sizes
-                    .frame_payload_words
-                    .saturating_sub(active_frame_bytes),
-            )
-            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+            .frame_payload_words
+            .saturating_sub(active_frame_bytes);
         let receipt = crate::GpuSlotAllocationReceipt::new(
             self.capacity.id().raw(),
             components,
@@ -2565,29 +2557,8 @@ impl GpuFixedClassArenaPlan {
             return Err(GpuClosedLoopError::StaleOrForeignHandle);
         }
         let upload = GpuPhenotypeUpload::try_from(phenotype)?;
-        upload.validate_against(phenotype)?;
         let execution = self.capacity.execution();
-        let counts = GpuTypedCounts {
-            encoder_plans: upload.encoder_plans.len(),
-            encoder_assignments: upload.encoder_assignments.len(),
-            encoder_target_offsets: upload.encoder_target_offsets.len(),
-            neuron_dynamics: upload.neuron_dynamics.len(),
-            projections: upload.projections.len(),
-            route_metadata: upload.route_metadata.len(),
-            target_offsets: upload.target_offsets.len(),
-            source_indices: upload.source_indices.len(),
-            route_indices: upload.route_indices.len(),
-            decoder_plans: upload.decoder_plans.len(),
-            decoder_families: upload.decoder_families.len(),
-            decoder_weight_indices: upload.decoder_weight_indices.len(),
-            memory_channel_plans: upload.memory_channel_plans.len(),
-            memory_weight_indices: upload.memory_weight_indices.len(),
-            plasticity_receptors: upload.plasticity_receptors.len(),
-            synapse_learning_metadata: upload.synapse_learning_metadata.len(),
-            decoder_eligibility_metadata: upload.decoder_eligibility_metadata.len(),
-            replay_capture_synapses: upload.replay_capture_local_synapse_ids.len(),
-            sleep_parameters: upload.sleep_parameters.len(),
-        };
+        let counts = GpuTypedCounts::from_upload(&upload);
         let encoder_ceiling = usize::try_from(self.strides.encoder_assignment_count)
             .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
         if counts.encoder_plans != 1
@@ -2767,27 +2738,17 @@ impl GpuFixedClassArenaPlan {
 
         let mut immutable_weight_words = vec![0_u32; self.strides.immutable_weight_words as usize];
         let weight_base = ranges.immutable_weight_words.start;
-        let genetic = upload
-            .genetic_weights
-            .iter()
-            .map(|value| value.to_bits())
-            .collect::<Vec<_>>();
-        let alpha = upload
-            .alpha
-            .iter()
-            .map(|value| value.to_bits())
-            .collect::<Vec<_>>();
         store_words_at(
             &mut immutable_weight_words,
             weight_base,
             ranges.layout.genetic_weight_words.start,
-            &genetic,
+            bytemuck::cast_slice(&upload.genetic_weights),
         )?;
         store_words_at(
             &mut immutable_weight_words,
             weight_base,
             ranges.layout.alpha_words.start,
-            &alpha,
+            bytemuck::cast_slice(&upload.alpha),
         )?;
         let mut mutable_state_words = vec![0_u32; self.strides.mutable_state_words as usize];
         let mutable_base = ranges.mutable_state_words.start;
@@ -3086,7 +3047,7 @@ impl GpuFixedSlotUpload {
         }
         let plan_base = self.ranges.immutable_plan_words.start;
         let weight_base = self.ranges.immutable_weight_words.start;
-        let mut plan = self.immutable_plan_words.clone();
+        let mut plan = std::mem::take(&mut self.immutable_plan_words);
         for (range, words) in [
             (
                 &self.ranges.layout.target_offset_words,
@@ -3148,7 +3109,7 @@ impl GpuFixedSlotUpload {
             self.ranges.layout.decoder_weight_index_words.start,
             &decoder_indices,
         )?;
-        let mut weights = self.immutable_weight_words.clone();
+        let mut weights = std::mem::take(&mut self.immutable_weight_words);
         store_words_at(
             &mut weights,
             weight_base,
@@ -3181,7 +3142,7 @@ impl GpuFixedSlotUpload {
         mut self,
         branches: &DendriticBranchSet,
     ) -> Result<Self, GpuClosedLoopError> {
-        let mut immutable_plan_words = self.immutable_plan_words.clone();
+        let mut immutable_plan_words = std::mem::take(&mut self.immutable_plan_words);
         write_dendritic_branch_plan(
             &mut immutable_plan_words,
             self.ranges.immutable_plan_words.start,
@@ -3299,22 +3260,28 @@ impl GpuFixedSlotUpload {
             &self.ranges.layout.route_index_words,
             recurrent_count,
         )?;
-        let target_end = usize::try_from(
+        let mut alpha = active_words_copy(
+            &self.immutable_weight_words,
+            weight_base,
+            &self.ranges.layout.alpha_words,
+            synapse_count,
+        )?;
+        let target_start = usize::try_from(
             *target_offsets
-                .get(target + 1)
+                .get(target)
                 .ok_or(GpuClosedLoopError::MalformedUpload)?,
         )
         .map_err(|_| GpuClosedLoopError::ArithmeticOverflow)?;
-        if target_end > recurrent_count
+        if target_start > insertion
             || source_indices
                 .iter()
                 .any(|value| *value >= old_record.neuron_count)
             || route_indices
                 .iter()
                 .any(|value| *value as usize >= old_counts.route_metadata)
-            || source_indices
-                .get(insertion..target_end)
-                .is_some_and(|span| span.contains(&synapse.source))
+            || (target_start..insertion).any(|index| {
+                source_indices[index] == synapse.source && alpha[index] == (-0.0_f32).to_bits()
+            })
         {
             return Err(GpuClosedLoopError::MalformedUpload);
         }
@@ -3330,12 +3297,6 @@ impl GpuFixedSlotUpload {
             &self.immutable_weight_words,
             weight_base,
             &self.ranges.layout.genetic_weight_words,
-            synapse_count,
-        )?;
-        let mut alpha = active_words_copy(
-            &self.immutable_weight_words,
-            weight_base,
-            &self.ranges.layout.alpha_words,
             synapse_count,
         )?;
         genetic_weights.insert(insertion, synapse.initial_weight.to_bits());
@@ -3428,7 +3389,7 @@ impl GpuFixedSlotUpload {
             }
         }
 
-        let mut mutable_state_words = self.mutable_state_words.clone();
+        let mut mutable_state_words = std::mem::take(&mut self.mutable_state_words);
         let mut extension = read_pod_at::<GpuBrainSlotExtensionRecord>(
             &mutable_state_words,
             mutable_base,
@@ -3462,7 +3423,7 @@ impl GpuFixedSlotUpload {
             }
         }
 
-        let mut immutable_plan_words = self.immutable_plan_words.clone();
+        let mut immutable_plan_words = std::mem::take(&mut self.immutable_plan_words);
         store_words_at(
             &mut immutable_plan_words,
             plan_base,
@@ -3511,7 +3472,7 @@ impl GpuFixedSlotUpload {
             self.ranges.layout.memory_weight_index_words.start,
             &memory_weight_indices,
         )?;
-        let mut immutable_weight_words = self.immutable_weight_words.clone();
+        let mut immutable_weight_words = std::mem::take(&mut self.immutable_weight_words);
         store_words_at(
             &mut immutable_weight_words,
             weight_base,
@@ -3903,7 +3864,6 @@ pub(crate) struct GpuFixedClassArenaBuffers {
     dispatch_header_words: wgpu::Buffer,
     frame_payload_words: wgpu::Buffer,
     mutable_state_words: wgpu::Buffer,
-    _upload_staging: wgpu::Buffer,
     compact_readback: wgpu::Buffer,
     arena_ownership_token: u64,
     buffer_set_token: u64,
@@ -3933,9 +3893,7 @@ impl GpuFixedClassArenaBuffers {
             .any(|bytes| {
                 bytes > limits.max_buffer_size || bytes > limits.max_storage_buffer_binding_size
             })
-            || [sizes.upload_staging, sizes.compact_readback]
-                .into_iter()
-                .any(|bytes| bytes > limits.max_buffer_size)
+            || sizes.compact_readback > limits.max_buffer_size
         {
             return Err(GpuClosedLoopError::CapacityExceeded);
         }
@@ -3990,12 +3948,6 @@ impl GpuFixedClassArenaBuffers {
                 "closed-loop-runtime-mutable-state",
                 sizes.mutable_state_words,
                 storage_mutable,
-            ),
-            _upload_staging: create_fixed_buffer(
-                device,
-                "closed-loop-runtime-upload-staging",
-                sizes.upload_staging,
-                wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::COPY_SRC,
             ),
             compact_readback: create_fixed_buffer(
                 device,
@@ -4868,5 +4820,80 @@ mod fixed_arena_tests {
             ),
             Err(GpuClosedLoopError::MalformedUpload)
         );
+    }
+
+    #[test]
+    fn lifetime_addition_rejects_duplicate_acquired_pairs_and_preserves_inherited_overlap() {
+        let capacity = BrainCapacityClass::n512();
+        let genome = BrainGenome::scaffold(705, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.35).unwrap());
+        let phenotype = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
+        let inherited = phenotype
+            .synapses()
+            .iter()
+            .find(|synapse| synapse.kind() == alife_core::CompiledSynapseKind::Recurrent)
+            .unwrap();
+        let addition = |source, target, route| AddLifetimeSynapse {
+            source,
+            target,
+            route,
+            initial_weight: 0.125,
+            evidence: alife_core::CoactivationEvidence {
+                region: route as u16,
+                source,
+                target,
+                coactivation: 1,
+                eligibility: 1,
+                concept_gap_support: 0,
+            },
+        };
+        let upload = plan.prepare_slot_upload(0, 1, &phenotype).unwrap();
+        let inherited_overlap = addition(
+            inherited.source(),
+            inherited.target(),
+            u32::from(inherited.route_index()),
+        );
+        let upload = upload
+            .with_added_lifetime_synapse(&inherited_overlap)
+            .unwrap();
+        assert_eq!(
+            upload.record().synapse_count,
+            phenotype.synapses().len() as u32 + 1
+        );
+        assert!(matches!(
+            upload.with_added_lifetime_synapse(&inherited_overlap),
+            Err(GpuClosedLoopError::MalformedUpload)
+        ));
+        let pairs = phenotype
+            .synapses()
+            .iter()
+            .map(|synapse| (synapse.source(), synapse.target()))
+            .collect::<std::collections::BTreeSet<_>>();
+        let (source, target) = (0..phenotype.neuron_count())
+            .flat_map(|source| (0..phenotype.neuron_count()).map(move |target| (source, target)))
+            .find(|(source, target)| source != target && !pairs.contains(&(*source, *target)))
+            .unwrap();
+        let added = addition(source, target, 0);
+        let upload = plan
+            .prepare_slot_upload(0, 1, &phenotype)
+            .unwrap()
+            .with_added_lifetime_synapse(&added)
+            .unwrap();
+        assert_eq!(
+            upload.record().synapse_count,
+            phenotype.synapses().len() as u32 + 1
+        );
+        assert!(matches!(
+            upload.with_added_lifetime_synapse(&added),
+            Err(GpuClosedLoopError::MalformedUpload)
+        ));
     }
 }

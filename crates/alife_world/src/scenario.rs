@@ -1,17 +1,14 @@
-//! v0 test fixture layer: deterministic headless behavior scenarios for P18.
+//! Deterministic scenarios for the explicitly labelled heuristic baseline.
 //!
-//! These fixtures sit above the P17 headless harness. They define named world
-//! layouts, creature starting state, scripted proposal timelines, and broad
-//! assertions over sealed patches, memory, topology, sleep, language, and
-//! social context. They intentionally avoid P19-style exact golden traces.
+//! Defines world layouts, starting states, scripted proposals, and expected
+//! changes in experience, memory, topology, sleep, language, and social context.
 
 use alife_core::{
     ActionId, ActionKind, ActionProposal, ActionTarget, BrainScaleTier, BrainTickInput,
     BrainTickStatus, ConceptCell, Confidence, CuriosityBias, DurationTicks, ExperiencePatch,
     HomeostaticSnapshot, Intensity, MemoryExpectancySnapshot, MemoryRecord, NormalizedScalar,
-    OrganismId, PhysicalContactKind, ReferenceActionFailure, ScaffoldContractError,
-    SleepConsolidationReport, SleepPhase, TeacherPerceptionChannel, Tick, Validate, Vec3f,
-    WorldEntityId,
+    OrganismId, PhysicalContactKind, ReferenceActionFailure, ScaffoldContractError, SleepPhase,
+    TeacherPerceptionChannel, Tick, Validate, Vec3f, WorldEntityId,
 };
 
 use crate::{
@@ -90,26 +87,10 @@ pub struct ScenarioObjectSpec {
     pub teacher_source_label: Option<&'static str>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScenarioSensoryFrame {
-    pub tick: Tick,
-    pub expected_visible_labels: Vec<&'static str>,
-    pub expected_heard_tokens: Vec<u32>,
-    pub expected_teacher_channel: Option<TeacherPerceptionChannel>,
-    pub expected_social_agents: usize,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScenarioStep {
     pub tick: Tick,
     pub proposals: Vec<ActionProposal>,
-    pub expected_behavior: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScenarioExpectedBehavior {
-    pub broad_behavior: &'static str,
-    pub run_sleep_consolidation: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,7 +142,6 @@ pub struct ExpectedTopologyChange {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScenarioExpectations {
-    pub behavior: ScenarioExpectedBehavior,
     pub patch: ExpectedPatchFields,
     pub memory: ExpectedMemoryChange,
     pub topology: ExpectedTopologyChange,
@@ -172,8 +152,6 @@ pub struct ScenarioFixture {
     pub name: ScenarioName,
     pub seed: u64,
     pub creature: ScenarioCreatureConfig,
-    pub object_layout: Vec<ScenarioObjectSpec>,
-    pub sensory_timeline: Vec<ScenarioSensoryFrame>,
     pub steps: Vec<ScenarioStep>,
     pub expectations: ScenarioExpectations,
     pub world: HeadlessWorld,
@@ -250,15 +228,11 @@ pub struct ScenarioRun {
     pub topology_simplex_count: usize,
     pub topology_gap_ids: Vec<alife_core::UnresolvedGapId>,
     pub curiosity_biases: Vec<CuriosityBias>,
-    pub sleep_report: Option<SleepConsolidationReport>,
     pub sleep_phase: SleepPhase,
-    pub sleep_transition_observed: bool,
     pub sleep_cycle_count: u32,
-    pub pending_structural_edit_count: usize,
     pub final_homeostasis: HomeostaticSnapshot,
     pub world_signature: Vec<String>,
     pub summary: ScenarioSummary,
-    pub fixture_expectations: ScenarioExpectations,
 }
 
 impl ScenarioRun {
@@ -276,23 +250,6 @@ impl ScenarioRun {
 pub struct ScenarioAssertions;
 
 impl ScenarioAssertions {
-    #[track_caller]
-    pub fn assert_fixture_is_complete(fixture: &ScenarioFixture) {
-        assert!(!fixture.name.as_str().is_empty());
-        assert!(!fixture.object_layout.is_empty());
-        assert!(!fixture.sensory_timeline.is_empty());
-        assert!(!fixture.steps.is_empty());
-        assert!(fixture
-            .object_layout
-            .iter()
-            .any(|object| object.organism_id == Some(fixture.creature.organism_id)));
-        assert!(!fixture.expectations.behavior.broad_behavior.is_empty());
-        for step in &fixture.steps {
-            assert!(!step.proposals.is_empty());
-            assert!(!step.expected_behavior.is_empty());
-        }
-    }
-
     #[track_caller]
     pub fn assert_run_matches_expectations(fixture: &ScenarioFixture, run: &ScenarioRun) {
         assert_eq!(run.name, fixture.name);
@@ -439,12 +396,6 @@ impl ScenarioAssertions {
 
         Self::assert_memory_expectations(&expected.memory, run);
         Self::assert_topology_expectations(&expected.topology, run);
-        if expected.behavior.run_sleep_consolidation {
-            assert!(run.sleep_transition_observed);
-            assert!(run.sleep_report.is_some());
-            assert!(run.sleep_cycle_count >= 1);
-            assert!(run.pending_structural_edit_count >= 1);
-        }
     }
 
     #[track_caller]
@@ -609,20 +560,13 @@ fn run_scenario(fixture: &ScenarioFixture) -> Result<ScenarioRun, ScaffoldContra
     mind.homeostasis().validate_contract()?;
 
     let mut ticks = Vec::with_capacity(fixture.steps.len());
-    let mut sleep_transition_observed = false;
     for step in &fixture.steps {
         let input = BrainTickInput::new(step.tick, step.proposals.clone())
             .with_pack_experience(true)
             .with_action_duration(DurationTicks::new(1));
         let tick = harness.tick_mind(&mut mind, input);
-        sleep_transition_observed |= tick.sleep_transition.is_some();
         ticks.push(tick);
     }
-
-    // Scenario fixtures exercise the explicitly labelled heuristic baseline.
-    // They never force or consolidate a second CPU neural sleep path; the
-    // production GPU live scheduler owns automatic sleep transactions.
-    let sleep_report = None;
 
     let patches = harness.telemetry().sealed_patches.clone();
     let patch_summaries = patches
@@ -658,7 +602,6 @@ fn run_scenario(fixture: &ScenarioFixture) -> Result<ScenarioRun, ScaffoldContra
         .collect::<Vec<_>>();
     let sleep_phase = mind.sleep_state().phase;
     let sleep_cycle_count = mind.development_state().sleep_cycle_count;
-    let pending_structural_edit_count = mind.pending_structural_edits().len();
     let final_homeostasis = *mind.homeostasis();
     let summary = ScenarioSummary {
         name: fixture.name,
@@ -688,15 +631,11 @@ fn run_scenario(fixture: &ScenarioFixture) -> Result<ScenarioRun, ScaffoldContra
         topology_concepts,
         topology_gap_ids,
         curiosity_biases,
-        sleep_report,
         sleep_phase,
-        sleep_transition_observed,
         sleep_cycle_count,
-        pending_structural_edit_count,
         final_homeostasis,
         world_signature,
         summary,
-        fixture_expectations: fixture.expectations.clone(),
     })
 }
 
@@ -784,24 +723,19 @@ fn food_seeking(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 0.55,
             )?,
         ],
-        expected_behavior: "hungry creature selects edible target and eats it",
     }];
     fixture(
         ScenarioName::FoodSeeking,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.hunger = 0.86;
             state.drives.brain_atp = 0.45;
         })?,
-        layout,
         world,
-        sensory(vec!["berry"], vec![], None, 0),
         steps,
-        expectations(
-            "hunger raises food salience; eating improves measured energy without host reward",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
                 expected_action_kind: ActionKind::Interact,
@@ -824,7 +758,7 @@ fn food_seeking(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 requires_social_context: false,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: false,
                 require_safety_bias: true,
@@ -833,7 +767,7 @@ fn food_seeking(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -842,7 +776,7 @@ fn food_seeking(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_word_binding: None,
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
@@ -865,7 +799,6 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 0.8,
                 0.85,
             )?],
-            expected_behavior: "first encounter contacts the harmful object",
         },
         ScenarioStep {
             tick: Tick::new(1),
@@ -889,25 +822,20 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                     0.8,
                 )?,
             ],
-            expected_behavior: "repeat encounter carries danger expectancy and selects avoidance",
         },
     ];
     fixture(
         ScenarioName::PoisonPainAvoidance,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.fear = 0.18;
             state.drives.curiosity = 0.5;
         })?,
-        layout,
         world,
-        sensory(vec!["poison"], vec![], None, 0),
         steps,
-        expectations(
-            "harmful object creates pain/fear and later danger expectancy",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
                 expected_action_kind: ActionKind::Move,
@@ -930,7 +858,7 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 requires_social_context: false,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 2,
                 require_danger_bias: true,
                 require_safety_bias: false,
@@ -939,7 +867,7 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 2,
@@ -948,7 +876,7 @@ fn poison_pain(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_word_binding: None,
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
@@ -970,23 +898,18 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
             0.82,
             0.75,
         )?],
-        expected_behavior: "blocked target produces failure and frustration",
     }];
     fixture(
         ScenarioName::ObstacleFrustration,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.curiosity = 0.6;
         })?,
-        layout,
         world,
-        sensory(vec!["wall"], vec![], None, 0),
         steps,
-        expectations(
-            "blocked movement records frustration and an unresolved topology gap",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::RecoverableActionFailure,
                 expected_action_kind: ActionKind::Move,
@@ -1009,7 +932,7 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 requires_social_context: false,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: true,
                 require_safety_bias: false,
@@ -1018,7 +941,7 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -1027,7 +950,7 @@ fn obstacle_frustration(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 require_word_binding: None,
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
@@ -1046,25 +969,20 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
             0.88,
             0.8,
         )?],
-        expected_behavior: "fatigued creature selects rest without forcing a CPU sleep hook",
     }];
     fixture(
         ScenarioName::FatigueSleep,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.fatigue = 0.95;
             state.drives.brain_atp = 0.32;
             state.hormones.sleep_pressure = 0.9;
         })?,
-        layout,
         world,
-        sensory(vec![], vec![], None, 0),
         steps,
-        expectations(
-            "reference rest relieves fatigue without emitting synthetic energy; GPU sleep remains owned by the live scheduler",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
                 expected_action_kind: ActionKind::Rest,
@@ -1089,7 +1007,7 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 requires_social_context: false,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: false,
                 require_safety_bias: true,
@@ -1098,7 +1016,7 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -1107,7 +1025,7 @@ fn fatigue_sleep(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError> {
                 require_word_binding: None,
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
@@ -1140,23 +1058,18 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 0.9,
             )?,
         ],
-        expected_behavior: "expected reward mismatch opens a curiosity gap through arbitration",
     }];
     fixture(
         ScenarioName::CuriosityContradiction,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.curiosity = 0.88;
         })?,
-        layout,
         world,
-        sensory(vec!["sealed_box"], vec![], None, 0),
         steps,
-        expectations(
-            "contradiction raises curiosity voltage without issuing an action shortcut",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::RecoverableActionFailure,
                 expected_action_kind: ActionKind::Interact,
@@ -1183,7 +1096,7 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 requires_social_context: false,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: true,
                 require_safety_bias: false,
@@ -1192,7 +1105,7 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -1201,7 +1114,7 @@ fn curiosity_contradiction(seed: u64) -> Result<ScenarioFixture, ScaffoldContrac
                 require_word_binding: None,
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
@@ -1224,23 +1137,18 @@ fn word_token_grounding(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
             0.74,
             0.85,
         )?],
-        expected_behavior: "word token is heard/seen and bound to a topology concept",
     }];
     fixture(
         ScenarioName::WordTokenGrounding,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.curiosity = 0.58;
         })?,
-        layout,
         world,
-        sensory(vec!["berry", "word_food"], vec![41], None, 0),
         steps,
-        expectations(
-            "word inputs enter through language sensory context only",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
                 expected_action_kind: ActionKind::Inspect,
@@ -1263,7 +1171,7 @@ fn word_token_grounding(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 requires_social_context: false,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: false,
                 require_safety_bias: true,
@@ -1272,7 +1180,7 @@ fn word_token_grounding(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -1281,7 +1189,7 @@ fn word_token_grounding(seed: u64) -> Result<ScenarioFixture, ScaffoldContractEr
                 require_word_binding: Some(41),
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
@@ -1307,23 +1215,18 @@ fn social_trust_fear(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError
             0.72,
             0.82,
         )?],
-        expected_behavior: "social proximity contributes trust/fear bias but not motor commands",
     }];
     fixture(
         ScenarioName::SimpleSocialTrustFear,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.loneliness = 0.72;
         })?,
-        layout,
         world,
-        sensory(vec!["friend", "threat"], vec![], None, 2),
         steps,
-        expectations(
-            "nearby agents provide social trust/fear signals through context",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
                 expected_action_kind: ActionKind::Move,
@@ -1346,7 +1249,7 @@ fn social_trust_fear(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError
                 requires_social_context: true,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: false,
                 require_safety_bias: true,
@@ -1355,7 +1258,7 @@ fn social_trust_fear(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -1364,7 +1267,7 @@ fn social_trust_fear(seed: u64) -> Result<ScenarioFixture, ScaffoldContractError
                 require_word_binding: None,
                 require_social_binding: true,
             },
-        ),
+        },
     )
 }
 
@@ -1393,28 +1296,18 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
             0.73,
             0.88,
         )?],
-        expected_behavior: "teacher label appears only as a heard perceptual token",
     }];
     fixture(
         ScenarioName::TeacherPerceptionEvent,
         seed,
         organism,
-        homeostasis(seed, |state| {
+        homeostasis(|state| {
             state.drives.curiosity = 0.62;
         })?,
-        layout,
         world,
-        sensory(
-            vec!["teacher", "teacher_word"],
-            vec![77],
-            Some(TeacherPerceptionChannel::Hearing),
-            1,
-        ),
         steps,
-        expectations(
-            "teacher event is sensory/modulatory and does not attach lesson action metadata",
-            false,
-            ExpectedPatchFields {
+        ScenarioExpectations {
+            patch: ExpectedPatchFields {
                 patch_index: 0,
                 expected_status: BrainTickStatus::Normal,
                 expected_action_kind: ActionKind::Inspect,
@@ -1437,7 +1330,7 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
                 requires_social_context: true,
                 requires_no_hidden_vectors: true,
             },
-            ExpectedMemoryChange {
+            memory: ExpectedMemoryChange {
                 min_records: 1,
                 require_danger_bias: false,
                 require_safety_bias: true,
@@ -1446,7 +1339,7 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
                 require_curiosity_bias: true,
                 require_bias_only_recall: false,
             },
-            ExpectedTopologyChange {
+            topology: ExpectedTopologyChange {
                 min_concepts: 1,
                 min_edges: 1,
                 min_simplexes: 1,
@@ -1455,19 +1348,16 @@ fn teacher_perception_event(seed: u64) -> Result<ScenarioFixture, ScaffoldContra
                 require_word_binding: Some(77),
                 require_social_binding: false,
             },
-        ),
+        },
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn fixture(
     name: ScenarioName,
     seed: u64,
     organism_id: OrganismId,
     initial_homeostasis: HomeostaticSnapshot,
-    object_layout: Vec<ScenarioObjectSpec>,
     world: HeadlessWorld,
-    sensory_timeline: Vec<ScenarioSensoryFrame>,
     steps: Vec<ScenarioStep>,
     expectations: ScenarioExpectations,
 ) -> Result<ScenarioFixture, ScaffoldContractError> {
@@ -1482,30 +1372,10 @@ fn fixture(
         name,
         seed,
         creature,
-        object_layout,
-        sensory_timeline,
         steps,
         expectations,
         world,
     })
-}
-
-fn expectations(
-    broad_behavior: &'static str,
-    run_sleep_consolidation: bool,
-    patch: ExpectedPatchFields,
-    memory: ExpectedMemoryChange,
-    topology: ExpectedTopologyChange,
-) -> ScenarioExpectations {
-    ScenarioExpectations {
-        behavior: ScenarioExpectedBehavior {
-            broad_behavior,
-            run_sleep_consolidation,
-        },
-        patch,
-        memory,
-        topology,
-    }
 }
 
 fn world_from_layout(
@@ -1593,7 +1463,7 @@ fn proposal(
         ),
         None => None,
     };
-    ActionProposal::new(
+    Ok(ActionProposal::new(
         action_id,
         kind,
         score,
@@ -1603,33 +1473,16 @@ fn proposal(
         ActionTarget::new(target, target_position),
         NormalizedScalar::new(salience)?,
     )?
-    .with_intensity(Intensity::new(1.0)?)
-    .tap_ok()
+    .with_intensity(Intensity::new(1.0)?))
 }
 
 fn homeostasis(
-    _seed: u64,
     configure: impl FnOnce(&mut HomeostaticSnapshot),
 ) -> Result<HomeostaticSnapshot, ScaffoldContractError> {
     let mut state = HomeostaticSnapshot::baseline(Tick::ZERO);
     configure(&mut state);
     state.validate_contract()?;
     Ok(state)
-}
-
-fn sensory(
-    visible: Vec<&'static str>,
-    tokens: Vec<u32>,
-    teacher_channel: Option<TeacherPerceptionChannel>,
-    social_agents: usize,
-) -> Vec<ScenarioSensoryFrame> {
-    vec![ScenarioSensoryFrame {
-        tick: Tick::ZERO,
-        expected_visible_labels: visible,
-        expected_heard_tokens: tokens,
-        expected_teacher_channel: teacher_channel,
-        expected_social_agents: social_agents,
-    }]
 }
 
 fn agent(label: &'static str, organism_id: OrganismId, position: Vec3f) -> ScenarioObjectSpec {
@@ -1758,14 +1611,4 @@ fn milli_unit(value: f32) -> u16 {
 
 fn milli_signed(value: f32) -> i32 {
     (value.clamp(-1.0, 1.0) * 1000.0).round() as i32
-}
-
-trait TapOk: Sized {
-    fn tap_ok(self) -> Result<Self, ScaffoldContractError>;
-}
-
-impl<T> TapOk for T {
-    fn tap_ok(self) -> Result<Self, ScaffoldContractError> {
-        Ok(self)
-    }
 }

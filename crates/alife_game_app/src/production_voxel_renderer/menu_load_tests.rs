@@ -490,8 +490,7 @@ fn ux() -> Fvr05ProductionUxStateResource {
             config_schema:String::new(),config_schema_version:1,object_count:0,creature_count:0,
             asset_count:0,voxel_backend_schema:None,voxel_visible_chunk_signatures:0,
             voxel_materialized_chunks:0,voxel_resource_hazard_refs:0,voxel_stable_selection_refs:0,
-            voxel_dirty_region_count:0,voxel_roundtrip_signatures_match:false,
-            no_renderer_tokens_in_voxel_save:true,gpu_runtime_schema:None,
+            voxel_dirty_region_count:0,gpu_runtime_schema:None,
             gpu_runtime_selected_backend:"Unavailable".into(),
             gpu_runtime_unavailable_reason:Some("CPU UI fixture".into()),
             gpu_runtime_no_active_bulk_readback:true,gpu_runtime_compact_action_readback_bytes:0,
@@ -499,7 +498,6 @@ fn ux() -> Fvr05ProductionUxStateResource {
         selected_backend:"Unavailable".into(),adapter_name:String::new(),backend_api:String::new(),
         graphics_backend:String::new(),unavailable_reason:"CPU UI fixture".into(),
         renderer_profile:String::new(),state_trace:String::new(),
-        authority:Fvr05ProductionDebugAuthorityReport::production_read_only(),
         gpu_runtime_state:serde_json::from_value(json!({
             "schema":"UI-only fixture","schema_version":1,"requested_backend_mode":"GpuAuthoritative",
             "selected_backend_mode":"Unavailable","adapter_identity":{"adapter_name":null,

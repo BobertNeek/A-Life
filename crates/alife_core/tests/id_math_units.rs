@@ -3,10 +3,10 @@ use std::collections::HashSet;
 use serde::{de::DeserializeOwned, Serialize};
 
 use alife_core::{
-    validate_optional_target, Aabb, ActionId, BrainClassId, Confidence, CoreFromAdapter,
-    CoreIntoAdapter, CreatureId, DurationTicks, ExperienceSequenceId, FixedPointScale,
-    GaussianClusterId, Intensity, MemoryId, NormalizedScalar, OrganismId, Pose, Quatf, Seconds,
-    SignedValence, Tick, Vec2f, Vec3f, Velocity, WorldEntityId, WorldEntityIdMapper,
+    validate_optional_target, Aabb, ActionId, BrainClassId, Confidence, CreatureId, DurationTicks,
+    ExperienceSequenceId, FixedPointScale, GaussianClusterId, Intensity, MemoryId,
+    NormalizedScalar, OrganismId, Pose, Quatf, Seconds, SignedValence, Tick, Vec2f, Vec3f,
+    Velocity, WorldEntityId,
 };
 
 fn assert_serde<T: Serialize + DeserializeOwned>() {}
@@ -72,41 +72,11 @@ fn bounded_units_reject_out_of_range_values() {
 }
 
 #[test]
-fn optional_targets_and_adapter_traits_stay_outside_engine_types() {
+fn optional_targets_validate_present_and_absent_entities() {
     assert_eq!(
         validate_optional_target(Some(WorldEntityId(55))).unwrap(),
         Some(WorldEntityId(55))
     );
     assert!(validate_optional_target(Some(WorldEntityId::INVALID)).is_err());
     assert_eq!(validate_optional_target(None).unwrap(), None);
-
-    struct AdapterEntity(u64);
-    struct Mapper;
-
-    impl WorldEntityIdMapper<AdapterEntity> for Mapper {
-        fn to_world_entity_id(&self, entity: AdapterEntity) -> WorldEntityId {
-            WorldEntityId(entity.0)
-        }
-    }
-
-    struct AdapterVec3([f32; 3]);
-
-    impl CoreFromAdapter<Vec3f> for AdapterVec3 {
-        fn core_from_adapter(value: Vec3f) -> Self {
-            Self(value.to_array())
-        }
-    }
-
-    impl CoreIntoAdapter<Vec3f> for AdapterVec3 {
-        fn core_into_adapter(self) -> Vec3f {
-            Vec3f::from_array(self.0)
-        }
-    }
-
-    assert_eq!(
-        Mapper.to_world_entity_id(AdapterEntity(99)),
-        WorldEntityId(99)
-    );
-    let adapter_vec = AdapterVec3::core_from_adapter(Vec3f::new(1.0, 2.0, 3.0));
-    assert_eq!(adapter_vec.core_into_adapter().to_array(), [1.0, 2.0, 3.0]);
 }

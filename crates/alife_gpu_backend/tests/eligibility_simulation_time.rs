@@ -1,5 +1,4 @@
-//! CPU contract checks and a bounded real-GPU probe of the production time helpers.
-//! This is not a CPU neural/plasticity implementation or a gameplay success test.
+//! Simulation-time decay helpers: CPU checks and a bounded GPU probe.
 
 use alife_gpu_backend::{CLOSED_LOOP_ELIGIBILITY_WGSL, CLOSED_LOOP_PLASTICITY_WGSL};
 

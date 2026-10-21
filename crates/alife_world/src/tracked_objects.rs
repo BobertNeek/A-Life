@@ -97,38 +97,7 @@ pub struct TrackedObjectRecord {
     pub stable_physical_descriptor: StablePhysicalDescriptor,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct TrackedObjectSaveRecord {
-    pub tracked_object_id: TrackedObjectId,
-    pub tracking_provenance: PhysicalTrackingProvenance,
-    pub tracking_key: PhysicalTrackingKey,
-    pub last_seen_tick: Tick,
-    pub stable_physical_descriptor: StablePhysicalDescriptor,
-}
-
-impl From<TrackedObjectRecord> for TrackedObjectSaveRecord {
-    fn from(record: TrackedObjectRecord) -> Self {
-        Self {
-            tracked_object_id: record.tracked_object_id,
-            tracking_provenance: record.tracking_provenance,
-            tracking_key: record.tracking_key,
-            last_seen_tick: record.last_seen_tick,
-            stable_physical_descriptor: record.stable_physical_descriptor,
-        }
-    }
-}
-
-impl From<TrackedObjectSaveRecord> for TrackedObjectRecord {
-    fn from(record: TrackedObjectSaveRecord) -> Self {
-        Self {
-            tracked_object_id: record.tracked_object_id,
-            tracking_provenance: record.tracking_provenance,
-            tracking_key: record.tracking_key,
-            last_seen_tick: record.last_seen_tick,
-            stable_physical_descriptor: record.stable_physical_descriptor,
-        }
-    }
-}
+pub type TrackedObjectSaveRecord = TrackedObjectRecord;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TrackedObjectRegistrySaveState {
@@ -231,8 +200,40 @@ impl TrackedObjectRegistry {
         descriptor: StablePhysicalDescriptor,
         tick: Tick,
     ) -> Result<TrackedObjectObservationReceipt, ScaffoldContractError> {
-        let mut receipts = self.observe_batch(observer, [(provenance, descriptor, tick)])?;
-        receipts.pop().ok_or(ScaffoldContractError::InvalidId)
+        let mut candidate = self.staged_observer(observer)?;
+        let before_digest = candidate.canonical_digest();
+        let (tracked_object_id, inserted, evicted) =
+            candidate.observe(provenance, descriptor, tick)?;
+        let receipt = TrackedObjectObservationReceipt {
+            organism_id_raw: observer.raw(),
+            tracked_object_id,
+            inserted,
+            evicted,
+            record_count: candidate.records_by_key.len() as u32,
+            next_id: candidate.next_id,
+            before_digest,
+            after_digest: candidate.canonical_digest(),
+        };
+        self.organisms.insert(observer.raw(), candidate);
+        Ok(receipt)
+    }
+
+    fn staged_observer(
+        &self,
+        observer: OrganismId,
+    ) -> Result<OrganismTrackedObjects, ScaffoldContractError> {
+        observer.validate()?;
+        Ok(self
+            .organisms
+            .get(&observer.raw())
+            .cloned()
+            .unwrap_or_else(|| {
+                OrganismTrackedObjects::new(
+                    observer.raw(),
+                    self.world_seed,
+                    self.per_organism_capacity,
+                )
+            }))
     }
 
     pub(crate) fn observe_batch(
@@ -241,29 +242,16 @@ impl TrackedObjectRegistry {
         observations: impl IntoIterator<
             Item = (PhysicalTrackingProvenance, StablePhysicalDescriptor, Tick),
         >,
-    ) -> Result<Vec<TrackedObjectObservationReceipt>, ScaffoldContractError> {
-        observer.validate()?;
-        let observer_raw = observer.raw();
-        let mut candidate = self
-            .organisms
-            .get(&observer_raw)
-            .cloned()
-            .unwrap_or_else(|| {
-                OrganismTrackedObjects::new(
-                    observer_raw,
-                    self.world_seed,
-                    self.per_organism_capacity,
-                )
-            });
-        let mut receipts = Vec::new();
+    ) -> Result<Vec<TrackedObjectId>, ScaffoldContractError> {
+        let mut candidate = self.staged_observer(observer)?;
+        let mut ids = Vec::new();
         for (provenance, descriptor, tick) in observations {
-            receipts.push(candidate.observe(provenance, descriptor, tick)?);
+            ids.push(candidate.observe(provenance, descriptor, tick)?.0);
         }
-        if receipts.is_empty() {
-            return Ok(receipts);
+        if !ids.is_empty() {
+            self.organisms.insert(observer.raw(), candidate);
         }
-        self.organisms.insert(observer_raw, candidate);
-        Ok(receipts)
+        Ok(ids)
     }
 
     pub fn records_for(
@@ -312,12 +300,7 @@ impl TrackedObjectRegistry {
                 |state| state.next_id,
             ),
             records: state.map_or_else(Vec::new, |state| {
-                state
-                    .records_by_key
-                    .values()
-                    .copied()
-                    .map(TrackedObjectSaveRecord::from)
-                    .collect()
+                state.records_by_key.values().copied().collect()
             }),
         };
         saved.validate_contract()?;
@@ -349,7 +332,7 @@ impl TrackedObjectRegistry {
             let organism_id_raw = saved.organism_id.raw();
             let mut records_by_key = BTreeMap::new();
             for record in saved.records.iter().copied() {
-                records_by_key.insert(record.tracking_key, TrackedObjectRecord::from(record));
+                records_by_key.insert(record.tracking_key, record);
             }
             let state = OrganismTrackedObjects {
                 organism_id_raw,
@@ -386,14 +369,13 @@ impl OrganismTrackedObjects {
         provenance: PhysicalTrackingProvenance,
         descriptor: StablePhysicalDescriptor,
         tick: Tick,
-    ) -> Result<TrackedObjectObservationReceipt, ScaffoldContractError> {
+    ) -> Result<(TrackedObjectId, bool, Option<TrackedObjectId>), ScaffoldContractError> {
         provenance.validate_contract()?;
         descriptor.validate_contract()?;
         if provenance.world_seed != self.world_seed {
             return Err(ScaffoldContractError::InvalidId);
         }
         let tracking_key = provenance.canonical_key();
-        let before_digest = self.canonical_digest();
 
         if let Some(existing) = self.records_by_key.get_mut(&tracking_key) {
             if tick.raw() < existing.last_seen_tick.raw() {
@@ -402,16 +384,7 @@ impl OrganismTrackedObjects {
             existing.last_seen_tick = tick;
             existing.stable_physical_descriptor = descriptor;
             let tracked_object_id = existing.tracked_object_id;
-            return Ok(TrackedObjectObservationReceipt {
-                organism_id_raw: self.organism_id_raw,
-                tracked_object_id,
-                inserted: false,
-                evicted: None,
-                record_count: self.records_by_key.len() as u32,
-                next_id: self.next_id,
-                before_digest,
-                after_digest: self.canonical_digest(),
-            });
+            return Ok((tracked_object_id, false, None));
         }
 
         let tracked_object_id = TrackedObjectId(self.next_id);
@@ -450,16 +423,7 @@ impl OrganismTrackedObjects {
                 stable_physical_descriptor: descriptor,
             },
         );
-        Ok(TrackedObjectObservationReceipt {
-            organism_id_raw: self.organism_id_raw,
-            tracked_object_id,
-            inserted: true,
-            evicted,
-            record_count: self.records_by_key.len() as u32,
-            next_id: self.next_id,
-            before_digest,
-            after_digest: self.canonical_digest(),
-        })
+        Ok((tracked_object_id, true, evicted))
     }
 
     fn canonical_digest(&self) -> [u64; 4] {
@@ -538,5 +502,36 @@ mod tests {
             )
             .is_err());
         assert_eq!(registry.save_state(observer).unwrap(), before);
+    }
+
+    #[test]
+    fn sensing_batch_preserves_audited_ids_eviction_and_restore_continuation() {
+        let owner = OrganismId(1);
+        let mut audited = TrackedObjectRegistry::new(77, 2).unwrap();
+        let mut sensing = audited.clone();
+        for batch in [
+            vec![
+                (provenance(1), descriptor(), Tick::new(1)),
+                (provenance(2), descriptor(), Tick::new(2)),
+            ],
+            vec![
+                (provenance(1), descriptor(), Tick::new(3)),
+                (provenance(3), descriptor(), Tick::new(4)),
+            ],
+            vec![(provenance(2), descriptor(), Tick::new(5))],
+        ] {
+            let mut expected_ids = Vec::new();
+            for (provenance, descriptor, tick) in batch.iter().copied() {
+                let receipt = audited
+                    .observe(owner, provenance, descriptor, tick)
+                    .unwrap();
+                assert_ne!(receipt.before_digest, receipt.after_digest);
+                expected_ids.push(receipt.tracked_object_id);
+            }
+            assert_eq!(sensing.observe_batch(owner, batch).unwrap(), expected_ids);
+            let saved = sensing.save_state(owner).unwrap();
+            assert_eq!(saved, audited.save_state(owner).unwrap());
+            sensing = TrackedObjectRegistry::from_save_state(saved).unwrap();
+        }
     }
 }

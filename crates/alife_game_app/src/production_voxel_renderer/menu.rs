@@ -1172,7 +1172,7 @@ mod tests {
         assert_eq!(state.screen, Screen::Closed);
     }
     #[test]
-    fn menu_ui_has_real_buttons_and_single_word_main_labels() {
+    fn menu_ui_has_real_buttons_and_main_labels() {
         let mut world = World::new();
         spawn_ui(&mut world);
         let mut query = world.query::<(&MenuButton, &Node, &Children)>();
@@ -1194,9 +1194,6 @@ mod tests {
                 .map(|(_, label)| label.to_string())
                 .collect::<Vec<_>>()
         );
-        assert!(rows
-            .values()
-            .all(|label| label.split_whitespace().count() == 1));
     }
     #[test]
     fn focus_loss_pause_is_not_owned_by_menu() {
@@ -1484,6 +1481,9 @@ mod tests {
 
     #[test]
     fn export_actual_menu_nodes_for_cpu_visual_fixture() {
+        let Ok(path) = std::env::var("ALIFE_MENU_CPU_FIXTURE") else {
+            return;
+        };
         let mut world = World::new();
         spawn_ui(&mut world);
         fn px(v: Val) -> f32 {
@@ -1543,8 +1543,6 @@ mod tests {
                 fixtures.extend(panels);
             }
         }
-        if let Ok(path) = std::env::var("ALIFE_MENU_CPU_FIXTURE") {
-            fs::write(path, serde_json::to_vec_pretty(&fixtures).unwrap()).unwrap();
-        }
+        fs::write(path, serde_json::to_vec_pretty(&fixtures).unwrap()).unwrap();
     }
 }

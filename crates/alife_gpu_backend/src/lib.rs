@@ -1,6 +1,5 @@
 //! wgpu backend for sparse GPU-authoritative neural compute.
 
-pub mod buffers;
 pub mod closed_loop_activity;
 pub mod closed_loop_admission;
 pub mod closed_loop_buffers;
@@ -14,10 +13,7 @@ pub mod closed_loop_pipeline;
 pub mod closed_loop_runtime;
 pub mod closed_loop_sleep;
 pub mod closed_loop_v11;
-pub mod recompaction;
-pub mod routing_masks;
 pub mod runtime;
-pub mod shader_contract;
 #[cfg(feature = "training-rollout")]
 pub mod training_rollout;
 #[cfg(feature = "training-rollout")]
@@ -26,16 +22,6 @@ pub use training_rollout::{
     GpuTrainingSamplingConfig,
 };
 
-pub use buffers::{
-    GpuAccumulatorLayout, GpuActionSummaryStagingRecord, GpuActivationPingPongViews,
-    GpuBufferContractHeader, GpuBufferView, GpuDiagnosticCountersRecord, GpuFixedPointPolicy,
-    GpuPackedSynapseIndexRecord, GpuReadbackClass, GpuReadbackPolicy, GpuRoutingDescriptorRecord,
-    GpuSupertileMaskRecord, GpuTileMetadataRecord, GpuUploadBuffers, GpuWeightBufferViews,
-    WeightBufferFormat, GPU_ACTION_SUMMARY_RECORD_BYTES, GPU_BUFFER_CONTRACT_SCHEMA_VERSION,
-    GPU_DIAGNOSTIC_COUNTER_BYTES, GPU_HEADER_BYTES, GPU_PACKED_SYNAPSE_INDEX_BYTES,
-    GPU_ROUTING_DESCRIPTOR_BYTES, GPU_SERIALIZATION_ENDIANNESS, GPU_SUPERTILE_MASK_BYTES,
-    GPU_TILE_METADATA_BYTES,
-};
 pub use closed_loop_activity::*;
 pub use closed_loop_admission::*;
 pub use closed_loop_buffers::*;
@@ -51,56 +37,7 @@ pub use closed_loop_pipeline::*;
 pub use closed_loop_runtime::*;
 pub use closed_loop_sleep::*;
 pub use closed_loop_v11::*;
-pub use recompaction::{
-    GpuAffectedTileRef, GpuAutophagyMarker, GpuAutophagyMarkerKind, GpuAutophagyPolicy,
-    GpuBufferReplacement, GpuLogicalBufferRef, GpuRecompactionDiagnostics, GpuRecompactionOutput,
-    GpuRecompactionPlan, GpuRecompactionRemapTable, GpuRecompactionSwapState,
-    GpuRecompactionValidationStatus, GpuRoutingMaskPreservation, GpuStructuralEditPlanEntry,
-    GpuStructuralEditStatus, GPU_RECOMPACTION_SCHEMA_VERSION, P28_WGSL_RECOMPACTION_AUTOPHAGY,
-};
-pub use routing_masks::{
-    p27_routing_counters, p27_tile_is_active, GpuActiveTileMaskConfig, GpuRoutingCounters,
-    GpuRoutingMaskPlan, GpuSupertileIndex, GpuSupertileMaskWords, P27_MICROTILE_EDGE,
-    P27_SUPERTILE_EDGE, P27_SUPERTILE_MASK_WORDS, P27_SUPERTILE_MICROTILES,
-    P27_WGSL_SUPERTILE_ROUTING,
-};
 pub use runtime::{
-    probe_local_wgpu_runtime, probe_local_wgpu_runtime_for_graphics_backend,
-    probe_local_wgpu_runtime_with_backends, required_storage_buffers, GpuPerformanceTargetStatus,
-    GpuRuntimeBackendConfig, GpuRuntimeBackendKind, GpuRuntimeBackendStatus, GpuRuntimeBoundary,
-    GpuRuntimeCapabilityManifest, GpuRuntimeDiagnosticExport, GpuRuntimeHardwareProbe,
-    GpuRuntimeReadbackGuard, GpuRuntimeThrottleDecision, GpuRuntimeThrottlingPolicy,
-    GpuRuntimeTimingBudget, GpuRuntimeTimingSample, GpuThrottleLevel, GpuThrottleReason,
-    GpuTierMeasurement, GpuTierPerformanceReport, GpuTierPopulation, P29_RUNTIME_SCHEMA_VERSION,
+    probe_local_wgpu_runtime_for_graphics_backend, required_storage_buffers, GpuRuntimeBackendKind,
+    GpuRuntimeHardwareProbe, P29_RUNTIME_SCHEMA_VERSION,
 };
-pub use shader_contract::{GpuShaderPass, P24_WGSL_CONTRACT_STUB};
-
-pub type WgpuLimits = wgpu::Limits;
-
-/// BLAKE3 identity of every WGSL source used by the GPU-authoritative closed
-/// loop. Names and lengths are included so concatenation cannot alias bundles.
-pub fn closed_loop_shader_bundle_digest() -> alife_core::Blake3Digest {
-    let sources = [
-        ("abi", CLOSED_LOOP_ABI_WGSL),
-        ("encode", CLOSED_LOOP_ENCODE_WGSL),
-        ("clear-diagnostics", CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL),
-        ("recurrent", CLOSED_LOOP_RECURRENT_WGSL),
-        ("decode", CLOSED_LOOP_DECODE_WGSL),
-        ("memory-context", CLOSED_LOOP_MEMORY_CONTEXT_WGSL),
-        ("eligibility", CLOSED_LOOP_ELIGIBILITY_WGSL),
-        ("plasticity", CLOSED_LOOP_PLASTICITY_WGSL),
-        ("consolidate", CLOSED_LOOP_CONSOLIDATE_WGSL),
-        ("replay-learning", CLOSED_LOOP_REPLAY_LEARNING_WGSL),
-    ];
-    let mut hasher = blake3::Hasher::new();
-    hasher.update(b"alife.gpu.closed-loop.wgsl-bundle.v1");
-    for (name, source) in sources {
-        #[cfg(feature = "training-rollout")]
-        let source = training_rollout::shader_source(source);
-        hasher.update(&(name.len() as u64).to_le_bytes());
-        hasher.update(name.as_bytes());
-        hasher.update(&(source.len() as u64).to_le_bytes());
-        hasher.update(source.as_bytes());
-    }
-    alife_core::Blake3Digest::from_bytes(*hasher.finalize().as_bytes())
-}

@@ -1,17 +1,12 @@
-//! Pass 1 backend join for bounded dendritic and structural computation.
-//!
-//! The closed-loop GPU path remains authoritative for normal neural execution.
-//! This state owns the bounded descriptors and receipts compiled into the
-//! production WGSL recurrent dispatch.
+//! Bounded dendritic and structural state for the WGSL recurrent dispatch.
 
 use alife_core::cognitive_work::CognitiveWorkCounters;
 use alife_core::{
     BrainCapacityClass, BrainPhenotype, CanonicalDigestBuilder, CoactivationEvidence,
     CognitiveWorkReceipt, DendriticBranch, DendriticBranchSet, DendriticInputRef,
     DendriticWorkReceipt, PhenotypeHash, ScaffoldContractError, StructuralPlasticityConfig,
-    StructuralPlasticityState, StructuralWorkReceipt, MAX_ACCEPTED_PER_PHASE,
-    MAX_CANDIDATES_PER_REGION, MAX_DENDRITIC_BRANCHES, MAX_DENDRITIC_BRANCHES_PER_NEURON,
-    MAX_DENDRITIC_INPUTS,
+    StructuralPlasticityState, StructuralWorkReceipt, MAX_DENDRITIC_BRANCHES,
+    MAX_DENDRITIC_BRANCHES_PER_NEURON, MAX_DENDRITIC_INPUTS,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -287,28 +282,6 @@ impl GpuV11CausalState {
         })
     }
 
-    pub fn new_for_phenotype(
-        neuron_count: u32,
-        dendritic_branches: DendriticBranchSet,
-        phenotype: &BrainPhenotype,
-    ) -> Result<Self, ScaffoldContractError> {
-        let plan = phenotype.cognitive_architecture();
-        if phenotype.neuron_count() != neuron_count
-            || dendritic_branches.branches().len() > usize::from(plan.dendritic_branch_capacity())
-        {
-            return Err(ScaffoldContractError::InvalidSparseProjectionSchema);
-        }
-        let structural_config = StructuralPlasticityConfig {
-            max_candidates_per_region: plan
-                .structural_candidate_budget()
-                .min(MAX_CANDIDATES_PER_REGION as u16),
-            max_accepted_per_phase: u16::from(plan.structural_edit_budget())
-                .min(MAX_ACCEPTED_PER_PHASE as u16),
-            ..StructuralPlasticityConfig::default()
-        };
-        Self::new(neuron_count, dendritic_branches, structural_config)
-    }
-
     pub fn dendritic_branches(&self) -> &DendriticBranchSet {
         &self.dendritic_branches
     }
@@ -459,36 +432,30 @@ impl GpuV11CausalState {
         }
 
         let mut rebuilt_by_target = BTreeMap::<u32, Vec<GpuV11SparseEdge>>::new();
-        for (source, targets) in indexed_pairs {
-            let mut input = vec![0.0; self.neuron_count as usize];
-            input[source as usize] = 1.0;
-            let output = next
-                .structural
-                .compute(&input)
-                .map_err(|_| ScaffoldContractError::InvalidSparseProjectionSchema)?;
-            for (target, route) in targets {
-                let weight = output[target as usize];
-                if weight == 0.0 {
-                    continue;
-                }
-                rebuilt_by_target
-                    .entry(target)
-                    .or_default()
-                    .push(GpuV11SparseEdge {
-                        source,
-                        target,
-                        route,
-                        weight,
-                    });
+        for (source, target, weight) in next.structural.connections() {
+            let Some(&route) = indexed_pairs
+                .get(&source)
+                .and_then(|targets| targets.get(&target))
+            else {
+                continue;
+            };
+            if weight == 0.0 {
+                continue;
             }
+            rebuilt_by_target
+                .entry(target)
+                .or_default()
+                .push(GpuV11SparseEdge {
+                    source,
+                    target,
+                    route,
+                    weight,
+                });
         }
-        let mut rebuilt = rebuilt_by_target
+        let rebuilt = rebuilt_by_target
             .into_iter()
             .map(|(target, edges)| GpuV11SparseSpan { target, edges })
             .collect::<Vec<_>>();
-        for span in &mut rebuilt {
-            span.edges.sort_unstable_by_key(|edge| edge.source);
-        }
         if structural.accepted_edges > 0 {
             let accepted = evidence.iter().find_map(|item| {
                 let already_present = self.sparse_spans.iter().any(|span| {

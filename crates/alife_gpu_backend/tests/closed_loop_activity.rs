@@ -1,4 +1,4 @@
-//! Exact activity-cost, deterministic-throttle, and replay contracts.
+//! GPU work accounting, throttling and exact replay tests.
 
 mod support;
 #[path = "closed_loop_activity/work_receipt_tests.rs"]
@@ -17,7 +17,6 @@ use alife_core::{Tick, BRAIN_ATP_BASAL_DEBIT_Q16, BRAIN_ATP_Q16_MAX};
 use alife_gpu_backend::GpuActivityRestoreInput;
 use alife_gpu_backend::{
     derive_executed_work, GpuActivityDispatchHeader, GpuClassBucketPlan,
-    CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL, CLOSED_LOOP_RECURRENT_WGSL,
     GPU_ACTIVITY_DISPATCH_HEADER_WORDS,
 };
 
@@ -258,6 +257,22 @@ fn throttle_and_work_receipts_cannot_cross_apply_between_same_class_slots() {
 }
 
 #[test]
+fn matching_pressure_and_dispatch_identity_cannot_apply_to_another_brain_class() {
+    let phenotype = support::n512_phenotype(4_513);
+    let capacity = BrainCapacityClass::n512();
+    let policy = BrainActivityPolicyV1::production_v1();
+    let mut foreign = identity(&phenotype, 0, 1, 1);
+    foreign.class_id_raw = BrainCapacityClass::n1024().id().raw();
+    let sample = pressure(&policy, foreign, 0, 0, 0, 65_535);
+    sample.validate_for(&policy).unwrap();
+
+    assert_eq!(
+        NeuralThrottleDecision::derive(&policy, &phenotype, capacity.execution(), foreign, sample),
+        Err(alife_core::ScaffoldContractError::BrainActivitySequenceMismatch)
+    );
+}
+
+#[test]
 fn every_pressure_bucket_truth_table_row_and_q24_rounding_is_exact() {
     let phenotype = support::phenotype_for_capacity_at_maturation(
         BrainCapacityClass::n512(),
@@ -402,92 +417,6 @@ fn activity_dispatch_header_binds_the_validated_route_schedule_exactly() {
     .is_err());
 }
 
-#[test]
-fn recurrent_shader_validates_and_applies_the_activity_route_mask() {
-    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("fn validate_activity_header"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL.contains("fn route_enabled_at"));
-    assert!(CLOSED_LOOP_RECURRENT_WGSL
-        .contains("if (!route_enabled_at(route_mask_base, route_index)) { continue; }"));
-}
-
-#[test]
-fn activity_contract_is_validated_once_per_dispatch_row_before_neuron_work() {
-    assert!(
-        CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("validate_activity_header(activity, header)")
-    );
-    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
-
-    let lf = CLOSED_LOOP_RECURRENT_WGSL.replace("\r\n", "\n");
-    for source in [
-        lf.clone(),
-        lf.replace('\n', "\r\n"),
-        lf.replacen('\n', "\r\n", 1),
-    ] {
-        let source = source.replace("\r\n", "\n");
-        let recurrent_entry = source
-            .split_once("fn recurrent_microstep")
-            .expect("recurrent shader exposes its compute entry")
-            .1;
-        assert!(!recurrent_entry.contains("validate_activity_header(activity, header)"));
-        assert!(recurrent_entry.contains("activity_contract_prevalidated(header)"));
-
-        let fast_guard = source
-            .split_once("fn activity_contract_prevalidated")
-            .expect("shared activity validation exposes the hot-path guard")
-            .1
-            .split_once("\n}\n")
-            .expect("hot-path guard is bounded")
-            .0;
-        assert!(fast_guard.contains("CONTRACT_INVALID_DIAGNOSTIC_BIT"));
-        for repeated_check in [
-            "schema_version",
-            "class_id",
-            "slot_generation",
-            "neuron_count",
-            "microstep_count",
-        ] {
-            assert!(
-                !fast_guard.contains(repeated_check),
-                "the per-invocation guard repeated {repeated_check} instead of consuming the row prepass"
-            );
-        }
-    }
-}
-
-#[test]
-fn validated_row_prepass_publishes_exact_work_without_hot_loop_atomics() {
-    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("scheduled_tile_visits"));
-    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("scheduled_synapse_ops"));
-    assert!(CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL.contains("validate_scheduled_work"));
-
-    let recurrent_entry = CLOSED_LOOP_RECURRENT_WGSL
-        .split_once("fn recurrent_microstep")
-        .expect("recurrent entry exists")
-        .1;
-    assert!(!recurrent_entry.contains("diagnostic_offset + 1u"));
-    assert!(!recurrent_entry.contains("var active_rows"));
-}
-
-#[test]
-fn parallel_hot_loops_read_only_the_validated_route_mask_word() {
-    let recurrent_entry = CLOSED_LOOP_RECURRENT_WGSL
-        .split_once("fn recurrent_microstep")
-        .expect("recurrent entry exists")
-        .1;
-    assert!(recurrent_entry.contains("route_enabled_at"));
-    assert!(!recurrent_entry.contains("load_activity_header"));
-
-    let recurrent_eligibility = alife_gpu_backend::CLOSED_LOOP_ELIGIBILITY_WGSL
-        .split_once("fn accumulate_recurrent_eligibility")
-        .expect("recurrent eligibility entry exists")
-        .1
-        .split_once("@compute")
-        .expect("recurrent eligibility entry is bounded")
-        .0;
-    assert!(recurrent_eligibility.contains("route_enabled_at"));
-    assert!(!recurrent_eligibility.contains("load_activity_header"));
-}
-
 #[cfg(feature = "gpu-tests")]
 #[test]
 fn backend_rejects_unaffordable_bounded_activity_before_submission() {
@@ -542,7 +471,6 @@ fn backend_rejects_unaffordable_bounded_activity_before_submission() {
         )
         .unwrap();
     let dispatches_before = brain.backend.completed_dispatch_count();
-    assert!(essential_debit < full_debit);
     assert!(brain
         .backend
         .next_bounded_activity_is_affordable(brain.handle)

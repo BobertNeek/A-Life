@@ -1,10 +1,10 @@
-//! Contract tests for deterministic, compiler-owned production phenotypes.
+//! Deterministic production phenotype compilation.
 
 use alife_core::genome::CognitiveArchitectureGenomeParameters;
 use alife_core::{
     BrainCapacityClass, BrainClassId, BrainGenome, BrainScaleTier, ContinuousLocus, CreatureGenome,
-    DevelopmentState, FoundationGeneticIdentity, LegacyBrainClassAdapter, NormalizedScalar,
-    PhenotypeCompiler, SensorProfile, Tick, CANDIDATE_FEATURE_COUNT,
+    DevelopmentState, FoundationGeneticIdentity, NormalizedScalar, PhenotypeCompiler,
+    SensorProfile, Tick, CANDIDATE_FEATURE_COUNT,
 };
 
 fn compile(class_id: BrainClassId, seed: u64) -> alife_core::BrainPhenotype {
@@ -130,8 +130,8 @@ fn large_named_tiers_are_research_gated() {
         BrainScaleTier::Ascended5M,
         BrainScaleTier::ResearchCustom,
     ] {
-        let legacy_id = LegacyBrainClassAdapter::capacity_id_for_tier(tier);
-        assert!(BrainCapacityClass::production_for_id(legacy_id).is_err());
+        let class_id = tier.default_class_id();
+        assert!(BrainCapacityClass::production_for_id(class_id).is_err());
     }
 }
 

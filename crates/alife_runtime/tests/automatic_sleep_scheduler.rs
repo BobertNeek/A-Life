@@ -1,4 +1,4 @@
-//! Canonical no-action scheduler cycle before the GPU consolidation driver is wired.
+//! Automatic sleep scheduling and recovery with a deterministic consolidation driver.
 use alife_core::sleep::{SleepWorkReceipt, SleepWorkStatus};
 use alife_core::{
     BiochemistryState, BrainCapacityClass, ConsolidationDriverEvent, ConsolidationIntent,
@@ -604,7 +604,7 @@ fn fatigue_enters_sleep_requests_once_emits_no_actions_and_wakes_after_completio
     assert!(events
         .iter()
         .filter(|event| event.phase != SleepPhase::Awake)
-        .all(|event| event.selected_action.is_none()));
+        .all(|event| !event.motor_eligible));
 }
 
 #[test]

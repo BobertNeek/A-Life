@@ -1,11 +1,11 @@
-//! Derived, submission-local sensitive-period metadata. Never a learned-state owner.
+//! Submission-local sensitive-period metadata.
 use alife_core::{
     BrainPhenotype, CriticalPeriod, DevelopmentState, PlasticityGenomeParameters,
     ScaffoldContractError, Validate,
 };
 
 /// Cached route factors and inherited rate ceilings for the age at actual mutation.
-/// The phenotype must retain its stable, period-free compilation. No phenotype or bank is edited.
+/// The phenotype retains its stable compilation; this metadata does not edit it or the banks.
 #[derive(Debug, Clone, PartialEq)]
 pub struct GpuDevelopmentalPlasticity {
     periods: Option<Vec<CriticalPeriod>>,

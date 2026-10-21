@@ -1,8 +1,4 @@
-//! CA10 versioned environment manifest launcher.
-//!
-//! This module stays Bevy-free. It resolves player-facing scenario IDs into
-//! existing P34-compatible fixture roots and validates those roots through the
-//! normal persistence/config contracts.
+//! Resolve environment selections to saved configuration, assets, and worlds.
 
 use std::collections::BTreeSet;
 
@@ -37,44 +33,6 @@ pub struct EnvironmentScenarioSelection {
     pub manifest_path: PathBuf,
     pub entry: EnvironmentScenarioEntry,
     pub launch: AppShellLaunchConfig,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnvironmentLauncherSummary {
-    pub schema: &'static str,
-    pub schema_version: u16,
-    pub manifest_path: PathBuf,
-    pub default_scenario_id: String,
-    pub selected_scenario_id: String,
-    pub title: String,
-    pub scenario_count: usize,
-    pub fixture_root: PathBuf,
-    pub seed: u64,
-    pub asset_count: usize,
-    pub object_count: usize,
-    pub creature_count: usize,
-    pub food_count: usize,
-    pub hazard_count: usize,
-    pub obstacle_count: usize,
-    pub player_visible_error_sample: String,
-}
-
-impl EnvironmentLauncherSummary {
-    pub fn signature_line(&self) -> String {
-        format!(
-            "{}:{}:{}:scenarios={}:seed={}:objects={}:creatures={}:food={}:hazards={}:obstacles={}",
-            self.schema,
-            self.schema_version,
-            self.selected_scenario_id,
-            self.scenario_count,
-            self.seed,
-            self.object_count,
-            self.creature_count,
-            self.food_count,
-            self.hazard_count,
-            self.obstacle_count
-        )
-    }
 }
 
 impl EnvironmentManifest {
@@ -253,38 +211,6 @@ pub fn select_environment_scenario(
 ) -> Result<EnvironmentScenarioSelection, GameAppShellError> {
     let manifest = EnvironmentManifest::from_json_file(manifest_path.as_ref())?;
     manifest.select(manifest_path, scenario_id)
-}
-
-pub fn run_environment_launcher_smoke(
-    manifest_path: impl AsRef<Path>,
-    scenario_id: Option<&str>,
-) -> Result<EnvironmentLauncherSummary, GameAppShellError> {
-    let manifest_path = manifest_path.as_ref();
-    let manifest = EnvironmentManifest::from_json_file(manifest_path)?;
-    let selection = manifest.select(manifest_path, scenario_id)?;
-    let startup = run_headless_app_shell_smoke(&selection.launch)?;
-    let visible = load_visible_world_from_p34_save(&selection.launch)?;
-    compare_visible_world_to_headless(&visible)?;
-
-    Ok(EnvironmentLauncherSummary {
-        schema: CA10_ENVIRONMENT_MANIFEST_SCHEMA,
-        schema_version: CA10_ENVIRONMENT_MANIFEST_SCHEMA_VERSION,
-        manifest_path: manifest_path.to_path_buf(),
-        default_scenario_id: manifest.default_scenario_id,
-        selected_scenario_id: selection.entry.id,
-        title: selection.entry.title,
-        scenario_count: manifest.scenarios.len(),
-        fixture_root: selection.launch.fixture_root,
-        seed: startup.seed,
-        asset_count: startup.asset_count,
-        object_count: visible.object_count,
-        creature_count: visible.kind_count(WorldObjectKind::Agent),
-        food_count: visible.kind_count(WorldObjectKind::Food),
-        hazard_count: visible.kind_count(WorldObjectKind::Hazard),
-        obstacle_count: visible.kind_count(WorldObjectKind::Obstacle),
-        player_visible_error_sample: "Unknown scenario. Pick one of the listed environments."
-            .to_string(),
-    })
 }
 
 fn validate_scenario_id(id: &str) -> Result<(), GameAppShellError> {

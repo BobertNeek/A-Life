@@ -1,7 +1,6 @@
 //! Portable, digest-checked GPU-brain checkpoint records.
 //!
-//! This module owns serialization contracts only. It contains no neural math,
-//! GPU handles, packed arena offsets, or fallback execution path.
+//! Stores portable data and asset references rather than process-local GPU handles.
 
 use alife_core::predictive::GroundedSuccessorPredictor;
 use alife_core::sleep::SleepWorkReceipt;
@@ -45,7 +44,7 @@ const WEIGHT_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-DUAL-WEIGHT-BANK-V1";
 const ELIGIBILITY_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-ELIGIBILITY-BANKS-V1";
 const REPLAY_JOURNAL_DIGEST_DOMAIN: &[u8] = b"ALIFE-GPU-REPLAY-JOURNAL-V1";
 
-/// The complete non-bulk v1.1 cognitive state at a sealed runtime boundary.
+/// The complete non-bulk cognitive state at a sealed runtime boundary.
 ///
 /// This is intentionally separate from durable founder state. Attention,
 /// active context, current motor intent, work receipts, sleep phase, and
@@ -109,7 +108,7 @@ impl ExactCognitiveCheckpointState {
                 ScaffoldContractError::BrainOwnershipMismatch,
             ));
         }
-        validate_predictor(&self.predictor)?;
+        self.predictor.validate_contract()?;
         if let Some(bundle) = &self.selected_motor_bundle {
             bundle.validate_contract()?;
             if bundle.organism_id != self.organism_id || bundle.tick != self.checkpoint_tick {
@@ -197,22 +196,11 @@ impl DurableFounderCognitiveState {
             });
         }
         self.source_organism_id.validate()?;
-        validate_predictor(&self.predictor)?;
+        self.predictor.validate_contract()?;
         validate_dendritic_branches(&self.dendritic_branches)?;
         validate_structural_plasticity(&self.structural_plasticity)?;
         Ok(())
     }
-}
-
-fn validate_predictor(predictor: &GroundedSuccessorPredictor) -> Result<(), PersistenceError> {
-    predictor.validate_contract()?;
-    let encoded = serde_json::to_vec(predictor)?;
-    let decoded: GroundedSuccessorPredictor = serde_json::from_slice(&encoded)?;
-    decoded.validate_contract()?;
-    if decoded != *predictor {
-        return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
-    }
-    Ok(())
 }
 
 fn validate_dendritic_branches(branches: &DendriticBranchSet) -> Result<(), PersistenceError> {

@@ -5,41 +5,23 @@ vertices. A color-only override has no reason to ship those changes. Pair the
 exact same triangle corners, require exact positions, and copy only normalized
 RGB bytes into the baseline COLOR_0 accessor. Everything else is byte-retained.
 """
-import json
 import hashlib
 import struct
 from collections import defaultdict
 from pathlib import Path
+from conifer_glb import Glb
 
 
-class Glb:
-    def __init__(self, path):
-        self.raw = Path(path).read_bytes()
-        size = struct.unpack_from('<I', self.raw, 12)[0]
-        self.doc = json.loads(self.raw[20:20 + size])
-        self.binary = 28 + size
-
-    def rows(self, index):
-        a = self.doc['accessors'][index]
-        v = self.doc['bufferViews'][a['bufferView']]
-        n = {'SCALAR': 1, 'VEC3': 3, 'VEC4': 4}[a['type']]
-        fmt = '<' + {5126: 'f', 5125: 'I', 5123: 'H', 5121: 'B'}[a['componentType']] * n
-        stride = v.get('byteStride', struct.calcsize(fmt))
-        offset = self.binary + v.get('byteOffset', 0) + a.get('byteOffset', 0)
-        return [struct.unpack_from(fmt, self.raw, offset + i * stride) for i in range(a['count'])]
-
-    def byte_offsets(self, index):
-        a = self.doc['accessors'][index]
-        v = self.doc['bufferViews'][a['bufferView']]
-        assert a['componentType'] == 5121 and a.get('normalized')
-        n = {'VEC3': 3, 'VEC4': 4}[a['type']]
-        stride = v.get('byteStride', n)
-        offset = self.binary + v.get('byteOffset', 0) + a.get('byteOffset', 0)
-        return [offset + i * stride for i in range(a['count'])]
+def byte_offsets(glb, index):
+    accessor = glb.doc['accessors'][index]
+    assert accessor['componentType'] == 5121 and accessor.get('normalized')
+    offset, stride, _, count = glb.layout(index)
+    return [offset + i * stride for i in range(count)]
 
 
 def retain_geometry(baseline, native_export, output):
     old, new = Glb(baseline), Glb(native_export)
+    assert len(old.doc['meshes']) == len(new.doc['meshes']), 'LOD mesh count changed'
     assert old.doc['materials'] == new.doc['materials']
     assert old.doc['nodes'] == new.doc['nodes']
     assert not new.doc.get('textures')
@@ -75,7 +57,7 @@ def retain_geometry(baseline, native_export, output):
             mapping[i].add(colors[j][:3])
         assert set(mapping) == set(range(len(old_pos)))
         assert all(len(options) == 1 for options in mapping.values()), 'Color seam ambiguity'
-        offsets = old.byte_offsets(p['attributes']['COLOR_0'])
+        offsets = byte_offsets(old, p['attributes']['COLOR_0'])
         for index, values in mapping.items():
             data[offsets[index]:offsets[index] + 3] = bytes(next(iter(values)))
         report.append(dict(mesh=previous['name'], triangles=len(old_indices) // 3,

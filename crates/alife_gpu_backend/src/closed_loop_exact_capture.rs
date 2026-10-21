@@ -2,7 +2,6 @@
 //!
 //! This is a persistence transaction boundary. It copies one immutable view of
 //! every admitted resident into one staging arena and maps that arena once.
-//! It never keeps a continuously synchronized CPU neural mirror.
 
 use std::{
     ops::Range,
@@ -20,7 +19,6 @@ use crate::{
     GpuActivityRuntimeSnapshot, GpuBrainHandle, GpuClosedLoopBackend,
     GpuCompactCheckpointAuthorityV1, GpuPendingEligibilityRecord, GpuSleepStagingReceipt,
     GpuSlotLearningStateRecord, GpuV11Checkpoint, PendingEligibilityReceipt,
-    PendingEligibilityRestoreParts,
 };
 
 pub const GPU_EXACT_POPULATION_CAPTURE_SCHEMA_VERSION: u16 = 1;
@@ -124,21 +122,7 @@ impl GpuExactPopulationCaptureRowV1 {
     ) -> Result<GpuCompactCheckpointAuthorityV1, ScaffoldContractError> {
         let pending = self
             .pending_eligibility
-            .map(|receipt| {
-                let identity = receipt.identity();
-                PendingEligibilityRestoreParts::try_new(
-                    identity.dispatch_generation(),
-                    identity.originating_tick(),
-                    identity.frame_digest(),
-                    identity.active_activation_side(),
-                    identity.candidate_index(),
-                    identity.action_id(),
-                    identity.action_family(),
-                    identity.candidate_feature_digest(),
-                    identity.active_eligibility_generation(),
-                    identity.staging_eligibility_generation(),
-                )
-            })
+            .map(crate::closed_loop_checkpoint::pending_parts_from_receipt)
             .transpose()?;
         GpuCompactCheckpointAuthorityV1::try_new(
             self.identity.active_activation_side,
@@ -424,11 +408,15 @@ impl GpuClosedLoopBackend {
                 activity_sequence_cursor: resident.activity_sequence_cursor,
                 brain_atp_q16: resident.brain_atp_q16,
                 last_world_atp_tick: resident.last_world_atp_tick,
-                last_activity_dispatch_generation: resident.last_activity_dispatch_generation,
-                last_activity_frame_digest: resident.last_activity_frame_digest,
+                last_activity_dispatch_generation: activity_snapshot
+                    .pressure
+                    .map_or(0, |pressure| pressure.dispatch_generation),
+                last_activity_frame_digest: activity_snapshot
+                    .pressure
+                    .map_or([0; 4], |pressure| pressure.frame_digest),
                 last_completed_gpu_time_ns: resident.last_completed_gpu_time_ns,
-                last_throttle: resident.last_throttle.clone(),
-                last_work: resident.last_work.clone(),
+                last_throttle: activity_snapshot.throttle.clone(),
+                last_work: activity_snapshot.work.clone(),
                 v11: resident.v11.checkpoint(),
             };
             validate_capture_identity(&identity)?;
@@ -487,8 +475,7 @@ impl GpuClosedLoopBackend {
             mapped_at_creation: false,
         });
 
-        // Copies were recorded with destination offsets but need the final
-        // staging buffer. Re-record now that its bounded size is known.
+        // Destination offsets and the final staging size are now known.
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {

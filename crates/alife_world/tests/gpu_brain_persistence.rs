@@ -1,4 +1,4 @@
-//! Portable GPU brain save-state and sleep-transaction persistence contracts.
+//! Portable GPU brain state and sleep-transaction persistence.
 
 use alife_core::{
     ActionId, BrainActivityPolicyV1, BrainCapacityClass, CandidateActionFamily,
@@ -532,7 +532,7 @@ fn completed_sleep_promotion_moves_exact_staging_refs_into_committed_main_state(
 fn gpu_checkpoint_asset_reference_enumeration_structurally_covers_every_optional_class() {
     let mut save = save_for_sleep(sleep_state(SleepPhase::Awake, ConsolidationState::None));
     // This fixture deliberately combines phase-specific references that cannot
-    // coexist in one valid checkpoint. The contract under test is enumeration.
+    // coexist in one valid checkpoint. This checks reference enumeration only.
     save.live_structural_topology = Some(asset("live-topology"));
     save.exact_cognitive_state = Some(asset("exact-cognitive"));
     save.pending_experience_transaction = Some(asset("pending-experience"));

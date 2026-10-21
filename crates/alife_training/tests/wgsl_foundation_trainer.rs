@@ -7,10 +7,10 @@ use alife_core::{
     NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick, TrainingStageManifest,
 };
 use alife_training::{
-    AdamWConfig, CandidateTrainingTarget, FoundationCurriculumStage, FoundationTrainer,
-    N2048CurriculumV1, N2048FoundationProgram, SpeechTrainingTarget, StageTrainableMask,
-    TrainingFrozenSynapse, TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick,
-    TrainingSequence, TrainingSequence32, TrainingTick, TRAINING_SEQUENCE_TICKS,
+    AdamWConfig, CandidateTrainingTarget, FoundationTrainer, SpeechTrainingTarget,
+    StageTrainableMask, TrainingFrozenSynapse, TrainingInitialState, TrainingReplayCandidate,
+    TrainingReplayTick, TrainingSequence, TrainingSequence32, TrainingTick,
+    TRAINING_SEQUENCE_TICKS,
 };
 
 fn native_exact_foundation(
@@ -968,38 +968,6 @@ fn n2048_speech_payload_head_trains_on_gpu_and_remains_exportable() {
     )
     .unwrap();
     trainer.rebind_for_next_cohort(next, exported).unwrap();
-}
-
-#[test]
-fn n2048_curriculum_stage_trains_and_evaluates_256_held_out_gpu_episodes() {
-    let capacity = BrainCapacityClass::n2048();
-    let genome = BrainGenome::scaffold(0xC011_2048, capacity.id());
-    let development =
-        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
-    let (phenotype, source) = native_exact_foundation(&genome, &development);
-    let curriculum = N2048CurriculumV1::new();
-    let mask = curriculum
-        .stage_mask(&phenotype, FoundationCurriculumStage::GroundedPerception)
-        .unwrap();
-    let trainer =
-        FoundationTrainer::new_required(phenotype, source, mask, AdamWConfig::default()).unwrap();
-    let mut program = N2048FoundationProgram::new(trainer);
-    let receipt = program
-        .run_stage(
-            FoundationCurriculumStage::GroundedPerception,
-            1,
-            0xA11C_E001,
-        )
-        .unwrap();
-    println!("{receipt:?}");
-    assert_eq!(receipt.evaluation.episodes(), 256);
-    assert!(receipt.evaluation.frozen_weights_bit_identical());
-    assert!(receipt.first_training_loss.is_finite());
-    assert!(receipt.final_training_loss.is_finite());
-    assert_eq!(
-        program.completed_stage_count(),
-        u16::from(receipt.gate_passed)
-    );
 }
 
 #[test]

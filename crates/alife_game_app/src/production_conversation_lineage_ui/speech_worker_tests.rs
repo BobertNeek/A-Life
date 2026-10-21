@@ -1,9 +1,6 @@
-//! CPU integration at the existing worker/translation/world-perception boundary.
-//!
-//! The translation callback and runtime identity are explicitly synthetic. Tests
-//! use the real worker start/poll/join lifecycle, bounded unaided translator and
-//! world speech APIs. They do not instantiate the GPU-only Bevy handler or its
-//! completion system, render UI, call an LLM, or demonstrate comprehension.
+//! CPU integration of the worker lifecycle, unaided translation, and world speech.
+//! Translation callbacks and runtime identity are fixtures; the GPU Bevy handler,
+//! renderer, and external language models are not exercised.
 use super::*;
 use std::{
     sync::mpsc::{self, Receiver, Sender},

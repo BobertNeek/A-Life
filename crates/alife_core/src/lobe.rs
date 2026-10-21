@@ -1,4 +1,4 @@
-//! Aligned lobe layout contracts, independent of runtime allocation.
+//! Aligned lobe layouts, independent of runtime allocation.
 
 use serde::{Deserialize, Serialize};
 
@@ -32,60 +32,6 @@ impl LobeKind {
         LobeKind::SocialCommunication,
         LobeKind::FlexibleReserve,
     ];
-
-    // Temporary source compatibility for pre-v2 callers. Durable v1 IDs use
-    // `LegacyLobeKindV1`; these aliases never create additional regions.
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SensoryGrounding: Self = Self::PerceptualIntegration;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const MetabolicDrive: Self = Self::InteroceptiveMotivational;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const AuditorySpeech: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const GlyphVision: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const LexiconConcept: Self = Self::MultimodalAssociation;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const CoreAssociation: Self = Self::TemporalPredictive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const EpisodicMemory: Self = Self::MemoryInterface;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const WorkingMemory: Self = Self::WorkingContextExecutive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const MotorArbitration: Self = Self::ActionPlanning;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const HomeostaticRegulation: Self = Self::FlexibleReserve;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const LanguageExpansion: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const MathQuantity: Self = Self::MultimodalAssociation;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const NarrativeHistory: Self = Self::TemporalPredictive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SocialReasoning: Self = Self::SocialCommunication;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SelfCriticUncertainty: Self = Self::WorkingContextExecutive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const PlanningDream: Self = Self::TemporalPredictive;
-    #[allow(non_upper_case_globals)]
-    #[deprecated(note = "use the v2 founder homologue")]
-    pub const SpeechWritingMotor: Self = Self::ActionPlanning;
 
     pub const fn stable_id(self) -> LobeIndex {
         LobeIndex(self.raw())
@@ -387,14 +333,12 @@ pub struct LobeLayout {
 
 impl LobeLayout {
     pub fn reference_for_neuron_count(neuron_count: u32) -> Result<Self, ScaffoldContractError> {
-        Self::build(neuron_count, None, LayoutMode::Reference)
-    }
-
-    pub fn with_disabled_lobe(
-        _neuron_count: u32,
-        _disabled: LobeKind,
-    ) -> Result<Self, ScaffoldContractError> {
-        Err(ScaffoldContractError::PhenotypeCompile)
+        let lengths = founder_floor_share_lengths(neuron_count)?;
+        let layout = Self {
+            regions: build_regions_from_lengths(&lengths),
+        };
+        layout.validate_for_neuron_count(neuron_count)?;
+        Ok(layout)
     }
 
     pub fn total_neurons(&self) -> u32 {
@@ -438,7 +382,11 @@ impl LobeLayout {
         &self,
         neuron_count: u32,
     ) -> Result<(), ScaffoldContractError> {
-        if self.total_neurons() != neuron_count {
+        let total = self
+            .regions
+            .iter()
+            .try_fold(0_u32, |total, region| total.checked_add(region.len));
+        if total != Some(neuron_count) {
             return Err(ScaffoldContractError::LobeTotalMismatch);
         }
         if !self.regions_are_aligned(16) {
@@ -447,10 +395,14 @@ impl LobeLayout {
 
         let mut cursor = 0;
         for region in self.enabled_regions() {
-            if region.len == 0 || region.start != cursor || region.end() > neuron_count {
+            let end = region
+                .start
+                .checked_add(region.len)
+                .ok_or(ScaffoldContractError::LobeRangeCoverage)?;
+            if region.len == 0 || region.start != cursor || end > neuron_count {
                 return Err(ScaffoldContractError::LobeRangeCoverage);
             }
-            cursor = region.end();
+            cursor = end;
         }
         if cursor != neuron_count {
             return Err(ScaffoldContractError::LobeRangeCoverage);
@@ -470,42 +422,9 @@ impl LobeLayout {
 
         Ok(())
     }
-
-    fn build(
-        neuron_count: u32,
-        disabled: Option<LobeKind>,
-        mode: LayoutMode,
-    ) -> Result<Self, ScaffoldContractError> {
-        if neuron_count < 512 {
-            return Err(ScaffoldContractError::BrainClassTooSmall);
-        }
-        if !neuron_count.is_multiple_of(16) {
-            return Err(ScaffoldContractError::LobeAlignment);
-        }
-
-        if disabled.is_some() || mode != LayoutMode::Reference {
-            return Err(ScaffoldContractError::PhenotypeCompile);
-        }
-        let layout = Self::reference_layout(neuron_count)?;
-        layout.validate_for_neuron_count(neuron_count)?;
-        Ok(layout)
-    }
-
-    fn reference_layout(neuron_count: u32) -> Result<Self, ScaffoldContractError> {
-        let lengths = founder_floor_share_lengths(neuron_count)?;
-        let regions = build_regions_from_lengths(neuron_count, &lengths);
-        let layout = Self { regions };
-        layout.validate_for_neuron_count(neuron_count)?;
-        Ok(layout)
-    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LayoutMode {
-    Reference,
-}
-
-fn build_regions_from_lengths(_neuron_count: u32, lengths: &[u32; 9]) -> Vec<LobeRegion> {
+fn build_regions_from_lengths(lengths: &[u32; 9]) -> Vec<LobeRegion> {
     let mut regions = Vec::with_capacity(LobeKind::ALL.len());
     let mut start = 0;
     for (kind, len) in LobeKind::CORE.into_iter().zip(lengths.iter().copied()) {
@@ -531,11 +450,11 @@ fn founder_floor_share_lengths(neuron_count: u32) -> Result<[u32; 9], ScaffoldCo
     let mut assigned_blocks = 0_u32;
     let mut remainders = [(0_u32, 0_usize); 9];
     for index in 0..9 {
-        let weighted = remainder_blocks * SHARES[index];
-        let blocks = weighted / 100;
+        let weighted = u64::from(remainder_blocks) * u64::from(SHARES[index]);
+        let blocks = (weighted / 100) as u32;
         lengths[index] += blocks * 16;
         assigned_blocks += blocks;
-        remainders[index] = (weighted % 100, index);
+        remainders[index] = ((weighted % 100) as u32, index);
     }
     remainders.sort_by(|left, right| right.cmp(left));
     for (_, index) in remainders

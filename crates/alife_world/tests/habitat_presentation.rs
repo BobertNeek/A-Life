@@ -1,17 +1,12 @@
 use alife_core::{
-    ActionCommand, ActionKind, ActionTarget, BrainScaleTier, Confidence, DurationTicks,
-    FoundationId, GenomeId, HomeostaticSnapshot, Intensity, LanguageTokenId, OrganismId,
-    SpeechActKind, SpeechMotorPayload, Tick, UtteranceId, Vec3f,
+    ActionCommand, ActionKind, ActionTarget, Confidence, DurationTicks, FoundationId, Intensity,
+    LanguageTokenId, OrganismId, SpeechActKind, SpeechMotorPayload, Tick, UtteranceId, Vec3f,
 };
 use alife_world::{
-    persistence::{
-        AssetManifest, CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary,
-        PortableSaveFile, RuntimeConfig, WeightLayerSaveSummary,
-    },
     AssistanceProvenance, FoundationProvenance, Habitat, HabitatActor, HabitatAuthority,
     HabitatAuthorityKind, HabitatId, HabitatMode, HabitatTransferProvenance,
-    HabitatTransferRequest, HeadlessScenarioBuilder, HeadlessWorld, PossessionProvenance,
-    PresentationEvidence, QuarantineProvenance, SelectionExposureProvenance,
+    HabitatTransferRequest, HeadlessScenarioBuilder, PossessionProvenance, PresentationEvidence,
+    QuarantineProvenance, SelectionExposureProvenance,
 };
 
 fn organism(raw: u64) -> OrganismId {
@@ -58,52 +53,6 @@ fn managed_transfer(organism_id: OrganismId, tick: Tick) -> HabitatTransferReque
             selection_exposure: Some(SelectionExposureProvenance::Unexposed),
         },
     }
-}
-
-fn current_save(world: &HeadlessWorld, organism_id: OrganismId) -> PortableSaveFile {
-    let tick = world.tick();
-    PortableSaveFile::from_headless_world(
-        "habitat-presentation-current-save",
-        world,
-        RuntimeConfig::deterministic_default(world.seed(), BrainScaleTier::Nano512),
-        AssetManifest::empty(),
-        vec![CreatureSaveState {
-            organism_id,
-            genome_id: GenomeId(17),
-            brain_class: BrainScaleTier::Nano512,
-            development_tick: tick,
-            appearance: alife_world::CreatureAppearanceGenome::default(),
-            mind: CreatureMindSaveSummary {
-                tick,
-                homeostasis: HomeostaticSnapshot::baseline(tick),
-                memory_record_count: 2,
-                memory_source_ids: Vec::new(),
-                concept_count: 1,
-                edge_count: 0,
-                simplex_count: 0,
-                unresolved_gap_count: 0,
-                sleep_state_label: "awake".to_string(),
-                diagnostics: vec!["habitat-presentation-fixture".to_string()],
-            },
-            weights: WeightLayerSaveSummary {
-                generated_weight_asset_id: None,
-                genetic_fixed_digest: "fnv1a64:0000000000000001".to_string(),
-                genetic_layer_mutable: false,
-                lifetime_consolidated_entries: 3,
-                h_operational_entries: 1,
-                h_shadow_entries: 1,
-            },
-            learning: LearningTraceSaveSummary {
-                lifetime_learning_enabled: true,
-                lamarckian_mode_enabled: false,
-                last_consolidated_tick: Some(tick),
-            },
-            composite_genetics: None,
-            lifetime_state_asset: None,
-            gpu_brain: None,
-        }],
-    )
-    .unwrap()
 }
 
 #[test]
@@ -229,18 +178,4 @@ fn projection_is_read_only_and_habitat_operations_leave_authoritative_snapshots_
     let baseline_action = unchanged.apply_command(&command).unwrap();
     let operated_action = operated.apply_command(&command).unwrap();
     assert_eq!(operated_action, baseline_action);
-
-    let mut saved = current_save(&operated, creature);
-    let neural_weight_summary_before = saved.creatures[0].weights.clone();
-    let mind_before = saved.creatures[0].mind.clone();
-    let semantic_config_before = saved.config.semantic.clone();
-    let mut saved_authority = authority_for(&[creature]);
-    saved_authority
-        .transfer(managed_transfer(creature, saved.world.tick))
-        .unwrap();
-    saved.world.habitats = saved_authority;
-
-    assert_eq!(saved.creatures[0].weights, neural_weight_summary_before);
-    assert_eq!(saved.creatures[0].mind, mind_before);
-    assert_eq!(saved.config.semantic, semantic_config_before);
 }

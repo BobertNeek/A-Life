@@ -1,4 +1,4 @@
-//! v0 scaffold: optional deterministic fake semantic provider for tests/headless use.
+//! Deterministic semantic contexts for tests and headless use.
 
 use alife_core::ScaffoldContractError;
 
