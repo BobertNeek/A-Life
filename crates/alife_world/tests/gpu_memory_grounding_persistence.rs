@@ -8,7 +8,7 @@ use alife_world::{
         GpuBrainAssetRef, MemorySidecarSaveState, PortableAssetDigest, TopologySidecarSaveSummary,
     },
     PhysicalTrackingProvenance, StablePhysicalDescriptor, TrackedObjectRegistry,
-    TrackedObjectRegistrySaveState, TRACKED_OBJECT_REGISTRY_SAVE_SCHEMA_VERSION,
+    TRACKED_OBJECT_REGISTRY_SAVE_SCHEMA_VERSION,
 };
 
 fn profile(profile: SensorProfile) -> SensorProfileIdentity {

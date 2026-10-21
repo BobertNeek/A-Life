@@ -1,7 +1,5 @@
 //! Developer asset, diagnostic and evidence tools.
 
-mod atomic_write;
-
 pub mod benchmark;
 pub mod creature_part_builder;
 pub mod ei0_exit_gate;

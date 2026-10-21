@@ -309,6 +309,7 @@ fn compact_raw_json(raw: &str) -> Vec<u8> {
     compact
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ei0GpuBatteryReceipt {
     pub organism_id: OrganismId,
     pub source_creature_genome_id: GenomeId,

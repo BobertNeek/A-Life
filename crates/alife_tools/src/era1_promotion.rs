@@ -2,7 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs::{self, File},
+    fs::File,
     io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
     process::Command,
@@ -15,6 +15,7 @@ use alife_core::{
 };
 use alife_gpu_backend::closed_loop_shader_bundle_digest;
 use alife_training::Era1TrialRunEvidence;
+use alife_world::Era1WorldFamily;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
