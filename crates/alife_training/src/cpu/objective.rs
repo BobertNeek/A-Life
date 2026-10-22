@@ -30,12 +30,12 @@ fn categorical(logits: &[f32], mask: u32, temperature: f32) -> Result<Distributi
         .iter()
         .enumerate()
         .filter(|(i, _)| mask & (1u32 << i) != 0)
-        .map(|(_, v)| v / temperature)
+        .map(|(_, v)| *v)
         .fold(f32::NEG_INFINITY, f32::max);
     let mut z = 0.;
     for (i, v) in logits.iter().enumerate() {
         if mask & (1u32 << i) != 0 {
-            d.p[i] = (v / temperature - max).exp();
+            d.p[i] = ((v - max) / temperature).exp();
             z += d.p[i];
         }
     }
@@ -44,7 +44,7 @@ fn categorical(logits: &[f32], mask: u32, temperature: f32) -> Result<Distributi
     }
     for (i, v) in logits.iter().enumerate() {
         if mask & (1u32 << i) != 0 {
-            d.lp[i] = v / temperature - max - z.ln();
+            d.lp[i] = (v - max) / temperature - z.ln();
             d.p[i] /= z;
             if d.p[i] > 0. {
                 d.entropy -= d.p[i] * d.lp[i];
@@ -564,4 +564,24 @@ where
         receipt.completed_epochs += 1;
     }
     Ok(receipt)
+}
+
+#[cfg(test)]
+mod distribution_tests {
+    use super::*;
+    #[test]
+    fn categorical_preserves_common_logit_shifts_at_nonunit_temperature() {
+        let small = categorical(&[0., 0.125, 0.25], 7, 0.7).unwrap();
+        let shifted = categorical(&[1_000_000., 1_000_000.125, 1_000_000.25], 7, 0.7).unwrap();
+        for i in 0..3 {
+            assert!((small.p[i] - shifted.p[i]).abs() < 1e-6);
+            assert!((small.lp[i] - shifted.lp[i]).abs() < 1e-6);
+        }
+    }
+    #[test]
+    fn equal_finite_logits_do_not_overflow_when_temperature_scaled() {
+        let d = categorical(&[f32::MAX, f32::MAX], 3, 0.5).unwrap();
+        assert_eq!(&d.p[..2], &[0.5, 0.5]);
+        assert!(d.entropy.is_finite());
+    }
 }
