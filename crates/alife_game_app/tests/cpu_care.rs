@@ -188,13 +188,27 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
         if lesson == "eat_held_food" {
             let compact = fixture.0.join("compact-equivalent");
             success(&[
-                "--fixture", "--output", text(&compact), "--seed", &seed,
-                "--lesson", lesson, "--decisions", "2",
+                "--fixture",
+                "--output",
+                text(&compact),
+                "--seed",
+                &seed,
+                "--lesson",
+                lesson,
+                "--decisions",
+                "2",
             ]);
             assert!(!compact.join("care-replay.json").exists());
-            for name in ["trained.alife-foundation", "actor-checkpoint.json", "value-checkpoint.json"] {
-                assert_eq!(fs::read(output.join(name)).unwrap(), fs::read(compact.join(name)).unwrap(),
-                           "diagnostic recording changed learned state: {name}");
+            for name in [
+                "trained.alife-foundation",
+                "actor-checkpoint.json",
+                "value-checkpoint.json",
+            ] {
+                assert_eq!(
+                    fs::read(output.join(name)).unwrap(),
+                    fs::read(compact.join(name)).unwrap(),
+                    "diagnostic recording changed learned state: {name}"
+                );
             }
             eprintln!("Optional diagnostic replay omitted {} bytes; learned checkpoints are byte-identical",
                       fs::metadata(output.join("care-replay.json")).unwrap().len());
