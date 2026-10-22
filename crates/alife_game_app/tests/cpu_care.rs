@@ -245,7 +245,7 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
         "--seed",
         "891099",
         "--lesson",
-        "obstacle_navigation",
+        "maze_navigation",
         "--decisions",
         "2",
     ]);
