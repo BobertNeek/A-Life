@@ -1,5 +1,6 @@
 import copy
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -100,6 +101,34 @@ class CpuScheduleTests(unittest.TestCase):
         self.assertEqual(dispatched[1][1], self.lane / 'episode-00000')
         self.calls.clear()
         self.assertEqual(self.execute(), result)
+        self.assertFalse(any(c[0] == '--previous' for c in self.calls))
+
+    def test_recent_policy_resumes_without_retired_payloads_or_initial_source(self):
+        self.plan['retention'] = {'mode': 'recent-checkpoints', 'keep': 2}
+        self.plan['schedule']['steps'][0]['episodes'] = 4
+        result = self.execute()
+        for name in ('episode-00000', 'episode-00001'):
+            shutil.rmtree(self.lane / name)
+        shutil.rmtree(self.source)
+        self.calls.clear()
+        self.assertEqual(self.execute(), result)
+        self.assertFalse(any(c[0] == '--previous' for c in self.calls))
+        checked = [Path(c[1]).name for c in self.calls if c[0] == '--validate-output']
+        self.assertEqual(checked, ['episode-00002', 'episode-00003'])
+        # Old seed and source links remain checked even without old payloads.
+        ledger = cpu.read(self.lane / cpu.LEDGER)
+        ledger['cpu_care_attempts'][1]['source_sha256']['actor-checkpoint.json'] = '0' * 64
+        self.write(self.lane / cpu.LEDGER, ledger)
+        with self.assertRaises(ValueError):
+            self.execute()
+
+    def test_recent_policy_rejects_missing_latest_state_and_keeps_failed_seeds(self):
+        self.plan['retention'] = {'mode': 'recent-checkpoints', 'keep': 2}
+        self.execute()
+        (self.lane / 'episode-00001' / 'actor-checkpoint.json').unlink()
+        self.calls.clear()
+        with self.assertRaises(FileNotFoundError):
+            self.execute()
         self.assertFalse(any(c[0] == '--previous' for c in self.calls))
 
     def test_pending_attempt_is_reconciled_without_seed_retry_or_slot_advance(self):
