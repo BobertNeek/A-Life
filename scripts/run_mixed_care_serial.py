@@ -262,8 +262,9 @@ def reconcile_prior_runs(doc, runs, *, check_payloads=True):
                 "prior run source lineage collision")
         if check_payloads:
             unchanged(Path(plan["source"]), plan["source_sha256"])
-        old = source_receipt(plan)
-        rows = schedule_rows(plan["schedule"])
+        else:
+            old = source_receipt(plan)
+            rows = schedule_rows(plan["schedule"])
         previous = run["plan"]["source"]
         hashes = plan["source_sha256"]
         for index, attempt in enumerate(run["attempts"]):
@@ -274,18 +275,19 @@ def reconcile_prior_runs(doc, runs, *, check_payloads=True):
             if attempt["status"] == "abandoned":
                 require(not (directory / "cycle.json").exists(), "abandoned attempt later acquired a seal; reconcile manually")
             else:
-                expected = accepted_hashes(attempt)
-                require(attempt["sha256"]["initial.alife-foundation"] == hashes["trained.alife-foundation"],
-                        "prior accepted source link changed")
-                receipt = attempt["receipt"]
-                validate_receipt(receipt, old, rows[attempt["slot"]], attempt["seed"])
                 if check_payloads:
-                    require(file_hashes(directory) == expected and
-                            host.sha256(directory / "initial.alife-foundation") == attempt["sha256"]["initial.alife-foundation"],
-                            "prior accepted receipt/checkpoint changed")
+                    hashes = file_hashes(directory)
+                    require({**hashes, "initial.alife-foundation": host.sha256(directory / "initial.alife-foundation")} ==
+                            attempt["sha256"], "prior accepted receipt/checkpoint changed")
                     actual, _ = inspector_io.load_json(directory / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
-                    require(actual == receipt, "prior accepted dose changed")
-                hashes, old = expected, receipt
+                    require(actual == attempt["receipt"], "prior accepted dose changed")
+                else:
+                    expected = accepted_hashes(attempt)
+                    require(attempt["sha256"]["initial.alife-foundation"] == hashes["trained.alife-foundation"],
+                            "prior accepted source link changed")
+                    receipt = attempt["receipt"]
+                    validate_receipt(receipt, old, rows[attempt["slot"]], attempt["seed"])
+                    hashes, old = expected, receipt
                 previous = str(directory)
         latest = previous
 
