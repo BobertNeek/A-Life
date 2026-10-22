@@ -2,7 +2,7 @@
 """Describe payloads eligible for retirement; never deletes or changes a lane.
 
 The updated scheduler must successfully resume/validate its saved recent-checkpoint
-plan before applying a report. Preserve the plan's starting source, all receipts,
+plan before applying a report. Preserve the plan's starting source, canonical cycle and seed-admission receipts,
 seed/history metadata, and separately owned original creature archives.
 """
 import argparse
@@ -32,7 +32,8 @@ def report(lane):
         files = []
         for path in directory.rglob('*'):
             cpu.require(not path.is_symlink(), 'unexpected symlink in retirement candidate')
-            if path.is_file() and path.name != 'cpu-cycle.json':
+            # Seed-admission evidence carries provenance not replaced by raw replay.
+            if path.is_file() and path.name not in ('cpu-cycle.json', 'care-seed-admission.json'):
                 files.append({'path': str(path), 'logical_bytes': path.stat().st_size})
         candidates.append({'episode': str(directory), 'files': files,
                            'logical_bytes': sum(f['logical_bytes'] for f in files)})

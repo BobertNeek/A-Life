@@ -152,6 +152,29 @@ class CpuScheduleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.execute()
 
+    def test_retirement_report_preserves_seed_provenance_and_recent_checkpoints(self):
+        import cpu_retention_report
+        self.plan['retention'] = {'mode': 'recent-checkpoints', 'keep': 2}
+        self.write(self.lane / cpu.PLAN, self.plan)
+        attempts = []
+        for index in range(3):
+            directory = self.lane / f'episode-{index}'
+            directory.mkdir()
+            self.write(directory / 'cpu-cycle.json', {'policy_version': index})
+            self.write(directory / 'care-seed-admission.json', {'historical_freshness': 'unknown'})
+            (directory / 'care-replay.json').write_bytes(b'diagnostic replay')
+            attempts.append({'status': 'accepted', 'output': str(directory)})
+        self.write(self.lane / cpu.LEDGER, {'cpu_care_attempts': attempts})
+        before = {str(p): p.read_bytes() for p in self.lane.rglob('*') if p.is_file()}
+        result = cpu_retention_report.report(self.lane)
+        candidates = result['retirement_candidates']
+        self.assertEqual(len(candidates), 1)
+        self.assertEqual([Path(f['path']).name for f in candidates[0]['files']], ['care-replay.json'])
+        self.assertEqual(result['retained_checkpoints'], [a['output'] for a in attempts[-2:]])
+        self.assertEqual(result['candidate_logical_bytes'], len(b'diagnostic replay'))
+        self.assertFalse(result['physical_savings_measured'])
+        self.assertEqual(before, {str(p): p.read_bytes() for p in self.lane.rglob('*') if p.is_file()})
+
     def test_unsupported_curriculum_and_inconsistent_dose_rejected(self):
         for lesson, decisions in [('obstacle_navigation', 2), ('feeding', 0), ('eat_held_food', 129)]:
             plan = copy.deepcopy(self.plan)
