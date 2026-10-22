@@ -618,3 +618,83 @@ fn cpu_blocked_route_closes_the_real_gate_without_claiming_meal_success() {
     }
     assert!(!output.join("care-replay.json").exists());
 }
+
+#[test]
+fn cpu_relocated_food_changes_position_once_and_excludes_bootstrap_credit() {
+    let fixture = Fixture::new();
+    let lane = fixture.0.join("lane");
+    fs::create_dir(&lane).unwrap();
+    let source = fixture.0.join("relocated-2");
+    for decisions in [2, 4] {
+        let output = if decisions == 2 {
+            source.clone()
+        } else {
+            lane.join("relocated-4")
+        };
+        let receipt = if decisions == 2 {
+            success(&[
+                "--fixture",
+                "--output",
+                text(&output),
+                "--seed",
+                "894301",
+                "--lesson",
+                "relocated_food",
+                "--decisions",
+                "2",
+            ])
+        } else {
+            let before = snapshot(&source);
+            let history_path = fixture.0.join("history.json");
+            history(&history_path, &source, &lane, &[894301]);
+            let receipt = success(&[
+                "--previous",
+                text(&source),
+                "--output",
+                text(&output),
+                "--seed-history",
+                text(&history_path),
+                "--seed",
+                "894302",
+                "--lesson",
+                "relocated_food",
+                "--decisions",
+                "4",
+            ]);
+            assert_eq!(snapshot(&source), before);
+            assert_eq!(
+                load(output.join("collection-actor-checkpoint.json")),
+                load(source.join("actor-checkpoint.json"))
+            );
+            assert_eq!(
+                load(output.join("initial-value-checkpoint.json")),
+                load(source.join("value-checkpoint.json"))
+            );
+            receipt
+        };
+        success(&["--validate-output", text(&output)]);
+        assert_eq!(receipt["episode"]["lesson"], "relocated_food");
+        assert_eq!(receipt["episode"]["food_relocation_row"], 2);
+        assert_eq!(receipt["training_ticks"], decisions);
+        assert_eq!(receipt["captured_replay_rows"], decisions + 1);
+        let trace = load(output.join("care-trace.json"));
+        let rows = trace["rows"].as_array().unwrap();
+        assert_eq!(rows[0]["food_relocated"], false);
+        assert_eq!(rows[1]["food_relocated"], false);
+        assert_eq!(rows[2]["food_relocated"], true);
+        assert_ne!(rows[0]["food_position"], rows[2]["food_position"]);
+        assert_eq!(
+            rows[2]["food_position"],
+            receipt["episode"]["food_relocation_target"]
+        );
+        let completed = rows
+            .iter()
+            .take(decisions)
+            .skip(2)
+            .any(|row| row["nourished_meal"] == true);
+        assert_eq!(receipt["episode"]["lesson_completed"], completed);
+        if decisions == 2 {
+            assert_eq!(receipt["episode"]["lesson_completed"], false);
+        }
+    }
+}

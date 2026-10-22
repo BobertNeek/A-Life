@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = arguments.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation --decisions 1..128 [--temperature 1] [--known-exclusions] [--record-diagnostic-replay]\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
+                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--known-exclusions] [--record-diagnostic-replay]\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
                 return Ok(());
             }
             "--fixture" => {
@@ -62,6 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("eat_reachable_food") => FoundationTeacherLesson::EatReachableFood,
         Some("feeding") => FoundationTeacherLesson::Feeding,
         Some("obstacle_navigation") => FoundationTeacherLesson::ObstacleNavigation,
+        Some("relocated_food") => FoundationTeacherLesson::RelocatedFood,
         _ => return Err("an explicit supported care lesson is required".into()),
     };
     let request = CpuCareRequest {
