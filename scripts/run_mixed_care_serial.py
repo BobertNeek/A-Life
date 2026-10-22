@@ -18,6 +18,7 @@ import sys
 import grab_food_seed_reservations as seeds
 import run_eat_held_food_night as host
 import summarize_ppo_diagnostics as inspector_io
+import training_artifact_store as artifacts
 
 LESSONS = ("eat_held_food", "eat_reachable_food", "feeding")
 LEDGER = host.MIXED_LEDGER_NAME
@@ -440,6 +441,7 @@ def execute(plan, *, resume=False, cutoff=None):
                 else:
                     attempt.update(status="accepted", receipt=receipt, sha256=hashes)
                     seeds.write_document(ledger_path, ledger)
+                artifacts.reuse_sealed_files(directory, hashes, lane / ".training-artifacts")
                 previous = directory
                 slot += 1
             else:
@@ -478,6 +480,7 @@ def execute(plan, *, resume=False, cutoff=None):
             attempt.update(status="accepted", receipt=receipt, sha256=hashes)
             seeds.write_document(ledger_path, ledger)
             seeds.write_document(output / "schedule.json", summary(run))
+            artifacts.reuse_sealed_files(directory, hashes, lane / ".training-artifacts")
             previous = directory
             slot += 1
         return summary(run)
