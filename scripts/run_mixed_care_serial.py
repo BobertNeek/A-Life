@@ -3,6 +3,8 @@
 
 The shared ledger is authoritative. Summary receipts are derived, never added to
 on restart. A dispatched attempt is never retried with the same seed or output.
+Recent-checkpoint recovery retains the full receipt/seed chain but only needs
+recent full payloads. This scheduler does not delete historical files.
 """
 import argparse
 import datetime as dt
@@ -225,7 +227,31 @@ def object_hash(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
-def reconcile_prior_runs(doc, runs):
+def retained_count(plan):
+    policy = plan.get("retention", {"mode": "all"})
+    require(policy.get("mode") in ("all", "recent-checkpoints"), "unknown retention policy")
+    return None if policy["mode"] == "all" else integer(policy.get("keep"), 2)
+
+
+def source_receipt(plan):
+    if "source_receipt" in plan:
+        require(isinstance(plan["source_receipt"], dict), "invalid saved source receipt")
+        return plan["source_receipt"]
+    path = Path(plan["source"]) / "cycle.json"
+    require(host.sha256(path) == plan["source_sha256"]["cycle.json"], "source receipt changed")
+    return inspector_io.load_json(path, seeds.MAX_DOCUMENT_BYTES)[0]
+
+
+def accepted_hashes(attempt):
+    hashes = attempt["sha256"]
+    required = set(FILES) | {"initial.alife-foundation"}
+    require(required <= set(hashes) <= required | {"terrain-continuation.json", "critic-correction.json"}
+            and all(isinstance(v, str) and len(v) == 64 and all(c in "0123456789abcdef" for c in v)
+                    for v in hashes.values()), "invalid accepted checkpoint hashes")
+    return {k: v for k, v in hashes.items() if k != "initial.alife-foundation"}
+
+
+def reconcile_prior_runs(doc, runs, *, check_payloads=True):
     """Bind the attestation to surviving prior state; grant no acceptance or retries."""
     require(doc["recovery_reconciliation"]["prior_ledger_runs_sha256"] == object_hash(runs),
             "recovery attestation prior ledger runs changed")
@@ -234,7 +260,10 @@ def reconcile_prior_runs(doc, runs):
         plan = run["plan"]
         require(latest is None or (plan["source"] == latest and plan["source_sha256"] == hashes),
                 "prior run source lineage collision")
-        unchanged(Path(plan["source"]), plan["source_sha256"])
+        if check_payloads:
+            unchanged(Path(plan["source"]), plan["source_sha256"])
+        old = source_receipt(plan)
+        rows = schedule_rows(plan["schedule"])
         previous = run["plan"]["source"]
         hashes = plan["source_sha256"]
         for index, attempt in enumerate(run["attempts"]):
@@ -245,11 +274,18 @@ def reconcile_prior_runs(doc, runs):
             if attempt["status"] == "abandoned":
                 require(not (directory / "cycle.json").exists(), "abandoned attempt later acquired a seal; reconcile manually")
             else:
-                hashes = file_hashes(directory)
-                require({**hashes, "initial.alife-foundation": host.sha256(directory / "initial.alife-foundation")} ==
-                        attempt["sha256"], "prior accepted receipt/checkpoint changed")
-                receipt, _ = inspector_io.load_json(directory / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
-                require(receipt == attempt["receipt"], "prior accepted dose changed")
+                expected = accepted_hashes(attempt)
+                require(attempt["sha256"]["initial.alife-foundation"] == hashes["trained.alife-foundation"],
+                        "prior accepted source link changed")
+                receipt = attempt["receipt"]
+                validate_receipt(receipt, old, rows[attempt["slot"]], attempt["seed"])
+                if check_payloads:
+                    require(file_hashes(directory) == expected and
+                            host.sha256(directory / "initial.alife-foundation") == attempt["sha256"]["initial.alife-foundation"],
+                            "prior accepted receipt/checkpoint changed")
+                    actual, _ = inspector_io.load_json(directory / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
+                    require(actual == receipt, "prior accepted dose changed")
+                hashes, old = expected, receipt
                 previous = str(directory)
         latest = previous
 
@@ -267,7 +303,7 @@ def reserve(plan, ledger_path, *, commit=True):
                   "assessment_seeds": [], "runs": []}
     require(all(run["output"] != plan["output"] for run in ledger["runs"]), "output already reserved; use --resume")
     if seed_admission(plan)["policy"] == "known-exclusions":
-        reconcile_prior_runs(doc, ledger["runs"])
+        reconcile_prior_runs(doc, ledger["runs"], check_payloads=retained_count(plan) is None)
     if ledger["runs"]:
         prior = ledger["runs"][-1]
         require(not any(a["status"] == "pending" for a in prior["attempts"]),
@@ -297,17 +333,15 @@ COUNT_FIELDS = ("requested_training_ticks", "captured_replay_rows", "trained_rep
                 "bootstrap_replay_rows", "completed_epochs", "actor_optimizer_updates", "value_optimizer_updates")
 
 
-def validate_cycle(directory, previous, row, seed, inspector, *, on_started=None, guard=None, cutoff=None):
-    options = {"on_started": on_started, "guard": guard, "cutoff": cutoff}
-    receipt, report, hashes = inspect(directory, inspector, **options)
-    old, ages, _ = inspect(previous, inspector, **options)
+def validate_receipt(receipt, old, row, seed):
+    require(receipt.get("biological_objective_version") == 2 and
+            receipt.get("objective_state_reset") is False, "requires objective2 without reset")
     require(receipt.get("seed") == seed and receipt.get("lesson") == row["lesson"] and
             receipt.get("founder_seed_base") == old.get("founder_seed_base") and
             receipt.get("policy_version") == old["policy_version"] + 1 and
             receipt.get("terminal_death_tick") is None and receipt.get("speech_target_rows") == 0,
             "cycle identity, lesson or healthy handoff mismatch")
-    require(host.sha256(previous / "trained.alife-foundation") == host.sha256(directory / "initial.alife-foundation")
-            and receipt.get("old_asset_digest") == old.get("new_asset_digest"), "wrong sealed predecessor")
+    require(receipt.get("old_asset_digest") == old.get("new_asset_digest"), "wrong sealed predecessor")
     for field in COUNT_FIELDS:
         integer(receipt.get(field))
     require(receipt["requested_training_ticks"] == row["decisions"] and
@@ -315,9 +349,7 @@ def validate_cycle(directory, previous, row, seed, inspector, *, on_started=None
             receipt["bootstrap_replay_rows"] == 1 and
             receipt["captured_replay_rows"] == row["decisions"] + 1, "decision/bootstrap counts disagree")
     for head in ("actor", "value"):
-        updates = integer(receipt[f"{head}_optimizer_updates"], 1)
-        require(report[f"{head}_optimizer_step"] - ages[f"{head}_optimizer_step"] == updates,
-                "optimizer age lost across lesson boundary")
+        integer(receipt[f"{head}_optimizer_updates"], 1)
     require(receipt["completed_epochs"] > 0, "cycle has no completed optimizer epochs")
     held = integer(receipt.get("prepared_held_food_opportunities"), 0, 1)
     reachable = integer(receipt.get("prepared_reachable_food_opportunities"), 0, 1)
@@ -337,7 +369,20 @@ def validate_cycle(directory, previous, row, seed, inspector, *, on_started=None
     trained = integer(receipt.get("trained_held_food_consumption_events"))
     require(trained <= captured <= held + reachable, "exact nourishing meal counts disagree")
     integer(receipt.get("consumed_events"), 0, receipt["captured_replay_rows"])
+
+
+def validate_cycle(directory, previous, row, seed, inspector, *, on_started=None, guard=None, cutoff=None):
+    options = {"on_started": on_started, "guard": guard, "cutoff": cutoff}
+    receipt, report, hashes = inspect(directory, inspector, **options)
+    old, ages, previous_hashes = inspect(previous, inspector, **options)
+    validate_receipt(receipt, old, row, seed)
     hashes["initial.alife-foundation"] = host.sha256(directory / "initial.alife-foundation")
+    require(previous_hashes["trained.alife-foundation"] == hashes["initial.alife-foundation"],
+            "wrong sealed predecessor")
+    for head in ("actor", "value"):
+        updates = integer(receipt[f"{head}_optimizer_updates"], 1)
+        require(report[f"{head}_optimizer_step"] - ages[f"{head}_optimizer_step"] == updates,
+                "optimizer age lost across lesson boundary")
     return receipt, hashes
 
 
@@ -402,7 +447,7 @@ def execute(plan, *, resume=False, cutoff=None):
                                    admission=seed_admission(plan))
         require(digest == plan["history_sha256"], "history changed on resume")
         if seed_admission(plan)["policy"] == "known-exclusions":
-            reconcile_prior_runs(doc, ledger["runs"][:-1])
+            reconcile_prior_runs(doc, ledger["runs"][:-1], check_payloads=retained_count(plan) is None)
 
         def guard():
             require(not (output / "STOP").exists(), "owner STOP requested interruption")
@@ -418,9 +463,17 @@ def execute(plan, *, resume=False, cutoff=None):
         # Rebuild the chain and validate surviving accepted seals before dispatch.
         inspection_options = {"on_started": active.append, "guard": guard, "cutoff": cutoff}
         previous = Path(plan["source"])
-        unchanged(previous, plan["source_sha256"])
-        guard()
-        inspect(previous, Path(plan["inspector"]), **inspection_options)
+        keep = retained_count(plan)
+        accepted = [a for a in run["attempts"] if a["status"] == "accepted"]
+        retained = {a["directory"] for a in accepted[-keep:]} if keep is not None else set()
+        previous_hashes = plan["source_sha256"]
+        previous_report = None
+        old = source_receipt(plan)
+        if keep is None or not accepted:
+            unchanged(previous, previous_hashes)
+            guard()
+            actual, previous_report, _ = inspect(previous, Path(plan["inspector"]), **inspection_options)
+            require(actual == old, "saved source receipt changed")
         slot = 0
         for index, attempt in enumerate(run["attempts"]):
             directory = output / f"attempt-{index:05d}"
@@ -428,6 +481,25 @@ def execute(plan, *, resume=False, cutoff=None):
                     and slot < len(rows), "attempt lineage collision")
             if attempt["status"] == "abandoned":
                 require(not (directory / "cycle.json").exists(), "abandoned attempt later acquired a seal; reconcile manually")
+                continue
+            if attempt["status"] == "accepted" and keep is not None:
+                expected = accepted_hashes(attempt)
+                receipt = attempt["receipt"]
+                validate_receipt(receipt, old, rows[slot], attempt["seed"])
+                require(attempt["sha256"]["initial.alife-foundation"] == previous_hashes["trained.alife-foundation"],
+                        "accepted predecessor hash changed")
+                report = None
+                if str(directory) in retained:
+                    actual, report, hashes = inspect(directory, Path(plan["inspector"]), **inspection_options)
+                    hashes["initial.alife-foundation"] = host.sha256(directory / "initial.alife-foundation")
+                    require(actual == receipt and hashes == attempt["sha256"], "accepted dose or checkpoint changed")
+                    if previous_report is not None:
+                        for head in ("actor", "value"):
+                            require(report[f"{head}_optimizer_step"] - previous_report[f"{head}_optimizer_step"] ==
+                                    receipt[f"{head}_optimizer_updates"], "optimizer age lost across retained checkpoints")
+                previous_hashes, old, previous_report = expected, receipt, report
+                previous = directory
+                slot += 1
                 continue
             if attempt["status"] == "accepted":
                 for name, digest in attempt["sha256"].items():
@@ -505,6 +577,7 @@ def arguments():
     parser.add_argument("--min-disk-gib", type=float, default=8)
     parser.add_argument("--min-memory-gib", type=float, default=2)
     parser.add_argument("--idle-seconds", type=int, default=30)
+    parser.add_argument("--keep-checkpoints", type=int, help="new plans validate this many recent full recovery checkpoints")
     parser.add_argument("--run", action="store_true")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--start", action="store_true", help="reserve and execute a saved host-only plan; requires --run")
@@ -520,7 +593,7 @@ def main(argv=None):
         if args.resume or args.start:
             require(args.run, "--start/--resume requires --run")
             require(all(getattr(args, name) is None for name in
-                        ("binary", "checkpoint_inspector", "source", "schedule", "seed_history", "seed", "seed_count", "seed_admission")),
+                        ("binary", "checkpoint_inspector", "source", "schedule", "seed_history", "seed", "seed_count", "seed_admission", "keep_checkpoints")),
                     "saved execution uses the immutable plan; do not supply a new configuration")
             plan, _ = load(output / "plan.json")
             require(plan.get("kind") == "mixed-care-plan" and plan.get("output") == str(output), "saved plan/output collision")
@@ -543,6 +616,7 @@ def main(argv=None):
             integer(args.idle_seconds, 0, 3600)
             require(all(math.isfinite(value) and value > 0 for value in (args.min_disk_gib, args.min_memory_gib)), "invalid resource limits")
             require(dt.datetime.now(host.UTC) < args.cutoff <= dt.datetime.now(host.UTC) + dt.timedelta(hours=24), "cutoff must be within 24 hours")
+            keep = integer(3 if args.keep_checkpoints is None else args.keep_checkpoints, 2)
             hashes = file_hashes(source)
             receipt, _ = inspector_io.load_json(source / "cycle.json", seeds.MAX_DOCUMENT_BYTES)
             history_path = args.seed_history.resolve(strict=True)
@@ -550,7 +624,8 @@ def main(argv=None):
             admission = {"policy": policy, "historical_freshness": FRESHNESS[policy]}
             _, digest, _, _ = history(history_path, hashes, receipt.get("seed"), output.parent, admission=admission)
             plan = {"schema": 1, "kind": "mixed-care-plan", "output": str(output), "source": str(source),
-                    "source_sha256": hashes, "source_seed": receipt["seed"], "binary": str(binary), "inspector": str(inspector),
+                    "source_sha256": hashes, "source_receipt": receipt,
+                    "retention": {"mode": "recent-checkpoints", "keep": keep}, "source_seed": receipt["seed"], "binary": str(binary), "inspector": str(inspector),
                     "binary_sha256": {str(path): host.sha256(path) for path in (binary, inspector)},
                     "history": str(history_path), "history_sha256": digest, "seed_admission": admission, "schedule": schedule,
                     "seed_range": [first, first + count - 1], "cutoff": args.cutoff.isoformat(),
