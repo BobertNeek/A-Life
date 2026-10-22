@@ -21,6 +21,15 @@ struct Distribution {
     lp: [f32; 32],
     entropy: f32,
 }
+fn shifted_logit(value: f32, maximum: f32, temperature: f32) -> f32 {
+    // Opposite signs cannot suffer cancellation. Scale first above temperature one so
+    // their difference does not overflow before a representable division.
+    if temperature > 1. && value < 0. && maximum > 0. {
+        value / temperature - maximum / temperature
+    } else {
+        (value - maximum) / temperature
+    }
+}
 fn categorical(logits: &[f32], mask: u32, temperature: f32) -> Result<Distribution, TrainingError> {
     let mut d = Distribution::default();
     if mask == 0 {
@@ -35,7 +44,7 @@ fn categorical(logits: &[f32], mask: u32, temperature: f32) -> Result<Distributi
     let mut z = 0.;
     for (i, v) in logits.iter().enumerate() {
         if mask & (1u32 << i) != 0 {
-            d.p[i] = ((v - max) / temperature).exp();
+            d.p[i] = shifted_logit(*v, max, temperature).exp();
             z += d.p[i];
         }
     }
@@ -44,7 +53,7 @@ fn categorical(logits: &[f32], mask: u32, temperature: f32) -> Result<Distributi
     }
     for (i, v) in logits.iter().enumerate() {
         if mask & (1u32 << i) != 0 {
-            d.lp[i] = (v - max) / temperature - z.ln();
+            d.lp[i] = shifted_logit(*v, max, temperature) - z.ln();
             d.p[i] /= z;
             if d.p[i] > 0. {
                 d.entropy -= d.p[i] * d.lp[i];
@@ -583,5 +592,14 @@ mod distribution_tests {
         let d = categorical(&[f32::MAX, f32::MAX], 3, 0.5).unwrap();
         assert_eq!(&d.p[..2], &[0.5, 0.5]);
         assert!(d.entropy.is_finite());
+    }
+    #[test]
+    fn opposite_finite_extremes_remain_finite_at_larger_temperatures() {
+        let d = categorical(&[-f32::MAX, f32::MAX], 3, 2.).unwrap();
+        assert_eq!(d.lp[0], -f32::MAX);
+        assert_eq!(&d.p[..2], &[0., 1.]);
+        assert_eq!(d.entropy, 0.);
+        let softer = categorical(&[-f32::MAX, f32::MAX], 3, 4.).unwrap();
+        assert_eq!(softer.lp[0], -f32::MAX / 2.);
     }
 }
