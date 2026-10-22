@@ -3,10 +3,10 @@ name: CPU foundation backend
 on:
   push:
     branches: ["main"]
-    paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", ".github/workflows/cpu-foundation-backend.yml"]
+    paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
   pull_request:
     branches: ["main"]
-    paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", ".github/workflows/cpu-foundation-backend.yml"]
+    paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
 
 permissions:
   contents: read
@@ -48,6 +48,8 @@ jobs:
           cargo test --locked -p alife_game_app --features cpu-training --test cpu_care -- --nocapture
           cargo test --locked -p alife_game_app --features cpu-training --lib food_outcome
           python -B -m unittest discover -s scripts -p test_cpu_care_serial.py -v
+          cargo build --locked -p alife_game_app --features cpu-training --bin train_cpu_care
+          python -B scripts/check_cpu_retention_native.py target/debug/train_cpu_care
           cargo clippy --locked -p alife_game_app --features cpu-training --lib --bin train_cpu_care --test cpu_care -- -D warnings
       - name: Strict CPU source review
         run: cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff -- -D warnings
