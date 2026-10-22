@@ -185,6 +185,20 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
                 row.action.validate(1.).unwrap();
             }
         }
+        if lesson == "eat_held_food" {
+            let compact = fixture.0.join("compact-equivalent");
+            success(&[
+                "--fixture", "--output", text(&compact), "--seed", &seed,
+                "--lesson", lesson, "--decisions", "2",
+            ]);
+            assert!(!compact.join("care-replay.json").exists());
+            for name in ["trained.alife-foundation", "actor-checkpoint.json", "value-checkpoint.json"] {
+                assert_eq!(fs::read(output.join(name)).unwrap(), fs::read(compact.join(name)).unwrap(),
+                           "diagnostic recording changed learned state: {name}");
+            }
+            eprintln!("Optional diagnostic replay omitted {} bytes; learned checkpoints are byte-identical",
+                      fs::metadata(output.join("care-replay.json")).unwrap().len());
+        }
         // The old receipt shape still requires its full recording. Do not
         // silently reinterpret a damaged historical output as compact output.
         let mut legacy = receipt.clone();
