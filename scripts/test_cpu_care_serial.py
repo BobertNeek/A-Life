@@ -48,7 +48,9 @@ class CpuScheduleTests(unittest.TestCase):
     def command(self, binary, *args):
         self.calls.append(args)
         if args[0] == '--validate-output':
-            return {'policy_version': 31, 'episode': {'trained_nourished_meals': 0, 'lesson_completed': False}}
+            return {'policy_version': 31, 'episode': {'trained_nourished_meals': 0, 'lesson_completed': False},
+                    'native_output_sha256': cpu.pins(Path(args[1])),
+                    'episode_artifact_sha256': {}, 'source_native_sha256': {}}
         if args[0] == '--reconcile-pending':
             ledger = cpu.read(self.lane / cpu.LEDGER)
             ledger['cpu_care_attempts'][-1]['status'] = 'failed'
@@ -115,6 +117,7 @@ class CpuScheduleTests(unittest.TestCase):
         self.execute()
         self.calls.clear()
         accepted = self.lane / 'episode-00000' / 'actor-checkpoint.json'
+        accepted.chmod(0o600)  # Deliberately override sealed-file protection to test admission.
         accepted.write_text('changed')
         with self.assertRaises(ValueError):
             self.execute()
