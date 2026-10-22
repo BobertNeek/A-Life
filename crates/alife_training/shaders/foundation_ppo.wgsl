@@ -34,14 +34,14 @@ fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
   var maximum = -3.402823466e+38;
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
-    let logit = bitcast<f32>(logits[r(row, 51u) + candidate]) / hf(7u);
+    let logit = bitcast<f32>(logits[r(row, 51u) + candidate]);
     if (!finite(logit)) { return distribution; }
     maximum = max(maximum, logit);
   }
   var normalizer = 0.0;
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
-    let shifted = bitcast<f32>(logits[r(row, 51u) + candidate]) / hf(7u) - maximum;
+    let shifted = (bitcast<f32>(logits[r(row, 51u) + candidate]) - maximum) / hf(7u);
     distribution.probability[candidate] = exp(shifted);
     normalizer += distribution.probability[candidate];
   }
@@ -49,7 +49,7 @@ fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
   let log_partition = log(normalizer);
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
-    let log_probability = bitcast<f32>(logits[r(row, 51u) + candidate]) / hf(7u) - maximum - log_partition;
+    let log_probability = (bitcast<f32>(logits[r(row, 51u) + candidate]) - maximum) / hf(7u) - log_partition;
     let probability = distribution.probability[candidate] / normalizer;
     distribution.probability[candidate] = probability;
     distribution.log_probability[candidate] = log_probability;
