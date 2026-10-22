@@ -164,6 +164,13 @@ class MixedRetentionTests(unittest.TestCase):
                 mixed.execute(self.plan, resume=True)
         self.assertEqual(self.dispatched, [])
 
+    def test_full_payload_reconciliation_keeps_legacy_metadata_contract(self):
+        legacy = copy.deepcopy(self.run)
+        for name in ('schedule', 'source_receipt', 'retention'):
+            del legacy['plan'][name]
+        doc = {'recovery_reconciliation': {'prior_ledger_runs_sha256': mixed.object_hash([legacy])}}
+        mixed.reconcile_prior_runs(doc, [legacy])
+
     def test_prior_reconciliation_uses_bound_metadata_without_payloads(self):
         self.retire_synthetic_payloads()
         doc = {'recovery_reconciliation': {'prior_ledger_runs_sha256': mixed.object_hash([self.run])}}
