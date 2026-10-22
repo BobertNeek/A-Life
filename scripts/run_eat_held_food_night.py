@@ -20,6 +20,8 @@ import subprocess
 import sys
 import time
 
+import training_artifact_store as artifacts
+
 UTC = dt.timezone.utc
 MAX_SEED = 2**64 - 1
 MIXED_LEDGER_NAME = ".mixed-care-seed-reservations.json"
@@ -506,6 +508,9 @@ def run_night(args, state, state_path, input_hashes):
             seconds = time.monotonic() - started
             size = sum(path.stat().st_size for path in directory.rglob("*") if path.is_file())
             samples.append({"seconds": seconds, "bytes": size})
+            artifacts.reuse_sealed_files(directory,
+                                         {Path(name).name: value for name, value in hashes.items()},
+                                         args.output.parent / ".training-artifacts")
             previous = directory
             checkpoint_hashes = {str(args.binary): input_hashes[str(args.binary)], **hashes}
             state["latest_checkpoint"] = str(directory); state["partial_episode"] = None
