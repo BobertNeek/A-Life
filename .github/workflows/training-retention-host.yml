@@ -1,0 +1,21 @@
+name: Training retention host contracts
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/*care*.py', 'scripts/grab_food_seed_reservations.py', 'scripts/run_eat_held_food_night.py', 'scripts/summarize_ppo_diagnostics.py', '.github/workflows/training-retention-host.yml']
+  pull_request:
+    paths: ['scripts/*care*.py', 'scripts/grab_food_seed_reservations.py', 'scripts/run_eat_held_food_night.py', 'scripts/summarize_ppo_diagnostics.py', '.github/workflows/training-retention-host.yml']
+permissions:
+  contents: read
+jobs:
+  scheduler:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -B -m unittest discover -s scripts -p 'test_*care*.py' -v
