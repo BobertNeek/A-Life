@@ -608,6 +608,7 @@ pub enum FoundationTeacherLesson {
     EatHeldFood,
     EatReachableFood,
     GrabFood,
+    RelocatedFood,
 }
 
 /// Legal possession established before learner capture, not a learner action.
@@ -2184,6 +2185,7 @@ fn run_foundation_training_pilot_with_request(
         | FoundationTeacherLesson::Feeding => food_subject.is_some_and(|(organism, target)| {
             care_meal_completed(food_outcome.as_ref(), organism, target)
         }),
+        FoundationTeacherLesson::RelocatedFood => false, // CPU collector owns relocation exposure accounting.
         FoundationTeacherLesson::VisionSearch => food_consumed,
         FoundationTeacherLesson::MazeNavigation => {
             food_consumed
@@ -2742,6 +2744,19 @@ fn move_scenario_object(
     physical.velocity = alife_core::Vec3f::ZERO;
     world.set_grounded_physical_properties(entity, physical)?;
     Ok(())
+}
+
+pub(crate) fn relocate_unheld_foundation_food(
+    world: &mut alife_world::HeadlessWorld,
+    target: alife_core::WorldEntityId,
+    position: alife_core::Vec3f,
+) -> Result<bool> {
+    let food = world.entity(target).ok_or("food missing")?;
+    if food.consumed || food.carried_by.is_some() || world.player_held_object() == Some(target) {
+        return Ok(false);
+    }
+    move_scenario_object(world, target, position)?;
+    Ok(true)
 }
 
 #[derive(Debug, Clone)]
@@ -3454,7 +3469,11 @@ pub(crate) fn configure_foundation_scenario(
                 }
             }
         }
-        Some(FoundationTeacherLesson::Feeding | FoundationTeacherLesson::VisionSearch) => {
+        Some(
+            FoundationTeacherLesson::Feeding
+            | FoundationTeacherLesson::VisionSearch
+            | FoundationTeacherLesson::RelocatedFood,
+        ) => {
             let angle = std::f32::consts::TAU * scenario_random(seed, 0);
             let distance = 2.2 + 1.4 * scenario_random(seed, 1);
             let [x, z] = food_position.unwrap_or([
@@ -3462,6 +3481,18 @@ pub(crate) fn configure_foundation_scenario(
                 origin.z + distance * angle.sin(),
             ]);
             move_scenario_object(world, food, alife_core::Vec3f::new(x, 0.0, z))?;
+            if lesson == Some(FoundationTeacherLesson::RelocatedFood) {
+                // Isolate following the relocated food from hazards and routing.
+                for label in ["obstacle-01", "obstacle-02", "hazard-01", "food-02"] {
+                    if let Some(entity) = world.entity_id(label) {
+                        move_scenario_object(
+                            world,
+                            entity,
+                            alife_core::Vec3f::new(origin.x - 30.0, origin.y, origin.z + 20.0),
+                        )?;
+                    }
+                }
+            }
         }
         Some(FoundationTeacherLesson::HazardAvoidance) => {
             // Once the hazard is out of the sensed danger range, the same
@@ -4722,6 +4753,27 @@ mod held_food_lesson_tests {
         Intensity, JointPhysicalOutcome, MotorChannel, MotorCommandBundle, PhysicalContactKind,
         PostActionOutcome, SignedValence, Vec3f,
     };
+
+    #[test]
+    fn relocation_preserves_player_hold_and_keeps_loose_food_static() {
+        let mut world = alife_world::HeadlessScenarioBuilder::new(42)
+            .food("food", Vec3f::new(2.0, 0.0, 0.0), 0.5)
+            .build()
+            .unwrap();
+        let food = world.entity_id("food").unwrap();
+        let moved = Vec3f::new(0.0, 0.0, 2.0);
+        assert!(relocate_unheld_foundation_food(&mut world, food, moved).unwrap());
+        assert_eq!(world.entity(food).unwrap().position, moved);
+        assert_eq!(
+            world.entity(food).unwrap().grounded_physical.velocity,
+            Vec3f::ZERO
+        );
+        world.begin_player_hold(food).unwrap();
+        let held_position = world.entity(food).unwrap().position;
+        assert!(!relocate_unheld_foundation_food(&mut world, food, Vec3f::ZERO).unwrap());
+        assert_eq!(world.entity(food).unwrap().position, held_position);
+        assert_eq!(world.player_held_object(), Some(food));
+    }
 
     #[test]
     fn play_vocabulary_uses_activation_family_and_preserves_reach_and_replay_identity() {

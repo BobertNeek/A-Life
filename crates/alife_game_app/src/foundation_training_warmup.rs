@@ -75,7 +75,7 @@ fn asset_digest(asset: &FoundationWeightAsset) -> String {
 
 fn lesson_index(lesson: FoundationTeacherLesson) -> usize {
     match lesson {
-        FoundationTeacherLesson::Feeding => 0,
+        FoundationTeacherLesson::Feeding | FoundationTeacherLesson::RelocatedFood => 0,
         FoundationTeacherLesson::HazardAvoidance => 1,
         FoundationTeacherLesson::ObstacleNavigation => 2,
         FoundationTeacherLesson::Recovery => 3,

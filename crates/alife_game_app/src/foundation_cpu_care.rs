@@ -4,8 +4,8 @@ use crate::foundation_training::{
     expose_foundation_teacher_cue,
     food_outcome::{ownership, FoodOutcomeObservation, FoodOwnershipSnapshot},
     grounded_navigation_completed, heard_foundation_teacher_cue, outcome_consumed,
-    teacher_outcome_blocked, teacher_outcome_moved, write_foundation_lesson_prior_readiness,
-    FoundationScenarioSetup,
+    relocate_unheld_foundation_food, teacher_outcome_blocked, teacher_outcome_moved,
+    write_foundation_lesson_prior_readiness, FoundationScenarioSetup,
 };
 use crate::gpu_live_runtime::semantic_prior::RuntimeSemanticPrior;
 use crate::{FoundationFoodOutcome, FoundationTeacherLesson};
@@ -63,6 +63,7 @@ pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
             | FoundationTeacherLesson::EatReachableFood
             | FoundationTeacherLesson::Feeding
             | FoundationTeacherLesson::ObstacleNavigation
+            | FoundationTeacherLesson::RelocatedFood
     ) || !(1..=128).contains(&request.decisions)
         || (!request.fixture && request.seed_history.is_none())
         || request.fixture && (request.known_exclusions || request.seed_history.is_some())
@@ -86,6 +87,8 @@ pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
         traces: Vec::new(),
         meal_rows: Vec::new(),
         navigation_rows: Vec::new(),
+        relocation_row: None,
+        relocation_target: None,
         cue_frames: 0,
         generic_consumed: 0,
         reservation: None,
@@ -109,6 +112,8 @@ struct CareEpisode {
     traces: Vec<Value>,
     meal_rows: Vec<usize>,
     navigation_rows: Vec<(bool, bool, bool)>,
+    relocation_row: Option<usize>,
+    relocation_target: Option<alife_core::Vec3f>,
     cue_frames: usize,
     generic_consumed: usize,
     reservation: Option<admission::CareSeedReservation>,
@@ -165,6 +170,22 @@ impl CpuEpisodeHooks for CareEpisode {
             .first()
             .ok_or("care learner missing")?
             .0;
+        if self.request.lesson == FoundationTeacherLesson::RelocatedFood {
+            let body = world.organism_entity_ids()[0].1;
+            let origin = world.entity(body).ok_or("learner body missing")?.position;
+            let start = world.entity(scenario.food).ok_or("food missing")?.position;
+            // One sideways relocation, not continuous pursuit or an action hint.
+            let side = if self.request.seed & 1 == 0 {
+                1.0
+            } else {
+                -1.0
+            };
+            self.relocation_target = Some(alife_core::Vec3f::new(
+                origin.x - side * (start.z - origin.z),
+                start.y,
+                origin.z + side * (start.x - origin.x),
+            ));
+        }
         self.summary = Some(FoundationFoodOutcome::new(learner, scenario.food));
         self.scenario = Some(scenario);
         Ok(())
@@ -176,6 +197,20 @@ impl CpuEpisodeHooks for CareEpisode {
     ) -> Result<()> {
         let scenario = self.scenario.as_ref().ok_or("care scene is not prepared")?;
         close_foundation_navigation_gate_in_world(host.world_mut(), scenario)?;
+        if self.relocation_row.is_none()
+            && host
+                .world()
+                .tick()
+                .raw()
+                .saturating_sub(scenario.start_tick)
+                >= 2
+        {
+            if let Some(position) = self.relocation_target {
+                if relocate_unheld_foundation_food(host.world_mut(), scenario.food, position)? {
+                    self.relocation_row = Some(self.traces.len());
+                }
+            }
+        }
         expose_foundation_teacher_cue(host.world_mut(), scenario)?;
         if matches!(
             self.request.lesson,
@@ -256,6 +291,13 @@ impl CpuEpisodeHooks for CareEpisode {
                 "action":row.patch.decision().selected_action,"bundle":row.patch.selected_bundle(),
                 "outcome":row.patch.outcome(),"ppo_action":row.action,
                 "nourished_meal":summary.nourished_meal_events>before});
+            if self.request.lesson == FoundationTeacherLesson::RelocatedFood {
+                trace["food_relocated"] = json!(self.relocation_row.is_some());
+                trace["food_position"] = json!(host
+                    .world()
+                    .entity(summary.target)
+                    .map(|food| food.position));
+            }
             if self.request.lesson == FoundationTeacherLesson::ObstacleNavigation {
                 let visible = frame
                     .candidates()
@@ -347,6 +389,13 @@ impl CpuEpisodeHooks for CareEpisode {
                 meal_completed,
                 self.navigation_rows.iter().take(train_rows).copied(),
             )
+        } else if self.request.lesson == FoundationTeacherLesson::RelocatedFood {
+            meal_completed
+                && self.relocation_row.is_some_and(|relocated| {
+                    self.meal_rows
+                        .iter()
+                        .any(|row| *row >= relocated && *row < train_rows)
+                })
         } else {
             meal_completed
         };
@@ -355,6 +404,7 @@ impl CpuEpisodeHooks for CareEpisode {
             "raw_replay_recorded":self.request.record_diagnostic_replay,
             "setup_ticks_are_training_rows":false,"setup_tick":scenario.start_tick,
             "navigation_gate":scenario.closing_gate,
+            "food_relocation_target":self.relocation_target,"food_relocation_row":self.relocation_row,
             "held_food_setup":scenario.held_food_setup,"reachable_food_setup":scenario.reachable_food_setup,
             "teacher_cue_tokens":scenario.teacher_cue_tokens,"teacher_cue_frames":self.cue_frames,
             "food_outcome":summary,"generic_consumed_events":self.generic_consumed,
