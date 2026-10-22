@@ -628,7 +628,73 @@ fn parse_evaluation_options(
     Ok(options)
 }
 
+#[derive(Default, serde::Serialize)]
+struct EatTargetCounts {
+    trained_commands: u64,
+    bootstrap_commands: u64,
+    unclassified_commands: u64,
+}
+
+#[derive(Default)]
+struct EatTargetSummary {
+    targets: std::collections::BTreeMap<Option<u64>, EatTargetCounts>,
+    representative_only_records: usize,
+}
+
+impl EatTargetSummary {
+    fn observe(
+        &mut self,
+        representative: &alife_core::ActionCommand,
+        bundle: Option<&alife_core::MotorCommandBundle>,
+        index: usize,
+        trained_rows: Option<usize>,
+    ) {
+        let mut count = |action, target: Option<alife_core::WorldEntityId>| {
+            if action != alife_world::HeadlessActionIds::EAT {
+                return;
+            }
+            let counts = self.targets.entry(target.map(|id| id.raw())).or_default();
+            match trained_rows {
+                Some(rows) if index < rows => counts.trained_commands += 1,
+                Some(_) => counts.bootstrap_commands += 1,
+                None => counts.unclassified_commands += 1,
+            }
+        };
+        if let Some(bundle) = bundle {
+            // The representative can hide concurrent Eat, or name another target.
+            // An explicitly empty bundle must not fall back to the representative.
+            for command in &bundle.channels {
+                count(
+                    command.primitive,
+                    command.target.and_then(|target| target.entity),
+                );
+            }
+        } else {
+            self.representative_only_records += 1;
+            count(representative.action_id, representative.target_entity);
+        }
+    }
+
+    fn report(&self) -> serde_json::Value {
+        serde_json::json!({
+            "representative_only_records": self.representative_only_records,
+            "selected_commands_by_target": self.targets.iter().map(|(target, counts)| {
+                serde_json::json!({"target_entity": target, "counts": counts})
+            }).collect::<Vec<_>>(),
+        })
+    }
+}
+
 fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt_path = directory.join("cycle.json");
+    let cycle_receipt: Option<alife_game_app::FoundationCycleReceipt> = receipt_path
+        .exists()
+        .then(|| std::fs::read(&receipt_path))
+        .transpose()?
+        .map(|bytes| serde_json::from_slice(&bytes))
+        .transpose()?;
+    let trained_rows = cycle_receipt.as_ref().map(|receipt| receipt.training_ticks);
+    let mut eat_targets = EatTargetSummary::default();
     let manifest_path = directory.join("replay-manifest.json");
     let references: Option<Vec<alife_game_app::FoundationReplayRecordRef>> = manifest_path
         .exists()
@@ -692,6 +758,12 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
         }
         last_tick = record.tick;
         last_segment = record.segment;
+        eat_targets.observe(
+            &record.patch.decision().selected_action,
+            record.patch.selected_bundle(),
+            index,
+            trained_rows,
+        );
         let outcome = record.patch.outcome();
         if outcome.physical.contact == alife_core::PhysicalContactKind::Consumed
             || outcome.joint.as_ref().is_some_and(|joint| {
@@ -712,16 +784,14 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
             .min(physiology.after.body.energy);
         final_energy = Some(physiology.after.body.energy);
     }
-    let completed = directory.join("cycle.json").exists();
+    let completed = cycle_receipt.is_some();
     let mut food_available_world_tick = None;
     let mut food_available_elapsed_seconds = None;
     let mut terminal_death_tick = None;
     let mut cycle_world_ticks = None;
     let mut cycle_final_energy = None;
     let mut delayed_food_gate_passed = None;
-    if completed {
-        let receipt: alife_game_app::FoundationCycleReceipt =
-            serde_json::from_slice(&std::fs::read(directory.join("cycle.json"))?)?;
+    if let Some(receipt) = &cycle_receipt {
         if receipt
             .training_ticks
             .checked_add(usize::from(receipt.terminal_death_tick.is_none()))
@@ -767,9 +837,91 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
             "terminal_death_tick": terminal_death_tick,
             "delayed_food_gate_passed": delayed_food_gate_passed,
             "manifest_complete": references.is_some(),
+            // Target IDs are observations, not food/speaker labels or meal evidence.
+            "eat_targeting": eat_targets.report(),
         }))?
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod targeting_tests {
+    use super::*;
+    use alife_core::*;
+
+    fn representative(target: Option<u64>) -> ActionCommand {
+        let mut action = ActionCommand::new(
+            OrganismId(1),
+            ActionKind::Interact,
+            target.map(WorldEntityId),
+            Confidence::new(1.0).unwrap(),
+            DurationTicks(1),
+        )
+        .unwrap();
+        action.action_id = alife_world::HeadlessActionIds::EAT;
+        action
+    }
+
+    fn bundle(target: u64) -> MotorCommandBundle {
+        let command = ChannelCommand::new(
+            MotorChannel::Manipulation,
+            alife_world::HeadlessActionIds::EAT,
+            Some(ActionTarget::new(Some(WorldEntityId(target)), None)),
+            Vec3f::ZERO,
+            Intensity::new(1.0).unwrap(),
+            DurationTicks(1),
+            0.0,
+            Confidence::new(1.0).unwrap(),
+            0,
+        )
+        .unwrap();
+        MotorCommandBundle::new(
+            OrganismId(1),
+            ExperienceSequenceId(1),
+            Tick(1),
+            vec![command],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn targeting_uses_concurrent_commands_not_representative_target() {
+        let mut summary = EatTargetSummary::default();
+        let mut action = representative(Some(2));
+        action.action_id = ActionId(4); // Inspect can represent a concurrent Eat.
+        summary.observe(&action, Some(&bundle(8)), 0, Some(2));
+        summary.observe(&representative(Some(2)), Some(&bundle(8)), 1, Some(2));
+        assert_eq!(summary.targets.len(), 1);
+        assert_eq!(summary.targets[&Some(8)].trained_commands, 2);
+        assert_eq!(summary.representative_only_records, 0);
+    }
+
+    #[test]
+    fn targeting_distinguishes_empty_bundle_from_legacy_missing_bundle() {
+        let mut summary = EatTargetSummary::default();
+        let mut empty = bundle(8);
+        empty.channels.clear();
+        summary.observe(&representative(Some(2)), Some(&empty), 0, Some(2));
+        assert!(summary.targets.is_empty());
+        summary.observe(&representative(Some(2)), None, 1, Some(2));
+        assert_eq!(summary.targets[&Some(2)].trained_commands, 1);
+        assert_eq!(summary.representative_only_records, 1);
+    }
+
+    #[test]
+    fn targeting_keeps_bootstrap_and_unclassified_commands_separate() {
+        let mut summary = EatTargetSummary::default();
+        summary.observe(&representative(Some(2)), Some(&bundle(2)), 0, Some(1));
+        summary.observe(&representative(Some(2)), Some(&bundle(2)), 1, Some(1));
+        summary.observe(&representative(None), None, 0, None);
+        let counts = &summary.targets[&Some(2)];
+        assert_eq!(counts.trained_commands, 1);
+        assert_eq!(counts.bootstrap_commands, 1);
+        assert_eq!(counts.unclassified_commands, 0);
+        assert_eq!(summary.targets[&None].unclassified_commands, 1);
+        let report = summary.report();
+        assert!(report["selected_commands_by_target"][0]["target_entity"].is_null());
+    }
 }
 
 #[cfg(test)]
