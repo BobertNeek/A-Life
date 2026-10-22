@@ -2746,6 +2746,7 @@ fn move_scenario_object(
     Ok(())
 }
 
+#[cfg(any(feature = "cpu-training", test))]
 pub(crate) fn relocate_unheld_foundation_food(
     world: &mut alife_world::HeadlessWorld,
     target: alife_core::WorldEntityId,
