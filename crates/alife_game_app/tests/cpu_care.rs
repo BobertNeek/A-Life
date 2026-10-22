@@ -600,6 +600,19 @@ fn cpu_blocked_route_closes_the_real_gate_without_claiming_meal_success() {
     assert!(rows
         .iter()
         .any(|row| row["navigation_gate_closed"] == true && row["loss_row"] == true));
+    for row in rows {
+        for field in ["food_visible", "navigation_blocked", "navigation_moved"] {
+            assert!(row[field].is_boolean());
+        }
+    }
+    let trained = &rows[..4];
+    let route_complete = trained[0]["food_visible"] == true
+        && trained.iter().any(|row| row["food_visible"] == false)
+        && trained.iter().all(|row| row["navigation_blocked"] == false)
+        && trained.iter().any(|row| row["navigation_moved"] == true);
+    if !route_complete {
+        assert_eq!(receipt["episode"]["lesson_completed"], false);
+    }
     if receipt["episode"]["trained_nourished_meals"] == 0 {
         assert_eq!(receipt["episode"]["lesson_completed"], false);
     }

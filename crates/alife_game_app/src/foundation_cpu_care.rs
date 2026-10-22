@@ -3,8 +3,8 @@ use crate::foundation_training::{
     care_meal_completed, close_foundation_navigation_gate_in_world, configure_foundation_scenario,
     expose_foundation_teacher_cue,
     food_outcome::{ownership, FoodOutcomeObservation, FoodOwnershipSnapshot},
-    heard_foundation_teacher_cue, outcome_consumed, write_foundation_lesson_prior_readiness,
-    FoundationScenarioSetup,
+    grounded_navigation_completed, heard_foundation_teacher_cue, outcome_consumed,
+    teacher_outcome_blocked, write_foundation_lesson_prior_readiness, FoundationScenarioSetup,
 };
 use crate::gpu_live_runtime::semantic_prior::RuntimeSemanticPrior;
 use crate::{FoundationFoodOutcome, FoundationTeacherLesson};
@@ -84,6 +84,7 @@ pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
         ownership_before: None,
         traces: Vec::new(),
         meal_rows: Vec::new(),
+        navigation_rows: Vec::new(),
         cue_frames: 0,
         generic_consumed: 0,
         reservation: None,
@@ -106,6 +107,7 @@ struct CareEpisode {
     ownership_before: Option<FoodOwnershipSnapshot>,
     traces: Vec<Value>,
     meal_rows: Vec<usize>,
+    navigation_rows: Vec<(bool, bool, bool)>,
     cue_frames: usize,
     generic_consumed: usize,
     reservation: Option<admission::CareSeedReservation>,
@@ -253,6 +255,19 @@ impl CpuEpisodeHooks for CareEpisode {
                 "action":row.patch.decision().selected_action,"bundle":row.patch.selected_bundle(),
                 "outcome":row.patch.outcome(),"ppo_action":row.action,
                 "nourished_meal":summary.nourished_meal_events>before});
+            if self.request.lesson == FoundationTeacherLesson::ObstacleNavigation {
+                let visible = frame
+                    .candidates()
+                    .iter()
+                    .any(|candidate| candidate.target.entity == Some(summary.target));
+                let blocked = teacher_outcome_blocked(row.patch.outcome());
+                let moved =
+                    row.patch.outcome().physical.contact == alife_core::PhysicalContactKind::Moved;
+                self.navigation_rows.push((visible, blocked, moved));
+                trace["food_visible"] = json!(visible);
+                trace["navigation_blocked"] = json!(blocked);
+                trace["navigation_moved"] = json!(moved);
+            }
             if let Some((gate, position)) = scenario.closing_gate {
                 trace["navigation_gate_closed"] = json!(host
                     .world()
@@ -325,6 +340,16 @@ impl CpuEpisodeHooks for CareEpisode {
             output,
             Some(self.request.lesson),
         )?;
+        let meal_completed = trained_care_meal_completed(summary, train_rows, &self.meal_rows);
+        let lesson_completed = if self.request.lesson == FoundationTeacherLesson::ObstacleNavigation
+        {
+            grounded_navigation_completed(
+                meal_completed,
+                self.navigation_rows.iter().take(train_rows).copied(),
+            )
+        } else {
+            meal_completed
+        };
         let metadata = json!({"schema":1,"kind":"care-first-cpu-episode","lesson":self.request.lesson,
             "episode_body":"new-prepared-cohort","persistent_learning":"native-founder-and-full-actor-value-optimizer",
             "raw_replay_recorded":self.request.record_diagnostic_replay,
@@ -335,7 +360,7 @@ impl CpuEpisodeHooks for CareEpisode {
             "food_outcome":summary,"generic_consumed_events":self.generic_consumed,
             "captured_nourished_meals":summary.nourished_meal_events,"trained_nourished_meals":trained_meals,
             "bootstrap_nourished_meals":summary.nourished_meal_events-trained_meals,
-            "lesson_completed":trained_care_meal_completed(summary, train_rows, &self.meal_rows),
+            "lesson_completed":lesson_completed,
             "curriculum_progression":"none; explicit supported care schedule only",
             "semantic_prior":self.prior.as_ref().map(|p| &p.metrics),
             "prior_failure_policy":"log_and_continue_without_prior",

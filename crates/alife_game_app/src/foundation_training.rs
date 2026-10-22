@@ -2224,22 +2224,20 @@ fn run_foundation_training_pilot_with_request(
         }
         FoundationTeacherLesson::ObstacleNavigation => {
             if config.sensor_profile == SensorProfile::GroundedTerrainVisionV1 {
-                let visible = |step: &FoundationTrainingStep| {
-                    step.frame
-                        .candidates()
-                        .iter()
-                        .any(|c| c.target.entity == Some(food))
-                };
-                food_consumed
-                    && steps.iter().all(|step| !teacher_step_blocked(step))
-                    && steps.first().is_some_and(visible)
-                    && steps.iter().any(|step| !visible(step))
-                    && steps.iter().any(|step| {
-                        matches!(
-                            step.patch.outcome().physical.contact,
-                            alife_core::PhysicalContactKind::Moved
+                grounded_navigation_completed(
+                    food_consumed,
+                    steps.iter().map(|step| {
+                        (
+                            step.frame
+                                .candidates()
+                                .iter()
+                                .any(|c| c.target.entity == Some(food)),
+                            teacher_step_blocked(step),
+                            step.patch.outcome().physical.contact
+                                == alife_core::PhysicalContactKind::Moved,
                         )
-                    })
+                    }),
+                )
             } else {
                 let food_start = steps
                     .iter()
@@ -2692,7 +2690,7 @@ fn teacher_step_blocked(step: &crate::FoundationTrainingStep) -> bool {
     teacher_outcome_blocked(step.patch.outcome())
 }
 
-fn teacher_outcome_blocked(outcome: &alife_core::PostActionOutcome) -> bool {
+pub(crate) fn teacher_outcome_blocked(outcome: &alife_core::PostActionOutcome) -> bool {
     outcome.physical.contact == alife_core::PhysicalContactKind::Blocked
         || outcome.joint.as_ref().is_some_and(|joint| {
             joint
@@ -2700,6 +2698,25 @@ fn teacher_outcome_blocked(outcome: &alife_core::PostActionOutcome) -> bool {
                 .iter()
                 .any(|channel| channel.physical.contact == alife_core::PhysicalContactKind::Blocked)
         })
+}
+
+/// Grounded navigation requires food, an initially visible target that becomes
+/// hidden, actual movement, and no blocked action. Callers select the evidence window.
+pub(crate) fn grounded_navigation_completed(
+    food_consumed: bool,
+    observations: impl IntoIterator<Item = (bool, bool, bool)>,
+) -> bool {
+    let mut observations = observations.into_iter();
+    let Some((first_visible, mut blocked, mut moved)) = observations.next() else {
+        return false;
+    };
+    let mut hidden = !first_visible;
+    for (visible, was_blocked, did_move) in observations {
+        hidden |= !visible;
+        blocked |= was_blocked;
+        moved |= did_move;
+    }
+    food_consumed && first_visible && hidden && moved && !blocked
 }
 
 fn move_scenario_object(
