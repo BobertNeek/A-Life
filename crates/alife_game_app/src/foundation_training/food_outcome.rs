@@ -568,6 +568,39 @@ mod tests {
     }
 
     #[test]
+    fn food_outcome_navigation_sees_movement_beneath_other_channel_contacts() {
+        let (mut world, target) = measured_world_fixture();
+        measured_eat(&mut world, target);
+        let (_, patch) = measured_eat(&mut world, target);
+        let mut outcome = patch.outcome().clone();
+        use crate::foundation_training::teacher_outcome_moved;
+        use alife_core::experience::ChannelPhysicalOutcome;
+        for contact in [PhysicalContactKind::Touch, PhysicalContactKind::Consumed] {
+            outcome.physical.contact = contact;
+            outcome.joint = None;
+            assert!(!teacher_outcome_moved(&outcome));
+            let mut movement = outcome.physical;
+            movement.contact = PhysicalContactKind::Moved;
+            movement.target_entity = None;
+            movement.displacement = alife_core::Vec3f::new(1.0, 0.0, 0.0);
+            for channel in [MotorChannel::Manipulation, MotorChannel::Locomotion] {
+                outcome.joint = Some(
+                    alife_core::JointPhysicalOutcome::new(outcome.physical, Vec::new())
+                        .unwrap()
+                        .with_channel_outcomes(vec![
+                            ChannelPhysicalOutcome::new(channel, movement).unwrap()
+                        ])
+                        .unwrap(),
+                );
+                assert_eq!(
+                    teacher_outcome_moved(&outcome),
+                    channel == MotorChannel::Locomotion
+                );
+            }
+        }
+    }
+
+    #[test]
     fn food_outcome_blocked_move_keeps_exact_meal_and_requires_benefit() {
         let (mut world, target) = measured_world_fixture();
         let learner = world.organism_entity_ids()[0].0;

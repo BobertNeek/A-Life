@@ -4,7 +4,8 @@ use crate::foundation_training::{
     expose_foundation_teacher_cue,
     food_outcome::{ownership, FoodOutcomeObservation, FoodOwnershipSnapshot},
     grounded_navigation_completed, heard_foundation_teacher_cue, outcome_consumed,
-    teacher_outcome_blocked, write_foundation_lesson_prior_readiness, FoundationScenarioSetup,
+    teacher_outcome_blocked, teacher_outcome_moved, write_foundation_lesson_prior_readiness,
+    FoundationScenarioSetup,
 };
 use crate::gpu_live_runtime::semantic_prior::RuntimeSemanticPrior;
 use crate::{FoundationFoodOutcome, FoundationTeacherLesson};
@@ -261,8 +262,7 @@ impl CpuEpisodeHooks for CareEpisode {
                     .iter()
                     .any(|candidate| candidate.target.entity == Some(summary.target));
                 let blocked = teacher_outcome_blocked(row.patch.outcome());
-                let moved =
-                    row.patch.outcome().physical.contact == alife_core::PhysicalContactKind::Moved;
+                let moved = teacher_outcome_moved(row.patch.outcome());
                 self.navigation_rows.push((visible, blocked, moved));
                 trace["food_visible"] = json!(visible);
                 trace["navigation_blocked"] = json!(blocked);

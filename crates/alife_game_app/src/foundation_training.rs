@@ -2233,8 +2233,7 @@ fn run_foundation_training_pilot_with_request(
                                 .iter()
                                 .any(|c| c.target.entity == Some(food)),
                             teacher_step_blocked(step),
-                            step.patch.outcome().physical.contact
-                                == alife_core::PhysicalContactKind::Moved,
+                            teacher_outcome_moved(step.patch.outcome()),
                         )
                     }),
                 )
@@ -2688,6 +2687,16 @@ fn teacher_step_targets(
 
 fn teacher_step_blocked(step: &crate::FoundationTrainingStep) -> bool {
     teacher_outcome_blocked(step.patch.outcome())
+}
+
+pub(crate) fn teacher_outcome_moved(outcome: &alife_core::PostActionOutcome) -> bool {
+    outcome.physical.contact == alife_core::PhysicalContactKind::Moved
+        || outcome.joint.as_ref().is_some_and(|joint| {
+            joint.channel_outcomes.iter().any(|channel| {
+                channel.channel == alife_core::MotorChannel::Locomotion
+                    && channel.physical.contact == alife_core::PhysicalContactKind::Moved
+            })
+        })
 }
 
 pub(crate) fn teacher_outcome_blocked(outcome: &alife_core::PostActionOutcome) -> bool {
