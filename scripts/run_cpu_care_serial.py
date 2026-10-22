@@ -22,6 +22,7 @@ PLAN = ".cpu-care-plan.json"
 HELPERS = ("run_mixed_care_serial.py", "grab_food_seed_reservations.py",
            "run_eat_held_food_night.py", "summarize_ppo_diagnostics.py")
 require = mixed.require
+CPU_LESSONS = (*mixed.LESSONS, "obstacle_navigation")
 
 
 def pins(source):
@@ -69,7 +70,7 @@ def build_plan(args):
             "CPU lane and immutable source must be separate trees")
     require(not lane.exists() or not any(lane.iterdir()), "new CPU lane must be empty")
     schedule = read(args.schedule)
-    rows = mixed.schedule_rows(schedule)  # Reuse the native explicit three-lesson/dose grammar.
+    rows = mixed.schedule_rows(schedule, supported_lessons=CPU_LESSONS)
     first, last = map(int, args.seeds.split(":"))
     require(0 < first <= last <= seeds.MAX_SEED, "invalid explicit seed range")
     require(last - first + 1 >= len(rows), "seed range cannot cover the explicit episode schedule")
@@ -138,7 +139,7 @@ def execute(plan):
     require(mixed.host.sha256(Path(__file__)) == plan["scheduler_sha256"], "pinned scheduler changed")
     require({k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")} == plan["prior_environment"],
             "semantic-prior environment changed")
-    rows = mixed.schedule_rows(plan["schedule"])
+    rows = mixed.schedule_rows(plan["schedule"], supported_lessons=CPU_LESSONS)
     previous = Path(plan["source"])
     ledger_path = lane / LEDGER
     attempts = read(ledger_path)["cpu_care_attempts"] if ledger_path.exists() else []

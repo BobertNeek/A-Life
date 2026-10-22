@@ -2981,14 +2981,20 @@ pub(crate) fn close_foundation_navigation_gate(
             )?;
         }
     }
-    if runtime.world().tick().raw() >= 2 {
+    close_foundation_navigation_gate_in_world(runtime.world_mut(), scenario)
+}
+
+pub(crate) fn close_foundation_navigation_gate_in_world(
+    world: &mut alife_world::HeadlessWorld,
+    scenario: &FoundationScenarioSetup,
+) -> Result<()> {
+    if world.tick().raw() >= 2 {
         if let Some((gate, position)) = scenario.closing_gate {
-            if runtime
-                .world()
+            if world
                 .entity(gate)
                 .is_some_and(|object| object.position != position)
             {
-                move_scenario_object(runtime.world_mut(), gate, position)?;
+                move_scenario_object(world, gate, position)?;
             }
         }
     }

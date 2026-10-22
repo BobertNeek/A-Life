@@ -1,6 +1,7 @@
 //! CPU care episodes reuse the native lesson world, prior and outcome observer.
 use crate::foundation_training::{
-    care_meal_completed, configure_foundation_scenario, expose_foundation_teacher_cue,
+    care_meal_completed, close_foundation_navigation_gate_in_world, configure_foundation_scenario,
+    expose_foundation_teacher_cue,
     food_outcome::{ownership, FoodOutcomeObservation, FoodOwnershipSnapshot},
     heard_foundation_teacher_cue, outcome_consumed, write_foundation_lesson_prior_readiness,
     FoundationScenarioSetup,
@@ -60,6 +61,7 @@ pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
         FoundationTeacherLesson::EatHeldFood
             | FoundationTeacherLesson::EatReachableFood
             | FoundationTeacherLesson::Feeding
+            | FoundationTeacherLesson::ObstacleNavigation
     ) || !(1..=128).contains(&request.decisions)
         || (!request.fixture && request.seed_history.is_none())
         || request.fixture && (request.known_exclusions || request.seed_history.is_some())
@@ -170,6 +172,7 @@ impl CpuEpisodeHooks for CareEpisode {
         founder: &CpuFoundationTrainer,
     ) -> Result<()> {
         let scenario = self.scenario.as_ref().ok_or("care scene is not prepared")?;
+        close_foundation_navigation_gate_in_world(host.world_mut(), scenario)?;
         expose_foundation_teacher_cue(host.world_mut(), scenario)?;
         if matches!(
             self.request.lesson,
@@ -250,6 +253,12 @@ impl CpuEpisodeHooks for CareEpisode {
                 "action":row.patch.decision().selected_action,"bundle":row.patch.selected_bundle(),
                 "outcome":row.patch.outcome(),"ppo_action":row.action,
                 "nourished_meal":summary.nourished_meal_events>before});
+            if let Some((gate, position)) = scenario.closing_gate {
+                trace["navigation_gate_closed"] = json!(host
+                    .world()
+                    .entity(gate)
+                    .is_some_and(|object| object.position == position));
+            }
             observation.decorate_trace(&mut trace);
             self.traces.push(trace);
         }
@@ -320,6 +329,7 @@ impl CpuEpisodeHooks for CareEpisode {
             "episode_body":"new-prepared-cohort","persistent_learning":"native-founder-and-full-actor-value-optimizer",
             "raw_replay_recorded":self.request.record_diagnostic_replay,
             "setup_ticks_are_training_rows":false,"setup_tick":scenario.start_tick,
+            "navigation_gate":scenario.closing_gate,
             "held_food_setup":scenario.held_food_setup,"reachable_food_setup":scenario.reachable_food_setup,
             "teacher_cue_tokens":scenario.teacher_cue_tokens,"teacher_cue_frames":self.cue_frames,
             "food_outcome":summary,"generic_consumed_events":self.generic_consumed,
