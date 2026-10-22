@@ -9,7 +9,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     io::{self, Read},
-    path::Path,
+    path::{Path, PathBuf},
 };
 pub const MAX_RECEIPT_BYTES: usize = 64 * 1024 * 1024;
 // Compatibility only: flat writers never accumulate this depth over episodes.
@@ -169,6 +169,7 @@ pub struct Lineage {
     pub legacy_proof_error: Option<String>,
     blobs: BTreeMap<String, Vec<u8>>,
     imported: BTreeSet<String>,
+    source_directory: PathBuf,
 }
 fn header(value: &Value) -> Value {
     let mut result = serde_json::Map::new();
@@ -254,6 +255,7 @@ impl Lineage {
             legacy_proof_error: None,
             blobs: BTreeMap::new(),
             imported: BTreeSet::new(),
+            source_directory: directory.to_path_buf(),
         };
         let mut current = root.clone();
         let mut seen = BTreeSet::new();
@@ -378,15 +380,41 @@ impl Lineage {
         }
         Ok(result)
     }
-    /// Copy only reachable, verified raw blobs. No source file is rewritten.
+    /// Retain reachable, verified raw blobs without rewriting immutable ancestry.
+    /// Same-filesystem hard links keep each output independently addressable even
+    /// after an older output is removed. Unsupported links fall back to copying.
+    /// These content-addressed files must never be edited in place.
     pub fn write_to(&self, destination: &Path) -> io::Result<()> {
+        self.write_with_link(destination, |source, target| fs::hard_link(source, target))
+    }
+    fn write_with_link(
+        &self,
+        destination: &Path,
+        link: impl Fn(&Path, &Path) -> io::Result<()>,
+    ) -> io::Result<()> {
         if self.blobs.is_empty() {
             return Ok(());
         }
         let base = destination.join(DIRECTORY);
         fs::create_dir(&base)?;
         for (digest, bytes) in &self.blobs {
-            fs::write(base.join(digest_name(digest)?), bytes)?;
+            let name = digest_name(digest)?;
+            let target = base.join(&name);
+            if self.imported.contains(digest) {
+                if load_blob(&self.source_directory, digest)? != *bytes {
+                    return Err(invalid("source lineage changed before export"));
+                }
+                let source = self.source_directory.join(DIRECTORY).join(name);
+                if link(&source, &target).is_ok() {
+                    // Check the linked file too, rather than trusting a path that
+                    // could have changed between validation and link creation.
+                    if load_blob(destination, digest)? != *bytes {
+                        return Err(invalid("source lineage changed during export"));
+                    }
+                    continue;
+                }
+            }
+            fs::write(target, bytes)?;
         }
         Ok(())
     }
@@ -547,6 +575,63 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn exported_ancestry_survives_source_removal_without_rewriting_blobs() {
+        let source = Tree::new();
+        let bytes = br#"{"seed":7}"#;
+        let digest = source.store(bytes);
+        let root = reference("cycle.json", &digest, 8);
+        let lineage = Lineage::load(&root, &source.0).unwrap();
+        let output = Tree::new();
+        lineage.write_to(&output.0).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let name = digest_name(&digest).unwrap();
+            let before = fs::metadata(source.0.join(DIRECTORY).join(&name)).unwrap();
+            let after = fs::metadata(output.0.join(DIRECTORY).join(name)).unwrap();
+            assert_eq!((before.dev(), before.ino()), (after.dev(), after.ino()));
+        }
+        drop(source);
+        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        assert_eq!(Lineage::load(&root, &output.0).unwrap().frames.len(), 2);
+    }
+
+    #[test]
+    fn unsupported_links_fall_back_to_complete_verified_copies() {
+        let source = Tree::new();
+        let bytes = br#"{"seed":7}"#;
+        let digest = source.store(bytes);
+        let root = reference("cycle.json", &digest, 8);
+        let lineage = Lineage::load(&root, &source.0).unwrap();
+        let output = Tree::new();
+        lineage
+            .write_with_link(&output.0, |_, _| {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "fixture filesystem",
+                ))
+            })
+            .unwrap();
+        drop(source);
+        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        assert_eq!(Lineage::load(&root, &output.0).unwrap().frames.len(), 2);
+    }
+
+    #[test]
+    fn export_rejects_changed_imported_ancestry() {
+        let source = Tree::new();
+        let digest = source.store(br#"{"seed":7}"#);
+        let lineage = Lineage::load(&reference("cycle.json", &digest, 8), &source.0).unwrap();
+        fs::write(
+            source.0.join(DIRECTORY).join(digest_name(&digest).unwrap()),
+            b"{}",
+        )
+        .unwrap();
+        let output = Tree::new();
+        assert!(lineage.write_to(&output.0).is_err());
+    }
+
     #[test]
     fn references_cannot_select_another_parent_or_hide_corruption() {
         let tree = Tree::new();
