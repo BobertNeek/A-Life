@@ -112,6 +112,7 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
         let seed = (891001 + index).to_string();
         let receipt = success(&[
             "--fixture",
+            "--record-diagnostic-replay",
             "--output",
             text(&output),
             "--seed",
@@ -184,6 +185,56 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
                 row.action.validate(1.).unwrap();
             }
         }
+        if lesson == "eat_held_food" {
+            let compact = fixture.0.join("compact-equivalent");
+            success(&[
+                "--fixture",
+                "--output",
+                text(&compact),
+                "--seed",
+                &seed,
+                "--lesson",
+                lesson,
+                "--decisions",
+                "2",
+            ]);
+            assert!(!compact.join("care-replay.json").exists());
+            for name in [
+                "trained.alife-foundation",
+                "actor-checkpoint.json",
+                "value-checkpoint.json",
+            ] {
+                assert_eq!(
+                    fs::read(output.join(name)).unwrap(),
+                    fs::read(compact.join(name)).unwrap(),
+                    "diagnostic recording changed learned state: {name}"
+                );
+            }
+            eprintln!("Optional diagnostic replay omitted {} bytes; learned checkpoints are byte-identical",
+                      fs::metadata(output.join("care-replay.json")).unwrap().len());
+        }
+        // The old receipt shape still requires its full recording. Do not
+        // silently reinterpret a damaged historical output as compact output.
+        let mut legacy = receipt.clone();
+        legacy["episode"]
+            .as_object_mut()
+            .unwrap()
+            .remove("raw_replay_recorded");
+        fs::write(
+            output.join("care-episode.json"),
+            serde_json::to_vec(&legacy["episode"]).unwrap(),
+        )
+        .unwrap();
+        legacy["episode_artifact_sha256"]["care-episode.json"] =
+            json!(sha(output.join("care-episode.json")));
+        fs::write(
+            output.join("cpu-cycle.json"),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
+        success(&["--validate-output", text(&output)]);
+        fs::remove_file(output.join("care-replay.json")).unwrap();
+        assert!(!run(&["--validate-output", text(&output)]).status.success());
         eprintln!("CPU care fixture: lesson={lesson}, decisions={}, rows={}, collection_s={}, update_s={}", receipt["canonical_valid_decisions"], receipt["training_rows"],receipt["collection_seconds"],receipt["update_seconds"]);
     }
     let rejected = fixture.0.join("unsupported");
@@ -217,6 +268,9 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         "--decisions",
         "2",
     ]);
+    assert_eq!(first["episode"]["raw_replay_recorded"], false);
+    assert!(!source.join("care-replay.json").exists());
+    success(&["--validate-output", text(&source)]);
     let before = snapshot(&source);
     let lane = fixture.0.join("cpu-lane");
     fs::create_dir(&lane).unwrap();
@@ -237,6 +291,10 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         "--decisions",
         "2",
     ]);
+    assert_eq!(second["episode"]["raw_replay_recorded"], false);
+    assert!(!output.join("care-replay.json").exists());
+    assert!(output.join("care-trace.json").is_file());
+    success(&["--validate-output", text(&output)]);
     assert_eq!(before, snapshot(&source));
     assert_eq!(
         load(output.join("collection-actor-checkpoint.json")),

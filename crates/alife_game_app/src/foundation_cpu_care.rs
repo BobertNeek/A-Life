@@ -26,6 +26,8 @@ pub struct CpuCareRequest {
     pub lesson: FoundationTeacherLesson,
     pub seed_history: Option<PathBuf>,
     pub known_exclusions: bool,
+    /// Optional bulky debug recording; the in-memory training rows are unchanged.
+    pub record_diagnostic_replay: bool,
     /// Development fixtures only; this never imports a retained policy.
     pub fixture: bool,
 }
@@ -288,10 +290,12 @@ impl CpuEpisodeHooks for CareEpisode {
                 serde_json::to_vec(value)?,
             )?)
         };
-        write(
-            "care-replay.json",
-            &json!({"schema":1,"backend":"native-cpu","collection_policy_sha256":policy_sha,"rows":rows}),
-        )?;
+        if self.request.record_diagnostic_replay {
+            write(
+                "care-replay.json",
+                &json!({"schema":1,"backend":"native-cpu","collection_policy_sha256":policy_sha,"rows":rows}),
+            )?;
+        }
         write(
             "care-trace.json",
             &json!({"schema":1,"backend":"native-cpu","lesson":self.request.lesson,"rows":self.traces}),
@@ -314,6 +318,7 @@ impl CpuEpisodeHooks for CareEpisode {
         )?;
         let metadata = json!({"schema":1,"kind":"care-first-cpu-episode","lesson":self.request.lesson,
             "episode_body":"new-prepared-cohort","persistent_learning":"native-founder-and-full-actor-value-optimizer",
+            "raw_replay_recorded":self.request.record_diagnostic_replay,
             "setup_ticks_are_training_rows":false,"setup_tick":scenario.start_tick,
             "held_food_setup":scenario.held_food_setup,"reachable_food_setup":scenario.reachable_food_setup,
             "teacher_cue_tokens":scenario.teacher_cue_tokens,"teacher_cue_frames":self.cue_frames,
@@ -327,7 +332,6 @@ impl CpuEpisodeHooks for CareEpisode {
             "critic_optimizer":alife_training::PpoConfig::default().value_optimizer});
         write("care-episode.json", &metadata)?;
         let mut artifacts = vec![
-            "care-replay.json",
             "care-trace.json",
             "care-prior-lives.json",
             "care-episode.json",
@@ -337,6 +341,9 @@ impl CpuEpisodeHooks for CareEpisode {
             "collection-actor-checkpoint.json",
             "initial-value-checkpoint.json",
         ];
+        if self.request.record_diagnostic_replay {
+            artifacts.push("care-replay.json");
+        }
         if self.reservation.is_some() {
             artifacts.push("care-seed-admission.json");
         }

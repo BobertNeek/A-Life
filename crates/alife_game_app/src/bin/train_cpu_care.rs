@@ -22,10 +22,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut values = BTreeMap::new();
     let mut fixture = false;
     let mut known_exclusions = false;
+    let mut record_diagnostic_replay = false;
     while let Some(key) = arguments.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding --decisions 1..128 [--temperature 1] [--known-exclusions]\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
+                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding --decisions 1..128 [--temperature 1] [--known-exclusions] [--record-diagnostic-replay]\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
                 return Ok(());
             }
             "--fixture" => {
@@ -33,6 +34,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("duplicate --fixture".into());
                 }
                 fixture = true;
+            }
+            "--record-diagnostic-replay" => {
+                if record_diagnostic_replay {
+                    return Err("duplicate diagnostic recording flag".into());
+                }
+                record_diagnostic_replay = true;
             }
             "--known-exclusions" => {
                 if known_exclusions {
@@ -72,6 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         lesson,
         fixture,
         known_exclusions,
+        record_diagnostic_replay,
     };
     println!("{}", serde_json::to_string(&run_cpu_care(request)?)?);
     Ok(())

@@ -344,8 +344,19 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
     let artifacts = receipt["episode_artifact_sha256"]
         .as_object()
         .ok_or("care artifacts missing")?;
+    // Earlier receipts always recorded the replay. Absence is only allowed by
+    // an explicit new receipt field, never inferred from a missing file.
+    let recorded = match receipt["episode"].get("raw_replay_recorded") {
+        None => true,
+        Some(Value::Bool(value)) => *value,
+        _ => return Err("invalid raw replay recording metadata".into()),
+    };
+    if recorded != artifacts.contains_key("care-replay.json")
+        || recorded != output.join("care-replay.json").is_file()
+    {
+        return Err("raw replay recording does not match its seal".into());
+    }
     for name in [
-        "care-replay.json",
         "care-trace.json",
         "care-prior-lives.json",
         "care-episode.json",
