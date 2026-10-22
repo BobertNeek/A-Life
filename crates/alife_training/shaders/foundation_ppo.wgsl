@@ -27,6 +27,13 @@ struct MaskedCategorical {
   valid: bool,
 }
 
+fn shifted_logit(value:f32, maximum:f32, temperature:f32) -> f32 {
+  if (temperature > 1.0 && value < 0.0 && maximum > 0.0) {
+    return value / temperature - maximum / temperature;
+  }
+  return (value - maximum) / temperature;
+}
+
 fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
   var distribution: MaskedCategorical;
   if (mask == 0u) { return distribution; }
@@ -41,7 +48,7 @@ fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
   var normalizer = 0.0;
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
-    let shifted = (bitcast<f32>(logits[r(row, 51u) + candidate]) - maximum) / hf(7u);
+    let shifted = shifted_logit(bitcast<f32>(logits[r(row, 51u) + candidate]), maximum, hf(7u));
     distribution.probability[candidate] = exp(shifted);
     normalizer += distribution.probability[candidate];
   }
@@ -49,7 +56,7 @@ fn masked_categorical(row:u32, mask:u32) -> MaskedCategorical {
   let log_partition = log(normalizer);
   for (var candidate = 0u; candidate < count; candidate++) {
     if ((mask & (1u << candidate)) == 0u) { continue; }
-    let log_probability = (bitcast<f32>(logits[r(row, 51u) + candidate]) - maximum) / hf(7u) - log_partition;
+    let log_probability = shifted_logit(bitcast<f32>(logits[r(row, 51u) + candidate]), maximum, hf(7u)) - log_partition;
     let probability = distribution.probability[candidate] / normalizer;
     distribution.probability[candidate] = probability;
     distribution.log_probability[candidate] = log_probability;
