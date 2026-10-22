@@ -15,11 +15,12 @@ import subprocess
 
 import grab_food_seed_reservations as seeds
 import run_mixed_care_serial as mixed
+import training_artifact_store as artifacts
 
 LEDGER = ".grab-food-seed-reservations.json"
 PLAN = ".cpu-care-plan.json"
 HELPERS = ("run_mixed_care_serial.py", "grab_food_seed_reservations.py",
-           "run_eat_held_food_night.py", "summarize_ppo_diagnostics.py")
+           "run_eat_held_food_night.py", "summarize_ppo_diagnostics.py", "training_artifact_store.py")
 require = mixed.require
 
 
@@ -151,7 +152,9 @@ def execute(plan):
         if attempt["status"] == "accepted":
             output = Path(attempt["output"])
             require(pins(output) == attempt["native_output_sha256"], "accepted CPU output changed")
-            command(binary, "--validate-output", output)
+            receipt = command(binary, "--validate-output", output)
+            artifacts.reuse_sealed_files(output, artifacts.cpu_sealed_files(receipt, output),
+                                         lane.parent / ".training-artifacts")
             previous = output
             slot += 1
         else:
@@ -182,7 +185,9 @@ def execute(plan):
         attempts = read(ledger_path)["cpu_care_attempts"]
         require(attempts[-1]["status"] == "accepted" and
                 attempts[-1]["native_output_sha256"] == pins(output), "native acceptance missing")
-        print(json.dumps({"episode": slot, "output": str(output), "policy_version": receipt["policy_version"],
+        storage = artifacts.reuse_sealed_files(output, artifacts.cpu_sealed_files(receipt, output),
+                                               lane.parent / ".training-artifacts")
+        print(json.dumps({"storage_reuse": storage, "episode": slot, "output": str(output), "policy_version": receipt["policy_version"],
                           "trained_nourished_meals": receipt["episode"]["trained_nourished_meals"],
                           "lesson_completed": receipt["episode"]["lesson_completed"]}), flush=True)
         previous = output
