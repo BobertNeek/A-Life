@@ -568,6 +568,39 @@ mod tests {
     }
 
     #[test]
+    fn food_outcome_navigation_sees_movement_beneath_other_channel_contacts() {
+        let (mut world, target) = measured_world_fixture();
+        measured_eat(&mut world, target);
+        let (_, patch) = measured_eat(&mut world, target);
+        let mut outcome = patch.outcome().clone();
+        use crate::foundation_training::teacher_outcome_moved;
+        use alife_core::experience::ChannelPhysicalOutcome;
+        for contact in [PhysicalContactKind::Touch, PhysicalContactKind::Consumed] {
+            outcome.physical.contact = contact;
+            outcome.joint = None;
+            assert!(!teacher_outcome_moved(&outcome));
+            let mut movement = outcome.physical;
+            movement.contact = PhysicalContactKind::Moved;
+            movement.target_entity = None;
+            movement.displacement = alife_core::Vec3f::new(1.0, 0.0, 0.0);
+            for channel in [MotorChannel::Manipulation, MotorChannel::Locomotion] {
+                outcome.joint = Some(
+                    alife_core::JointPhysicalOutcome::new(outcome.physical, Vec::new())
+                        .unwrap()
+                        .with_channel_outcomes(vec![
+                            ChannelPhysicalOutcome::new(channel, movement).unwrap()
+                        ])
+                        .unwrap(),
+                );
+                assert_eq!(
+                    teacher_outcome_moved(&outcome),
+                    channel == MotorChannel::Locomotion
+                );
+            }
+        }
+    }
+
+    #[test]
     fn food_outcome_blocked_move_keeps_exact_meal_and_requires_benefit() {
         let (mut world, target) = measured_world_fixture();
         let learner = world.organism_entity_ids()[0].0;
@@ -613,6 +646,28 @@ mod tests {
             // This is an actual world Eat and measured biological benefit. A
             // bootstrap-only meal cannot stand in for a trained care decision.
             assert!(trained_care_meal_completed(&summary, 2, &[1]));
+            use crate::foundation_training::grounded_navigation_completed;
+            let meal = trained_care_meal_completed(&summary, 2, &[1]);
+            assert!(!grounded_navigation_completed(meal, []));
+            // A real meal alone does not prove navigation. Every route condition
+            // matters, including a blocked joint-channel action.
+            for route in [
+                vec![(true, false, true)],
+                vec![(false, false, true), (false, false, true)],
+                vec![(true, false, false), (false, false, false)],
+                vec![(true, false, true), (false, true, true)],
+            ] {
+                assert!(!grounded_navigation_completed(meal, route));
+            }
+            let route = [(true, false, true), (false, false, true)];
+            assert!(grounded_navigation_completed(meal, route));
+            assert!(!grounded_navigation_completed(false, route));
+            // A visibility transition confined to the bootstrap row cannot pass.
+            assert!(!grounded_navigation_completed(
+                meal,
+                route.into_iter().take(1)
+            ));
+
             assert!(!trained_care_meal_completed(&summary, 1, &[1]));
             let mut generic_consumption = summary.clone();
             generic_consumption.nourished_meal_events = 0;
