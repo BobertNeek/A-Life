@@ -89,6 +89,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Check training CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Care targeting inspection CPU tests
+        run: cargo test --locked -p alife_game_app --features foundation-training --bin train_n2048_care targeting_tests
       - name: Output ownership CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_output::tests
 
