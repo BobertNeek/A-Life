@@ -9,6 +9,7 @@ import argparse
 import json
 import math
 import ntpath
+import posixpath
 import os
 from pathlib import Path
 import subprocess
@@ -47,7 +48,7 @@ def path_key(path, *, windows=None):
         elif path.startswith("\\\\?\\"):
             path = path[4:]
         return ntpath.normcase(ntpath.abspath(path))
-    return os.path.normcase(os.path.abspath(path))
+    return posixpath.abspath(path)
 
 
 def same_path(left, right):
