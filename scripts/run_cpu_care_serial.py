@@ -9,6 +9,7 @@ import argparse
 import json
 import math
 import ntpath
+import posixpath
 import os
 from pathlib import Path
 import subprocess
@@ -46,7 +47,7 @@ def path_key(path, *, windows=None):
         elif path.startswith("\\\\?\\"):
             path = path[4:]
         return ntpath.normcase(ntpath.abspath(path))
-    return os.path.normcase(os.path.abspath(path))
+    return posixpath.abspath(path)
 
 
 def same_path(left, right):
@@ -85,7 +86,11 @@ def build_plan(args):
     root = Path(__file__).resolve().parent.parent
     git = lambda *a: subprocess.check_output(["git", *a], cwd=root, text=True).strip()
     require(not git("status", "--porcelain"), "run planning requires a clean source checkout")
-    return {"schema": 1, "kind": "native-cpu-care-plan", "source": str(source), "source_sha256": source_pins,
+    keep = getattr(args, "keep_checkpoints", None)
+    keep = 3 if keep is None else keep
+    require(type(keep) is int and keep >= 2, "retain latest checkpoint and at least one rollback")
+    return {"schema": 1, "retention": {"mode": "recent-checkpoints", "keep": keep},
+            "kind": "native-cpu-care-plan", "source": str(source), "source_sha256": source_pins,
             "lane": str(lane), "history": str(history), "history_sha256": mixed.host.sha256(history),
             "binary": str(binary), "binary_sha256": mixed.host.sha256(binary), "schedule": schedule,
             "seed_range": [first, last], "temperature": args.temperature, "seed_admission": admission,
@@ -133,7 +138,6 @@ def execute(plan):
     require(mixed.host.sha256(Path(__file__)) == plan["scheduler_sha256"], "pinned scheduler changed")
     require({k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")} == plan["prior_environment"],
             "semantic-prior environment changed")
-    require(pins(Path(plan["source"])) == plan["source_sha256"], "immutable starting source changed")
     rows = mixed.schedule_rows(plan["schedule"])
     previous = Path(plan["source"])
     ledger_path = lane / LEDGER
@@ -141,17 +145,38 @@ def execute(plan):
     if attempts and attempts[-1]["status"] == "pending":
         command(binary, "--reconcile-pending", lane)
         attempts = read(ledger_path)["cpu_care_attempts"]
+    retention = plan.get("retention", {"mode": "all"})
+    require(retention.get("mode") in ("all", "recent-checkpoints"), "unknown retention policy")
+    accepted = [a for a in attempts if a["status"] == "accepted"]
+    if retention["mode"] == "recent-checkpoints":
+        keep = retention.get("keep")
+        require(type(keep) is int and keep >= 2, "invalid retained checkpoint count")
+        retained = {path_key(a["output"]) for a in accepted[-keep:]}
+    else:
+        retained = {path_key(a["output"]) for a in accepted}
+    if not accepted or retention["mode"] == "all":
+        require(pins(Path(plan["source"])) == plan["source_sha256"], "immutable starting source changed")
+    expected_source = plan["source_sha256"]
     slot = 0
     for index, attempt in enumerate(attempts):
         require(slot < len(rows) and attempt["seed"] == plan["seed_range"][0] + index and
                 same_path(attempt["output"], lane / f"episode-{index:05d}") and
-                attempt["source_sha256"] == pins(previous) and
+                attempt["source_sha256"] == expected_source and
                 attempt["lesson"] == rows[slot]["lesson"] and attempt["decisions"] == rows[slot]["decisions"],
                 "saved CPU attempt does not match explicit schedule/lineage")
         if attempt["status"] == "accepted":
             output = Path(attempt["output"])
-            require(pins(output) == attempt["native_output_sha256"], "accepted CPU output changed")
-            command(binary, "--validate-output", output)
+            expected_source = attempt["native_output_sha256"]
+            require(isinstance(expected_source, dict) and all(
+                isinstance(digest, str) and len(digest) == 64 and
+                all(c in "0123456789abcdef" for c in digest) for digest in expected_source.values()),
+                "invalid accepted continuation digests")
+            require(set(expected_source) == {"cpu-cycle.json", "trained.alife-foundation",
+                                            "actor-checkpoint.json", "value-checkpoint.json"},
+                    "accepted CPU state lacks continuation pins")
+            if path_key(output) in retained:
+                require(pins(output) == expected_source, "accepted CPU output changed")
+                command(binary, "--validate-output", output)
             previous = output
             slot += 1
         else:
@@ -203,11 +228,13 @@ def main():
     parser.add_argument("--seeds", help="explicit nonzero inclusive FIRST:LAST range")
     parser.add_argument("--temperature", type=float, default=1.)
     parser.add_argument("--known-exclusions", action="store_true")
+    parser.add_argument("--keep-checkpoints", type=int,
+                        help="new plans validate this many recent full checkpoints; old receipts/seeds remain")
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
     if args.resume:
         require(args.run and not any((args.binary, args.previous, args.lane, args.seed_history, args.schedule, args.seeds,
-                                      args.known_exclusions)), "resume uses only --resume LANE --run")
+                                      args.known_exclusions, args.keep_checkpoints)), "resume uses only --resume LANE --run")
         lane = args.resume.resolve(strict=True)
         plan = read(lane / PLAN)
         require(same_path(plan["lane"], lane), "saved lane identity changed")
