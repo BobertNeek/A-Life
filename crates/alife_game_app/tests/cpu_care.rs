@@ -245,7 +245,7 @@ fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dos
         "--seed",
         "891099",
         "--lesson",
-        "obstacle_navigation",
+        "maze_navigation",
         "--decisions",
         "2",
     ]);
@@ -536,4 +536,72 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         );
     }
     success(&["--validate-output", text(&third_output)]);
+}
+
+#[test]
+fn cpu_blocked_route_closes_the_real_gate_without_claiming_meal_success() {
+    let fixture = Fixture::new();
+    let source = fixture.0.join("source");
+    let first = success(&[
+        "--fixture",
+        "--output",
+        text(&source),
+        "--seed",
+        "894100",
+        "--lesson",
+        "eat_held_food",
+        "--decisions",
+        "2",
+    ]);
+    let before = snapshot(&source);
+    let lane = fixture.0.join("lane");
+    fs::create_dir(&lane).unwrap();
+    let history_path = fixture.0.join("history.json");
+    history(&history_path, &source, &lane, &[894100]);
+    let output = lane.join("blocked-route");
+    let receipt = success(&[
+        "--previous",
+        text(&source),
+        "--output",
+        text(&output),
+        "--seed-history",
+        text(&history_path),
+        "--seed",
+        "894101",
+        "--lesson",
+        "obstacle_navigation",
+        "--decisions",
+        "4",
+    ]);
+    assert_eq!(snapshot(&source), before);
+    assert_eq!(
+        load(output.join("collection-actor-checkpoint.json")),
+        load(source.join("actor-checkpoint.json"))
+    );
+    assert_eq!(
+        load(output.join("initial-value-checkpoint.json")),
+        load(source.join("value-checkpoint.json"))
+    );
+    assert_eq!(receipt["source_policy_version"], first["policy_version"]);
+    success(&["--validate-output", text(&output)]);
+    assert_eq!(receipt["episode"]["lesson"], "obstacle_navigation");
+    assert!(receipt["episode"]["navigation_gate"].is_array());
+    assert_eq!(receipt["training_ticks"], 4);
+    assert_eq!(receipt["captured_replay_rows"], 5);
+    assert_eq!(receipt["objective_state_reset"], false);
+    let trace = load(output.join("care-trace.json"));
+    let rows = trace["rows"].as_array().unwrap();
+    for row in rows {
+        assert_eq!(
+            row["navigation_gate_closed"],
+            row["decision_tick"].as_u64().unwrap() >= 2
+        );
+    }
+    assert!(rows
+        .iter()
+        .any(|row| row["navigation_gate_closed"] == true && row["loss_row"] == true));
+    if receipt["episode"]["trained_nourished_meals"] == 0 {
+        assert_eq!(receipt["episode"]["lesson_completed"], false);
+    }
+    assert!(!output.join("care-replay.json").exists());
 }

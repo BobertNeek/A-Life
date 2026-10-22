@@ -175,6 +175,13 @@ class CpuScheduleTests(unittest.TestCase):
         self.assertFalse(result['physical_savings_measured'])
         self.assertEqual(before, {str(p): p.read_bytes() for p in self.lane.rglob('*') if p.is_file()})
 
+    def test_cpu_blocked_route_is_explicit_and_gpu_schedule_stays_unchanged(self):
+        schedule = {'schema': 1, 'steps': [{'lesson': 'obstacle_navigation', 'episodes': 2, 'decisions': 64}]}
+        rows = cpu.mixed.schedule_rows(schedule, supported_lessons=cpu.CPU_LESSONS)
+        self.assertEqual(rows, [{'lesson': 'obstacle_navigation', 'decisions': 64}] * 2)
+        with self.assertRaises(ValueError):
+            cpu.mixed.schedule_rows(schedule)
+
     def test_unsupported_curriculum_and_inconsistent_dose_rejected(self):
         for lesson, decisions in [('obstacle_navigation', 2), ('feeding', 0), ('eat_held_food', 129)]:
             plan = copy.deepcopy(self.plan)

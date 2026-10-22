@@ -117,13 +117,13 @@ def inspect(directory, binary, *, on_started=None, guard=None, cutoff=None):
     return receipt, report, before
 
 
-def schedule_rows(document):
+def schedule_rows(document, *, supported_lessons=LESSONS):
     require(set(document) == {"schema", "steps"}, "schedule requires only schema and steps")
     rows = []
     for step in seeds._list(document["steps"]):
         require(isinstance(step, dict) and set(step) == {"lesson", "episodes", "decisions"},
                 "each schedule step requires lesson, episodes and decisions")
-        require(step["lesson"] in LESSONS, "unsupported care lesson")
+        require(step["lesson"] in supported_lessons, "unsupported care lesson")
         count = integer(step["episodes"], 1, seeds.MAX_ENTRIES)
         integer(step["decisions"], 1, 128)
         require(len(rows) + count <= seeds.MAX_ENTRIES, "schedule exceeds episode bound")
