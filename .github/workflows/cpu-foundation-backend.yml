@@ -3,10 +3,10 @@ name: CPU foundation backend
 on:
   push:
     branches: ["main"]
-    paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
+    paths: ["crates/alife_training/**", "crates/alife_archive/**", "crates/alife_semantic/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.toml", "Cargo.lock", ".cargo/**", "rust-toolchain*", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
   pull_request:
     branches: ["main"]
-    paths: ["crates/alife_training/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.lock", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
+    paths: ["crates/alife_training/**", "crates/alife_archive/**", "crates/alife_semantic/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.toml", "Cargo.lock", ".cargo/**", "rust-toolchain*", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
 
 permissions:
   contents: read
@@ -55,3 +55,65 @@ jobs:
         run: cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff -- -D warnings
       - name: Compile hardware differential test without requesting an adapter
         run: cargo check --locked -p alife_training --features cpu-backend,gpu-tests --test cpu_backend --test backend_handoff
+      - name: Package tested CPU executable
+        env:
+          EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import io
+          import json
+          import os
+          from pathlib import Path
+          import platform
+          import re
+          import subprocess
+          import tarfile
+
+          def command(*args):
+              return subprocess.check_output(args, text=True).strip()
+
+          revision = command('git', 'rev-parse', 'HEAD')
+          if revision != os.environ['EXPECTED_SOURCE_REVISION']:
+              raise SystemExit('Checked-out revision mismatch')
+          binary = Path('target/debug/train_cpu_care')
+          versions = re.findall(r'GLIBC_(\d+(?:\.\d+)+)', command('readelf', '--version-info', str(binary)))
+          minimum_glibc = max(set(versions), key=lambda value: tuple(map(int, value.split('.')))) if versions else None
+          rustc = command('rustc', '-vV')
+          with binary.open('rb') as handle:
+              digest = hashlib.file_digest(handle, 'sha256').hexdigest()
+          receipt = {
+              'schema': 1,
+              'source_revision': revision,
+              'source_tree': command('git', 'rev-parse', 'HEAD^{tree}'),
+              'executable_sha256': digest,
+              'executable_bytes': binary.stat().st_size,
+              'rustc': rustc,
+              'target': next(line.removeprefix('host: ') for line in rustc.splitlines() if line.startswith('host: ')),
+              'minimum_glibc': minimum_glibc,
+              'dynamic_libraries': re.findall(r'Shared library: \[(.*?)\]', command('readelf', '-d', str(binary))),
+              'build_host': {'system': platform.system(), 'machine': platform.machine(), 'libc': platform.libc_ver()},
+              'features': ['cpu-training'],
+              'build_profile': 'dev',
+              'production_training_executed': False,
+              'founder_promoted': False,
+              'workflow_run': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          artifact = Path('target/cpu-training-artifact')
+          artifact.mkdir()
+          receipt_bytes = (json.dumps(receipt, indent=2) + '\n').encode('utf-8')
+          with tarfile.open(artifact / 'cpu-training.tar.gz', 'w:gz') as archive:
+              archive.add(binary, arcname=binary.name)
+              info = tarfile.TarInfo('build-receipt.json')
+              info.size = len(receipt_bytes)
+              info.mode = 0o644
+              archive.addfile(info, io.BytesIO(receipt_bytes))
+          PY
+      - name: Upload CPU executable and receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpu-training-${{ github.event.pull_request.head.sha || github.sha }}
+          path: target/cpu-training-artifact
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
