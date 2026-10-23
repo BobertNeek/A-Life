@@ -36,6 +36,12 @@ jobs:
           cargo test --locked -p alife_training --features cpu-backend --lib native_receipt::
           cargo test --locked -p alife_training --features cpu-backend --lib cpu::
           cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_cli --test backend_handoff --test checkpoint_validation -- --nocapture
+      - name: Inference-only founder merge contracts
+        env:
+          RUST_MIN_STACK: '33554432'
+        run: |
+          cargo test --locked -p alife_training --features receipt-lineage --bin merge_founder_inference --test merge_inference_cli -- --nocapture
+          cargo clippy --locked -p alife_training --features receipt-lineage --bin merge_founder_inference --test merge_inference_cli -- -D warnings
       - name: Preserve GPU evidence and offline-only CPU boundaries
         run: |
           cargo test --locked -p alife_core --test cpu_neural_evidence --test experience_neural_decision --test packed_experience_logging

@@ -31,3 +31,8 @@ gpu-tests = ["alife_gpu_backend/gpu-tests", "alife_runtime/gpu-tests"]
 name = "train_cpu_foundation"
 path = "src/bin/train_cpu_foundation.rs"
 required-features = ["cpu-backend"]
+
+[[bin]]
+name = "merge_founder_inference"
+path = "src/bin/merge_founder_inference.rs"
+required-features = ["receipt-lineage"]
