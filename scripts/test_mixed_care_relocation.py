@@ -1,5 +1,6 @@
 """Saved relocation admission contracts; no native/GPU execution is mocked as a pass."""
 import copy
+import struct
 import unittest
 
 import run_mixed_care_serial as mixed
@@ -60,6 +61,44 @@ class RelocatedCareTests(unittest.TestCase):
 
     def test_exact_own_acquisition_and_trained_meal_are_admitted(self):
         self.validate(fixture())
+
+    def f32_fixture(self):
+        receipt = fixture()
+        evidence = receipt["food_relocation"]
+        initial = dict(x=6.294225, y=0.0, z=-0.30863175)
+        moved = dict(x=2.6913683, y=0.0, z=-3.2942252)
+        evidence.update(initial_position=initial, relocation_target=moved)
+        evidence["relocation"].update(from_position=initial, to_position=moved)
+        for row in evidence["rows"]:
+            position = moved if row["row"] >= 2 else initial
+            widened = {axis: struct.unpack("<f", struct.pack("<f", number))[0]
+                       for axis, number in position.items()}
+            row.update(food_position_before_decision=widened.copy(), food_position_after_outcome=widened.copy())
+        return receipt
+
+    def test_native_f32_serde_and_widened_trace_positions_bind_exactly(self):
+        receipt = self.f32_fixture()
+        evidence = receipt["food_relocation"]
+        self.assertNotEqual(evidence["relocation"]["to_position"], evidence["rows"][2]["food_position_before_decision"])
+        self.validate(receipt)
+
+    def test_adjacent_native_f32_position_still_contradicts_relocation(self):
+        for row, field in ((2, "food_position_before_decision"), (1, "food_position_after_outcome")):
+            with self.subTest(row=row):
+                receipt = self.f32_fixture()
+                position = receipt["food_relocation"]["rows"][row][field]
+                bits = struct.unpack("<I", struct.pack("<f", position["x"]))[0]
+                position["x"] = struct.unpack("<f", struct.pack("<I", bits + 1))[0]
+                with self.assertRaises(ValueError):
+                    self.validate(receipt)
+
+    def test_non_native_boundary_position_is_rejected(self):
+        for number in (float("inf"), float("nan"), 1e300, True):
+            with self.subTest(number=number):
+                receipt = self.f32_fixture()
+                receipt["food_relocation"]["rows"][2]["food_position_before_decision"]["x"] = number
+                with self.assertRaises(ValueError):
+                    self.validate(receipt)
 
     def test_bundle_manipulation_is_used_instead_of_representative_action(self):
         receipt = fixture()
