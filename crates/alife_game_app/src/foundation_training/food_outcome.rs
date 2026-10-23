@@ -16,8 +16,8 @@ pub struct FoundationFoodOutcome {
     pub nourished_meal_events: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-pub(crate) struct FoodOwnershipSnapshot {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct FoodOwnershipSnapshot {
     pub owner: Option<OrganismId>,
     pub consumed: bool,
 }

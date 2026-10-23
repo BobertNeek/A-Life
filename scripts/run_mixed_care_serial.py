@@ -22,7 +22,7 @@ import mixed_care_ledger as ledger_store
 import run_eat_held_food_night as host
 import summarize_ppo_diagnostics as inspector_io
 
-LESSONS = ("eat_held_food", "eat_reachable_food", "feeding")
+LESSONS = ("eat_held_food", "eat_reachable_food", "feeding", "relocated_food")
 LEDGER = host.MIXED_LEDGER_NAME
 FILES = seeds.SOURCE_FILES
 require = inspector_io.require
@@ -348,6 +348,133 @@ COUNT_FIELDS = ("requested_training_ticks", "captured_replay_rows", "trained_rep
                 "bootstrap_replay_rows", "completed_epochs", "actor_optimizer_updates", "value_optimizer_updates")
 
 
+def validate_food_relocation(receipt):
+    """Bind passive exact-target evidence to loss rows; a valid miss is still learning."""
+    evidence = receipt.get("food_relocation")
+    require(isinstance(evidence, dict) and evidence.get("schema") == 1 and evidence.get("assessment") is None,
+            "relocated-food evidence required")
+    organism = integer(evidence.get("organism"), 1)
+    target = integer(evidence.get("target"), 1)
+    captured, trained = receipt["captured_replay_rows"], receipt["trained_replay_rows"]
+    rows = evidence.get("rows")
+    require(evidence.get("captured_rows") == captured and evidence.get("trained_rows") == trained and
+            isinstance(rows, list) and len(rows) == captured, "relocation row counts disagree")
+    setup_tick = integer(evidence.get("setup_tick"))
+    for name in ("initial_position", "relocation_target"):
+        host.coordinates(evidence.get(name))
+    require(evidence["initial_position"] != evidence["relocation_target"], "relocation must move food")
+    event = evidence.get("relocation")
+    first = captured
+    if event is not None:
+        require(isinstance(event, dict), "invalid physical relocation")
+        first = integer(event.get("row"), 0, captured)
+        tick = integer(event.get("decision_tick"), setup_tick + 2)
+        for name in ("from_position", "to_position"):
+            host.coordinates(event.get(name))
+        require(event["from_position"] != event["to_position"] and
+                event["to_position"] == evidence["relocation_target"] and
+                event.get("ownership_before") == event.get("ownership_after") ==
+                {"owner": None, "consumed": False}, "relocation is not a loose-food world move")
+        require((first == 0 or rows[first - 1].get("outcome_tick", tick + 1) <= tick) and
+                (first == captured or rows[first].get("decision_tick", tick - 1) >= tick),
+                "relocation tick is outside its captured boundary")
+        if first < captured and rows[first].get("decision_tick") == tick:
+            require(rows[first].get("food_position_before_decision") == event["to_position"],
+                    "captured post-move position contradicts physical relocation")
+        if first > 0 and rows[first - 1].get("outcome_tick") == tick:
+            require(rows[first - 1].get("food_position_after_outcome") == event["from_position"],
+                    "captured pre-move position contradicts physical relocation")
+    acquisitions, meals = [], []
+    visible = [0, 0]
+    previous_tick = setup_tick
+    for index, trace in enumerate(rows):
+        require(isinstance(trace, dict) and trace.get("row") == index and
+                trace.get("organism_id") == organism and trace.get("lesson_target") == target and
+                trace.get("behavior") == "OnPolicy" and trace.get("loss_row") is (index < trained) and
+                trace.get("food_relocated") is (event is not None and index >= first) and
+                type(trace.get("food_visible")) is bool, "relocation row identity or loss binding mismatch")
+        tick = integer(trace.get("decision_tick"), previous_tick)
+        previous_tick = integer(trace.get("outcome_tick"), tick + 1, tick + 1)
+        integer(trace.get("sequence_id"), 1)
+        integer(trace.get("dispatch_generation"))
+        digest = trace.get("frame_digest")
+        require(isinstance(digest, list) and len(digest) == 4, "relocation frame digest missing")
+        for word in digest:
+            integer(word, 0, 2**64 - 1)
+        host.coordinates(trace.get("food_position_before_decision"))
+        if trace.get("food_position_after_outcome") is not None:
+            host.coordinates(trace["food_position_after_outcome"])
+        before = trace.get("lesson_target_ownership_before_decision")
+        after = trace.get("lesson_target_ownership_after_outcome")
+        for ownership in (before, after):
+            require(ownership is None or isinstance(ownership, dict) and
+                    type(ownership.get("consumed")) is bool and
+                    (ownership.get("owner") is None or type(ownership["owner"]) is int and ownership["owner"] > 0),
+                    "invalid food ownership observation")
+        action = trace.get("selected_action") or {}
+        require(action.get("organism_id") == organism, "foreign relocation action")
+        commands = trace.get("selected_commands")
+        outcomes = trace.get("channel_outcomes")
+
+        def selected(primitives, contact):
+            def physical(value):
+                return isinstance(value, dict) and value.get("target_entity") == target and value.get("contact") == contact
+            if commands is None:
+                return action.get("action_id") in primitives and action.get("target_entity") == target and physical(trace.get("physical"))
+            require(isinstance(commands, list) and (outcomes is None or isinstance(outcomes, list)),
+                    "invalid manipulation evidence")
+            return any(command.get("channel") == "Manipulation" and command.get("primitive") in primitives and
+                       (command.get("target") or {}).get("entity") == target and
+                       any(outcome.get("channel") == "Manipulation" and physical(outcome.get("physical"))
+                           for outcome in outcomes or []) for command in commands)
+
+        for name in ("ordinary_acquisition", "nourished_meal"):
+            require(type(trace.get(name)) is bool, "missing exact food outcome flag")
+        if trace["ordinary_acquisition"]:
+            require(before == {"owner": None, "consumed": False} and
+                    after == {"owner": organism, "consumed": False} and selected((210, 211), "Touch"),
+                    "acquisition requires the learner's actual food pickup")
+            acquisitions.append(index)
+        if trace["nourished_meal"]:
+            physiology = trace.get("physiology") or {}
+            keys = [f"{phase}_{field}" for field in ("energy", "hunger", "health", "injury", "pain")
+                    for phase in ("before", "after")]
+            require(all(type(physiology.get(key)) in (int, float) and math.isfinite(physiology[key]) for key in keys),
+                    "nourishment requires measured physiology")
+            require(before == {"owner": organism, "consumed": False} and after is not None and after["consumed"] and
+                    selected((210,), "Consumed") and
+                    (physiology["after_energy"] > physiology["before_energy"] or
+                     physiology["after_hunger"] < physiology["before_hunger"]) and
+                    physiology["after_health"] >= physiology["before_health"] and
+                    physiology["after_injury"] <= physiology["before_injury"] and
+                    physiology["after_pain"] <= physiology["before_pain"], "meal lacks exact-target nourishing consequence")
+            meals.append(index)
+        if index < trained and trace["food_visible"]:
+            visible[int(trace["food_relocated"])] += 1
+    require(evidence.get("acquisition_rows") == acquisitions and evidence.get("nourished_meal_rows") == meals,
+            "relocation outcome row indexes disagree")
+    outcome = evidence.get("food_outcome") or {}
+    for key in ("ordinary_acquisition_events", "nourished_meal_events"):
+        integer(outcome.get(key), 0, captured)
+    for key in ("trained_post_relocation_acquisitions", "trained_post_relocation_nourished_meals",
+                "trained_pre_relocation_visible_rows", "trained_post_relocation_visible_rows"):
+        integer(evidence.get(key), 0, trained)
+    require(outcome.get("organism") == organism and outcome.get("target") == target and
+            outcome.get("ordinary_acquisition_events") == len(acquisitions) and
+            outcome.get("nourished_meal_events") == len(meals), "relocation food outcome binding mismatch")
+    integer(outcome.get("consumption_events"), len(meals), captured)
+    integer(outcome.get("explicit_grab_acquisition_events"), 0, len(acquisitions))
+    post_acquisitions = sum(first <= row < trained for row in acquisitions) if event is not None else 0
+    post_meals = sum(first <= row < trained and any(first <= acquisition < row for acquisition in acquisitions)
+                     for row in meals) if event is not None else 0
+    require(evidence.get("trained_post_relocation_acquisitions") == post_acquisitions and
+            evidence.get("trained_post_relocation_nourished_meals") == post_meals and
+            evidence.get("trained_pre_relocation_visible_rows") == visible[0] and
+            evidence.get("trained_post_relocation_visible_rows") == visible[1] and
+            evidence.get("lesson_completed") is bool(post_meals and all(visible)),
+            "relocation completion includes untrained, unseen or unacquired food")
+
+
 def validate_receipt(receipt, old, row, seed):
     require(receipt.get("biological_objective_version") == 2 and
             receipt.get("objective_state_reset") is False, "requires objective2 without reset")
@@ -369,7 +496,7 @@ def validate_receipt(receipt, old, row, seed):
     held = integer(receipt.get("prepared_held_food_opportunities"), 0, 1)
     reachable = integer(receipt.get("prepared_reachable_food_opportunities"), 0, 1)
     require((held, reachable) == {"eat_held_food": (1, 0), "eat_reachable_food": (0, 1),
-                                "feeding": (0, 0)}[row["lesson"]], "lesson opportunities disagree")
+                                "feeding": (0, 0), "relocated_food": (0, 0)}[row["lesson"]], "lesson opportunities disagree")
     if row["lesson"] == "eat_held_food":
         host.assert_setup(receipt)
     elif row["lesson"] == "eat_reachable_food":
@@ -384,6 +511,8 @@ def validate_receipt(receipt, old, row, seed):
     trained = integer(receipt.get("trained_held_food_consumption_events"))
     require(trained <= captured <= held + reachable, "exact nourishing meal counts disagree")
     integer(receipt.get("consumed_events"), 0, receipt["captured_replay_rows"])
+    if row["lesson"] == "relocated_food":
+        validate_food_relocation(receipt)
 
 
 def validate_cycle(directory, previous, row, seed, inspector, *, on_started=None, guard=None, cutoff=None):
@@ -414,7 +543,16 @@ def summary(run):
         total["episodes"] += 1
         for key in COUNT_FIELDS:
             total[key] += receipt[key]
-        if receipt["lesson"] == "feeding":
+        if receipt["lesson"] == "relocated_food":
+            evidence = receipt["food_relocation"]
+            total["exact_nourishing_consumption_events"] += evidence["food_outcome"]["nourished_meal_events"]
+            total["trained_exact_nourishing_consumption_events"] += sum(
+                row < evidence["trained_rows"] for row in evidence["nourished_meal_rows"])
+            for key in ("trained_post_relocation_acquisitions", "trained_post_relocation_nourished_meals"):
+                total[key] = total.get(key, 0) + evidence[key]
+            total["completed_relocation_episodes"] = total.get("completed_relocation_episodes", 0) + int(evidence["lesson_completed"])
+            total["generic_consumed_events"] += receipt["consumed_events"]
+        elif receipt["lesson"] == "feeding":
             total["generic_consumed_events"] += receipt["consumed_events"]
         else:
             total["exact_nourishing_consumption_events"] += receipt["held_food_consumption_events"]

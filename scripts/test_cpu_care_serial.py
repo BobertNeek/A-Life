@@ -182,12 +182,11 @@ class CpuScheduleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             cpu.mixed.schedule_rows(schedule)
 
-    def test_relocated_food_is_explicit_and_does_not_change_gpu_curriculum(self):
+    def test_relocated_food_is_explicit_in_both_care_schedulers(self):
         schedule = {'schema': 1, 'steps': [{'lesson': 'relocated_food', 'episodes': 1, 'decisions': 16}]}
         self.assertEqual(cpu.mixed.schedule_rows(schedule, supported_lessons=cpu.CPU_LESSONS),
                          [{'lesson': 'relocated_food', 'decisions': 16}])
-        with self.assertRaises(ValueError):
-            cpu.mixed.schedule_rows(schedule)
+        self.assertEqual(cpu.mixed.schedule_rows(schedule), [{'lesson': 'relocated_food', 'decisions': 16}])
 
     def test_unsupported_curriculum_and_inconsistent_dose_rejected(self):
         for lesson, decisions in [('obstacle_navigation', 2), ('feeding', 0), ('eat_held_food', 129)]:
