@@ -50,12 +50,13 @@ def profile_planning(mixed, destination, *, metadata=None):
         setattr(owner, name, measured)
 
     for name in ("load", "read_ledger", "history", "recovery_attestation",
-                 "reconcile_prior_runs", "reserve", "file_hashes", "object_hash", "main"):
+                 "reconcile_prior_runs", "reserve", "file_hashes", "object_hash",
+                 "summary", "schedule_rows", "main"):
         if hasattr(mixed, name):
             instrument(mixed, name, name)
     instrument(mixed.host, "sha256", "sha256", hashed_file=True)
     try:
-        yield
+        yield instrument
     finally:
         error = sys.exc_info()[1]
         for owner, name, function in reversed(original):

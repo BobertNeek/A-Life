@@ -65,6 +65,15 @@ class PlanningProfileTests(unittest.TestCase):
         self.assertEqual(json.loads(self.output.read_text())["exit_code"], 7)
         self.assertEqual((self.mixed.main, self.mixed.history, self.host.sha256), original)
 
+    def test_caller_can_time_and_restore_its_host_io_boundaries(self):
+        helper = SimpleNamespace(read=lambda path: Path(path).read_bytes())
+        original = helper.read
+        with profiling.profile_planning(self.mixed, self.output) as instrument:
+            instrument(helper, "read", "helper.read")
+            self.assertEqual(helper.read(self.evidence), self.evidence.read_bytes())
+        self.assertIs(helper.read, original)
+        self.assertEqual(json.loads(self.output.read_text())["calls"][0]["stage"], "helper.read")
+
 
 if __name__ == "__main__":
     unittest.main()
