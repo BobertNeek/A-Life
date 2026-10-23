@@ -56,6 +56,56 @@ class SegmentedLedgerTests(unittest.TestCase):
             self.assertLessEqual(self.path.stat().st_size, 2500)
             self.assertTrue(all(p.stat().st_size <= 2500 for p in store.folder(self.path).iterdir()))
 
+    def test_pending_and_accepted_writes_hash_unchanged_prefix_once_each(self):
+        state = self.migrated()
+        state["runs"][-1]["attempts"][0]["status"] = "accepted"
+        store.write(self.path, state)
+        for seed in (13, 14):
+            attempt = {"seed": seed, "slot": seed - 12, "status": "pending"}
+            state["runs"][-1]["attempts"].append(attempt)
+            for status in ("pending", "accepted"):
+                with self.subTest(seed=seed, status=status):
+                    attempt["status"] = status
+                    with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
+                        store.write(self.path, state)
+                    hashed.assert_called_once_with(state["runs"][:2])
+                    self.assertEqual(dict(store.read(self.path)), dict(state))
+
+    def test_new_allocation_rebinds_prefix_and_nested_mutation_fails_before_commit(self):
+        state = self.migrated()
+        state["runs"][-1]["attempts"][0]["status"] = "accepted"
+        store.write(self.path, state)
+        state["runs"].append(self.allocation(13, "pending"))
+        with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
+            store.write(self.path, state)
+        self.assertEqual([len(call.args[0]) for call in hashed.call_args_list], [2, 3])
+        self.assertEqual(state.protected_prefix, 3)
+        self.assertEqual(state.prefix_sha256, store.canonical_hash(state["runs"][:3]))
+        self.assertEqual(dict(store.read(self.path)), dict(state))
+
+        state["runs"][-1]["attempts"][0]["status"] = "abandoned"
+        with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
+            store.write(self.path, state)
+        hashed.assert_called_once_with(state["runs"][:3])
+        self.assertEqual(dict(store.read(self.path)), dict(state))
+
+        before = self.path.read_bytes()
+        state["runs"][2]["attempts"][0]["receipt"]["note"] = "changed nested receipt"
+        with patch.object(store, "immutable") as publish, self.assertRaisesRegex(ValueError, "archived history"):
+            store.write(self.path, state)
+        publish.assert_not_called()
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_each_fresh_read_hashes_the_full_protected_prefix(self):
+        state = self.migrated()
+        for _ in range(2):
+            with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
+                admitted = store.read(self.path)
+            prefixes = [call.args[0] for call in hashed.call_args_list if call.args[0]]
+            self.assertEqual(prefixes, [state["runs"][:2]])
+            self.assertEqual(admitted.prefix_sha256, store.canonical_hash(state["runs"][:2]))
+            self.assertEqual(dict(admitted), dict(state))
+
     def test_failed_manifest_replace_preserves_old_bytes_and_orphans_are_reusable(self):
         state = self.legacy(); before = self.path.read_bytes(); real = os.replace
         def fail(source, target):
