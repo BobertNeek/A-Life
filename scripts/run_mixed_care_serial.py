@@ -18,6 +18,7 @@ import subprocess
 import sys
 
 import grab_food_seed_reservations as seeds
+import mixed_care_ledger as ledger_store
 import run_eat_held_food_night as host
 import summarize_ppo_diagnostics as inspector_io
 
@@ -58,13 +59,18 @@ def recovery_attestation(doc, ledger_path):
     evidence = seeds._list(attestation["evidence"])
     require(evidence, "recovery attestation requires cited exact-byte evidence")
     seen = set()
+    verified_segments = {}
     for item in evidence:
-        require(isinstance(item, dict) and set(item) == {"path", "sha256"} and
+        require(isinstance(item, dict) and
+                (set(item) == {"path", "sha256"} or
+                 (set(item) == {"path", "sha256", "format"} and item["format"] == ledger_store.MANIFEST)) and
                 isinstance(item["path"], str) and Path(item["path"]).is_absolute(), "invalid recovery evidence reference")
         path = Path(item["path"]).resolve(strict=True)
         require(path != ledger_path.resolve(), "recovery evidence must be an immutable snapshot, not the live mixed ledger")
         require(path not in seen and host.sha256(path) == item["sha256"], "recovery evidence changed or duplicated")
         seen.add(path)
+        if "format" in item:
+            ledger_store.verify_snapshot(path, ledger_path, read_document=load, verified=verified_segments)
 
 
 def load(path):
@@ -186,7 +192,7 @@ def history(path, source_hashes, source_seed, lane, *, admission=None):
 
 def read_ledger(path):
     require(not path.is_symlink(), "mixed ledger must not be a symlink")
-    ledger, _ = load(path)
+    ledger = ledger_store.read(path, read_document=load)
     require(ledger.get("kind") == "mixed-care-seed-ledger", "invalid mixed ledger kind")
     seeds._ranges(ledger.get("excluded_seed_ranges"))
     for seed in seeds._list(ledger.get("assessment_seeds")):
@@ -221,6 +227,14 @@ def read_ledger(path):
                 require(isinstance(attempt.get("sha256"), dict), "accepted seal lacks hashes")
                 slot += 1
     return ledger
+
+
+def write_ledger(path, ledger):
+    return ledger_store.write(path, ledger)
+
+
+def ledger_snapshot_reference(snapshot, source):
+    return ledger_store.snapshot_reference(snapshot, source, read_document=load)
 
 
 def object_hash(value):
@@ -301,8 +315,7 @@ def reserve(plan, ledger_path, *, commit=True):
     if ledger_path.exists():
         ledger = read_ledger(ledger_path)
     else:
-        ledger = {"schema": 1, "kind": "mixed-care-seed-ledger", "excluded_seed_ranges": [],
-                  "assessment_seeds": [], "runs": []}
+        ledger = ledger_store.State()
     require(all(run["output"] != plan["output"] for run in ledger["runs"]), "output already reserved; use --resume")
     if seed_admission(plan)["policy"] == "known-exclusions":
         reconcile_prior_runs(doc, ledger["runs"], check_payloads=retained_count(plan) is None)
@@ -327,7 +340,7 @@ def reserve(plan, ledger_path, *, commit=True):
     ledger["runs"].append({"output": plan["output"], "plan": plan, "plan_sha256": object_hash(plan),
                            "history_import": doc, "attempts": []})
     if commit:
-        seeds.write_document(ledger_path, ledger, compact=True)
+        write_ledger(ledger_path, ledger)
     return ledger
 
 
@@ -513,13 +526,13 @@ def execute(plan, *, resume=False, cutoff=None):
                     require(receipt == attempt["receipt"] and hashes == attempt["sha256"], "accepted dose changed")
                 else:
                     attempt.update(status="accepted", receipt=receipt, sha256=hashes)
-                    seeds.write_document(ledger_path, ledger, compact=True)
+                    write_ledger(ledger_path, ledger)
                 previous = directory
                 slot += 1
             else:
                 require(attempt["status"] == "pending", "accepted seal missing")
                 attempt["status"] = "abandoned"
-                seeds.write_document(ledger_path, ledger, compact=True)
+                write_ledger(ledger_path, ledger)
         seeds.write_document(output / "schedule.json", summary(run))
         while slot < len(rows):
             index = len(run["attempts"])
@@ -537,7 +550,7 @@ def execute(plan, *, resume=False, cutoff=None):
             require(not directory.exists(), "attempt output collision")
             attempt = {"slot": slot, "seed": seed, "directory": str(directory), "previous": str(previous), "status": "pending"}
             run["attempts"].append(attempt)
-            seeds.write_document(ledger_path, ledger, compact=True)
+            write_ledger(ledger_path, ledger)
             row = rows[slot]
             argv = [plan["binary"], "--resume-cycle", str(previous), str(directory), str(row["decisions"]),
                     "--seed", str(seed), "--lesson", row["lesson"]]
@@ -550,7 +563,7 @@ def execute(plan, *, resume=False, cutoff=None):
             receipt, hashes = validate_cycle(directory, previous, row, seed, Path(plan["inspector"]),
                                              **inspection_options)
             attempt.update(status="accepted", receipt=receipt, sha256=hashes)
-            seeds.write_document(ledger_path, ledger, compact=True)
+            write_ledger(ledger_path, ledger)
             seeds.write_document(output / "schedule.json", summary(run))
             previous = directory
             slot += 1

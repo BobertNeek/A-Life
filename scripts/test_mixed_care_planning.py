@@ -164,6 +164,71 @@ class MixedPlanningTests(unittest.TestCase):
         trainer.assert_not_called()
         self.assertFalse((self.root / mixed.LEDGER).exists())
 
+    def continuation_history(self):
+        path = self.root / mixed.LEDGER
+        ledger = mixed.read_ledger(path)
+        self.document['recovery_reconciliation']['prior_ledger_runs_sha256'] = mixed.object_hash(ledger['runs'])
+        snapshot = self.root / ('snapshot-' + str(len(ledger['runs'])) + '.json')
+        snapshot.write_bytes(path.read_bytes())
+        reference = mixed.ledger_snapshot_reference(snapshot, path)
+        self.document['recovery_reconciliation']['evidence'].append(reference)
+        self.save_history()
+        return ledger
+
+    def two_reserved_allocations(self):
+        self.assertEqual(self.plan()[0], 0)
+        path = self.root / mixed.LEDGER
+        mixed.reserve(mixed.load(self.output / 'plan.json')[0], path)
+        self.continuation_history()
+        self.output = self.root / 'second-plan'
+        self.argv[self.argv.index('--output') + 1] = str(self.output)
+        self.argv[self.argv.index('--seed') + 1] = '101'
+        self.assertEqual(self.plan()[0], 0)
+        mixed.reserve(mixed.load(self.output / 'plan.json')[0], path)
+        self.continuation_history()
+        self.output = self.root / 'third-plan'
+        self.argv[self.argv.index('--output') + 1] = str(self.output)
+        self.argv[self.argv.index('--seed') + 1] = '102'
+        return path
+
+    def test_archived_allocation_still_excludes_unused_reserved_seeds(self):
+        path = self.two_reserved_allocations()
+        self.assertEqual(len(mixed.read_ledger(path)['runs']), 2)
+        self.argv[self.argv.index('--seed') + 1] = '100'
+        before = path.read_bytes()
+        result, error = self.plan()
+        self.assertEqual(result, 1)
+        self.assertIn('allocation overlaps excluded seeds', error)
+        self.assertFalse(self.output.exists())
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_manifest_evidence_dependency_failure_blocks_plan_before_dispatch(self):
+        path = self.two_reserved_allocations()
+        manifest = mixed.load(path)[0]
+        segment = mixed.ledger_store.folder(path) / (manifest['head'] + '.json')
+        segment.write_text('corrupted archive')
+        before = path.read_bytes()
+        with patch.object(mixed, 'execute', side_effect=AssertionError('native dispatch')) as execute:
+            result, _ = self.plan()
+        self.assertEqual(result, 1)
+        execute.assert_not_called()
+        self.assertFalse(self.output.exists())
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_rehashed_archive_does_not_bypass_typed_plan_binding(self):
+        path = self.two_reserved_allocations()
+        manifest = mixed.load(path)[0]
+        segment = mixed.ledger_store.folder(path) / (manifest['head'] + '.json')
+        document = mixed.load(segment)[0]
+        document['run']['plan']['source'] = str(self.root / 'wrong-source')
+        data = mixed.ledger_store.encoded(document)
+        digest = mixed.hashlib.sha256(data).hexdigest()
+        (segment.parent / (digest + '.json')).write_bytes(data)
+        manifest['head'] = digest
+        mixed.seeds.write_document(path, manifest, compact=True)
+        with self.assertRaisesRegex(ValueError, 'ledger plan changed'):
+            mixed.read_ledger(path)
+
 
 if __name__ == "__main__":
     unittest.main()
