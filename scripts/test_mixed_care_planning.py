@@ -81,7 +81,7 @@ class MixedPlanningTests(unittest.TestCase):
         with patch.object(mixed.host, "sha256", side_effect=counted), \
                 patch.object(mixed, "execute", side_effect=AssertionError("planning dispatched")) as execute:
             self.assertEqual(self.plan()[0], 0)
-        self.assertEqual(reads, [self.evidence])
+        self.assertEqual([path.resolve() for path in reads], [self.evidence.resolve()])
         execute.assert_not_called()
         plan = mixed.load(self.output / "plan.json")[0]
         self.assertEqual(plan["retention"], {"mode": "recent-checkpoints", "keep": 3})
