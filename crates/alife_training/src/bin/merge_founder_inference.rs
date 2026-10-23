@@ -1,7 +1,7 @@
 //! Evaluation-only adapter. Ancestry authentication remains the caller's responsibility.
 use alife_core::{
     BrainCapacityClass, BrainPhenotype, FoundationWeightAsset, PhenotypeCompiler,
-    PhenotypeCompilerInputs,
+    PhenotypeCompilerInputs, TrainingStageManifest,
 };
 use alife_training::{
     merge_founder_branches, native_receipt::sha256, resolve_isolated_training_output,
@@ -135,18 +135,27 @@ fn merge(
     alife_training::FounderMergeReceipt,
     Value,
 )> {
-    for branch in [pc, cpu] {
+    let parent_stage = parent.asset.manifest().training_stage();
+    for (role, branch) in [("PC", pc), ("CPU", cpu)] {
         if !same_graph(&parent.phenotype, &branch.phenotype)
             || branch.actor.stage_mask != parent.actor.stage_mask
         {
             return Err("branch graph or actual stage mask differs from common parent".into());
         }
+        let stage = branch.asset.manifest().training_stage();
+        if stage.curriculum_version() != parent_stage.curriculum_version() {
+            return Err(format!("{role} curriculum version differs from common parent").into());
+        }
+        if stage.evaluation_version() != parent_stage.evaluation_version() {
+            return Err(format!("{role} evaluation version differs from common parent").into());
+        }
     }
     let branch = |saved: &Saved| -> Result<FounderMergeBranch> {
+        let stage = saved.asset.manifest().training_stage();
         let original = FoundationWeightAsset::from_trained_weights(
             &parent.phenotype,
             saved.asset.weights().to_vec(),
-            saved.asset.manifest().training_stage(),
+            stage,
         )?;
         if original != saved.asset {
             return Err(
@@ -157,7 +166,11 @@ fn merge(
         let asset = FoundationWeightAsset::from_trained_weights(
             &parent.phenotype,
             saved.asset.weights().to_vec(),
-            parent.asset.manifest().training_stage(),
+            TrainingStageManifest::new(
+                stage.curriculum_version(),
+                stage.evaluation_version(),
+                parent_stage.completed_stage_count(),
+            ),
         )?;
         if asset
             .weights()
@@ -176,7 +189,7 @@ fn merge(
     };
     let pc_view = branch(pc)?;
     let cpu_view = branch(cpu)?;
-    let views = json!({"derivation":"FoundationWeightAsset::from_trained_weights using the common parent graph and stage; original checkpoints are not rebound",
+    let views = json!({"derivation":"FoundationWeightAsset::from_trained_weights using the common parent graph and completed_stage_count; curriculum/evaluation versions remain unchanged; original checkpoints are not rebound",
         "weights_bit_identical":true,"original_own_stage_reconstruction_equal":true,
         "pc":{"original_digest":pc.asset.digest(),"original_stage":pc.asset.manifest().training_stage(),
             "view_digest":pc_view.asset.digest(),"view_stage":pc_view.asset.manifest().training_stage()},

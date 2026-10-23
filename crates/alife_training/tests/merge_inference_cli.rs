@@ -8,7 +8,14 @@ use std::{
     process::Command,
 };
 
-fn source(root: &Path, name: &str, delta: f32, different_mask: bool, frozen_change: bool) -> Value {
+fn source(
+    root: &Path,
+    name: &str,
+    delta: f32,
+    different_mask: bool,
+    frozen_change: bool,
+    stage: TrainingStageManifest,
+) -> Value {
     let dir = root.join(name);
     fs::create_dir(&dir).unwrap();
     let capacity = BrainCapacityClass::n2048();
@@ -44,7 +51,6 @@ fn source(root: &Path, name: &str, delta: f32, different_mask: bool, frozen_chan
         .unwrap();
     let mut weights = builtin.weights().to_vec();
     weights[index + usize::from(frozen_change)] += delta;
-    let stage = TrainingStageManifest::new(1, 1, if name == "pc" { 9241 } else { 7975 });
     let asset = FoundationWeightAsset::from_trained_weights(&original, weights, stage).unwrap();
     let (phenotype, inputs) = compile(&asset);
     let actor = FoundationTrainerCheckpoint {
@@ -63,6 +69,8 @@ fn source(root: &Path, name: &str, delta: f32, different_mask: bool, frozen_chan
         second_moment: vec![0.; asset.weights().len()],
         update_ages: vec![0; asset.weights().len()],
     };
+    asset.validate_against(&phenotype).unwrap();
+    actor.validate_for(&phenotype, asset.digest()).unwrap();
     let p = dir.join("phenotype.json");
     let a = dir.join("trained.alife-foundation");
     let c = dir.join("actor-checkpoint.json");
@@ -92,10 +100,23 @@ impl Fixture {
         Self(root)
     }
     fn request(&self, mismatch: bool, frozen_change: bool) -> Value {
+        self.request_with_stage(mismatch, frozen_change, None)
+    }
+    fn request_with_stage(
+        &self,
+        mismatch: bool,
+        frozen_change: bool,
+        stage_override: Option<(&str, TrainingStageManifest)>,
+    ) -> Value {
         let audit = self.0.join("ancestry.json");
         fs::write(&audit, b"{\"fixture_only\":true}").unwrap();
-        let request = json!({"parent":source(&self.0,"parent",0.,false,false),"pc":source(&self.0,"pc",0.02,false,frozen_change),
-            "cpu":source(&self.0,"cpu",0.04,mismatch,false),"ancestry_audit":audit});
+        let stage = |role: &str| match stage_override {
+            Some((branch, stage)) if role == branch => stage,
+            _ => TrainingStageManifest::new(1, 1, if role == "pc" { 9241 } else { 7975 }),
+        };
+        let request = json!({"parent":source(&self.0,"parent",0.,false,false,stage("parent")),
+            "pc":source(&self.0,"pc",0.02,false,frozen_change,stage("pc")),
+            "cpu":source(&self.0,"cpu",0.04,mismatch,false,stage("cpu")),"ancestry_audit":audit});
         fs::write(
             self.0.join("request.json"),
             serde_json::to_vec(&request).unwrap(),
@@ -161,6 +182,18 @@ fn differing_real_stage_counts_create_bit_identical_views_without_changing_input
         7975
     );
     assert_eq!(receipt["evaluation_views"]["weights_bit_identical"], true);
+    for role in ["pc", "cpu"] {
+        for kind in ["original_stage", "view_stage"] {
+            assert_eq!(
+                receipt["evaluation_views"][role][kind]["curriculum_version"],
+                1
+            );
+            assert_eq!(
+                receipt["evaluation_views"][role][kind]["evaluation_version"],
+                1
+            );
+        }
+    }
     assert_ne!(
         receipt["evaluation_views"]["pc"]["original_digest"],
         receipt["evaluation_views"]["pc"]["view_digest"]
@@ -228,4 +261,53 @@ fn frozen_coordinate_change_is_rejected_without_output_or_input_changes() {
     for (path, bytes) in before {
         assert_eq!(fs::read(path).unwrap(), bytes);
     }
+}
+
+fn assert_stage_version_rejected(role: &str, version: &str, stage: TrainingStageManifest) {
+    let fixture = Fixture::new();
+    fixture.request_with_stage(false, false, Some((role, stage)));
+    let before: Vec<_> = ["", "parent", "pc", "cpu"]
+        .into_iter()
+        .flat_map(|dir| fs::read_dir(fixture.0.join(dir)).unwrap())
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.is_file())
+        .map(|path| {
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    let result = fixture.run();
+    assert!(!result.status.success());
+    let error = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        error.contains(&format!(
+            "{} {version} version differs from common parent",
+            role.to_uppercase()
+        )),
+        "{error}"
+    );
+    assert!(!fixture.0.join("output").exists());
+    for (path, bytes) in before {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn pc_curriculum_version_mismatch_rejects_valid_original_without_changing_inputs() {
+    assert_stage_version_rejected("pc", "curriculum", TrainingStageManifest::new(2, 1, 9241));
+}
+
+#[test]
+fn pc_evaluation_version_mismatch_rejects_valid_original_without_changing_inputs() {
+    assert_stage_version_rejected("pc", "evaluation", TrainingStageManifest::new(1, 2, 9241));
+}
+
+#[test]
+fn cpu_curriculum_version_mismatch_rejects_valid_original_without_changing_inputs() {
+    assert_stage_version_rejected("cpu", "curriculum", TrainingStageManifest::new(2, 1, 7975));
+}
+
+#[test]
+fn cpu_evaluation_version_mismatch_rejects_valid_original_without_changing_inputs() {
+    assert_stage_version_rejected("cpu", "evaluation", TrainingStageManifest::new(1, 2, 7975));
 }
