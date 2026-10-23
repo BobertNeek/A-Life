@@ -11,7 +11,7 @@ use std::{
 fn source(
     root: &Path,
     name: &str,
-    delta: f32,
+    deltas: &[f32],
     different_mask: bool,
     frozen_change: bool,
     stage: TrainingStageManifest,
@@ -50,7 +50,9 @@ fn source(
         .position(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(_)))
         .unwrap();
     let mut weights = builtin.weights().to_vec();
-    weights[index + usize::from(frozen_change)] += delta;
+    for (offset, delta) in deltas.iter().enumerate() {
+        weights[index + offset + usize::from(frozen_change)] += delta;
+    }
     let asset = FoundationWeightAsset::from_trained_weights(&original, weights, stage).unwrap();
     let (phenotype, inputs) = compile(&asset);
     let actor = FoundationTrainerCheckpoint {
@@ -61,7 +63,9 @@ fn source(
         config: AdamWConfig::default(),
         stage_mask: StageTrainableMask::from_synapse_indices(
             &phenotype,
-            &[index as u32 + u32::from(different_mask)],
+            &(0..deltas.len())
+                .map(|offset| index as u32 + offset as u32 + u32::from(different_mask))
+                .collect::<Vec<_>>(),
         )
         .unwrap(),
         weights: asset.weights().to_vec(),
@@ -108,15 +112,26 @@ impl Fixture {
         frozen_change: bool,
         stage_override: Option<(&str, TrainingStageManifest)>,
     ) -> Value {
+        self.request_with_deltas(mismatch, frozen_change, stage_override, &[0.02], &[0.04])
+    }
+    fn request_with_deltas(
+        &self,
+        mismatch: bool,
+        frozen_change: bool,
+        stage_override: Option<(&str, TrainingStageManifest)>,
+        pc: &[f32],
+        cpu: &[f32],
+    ) -> Value {
+        assert_eq!(pc.len(), cpu.len());
         let audit = self.0.join("ancestry.json");
         fs::write(&audit, b"{\"fixture_only\":true}").unwrap();
         let stage = |role: &str| match stage_override {
             Some((branch, stage)) if role == branch => stage,
             _ => TrainingStageManifest::new(1, 1, if role == "pc" { 9241 } else { 7975 }),
         };
-        let request = json!({"parent":source(&self.0,"parent",0.,false,false,stage("parent")),
-            "pc":source(&self.0,"pc",0.02,false,frozen_change,stage("pc")),
-            "cpu":source(&self.0,"cpu",0.04,mismatch,false,stage("cpu")),"ancestry_audit":audit});
+        let request = json!({"parent":source(&self.0,"parent",&vec![0.;pc.len()],false,false,stage("parent")),
+            "pc":source(&self.0,"pc",pc,false,frozen_change,stage("pc")),
+            "cpu":source(&self.0,"cpu",cpu,mismatch,false,stage("cpu")),"ancestry_audit":audit});
         fs::write(
             self.0.join("request.json"),
             serde_json::to_vec(&request).unwrap(),
@@ -125,11 +140,17 @@ impl Fixture {
         request
     }
     fn run(&self) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_merge_founder_inference"))
+        self.run_policy("output", None)
+    }
+    fn run_policy(&self, output: &str, policy: Option<&str>) -> std::process::Output {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_merge_founder_inference"));
+        command
             .arg(self.0.join("request.json"))
-            .arg(self.0.join("output"))
-            .output()
-            .unwrap()
+            .arg(self.0.join(output));
+        if let Some(policy) = policy {
+            command.args(["--conflict-policy", policy]);
+        }
+        command.output().unwrap()
     }
 }
 impl Drop for Fixture {
@@ -233,6 +254,11 @@ fn incompatible_actual_masks_fail_before_output_creation() {
     assert!(!result.status.success());
     assert!(String::from_utf8_lossy(&result.stderr).contains("actual stage mask"));
     assert!(!fixture.0.join("output").exists());
+    assert!(!fixture
+        .run_policy("output", Some("midpoint"))
+        .status
+        .success());
+    assert!(!fixture.0.join("output").exists());
 }
 
 #[test]
@@ -261,6 +287,11 @@ fn frozen_coordinate_change_is_rejected_without_output_or_input_changes() {
     for (path, bytes) in before {
         assert_eq!(fs::read(path).unwrap(), bytes);
     }
+    assert!(!fixture
+        .run_policy("output", Some("midpoint"))
+        .status
+        .success());
+    assert!(!fixture.0.join("output").exists());
 }
 
 fn assert_stage_version_rejected(role: &str, version: &str, stage: TrainingStageManifest) {
@@ -287,6 +318,13 @@ fn assert_stage_version_rejected(role: &str, version: &str, stage: TrainingStage
         "{error}"
     );
     assert!(!fixture.0.join("output").exists());
+    let midpoint = fixture.run_policy("output", Some("midpoint"));
+    assert!(!midpoint.status.success());
+    assert!(String::from_utf8_lossy(&midpoint.stderr).contains(&format!(
+        "{} {version} version differs from common parent",
+        role.to_uppercase(),
+    )));
+    assert!(!fixture.0.join("output").exists());
     for (path, bytes) in before {
         assert_eq!(fs::read(path).unwrap(), bytes);
     }
@@ -310,4 +348,172 @@ fn cpu_curriculum_version_mismatch_rejects_valid_original_without_changing_input
 #[test]
 fn cpu_evaluation_version_mismatch_rejects_valid_original_without_changing_inputs() {
     assert_stage_version_rejected("cpu", "evaluation", TrainingStageManifest::new(1, 2, 7975));
+}
+
+#[test]
+fn midpoint_is_opt_in_changes_only_conflicts_and_records_policy_without_changing_inputs() {
+    let fixture = Fixture::new();
+    let request = fixture.request_with_deltas(
+        false,
+        false,
+        None,
+        &[0.02, 0.02, 0.02, 0.],
+        &[-0.04, 0.04, 0., 0.04],
+    );
+    let before: Vec<_> = ["parent", "pc", "cpu"]
+        .iter()
+        .flat_map(|role| request[role].as_object().unwrap().values())
+        .map(|path| {
+            let path = path.as_str().unwrap();
+            (path.to_owned(), fs::read(path).unwrap())
+        })
+        .collect();
+    let default = fixture.run();
+    assert!(
+        default.status.success(),
+        "{}",
+        String::from_utf8_lossy(&default.stderr)
+    );
+    let explicit = fixture.run_policy("explicit-default", Some("ancestor-revert"));
+    assert!(
+        explicit.status.success(),
+        "{}",
+        String::from_utf8_lossy(&explicit.stderr)
+    );
+    let midpoint = fixture.run_policy("midpoint", Some("midpoint"));
+    assert!(
+        midpoint.status.success(),
+        "{}",
+        String::from_utf8_lossy(&midpoint.stderr)
+    );
+    let path = |output: &str| fixture.0.join(output).join("merged.alife-foundation");
+    let default_bytes = fs::read(path("output")).unwrap();
+    assert_eq!(default_bytes, fs::read(path("explicit-default")).unwrap());
+    let original = FoundationWeightAsset::decode_canonical(&default_bytes).unwrap();
+    let changed =
+        FoundationWeightAsset::decode_canonical(&fs::read(path("midpoint")).unwrap()).unwrap();
+    let source_asset = |role: &str| {
+        FoundationWeightAsset::decode_canonical(
+            &fs::read(request[role]["foundation"].as_str().unwrap()).unwrap(),
+        )
+        .unwrap()
+    };
+    let parent = source_asset("parent");
+    let pc = source_asset("pc");
+    let cpu = source_asset("cpu");
+    let mut changed_count = 0;
+    for (index, (old, new)) in original.weights().iter().zip(changed.weights()).enumerate() {
+        let p = parent.weights()[index];
+        let a = pc.weights()[index];
+        let b = cpu.weights()[index];
+        if (f64::from(a) - f64::from(p)) * (f64::from(b) - f64::from(p)) < 0. {
+            assert_eq!(old.to_bits(), p.to_bits());
+            assert_eq!(
+                new.to_bits(),
+                (((f64::from(a) + f64::from(b)) * 0.5) as f32).to_bits()
+            );
+            changed_count += 1;
+        } else {
+            assert_eq!(old.to_bits(), new.to_bits());
+        }
+    }
+    assert_eq!(changed_count, 1);
+    for (output, policy, algorithm) in [
+        (
+            "output",
+            "ancestor_revert",
+            "alife_training::merge_founder_branches",
+        ),
+        (
+            "explicit-default",
+            "ancestor_revert",
+            "alife_training::merge_founder_branches",
+        ),
+        (
+            "midpoint",
+            "midpoint",
+            "alife_training::merge_founder_branches_with_policy",
+        ),
+    ] {
+        let receipt: Value = serde_json::from_slice(
+            &fs::read(fixture.0.join(output).join("merge-receipt.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(receipt["conflict_policy"], policy);
+        assert_eq!(receipt["algorithm"], algorithm);
+        assert_eq!(receipt["sign_conflicts"], 1);
+        assert_eq!(receipt["unique_changes"], 2);
+        assert_eq!(receipt["averaged_changes"], 1);
+        assert_eq!(receipt["optimizer_updates"], 0);
+        assert_eq!(receipt["non_resumable"], true);
+        assert_eq!(receipt["unpromoted"], true);
+        for key in [
+            "adam_merged",
+            "critic_merged",
+            "private_state_merged",
+            "ancestry_authenticated_by_tool",
+        ] {
+            assert_eq!(receipt[key], false);
+        }
+    }
+    let saved_candidate = fs::read(path("midpoint")).unwrap();
+    let saved_receipt = fs::read(fixture.0.join("midpoint/merge-receipt.json")).unwrap();
+    assert!(!fixture
+        .run_policy("midpoint", Some("midpoint"))
+        .status
+        .success());
+    assert_eq!(fs::read(path("midpoint")).unwrap(), saved_candidate);
+    assert_eq!(
+        fs::read(fixture.0.join("midpoint/merge-receipt.json")).unwrap(),
+        saved_receipt
+    );
+    for (path, bytes) in before {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn midpoint_rejects_nonfinite_asset_weights_without_publishing() {
+    for invalid in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+        let fixture = Fixture::new();
+        let request = fixture.request(false, false);
+        let path = Path::new(request["pc"]["foundation"].as_str().unwrap());
+        let mut bytes = fs::read(path).unwrap();
+        let asset = FoundationWeightAsset::decode_canonical(&bytes).unwrap();
+        let offset = bytes.len() - 32 - asset.weights().len() * 4;
+        bytes[offset..offset + 4].copy_from_slice(&invalid.to_le_bytes());
+        fs::write(path, &bytes).unwrap();
+        assert!(!fixture
+            .run_policy("output", Some("midpoint"))
+            .status
+            .success());
+        assert!(!fixture.0.join("output").exists());
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+}
+
+#[test]
+fn midpoint_rejects_actor_numeric_overflow_without_publishing() {
+    let fixture = Fixture::new();
+    let request = fixture.request(false, false);
+    let path = Path::new(request["pc"]["actor_checkpoint"].as_str().unwrap());
+    let mut actor: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+    actor["weights"][0] = json!(1e100);
+    let bytes = serde_json::to_vec(&actor).unwrap();
+    fs::write(path, &bytes).unwrap();
+    assert!(!fixture
+        .run_policy("output", Some("midpoint"))
+        .status
+        .success());
+    assert!(!fixture.0.join("output").exists());
+    assert_eq!(fs::read(path).unwrap(), bytes);
+}
+
+#[test]
+fn unknown_conflict_policy_fails_before_admission_or_output_creation() {
+    let fixture = Fixture::new();
+    let result = fixture.run_policy("output", Some("unknown"));
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("usage:"));
+    assert!(!fixture.0.join("output").exists());
 }

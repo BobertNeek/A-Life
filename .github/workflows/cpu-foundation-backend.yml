@@ -40,6 +40,7 @@ jobs:
         env:
           RUST_MIN_STACK: '33554432'
         run: |
+          cargo test --locked -p alife_training --lib founder_merge::tests -- --nocapture
           cargo test --locked -p alife_training --features receipt-lineage --bin merge_founder_inference --test merge_inference_cli -- --nocapture
           cargo clippy --locked -p alife_training --features receipt-lineage --bin merge_founder_inference --test merge_inference_cli -- -D warnings
       - name: Preserve GPU evidence and offline-only CPU boundaries
