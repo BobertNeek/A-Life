@@ -220,7 +220,7 @@ def summarize(document, *, pilot=None, decision_budget=None, execution_status="u
         "execution": {"caller_declared_status": execution_status, "decision_budget": decision_budget,
                       "observed_decisions": len(rows), "contiguous_from_zero": contiguous,
                       "within_declared_budget": within_budget,
-                      "pilot_ticks": pilot_ticks, "whole_trace_counts_available": complete,
+                      "pilot_ticks": pilot_ticks, "capture_complete": complete,
                       "budget_exhausted": len(rows) >= decision_budget if complete and decision_budget is not None else None},
         "metrics": metrics,
         "provenance": {key: pilot.get(key) for key in ("seed", "lesson", "source_asset_digest", "teacher_mode", "initial_sampling", "silent_request", "teacher_cue_frames")},
