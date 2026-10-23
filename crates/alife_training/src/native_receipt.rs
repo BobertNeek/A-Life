@@ -179,6 +179,7 @@ pub struct Lineage {
 enum Frame {
     Inline(Value),
     Archived(String),
+    TerminalProof,
 }
 fn header(value: &Value) -> Value {
     let mut result = serde_json::Map::new();
@@ -377,7 +378,13 @@ impl Lineage {
                 result
                     .reserve_index(serde_json::to_vec(&proof).map_err(io::Error::other)?.len())?;
                 result.terminal_proof = Some(proof);
-                result.push_frame(&child, current_digest.take())?;
+                if current_digest.is_some() {
+                    result.push_frame(&child, current_digest.take())?;
+                } else {
+                    // The inline terminal already lives in terminal_proof.
+                    // Keep a reference instead of a second full metadata copy.
+                    result.push_index_frame(Frame::TerminalProof, 128)?;
+                }
                 break;
             }
             expected_domain = Some(name);
@@ -394,17 +401,20 @@ impl Lineage {
         Ok(())
     }
     fn push_frame(&mut self, value: &Value, digest: Option<String>) -> io::Result<()> {
+        let (frame, bytes) = if let Some(digest) = digest {
+            (Frame::Archived(digest), 128)
+        } else {
+            let value = header(value);
+            let bytes = serde_json::to_vec(&value).map_err(io::Error::other)?.len();
+            (Frame::Inline(value), bytes)
+        };
+        self.push_index_frame(frame, bytes)
+    }
+    fn push_index_frame(&mut self, frame: Frame, bytes: usize) -> io::Result<()> {
         if self.frames.len() >= MAX_LINEAGE_RECEIPTS {
             return Err(invalid("native lineage work bound exceeded"));
         }
-        let frame = if let Some(digest) = digest {
-            self.reserve_index(128)?;
-            Frame::Archived(digest)
-        } else {
-            let value = header(value);
-            self.reserve_index(serde_json::to_vec(&value).map_err(io::Error::other)?.len())?;
-            Frame::Inline(value)
-        };
+        self.reserve_index(bytes)?;
         self.frames.push(frame);
         Ok(())
     }
@@ -417,6 +427,12 @@ impl Lineage {
                 let bytes = self.imported_bytes(&self.source_directory, digest)?;
                 Ok(header(&parse(&bytes)?))
             }
+            Frame::TerminalProof => self
+                .terminal_proof
+                .as_ref()
+                .and_then(|proof| proof.get("terminal_native_receipt"))
+                .map(header)
+                .ok_or_else(|| invalid("missing retained inline terminal proof")),
         })
     }
     pub fn contains_fixture(&self) -> io::Result<bool> {
@@ -484,10 +500,10 @@ impl Lineage {
     }
     /// Include the exact direct parent as a new blob, retaining inherited blobs.
     pub fn check_parent(&self, bytes: &[u8]) -> io::Result<String> {
-        let digest = sha256(bytes);
         if bytes.len() > MAX_RECEIPT_BYTES {
             return Err(invalid("seed evidence exceeds64 MiB"));
         }
+        let digest = sha256(bytes);
         if self.retained.contains_key(&digest) {
             return Ok(digest);
         }
@@ -497,12 +513,12 @@ impl Lineage {
         if self.frames.len() >= MAX_LINEAGE_RECEIPTS {
             return Err(invalid("native lineage work bound exceeded"));
         }
-        let retained: usize = self.retained.values().map(Vec::len).sum();
+        // The single raw parent has its own per-document budget above. Its
+        // header is already in the index: charging raw payload here as well
+        // would reject previously valid large (32..64 MiB) direct parents.
         if self
             .index_bytes
-            .checked_add(retained)
-            .and_then(|n| n.checked_add(bytes.len()))
-            .and_then(|n| n.checked_add(384))
+            .checked_add(384)
             .is_none_or(|n| n > MAX_LINEAGE_INDEX_BYTES)
         {
             return Err(invalid("native lineage reference index exceeds64 MiB"));
@@ -764,6 +780,62 @@ mod tests {
         assert_eq!(lineage.index_bytes, before + 384);
         assert!(lineage.retain_parent(b"{}".to_vec()).is_err());
         assert_eq!(lineage.retained.len(), 1);
+    }
+    #[test]
+    fn large_valid_direct_parent_does_not_consume_the_index_budget_twice() {
+        let source = Tree::new();
+        let root = json!({"complete":true,"mode":"native_cpu_fresh_cohort","backend":"native-cpu",
+            "receipt_filename":"cpu-cycle.json","objective_state_reset":false,
+            "biological_objective_version":2,"critic_objective_version":1,"seed":7,"fixture":true,
+            "seed_provenance":{"source_sha256":{}},
+            "large_metadata":"x".repeat(40 * 1024 * 1024),"nested":{"assessment_seeds":[17]}});
+        let bytes = serde_json::to_vec(&root).unwrap();
+        assert!(bytes.len() > MAX_RECEIPT_BYTES / 2 && bytes.len() < MAX_RECEIPT_BYTES);
+        let mut lineage = Lineage::load(&root, &source.0).unwrap();
+        let before = lineage.index_bytes;
+        lineage.check_parent(&bytes).unwrap();
+        let digest = lineage.retain_parent(bytes.clone()).unwrap();
+        assert_eq!(lineage.index_bytes, before + 384);
+        let output = Tree::new();
+        lineage.write_to(&output.0).unwrap();
+        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        let child = reference("cpu-cycle.json", &digest, 8);
+        let restored = Lineage::load(&child, &output.0).unwrap();
+        let restored_parent = restored.frames().last().unwrap().unwrap();
+        assert_eq!(restored_parent, root);
+        assert!(restored.contains_fixture().unwrap());
+    }
+    #[test]
+    fn large_inline_terminal_keeps_one_metadata_copy_and_complete_evidence() {
+        let source = Tree::new();
+        let terminal = json!({"seed":17,"large_metadata":"x".repeat(40 * 1024 * 1024),
+            "nested":{"assessment_seeds":[18],"reserved_seed_ranges":[[19,20]]}});
+        let mut root = reference(
+            "cycle.json",
+            &sha256(&serde_json::to_vec(&terminal).unwrap()),
+            21,
+        );
+        root["seed_provenance"]
+            .as_object_mut()
+            .unwrap()
+            .remove("native_source_receipt_ref");
+        root["seed_provenance"]["native_source_receipt"] = terminal.clone();
+        let bytes = serde_json::to_vec(&root).unwrap();
+        assert!(bytes.len() > MAX_RECEIPT_BYTES / 2 && bytes.len() < MAX_RECEIPT_BYTES);
+        let mut lineage = Lineage::load(&root, &source.0).unwrap();
+        assert!(lineage.index_bytes < 41 * 1024 * 1024);
+        assert_eq!(lineage.frames().last().unwrap().unwrap(), terminal);
+        let digest = lineage.retain_parent(bytes.clone()).unwrap();
+        let output = Tree::new();
+        lineage.write_to(&output.0).unwrap();
+        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        let child = reference("cpu-cycle.json", &digest, 22);
+        let restored = Lineage::load(&child, &output.0).unwrap();
+        assert_eq!(restored.frames().last().unwrap().unwrap(), terminal);
+        assert_eq!(
+            restored.terminal_proof.unwrap()["terminal_native_receipt"],
+            terminal
+        );
     }
     #[test]
     fn exported_ancestry_survives_source_removal_without_rewriting_blobs() {
