@@ -1043,17 +1043,6 @@ mod sampling_temperature_tests {
     }
 
     #[test]
-    fn relocated_food_optional_evidence_preserves_legacy_cycle_and_optimizer_identity() {
-        let (receipt, asset, actor, value) = cycle_handoff();
-        let encoded = serde_json::to_value(&receipt).unwrap();
-        assert!(!encoded.as_object().unwrap().contains_key("food_relocation"));
-        let restored: FoundationCycleReceipt = serde_json::from_value(encoded.clone()).unwrap();
-        assert!(restored.food_relocation.is_none());
-        assert_eq!(serde_json::to_value(&restored).unwrap(), encoded);
-        validate_cycle_optimizer_handoff(&restored, &asset, &actor, &value).unwrap();
-    }
-
-    #[test]
     fn relocated_food_decision_bound_is_checked_before_source_or_output_access() {
         for decisions in [0, 2049, 36_000, usize::MAX] {
             let error = run_foundation_training_cycle_profiled(
@@ -1655,6 +1644,17 @@ mod founder_refresh_tests {
         let legacy: FoundationCycleReceipt = serde_json::from_value(encoded).unwrap();
         assert!(legacy.reachable_food_setup.is_none());
         assert_eq!(legacy.prepared_reachable_food_opportunities, 0);
+    }
+
+    #[test]
+    fn relocated_food_optional_evidence_preserves_legacy_cycle_and_optimizer_identity() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let encoded = serde_json::to_value(&receipt).unwrap();
+        assert!(!encoded.as_object().unwrap().contains_key("food_relocation"));
+        let restored: FoundationCycleReceipt = serde_json::from_value(encoded.clone()).unwrap();
+        assert!(restored.food_relocation.is_none());
+        assert_eq!(serde_json::to_value(&restored).unwrap(), encoded);
+        validate_cycle_optimizer_handoff(&restored, &asset, &actor, &value).unwrap();
     }
 
     fn cycle_handoff() -> (
