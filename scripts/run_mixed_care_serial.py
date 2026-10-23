@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import struct
 import subprocess
 import sys
 
@@ -348,6 +349,18 @@ COUNT_FIELDS = ("requested_training_ticks", "captured_replay_rows", "trained_rep
                 "bootstrap_replay_rows", "completed_epochs", "actor_optimizer_updates", "value_optimizer_updates")
 
 
+def world_position_f32(value):
+    """Compare native Vec3f values across typed serde and widened JSON traces."""
+    coordinates = host.coordinates(value)
+    require(all(type(number) in (int, float) for number in coordinates), "invalid native f32 pose")
+    try:
+        result = struct.unpack("<3f", struct.pack("<3f", *coordinates))
+    except (OverflowError, struct.error) as error:
+        raise ValueError("pose is outside native f32 range") from error
+    require(all(math.isfinite(number) for number in result), "pose is outside native f32 range")
+    return result
+
+
 def validate_food_relocation(receipt):
     """Bind passive exact-target evidence to loss rows; a valid miss is still learning."""
     evidence = receipt.get("food_relocation")
@@ -379,10 +392,12 @@ def validate_food_relocation(receipt):
                 (first == captured or rows[first].get("decision_tick", tick - 1) >= tick),
                 "relocation tick is outside its captured boundary")
         if first < captured and rows[first].get("decision_tick") == tick:
-            require(rows[first].get("food_position_before_decision") == event["to_position"],
+            require(world_position_f32(rows[first].get("food_position_before_decision")) ==
+                    world_position_f32(event["to_position"]),
                     "captured post-move position contradicts physical relocation")
         if first > 0 and rows[first - 1].get("outcome_tick") == tick:
-            require(rows[first - 1].get("food_position_after_outcome") == event["from_position"],
+            require(world_position_f32(rows[first - 1].get("food_position_after_outcome")) ==
+                    world_position_f32(event["from_position"]),
                     "captured pre-move position contradicts physical relocation")
     acquisitions, meals = [], []
     visible = [0, 0]
