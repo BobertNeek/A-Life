@@ -756,28 +756,66 @@ mod tests {
         collect(&mut world, &mut collector, false);
         collect(&mut world, &mut collector, false);
         collector.before_step(&mut world).unwrap();
-        let other = world.entity_id("food-02").unwrap();
         let body = world.entity(world.organism_entity_ids()[0].1).unwrap();
         let origin = body.position;
         let angle = body.body_yaw + body.head_yaw;
-        super::super::move_scenario_object(
-            &mut world,
-            other,
-            Vec3f::new(
-                origin.x + 0.05 * angle.cos(),
-                origin.y,
-                origin.z + 0.05 * angle.sin(),
-            ),
-        )
-        .unwrap();
-        for _ in 0..2 {
+        let other = world
+            .editor_spawn_object(alife_world::WorldEditorSpawnSpec {
+                label: "alternate-food".into(),
+                kind: alife_world::WorldObjectKind::Food,
+                organism_id: None,
+                position: Vec3f::new(
+                    origin.x + 0.05 * angle.cos(),
+                    origin.y,
+                    origin.z + 0.05 * angle.sin(),
+                ),
+                nutrition: alife_world::FoodVariety::Root.nutrition(),
+                hazard_pain: 0.0,
+                radius: 0.3,
+                token_id: None,
+            })
+            .unwrap();
+        world
+            .set_food_variety(other, alife_world::FoodVariety::Root)
+            .unwrap();
+        assert_ne!(other, collector.receipt.target);
+        // Keep this tightly packed identity regression free from the intended
+        // food optically occluding the separately spawned alternate meal.
+        world
+            .editor_set_optical_opacity(collector.receipt.target, 0.0)
+            .unwrap();
+        for row in 0..2 {
             let (before, frame, behavior, patch) =
                 act(&mut world, &mut collector, true, Some(other));
+            assert_eq!(patch.outcome().physical.target_entity, Some(other));
+            assert_eq!(
+                patch.outcome().physical.contact,
+                if row == 0 {
+                    alife_core::PhysicalContactKind::Touch
+                } else {
+                    alife_core::PhysicalContactKind::Consumed
+                }
+            );
+            if row == 0 {
+                assert_eq!(
+                    world.entity(other).unwrap().carried_by,
+                    Some(collector.receipt.organism)
+                );
+            } else {
+                assert!(super::super::held_food_body_benefit(
+                    patch.outcome().measured_physiology.unwrap()
+                ));
+            }
             collector
                 .observe_row(&world, before, &frame, &behavior, &patch)
                 .unwrap();
         }
         assert!(world.entity(other).unwrap().consumed);
+        assert!(!world.entity(collector.receipt.target).unwrap().consumed);
+        assert_eq!(
+            world.entity(collector.receipt.target).unwrap().carried_by,
+            None
+        );
         let receipt = collector.finish(4).unwrap();
         assert!(receipt.acquisition_rows.is_empty());
         assert!(receipt.nourished_meal_rows.is_empty());
