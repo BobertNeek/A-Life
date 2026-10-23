@@ -624,7 +624,9 @@ def main(argv=None):
             history_path = args.seed_history.resolve(strict=True)
             policy = args.seed_admission or "strict"
             admission = {"policy": policy, "historical_freshness": FRESHNESS[policy]}
-            _, digest, _, _ = history(history_path, hashes, receipt.get("seed"), output.parent, admission=admission)
+            # Bind the bytes here; reserve() verifies all history/evidence once
+            # and rejects a changed digest before creating any plan or reservation.
+            _, digest = load(history_path)
             plan = {"schema": 1, "kind": "mixed-care-plan", "output": str(output), "source": str(source),
                     "source_sha256": hashes, "source_receipt": receipt,
                     "retention": {"mode": "recent-checkpoints", "keep": keep}, "source_seed": receipt["seed"], "binary": str(binary), "inspector": str(inspector),
