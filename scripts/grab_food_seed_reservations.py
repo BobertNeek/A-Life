@@ -145,12 +145,13 @@ def commit(path, prepared, allocation):
     write_document(path, value)
 
 
-def write_document(path, value):
+def write_document(path, value, *, compact=False):
     """Durably replace a bounded JSON document; caller owns its lane lock."""
     path = Path(path)
     if path.is_symlink():
         raise ValueError("durable document must not be a symlink")
-    payload = (json.dumps(value, indent=2, allow_nan=False) + "\n").encode("utf-8")
+    formatting = {"separators": (",", ":")} if compact else {"indent": 2}
+    payload = (json.dumps(value, allow_nan=False, **formatting) + "\n").encode("utf-8")
     if len(payload) > MAX_DOCUMENT_BYTES:
         raise ValueError("seed ledger exceeds its bounded document size; reconcile before continuing")
     temporary = None
