@@ -174,6 +174,50 @@ class CareTraceSummaryTests(unittest.TestCase):
         self.assertEqual(r['metrics']['nourishing_consumption']['events'][0]['decision_tick'], 131)
         self.assertEqual(r['metrics']['visibility_loss']['count'], 0)
 
+    def test_native_six_channel_bundle_keeps_species_specific_out_of_care_metrics(self):
+        rows = meal_rows()
+        for r in rows:
+            for channel in ['Locomotion', 'Orientation', 'Vocal', 'Posture', {'SpeciesSpecific': 0}]:
+                r['selected_commands'].append(command(channel, 1, None))
+                r['channel_outcomes'].append(dict(channel=copy.deepcopy(channel), physical=dict(
+                    contact='None', target_entity=None)))
+        before = copy.deepcopy(rows)
+        r = summary(rows)
+        self.assertEqual(r['metrics']['own_pickup']['count'], 1)
+        self.assertEqual(r['metrics']['nourishing_consumption']['count'], 1)
+        self.assertEqual(r['metrics']['locomotion_switch_away']['count'], 0)
+        self.assertEqual(rows, before)
+        # A species-specific channel must never stand in for Manipulation.
+        rows = meal_rows()
+        rows[1]['selected_commands'][0]['channel'] = {'SpeciesSpecific': 0}
+        rows[1]['channel_outcomes'][0]['channel'] = {'SpeciesSpecific': 0}
+        r = summary(rows)
+        self.assertEqual(r['metrics']['nourishing_consumption']['observed_count'], 0)
+        self.assertIsNone(r['metrics']['nourishing_consumption']['count'])
+
+    def test_species_specific_channels_use_native_keys_for_duplicate_detection(self):
+        for field in ['selected_commands', 'channel_outcomes']:
+            with self.subTest(field=field):
+                rows = meal_rows()
+                if field == 'selected_commands':
+                    make = lambda n: command({'SpeciesSpecific': n}, 1, None)
+                else:
+                    make = lambda n: dict(channel={'SpeciesSpecific': n}, physical=dict(contact='None', target_entity=None))
+                rows[0][field].extend([make(0), make(255)])
+                self.assertEqual(summary(rows)['metrics']['own_pickup']['count'], 1)
+                rows[0][field].append(make(0))
+                with self.assertRaisesRegex(ValueError, 'duplicate'): summary(rows)
+
+    def test_malformed_species_specific_channels_are_rejected(self):
+        invalid = ['SpeciesSpecific', {'SpeciesSpecific': -1}, {'SpeciesSpecific': 256},
+                   {'SpeciesSpecific': True}, {'SpeciesSpecific': 0.5}, {'SpeciesSpecific': '0'},
+                   {'SpeciesSpecific': 0, 'extra': 1}, None]
+        for field in ['selected_commands', 'channel_outcomes']:
+            for channel in invalid:
+                with self.subTest(field=field, channel=channel):
+                    rows = meal_rows(); rows[0][field][0]['channel'] = channel
+                    with self.assertRaisesRegex(ValueError, 'native motor channel'): summary(rows)
+
     def test_early_completion_and_unknown_budget_are_not_budget_exhaustion(self):
         self.assertFalse(summary(meal_rows(), decision_budget=128)['execution']['budget_exhausted'])
         self.assertIsNone(summary(meal_rows(), decision_budget=None)['execution']['budget_exhausted'])

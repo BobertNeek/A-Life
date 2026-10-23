@@ -22,6 +22,7 @@ from foundation_probe_schema import candidates, number, object_slots, position, 
 
 MAX_BYTES = 64 * 1024 * 1024
 CHANNELS = ("Locomotion", "Manipulation")
+NATIVE_CHANNEL_KEYS = {"Locomotion": 0, "Orientation": 1, "Manipulation": 2, "Vocal": 3, "Posture": 4}
 MISSING = object()
 
 
@@ -32,6 +33,15 @@ def require(condition, message):
 
 def identifier(value):
     return uint(value, 64, positive=True)
+
+
+def channel_key(value):
+    """Match MotorChannel serde forms/canonical_key without rewriting evidence."""
+    if isinstance(value, str) and value in NATIVE_CHANNEL_KEYS:
+        return NATIVE_CHANNEL_KEYS[value]
+    if isinstance(value, dict) and set(value) == {"SpeciesSpecific"} and uint(value["SpeciesSpecific"], 8):
+        return 0x100 + value["SpeciesSpecific"]
+    raise ValueError("malformed or unsupported native motor channel")
 
 
 def ownership(value):
@@ -52,8 +62,9 @@ def commands(row):
     seen = set()
     for c in value:
         require(isinstance(c, dict) and {"channel", "primitive", "target"} <= c.keys(), "malformed command")
-        require(isinstance(c["channel"], str) and c["channel"] not in seen, "duplicate/invalid channel")
-        seen.add(c["channel"])
+        key = channel_key(c["channel"])
+        require(key not in seen, "duplicate channel")
+        seen.add(key)
         require(uint(c["primitive"], 32, positive=True), "invalid primitive")
         if c["target"] is not None:
             require(isinstance(c["target"], dict) and "entity" in c["target"], "malformed command target")
@@ -73,9 +84,10 @@ def outcomes(row):
     require(isinstance(value, list) and len(value) <= 6, "malformed channel outcomes")
     seen = set()
     for c in value:
-        require(isinstance(c, dict) and isinstance(c.get("channel"), str), "malformed outcome")
-        require(c["channel"] not in seen, "duplicate outcome channel")
-        seen.add(c["channel"])
+        require(isinstance(c, dict), "malformed outcome")
+        key = channel_key(c.get("channel"))
+        require(key not in seen, "duplicate outcome channel")
+        seen.add(key)
         p = c.get("physical")
         require(isinstance(p, dict) and {"contact", "target_entity"} <= p.keys(), "malformed physical outcome")
         require(isinstance(p["contact"], str), "malformed contact")
@@ -173,8 +185,9 @@ def summarize(document, *, pilot=None, decision_budget=None, execution_status="u
         targets = {channel: None for channel in CHANNELS}
         if selected_known:
             for c in selected:
-                if c["channel"] in targets:
-                    targets[c["channel"]] = entity(c)
+                for channel in CHANNELS:
+                    if c["channel"] == channel:
+                        targets[channel] = entity(c)
         for channel in CHANNELS:
             known = adjacent and selected_known and previous["selected_known"]
             old = previous["targets"][channel] if known else None
