@@ -4,8 +4,9 @@ use alife_core::{
     PhenotypeCompilerInputs, TrainingStageManifest,
 };
 use alife_training::{
-    merge_founder_branches, native_receipt::sha256, resolve_isolated_training_output,
-    FoundationTrainerCheckpoint, FounderMergeBranch,
+    merge_founder_branches, merge_founder_branches_with_policy, native_receipt::sha256,
+    resolve_isolated_training_output, FoundationTrainerCheckpoint, FounderMergeBranch,
+    FounderMergeConflictPolicy,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -130,6 +131,7 @@ fn merge(
     parent: &Saved,
     pc: &Saved,
     cpu: &Saved,
+    conflict_policy: FounderMergeConflictPolicy,
 ) -> Result<(
     FoundationWeightAsset,
     alife_training::FounderMergeReceipt,
@@ -195,13 +197,23 @@ fn merge(
             "view_digest":pc_view.asset.digest(),"view_stage":pc_view.asset.manifest().training_stage()},
         "cpu":{"original_digest":cpu.asset.digest(),"original_stage":cpu.asset.manifest().training_stage(),
             "view_digest":cpu_view.asset.digest(),"view_stage":cpu_view.asset.manifest().training_stage()}});
-    let (asset, receipt) = merge_founder_branches(
-        &parent.phenotype,
-        &parent.asset,
-        &pc_view,
-        &cpu_view,
-        &parent.actor.stage_mask,
-    )?;
+    let (asset, receipt) = match conflict_policy {
+        FounderMergeConflictPolicy::AncestorRevert => merge_founder_branches(
+            &parent.phenotype,
+            &parent.asset,
+            &pc_view,
+            &cpu_view,
+            &parent.actor.stage_mask,
+        )?,
+        FounderMergeConflictPolicy::Midpoint => merge_founder_branches_with_policy(
+            &parent.phenotype,
+            &parent.asset,
+            &pc_view,
+            &cpu_view,
+            &parent.actor.stage_mask,
+            conflict_policy,
+        )?,
+    };
     Ok((asset, receipt, views))
 }
 fn publish(
@@ -262,7 +274,11 @@ fn publish(
     Ok(())
 }
 
-fn run(request_path: &Path, output: &Path) -> Result<Value> {
+fn run(
+    request_path: &Path,
+    output: &Path,
+    conflict_policy: FounderMergeConflictPolicy,
+) -> Result<Value> {
     let mut pins = BTreeMap::new();
     let request: Request = serde_json::from_slice(&read(request_path, &mut pins)?)?;
     let _: Value = serde_json::from_slice(&read(&request.ancestry_audit, &mut pins)?)?;
@@ -285,7 +301,7 @@ fn run(request_path: &Path, output: &Path) -> Result<Value> {
     let parent = load(&request.parent, &mut pins).map_err(|e| format!("parent admission: {e}"))?;
     let pc = load(&request.pc, &mut pins).map_err(|e| format!("PC admission: {e}"))?;
     let cpu = load(&request.cpu, &mut pins).map_err(|e| format!("CPU admission: {e}"))?;
-    let (asset, merged, views) = merge(&parent, &pc, &cpu)
+    let (asset, merged, views) = merge(&parent, &pc, &cpu, conflict_policy)
         .map_err(|e| format!("merge_founder_branches strict contract: {e:?}"))?;
     let encoded = asset.encode_canonical()?;
     if FoundationWeightAsset::decode_canonical(&encoded)? != asset
@@ -304,8 +320,15 @@ fn run(request_path: &Path, output: &Path) -> Result<Value> {
             return Err("input changed during admission".into());
         }
     }
+    let algorithm = match merged.conflict_policy {
+        FounderMergeConflictPolicy::AncestorRevert => "alife_training::merge_founder_branches",
+        FounderMergeConflictPolicy::Midpoint => {
+            "alife_training::merge_founder_branches_with_policy"
+        }
+    };
     let receipt = json!({"schema":1,"mode":"offline_optimizer_frozen_inference_only","ancestry_authenticated_by_tool":false,
-        "ancestry_audit":request.ancestry_audit,"input_sha256":pins,"algorithm":"alife_training::merge_founder_branches",
+        "ancestry_audit":request.ancestry_audit,"input_sha256":pins,"algorithm":algorithm,
+        "conflict_policy":merged.conflict_policy.as_str(),
         "parent_asset_digest":parent.asset.digest(),"pc_asset_digest":pc.asset.digest(),"cpu_asset_digest":cpu.asset.digest(),
         "candidate_asset_digest":asset.digest(),"candidate_sha256":sha256(&encoded),"unpromoted":true,
         "optimizer_updates":0,"critic_merged":false,"adam_merged":false,"private_state_merged":false,
@@ -320,12 +343,26 @@ fn run(request_path: &Path, output: &Path) -> Result<Value> {
 }
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
-    if args.len() != 2 {
-        return Err("usage: merge_founder_inference REQUEST.json ABSENT_OUTPUT_DIRECTORY".into());
-    }
+    let usage = "usage: merge_founder_inference REQUEST.json ABSENT_OUTPUT_DIRECTORY [--conflict-policy ancestor-revert|midpoint]";
+    let conflict_policy = match args.as_slice() {
+        [_, _] => FounderMergeConflictPolicy::AncestorRevert,
+        [_, _, flag, policy] if flag == "--conflict-policy" => {
+            if policy == "ancestor-revert" {
+                FounderMergeConflictPolicy::AncestorRevert
+            } else if policy == "midpoint" {
+                FounderMergeConflictPolicy::Midpoint
+            } else {
+                return Err(usage.into());
+            }
+        }
+        _ => return Err(usage.into()),
+    };
     let result = std::thread::Builder::new()
         .stack_size(32 * 1024 * 1024)
-        .spawn(move || run(Path::new(&args[0]), Path::new(&args[1])).map_err(|e| e.to_string()))?
+        .spawn(move || {
+            run(Path::new(&args[0]), Path::new(&args[1]), conflict_policy)
+                .map_err(|e| e.to_string())
+        })?
         .join()
         .map_err(|_| "inference merge worker panicked")??;
     println!("{}", serde_json::to_string_pretty(&result)?);
