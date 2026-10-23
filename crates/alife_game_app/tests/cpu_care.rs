@@ -520,8 +520,12 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         alife_training::native_receipt::read(&third_output.join("cpu-cycle.json")).unwrap();
     let lineage =
         alife_training::native_receipt::Lineage::load(&sealed_third, &third_output).unwrap();
-    assert_eq!(lineage.frames.len(), 3);
-    for (frame, directory) in lineage.frames.iter().zip([&third_output, &output, &source]) {
+    let frames = lineage
+        .frames()
+        .collect::<std::io::Result<Vec<_>>>()
+        .unwrap();
+    assert_eq!(frames.len(), 3);
+    for (frame, directory) in frames.iter().zip([&third_output, &output, &source]) {
         let (_, sealed) =
             alife_training::native_receipt::read(&directory.join("cpu-cycle.json")).unwrap();
         assert_eq!(frame, &sealed);

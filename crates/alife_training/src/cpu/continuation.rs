@@ -407,12 +407,11 @@ pub fn run_cpu_continuation(
         })
         .transpose()?;
     let fixture = args.fixture
-        || lineage.as_ref().is_some_and(|lineage| {
-            lineage
-                .frames
-                .iter()
-                .any(|receipt| receipt["fixture"] == true)
-        });
+        || lineage
+            .as_ref()
+            .map(|lineage| lineage.contains_fixture())
+            .transpose()?
+            .unwrap_or(false);
     let parent_ref = if let Some(lineage) = lineage.as_ref() {
         let name = ["cycle.json", "cpu-cycle.json", "group50.json"]
             .into_iter()
