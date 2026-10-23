@@ -627,9 +627,10 @@ def main(argv=None):
             # Bind the bytes here; reserve() verifies all history/evidence once
             # and rejects a changed digest before creating any plan or reservation.
             _, digest = load(history_path)
+            source_seed = seeds._seed(receipt.get("seed"))
             plan = {"schema": 1, "kind": "mixed-care-plan", "output": str(output), "source": str(source),
                     "source_sha256": hashes, "source_receipt": receipt,
-                    "retention": {"mode": "recent-checkpoints", "keep": keep}, "source_seed": receipt["seed"], "binary": str(binary), "inspector": str(inspector),
+                    "retention": {"mode": "recent-checkpoints", "keep": keep}, "source_seed": source_seed, "binary": str(binary), "inspector": str(inspector),
                     "binary_sha256": {str(path): host.sha256(path) for path in (binary, inspector)},
                     "history": str(history_path), "history_sha256": digest, "seed_admission": admission, "schedule": schedule,
                     "seed_range": [first, first + count - 1], "cutoff": args.cutoff.isoformat(),

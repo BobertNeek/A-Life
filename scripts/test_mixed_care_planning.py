@@ -96,6 +96,16 @@ class MixedPlanningTests(unittest.TestCase):
         self.assertIn("recovery evidence changed", error)
         self.assert_no_plan_or_reservation()
 
+    def test_missing_source_seed_is_a_controlled_failure(self):
+        self.receipt.pop("seed")
+        (self.source / "cycle.json").write_text(json.dumps(self.receipt))
+        self.document["source_sha256"] = mixed.file_hashes(self.source)
+        self.save_history()
+        result, error = self.plan()
+        self.assertEqual(result, 1)
+        self.assertIn("mixed-care scheduler stopped", error)
+        self.assert_no_plan_or_reservation()
+
     def test_history_change_between_binding_and_validation_is_rejected(self):
         original = mixed.reserve
         def changed(plan, path, **options):
