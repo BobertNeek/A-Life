@@ -282,8 +282,8 @@ pub(super) fn admit(
     }
     let lineage = alife_training::native_receipt::Lineage::load(&native, previous)?;
     lineage.check_parent(&native_bytes)?;
-    for frame in &lineage.frames {
-        exclusions(frame, seed)?;
+    for frame in lineage.frames() {
+        exclusions(&frame?, seed)?;
     }
     let consumed = document["consumed_seed_ranges"]
         .as_array()
