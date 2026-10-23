@@ -109,9 +109,13 @@ class State(dict):
         self.current_before = None
         self.metadata_before = None
 
-    def bind_history(self):
-        self.protected_prefix = max(self.archived, max(0, len(self["runs"]) - 1))
-        self.prefix_sha256 = canonical_hash(self["runs"][:self.protected_prefix])
+    def bind_history(self, *, reuse_verified_prefix=False):
+        protected_prefix = max(self.archived, max(0, len(self["runs"]) - 1))
+        # Only a successful write may reuse the prefix just checked by append_only.
+        # New admissions and expanded boundaries always hash the complete prefix.
+        if not reuse_verified_prefix or protected_prefix != self.protected_prefix:
+            self.prefix_sha256 = canonical_hash(self["runs"][:protected_prefix])
+        self.protected_prefix = protected_prefix
         self.current_before = (copy.deepcopy(self["runs"][self.protected_prefix])
                                if len(self["runs"]) > self.protected_prefix else None)
         self.metadata_before = copy.deepcopy({k: v for k, v in self.items() if k != "runs"})
@@ -260,7 +264,7 @@ def write(path, state):
     seeds.write_document(path, value, compact=True)
     state.origin = origin; state.document_sha256 = hashlib.sha256(data).hexdigest()
     state.archived = count; state.head = head; state.legacy_backup = backup; state.legacy = False
-    state.bind_history()
+    state.bind_history(reuse_verified_prefix=True)
     return state.document_sha256
 
 
