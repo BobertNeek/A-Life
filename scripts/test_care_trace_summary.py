@@ -159,8 +159,20 @@ class CareTraceSummaryTests(unittest.TestCase):
         r = summary(rows)
         self.assertIsNone(r['metrics']['visibility_loss']['count'])
         self.assertEqual(r['metrics']['visibility_loss']['observed_count'], 0)
-        self.assertFalse(r['execution']['contiguous_from_zero'])
+        self.assertFalse(r['execution']['contiguous_decisions'])
         self.assertIsNone(summary([], decision_budget=4)['execution']['budget_exhausted'])
+
+    def test_setup_world_tick_offset_is_not_missing_evaluation_capture(self):
+        rows = meal_rows()
+        for r in rows:
+            for key in ['tick', 'decision_tick', 'outcome_tick']:
+                r[key] += 130
+        r = summary(rows, pilot={'ticks': 2})
+        self.assertTrue(r['execution']['contiguous_decisions'])
+        self.assertEqual(r['execution']['first_world_tick'], 130)
+        self.assertEqual(r['metrics']['nourishing_consumption']['count'], 1)
+        self.assertEqual(r['metrics']['nourishing_consumption']['events'][0]['decision_tick'], 131)
+        self.assertEqual(r['metrics']['visibility_loss']['count'], 0)
 
     def test_early_completion_and_unknown_budget_are_not_budget_exhaustion(self):
         self.assertFalse(summary(meal_rows(), decision_budget=128)['execution']['budget_exhausted'])

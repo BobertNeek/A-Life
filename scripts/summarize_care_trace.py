@@ -138,7 +138,8 @@ def summarize(document, *, pilot=None, decision_budget=None, execution_status="u
     target = next(iter(ids["lesson_target"]), None)
     subject = next(iter(ids["organism_id"]), None)
     tracked_id = next(iter(tracked), None)
-    contiguous = bool(ticks) and ticks == list(range(len(ticks)))
+    first_tick = ticks[0] if ticks else None
+    contiguous = bool(ticks) and ticks == list(range(first_tick, first_tick + len(ticks)))
     pilot_ticks = pilot.get("ticks")
     require(pilot_ticks is None or uint(pilot_ticks, 32), "invalid pilot tick count")
     within_budget = decision_budget is None or len(rows) <= decision_budget
@@ -166,7 +167,7 @@ def summarize(document, *, pilot=None, decision_budget=None, execution_status="u
         transition_known = adjacent and visible is not None and previous["visible"] is not None
         for name, start, end in (("visibility_loss", True, False), ("visual_reacquisition", False, True)):
             # No transition is observable at the start, or across missing rows.
-            event(name, (tick == 0 and visible is not None) or transition_known,
+            event(name, (tick == first_tick and visible is not None) or transition_known,
                   transition_known and previous["visible"] == start and visible == end)
         selected_known = selected is not None and target is not None
         targets = {channel: None for channel in CHANNELS}
@@ -180,7 +181,7 @@ def summarize(document, *, pilot=None, decision_budget=None, execution_status="u
             current = targets[channel]
             for suffix, happened in (("away", old == target and current not in (None, target)),
                                      ("back", old not in (None, target) and current == target)):
-                event(f"{channel.lower()}_switch_{suffix}", (tick == 0 and selected_known) or known,
+                event(f"{channel.lower()}_switch_{suffix}", (tick == first_tick and selected_known) or known,
                       known and happened, from_entity=old, to_entity=current, food_visible=visible)
         event("food_approach", selected_known, selected_known and any(
             c["channel"] == "Locomotion" and c["primitive"] == 101 and entity(c) == target for c in selected or []))
@@ -218,7 +219,8 @@ def summarize(document, *, pilot=None, decision_budget=None, execution_status="u
         "schema_version": 1, "neural_execution": False, "qualification": False,
         "subject": subject, "food_target": target, "food_tracked_object_id": tracked_id,
         "execution": {"caller_declared_status": execution_status, "decision_budget": decision_budget,
-                      "observed_decisions": len(rows), "contiguous_from_zero": contiguous,
+                      "observed_decisions": len(rows), "first_world_tick": first_tick,
+                      "contiguous_decisions": contiguous,
                       "within_declared_budget": within_budget,
                       "pilot_ticks": pilot_ticks, "capture_complete": complete,
                       "budget_exhausted": len(rows) >= decision_budget if complete and decision_budget is not None else None},
