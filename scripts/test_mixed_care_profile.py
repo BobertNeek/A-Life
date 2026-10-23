@@ -56,6 +56,15 @@ class PlanningProfileTests(unittest.TestCase):
                 self.assertEqual(self.mixed.main(self.evidence), self.host.sha256(self.evidence))
         self.assertEqual((self.mixed.main, self.mixed.history, self.host.sha256), original)
 
+    def test_script_exit_code_propagates_and_is_recorded(self):
+        original = (self.mixed.main, self.mixed.history, self.host.sha256)
+        with self.assertRaises(SystemExit) as stopped:
+            with profiling.profile_planning(self.mixed, self.output):
+                raise SystemExit(7)
+        self.assertEqual(stopped.exception.code, 7)
+        self.assertEqual(json.loads(self.output.read_text())["exit_code"], 7)
+        self.assertEqual((self.mixed.main, self.mixed.history, self.host.sha256), original)
+
 
 if __name__ == "__main__":
     unittest.main()

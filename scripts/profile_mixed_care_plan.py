@@ -66,6 +66,8 @@ def profile_planning(mixed, destination, *, metadata=None):
             "cpu_seconds": time.process_time() - cpu_started,
             "timings_are_nested": True, "metadata": metadata or {},
             "exception_type": type(error).__name__ if error is not None else None,
+            "exit_code": ((error.code if isinstance(error.code, int) else 0 if error.code is None else 1)
+                          if isinstance(error, SystemExit) else 1 if error is not None else 0),
             "calls": calls,
         }
         try:
