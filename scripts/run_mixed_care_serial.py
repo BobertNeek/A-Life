@@ -327,7 +327,7 @@ def reserve(plan, ledger_path, *, commit=True):
     ledger["runs"].append({"output": plan["output"], "plan": plan, "plan_sha256": object_hash(plan),
                            "history_import": doc, "attempts": []})
     if commit:
-        seeds.write_document(ledger_path, ledger)
+        seeds.write_document(ledger_path, ledger, compact=True)
     return ledger
 
 
@@ -513,13 +513,13 @@ def execute(plan, *, resume=False, cutoff=None):
                     require(receipt == attempt["receipt"] and hashes == attempt["sha256"], "accepted dose changed")
                 else:
                     attempt.update(status="accepted", receipt=receipt, sha256=hashes)
-                    seeds.write_document(ledger_path, ledger)
+                    seeds.write_document(ledger_path, ledger, compact=True)
                 previous = directory
                 slot += 1
             else:
                 require(attempt["status"] == "pending", "accepted seal missing")
                 attempt["status"] = "abandoned"
-                seeds.write_document(ledger_path, ledger)
+                seeds.write_document(ledger_path, ledger, compact=True)
         seeds.write_document(output / "schedule.json", summary(run))
         while slot < len(rows):
             index = len(run["attempts"])
@@ -537,7 +537,7 @@ def execute(plan, *, resume=False, cutoff=None):
             require(not directory.exists(), "attempt output collision")
             attempt = {"slot": slot, "seed": seed, "directory": str(directory), "previous": str(previous), "status": "pending"}
             run["attempts"].append(attempt)
-            seeds.write_document(ledger_path, ledger)
+            seeds.write_document(ledger_path, ledger, compact=True)
             row = rows[slot]
             argv = [plan["binary"], "--resume-cycle", str(previous), str(directory), str(row["decisions"]),
                     "--seed", str(seed), "--lesson", row["lesson"]]
@@ -550,7 +550,7 @@ def execute(plan, *, resume=False, cutoff=None):
             receipt, hashes = validate_cycle(directory, previous, row, seed, Path(plan["inspector"]),
                                              **inspection_options)
             attempt.update(status="accepted", receipt=receipt, sha256=hashes)
-            seeds.write_document(ledger_path, ledger)
+            seeds.write_document(ledger_path, ledger, compact=True)
             seeds.write_document(output / "schedule.json", summary(run))
             previous = directory
             slot += 1

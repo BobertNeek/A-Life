@@ -122,6 +122,15 @@ class MixedRetentionTests(unittest.TestCase):
             mixed.execute(self.plan, resume=True)
         self.assertEqual(self.dispatched, [])
 
+    def test_resume_compacts_ledger_but_keeps_summary_readable(self):
+        mixed.execute(self.plan, resume=True)
+        path = self.root / mixed.LEDGER
+        actual = path.read_bytes()
+        ledger = mixed.read_ledger(path)
+        self.assertEqual(actual, (json.dumps(ledger, separators=(',', ':'), allow_nan=False) + '\n').encode())
+        summary = (self.output / 'schedule.json').read_bytes()
+        self.assertEqual(summary, (json.dumps(json.loads(summary), indent=2, allow_nan=False) + '\n').encode())
+
     def test_changed_latest_checkpoint_blocks_dispatch(self):
         self.retire_synthetic_payloads()
         (self.output/'attempt-00003'/'actor-checkpoint.json').write_text('{"optimizer_step":0}')
