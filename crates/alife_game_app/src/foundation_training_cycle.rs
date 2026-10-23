@@ -184,6 +184,9 @@ pub struct FoundationCycleReceipt {
     pub food_available_world_tick: Option<u64>,
     #[serde(default)]
     pub lesson: Option<FoundationTeacherLesson>,
+    /// Exact physical relocation and trained acquisition/nourishment evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_relocation: Option<crate::FoundationFoodRelocationReceipt>,
     #[serde(default)]
     pub first_consumed_world_tick: Option<u64>,
     #[serde(default)]
@@ -1014,6 +1017,85 @@ mod sampling_temperature_tests {
             )
             .unwrap_err();
             assert!(error.to_string().contains("temperature must be finite"));
+        }
+    }
+
+    #[test]
+    fn relocated_food_rejects_conflicting_delayed_placement_before_source_or_output_access() {
+        let error = run_foundation_training_cycle_profiled(
+            Path::new("unused-relocated-food-output-fixture"),
+            42,
+            16,
+            Some(Path::new("missing-relocated-food-source-fixture")),
+            Some(32),
+            Some(FoundationTeacherLesson::RelocatedFood),
+            None,
+            1.0,
+            0,
+            None,
+            false,
+            &CycleStageTiming::default(),
+            false,
+        )
+        .err()
+        .unwrap();
+        assert!(error.to_string().contains("delayed-food placement gate"));
+    }
+
+    #[test]
+    fn relocated_food_optional_evidence_preserves_legacy_cycle_and_optimizer_identity() {
+        let (receipt, asset, actor, value) = cycle_handoff();
+        let encoded = serde_json::to_value(&receipt).unwrap();
+        assert!(!encoded.as_object().unwrap().contains_key("food_relocation"));
+        let restored: FoundationCycleReceipt = serde_json::from_value(encoded.clone()).unwrap();
+        assert!(restored.food_relocation.is_none());
+        assert_eq!(serde_json::to_value(&restored).unwrap(), encoded);
+        validate_cycle_optimizer_handoff(&restored, &asset, &actor, &value).unwrap();
+    }
+
+    #[test]
+    fn relocated_food_decision_bound_is_checked_before_source_or_output_access() {
+        for decisions in [0, 2049, 36_000, usize::MAX] {
+            let error = run_foundation_training_cycle_profiled(
+                Path::new("unused-relocated-food-output-fixture"),
+                42,
+                decisions,
+                Some(Path::new("missing-relocated-food-source-fixture")),
+                None,
+                Some(FoundationTeacherLesson::RelocatedFood),
+                None,
+                1.0,
+                0,
+                None,
+                false,
+                &CycleStageTiming::default(),
+                false,
+            )
+            .err()
+            .unwrap();
+            assert!(error.to_string().contains("1..=2048 training decisions"));
+        }
+        // Both inclusive boundaries proceed only as far as the absent source;
+        // they must never construct a backend or claim an output directory.
+        for decisions in [1, 2048] {
+            let error = run_foundation_training_cycle_profiled(
+                Path::new("unused-relocated-food-output-fixture"),
+                42,
+                decisions,
+                Some(Path::new("missing-relocated-food-source-fixture")),
+                None,
+                Some(FoundationTeacherLesson::RelocatedFood),
+                None,
+                1.0,
+                0,
+                None,
+                false,
+                &CycleStageTiming::default(),
+                false,
+            )
+            .err()
+            .unwrap();
+            assert!(error.downcast_ref::<std::io::Error>().is_some());
         }
     }
 
@@ -2786,6 +2868,19 @@ fn run_foundation_training_cycle_profiled(
 ) -> Result<FoundationCycleOutcome> {
     let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
+    if lesson == Some(FoundationTeacherLesson::RelocatedFood) && food_available_world_tick.is_some()
+    {
+        return Err(
+            "relocated-food lesson cannot be combined with a delayed-food placement gate".into(),
+        );
+    }
+    if lesson == Some(FoundationTeacherLesson::RelocatedFood)
+        && !(1..=2048).contains(&training_ticks)
+    {
+        // Keep complete world evidence bounded like the existing pilot. The
+        // serial care scheduler independently retains its 1..=128 decision cap.
+        return Err("relocated-food collection requires 1..=2048 training decisions".into());
+    }
     if previous.is_some_and(|path| {
         ["cycle.json", "adaptation.json", "warmup.json"]
             .iter()
@@ -3059,6 +3154,17 @@ fn run_foundation_training_cycle_in_owned_output(
     if let Some(scenario) = &mut scenario {
         scenario.repeat_vocabulary = lesson != Some(FoundationTeacherLesson::VocabularyProduction);
     }
+    let mut relocation_collector = if lesson == Some(FoundationTeacherLesson::RelocatedFood) {
+        Some(
+            crate::foundation_training::relocated_food::RelocatedFoodCollector::new(
+                &game.world,
+                scenario.as_ref().ok_or("relocated-food scenario missing")?,
+                seed,
+            )?,
+        )
+    } else {
+        None
+    };
     let mut creatures = game.creatures;
     // Recovery preconditioning advances ordinary world biology before the
     // durable base is published. Keep the New Game save summaries in step
@@ -3236,6 +3342,10 @@ fn run_foundation_training_cycle_in_owned_output(
         crate::close_foundation_navigation_gate(&mut runtime, scenario)?;
     }
     crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, lesson)?;
+    let relocation_before = relocation_collector
+        .as_mut()
+        .map(|collector| collector.before_step(runtime.world_mut()))
+        .transpose()?;
     let held_before = lesson_food_held(&runtime);
     let grab_before = lesson_food_ownership(&runtime);
     runtime.tick().map_err(|e| {
@@ -3256,6 +3366,9 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     if first[0].frame.organism_id() != organism_id {
         return Err("first training capture belongs to a different organism".into());
+    }
+    if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before) {
+        collector.observe_step(runtime.world(), before, &first[0])?;
     }
     if let Some(setup) = grab_setup {
         if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
@@ -3424,6 +3537,10 @@ fn run_foundation_training_cycle_in_owned_output(
         ) {
             crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, lesson)?;
         }
+        let relocation_before = relocation_collector
+            .as_mut()
+            .map(|collector| collector.before_step(runtime.world_mut()))
+            .transpose()?;
         let held_before = lesson_food_held(&runtime);
         let grab_before = lesson_food_ownership(&runtime);
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
@@ -3539,6 +3656,10 @@ fn run_foundation_training_cycle_in_owned_output(
         if captured.len() != 1 {
             return Err(format!("cycle world tick {after}: expected at most one decision").into());
         }
+        if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before)
+        {
+            collector.observe_step(runtime.world(), before, &captured[0])?;
+        }
         if let Some(setup) = grab_setup {
             if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
                 setup,
@@ -3599,6 +3720,9 @@ fn run_foundation_training_cycle_in_owned_output(
     if train_rows == 0 {
         return Err("cycle has no complete training transition".into());
     }
+    let food_relocation = relocation_collector
+        .map(|collector| collector.finish(train_rows))
+        .transpose()?;
     timing.annotate(|| {
         serde_json::json!({
             "actual_decisions": train_rows,
@@ -4167,6 +4291,7 @@ fn run_foundation_training_cycle_in_owned_output(
         rest_recovery_actions,
         food_available_world_tick,
         lesson,
+        food_relocation,
         first_consumed_world_tick,
         food_available_elapsed_seconds,
         first_consumed_elapsed_seconds,

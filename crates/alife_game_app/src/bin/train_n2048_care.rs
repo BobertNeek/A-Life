@@ -530,6 +530,7 @@ fn parse_teacher_lesson(
         "eat_held_food" => Ok(Lesson::EatHeldFood),
         "eat_reachable_food" => Ok(Lesson::EatReachableFood),
         "feeding" => Ok(Lesson::Feeding),
+        "relocated_food" => Ok(Lesson::RelocatedFood),
         "obstacle_navigation" => Ok(Lesson::ObstacleNavigation),
         "hazard_avoidance" => Ok(Lesson::HazardAvoidance),
         "recovery" => Ok(Lesson::Recovery),
@@ -848,6 +849,14 @@ fn inspect_cycle(directory: &std::path::Path) -> Result<(), Box<dyn std::error::
 mod targeting_tests {
     use super::*;
     use alife_core::*;
+
+    #[test]
+    fn relocated_food_lesson_is_available_to_native_cli() {
+        assert_eq!(
+            parse_teacher_lesson("relocated_food").unwrap(),
+            alife_game_app::FoundationTeacherLesson::RelocatedFood
+        );
+    }
 
     fn representative(target: Option<u64>) -> ActionCommand {
         let mut action = ActionCommand::new(

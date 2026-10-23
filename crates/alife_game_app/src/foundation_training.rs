@@ -33,9 +33,14 @@ mod initial_asset;
 mod lesson_trace;
 mod play_assessment;
 mod recovery;
-pub use food_outcome::FoundationFoodOutcome;
+pub(crate) mod relocated_food;
+pub use food_outcome::{FoodOwnershipSnapshot, FoundationFoodOutcome};
 pub use play_assessment::{
     assess_foundation_play, FoundationPlayAssessment, FoundationPlayBoredomObservation,
+};
+pub use relocated_food::{
+    FoundationFoodRelocationAssessment, FoundationFoodRelocationEvent,
+    FoundationFoodRelocationReceipt,
 };
 mod maze;
 pub use diagnostics::{FoundationLessonBudget, FoundationSpeechBehaviorDiagnostics};
@@ -562,6 +567,9 @@ pub struct FoundationPilotReceipt {
     /// Output-only exact-target observations, separate from explicit Grab credit.
     #[serde(default)]
     pub food_outcome: Option<FoundationFoodOutcome>,
+    /// Measured relocation and exact-target outcomes; absent in historical probes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_relocation: Option<FoundationFoodRelocationReceipt>,
     #[serde(default)]
     pub held_food_consumption_events: usize,
     /// Assessment-only possession snapshots taken before each learner tick.
@@ -1651,6 +1659,11 @@ fn run_foundation_training_pilot_with_request(
     if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
         return Err(invalid().into());
     }
+    if teacher_mode && lesson == Some(FoundationTeacherLesson::RelocatedFood) {
+        return Err(
+            "relocated-food collection requires on-policy actions without a demonstrator".into(),
+        );
+    }
     std::fs::create_dir(output)?; // A fresh run never overwrites an earlier receipt.
     let asset = if let Some(asset) = asset_override {
         asset
@@ -1671,6 +1684,10 @@ fn run_foundation_training_pilot_with_request(
         lesson.or_else(|| teacher_mode.then_some(FoundationTeacherLesson::Feeding));
     let mut scenario =
         configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
+    let mut relocation_collector = (scenario_lesson
+        == Some(FoundationTeacherLesson::RelocatedFood))
+    .then(|| relocated_food::RelocatedFoodCollector::new(&game.world, &scenario, seed))
+    .transpose()?;
     if !teacher_mode {
         configure_care_evaluation_condition(&mut scenario, scenario_lesson, silent_request);
     }
@@ -1841,8 +1858,11 @@ fn run_foundation_training_pilot_with_request(
                 .map(|setup| (setup.organism, setup.target))
         })
         .or_else(|| {
-            (scenario_lesson == Some(FoundationTeacherLesson::Feeding))
-                .then(|| (runtime.world().organism_entity_ids()[0].0, food))
+            matches!(
+                scenario_lesson,
+                Some(FoundationTeacherLesson::Feeding | FoundationTeacherLesson::RelocatedFood)
+            )
+            .then(|| (runtime.world().organism_entity_ids()[0].0, food))
         });
     let mut food_outcome =
         food_subject.map(|(organism, target)| FoundationFoodOutcome::new(organism, target));
@@ -1870,6 +1890,10 @@ fn run_foundation_training_pilot_with_request(
                 prime_foundation_lesson_prior(&mut runtime, scenario_lesson)?;
             }
         }
+        let relocation_before = relocation_collector
+            .as_mut()
+            .map(|collector| collector.before_step(runtime.world_mut()))
+            .transpose()?;
         let held_food_before =
             care_food_subject.is_some_and(|subject| subject.is_held(runtime.world()));
         if held_food_before {
@@ -1920,6 +1944,10 @@ fn run_foundation_training_pilot_with_request(
                 collected.len()
             )
             .into());
+        }
+        if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before)
+        {
+            collector.observe_step(runtime.world(), before, &collected[0])?;
         }
         if let Some(observation) = food_observation {
             if observation.matches_step(&collected[0]) {
@@ -2178,6 +2206,9 @@ fn run_foundation_training_pilot_with_request(
             maze_nodes_reached += 1;
         }
     }
+    let food_relocation = relocation_collector
+        .map(|collector| collector.finish_assessment(steps.len()))
+        .transpose()?;
     let lesson_completed = scenario_lesson.map(|lesson| match lesson {
         FoundationTeacherLesson::GrabFood => !grab_food_acquisitions.is_empty(),
         FoundationTeacherLesson::EatHeldFood
@@ -2185,7 +2216,10 @@ fn run_foundation_training_pilot_with_request(
         | FoundationTeacherLesson::Feeding => food_subject.is_some_and(|(organism, target)| {
             care_meal_completed(food_outcome.as_ref(), organism, target)
         }),
-        FoundationTeacherLesson::RelocatedFood => false, // CPU collector owns relocation exposure accounting.
+        FoundationTeacherLesson::RelocatedFood => food_relocation
+            .as_ref()
+            .and_then(|evidence| evidence.assessment.as_ref())
+            .is_some_and(|assessment| assessment.completed),
         FoundationTeacherLesson::VisionSearch => food_consumed,
         FoundationTeacherLesson::MazeNavigation => {
             food_consumed
@@ -2327,6 +2361,7 @@ fn run_foundation_training_pilot_with_request(
                 "lesson": scenario_lesson,
                 "lesson_completed": lesson_completed,
                 "food_outcome": food_outcome,
+                "food_relocation": food_relocation,
                 "initial_sampling": initial_sampling,
                 "consumed_events": consumed_events,
                 "blocked_actions": steps.iter().filter(|step| teacher_step_blocked(step)).count(),
@@ -2572,6 +2607,7 @@ fn run_foundation_training_pilot_with_request(
         reachable_food_setup: scenario.reachable_food_setup.clone(),
         grab_food_acquisitions,
         food_outcome,
+        food_relocation,
         held_food_consumption_events,
         held_food_possession_frames,
         held_food_terminal_death_tick,
@@ -2746,7 +2782,6 @@ fn move_scenario_object(
     Ok(())
 }
 
-#[cfg(any(feature = "cpu-training", test))]
 pub(crate) fn relocate_unheld_foundation_food(
     world: &mut alife_world::HeadlessWorld,
     target: alife_core::WorldEntityId,

@@ -71,10 +71,14 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::comparison_identity::tests -- --test-threads=1
       - name: Native sensory serialization matches the shared Python admission fixture
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::lesson_trace::tests::native_sensory_json_matches_comparison_fixture -- --exact
+      - name: Relocated-food physical outcome and backward receipt CPU regressions
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib relocated_food -- --test-threads=1
+      - name: Relocated-food native CLI admission
+        run: cargo test --locked -p alife_game_app --features foundation-training --bin train_n2048_care relocated_food -- --test-threads=1
       - name: Canonical and policy-weight comparison world identity CPU regressions
         run: cargo test --locked -p alife_world --test headless_world_signature --test policy_weight_comparison_signature -- --test-threads=1
-      - name: Build training executable
-        run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Build matching training and checkpoint inspection executables
+        run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin inspect_archived_success
       - name: Check rehearsal admission before runtime creation
         run: |
           $taskBinary = (Resolve-Path 'target/debug/train_n2048_care.exe').Path
@@ -98,19 +102,28 @@ jobs:
       - name: Seal artifact metadata
         run: |
           $taskBinary = 'target/debug/train_n2048_care.exe'
+          $taskInspector = 'target/debug/inspect_archived_success.exe'
           $taskRevision = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0 -or $taskRevision -ne $env:GITHUB_SHA) { throw 'Checked-out revision mismatch' }
+          $taskTree = git rev-parse 'HEAD^{tree}'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the compiled source tree' }
           $taskArtifact = New-Item -ItemType Directory -Path 'target/windows-training-artifact'
           Copy-Item -LiteralPath $taskBinary -Destination $taskArtifact.FullName
+          Copy-Item -LiteralPath $taskInspector -Destination $taskArtifact.FullName
           [ordered]@{
             schema = 1
             source_revision = $taskRevision
+            source_tree = $taskTree
             executable_sha256 = (Get-FileHash -LiteralPath $taskBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+            executables = [ordered]@{
+              'train_n2048_care.exe' = (Get-FileHash -LiteralPath $taskBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+              'inspect_archived_success.exe' = (Get-FileHash -LiteralPath $taskInspector -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
             rustc = (rustc --version)
             target = 'x86_64-pc-windows-msvc'
             features = @('foundation-training')
             build_profile = 'dev'
-            cpu_checks = @('training shader composition across line endings', 'acquisition rehearsal', 'next-cohort archive run identity', 'actor-centering CLI admission', 'native policy/executable comparison identity', 'native sensory serialization', 'world and policy-weight comparison identities', 'CLI bounds 0 and 513 rejected; 512 reaches sealed-source admission', 'rejected admission preserves absent output')
+            cpu_checks = @('training shader composition across line endings', 'acquisition rehearsal', 'next-cohort archive run identity', 'actor-centering CLI admission', 'native policy/executable comparison identity', 'native sensory serialization', 'relocated-food physical outcomes, bounds and backward receipts', 'relocated-food CLI admission', 'world and policy-weight comparison identities', 'CLI bounds 0 and 513 rejected; 512 reaches sealed-source admission', 'rejected admission preserves absent output')
             gpu_training_executed = $false
             founder_promoted = $false
             workflow_run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
