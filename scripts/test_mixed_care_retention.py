@@ -122,12 +122,15 @@ class MixedRetentionTests(unittest.TestCase):
             mixed.execute(self.plan, resume=True)
         self.assertEqual(self.dispatched, [])
 
-    def test_resume_compacts_ledger_but_keeps_summary_readable(self):
+    def test_resume_keeps_manifest_compact_and_summary_readable(self):
         mixed.execute(self.plan, resume=True)
         path = self.root / mixed.LEDGER
         actual = path.read_bytes()
         ledger = mixed.read_ledger(path)
-        self.assertEqual(actual, (json.dumps(ledger, separators=(',', ':'), allow_nan=False) + '\n').encode())
+        physical = json.loads(actual)
+        self.assertEqual(physical['kind'], mixed.ledger_store.MANIFEST)
+        self.assertEqual(actual, (json.dumps(physical, separators=(',', ':'), allow_nan=False) + '\n').encode())
+        self.assertEqual(physical['current_runs'], ledger['runs'])
         summary = (self.output / 'schedule.json').read_bytes()
         self.assertEqual(summary, (json.dumps(json.loads(summary), indent=2, allow_nan=False) + '\n').encode())
 
