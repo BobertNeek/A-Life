@@ -2,7 +2,7 @@
 //! This observer never chooses an action or contributes curriculum reward.
 use super::food_outcome::{ownership, FoodOutcomeObservation, FoodOwnershipSnapshot};
 use super::{FoundationFoodOutcome, FoundationScenarioSetup, Result};
-use alife_core::{OrganismId, Tick, Vec3f, WorldEntityId};
+use alife_core::{OrganismId, Tick, Validate, Vec3f, WorldEntityId};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FoundationFoodRelocationEvent {
