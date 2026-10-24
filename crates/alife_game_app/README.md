@@ -236,8 +236,48 @@ bootstrap; death or an incomplete dose retains its checkpoint/trace and aborts
 the comparison instead of fabricating a completed outcome. Survival-rate and
 variable-duration terminal assessment remain unsupported.
 
-The comparison accepts an existing strict complete operator-attested history; it
-does not manufacture completeness or upgrade unknown evidence. Fresh outputs are
+The comparison defaults to an existing strict complete operator-attested history.
+For an explicitly limited relative-behavior experiment with incomplete history:
+
+```sh
+python -B scripts/compare_cpu_care_rounds.py --spec ABS/comparison.json --known-exclusions
+python -B scripts/compare_cpu_care_rounds.py --spec ABS/comparison.json --known-exclusions --run
+```
+
+This opt-in requires `complete:false`, exactly
+`"seed_admission":{"policy":"known-exclusions","historical_freshness":"unknown"}`,
+the existing bounded `missing_history` explanation and valid cited
+`recovery_reconciliation`. Derived histories retain those facts unchanged.
+The runner reuses the existing recovery validator, source/compiler/objective/full
+optimizer admission and every disclosed seed exclusion. Recovery JSON evidence
+also contributes disclosed seed ranges to preflight. It pins all cited evidence,
+the qualified checkout and five admission helpers, while keeping each arm's
+process directory and deterministic prior cache isolated. Both modes retain
+within-experiment training/assessment separation and actual matched-budget checks.
+
+Comparison V1 uses new CPU-only lanes with no prior mixed-ledger runs. The supplied
+attestation must already describe that isolated fork and bind the empty prior-runs
+digest; an attestation for a different lane is rejected. Cited plain immutable
+recovery files are supported. Ledger-origin-bound manifests cannot be retargeted
+across these fresh lanes; retain their original records and obtain a legitimately
+supported fork attestation rather than editing its claims or digest automatically.
+Known seed ranges in structured history/import/recovery records remain exclusions.
+
+Unknown-mode plans, command records, care episodes, native serial receipts,
+assessment results and comparison reports retain the admission policy and claim
+limitation. Generic central learner receipts attest their exact source and
+optimizer result through SHA-pinned collector commits; they do not attest
+historical freshness. Generic founder exports and inspection summaries remain
+explicitly `unasserted`, never silently complete.
+
+Unknown-mode results describe relative behavior conditional on the selected
+initial source and specified worlds. They cannot establish historically unseen
+seeds, unseen-world generalization or synergy. Shared prior exposure does not
+invalidate reporting the paired measurements, but limits those interpretations.
+Complete history supports historical seed exclusion; it alone does not establish
+novel skill combinations or statistically reliable positive transfer.
+
+Neither mode manufactures completeness or upgrades unknown evidence. Fresh outputs are
 required: interrupted comparison runs retain all completed/partial artifacts,
 and automatic comparison resume is unsupported. Standalone source export is
 limited to 64 MiB aggregate ancestry blobs; comparison ancestry/history inputs

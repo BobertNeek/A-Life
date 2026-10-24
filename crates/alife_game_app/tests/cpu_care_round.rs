@@ -988,3 +988,283 @@ fn two_real_care_rounds_continue_exact_founders_and_run_matched_heldout_assessme
     );
     assert_eq!(tree(&second), source_before);
 }
+
+#[test]
+fn known_exclusion_comparison_preserves_unknown_freshness_and_full_optimizer_continuation() {
+    const CLAIM: &str = "historical freshness unknown; disclosed exclusions only; no claim of unseen-seed generalization or synergy";
+    fn unknown(value: &Value) {
+        assert_eq!(
+            value["seed_admission"],
+            json!({
+                "policy":"known-exclusions","historical_freshness":"unknown"
+            })
+        );
+    }
+    fn scoped_unknown(value: &Value) {
+        unknown(value);
+        assert_eq!(value["known_exclusions"], true);
+        assert_eq!(value["claim_scope"], CLAIM);
+    }
+
+    let fixture = NativeFixture::new();
+    let immutable_evidence = fixture.fixture.join("immutable-fixture-recovery.json");
+    fs::copy(&fixture.history, &immutable_evidence).unwrap();
+    let evidence_before = fs::read(&immutable_evidence).unwrap();
+    let mut history = load(&fixture.history);
+    history["complete"] = json!(false);
+    history["seed_admission"] = json!({
+        "policy":"known-exclusions","historical_freshness":"unknown"
+    });
+    history["missing_history"] = json!(
+        "Explicit synthetic fixture with incomplete historical evidence; disclosed exclusions only"
+    );
+    history["recovery_reconciliation"] = json!({
+        "accepted_checkpoint_authoritative":true,
+        "known_inflight_attempts_reconciled_or_excluded":true,
+        "no_known_detached_later_accepted_chain":true,
+        "explanation":"Disposable fixture has no prior mixed lane runs; original native source and immutable recovery evidence remain authoritative",
+        "evidence":[{"path":immutable_evidence,"sha256":sha(&immutable_evidence)}],
+        "prior_ledger_runs_sha256":format!("{:x}", Sha256::digest(b"[]"))
+    });
+    write_json(&fixture.history, &history);
+    let protected = fixture.protected();
+    let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap();
+    let script = checkout.join("scripts/compare_cpu_care_rounds.py");
+    let output = fixture.fixture.join("known-exclusion-comparison");
+    let recipe = fixture.fixture.join("known-exclusion-comparison-spec.json");
+    let care_binary = Path::new(env!("CARGO_BIN_EXE_train_cpu_care"))
+        .canonicalize()
+        .unwrap();
+    let round_binary = Path::new(env!("CARGO_BIN_EXE_train_cpu_care_round"))
+        .canonicalize()
+        .unwrap();
+    write_json(
+        &recipe,
+        &json!({
+            "schema":1,"previous":fixture.source.canonicalize().unwrap(),
+            "seed_history":fixture.history.canonicalize().unwrap(),"output":output,
+            "care_binary":care_binary,"round_binary":round_binary,"temperature":1.0,
+            "rounds":[
+                [{"collector_run_id":"held","seed":HELD_SEED,"lesson":"eat_held_food","decisions":1}],
+                [{"collector_run_id":"reachable","seed":REACHABLE_SEED,"lesson":"eat_reachable_food","decisions":1}]
+            ],
+            "assessments":[{"seed":SOURCE_SEED+30,"lesson":"eat_held_food","decisions":1}]
+        }),
+    );
+    let invoke = |known: bool| {
+        let mut command = Command::new("python");
+        command.args(["-B", text(&script), "--spec", text(&recipe), "--run"]);
+        if known {
+            command.arg("--known-exclusions");
+        }
+        command
+            .current_dir(&checkout)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env("VK_ICD_FILENAMES", "/no-vulkan-icd.json")
+            .env("ALIFE_SLM_PRIOR_BACKEND", "local")
+            .env("ALIFE_SLM_PRIOR", "on")
+            .output()
+            .unwrap()
+    };
+    let strict = invoke(false);
+    assert!(
+        !strict.status.success(),
+        "strict comparison accepted incomplete history"
+    );
+    assert!(!output.exists());
+    fixture.assert_protected(&protected);
+    assert_eq!(fs::read(&immutable_evidence).unwrap(), evidence_before);
+
+    let report = successful(invoke(true));
+    assert_eq!(report, load(output.join("comparison-report.json")));
+    scoped_unknown(&report);
+    let plan = load(output.join("comparison-plan.json"));
+    scoped_unknown(&plan);
+    let evidence_path = immutable_evidence.canonicalize().unwrap();
+    assert!(plan["immutable_files"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .any(|(path, pin)| Path::new(path)
+            .canonicalize()
+            .is_ok_and(|path| path == evidence_path)
+            && pin["sha256"] == sha(&immutable_evidence)));
+    assert_eq!(report["complete"], true); // Execution completion is not history completeness.
+    assert_eq!(report["initial_fixture"], true);
+    assert_eq!(report["budget_matched"], true);
+    assert_eq!(report["promotion"], "none");
+    assert_eq!(report["heldout_pairs"].as_array().unwrap().len(), 1);
+    let initial_actor = load(fixture.source.join("actor-checkpoint.json"));
+    let initial_value = load(fixture.source.join("value-checkpoint.json"));
+    assert!(initial_actor["optimizer_step"].as_u64().unwrap() > 0);
+    assert!(initial_value["optimizer_step"].as_u64().unwrap() > 0);
+    let round0 = read_cpu_cooperative_round(&output.join("cooperative/round-0/learner")).unwrap();
+    let round1 = read_cpu_cooperative_round(&output.join("cooperative/round-1/learner")).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&round0.source_handoff.actor).unwrap(),
+        fs::read(fixture.source.join("actor-checkpoint.json")).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_vec(&round0.source_handoff.value).unwrap(),
+        fs::read(fixture.source.join("value-checkpoint.json")).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_vec(&round0.output_handoff).unwrap(),
+        serde_json::to_vec(&round1.source_handoff).unwrap()
+    );
+    for (arm, final_source) in [
+        ("cooperative", output.join("cooperative/founder-1")),
+        ("serial", output.join("serial/episodes/episode-001")),
+    ] {
+        let training = &report["training"][arm];
+        assert_eq!(training["training_rows"], 2);
+        assert_eq!(training["optimizer_updates"]["actor"], 4);
+        assert_eq!(training["optimizer_updates"]["value"], 4);
+        assert_eq!(
+            training["initial_optimizer_steps"]["actor"],
+            initial_actor["optimizer_step"]
+        );
+        assert_eq!(
+            training["initial_optimizer_steps"]["value"],
+            initial_value["optimizer_step"]
+        );
+        assert_eq!(
+            load(final_source.join("actor-checkpoint.json"))["optimizer_step"]
+                .as_u64()
+                .unwrap(),
+            initial_actor["optimizer_step"].as_u64().unwrap() + 4
+        );
+        assert_eq!(
+            load(final_source.join("value-checkpoint.json"))["optimizer_step"]
+                .as_u64()
+                .unwrap(),
+            initial_value["optimizer_step"].as_u64().unwrap() + 4
+        );
+        for round in training["rounds"].as_array().unwrap() {
+            assert_eq!(round["steps"].as_array().unwrap().len(), 1);
+            scoped_unknown(&round["steps"][0]);
+            assert_eq!(round["steps"][0]["training_rows"], 1);
+            assert_eq!(round["steps"][0]["actor_optimizer_updates"], 2);
+            assert_eq!(round["steps"][0]["value_optimizer_updates"], 2);
+        }
+        let mut history_count = 0;
+        for entry in fs::read_dir(output.join(arm).join("histories")).unwrap() {
+            let path = entry.unwrap().path();
+            let document = load(&path);
+            if document["kind"] != "mixed-care-seed-history" {
+                continue;
+            }
+            history_count += 1;
+            unknown(&document);
+            assert_eq!(document["complete"], false);
+            assert_eq!(document["missing_history"], history["missing_history"]);
+            assert_eq!(
+                document["recovery_reconciliation"],
+                history["recovery_reconciliation"]
+            );
+        }
+        assert_eq!(history_count, 3);
+        let pair = &report["heldout_pairs"][0][arm];
+        let assessment = &pair["result"];
+        scoped_unknown(assessment);
+        assert_eq!(assessment["evaluated_decisions"], 1);
+        assert_eq!(assessment["bootstrap_decisions"], 1);
+        assert_eq!(assessment["teacher_present"], false);
+        assert_eq!(assessment["semantic_prior_enabled"], false);
+        assert_eq!(assessment["actor_checkpoint_unchanged"], true);
+        assert_eq!(assessment["value_checkpoint_unchanged"], true);
+        assert_eq!(assessment["offline_actor_optimizer_updates"], 0);
+        assert_eq!(assessment["offline_value_optimizer_updates"], 0);
+        let eval_root = Path::new(pair["output"].as_str().unwrap());
+        assert_eq!(
+            load(eval_root.join("care-evaluation.json"))["result"],
+            *assessment
+        );
+        scoped_unknown(&load(eval_root.join("care-episode.json")));
+    }
+    for (index, collector) in [(0, "held"), (1, "reachable")] {
+        let round = output.join(format!("cooperative/round-{index}"));
+        let source = if index == 0 {
+            fixture.source.clone()
+        } else {
+            output.join("cooperative/founder-0")
+        };
+        let private = round.join("collectors").join(collector);
+        unknown(&load(private.join("collection-metadata.json")));
+        scoped_unknown(&load(private.join("care-episode.json")));
+        for (collected, inherited) in [
+            ("collection-actor-checkpoint.json", "actor-checkpoint.json"),
+            ("initial-value-checkpoint.json", "value-checkpoint.json"),
+        ] {
+            assert_eq!(
+                fs::read(private.join(collected)).unwrap(),
+                fs::read(source.join(inherited)).unwrap()
+            );
+        }
+        let serial = output.join(format!("serial/episodes/episode-{index:03}"));
+        let serial_parent = if index == 0 {
+            fixture.source.clone()
+        } else {
+            output.join("serial/episodes/episode-000")
+        };
+        for (collected, inherited) in [
+            ("collection-actor-checkpoint.json", "actor-checkpoint.json"),
+            ("initial-value-checkpoint.json", "value-checkpoint.json"),
+        ] {
+            assert_eq!(
+                fs::read(serial.join(collected)).unwrap(),
+                fs::read(serial_parent.join(inherited)).unwrap()
+            );
+        }
+        let native = load(serial.join("cpu-cycle.json"));
+        unknown(&native);
+        scoped_unknown(&native["episode"]);
+        let exported = load(output.join(format!("cooperative/founder-{index}/cpu-cycle.json")));
+        assert_eq!(
+            exported["seed_admission"]["historical_freshness"],
+            "unasserted"
+        );
+        assert_eq!(exported["member_historical_freshness"], "unasserted");
+    }
+    let mut scoped_commands = 0;
+    for entry in fs::read_dir(output.join("commands")).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_str().unwrap();
+        let Some(number) = name.strip_suffix(".argv.json") else {
+            continue;
+        };
+        let invocation = load(&path);
+        let action = invocation["argv"][1].as_str().unwrap();
+        let stdout = load(
+            output
+                .join("commands")
+                .join(format!("{number}.stdout.json")),
+        );
+        match action {
+            "plan" | "run" | "evaluate" => {
+                scoped_unknown(&stdout);
+                scoped_commands += 1;
+            }
+            "--previous" => {
+                unknown(&stdout);
+                assert!(invocation["argv"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|arg| arg == "--known-exclusions"));
+            }
+            "--validate-output" => unknown(&stdout),
+            "inspect" | "export-source" => {
+                assert_eq!(stdout["member_historical_freshness"], "unasserted")
+            }
+            other => panic!("unexpected comparison command {other}"),
+        }
+    }
+    assert_eq!(scoped_commands, 6);
+    fixture.assert_protected(&protected);
+    assert_eq!(fs::read(&immutable_evidence).unwrap(), evidence_before);
+}
