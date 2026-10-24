@@ -148,6 +148,11 @@ class ComparisonPreflightTests(unittest.TestCase):
                 self.write(self.history, self.document)
                 with self.assertRaisesRegex(ValueError, "training seed overlaps"):
                     self.plan(known_exclusions=True)
+        alternate.write_bytes(json.dumps(document).encode() + b"\xff")
+        self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(alternate)["sha256"]
+        self.write(self.history, self.document)
+        with self.assertRaisesRegex(ValueError, "invalid structured recovery evidence encoding"):
+            self.plan(known_exclusions=True)
         for kind in (mixed.ledger_store.MANIFEST, mixed.ledger_store.SEGMENT):
             self.write(alternate, {"schema": 1, "kind": kind})
             self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(alternate)["sha256"]

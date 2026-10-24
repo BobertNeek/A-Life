@@ -271,8 +271,10 @@ def known_history_inputs(history, paths, documents, pins):
         except json.JSONDecodeError as error:
             require(path.suffix.lower() != ".json" and not error.doc.lstrip().startswith(("{", "[")),
                     "malformed structured recovery evidence")
-        except UnicodeDecodeError:
-            require(path.suffix.lower() != ".json", "invalid JSON recovery evidence encoding")
+        except UnicodeDecodeError as error:
+            prefix = raw.decode(error.encoding, errors="replace").lstrip("\ufeff \t\r\n")
+            require(path.suffix.lower() != ".json" and not prefix.startswith(("{", "[")),
+                    "invalid structured recovery evidence encoding")
         else:
             check_dependencies(document, path)
             if path not in documents:
