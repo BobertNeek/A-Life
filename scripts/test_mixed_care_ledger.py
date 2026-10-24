@@ -11,6 +11,26 @@ import grab_food_seed_reservations as seeds
 import mixed_care_ledger as store
 
 
+class CanonicalHistoryHashTests(unittest.TestCase):
+    def test_prefix_digests_match_existing_json_bytes(self):
+        runs = [{"z": [None, True, False, 0.125, -0.0, 1e-30, 1e30],
+                 "a": {"note": "spaces stay\n雪😀\"\\", "age": 2**64 - 1}},
+                {}, {"attempts": [{"status": "abandoned", "seed": 2**60 + 1}]}]
+        for count in range(len(runs) + 1):
+            expected = hashlib.sha256(json.dumps(runs[:count], sort_keys=True, allow_nan=False).encode()).hexdigest()
+            with self.subTest(count=count):
+                self.assertEqual(store.canonical_hash(runs, count), expected)
+        self.assertEqual(store.canonical_hash(runs), expected)
+        self.assertEqual(store.canonical_hash([]), hashlib.sha256(b"[]").hexdigest())
+
+    def test_nonfinite_protected_values_are_rejected(self):
+        for value in (float("nan"), float("inf"), -float("inf")):
+            runs = [{"attempts": [{"receipt": {"value": value}}]}]
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                store.canonical_hash(runs)
+            self.assertEqual(store.canonical_hash(runs, 0), store.canonical_hash([]))
+
+
 class SegmentedLedgerTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -68,7 +88,7 @@ class SegmentedLedgerTests(unittest.TestCase):
                     attempt["status"] = status
                     with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
                         store.write(self.path, state)
-                    hashed.assert_called_once_with(state["runs"][:2])
+                    hashed.assert_called_once_with(state["runs"], 2)
                     self.assertEqual(dict(store.read(self.path)), dict(state))
 
     def test_new_allocation_rebinds_prefix_and_nested_mutation_fails_before_commit(self):
@@ -78,7 +98,7 @@ class SegmentedLedgerTests(unittest.TestCase):
         state["runs"].append(self.allocation(13, "pending"))
         with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
             store.write(self.path, state)
-        self.assertEqual([len(call.args[0]) for call in hashed.call_args_list], [2, 3])
+        self.assertEqual([call.args[1] for call in hashed.call_args_list], [2, 3])
         self.assertEqual(state.protected_prefix, 3)
         self.assertEqual(state.prefix_sha256, store.canonical_hash(state["runs"][:3]))
         self.assertEqual(dict(store.read(self.path)), dict(state))
@@ -86,7 +106,7 @@ class SegmentedLedgerTests(unittest.TestCase):
         state["runs"][-1]["attempts"][0]["status"] = "abandoned"
         with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
             store.write(self.path, state)
-        hashed.assert_called_once_with(state["runs"][:3])
+        hashed.assert_called_once_with(state["runs"], 3)
         self.assertEqual(dict(store.read(self.path)), dict(state))
 
         before = self.path.read_bytes()
@@ -101,10 +121,24 @@ class SegmentedLedgerTests(unittest.TestCase):
         for _ in range(2):
             with patch.object(store, "canonical_hash", wraps=store.canonical_hash) as hashed:
                 admitted = store.read(self.path)
-            prefixes = [call.args[0] for call in hashed.call_args_list if call.args[0]]
+            prefixes = [call.args[0][:call.args[1]] for call in hashed.call_args_list if call.args[0]]
             self.assertEqual(prefixes, [state["runs"][:2]])
             self.assertEqual(admitted.prefix_sha256, store.canonical_hash(state["runs"][:2]))
             self.assertEqual(dict(admitted), dict(state))
+
+    def test_nested_mutation_at_each_archive_position_blocks_publication(self):
+        state = store.State({**self.value, "runs": [self.allocation(seed) for seed in range(10, 18)]})
+        store.write(self.path, state)
+        before = self.path.read_bytes()
+        for index in (0, 3, 6):
+            with self.subTest(index=index):
+                admitted = store.read(self.path)
+                admitted["runs"][index]["attempts"][0]["receipt"]["value"] += 1
+                with patch.object(store, "immutable") as publish, self.assertRaisesRegex(ValueError, "archived history"):
+                    store.write(self.path, admitted)
+                publish.assert_not_called()
+                self.assertEqual(self.path.read_bytes(), before)
+                self.assertEqual(dict(store.read(self.path)), dict(state))
 
     def test_failed_manifest_replace_preserves_old_bytes_and_orphans_are_reusable(self):
         state = self.legacy(); before = self.path.read_bytes(); real = os.replace

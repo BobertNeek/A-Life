@@ -24,8 +24,19 @@ def require(value, message):
         raise ValueError(message)
 
 
-def canonical_hash(value):
-    return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
+def canonical_hash(runs, count=None):
+    """Hash exact canonical prefix bytes with temporaries bounded by one allocation.
+
+    Keep json.dumps' default list punctuation and per-value encoding: existing
+    prefix digests remain identical. Every protected allocation is still visited.
+    """
+    hasher = hashlib.sha256(b"[")
+    for index in range(len(runs) if count is None else count):
+        if index:
+            hasher.update(b", ")
+        hasher.update(json.dumps(runs[index], sort_keys=True, allow_nan=False).encode())
+    hasher.update(b"]")
+    return hasher.hexdigest()
 
 
 def encoded(value):
@@ -114,7 +125,7 @@ class State(dict):
         # Only a successful write may reuse the prefix just checked by append_only.
         # New admissions and expanded boundaries always hash the complete prefix.
         if not reuse_verified_prefix or protected_prefix != self.protected_prefix:
-            self.prefix_sha256 = canonical_hash(self["runs"][:protected_prefix])
+            self.prefix_sha256 = canonical_hash(self["runs"], protected_prefix)
         self.protected_prefix = protected_prefix
         self.current_before = (copy.deepcopy(self["runs"][self.protected_prefix])
                                if len(self["runs"]) > self.protected_prefix else None)
@@ -124,7 +135,7 @@ class State(dict):
 def append_only(state):
     runs = state["runs"]
     require(len(runs) >= state.protected_prefix and
-            canonical_hash(runs[:state.protected_prefix]) == state.prefix_sha256,
+            canonical_hash(runs, state.protected_prefix) == state.prefix_sha256,
             "archived history was changed or removed")
     if state.current_before is not None:
         require(len(runs) > state.protected_prefix, "current allocation was removed")
