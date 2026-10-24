@@ -117,6 +117,18 @@ fn config(spec: &CpuCareRoundSpecV1) -> PpoConfig {
         ..Default::default()
     }
 }
+fn portable_run_id(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    !name.is_empty()
+        && name.len() <= 64
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        && !matches!(lower.as_str(), "con" | "prn" | "aux" | "nul")
+        && !(lower.len() == 4
+            && (lower.starts_with("com") || lower.starts_with("lpt"))
+            && matches!(lower.as_bytes()[3], b'1'..=b'9'))
+}
 fn check_spec(spec: &CpuCareRoundSpecV1) -> Result<()> {
     let mut seeds = BTreeSet::new();
     let mut ids = BTreeSet::new();
@@ -135,13 +147,8 @@ fn check_spec(spec: &CpuCareRoundSpecV1) -> Result<()> {
     }
     config(spec).validate()?;
     for lesson in &spec.collectors {
-        if lesson.collector_run_id.is_empty()
-            || lesson.collector_run_id.len() > 64
-            || !lesson
-                .collector_run_id
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-            || !ids.insert(&lesson.collector_run_id)
+        if !portable_run_id(&lesson.collector_run_id)
+            || !ids.insert(lesson.collector_run_id.to_ascii_lowercase())
             || lesson.seed == 0
             || !seeds.insert(lesson.seed)
             || !(1..=128).contains(&lesson.decisions)
@@ -856,14 +863,30 @@ mod tests {
     fn legal_run_names_cannot_alias_dispatch_history_and_ledger_snapshots() {
         let mut paths = BTreeSet::new();
         for name in ["a", "b", "b-ledger", "b-ledger-ledger", "00_held"] {
-            assert!(name
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'));
+            assert!(portable_run_id(name));
             let (history, ledger) = dispatch_paths(Path::new("histories"), name);
             assert!(paths.insert(history));
             assert!(paths.insert(ledger));
         }
         assert_eq!(paths.len(), 10);
+        for name in ["CON", "aux", "Prn", "NUL", "com1", "LPT9", "a.b", "../a"] {
+            assert!(!portable_run_id(name));
+        }
+    }
+
+    #[test]
+    fn case_aliasing_collectors_are_rejected_before_any_source_or_output_access() {
+        let spec: CpuCareRoundSpecV1 = serde_json::from_value(json!({
+            "schema_version":1,"previous":"absent-source","seed_history":"absent-history",
+            "output":"absent-output","temperature":1.,"prior":"deterministic_v1",
+            "window_ticks":32,"burn_in":8,"effective_batch_size":1,
+            "collectors":[
+                {"collector_run_id":"A","seed":1,"lesson":"eat_held_food","decisions":2},
+                {"collector_run_id":"a","seed":2,"lesson":"eat_reachable_food","decisions":2}
+            ]
+        }))
+        .unwrap();
+        assert!(check_spec(&spec).is_err());
     }
 
     #[test]
