@@ -63,12 +63,12 @@ jobs:
         run: cargo test --locked -p alife_gpu_backend --features training-rollout --lib training_rollout::tests
       - name: Collect-only durable publication CPU contracts
         run: cargo test --locked -p alife_training --features cpu-backend --lib cpu::collector_output::tests -- --test-threads=1
-      - name: Cooperative round recovery CPU contracts
+      - name: Cooperative round durable recovery CPU contracts
+        run: cargo test --locked -p alife_training --features cpu-backend --lib cpu::round_output::tests -- --test-threads=1
+      - name: Cooperative round central learner CPU contracts
         env:
           RUST_MIN_STACK: '33554432'
-        run: |
-          cargo test --locked -p alife_training --features cpu-backend --lib cpu::round_output::tests -- --test-threads=1
-          cargo test --locked -p alife_training --features cpu-backend --test cpu_cooperative_round -- --test-threads=1
+        run: cargo test --locked -p alife_training --features cpu-backend --test cpu_cooperative_round -- --test-threads=1
       - name: Acquisition rehearsal CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_acquisition_rehearsal::tests
       - name: Next-cohort archive run ID CPU boundary regressions
