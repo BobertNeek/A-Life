@@ -3,10 +3,10 @@ name: CPU foundation backend
 on:
   push:
     branches: ["main"]
-    paths: ["crates/alife_training/**", "crates/alife_archive/**", "crates/alife_semantic/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.toml", "Cargo.lock", ".cargo/**", "rust-toolchain*", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
+    paths: ["crates/alife_training/**", "crates/alife_archive/**", "crates/alife_semantic/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.toml", "Cargo.lock", ".cargo/**", "rust-toolchain*", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/compare_cpu_care_rounds.py", "scripts/test_compare_cpu_care_rounds.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
   pull_request:
     branches: ["main"]
-    paths: ["crates/alife_training/**", "crates/alife_archive/**", "crates/alife_semantic/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.toml", "Cargo.lock", ".cargo/**", "rust-toolchain*", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
+    paths: ["crates/alife_training/**", "crates/alife_archive/**", "crates/alife_semantic/**", "crates/alife_core/**", "crates/alife_runtime/**", "crates/alife_gpu_backend/**", "crates/alife_world/**", "crates/alife_game_app/**", "crates/alife_school/**", "Cargo.toml", "Cargo.lock", ".cargo/**", "rust-toolchain*", "scripts/run_cpu_care_serial.py", "scripts/test_cpu_care_serial.py", "scripts/compare_cpu_care_rounds.py", "scripts/test_compare_cpu_care_rounds.py", "scripts/check_cpu_retention_native.py", "scripts/cpu_retention_report.py", ".github/workflows/cpu-foundation-backend.yml"]
 
 permissions:
   contents: read
@@ -14,7 +14,7 @@ permissions:
 jobs:
   serial-care-round:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CARGO_BUILD_JOBS: '2'
       CARGO_INCREMENTAL: '0'
@@ -28,7 +28,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
-      - name: Serial real-care round, explicit prior and preserved private life
+      - name: Serial real-care rounds, founder continuation and heldout comparison
         run: cargo test --locked -p alife_game_app --features cpu-training --test cpu_care_round -- --nocapture
   cooperative-round:
     runs-on: ubuntu-latest
@@ -90,12 +90,16 @@ jobs:
         run: |
           cargo test --locked -p alife_game_app --features cpu-training --test cpu_care -- --nocapture
           cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::collect_only_tests -- --nocapture
+          cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::evaluation::tests
+          cargo test --locked -p alife_game_app --features cpu-training --lib declared_assessment_admission
+          cargo test --locked -p alife_game_app --features cpu-training --lib assessment_exceptions
           cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::admission::tests
           cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::round::tests
           cargo test --locked -p alife_game_app --features cpu-training --lib collect_only_snapshot_imports_require_current_raw_ledger_bytes_and_keep_exclusions
           cargo test --locked -p alife_game_app --features cpu-training --lib explicit_training_prior
           cargo test --locked -p alife_game_app --features cpu-training --lib food_outcome
           python -B -m unittest discover -s scripts -p test_cpu_care_serial.py -v
+          python -B -m unittest discover -s scripts -p test_compare_cpu_care_rounds.py -v
           cargo build --locked -p alife_game_app --features cpu-training --bin train_cpu_care --bin train_cpu_care_round
           python -B scripts/check_cpu_retention_native.py target/debug/train_cpu_care
           cargo clippy --locked -p alife_game_app --features cpu-training --lib --bin train_cpu_care --bin train_cpu_care_round --test cpu_care --test cpu_care_round -- -D warnings

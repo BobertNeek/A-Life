@@ -17,6 +17,8 @@ on:
       - "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs"
       - "crates/alife_game_app/src/bin/train_cpu_care_round.rs"
       - "crates/alife_game_app/tests/cpu_care_round.rs"
+      - "scripts/compare_cpu_care_rounds.py"
+      - "scripts/test_compare_cpu_care_rounds.py"
       - "crates/alife_game_app/Cargo.toml"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
@@ -40,6 +42,8 @@ on:
       - "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs"
       - "crates/alife_game_app/src/bin/train_cpu_care_round.rs"
       - "crates/alife_game_app/tests/cpu_care_round.rs"
+      - "scripts/compare_cpu_care_rounds.py"
+      - "scripts/test_compare_cpu_care_rounds.py"
       - "crates/alife_game_app/Cargo.toml"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
@@ -60,7 +64,7 @@ jobs:
   serial-care-round:
     name: Serial CPU care round
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CARGO_BUILD_JOBS: '2'
       CARGO_INCREMENTAL: '0'
@@ -74,8 +78,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Rooted and canonical output admission before filesystem mutation
-        run: cargo test --locked -p alife_training --lib output_resolution_tests
-      - name: Serial real-care adapter contracts without a live prior
+        run: cargo test --locked -p alife_training --features cpu-backend --lib output_resolution_tests
+      - name: Serial real-care continuation and matched assessment without a live prior
         run: cargo test --locked -p alife_game_app --features cpu-training --test cpu_care_round -- --nocapture
   build:
     name: Build and check Windows training CLI

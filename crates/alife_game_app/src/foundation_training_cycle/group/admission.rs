@@ -132,10 +132,19 @@ pub(super) fn read(path: &Path) -> Result<(Vec<u8>, Value)> {
     Ok(alife_training::native_receipt::read(path)?)
 }
 
-fn exclusions(value: &Value, seed: u64) -> Result<()> {
+fn exclusions(value: &Value, seed: u64, assessment: bool) -> Result<()> {
     match value {
         Value::Object(map) => {
             for (key, value) in map {
+                // Assessment may replay explicitly held-out seeds across arms;
+                // all training/consumed/world-seed evidence remains exclusionary.
+                if assessment && key == "assessment_seed" {
+                    value
+                        .as_u64()
+                        .filter(|seed| *seed > 0)
+                        .ok_or("assessment seed declaration must be a positive scalar")?;
+                    continue;
+                }
                 if key.ends_with("seed_ranges")
                     || key.ends_with("seed_range")
                     || key == "seed_range"
@@ -168,7 +177,8 @@ fn exclusions(value: &Value, seed: u64) -> Result<()> {
                     }
                 } else if key == "assessment_seeds" {
                     for value in value.as_array().ok_or("invalid assessment seed evidence")? {
-                        if value.as_u64().ok_or("invalid assessment seed")? == seed {
+                        let declared = value.as_u64().ok_or("invalid assessment seed")?;
+                        if !assessment && declared == seed {
                             return Err("group seed overlaps a known assessment".into());
                         }
                     }
@@ -179,13 +189,13 @@ fn exclusions(value: &Value, seed: u64) -> Result<()> {
                 {
                     return Err("group seed is a disclosed historical retry; new group admission rejects reuse".into());
                 } else {
-                    exclusions(value, seed)?;
+                    exclusions(value, seed, assessment)?;
                 }
             }
         }
         Value::Array(values) => {
             for value in values {
-                exclusions(value, seed)?;
+                exclusions(value, seed, assessment)?;
             }
         }
         _ => {}
@@ -193,6 +203,7 @@ fn exclusions(value: &Value, seed: u64) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // bounded import state plus assessment role
 fn import(
     path: &Path,
     expected_sha256: &str,
@@ -201,6 +212,7 @@ fn import(
     records: &mut Vec<Value>,
     depth: usize,
     bytes_total: &mut u64,
+    assessment: bool,
 ) -> Result<()> {
     if depth > 8 || records.len() >= 128 {
         return Err("seed evidence import budget exceeded".into());
@@ -223,7 +235,7 @@ fn import(
     if document["schema"] != 1 {
         return Err("seed evidence requires schema 1".into());
     }
-    exclusions(&document, seed)?;
+    exclusions(&document, seed, assessment)?;
     if let Some(imports) = document.get("imports") {
         for item in imports.as_array().ok_or("invalid seed evidence imports")? {
             let child = Path::new(item["path"].as_str().ok_or("missing seed import path")?);
@@ -242,6 +254,7 @@ fn import(
                 records,
                 depth + 1,
                 bytes_total,
+                assessment,
             )?;
         }
     }
@@ -256,7 +269,15 @@ pub(super) fn admit(
     seed: u64,
     known_exclusions: bool,
 ) -> Result<Value> {
-    admit_with_lane_snapshots(previous, history, output, seed, known_exclusions, false)
+    admit_with_lane_snapshots(
+        previous,
+        history,
+        output,
+        seed,
+        known_exclusions,
+        false,
+        false,
+    )
 }
 
 #[cfg(any(test, feature = "cpu-training"))]
@@ -267,7 +288,34 @@ pub(super) fn admit_collection(
     seed: u64,
     known_exclusions: bool,
 ) -> Result<Value> {
-    admit_with_lane_snapshots(previous, history, output, seed, known_exclusions, true)
+    admit_with_lane_snapshots(
+        previous,
+        history,
+        output,
+        seed,
+        known_exclusions,
+        true,
+        false,
+    )
+}
+
+#[cfg(feature = "cpu-training")]
+pub(super) fn admit_assessment(
+    previous: &Path,
+    history: &Path,
+    output: &Path,
+    seed: u64,
+    known_exclusions: bool,
+) -> Result<Value> {
+    admit_with_lane_snapshots(
+        previous,
+        history,
+        output,
+        seed,
+        known_exclusions,
+        false,
+        true,
+    )
 }
 
 fn admit_with_lane_snapshots(
@@ -277,6 +325,7 @@ fn admit_with_lane_snapshots(
     seed: u64,
     known_exclusions: bool,
     allow_immutable_lane_snapshots: bool,
+    assessment: bool,
 ) -> Result<Value> {
     let (bytes, document) = read(history)?;
     let selected = json!({"policy":if known_exclusions {"known-exclusions"} else {"strict"},
@@ -291,6 +340,13 @@ fn admit_with_lane_snapshots(
         || recorded != selected
     {
         return Err("strict admission requires complete attested seed history; incomplete history requires explicit known-exclusions".into());
+    }
+    if assessment
+        && !document["assessment_seeds"]
+            .as_array()
+            .is_some_and(|seeds| seeds.iter().any(|value| value.as_u64() == Some(seed)))
+    {
+        return Err("care assessment requires an explicitly declared held-out seed".into());
     }
     let lane = output
         .parent()
@@ -311,7 +367,7 @@ fn admit_with_lane_snapshots(
     let lineage = alife_training::native_receipt::Lineage::load(&native, previous)?;
     lineage.check_parent(&native_bytes)?;
     for frame in lineage.frames() {
-        exclusions(&frame?, seed)?;
+        exclusions(&frame?, seed, assessment)?;
     }
     let consumed = document["consumed_seed_ranges"]
         .as_array()
@@ -350,6 +406,7 @@ fn admit_with_lane_snapshots(
         &mut records,
         0,
         &mut 0,
+        assessment,
     )?;
     // Ordinary admission requires each actual ledger path as an exact-byte
     // import. Collect-only admission may retain an imported immutable snapshot,
@@ -403,6 +460,10 @@ fn admit_with_lane_snapshots(
     let mut provenance = json!({"schema":1,"world_seed":seed,"source_sha256":source_hashes,
         "seed_admission":selected,
         "historical_retry":false,"native_source_receipt":native,"evidence":records,"history_sha256":hash(&bytes)});
+    if assessment {
+        provenance["allocation"] = json!("declared-held-out-assessment");
+        provenance["training_seed_reserved"] = json!(false);
+    }
     if allow_immutable_lane_snapshots {
         // Reservation compares admission before and after taking the lane lock.
         // Filesystem enumeration order must not change the provenance value.
@@ -420,6 +481,26 @@ fn admit_with_lane_snapshots(
 mod tests {
     use super::*;
     #[test]
+    fn assessment_exceptions_never_hide_training_or_consumed_seed_evidence() {
+        let heldout = json!({"assessment_seeds":[11],"allocations":[{"assessment_seed":11}]});
+        assert!(exclusions(&heldout, 11, true).is_ok());
+        assert!(exclusions(&heldout, 11, false).is_err());
+        for evidence in [
+            json!({"training_seed_ranges":[[11,11]]}),
+            json!({"consumed_seed_ranges":[[10,12]]}),
+            json!({"nested":{"world_seed":11}}),
+        ] {
+            assert!(exclusions(&evidence, 11, true).is_err());
+        }
+        assert!(exclusions(&json!({"assessment_seeds":"malformed"}), 11, true).is_err());
+        for malformed in [
+            json!({"assessment_seed":{"training_seed_ranges":[[11,11]]}}),
+            json!({"assessment_seeds":[11,{"consumed_seed_ranges":[[11,11]]}]}),
+        ] {
+            assert!(exclusions(&malformed, 11, true).is_err());
+        }
+    }
+    #[test]
     fn nested_exclusions_and_assessments_cannot_be_bypassed() {
         for evidence in [
             json!({"reserved_seed_ranges":[[10,15]]}),
@@ -427,10 +508,10 @@ mod tests {
             json!({"allocations":[{"assessment_seed":11}]}),
             json!({"assessment_seeds":[11]}),
         ] {
-            assert!(exclusions(&evidence, 11).is_err());
-            assert!(exclusions(&evidence, 30).is_ok());
+            assert!(exclusions(&evidence, 11, false).is_err());
+            assert!(exclusions(&evidence, 30, false).is_ok());
         }
-        assert!(exclusions(&json!({"consumed_seed_ranges":[[15,10]]}), 30).is_err());
+        assert!(exclusions(&json!({"consumed_seed_ranges":[[15,10]]}), 30, false).is_err());
     }
 }
 
@@ -503,6 +584,22 @@ mod admission_tests {
         }
         fn admit(&self, seed: u64, known: bool) -> Result<Value> {
             admit(&self.source, &self.history, &self.output, seed, known)
+        }
+    }
+    #[cfg(feature = "cpu-training")]
+    #[test]
+    fn declared_assessment_admission_checks_training_and_ancestral_exclusions() {
+        let mut f = Fixture::new();
+        f.document["complete"] = json!(true);
+        f.document.as_object_mut().unwrap().remove("seed_admission");
+        f.write();
+        assert!(admit_assessment(&f.source, &f.history, &f.output, 140, false).is_ok());
+        assert!(f.admit(140, false).is_err());
+        assert!(admit_assessment(&f.source, &f.history, &f.output, 200, false).is_err());
+        for seed in [100, 125, 252] {
+            f.document["assessment_seeds"] = json!([seed]);
+            f.write();
+            assert!(admit_assessment(&f.source, &f.history, &f.output, seed, false).is_err());
         }
     }
     #[test]

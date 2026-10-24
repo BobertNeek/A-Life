@@ -3,7 +3,7 @@ use alife_game_app::{
     cpu_care_round_summary, prepare_cpu_care_round, run_cpu_care_round, CpuCareRoundPlanV1,
     CpuCareRoundSpecV1,
 };
-use alife_training::cpu::read_cpu_cooperative_round;
+use alife_training::cpu::{materialize_cpu_cooperative_source, read_cpu_cooperative_round};
 use std::{
     collections::BTreeMap,
     fs,
@@ -33,12 +33,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let command = args.next().unwrap_or_else(|| "--help".into());
     if matches!(command.as_str(), "--help" | "-h") {
-        println!("train_cpu_care_round plan --spec RECIPE.json --output SEALED_PLAN.json\ntrain_cpu_care_round run --plan SEALED_PLAN.json\ntrain_cpu_care_round inspect --result ROUND_DIR/learner\n\nV1 serially collects explicit existing care lessons under one frozen native CPU source and isolated deterministic_v1 priors, then invokes one central learner. The recipe fixes source/history/output/seeds/doses. Reuse the same binary and plan for retry. Completed collectors/results are reused; incomplete private lives are preserved and never automatically restarted. No accepted brain is selected or promoted. Serial collection is a parity control, not the serial-learning comparison or evidence of synergy.");
+        println!("train_cpu_care_round plan --spec RECIPE.json --output SEALED_PLAN.json\ntrain_cpu_care_round run --plan SEALED_PLAN.json\ntrain_cpu_care_round inspect --result ROUND_DIR/learner\ntrain_cpu_care_round export-source --source EXACT_NATIVE_SOURCE --result ROUND_DIR/learner --output NEW_NATIVE_SOURCE\ntrain_cpu_care_round evaluate --spec ASSESSMENT.json\n\nV1 serially collects explicit care lessons under one frozen native CPU source and isolated deterministic_v1 priors, then invokes one central learner. Export carries full founder/Adam state into fresh lives only; private archives are never transplanted. Assessment uses declared held-out seeds with teachers/prior removed and no offline updates. Reuse the same binary and plan for collection retry. Incomplete private lives remain preserved and are never automatically restarted. No accepted brain is selected or promoted. Serial collection is a parity control; the separate comparison command executes serial learning too. These mechanisms alone do not establish synergy.");
         return Ok(());
     }
     let mut values = BTreeMap::new();
     while let Some(key) = args.next() {
-        if !matches!(key.as_str(), "--spec" | "--output" | "--plan" | "--result") {
+        if !matches!(
+            key.as_str(),
+            "--spec" | "--output" | "--plan" | "--result" | "--source"
+        ) {
             return Err(format!("unknown argument {key}").into());
         }
         let value = args.next().ok_or("argument value missing")?;
@@ -86,7 +89,32 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let result = read_cpu_cooperative_round(&values["--result"])?;
             cpu_care_round_summary(&result, &values["--result"])
         }
-        _ => return Err("expected plan --spec --output, run --plan or inspect --result".into()),
+        "export-source"
+            if values.len() == 3
+                && values.contains_key("--source")
+                && values.contains_key("--result")
+                && values.contains_key("--output") =>
+        {
+            let receipt = materialize_cpu_cooperative_source(
+                &values["--source"],
+                &values["--result"],
+                &values["--output"],
+            )?;
+            serde_json::json!({"output":values["--output"],"mode":receipt["mode"],
+                "policy_version":receipt["policy_version"],"actor_optimizer_step":receipt["actor_optimizer_step"],
+                "value_optimizer_step":receipt["value_optimizer_step"],"consumed_seed_ranges":receipt["consumed_seed_ranges"],
+                "private_lifetime_continuation":"none; fresh lives only","promotion":"none"})
+        }
+        "evaluate" if values.len() == 1 && values.contains_key("--spec") => {
+            let request: alife_game_app::CpuCareEvaluationRequest = read(&values["--spec"])?;
+            alife_game_app::evaluate_cpu_care(request)?
+        }
+        _ => {
+            return Err(
+                "expected documented plan, run, inspect, export-source or evaluate arguments"
+                    .into(),
+            )
+        }
     };
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())

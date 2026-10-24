@@ -768,3 +768,223 @@ fn an_existing_unsealed_private_life_is_never_reset_or_redispatched() {
     assert!(!interrupted.join("collector-commit.json").exists());
     fixture.assert_protected(&protected);
 }
+
+#[test]
+fn two_real_care_rounds_continue_exact_founders_and_run_matched_heldout_assessment() {
+    let fixture = NativeFixture::new();
+    let output = fixture.fixture.join("matched-comparison");
+    let recipe = fixture.fixture.join("comparison-spec.json");
+    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/compare_cpu_care_rounds.py")
+        .canonicalize()
+        .unwrap();
+    let round_binary = Path::new(env!("CARGO_BIN_EXE_train_cpu_care_round"))
+        .canonicalize()
+        .unwrap();
+    let care_binary = Path::new(env!("CARGO_BIN_EXE_train_cpu_care"))
+        .canonicalize()
+        .unwrap();
+    let trained = [HELD_SEED, REACHABLE_SEED, SOURCE_SEED + 3, SOURCE_SEED + 4];
+    write_json(
+        &recipe,
+        &json!({"schema":1,"previous":fixture.source.canonicalize().unwrap(),
+        "seed_history":fixture.history.canonicalize().unwrap(),"output":output,
+        "care_binary":care_binary,"round_binary":round_binary,"temperature":1.0,
+        "rounds":[
+            [{"collector_run_id":"00-held","seed":trained[0],"lesson":"eat_held_food","decisions":1},
+             {"collector_run_id":"01-reachable","seed":trained[1],"lesson":"eat_reachable_food","decisions":1}],
+            [{"collector_run_id":"00-held","seed":trained[2],"lesson":"eat_held_food","decisions":1},
+             {"collector_run_id":"01-reachable","seed":trained[3],"lesson":"eat_reachable_food","decisions":1}]],
+        "assessments":[{"seed":SOURCE_SEED+20,"lesson":"obstacle_navigation","decisions":2},
+                       {"seed":SOURCE_SEED+21,"lesson":"relocated_food","decisions":2}]}),
+    );
+    let protected = fixture.protected();
+    let result = Command::new("python")
+        .args(["-B", text(&script), "--spec", text(&recipe), "--run"])
+        .env("ALIFE_SLM_PRIOR_BACKEND", "local")
+        .env("ALIFE_SLM_PRIOR", "on")
+        .current_dir(fixture.fixture.join("round-process"))
+        .output()
+        .unwrap();
+    successful(result);
+    let report = load(output.join("comparison-report.json"));
+    assert_eq!(report["complete"], true);
+    assert_eq!(report["budget_matched"], true);
+    assert_eq!(report["promotion"], "none");
+    assert_eq!(report["heldout_pairs"].as_array().unwrap().len(), 2);
+    for arm in ["cooperative", "serial"] {
+        assert_eq!(report["training"][arm]["training_rows"], 4);
+        assert_eq!(report["training"][arm]["optimizer_updates"]["actor"], 8);
+        assert_eq!(report["training"][arm]["optimizer_updates"]["value"], 8);
+        for pair in report["heldout_pairs"].as_array().unwrap() {
+            let assessment = &pair[arm]["result"];
+            assert_eq!(assessment["teacher_present"], false);
+            assert_eq!(assessment["semantic_prior_enabled"], false);
+            assert_eq!(assessment["offline_actor_optimizer_updates"], 0);
+            assert_eq!(assessment["offline_value_optimizer_updates"], 0);
+        }
+    }
+    let first = output.join("cooperative/founder-0");
+    let second = output.join("cooperative/founder-1");
+    let round1 = read_cpu_cooperative_round(&output.join("cooperative/round-0/learner")).unwrap();
+    let round2 = read_cpu_cooperative_round(&output.join("cooperative/round-1/learner")).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&round1.output_handoff).unwrap(),
+        serde_json::to_vec(&round2.source_handoff).unwrap()
+    );
+    assert!(
+        round2.output_handoff.actor.optimizer_step > round1.output_handoff.actor.optimizer_step
+    );
+    for collector in ["00-held", "01-reachable"] {
+        let private = output
+            .join("cooperative/round-1/collectors")
+            .join(collector);
+        assert_eq!(
+            fs::read(private.join("collection-actor-checkpoint.json")).unwrap(),
+            fs::read(first.join("actor-checkpoint.json")).unwrap()
+        );
+        assert_eq!(
+            fs::read(private.join("initial-value-checkpoint.json")).unwrap(),
+            fs::read(first.join("value-checkpoint.json")).unwrap()
+        );
+        assert_eq!(
+            fs::read(private.join("collection-policy.alife-foundation")).unwrap(),
+            fs::read(first.join("trained.alife-foundation")).unwrap()
+        );
+    }
+    let first_before = tree(&first);
+    successful(round_cli(
+        &fixture.fixture,
+        &[
+            "export-source",
+            "--source",
+            text(&fixture.source),
+            "--result",
+            text(&output.join("cooperative/round-0/learner")),
+            "--output",
+            text(&first),
+        ],
+        true,
+    ));
+    assert_eq!(tree(&first), first_before);
+    fixture.assert_protected(&protected);
+
+    // The ancestry alone must exclude every member, even if an operator's new
+    // history omits the just-disclosed collector seeds.
+    let mut history = load(&fixture.history);
+    history["source_sha256"] = pins(&second);
+    history["assessment_seeds"] = json!([SOURCE_SEED + 20, SOURCE_SEED + 21, SOURCE_SEED + 22]);
+    let history_path = fixture.fixture.join("continued-history.json");
+    write_json(&history_path, &history);
+    let source_before = tree(&second);
+    for seed in [trained.as_slice(), &[SOURCE_SEED + 20]].concat() {
+        let rejected = fixture.fixture.join(&format!("rejected-seed-{seed}"));
+        let mut spec = fixture.spec(&rejected);
+        spec["previous"] = json!(second);
+        spec["seed_history"] = json!(history_path);
+        spec["collectors"] = json!([{"collector_run_id":"retry","seed":seed,"lesson":"eat_held_food","decisions":1}]);
+        let spec_path = fixture.fixture.join(&format!("rejected-{seed}.json"));
+        let plan_path = fixture.fixture.join(&format!("rejected-{seed}-plan.json"));
+        write_json(&spec_path, &spec);
+        assert!(!round_cli(
+            &fixture.fixture,
+            &[
+                "plan",
+                "--spec",
+                text(&spec_path),
+                "--output",
+                text(&plan_path)
+            ],
+            true
+        )
+        .status
+        .success());
+        assert!(!rejected.exists() && !plan_path.exists());
+    }
+    let prior_handoff = second.join("cooperative-source-handoff.json");
+    let original = fs::read(&prior_handoff).unwrap();
+    let mut changed = original.clone();
+    changed.push(b'\n');
+    fs::write(&prior_handoff, &changed).unwrap();
+    let eval_path = fixture.fixture.join("continued-evaluation-spec.json");
+    let eval_output = fixture.fixture.join("continued-evaluation");
+    write_json(
+        &eval_path,
+        &json!({"previous":second,"seed_history":history_path,"output":eval_output,
+        "seed":SOURCE_SEED+22,"decisions":1,"temperature":1.0,"lesson":"eat_reachable_food"}),
+    );
+    assert!(!round_cli(
+        &fixture.fixture,
+        &["evaluate", "--spec", text(&eval_path)],
+        true
+    )
+    .status
+    .success());
+    assert!(!eval_output.exists());
+    fs::write(&prior_handoff, original).unwrap();
+    assert_eq!(tree(&second), source_before);
+    // Retire paths without destroying any archived private life. Admission of
+    // the next fresh life must use its own portable proofs and ancestry.
+    fs::rename(&first, fixture.fixture.join("preserved-first-founder")).unwrap();
+    fs::rename(
+        output.join("cooperative/round-0"),
+        fixture.fixture.join("preserved-first-round"),
+    )
+    .unwrap();
+    fs::rename(
+        &fixture.source,
+        fixture.fixture.join("preserved-initial-source"),
+    )
+    .unwrap();
+    let assessment = successful(round_cli(
+        &fixture.fixture,
+        &["evaluate", "--spec", text(&eval_path)],
+        true,
+    ));
+    assert_eq!(assessment["offline_actor_optimizer_updates"], 0);
+    assert_eq!(assessment["actor_checkpoint_unchanged"], true);
+    assert_eq!(assessment["teacher_present"], false);
+    assert_eq!(tree(&second), source_before);
+    let serial_output = fixture
+        .fixture
+        .join("ordinary-child-of-cooperative-founder");
+    let child = successful(
+        Command::new(&care_binary)
+            .args([
+                "--previous",
+                text(&second),
+                "--output",
+                text(&serial_output),
+                "--seed-history",
+                text(&history_path),
+                "--seed",
+                &(SOURCE_SEED + 23).to_string(),
+                "--lesson",
+                "eat_reachable_food",
+                "--decisions",
+                "1",
+            ])
+            .env("ALIFE_SLM_PRIOR_BACKEND", "deterministic")
+            .env("ALIFE_SLM_PRIOR", "on")
+            .current_dir(fixture.fixture.join("source-process"))
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(
+        child["initial_actor_optimizer_step"],
+        round2.output_handoff.actor.optimizer_step
+    );
+    assert_eq!(
+        child["initial_value_optimizer_step"],
+        round2.output_handoff.value.optimizer_step
+    );
+    assert_eq!(child["actor_optimizer_updates"], 2);
+    assert_eq!(child["value_optimizer_updates"], 2);
+    successful(
+        Command::new(&care_binary)
+            .args(["--validate-output", text(&serial_output)])
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(tree(&second), source_before);
+}

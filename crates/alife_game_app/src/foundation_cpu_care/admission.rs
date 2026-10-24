@@ -845,12 +845,23 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
         }
     }
     for (name, expected) in source_pins {
-        if Path::new(name).components().count() != 1
-            || !matches!(
-                Path::new(name).components().next(),
-                Some(std::path::Component::Normal(_))
-            )
-            || expected.as_str() != Some(sha(&fs::read(source.join(name))?).as_str())
+        let key = Path::new(name);
+        if key.components().count() != 1 && name != "cooperative-result/cooperative-round.json"
+            || !key
+                .components()
+                .all(|component| matches!(component, std::path::Component::Normal(_)))
+        {
+            return Err("noncanonical retained native source path".into());
+        }
+        let mut path = source.clone();
+        for component in key.components() {
+            path.push(component.as_os_str());
+            if fs::symlink_metadata(&path)?.file_type().is_symlink() {
+                return Err("retained native source cannot contain symlinks".into());
+            }
+        }
+        if !path.canonicalize()?.starts_with(source.canonicalize()?)
+            || expected.as_str() != Some(sha(&fs::read(path)?).as_str())
         {
             return Err("retained native source changed".into());
         }

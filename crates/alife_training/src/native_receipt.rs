@@ -279,7 +279,10 @@ impl Lineage {
                 && current["mode"] == "group50_shared_habitat"
                 && current["population"] == 50;
             let cpu = current["complete"] == true
-                && current["mode"] == "native_cpu_fresh_cohort"
+                && matches!(
+                    current["mode"].as_str(),
+                    Some("native_cpu_fresh_cohort" | "native_cpu_cooperative_founder")
+                )
                 && current["backend"] == "native-cpu"
                 && current["receipt_filename"] == "cpu-cycle.json"
                 && current["objective_state_reset"] == false
@@ -340,7 +343,7 @@ impl Lineage {
                     let mut verified = false;
                     if result.frames.len() == 1 {
                         let retained = directory
-                            .join(if current["mode"] == "native_cpu_fresh_cohort" {
+                            .join(if cpu {
                                 "source-native"
                             } else {
                                 "source-receipts"
@@ -455,6 +458,32 @@ impl Lineage {
     /// These content-addressed files must never be edited in place.
     pub fn write_to(&self, destination: &Path) -> io::Result<()> {
         self.write_with_link(destination, |source, target| fs::hard_link(source, target))
+    }
+    /// Verified immutable bytes for a publisher that must resume exact files
+    /// without replacing an existing partial output. Includes a retained parent.
+    pub fn raw_files(&self) -> io::Result<BTreeMap<String, Vec<u8>>> {
+        let total = self
+            .blobs
+            .values()
+            .try_fold(0usize, |total, bytes| total.checked_add(*bytes))
+            .ok_or_else(|| invalid("materialized ancestry byte count overflow"))?;
+        if total > MAX_RECEIPT_BYTES {
+            return Err(invalid("cooperative source materialization supports at most64 MiB of ancestry blobs; originals remain intact"));
+        }
+        self.blobs
+            .keys()
+            .map(|digest| {
+                let bytes = if let Some(bytes) = self.retained.get(digest) {
+                    if sha256(bytes) != *digest {
+                        return Err(invalid("retained lineage bytes changed"));
+                    }
+                    bytes.clone()
+                } else {
+                    self.imported_bytes(&self.source_directory, digest)?
+                };
+                Ok((format!("{DIRECTORY}/{}", digest_name(digest)?), bytes))
+            })
+            .collect()
     }
     fn write_with_link(
         &self,

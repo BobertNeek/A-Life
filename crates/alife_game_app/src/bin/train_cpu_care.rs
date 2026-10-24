@@ -2,6 +2,22 @@
 use alife_game_app::{run_cpu_care, CpuCareRequest, FoundationTeacherLesson};
 use std::{collections::BTreeMap, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Cooperative predecessors validate full round proofs. Use the same bounded
+    // offline stack as the round CLI on Windows' smaller executable main stack.
+    #[cfg(windows)]
+    {
+        std::thread::Builder::new()
+            .name("cpu-care".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(|| run().map_err(|error| error.to_string()))?
+            .join()
+            .map_err(|_| "CPU care worker panicked; retained output requires inspection")??;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    run()
+}
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let special: Vec<_> = std::env::args().skip(1).collect();
     if special.len() == 2 {
         let result = match special[0].as_str() {

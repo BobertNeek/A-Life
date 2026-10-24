@@ -37,6 +37,19 @@ pub(crate) fn admit_native_cpu_care_collection_seed(
     admission::admit_collection(previous, history, output, seed, known_exclusions)
 }
 
+/// A declared held-out seed may be evaluated across independent arms, but must
+/// never overlap any disclosed training/consumed seed. This reserves no seed.
+#[cfg(feature = "cpu-training")]
+pub(crate) fn admit_native_cpu_care_assessment_seed(
+    previous: &Path,
+    history: &Path,
+    output: &Path,
+    seed: u64,
+    known_exclusions: bool,
+) -> Result<serde_json::Value> {
+    admission::admit_assessment(previous, history, output, seed, known_exclusions)
+}
+
 /// Recheck the qualified known-exclusions recovery proof without admitting or
 /// reserving any seed. This opens no GPU and cannot restart a private lifetime.
 #[cfg(feature = "cpu-training")]
