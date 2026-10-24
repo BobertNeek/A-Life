@@ -638,10 +638,8 @@ mod tests {
                 .find(|c| c.action_id == action)
                 .unwrap()
         };
-        let idle = alife_world::HeadlessWorldCommand::idle(organism)
-            .unwrap()
-            .action_id;
-        let representative = candidate(idle).candidate_index;
+        let representative_action = Actions::TURN_LEFT;
+        let representative = candidate(representative_action).candidate_index;
         let channels = [
             (MotorChannel::Orientation, Actions::TURN_LEFT),
             (MotorChannel::Locomotion, Actions::STEP_FORWARD),
@@ -701,7 +699,7 @@ mod tests {
             frame.clone(),
             None,
             outcome,
-            idle,
+            representative_action,
             Some((bundle.clone(), execution.joint)),
         );
         let mut behavior = captured_behavior(&frame, &patch, representative);
@@ -732,7 +730,10 @@ mod tests {
         let receipt = collector.finish(1).unwrap();
         let row = &receipt.rows[0];
         assert_eq!(row["selected_commands"], serde_json::json!(bundle.channels));
-        assert_eq!(row["selected_action"]["action_id"], idle.raw());
+        assert_eq!(
+            row["selected_action"]["action_id"],
+            representative_action.raw()
+        );
         assert_eq!(row["body_before_decision"], serde_json::json!(before.body));
         assert_eq!(
             row["body_after_outcome"],
