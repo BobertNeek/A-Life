@@ -1177,7 +1177,7 @@ impl PpoTrainingState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PpoUpdateReceipt {
     pub collection_policy_version: u64,
     pub completed_epochs: u32,

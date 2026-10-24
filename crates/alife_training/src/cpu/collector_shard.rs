@@ -91,7 +91,7 @@ pub struct CpuCollectorAssignmentV1 {
     pub episode_config_sha256: [u8; 32],
 }
 impl CpuCollectorAssignmentV1 {
-    fn validate(&self) -> Result<(), TrainingError> {
+    pub(super) fn validate(&self) -> Result<(), TrainingError> {
         let text = |s: &str| !s.trim().is_empty() && s.len() <= 256;
         if !text(&self.collector_run_id)
             || !text(&self.producer_revision)
@@ -117,7 +117,7 @@ pub struct CpuCollectorTrajectoryV1 {
     pub decisions: Vec<CpuCollectedDecision>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CpuCollectorTrajectoryId {
     pub collector_run_id: String,
     pub organism_id: OrganismId,
@@ -261,7 +261,14 @@ pub fn admit_cpu_collector_shards(
         windows: Vec::new(),
         window_trajectories: Vec::new(),
     };
-    for shard in shards {
+    // Canonical execution order is independent of transport arrival order.
+    let mut shards = shards;
+    shards.sort_by(|a, b| {
+        a.assignment
+            .collector_run_id
+            .cmp(&b.assignment.collector_run_id)
+    });
+    for mut shard in shards {
         shard.validate_seal()?;
         if shard.snapshot != snapshot
             || !assignments.contains(&shard.assignment)
@@ -269,6 +276,9 @@ pub fn admit_cpu_collector_shards(
         {
             return Err(invalid());
         }
+        shard
+            .trajectories
+            .sort_by_key(|t| t.final_record.organism_id().raw());
         let mut organisms = BTreeSet::new();
         let mut counters = BTreeSet::new();
         for trajectory in shard.trajectories {
