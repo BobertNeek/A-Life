@@ -490,6 +490,37 @@ def validate_food_relocation(receipt):
             "relocation completion includes untrained, unseen or unacquired food")
 
 
+def validate_feeding_food(receipt):
+    """Admit compact native evidence; unavailable historical evidence stays unknown.
+
+    The native observer proves target/learner ownership, actual Eat consumption
+    and measured physiology. These compact counts do not re-prove those facts.
+    """
+    evidence = receipt.get("feeding_food")
+    if evidence is None:
+        return
+    require(receipt.get("lesson") == "feeding" and isinstance(evidence, dict) and
+            set(evidence) == {"food_outcome", "nourished_meal_rows", "captured_rows", "trained_rows"},
+            "invalid Feeding food evidence")
+    captured = integer(evidence.get("captured_rows"), 1)
+    trained = integer(evidence.get("trained_rows"), 1, captured)
+    require(captured == receipt["captured_replay_rows"] and trained == receipt["trained_replay_rows"],
+            "Feeding food evidence replay binding mismatch")
+    outcome = evidence.get("food_outcome")
+    require(isinstance(outcome, dict), "missing Feeding exact food outcome")
+    integer(outcome.get("organism"), 1)
+    integer(outcome.get("target"), 1)
+    acquisitions = integer(outcome.get("ordinary_acquisition_events"), 0, captured)
+    integer(outcome.get("explicit_grab_acquisition_events"), 0, acquisitions)
+    consumed = integer(outcome.get("consumption_events"), 0, receipt["consumed_events"])
+    meals = integer(outcome.get("nourished_meal_events"), 0, consumed)
+    rows = evidence.get("nourished_meal_rows")
+    require(isinstance(rows, list) and len(rows) == meals, "Feeding meal rows disagree with exact outcome")
+    previous = -1
+    for meal in rows:
+        previous = integer(meal, previous + 1, captured - 1)
+
+
 def validate_receipt(receipt, old, row, seed):
     require(receipt.get("biological_objective_version") == 2 and
             receipt.get("objective_state_reset") is False, "requires objective2 without reset")
@@ -526,6 +557,7 @@ def validate_receipt(receipt, old, row, seed):
     trained = integer(receipt.get("trained_held_food_consumption_events"))
     require(trained <= captured <= held + reachable, "exact nourishing meal counts disagree")
     integer(receipt.get("consumed_events"), 0, receipt["captured_replay_rows"])
+    validate_feeding_food(receipt)
     if row["lesson"] == "relocated_food":
         validate_food_relocation(receipt)
 
@@ -549,6 +581,10 @@ def summary(run):
     totals = {lesson: {"episodes": 0, **dict.fromkeys(COUNT_FIELDS, 0),
                       "exact_nourishing_consumption_events": 0, "trained_exact_nourishing_consumption_events": 0,
                       "generic_consumed_events": 0} for lesson in LESSONS}
+    feeding = totals["feeding"]
+    feeding.update(exact_nourishment_measured_episodes=0, exact_nourishment_unknown_episodes=0,
+                   known_exact_nourishing_consumption_events=0,
+                   known_trained_exact_nourishing_consumption_events=0)
     latest = run["plan"]["source"]
     for attempt in run["attempts"]:
         if attempt["status"] != "accepted":
@@ -569,10 +605,22 @@ def summary(run):
             total["generic_consumed_events"] += receipt["consumed_events"]
         elif receipt["lesson"] == "feeding":
             total["generic_consumed_events"] += receipt["consumed_events"]
+            evidence = receipt.get("feeding_food")
+            if evidence is None:
+                total["exact_nourishment_unknown_episodes"] += 1
+            else:
+                total["exact_nourishment_measured_episodes"] += 1
+                total["known_exact_nourishing_consumption_events"] += evidence["food_outcome"]["nourished_meal_events"]
+                total["known_trained_exact_nourishing_consumption_events"] += sum(
+                    row < evidence["trained_rows"] for row in evidence["nourished_meal_rows"])
         else:
             total["exact_nourishing_consumption_events"] += receipt["held_food_consumption_events"]
             total["trained_exact_nourishing_consumption_events"] += receipt["trained_held_food_consumption_events"]
         latest = attempt["directory"]
+    feeding["exact_nourishing_consumption_events"] = (
+        None if feeding["exact_nourishment_unknown_episodes"] else feeding["known_exact_nourishing_consumption_events"])
+    feeding["trained_exact_nourishing_consumption_events"] = (
+        None if feeding["exact_nourishment_unknown_episodes"] else feeding["known_trained_exact_nourishing_consumption_events"])
     return {"schema": 1, "kind": "mixed-care-summary", "seed_admission": seed_admission(run["plan"]),
             "per_lesson": totals, "latest_checkpoint": latest,
             "accepted_episodes": sum(total["episodes"] for total in totals.values()), "promoted": False,

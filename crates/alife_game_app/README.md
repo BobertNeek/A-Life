@@ -36,6 +36,53 @@ cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-c
 cargo run -p alife_game_app --features gpu-tests --bin alife_game_app -- gpu-closed-loop-soak --help
 ```
 
+## Feeding nourishment in mixed-care reports
+
+The native GPU `feeding` cycle writes optional `feeding_food` evidence in
+`cycle.json`: the learner/target `food_outcome`, captured/trained row counts and
+`nourished_meal_rows`. The observer requires the learner's held, unconsumed target,
+its actual selected Eat consumption and measured energy gain or hunger reduction
+without fresh health, injury or pain harm. Pickup, release and regrab do not count
+as meals. The same target may regrow; each additional meal still requires a new
+pickup, consumption and measured benefit. This records evidence without changing
+biology, reward or curriculum.
+The pilot already reports `food_outcome`; native CPU care separately reports
+`captured_nourished_meals`, `trained_nourished_meals` and
+`bootstrap_nourished_meals` in `care-episode.json`.
+
+The mixed-care host writes `schedule.json` from accepted ledger receipts.
+Feeding's `generic_consumed_events` remains independent of
+`exact_nourishing_consumption_events`; the trained exact count excludes bootstrap
+rows. Older missing/null `feeding_food` evidence remains unknown. If any accepted
+Feeding episode is unknown, both exact totals are `null`, with
+`exact_nourishment_measured_episodes`, `exact_nourishment_unknown_episodes` and
+`known_*exact_nourishing_consumption_events` exposing the measured subset. A
+measured zero is zero. Historical generic consumption is never converted into
+meals, and archived receipts are not rewritten. Compact host validation checks
+count/row consistency; it cannot independently reconstruct native physiology
+or target ownership from those counts.
+
+From the repository root, derive a fresh summary from an existing ledger and
+its exact saved run directory without dispatching a trainer or writing files:
+
+```sh
+python -B - ABS/LANE/.mixed-care-seed-reservations.json ABS/RUN <<'PY'
+import json
+import sys
+from pathlib import Path
+sys.path.insert(0, "scripts")
+import run_mixed_care_serial as mixed
+ledger = mixed.read_ledger(Path(sys.argv[1]))
+output = str(Path(sys.argv[2]).resolve(strict=True))
+run = next(run for run in ledger["runs"] if run["output"] == output)
+print(json.dumps(mixed.summary(run), indent=2))
+PY
+```
+
+This reads the retained receipt evidence; it does not repeat native checkpoint
+admission or establish learning efficacy. A saved `schedule.json` from an older
+host retains its original reporting behavior until a new derived report is made.
+
 ## One serial CPU care round
 
 Build once, then use the same executable for planning, dispatch and retry:

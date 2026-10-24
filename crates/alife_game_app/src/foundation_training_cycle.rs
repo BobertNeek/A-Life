@@ -187,6 +187,9 @@ pub struct FoundationCycleReceipt {
     /// Exact physical relocation and trained acquisition/nourishment evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub food_relocation: Option<crate::FoundationFoodRelocationReceipt>,
+    /// Exact target consumption and measured nourishment; absent means unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feeding_food: Option<crate::FoundationFeedingFoodReceipt>,
     #[serde(default)]
     pub first_consumed_world_tick: Option<u64>,
     #[serde(default)]
@@ -1655,6 +1658,35 @@ mod founder_refresh_tests {
         assert!(restored.food_relocation.is_none());
         assert_eq!(serde_json::to_value(&restored).unwrap(), encoded);
         validate_cycle_optimizer_handoff(&restored, &asset, &actor, &value).unwrap();
+    }
+
+    #[test]
+    fn feeding_optional_evidence_preserves_unknown_legacy_and_optimizer_identity() {
+        let (mut receipt, asset, actor, value) = cycle_handoff();
+        receipt.lesson = Some(FoundationTeacherLesson::Feeding);
+        receipt.consumed_events = 90;
+        let encoded = serde_json::to_value(&receipt).unwrap();
+        assert!(!encoded.as_object().unwrap().contains_key("feeding_food"));
+        let mut restored: FoundationCycleReceipt = serde_json::from_value(encoded.clone()).unwrap();
+        assert!(restored.feeding_food.is_none());
+        assert_eq!(serde_json::to_value(&restored).unwrap(), encoded);
+        validate_cycle_optimizer_handoff(&restored, &asset, &actor, &value).unwrap();
+        restored.feeding_food = Some(crate::FoundationFeedingFoodReceipt::new(
+            alife_core::OrganismId(1),
+            alife_core::WorldEntityId(2),
+        ));
+        let measured: FoundationCycleReceipt =
+            serde_json::from_slice(&serde_json::to_vec(&restored).unwrap()).unwrap();
+        assert_eq!(
+            measured
+                .feeding_food
+                .unwrap()
+                .food_outcome
+                .nourished_meal_events,
+            0
+        );
+        validate_cycle_optimizer_handoff(&restored, &asset, &actor, &value).unwrap();
+        assert_eq!(restored.consumed_events, 90);
     }
 
     fn cycle_handoff() -> (
@@ -3302,6 +3334,10 @@ fn run_foundation_training_cycle_in_owned_output(
     let mut teacher_cue_frames = 0;
     let mut held_food_consumption_events = 0;
     let mut held_food_meal_rows = Vec::new();
+    let mut feeding_food = scenario
+        .as_ref()
+        .filter(|_| lesson == Some(FoundationTeacherLesson::Feeding))
+        .map(|setup| crate::FoundationFeedingFoodReceipt::new(organism_id, setup.food));
     let mut grab_food_acquisitions = Vec::new();
     let mut grab_reward_gate = crate::foundation_grab_food::GrabRewardGate::default();
     let grab_setup = scenario.as_ref().and_then(|s| s.grab_food_setup.as_ref());
@@ -3348,6 +3384,9 @@ fn run_foundation_training_cycle_in_owned_output(
         .transpose()?;
     let held_before = lesson_food_held(&runtime);
     let grab_before = lesson_food_ownership(&runtime);
+    let feeding_before = feeding_food
+        .as_ref()
+        .map(|food| food.before_step(runtime.world()));
     runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
@@ -3366,6 +3405,9 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     if first[0].frame.organism_id() != organism_id {
         return Err("first training capture belongs to a different organism".into());
+    }
+    if let (Some(food), Some(before)) = (feeding_food.as_mut(), feeding_before) {
+        food.observe_step(runtime.world(), before, &first[0])?;
     }
     if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before) {
         collector.observe_step(runtime.world(), before, &first[0])?;
@@ -3543,6 +3585,9 @@ fn run_foundation_training_cycle_in_owned_output(
             .transpose()?;
         let held_before = lesson_food_held(&runtime);
         let grab_before = lesson_food_ownership(&runtime);
+        let feeding_before = feeding_food
+            .as_ref()
+            .map(|food| food.before_step(runtime.world()));
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
             let _ = std::fs::write(
                 output.join("runtime-performance-failed.json"),
@@ -3656,6 +3701,9 @@ fn run_foundation_training_cycle_in_owned_output(
         if captured.len() != 1 {
             return Err(format!("cycle world tick {after}: expected at most one decision").into());
         }
+        if let (Some(food), Some(before)) = (feeding_food.as_mut(), feeding_before) {
+            food.observe_step(runtime.world(), before, &captured[0])?;
+        }
         if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before)
         {
             collector.observe_step(runtime.world(), before, &captured[0])?;
@@ -3722,6 +3770,9 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     let food_relocation = relocation_collector
         .map(|collector| collector.finish(train_rows))
+        .transpose()?;
+    let feeding_food = feeding_food
+        .map(|food| food.finish(train_rows))
         .transpose()?;
     timing.annotate(|| {
         serde_json::json!({
@@ -4292,6 +4343,7 @@ fn run_foundation_training_cycle_in_owned_output(
         food_available_world_tick,
         lesson,
         food_relocation,
+        feeding_food,
         first_consumed_world_tick,
         food_available_elapsed_seconds,
         first_consumed_elapsed_seconds,
