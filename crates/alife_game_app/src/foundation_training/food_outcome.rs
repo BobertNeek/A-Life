@@ -16,6 +16,80 @@ pub struct FoundationFoodOutcome {
     pub nourished_meal_events: usize,
 }
 
+/// Passive Feeding cycle evidence. Absence on historical cycles means unknown.
+/// Row indices separate actual training meals from the captured bootstrap row.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FoundationFeedingFoodReceipt {
+    pub food_outcome: FoundationFoodOutcome,
+    pub nourished_meal_rows: Vec<usize>,
+    pub captured_rows: usize,
+    pub trained_rows: usize,
+}
+
+impl FoundationFeedingFoodReceipt {
+    pub(crate) fn new(organism: OrganismId, target: WorldEntityId) -> Self {
+        Self {
+            food_outcome: FoundationFoodOutcome::new(organism, target),
+            nourished_meal_rows: Vec::new(),
+            captured_rows: 0,
+            trained_rows: 0,
+        }
+    }
+
+    pub(crate) fn before_step(
+        &self,
+        world: &alife_world::HeadlessWorld,
+    ) -> (Tick, Option<FoodOwnershipSnapshot>) {
+        (world.tick(), ownership(world, self.food_outcome.target))
+    }
+
+    pub(crate) fn observe_step(
+        &mut self,
+        world: &alife_world::HeadlessWorld,
+        before: (Tick, Option<FoodOwnershipSnapshot>),
+        step: &crate::FoundationTrainingStep,
+    ) -> super::Result<()> {
+        let observation = FoodOutcomeObservation {
+            organism: self.food_outcome.organism,
+            target: self.food_outcome.target,
+            decision_tick: before.0,
+            outcome_tick: world.tick(),
+            before: before.1,
+            after: ownership(world, self.food_outcome.target),
+        };
+        self.observe_row(observation, &step.frame, &step.behavior, &step.patch)
+    }
+
+    fn observe_row(
+        &mut self,
+        observation: FoodOutcomeObservation,
+        frame: &alife_core::PerceptionFrame,
+        behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt,
+        patch: &ExperiencePatch,
+    ) -> super::Result<()> {
+        if !observation.matches_row(frame, behavior, patch) {
+            return Err("feeding food capture identity mismatch".into());
+        }
+        let meals_before = self.food_outcome.nourished_meal_events;
+        self.food_outcome.observe(observation, patch);
+        if self.food_outcome.nourished_meal_events > meals_before {
+            self.nourished_meal_rows.push(self.captured_rows);
+        }
+        self.captured_rows += 1;
+        Ok(())
+    }
+
+    pub(crate) fn finish(mut self, trained_rows: usize) -> super::Result<Self> {
+        crate::foundation_training_cycle::cycle_replay_dose(
+            self.captured_rows,
+            trained_rows,
+            &self.nourished_meal_rows,
+        )?;
+        self.trained_rows = trained_rows;
+        Ok(self)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct FoodOwnershipSnapshot {
     pub owner: Option<OrganismId>,
@@ -283,16 +357,63 @@ mod tests {
         world: &mut alife_world::HeadlessWorld,
         target: WorldEntityId,
     ) -> (FoodOutcomeObservation, ExperiencePatch) {
+        measured_action(world, target, HeadlessActionIds::EAT)
+    }
+
+    fn measured_action(
+        world: &mut alife_world::HeadlessWorld,
+        target: WorldEntityId,
+        action: alife_core::ActionId,
+    ) -> (FoodOutcomeObservation, ExperiencePatch) {
         let frame = super::super::held_food_lesson_tests::frame(world);
         let organism = frame.organism_id();
         let decision_tick = world.tick();
         let before = ownership(world, target);
-        let (_, outcome) = super::super::held_food_lesson_tests::eat_outcome(world, target);
-        assert!(outcome.measured_physiology.is_some());
+        let command = frame
+            .candidates()
+            .iter()
+            .find(|candidate| {
+                candidate.action_id == action && candidate.target.entity == Some(target)
+            })
+            .unwrap()
+            .to_command(organism, Confidence::new(1.0).unwrap())
+            .unwrap();
+        let body = world.organism_entity_ids()[0].1;
+        let execution = world
+            .apply_registered_command(&command, body, Tick(decision_tick.raw() + 1))
+            .unwrap();
+        world.try_advance_tick().unwrap();
+        let outcome = alife_core::PostActionOutcome::new(
+            organism,
+            alife_core::ExperienceSequenceId(1),
+            world.tick(),
+            execution.action_result.execution.succeeded,
+            execution.action_result.execution.physical,
+            alife_core::HomeostaticDelta::zero(),
+            alife_core::SignedValence::ZERO,
+            NormalizedScalar::ZERO,
+            NormalizedScalar::ZERO,
+            alife_core::SignedValence::ZERO,
+            NormalizedScalar::ZERO,
+        )
+        .unwrap()
+        .with_measured_physiology(
+            alife_core::MeasuredPhysiologyTransition::new(
+                execution.biology_before,
+                execution.biology_after,
+            )
+            .unwrap(),
+        )
+        .unwrap();
         // Reuse the established synthetic selection scaffolding over actual
         // canonical-world action/biology receipts. No GPU choice is claimed.
-        let patch =
-            super::super::held_food_lesson_tests::eating_narration_patch(frame, target, outcome);
+        let patch = super::super::held_food_lesson_tests::action_patch(
+            frame,
+            Some(target),
+            outcome,
+            action,
+            None,
+        );
         (
             FoodOutcomeObservation {
                 organism,
@@ -318,6 +439,187 @@ mod tests {
             .unwrap()],
         )
         .unwrap()
+    }
+
+    fn captured_behavior(patch: &ExperiencePatch) -> alife_gpu_backend::GpuTrainingRolloutReceipt {
+        // Synthetic GPU binding data over canonical CPU world outcomes tests
+        // receipt accounting only, not inference, training or learned behavior.
+        let frame = patch.pre_action().perception();
+        alife_gpu_backend::GpuTrainingRolloutReceipt {
+            organism_id: frame.organism_id().raw(),
+            tick: frame.tick().raw(),
+            dispatch_generation: patch
+                .decision()
+                .neural_evidence()
+                .unwrap()
+                .dispatch_generation,
+            frame_digest: frame.frame_digest(),
+            active_weight_generation: 0,
+            sampling: alife_gpu_backend::GpuTrainingSamplingConfig {
+                seed: 1,
+                counter: 0,
+                temperature: 1.0,
+                demonstrator: None,
+            },
+            logits: Vec::new(),
+            decoder_inputs: Vec::new(),
+            decoder_input_stride: 24,
+            representative_mask: 0,
+            motor_masks: [0; 6],
+            forced_motor_slots: Vec::new(),
+            representative_index: 0,
+            motor_indices: [u16::MAX; 6],
+            factor_log_probabilities: [0.0; 7],
+            behavior: alife_gpu_backend::GpuTrainingBehaviorKind::OnPolicy,
+            joint_log_probability: Some(0.0),
+            policy_joint_log_probability: 0.0,
+        }
+    }
+
+    #[test]
+    fn feeding_food_cycle_counts_real_nourishment_and_excludes_bootstrap_meal() {
+        let (mut world, target) = measured_world_fixture();
+        let position = world.entity(target).unwrap().position;
+        // A disposable reachable Feeding scene, retaining natural hunger and
+        // canonical action/biochemistry. No training or accepted brain is used.
+        let scenario = super::super::configure_foundation_scenario(
+            &mut world,
+            42,
+            Some(super::super::FoundationTeacherLesson::Feeding),
+            Some([position.x, position.z]),
+            false,
+        )
+        .unwrap();
+        assert_eq!(scenario.food, target);
+        assert!(scenario.care_food_subject().is_none());
+        let organism = world.organism_entity_ids()[0].0;
+        let mut receipt = FoundationFeedingFoodReceipt::new(organism, target);
+        for row in 0..2 {
+            let (observation, patch) = measured_eat(&mut world, target);
+            let before_observe = world.canonical_signature_digest().unwrap();
+            receipt
+                .observe_row(
+                    observation,
+                    patch.pre_action().perception(),
+                    &captured_behavior(&patch),
+                    &patch,
+                )
+                .unwrap();
+            assert_eq!(world.canonical_signature_digest().unwrap(), before_observe);
+            assert_eq!(receipt.food_outcome.ordinary_acquisition_events, 1);
+            assert_eq!(receipt.food_outcome.consumption_events, row);
+            assert_eq!(receipt.food_outcome.nourished_meal_events, row);
+        }
+        assert_eq!(receipt.nourished_meal_rows, vec![1]);
+        let bootstrap = receipt.clone().finish(1).unwrap();
+        assert_eq!(bootstrap.trained_rows, 1);
+        assert_eq!(
+            crate::foundation_training_cycle::cycle_replay_dose(
+                bootstrap.captured_rows,
+                bootstrap.trained_rows,
+                &bootstrap.nourished_meal_rows
+            )
+            .unwrap(),
+            (1, 0)
+        );
+        let trained = receipt.finish(2).unwrap();
+        assert_eq!(
+            crate::foundation_training_cycle::cycle_replay_dose(
+                trained.captured_rows,
+                trained.trained_rows,
+                &trained.nourished_meal_rows
+            )
+            .unwrap(),
+            (0, 1)
+        );
+        let restored: FoundationFeedingFoodReceipt =
+            serde_json::from_slice(&serde_json::to_vec(&trained).unwrap()).unwrap();
+        assert_eq!(restored.food_outcome, trained.food_outcome);
+        assert_eq!(restored.nourished_meal_rows, vec![1]);
+    }
+
+    #[test]
+    fn feeding_food_cycle_rejects_unbound_capture_without_partial_credit() {
+        let (mut world, target) = measured_world_fixture();
+        measured_eat(&mut world, target);
+        let (observation, patch) = measured_eat(&mut world, target);
+        for variant in 0..5 {
+            let mut receipt = FoundationFeedingFoodReceipt::new(observation.organism, target);
+            let mut behavior = captured_behavior(&patch);
+            let mut observation = observation;
+            match variant {
+                0 => behavior.tick += 1,
+                1 => behavior.organism_id += 1,
+                2 => behavior.dispatch_generation += 1,
+                3 => behavior.frame_digest = alife_core::PerceptionFrameDigest([0; 4]),
+                _ => observation.outcome_tick = observation.decision_tick,
+            }
+            assert!(
+                receipt
+                    .observe_row(
+                        observation,
+                        patch.pre_action().perception(),
+                        &behavior,
+                        &patch
+                    )
+                    .is_err(),
+                "variant {variant}"
+            );
+            assert_eq!(receipt.captured_rows, 0);
+            assert_eq!(receipt.food_outcome.nourished_meal_events, 0);
+            assert!(receipt.nourished_meal_rows.is_empty());
+        }
+    }
+
+    #[test]
+    fn feeding_food_drop_regrab_and_repeat_eat_cannot_double_credit_nourishment() {
+        let (mut world, target) = measured_world_fixture();
+        let organism = world.organism_entity_ids()[0].0;
+        let mut receipt = FoundationFeedingFoodReceipt::new(organism, target);
+        let mut last_decision = None;
+        for action in [
+            HeadlessActionIds::EAT,
+            HeadlessActionIds::GRAB,
+            HeadlessActionIds::EAT,
+            HeadlessActionIds::EAT,
+        ] {
+            let (observation, patch) = measured_action(&mut world, target, action);
+            receipt
+                .observe_row(
+                    observation,
+                    patch.pre_action().perception(),
+                    &captured_behavior(&patch),
+                    &patch,
+                )
+                .unwrap();
+            last_decision = Some(patch.decision().clone());
+        }
+        assert_eq!(receipt.food_outcome.ordinary_acquisition_events, 2);
+        assert_eq!(receipt.food_outcome.consumption_events, 1);
+        assert_eq!(receipt.food_outcome.nourished_meal_events, 1);
+        assert_eq!(receipt.nourished_meal_rows, vec![3]);
+        // Once consumed, the world offers no second meal. An explicit retry
+        // returns the actual non-consumption outcome and cannot add credit.
+        let decision_tick = world.tick();
+        let ownership_before = ownership(&world, target);
+        let (_, outcome) = super::super::held_food_lesson_tests::eat_outcome(&mut world, target);
+        assert!(!super::super::outcome_consumed(&outcome));
+        let before = receipt.food_outcome.clone();
+        // Exercise the food predicate with the retry's real world consequence;
+        // this is not a new GPU-selected capture.
+        receipt.food_outcome.observe_selected(
+            FoodOutcomeObservation {
+                organism,
+                target,
+                decision_tick,
+                outcome_tick: world.tick(),
+                before: ownership_before,
+                after: ownership(&world, target),
+            },
+            &last_decision.unwrap(),
+            &outcome,
+        );
+        assert_eq!(receipt.finish(4).unwrap().food_outcome, before);
     }
 
     #[test]

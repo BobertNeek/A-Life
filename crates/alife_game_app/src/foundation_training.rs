@@ -34,7 +34,9 @@ mod lesson_trace;
 mod play_assessment;
 mod recovery;
 pub(crate) mod relocated_food;
-pub use food_outcome::{FoodOwnershipSnapshot, FoundationFoodOutcome};
+pub use food_outcome::{
+    FoodOwnershipSnapshot, FoundationFeedingFoodReceipt, FoundationFoodOutcome,
+};
 pub use play_assessment::{
     assess_foundation_play, FoundationPlayAssessment, FoundationPlayBoredomObservation,
 };

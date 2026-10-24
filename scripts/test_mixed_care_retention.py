@@ -115,6 +115,31 @@ class MixedRetentionTests(unittest.TestCase):
         self.assertEqual([a['seed'] for a in attempts], list(range(100,105)))
         self.assertEqual(json.loads((self.output/'attempt-00004'/'actor-checkpoint.json').read_text())['optimizer_step'], 30)
 
+    def test_feeding_evidence_survives_recovery_without_rewriting_old_receipts(self):
+        attempt = self.run['attempts'][2]
+        receipt = attempt['receipt']
+        receipt['feeding_food'] = {'captured_rows': 3, 'trained_rows': 2, 'nourished_meal_rows': [1],
+            'food_outcome': {'organism': 7, 'target': 9, 'ordinary_acquisition_events': 1,
+                'explicit_grab_acquisition_events': 0, 'consumption_events': 1, 'nourished_meal_events': 1}}
+        directory = Path(attempt['directory'])
+        (directory/'cycle.json').write_text(json.dumps(receipt))
+        attempt['sha256'].update(mixed.file_hashes(directory))
+        self.save()
+        before = (directory/'cycle.json').read_bytes()
+        historical = copy.deepcopy(self.run['attempts'][0]['receipt'])
+        self.retire_synthetic_payloads()
+        total = mixed.execute(self.plan, resume=True)['per_lesson']['feeding']
+        self.assertEqual(total['known_exact_nourishing_consumption_events'], 1)
+        self.assertEqual(total['known_trained_exact_nourishing_consumption_events'], 1)
+        self.assertEqual(total['exact_nourishment_measured_episodes'], 1)
+        self.assertEqual(total['exact_nourishment_unknown_episodes'], 4)
+        self.assertIsNone(total['exact_nourishing_consumption_events'])
+        self.assertEqual((directory/'cycle.json').read_bytes(), before)
+        restored = mixed.read_ledger(self.root/mixed.LEDGER)['runs'][0]['attempts']
+        self.assertEqual(restored[0]['receipt'], historical)
+        self.assertNotIn('feeding_food', restored[0]['receipt'])
+        self.assertEqual(restored[2]['receipt']['feeding_food'], receipt['feeding_food'])
+
     def test_legacy_plan_still_requires_its_payloads(self):
         del self.plan['retention']; del self.plan['source_receipt']; self.save()
         self.retire_synthetic_payloads()
