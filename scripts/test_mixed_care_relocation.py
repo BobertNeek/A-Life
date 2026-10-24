@@ -103,12 +103,27 @@ class RelocatedCareTests(unittest.TestCase):
     def test_bundle_manipulation_is_used_instead_of_representative_action(self):
         receipt = fixture()
         for row in receipt["food_relocation"]["rows"]:
-            row["selected_commands"] = [dict(channel="Manipulation", primitive=row["selected_action"]["action_id"], target=dict(entity=9))]
-            row["channel_outcomes"] = [dict(channel="Manipulation", physical=row["physical"])]
+            # Future native diagnostics include all channels and complete commands.
+            # This host fixture tests compatibility/accounting, not world execution.
+            row["selected_commands"] = [dict(channel="Manipulation", primitive=row["selected_action"]["action_id"], target=dict(entity=9)),
+                dict(channel="Locomotion", primitive=105, target=None),
+                dict(channel="Orientation", primitive=604, target=None)]
+            for command in row["selected_commands"]:
+                command.update(direction=dict(x=0., y=0., z=1.), intensity=.5, duration_ticks=1,
+                               stand_off_distance=0., payload=dict(values=[]), confidence=1., coordination_group=0)
+            row["channel_outcomes"] = [dict(channel="Manipulation", physical=row["physical"]),
+                dict(channel="Locomotion", physical=dict(contact="Moved", target_entity=None))]
+            row["applied_motor_channels"] = [dict(command=row["selected_commands"][1], phase="Completed",
+                physical=row["channel_outcomes"][1]["physical"], observation=None)]
+            row["body_before_decision"] = dict(entity=8, position=dict(x=0., y=0., z=0.),
+                velocity=dict(x=0., y=0., z=0.), body_yaw=.2, head_yaw=.3, gaze_yaw=.5)
+            row["body_after_outcome"] = None
             row["selected_action"]["action_id"] = 0
             row["selected_action"]["target_entity"] = None
             row["physical"] = dict(contact="None", target_entity=None)
+        before = copy.deepcopy(receipt)
         self.validate(receipt)
+        self.assertEqual(receipt, before)
 
     def test_valid_miss_and_no_relocation_are_learning_not_false_success(self):
         for relocate in (True, False):

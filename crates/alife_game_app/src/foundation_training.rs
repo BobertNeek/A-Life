@@ -1910,7 +1910,7 @@ fn run_foundation_training_pilot_with_request(
                 food_outcome::ownership(runtime.world(), target),
             )
         });
-        runtime
+        let tick_summaries = runtime
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
         let food_observation =
@@ -1949,8 +1949,9 @@ fn run_foundation_training_pilot_with_request(
         }
         if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before)
         {
-            collector.observe_step(runtime.world(), before, &collected[0])?;
+            collector.observe_step(runtime.world(), before, &collected[0], &tick_summaries)?;
         }
+        drop(tick_summaries);
         if let Some(observation) = food_observation {
             if observation.matches_step(&collected[0]) {
                 if let Some(summary) = food_outcome.as_mut() {
