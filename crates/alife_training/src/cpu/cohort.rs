@@ -71,8 +71,8 @@ pub fn cpu_training_windows(
         if current.organism_id != organism
             || next.is_some_and(|n| {
                 n.organism_id != organism
-                    || current.patch.header().sequence_id.raw() + 1
-                        != n.patch.header().sequence_id.raw()
+                    || current.patch.header().sequence_id.raw().checked_add(1)
+                        != Some(n.patch.header().sequence_id.raw())
             })
             || current.patch.decision().policy_backend()
                 != alife_core::PolicyBackend::NeuralClosedLoopCpu
@@ -230,19 +230,7 @@ where
     let mut counts = Vec::new();
     for i in 0..window_count {
         let w = load(i)?;
-        let (_, objectives, replayed) =
-            super::objective::evaluate_window(trainer, &w.actor, config, version)?;
-        validate_residual_window(&w, Some(&replayed), config)?;
-        value.residual_gradients(&w.critic_features, &w.critic_rows, config.value_coefficient)?;
-        if objectives
-            .iter()
-            .zip(w.actor.batch.transitions())
-            .any(|(o, t)| {
-                (o.joint_log_probability - t.action.old_joint_log_probability).abs() > 1e-3
-            })
-        {
-            return Err(super::invalid());
-        }
+        validate_frozen_residual_window(trainer, value, &w, config, version)?;
         counts.push(w.actor.batch.len());
     }
     let mut receipt = PpoUpdateReceipt {
@@ -306,6 +294,30 @@ where
         receipt.completed_epochs += 1;
     }
     Ok(receipt)
+}
+pub(super) fn validate_frozen_residual_window(
+    trainer: &CpuFoundationTrainer,
+    value: &CpuValueHead,
+    window: &CpuResidualTrainingWindow,
+    config: PpoConfig,
+    version: u64,
+) -> Result<(), TrainingError> {
+    let (_, objectives, replayed) =
+        super::objective::evaluate_window(trainer, &window.actor, config, version)?;
+    validate_residual_window(window, Some(&replayed), config)?;
+    value.residual_gradients(
+        &window.critic_features,
+        &window.critic_rows,
+        config.value_coefficient,
+    )?;
+    if objectives
+        .iter()
+        .zip(window.actor.batch.transitions())
+        .any(|(o, t)| (o.joint_log_probability - t.action.old_joint_log_probability).abs() > 1e-3)
+    {
+        return Err(super::invalid());
+    }
+    Ok(())
 }
 fn validate_residual_window(
     w: &CpuResidualTrainingWindow,

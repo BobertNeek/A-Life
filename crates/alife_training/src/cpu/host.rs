@@ -94,6 +94,10 @@ pub struct CpuCanonicalHost {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCollectedDecision {
     pub organism_id: OrganismId,
+    /// Exact native sampling counter. Older diagnostic rows lack this evidence;
+    /// they remain readable but cannot be admitted as cooperative shards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampling_counter: Option<u32>,
     pub initial: crate::TrainingInitialState,
     pub replay_tick: crate::TrainingReplayTick,
     pub action: crate::PpoJointAction,
@@ -844,12 +848,13 @@ impl CpuCanonicalHost {
             let output = r.neural.advance(founder, context, &effects)?;
             r.activity.remaining_atp_q16 = activity.available_atp_q16 - activity.debit_atp_q16;
             r.activity.source_frame_digest = frame.frame_digest().0;
+            let sampling_counter = self.sampling_counter;
             let action = sample_cpu_joint_action(
                 p,
                 &frame,
                 &output.candidate_logits,
                 self.sampling_seed,
-                self.sampling_counter,
+                sampling_counter,
                 temperature,
             )?;
             self.sampling_counter = self
@@ -1171,6 +1176,7 @@ impl CpuCanonicalHost {
                 .ok_or(CpuHostError::State("sequence overflow"))?;
             decisions.push(CpuCollectedDecision {
                 organism_id: id,
+                sampling_counter: Some(sampling_counter),
                 initial: output.initial,
                 replay_tick: output.replay_tick,
                 action,
@@ -1233,7 +1239,7 @@ fn replay_evidence(
     SleepReplayEvidence::new(batch, events.iter().map(|e| e.target.clone()).collect())
 }
 
-fn validate_record_founder(
+pub(super) fn validate_record_founder(
     record: &alife_world::WorldOrganismRecord,
     founder: &CpuFoundationTrainer,
 ) -> Result<(), CpuHostError> {

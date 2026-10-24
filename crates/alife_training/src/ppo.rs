@@ -15,7 +15,7 @@ pub const PPO_ROW_WORDS: usize = 64;
 pub const PPO_METRIC_WORDS: usize = 8;
 pub const PPO_WGSL: &str = include_str!("../shaders/foundation_ppo.wgsl");
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PpoConfig {
     pub clip_ratio: f32,
     pub epochs: u32,
