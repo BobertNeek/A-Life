@@ -1,7 +1,7 @@
 //! One explicit care round. No accepted-source search, concurrency or promotion.
 use alife_game_app::{
     cpu_care_round_summary, prepare_cpu_care_round, run_cpu_care_round, CpuCareRoundPlanV1,
-    CpuCareRoundSpecV1,
+    CpuCareRoundSpecV1, CPU_CARE_FRESHNESS_UNKNOWN_CLAIM_SCOPE,
 };
 use alife_training::cpu::{materialize_cpu_cooperative_source, read_cpu_cooperative_round};
 use std::{
@@ -16,6 +16,14 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Box<dyn std::e
         return Err("care round JSON exceeds16 MiB".into());
     }
     Ok(serde_json::from_slice(&fs::read(path)?)?)
+}
+fn add_unknown_freshness_context(value: &mut serde_json::Value, known_exclusions: bool) {
+    if known_exclusions {
+        value["known_exclusions"] = serde_json::json!(true);
+        value["seed_admission"] =
+            serde_json::json!({"policy":"known-exclusions","historical_freshness":"unknown"});
+        value["claim_scope"] = serde_json::json!(CPU_CARE_FRESHNESS_UNKNOWN_CLAIM_SCOPE);
+    }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Native checkpoint reconstruction and recurrent PPO need more stack than
@@ -76,18 +84,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .open(&output)?;
             file.write_all(&serde_json::to_vec_pretty(&serde_json::to_value(&plan)?)?)?;
             file.sync_all()?;
-            serde_json::json!({"plan":output,"plan_sha256":plan.payload_sha256,
+            let mut summary = serde_json::json!({"plan":output,"plan_sha256":plan.payload_sha256,
                 "output":plan.spec.output,"collectors":plan.assignments.len(),
-                "prior":"deterministic_v1","prior_provider_identity":plan.prior_provider_identity})
+                "prior":"deterministic_v1","prior_provider_identity":plan.prior_provider_identity});
+            add_unknown_freshness_context(&mut summary, plan.spec.known_exclusions);
+            summary
         }
         "run" if values.len() == 1 && values.contains_key("--plan") => {
             let plan: CpuCareRoundPlanV1 = read(&values["--plan"])?;
             let result = run_cpu_care_round(&plan)?;
-            cpu_care_round_summary(&result, &plan.spec.output.join("learner"))
+            let mut summary = cpu_care_round_summary(&result, &plan.spec.output.join("learner"));
+            add_unknown_freshness_context(&mut summary, plan.spec.known_exclusions);
+            summary
         }
         "inspect" if values.len() == 1 && values.contains_key("--result") => {
             let result = read_cpu_cooperative_round(&values["--result"])?;
-            cpu_care_round_summary(&result, &values["--result"])
+            let mut summary = cpu_care_round_summary(&result, &values["--result"]);
+            summary["member_historical_freshness"] = serde_json::json!("unasserted");
+            summary["claim_scope"] = serde_json::json!("generic core result does not attest member historical freshness; no claim of unseen-seed generalization or synergy");
+            summary
         }
         "export-source"
             if values.len() == 3
@@ -103,6 +118,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             serde_json::json!({"output":values["--output"],"mode":receipt["mode"],
                 "policy_version":receipt["policy_version"],"actor_optimizer_step":receipt["actor_optimizer_step"],
                 "value_optimizer_step":receipt["value_optimizer_step"],"consumed_seed_ranges":receipt["consumed_seed_ranges"],
+                "member_historical_freshness":receipt["member_historical_freshness"],
+                "claim_scope":"generic founder export does not attest member historical freshness; no claim of unseen-seed generalization or synergy",
                 "private_lifetime_continuation":"none; fresh lives only","promotion":"none"})
         }
         "evaluate" if values.len() == 1 && values.contains_key("--spec") => {

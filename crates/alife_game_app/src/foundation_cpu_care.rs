@@ -23,6 +23,19 @@ pub use evaluation::*;
 pub use round::*;
 type Result<T> = CpuContinuationResult<T>;
 
+pub const CPU_CARE_FRESHNESS_UNKNOWN_CLAIM_SCOPE: &str = "historical freshness unknown; disclosed exclusions only; no claim of unseen-seed generalization or synergy";
+const UNKNOWN_FRESHNESS_CONTEXT_FIELDS: [&str; 3] =
+    ["known_exclusions", "seed_admission", "claim_scope"];
+
+fn add_unknown_freshness_context(value: &mut Value, known_exclusions: bool) {
+    if known_exclusions {
+        value["known_exclusions"] = json!(true);
+        value["seed_admission"] =
+            json!({"policy":"known-exclusions","historical_freshness":"unknown"});
+        value["claim_scope"] = json!(CPU_CARE_FRESHNESS_UNKNOWN_CLAIM_SCOPE);
+    }
+}
+
 pub struct CpuCareRequest {
     pub previous: Option<PathBuf>,
     pub output: PathBuf,
@@ -573,6 +586,7 @@ impl CpuEpisodeHooks for CareEpisode {
             metadata["offline_value_optimizer_updates"] = json!(0);
             metadata["persistent_learning"] = json!("fresh-private-life-with-ordinary-biology-waking-learning-and-sleep; frozen-founder-and-full-optimizers");
         }
+        add_unknown_freshness_context(&mut metadata, self.request.known_exclusions);
         write("care-episode.json", &metadata)?;
         let mut artifacts = vec![
             "care-trace.json",

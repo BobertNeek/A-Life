@@ -199,8 +199,7 @@ fn metrics(
                 .map(|name| (name.to_string_lossy().replace('\\', "/"), hash.clone()))
         })
         .collect::<BTreeMap<_, _>>();
-    Ok(
-        json!({"mode":"native-cpu-care-assessment","backend":"native-cpu",
+    let mut result = json!({"mode":"native-cpu-care-assessment","backend":"native-cpu",
         "result":request.output.join(CPU_CARE_EVALUATION_FILE),"lesson":request.lesson,"seed":request.seed,
         "decisions":request.decisions,"evaluated_decisions":request.decisions,"bootstrap_decisions":1,
         "source_policy_version":source.policy_version,"policy_version":source.policy_version,
@@ -216,8 +215,27 @@ fn metrics(
         "value_checkpoint_before_sha256":value_hash,"value_checkpoint_after_sha256":value_after_hash,
         "offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0,
         "offline_learning_disabled":true,"private_waking_learning":"ordinary","promotion":"none",
-        "trace":request.output.join("care-trace.json"),"private_checkpoint":request.output.join("collector-checkpoint.json")}),
-    )
+        "trace":request.output.join("care-trace.json"),"private_checkpoint":request.output.join("collector-checkpoint.json")});
+    add_unknown_freshness_context(&mut result, request.known_exclusions);
+    Ok(result)
+}
+
+fn matches_completed_result(actual: &Value, mut expected: Value, known_exclusions: bool) -> bool {
+    if known_exclusions
+        && UNKNOWN_FRESHNESS_CONTEXT_FIELDS
+            .iter()
+            .all(|field| actual.get(*field).is_none())
+    {
+        // The original seal, request, inputs, archive and private recovery are
+        // checked separately. Keep old complete results byte-identical rather
+        // than upgrading their stored metadata or restarting their lives.
+        if let Some(object) = expected.as_object_mut() {
+            for field in UNKNOWN_FRESHNESS_CONTEXT_FIELDS {
+                object.remove(field);
+            }
+        }
+    }
+    actual == &expected
 }
 fn verify_recovery(
     request: &CpuCareEvaluationRequest,
@@ -331,16 +349,18 @@ pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value>
             );
         }
         let (episode, actor_hash, value_hash) = verify_recovery(&request, &source.handoff)?;
-        if receipt.result
-            != metrics(
+        if !matches_completed_result(
+            &receipt.result,
+            metrics(
                 &request,
                 &source.handoff,
                 &pins,
                 &episode,
                 &actor_hash,
                 &value_hash,
-            )?
-        {
+            )?,
+            request.known_exclusions,
+        ) {
             return Err("assessment result differs from its exact native recovery evidence".into());
         }
         verify_pins(&pins)?;
@@ -398,6 +418,40 @@ pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unknown_context_preserves_strict_shape_and_verified_legacy_result_reuse() {
+        let legacy = json!({"mode":"native-cpu-care-assessment","seed":17,
+            "private_checkpoint":"preserved-checkpoint.json","offline_actor_optimizer_updates":0});
+        let original = serde_json::to_vec(&legacy).unwrap();
+        let mut strict = legacy.clone();
+        add_unknown_freshness_context(&mut strict, false);
+        assert_eq!(serde_json::to_vec(&strict).unwrap(), original);
+
+        let mut current = legacy.clone();
+        add_unknown_freshness_context(&mut current, true);
+        assert_eq!(
+            current["seed_admission"],
+            json!({"policy":"known-exclusions","historical_freshness":"unknown"})
+        );
+        assert!(matches_completed_result(&current, current.clone(), true));
+        assert!(matches_completed_result(&legacy, current.clone(), true));
+        assert_eq!(serde_json::to_vec(&legacy).unwrap(), original);
+
+        let mut partial = current.clone();
+        partial.as_object_mut().unwrap().remove("claim_scope");
+        assert!(!matches_completed_result(&partial, current.clone(), true));
+        let mut false_claim = current.clone();
+        false_claim["seed_admission"]["historical_freshness"] = json!("operator-attested-complete");
+        assert!(!matches_completed_result(
+            &false_claim,
+            current.clone(),
+            true
+        ));
+        let mut changed_evidence = legacy;
+        changed_evidence["private_checkpoint"] = json!("replacement-checkpoint.json");
+        assert!(!matches_completed_result(&changed_evidence, current, true));
+    }
 
     #[test]
     fn assessment_removes_teacher_and_prior_but_preserves_real_private_outcomes_and_full_optimizers(

@@ -1,12 +1,15 @@
 """Pure comparison preflight/accounting tests; these do not execute neural training."""
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import compare_cpu_care_rounds as compare
+import run_mixed_care_serial as mixed
 
 
 class ComparisonPreflightTests(unittest.TestCase):
@@ -42,9 +45,188 @@ class ComparisonPreflightTests(unittest.TestCase):
     def write(self, path, value):
         path.write_text(json.dumps(value), encoding="utf-8")
 
-    def plan(self, spec=None):
+    def plan(self, spec=None, *, known_exclusions=False):
         self.write(self.spec_path, self.spec if spec is None else spec)
-        return compare.build_plan(self.spec_path)
+        return compare.build_plan(self.spec_path, known_exclusions=known_exclusions)
+
+    def unknown_history(self):
+        evidence = self.root / "retained-recovery.json"
+        self.write(evidence, {"schema": 1, "kind": "synthetic-recovery-evidence",
+                              "explanation": "Development fixture only; source and old history are synthetic"})
+        self.document.update(complete=False, seed_admission=dict(compare.KNOWN),
+                             missing_history="Synthetic fixture deliberately has incomplete historical records",
+                             recovery_reconciliation={
+                                 "accepted_checkpoint_authoritative": True,
+                                 "known_inflight_attempts_reconciled_or_excluded": True,
+                                 "no_known_detached_later_accepted_chain": True,
+                                 "explanation": "Explicit isolated synthetic source and fresh CPU-only lanes",
+                                 "evidence": [{"path": str(evidence), "sha256": compare.file_pin(evidence)["sha256"]}],
+                                 "prior_ledger_runs_sha256": mixed.object_hash([])})
+        self.write(self.history, self.document)
+        return evidence
+
+    def test_unknown_requires_explicit_opt_in_and_preserves_incomplete_recovery_facts(self):
+        self.unknown_history()
+        with self.assertRaisesRegex(ValueError, "unknown history is unsupported"):
+            self.plan()
+        self.write(self.spec_path, self.spec)
+        before = compare.raw_tree(self.root)
+        plan = compare.build_plan(self.spec_path, known_exclusions=True)
+        self.assertEqual(compare.raw_tree(self.root), before)
+        self.assertEqual(plan["seed_admission"], compare.KNOWN)
+        self.assertEqual(plan["claim_scope"], compare.UNKNOWN_CLAIM_SCOPE)
+        generated = compare.episode_history(plan, self.source, [30, 31])
+        for key in ("complete", "seed_admission", "missing_history", "recovery_reconciliation"):
+            self.assertEqual(generated[key], self.document[key])
+        self.assertEqual(plan["missing_history"], self.document["missing_history"])
+        self.assertTrue(all(str(Path(plan["admission_checkout"]["root"]) / "scripts" / name)
+                            in plan["immutable_files"] for name in compare.ADMISSION_HELPERS))
+        self.assertFalse(self.output.exists())
+
+    def test_unknown_does_not_relabel_complete_or_falsely_certified_history(self):
+        with self.assertRaisesRegex(ValueError, "incomplete history"):
+            self.plan(known_exclusions=True)
+        self.unknown_history()
+        for change in (lambda: self.document.update(complete=True),
+                       lambda: self.document.update(seed_admission=dict(compare.STRICT))):
+            original = copy.deepcopy(self.document)
+            change()
+            self.write(self.history, self.document)
+            with self.assertRaisesRegex(ValueError, "truthful unknown freshness"):
+                self.plan(known_exclusions=True)
+            self.document = original
+        with self.assertRaisesRegex(ValueError, "explicit boolean"):
+            compare.build_plan(self.spec_path, known_exclusions="true")
+
+    def test_unknown_cannot_bypass_missing_recovery_or_retarget_prior_lane_proof(self):
+        self.unknown_history()
+        original = copy.deepcopy(self.document)
+        for change in (lambda: self.document.pop("missing_history"),
+                       lambda: self.document["recovery_reconciliation"].update(accepted_checkpoint_authoritative=False),
+                       lambda: self.document["recovery_reconciliation"].update(prior_ledger_runs_sha256="a" * 64),
+                       lambda: self.document["recovery_reconciliation"]["evidence"][0].update(format="manifest")):
+            self.document = copy.deepcopy(original)
+            change()
+            self.write(self.history, self.document)
+            with self.assertRaises(ValueError):
+                self.plan(known_exclusions=True)
+            self.assertFalse(self.output.exists())
+
+    def test_unknown_recovery_ranges_and_imported_reservations_remain_exclusionary(self):
+        evidence = self.unknown_history()
+        self.write(evidence, {"schema": 1, "interrupted_seed_ranges": [[30, 30]]})
+        self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(evidence)["sha256"]
+        self.write(self.history, self.document)
+        with self.assertRaisesRegex(ValueError, "training seed overlaps"):
+            self.plan(known_exclusions=True)
+        self.write(evidence, {"schema": 1, "training_seed_ranges": [[90, 90]]})
+        self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(evidence)["sha256"]
+        self.write(self.history, self.document)
+        with self.assertRaisesRegex(ValueError, "assessment overlaps known"):
+            self.plan(known_exclusions=True)
+        imported = self.root / "old-attempts.json"
+        self.write(imported, {"schema": 1, "reserved_seed_ranges": [[30, 30]]})
+        self.write(evidence, {"schema": 1})
+        self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(evidence)["sha256"]
+        self.document["imports"] = [{"path": str(imported), "sha256": compare.file_pin(imported)["sha256"]}]
+        self.write(self.history, self.document)
+        with self.assertRaisesRegex(ValueError, "training seed overlaps"):
+            self.plan(known_exclusions=True)
+
+    def test_unknown_scans_all_bounded_json_proof_presentations_and_rejects_untagged_archives(self):
+        original = self.unknown_history()
+        alternate = self.root / "plain-recovery.txt"
+        document = {"schema": 1, "training_seed_ranges": [[30, 30]]}
+        presentations = [b" " * 8192 + json.dumps(document).encode(),
+                         b"\xef\xbb\xbf" + json.dumps(document).encode(),
+                         json.dumps([document]).encode(),
+                         json.dumps(document).encode("utf-16")]
+        for raw in presentations:
+            with self.subTest(raw=raw[:12]):
+                alternate.write_bytes(raw)
+                self.document["recovery_reconciliation"]["evidence"] = [
+                    {"path": str(alternate), "sha256": compare.file_pin(alternate)["sha256"]}]
+                self.write(self.history, self.document)
+                with self.assertRaisesRegex(ValueError, "training seed overlaps"):
+                    self.plan(known_exclusions=True)
+        alternate.write_bytes(json.dumps(document).encode() + b"\xff")
+        self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(alternate)["sha256"]
+        self.write(self.history, self.document)
+        with self.assertRaisesRegex(ValueError, "invalid structured recovery evidence encoding"):
+            self.plan(known_exclusions=True)
+        for kind in (mixed.ledger_store.MANIFEST, mixed.ledger_store.SEGMENT):
+            self.write(alternate, {"schema": 1, "kind": kind})
+            self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(alternate)["sha256"]
+            self.write(self.history, self.document)
+            with self.assertRaisesRegex(ValueError, "manifest/segment"):
+                self.plan(known_exclusions=True)
+            self.document["imports"] = [{"path": str(alternate), "sha256": compare.file_pin(alternate)["sha256"]}]
+            self.write(self.history, self.document)
+            with self.assertRaisesRegex(ValueError, "manifest/segment"):
+                self.plan(known_exclusions=True)
+            self.document["imports"] = []
+        self.write(alternate, {"schema": 1, "imports": [{"path": str(original),
+                                                           "sha256": compare.file_pin(original)["sha256"]}]})
+        self.document["recovery_reconciliation"]["evidence"][0]["sha256"] = compare.file_pin(alternate)["sha256"]
+        self.write(self.history, self.document)
+        with self.assertRaisesRegex(ValueError, "must already be exact-byte history imports"):
+            self.plan(known_exclusions=True)
+
+    def test_unknown_recovery_proof_is_raw_pinned_before_output_or_native_mutation(self):
+        evidence = self.unknown_history()
+        plan = self.plan(known_exclusions=True)
+        evidence.write_bytes(evidence.read_bytes() + b"\n")
+        with self.assertRaisesRegex(ValueError, "pinned recipe/binary/history/helper"):
+            compare.execute(plan)
+        self.assertFalse(self.output.exists())
+        with self.assertRaisesRegex(ValueError, "recovery evidence raw bytes changed"):
+            self.plan(known_exclusions=True)
+
+    def test_unknown_native_git_context_keeps_process_and_prior_cache_isolated(self):
+        self.unknown_history()
+        plan = self.plan(known_exclusions=True)
+        self.output.mkdir()
+        runner = compare.Runner(plan)
+        cwd = self.output / "private-process"
+        cwd.mkdir()
+        calls = []
+
+        def invoke(argv, **kwargs):
+            calls.append((argv, kwargs))
+            kwargs["stdout"].write(b"{}")
+            return SimpleNamespace(returncode=0)
+
+        with patch.object(compare, "qualified_checkout", return_value=plan["admission_checkout"]), \
+                patch.object(compare.subprocess, "run", side_effect=invoke), \
+                patch.dict(compare.os.environ, {"GIT_DIR": "hostile", "GIT_WORK_TREE": "hostile",
+                                                "ALIFE_SLM_PRIOR_BACKEND": "local"}):
+            runner.command(self.binary, ["plan"], cwd)
+        environment = calls[0][1]["env"]
+        self.assertEqual(calls[0][1]["cwd"], cwd)
+        self.assertNotEqual(str(cwd), plan["admission_checkout"]["root"])
+        self.assertEqual(environment["GIT_DIR"], plan["admission_checkout"]["git_dir"])
+        self.assertEqual(environment["GIT_WORK_TREE"], plan["admission_checkout"]["root"])
+        self.assertEqual(environment["ALIFE_SLM_PRIOR_BACKEND"], "deterministic")
+        receipt = compare.read_json(runner.logs / "000.argv.json")
+        self.assertEqual(receipt["seed_admission"], compare.KNOWN)
+        self.assertEqual(receipt["claim_scope"], compare.UNKNOWN_CLAIM_SCOPE)
+
+    @unittest.skipUnless(os.name == "nt", "Windows verbatim path identity")
+    def test_qualified_checkout_accepts_windows_verbatim_script_path(self):
+        ordinary = compare.qualified_checkout()
+        script = str(Path(compare.__file__).resolve())
+        verbatim = script if script.startswith("\\\\?\\") else "\\\\?\\" + script
+        with patch.object(compare, "__file__", verbatim):
+            qualified = compare.qualified_checkout()
+        self.assertEqual(qualified, ordinary)
+        self.assertTrue(Path(qualified["root"]).samefile(Path(script).parent.parent))
+
+    def test_qualified_checkout_rejects_a_different_existing_directory(self):
+        actual = compare.qualified_checkout()
+        result = SimpleNamespace(returncode=0, stdout=str(self.root) + "\n" + actual["git_dir"] + "\n")
+        with patch.object(compare.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(ValueError, "does not match this runner"):
+                compare.qualified_checkout()
 
     def test_preflight_is_read_only_canonical_and_preserves_existing_attestation(self):
         self.write(self.spec_path, self.spec)
