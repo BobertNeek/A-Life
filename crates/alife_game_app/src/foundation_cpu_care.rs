@@ -17,6 +17,8 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
+mod round;
+pub use round::*;
 type Result<T> = CpuContinuationResult<T>;
 
 pub struct CpuCareRequest {
@@ -92,6 +94,8 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         cue_frames: 0,
         generic_consumed: 0,
         reservation: None,
+        collection_binding: None,
+        explicit_deterministic_prior: false,
     };
     Ok((config, episode))
 }
@@ -122,9 +126,55 @@ struct CareEpisode {
     cue_frames: usize,
     generic_consumed: usize,
     reservation: Option<admission::CareSeedReservation>,
+    collection_binding: Option<(CpuCollectorAssignmentV1, [u8; 32])>,
+    explicit_deterministic_prior: bool,
+}
+
+impl CareEpisode {
+    fn private_life_archive(
+        &self,
+        host: &CpuCanonicalHost,
+        output: &std::path::Path,
+    ) -> Result<(String, Value)> {
+        let policy_sha = format!(
+            "{:x}",
+            Sha256::digest(std::fs::read(
+                output.join("collection-policy.alife-foundation")
+            )?)
+        );
+        let mut lives = BTreeMap::new();
+        if let Some(prior) = self.prior.as_ref() {
+            for record in host.world().organism_registry().iter() {
+                lives.insert(
+                    record.organism_id().raw(),
+                    prior.snapshot(record.organism_id().raw())?,
+                );
+            }
+        }
+        let archive = json!({"schema":1,"collection_policy_sha256":policy_sha,
+            "provider_identity":self.prior.as_ref().map(|p| &p.metrics.provider_identity),
+            "world_tick":host.world().tick(),"lives":lives,
+            "restore_contract":"restore host checkpoint under collection policy and restore_life for the same organism before further dispatch"});
+        Ok((policy_sha, archive))
+    }
 }
 
 impl CpuEpisodeHooks for CareEpisode {
+    fn preserve_collection_recovery(
+        &mut self,
+        host: &CpuCanonicalHost,
+        _founder: &CpuFoundationTrainer,
+        output: &std::path::Path,
+    ) -> Result<()> {
+        let (_, archive) = self.private_life_archive(host, output)?;
+        admission::write_atomic(&output.join("care-prior-lives.json"), &archive).map_err(|error| {
+            format!(
+                "care prior recovery archive at {} could not be sealed: {error}",
+                output.display()
+            )
+            .into()
+        })
+    }
     fn decision_budget(&self) -> Option<usize> {
         Some(self.request.decisions)
     }
@@ -142,7 +192,15 @@ impl CpuEpisodeHooks for CareEpisode {
                 json!({"allocation":"development-fixture-only","historical_freshness":"unknown"}),
             );
         }
-        let reservation = admission::CareSeedReservation::reserve(config, &self.request)?;
+        let reservation = match &self.collection_binding {
+            Some((assignment, plan)) => admission::CareSeedReservation::reserve_collection(
+                config,
+                &self.request,
+                assignment,
+                *plan,
+            )?,
+            None => admission::CareSeedReservation::reserve(config, &self.request)?,
+        };
         let provenance = reservation.provenance["seed_admission"].clone();
         self.reservation = Some(reservation);
         Ok(provenance)
@@ -151,7 +209,13 @@ impl CpuEpisodeHooks for CareEpisode {
         if founder.phenotype().sensor_profile() != SensorProfile::GroundedTerrainVisionV1 {
             return Err("CPU care requires the retained grounded natural-senses policy; sensor conversion is not continuation".into());
         }
-        self.prior = RuntimeSemanticPrior::from_environment(self.request.seed, true)?;
+        self.prior = if self.explicit_deterministic_prior {
+            Some(RuntimeSemanticPrior::deterministic_for_training(
+                self.request.seed,
+            ))
+        } else {
+            RuntimeSemanticPrior::from_environment(self.request.seed, true)?
+        };
         if matches!(
             self.request.lesson,
             FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::EatReachableFood
@@ -340,21 +404,7 @@ impl CpuEpisodeHooks for CareEpisode {
         for (i, trace) in self.traces.iter_mut().enumerate() {
             trace["loss_row"] = json!(i < train_rows);
         }
-        let policy_sha = format!(
-            "{:x}",
-            Sha256::digest(std::fs::read(
-                output.join("collection-policy.alife-foundation")
-            )?)
-        );
-        let mut lives = BTreeMap::new();
-        if let Some(prior) = self.prior.as_ref() {
-            for record in host.world().organism_registry().iter() {
-                lives.insert(
-                    record.organism_id().raw(),
-                    prior.snapshot(record.organism_id().raw())?,
-                );
-            }
-        }
+        let (policy_sha, private_lives) = self.private_life_archive(host, output)?;
         let write = |name: &str, value: &Value| -> Result<()> {
             Ok(std::fs::write(
                 output.join(name),
@@ -371,12 +421,7 @@ impl CpuEpisodeHooks for CareEpisode {
             "care-trace.json",
             &json!({"schema":1,"backend":"native-cpu","lesson":self.request.lesson,"rows":self.traces}),
         )?;
-        write(
-            "care-prior-lives.json",
-            &json!({"schema":1,"collection_policy_sha256":policy_sha,
-            "provider_identity":self.prior.as_ref().map(|p| &p.metrics.provider_identity),"world_tick":host.world().tick(),"lives":lives,
-            "restore_contract":"restore host checkpoint under collection policy and restore_life for the same organism before further dispatch"}),
-        )?;
+        admission::write_atomic(&output.join("care-prior-lives.json"), &private_lives)?;
         if let Some(reservation) = self.reservation.as_ref() {
             // Full history/provenance is retained once outside recursive native
             // receipts. Only policy/freshness belongs in seed_admission.
@@ -404,7 +449,7 @@ impl CpuEpisodeHooks for CareEpisode {
         } else {
             meal_completed
         };
-        let metadata = json!({"schema":1,"kind":"care-first-cpu-episode","lesson":self.request.lesson,
+        let mut metadata = json!({"schema":1,"kind":"care-first-cpu-episode","lesson":self.request.lesson,
             "episode_body":"new-prepared-cohort","persistent_learning":"native-founder-and-full-actor-value-optimizer",
             "raw_replay_recorded":self.request.record_diagnostic_replay,
             "setup_ticks_are_training_rows":false,"setup_tick":scenario.start_tick,
@@ -420,6 +465,11 @@ impl CpuEpisodeHooks for CareEpisode {
             "semantic_prior":self.prior.as_ref().map(|p| &p.metrics),
             "prior_failure_policy":"log_and_continue_without_prior",
             "critic_optimizer":alife_training::PpoConfig::default().value_optimizer});
+        if let Some((_, plan)) = &self.collection_binding {
+            metadata["care_round_plan_sha256"] = json!(plan);
+            metadata["comparison_role"] = json!("serial-collection-parity-control");
+            metadata["prior_failure_policy"] = json!("reject-before-collector-seal");
+        }
         write("care-episode.json", &metadata)?;
         let mut artifacts = vec![
             "care-trace.json",
@@ -450,6 +500,242 @@ impl CpuEpisodeHooks for CareEpisode {
 #[cfg(test)]
 mod collect_only_tests {
     use super::*;
+
+    #[test]
+    fn interrupted_care_collection_retains_matching_host_and_private_prior_lives() {
+        use alife_core::{BrainCapacityClass, PhenotypeCompiler, PhenotypeCompilerInputs};
+        use alife_training::{FoundationTrainerCheckpoint, PpoValueHeadCheckpoint};
+        use std::path::Path;
+
+        struct InterruptedCare {
+            episode: CareEpisode,
+            ticks: usize,
+            started_tick: Option<u64>,
+            failure_tick: Option<u64>,
+            recovery: Option<(FoundationTrainerCheckpoint, CpuCanonicalCheckpoint)>,
+        }
+        impl CpuEpisodeHooks for InterruptedCare {
+            fn decision_budget(&self) -> Option<usize> {
+                self.episode.decision_budget()
+            }
+            fn fixture_asset(
+                &self,
+                seed: u64,
+            ) -> Result<Option<alife_core::FoundationWeightAsset>> {
+                self.episode.fixture_asset(seed)
+            }
+            fn admit(
+                &mut self,
+                config: &CpuContinuationConfig,
+                source: Option<&Value>,
+                hashes: &BTreeMap<String, String>,
+            ) -> Result<Value> {
+                self.episode.admit(config, source, hashes)
+            }
+            fn validate_policy(&mut self, founder: &CpuFoundationTrainer) -> Result<()> {
+                self.episode.validate_policy(founder)
+            }
+            fn prepare_world(&mut self, world: &mut alife_world::HeadlessWorld) -> Result<()> {
+                self.episode.prepare_world(world)
+            }
+            fn before_step(
+                &mut self,
+                host: &mut CpuCanonicalHost,
+                founder: &CpuFoundationTrainer,
+            ) -> Result<()> {
+                self.started_tick.get_or_insert(host.world().tick().raw());
+                if self.ticks == 2 {
+                    self.failure_tick = Some(host.world().tick().raw());
+                    return Err("synthetic care interruption after two native ticks".into());
+                }
+                self.episode.before_step(host, founder)
+            }
+            fn prepare_draft(
+                &mut self,
+                draft: PerceptionFrameDraft,
+                sequence: ExperienceSequenceId,
+            ) -> std::result::Result<PerceptionFrameDraft, ScaffoldContractError> {
+                self.episode.prepare_draft(draft, sequence)
+            }
+            fn after_step(
+                &mut self,
+                host: &CpuCanonicalHost,
+                founder: &CpuFoundationTrainer,
+                step: &CpuCanonicalStep,
+            ) -> Result<()> {
+                self.episode.after_step(host, founder, step)?;
+                self.ticks += 1;
+                Ok(())
+            }
+            fn finish_collection(
+                &mut self,
+                host: &CpuCanonicalHost,
+                founder: &CpuFoundationTrainer,
+                rows: &BTreeMap<u64, Vec<CpuCollectedDecision>>,
+                train_rows: usize,
+                output: &Path,
+            ) -> Result<CpuEpisodeReceipt> {
+                self.episode
+                    .finish_collection(host, founder, rows, train_rows, output)
+            }
+            fn preserve_collection_recovery(
+                &mut self,
+                host: &CpuCanonicalHost,
+                founder: &CpuFoundationTrainer,
+                output: &Path,
+            ) -> Result<()> {
+                self.recovery = Some((founder.checkpoint(), host.checkpoint(founder)?));
+                self.episode
+                    .preserve_collection_recovery(host, founder, output)
+            }
+        }
+
+        struct TemporaryOutput(PathBuf);
+        impl Drop for TemporaryOutput {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let output = TemporaryOutput(std::env::temp_dir().join(format!(
+            "alife-interrupted-care-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        )));
+        let root = &output.0;
+        let seed = 0x93_42;
+        let (config, mut episode) = prepare_care_episode(CpuCareRequest {
+            previous: None,
+            output: root.clone(),
+            seed,
+            decisions: 4,
+            temperature: 1.,
+            lesson: FoundationTeacherLesson::EatHeldFood,
+            seed_history: None,
+            known_exclusions: false,
+            record_diagnostic_replay: false,
+            fixture: true,
+        })
+        .unwrap();
+        // This constructor ignores ambient provider settings and shared caches.
+        episode.explicit_deterministic_prior = true;
+        let mut interrupted = InterruptedCare {
+            episode,
+            ticks: 0,
+            started_tick: None,
+            failure_tick: None,
+            recovery: None,
+        };
+        let error = match collect_cpu_episode(config, &mut interrupted) {
+            Ok(_) => panic!("interrupted care unexpectedly finalized a collector"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error.to_string(),
+            "synthetic care interruption after two native ticks"
+        );
+        assert_eq!(interrupted.ticks, 2);
+        let tick = interrupted.failure_tick.unwrap();
+        assert_eq!(tick, interrupted.started_tick.unwrap() + 2);
+        assert!(interrupted.episode.reservation.is_none());
+
+        let actor: FoundationTrainerCheckpoint = serde_json::from_slice(
+            &std::fs::read(root.join("collection-actor-checkpoint.json")).unwrap(),
+        )
+        .unwrap();
+        let value: PpoValueHeadCheckpoint = serde_json::from_slice(
+            &std::fs::read(root.join("initial-value-checkpoint.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(actor.optimizer_step, 0);
+        assert_eq!(value.optimizer_step, 0);
+        assert!(actor.update_ages.iter().all(|age| *age == 0));
+        assert!(actor
+            .first_moment
+            .iter()
+            .chain(&actor.second_moment)
+            .all(|m| *m == 0.));
+        assert!(value.parameters.iter().all(|parameter| *parameter == 0.));
+        let checkpoint: CpuCanonicalCheckpoint =
+            serde_json::from_slice(&std::fs::read(root.join("collector-checkpoint.json")).unwrap())
+                .unwrap();
+        assert!(checkpoint.sampling_counter > 0);
+        assert!(checkpoint.residents.iter().any(|resident| resident
+            .neural
+            .eligibility
+            .iter()
+            .any(|trace| *trace != 0.)));
+        let (recovery_actor, recovery_host) = interrupted.recovery.as_ref().unwrap();
+        assert_eq!(recovery_actor, &actor);
+        assert_eq!(
+            serde_json::to_vec(recovery_host).unwrap(),
+            serde_json::to_vec(&checkpoint).unwrap()
+        );
+        let inputs: PhenotypeCompilerInputs = serde_json::from_slice(
+            &std::fs::read(root.join("collection-compiler-inputs.json")).unwrap(),
+        )
+        .unwrap();
+        let phenotype =
+            PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048()).unwrap();
+        let founder = CpuFoundationTrainer::from_checkpoint(
+            phenotype,
+            inputs.n2048_candidate_asset().unwrap().clone(),
+            actor,
+        )
+        .unwrap();
+        let host = CpuCanonicalHost::from_checkpoint(checkpoint, &founder).unwrap();
+        assert_eq!(host.world().tick().raw(), tick);
+        let archive: Value =
+            serde_json::from_slice(&std::fs::read(root.join("care-prior-lives.json")).unwrap())
+                .unwrap();
+        assert_eq!(archive["world_tick"], tick);
+        assert_eq!(
+            archive["collection_policy_sha256"],
+            format!(
+                "{:x}",
+                Sha256::digest(
+                    std::fs::read(root.join("collection-policy.alife-foundation")).unwrap()
+                )
+            )
+        );
+        let prior = interrupted.episode.prior.as_ref().unwrap();
+        assert_eq!(
+            archive["provider_identity"],
+            prior.metrics.provider_identity
+        );
+        assert_eq!(archive["lives"].as_object().unwrap().len(), 1);
+        let id = host
+            .world()
+            .organism_registry()
+            .iter()
+            .next()
+            .unwrap()
+            .organism_id()
+            .raw();
+        let saved_life: Vec<u8> =
+            serde_json::from_value(archive["lives"][id.to_string()].clone()).unwrap();
+        assert_eq!(Some(saved_life.clone()), prior.snapshot(id).unwrap());
+        let mut restored_prior = RuntimeSemanticPrior::deterministic_for_training(seed);
+        restored_prior.restore_life(id, tick, &saved_life).unwrap();
+        assert_eq!(restored_prior.snapshot(id).unwrap(), Some(saved_life));
+        for name in [
+            "collector-shard.json",
+            "collector-commit.json",
+            "cpu-cycle.json",
+            "training-handoff.json",
+            "trained.alife-foundation",
+            "care-episode.json",
+        ] {
+            assert!(
+                !root.join(name).exists(),
+                "interrupted collection published {name}"
+            );
+        }
+        assert!(read_cpu_collector_output(root).is_err());
+    }
+
     #[test]
     fn care_collection_keeps_private_learning_and_seals_without_offline_updates() {
         // Give the fixture its own environment; never initialize a live prior

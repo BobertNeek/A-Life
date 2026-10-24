@@ -18,6 +18,12 @@ pub fn resolve_isolated_training_output<'a>(
     let mut resolved = PathBuf::new();
     for component in std::path::absolute(output)?.components() {
         match component {
+            // A Windows drive/verbatim prefix alone is not a rooted path. Join
+            // its RootDir before asking the filesystem to resolve anything.
+            Component::Prefix(_) => {
+                resolved.push(component.as_os_str());
+                continue;
+            }
             Component::CurDir => continue,
             Component::ParentDir => {
                 resolved.pop();
@@ -40,6 +46,46 @@ pub fn resolve_isolated_training_output<'a>(
         }
     }
     Ok(resolved)
+}
+
+#[cfg(test)]
+mod output_resolution_tests {
+    use super::resolve_isolated_training_output;
+    #[test]
+    fn rooted_and_canonical_output_paths_resolve_before_source_containment_checks() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-output-roots-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let canonical = root.canonicalize().unwrap();
+        let source = canonical.join("source");
+        std::fs::create_dir(&source).unwrap();
+        let expected = canonical.join("new-lane/episode");
+        for output in [root.join("new-lane/episode"), expected.clone()] {
+            assert_eq!(
+                resolve_isolated_training_output(
+                    &output,
+                    [&source].map(std::path::PathBuf::as_path)
+                )
+                .unwrap(),
+                expected
+            );
+        }
+        for output in [source.clone(), source.join("child"), canonical.clone()] {
+            assert!(resolve_isolated_training_output(
+                &output,
+                [&source].map(std::path::PathBuf::as_path)
+            )
+            .is_err());
+        }
+        assert!(!expected.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FoundationTrainingBackendV1 {

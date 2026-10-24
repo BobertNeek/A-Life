@@ -11,6 +11,11 @@ path = "src/bin/train_cpu_care.rs"
 required-features = ["cpu-training"]
 
 [[bin]]
+name = "train_cpu_care_round"
+path = "src/bin/train_cpu_care_round.rs"
+required-features = ["cpu-training"]
+
+[[bin]]
 name = "export_native_training_handoff"
 path = "src/bin/export_native_training_handoff.rs"
 required-features = ["foundation-training"]

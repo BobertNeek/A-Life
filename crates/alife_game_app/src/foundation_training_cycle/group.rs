@@ -24,6 +24,30 @@ pub(crate) fn admit_native_cpu_care_seed(
     admission::admit(previous, history, output, seed, known_exclusions)
 }
 
+/// Collect-only admission can retain immutable snapshots of current lane ledgers.
+/// Seed exclusions and historical-freshness requirements remain unchanged.
+#[cfg(feature = "cpu-training")]
+pub(crate) fn admit_native_cpu_care_collection_seed(
+    previous: &Path,
+    history: &Path,
+    output: &Path,
+    seed: u64,
+    known_exclusions: bool,
+) -> Result<serde_json::Value> {
+    admission::admit_collection(previous, history, output, seed, known_exclusions)
+}
+
+/// Recheck the qualified known-exclusions recovery proof without admitting or
+/// reserving any seed. This opens no GPU and cannot restart a private lifetime.
+#[cfg(feature = "cpu-training")]
+pub(crate) fn verify_native_cpu_care_recovery(
+    previous: &Path,
+    history: &Path,
+    lane: &Path,
+) -> Result<()> {
+    admission::verify_recovery(previous, history, lane)
+}
+
 #[cfg(feature = "cpu-training")]
 pub(crate) fn read_native_cpu_care_evidence(path: &Path) -> Result<(Vec<u8>, serde_json::Value)> {
     admission::read(path)

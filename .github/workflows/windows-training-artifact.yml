@@ -13,6 +13,11 @@ on:
       - "crates/alife_runtime/**"
       - "crates/alife_game_app/src/foundation*.rs"
       - "crates/alife_game_app/src/foundation_training/**"
+      - "crates/alife_game_app/src/foundation_cpu_care/**"
+      - "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs"
+      - "crates/alife_game_app/src/bin/train_cpu_care_round.rs"
+      - "crates/alife_game_app/tests/cpu_care_round.rs"
+      - "crates/alife_game_app/Cargo.toml"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
       - "crates/alife_world/tests/*signature.rs"
@@ -31,6 +36,11 @@ on:
       - "crates/alife_runtime/**"
       - "crates/alife_game_app/src/foundation*.rs"
       - "crates/alife_game_app/src/foundation_training/**"
+      - "crates/alife_game_app/src/foundation_cpu_care/**"
+      - "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs"
+      - "crates/alife_game_app/src/bin/train_cpu_care_round.rs"
+      - "crates/alife_game_app/tests/cpu_care_round.rs"
+      - "crates/alife_game_app/Cargo.toml"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
       - "crates/alife_world/tests/*signature.rs"
@@ -47,6 +57,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  serial-care-round:
+    name: Serial CPU care round
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      RUST_MIN_STACK: '33554432'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rooted and canonical output admission before filesystem mutation
+        run: cargo test --locked -p alife_training --lib output_resolution_tests
+      - name: Serial real-care adapter contracts without a live prior
+        run: cargo test --locked -p alife_game_app --features cpu-training --test cpu_care_round -- --nocapture
   build:
     name: Build and check Windows training CLI
     runs-on: windows-latest

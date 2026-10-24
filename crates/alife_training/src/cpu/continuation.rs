@@ -104,6 +104,16 @@ pub trait CpuEpisodeHooks {
             artifacts: Vec::new(),
         })
     }
+    /// Retain consumer-owned private state alongside the last native checkpoint,
+    /// including interrupted collection. This does not finalize or admit a shard.
+    fn preserve_collection_recovery(
+        &mut self,
+        _host: &CpuCanonicalHost,
+        _founder: &CpuFoundationTrainer,
+        _output: &Path,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 pub struct CpuEpisodeReceipt {
     pub metadata: Value,
@@ -456,7 +466,13 @@ fn collect_cpu_episode_inner(
 ) -> Result<CpuCollectedEpisode> {
     args.previous = args.previous.map(|p| p.canonicalize()).transpose()?;
     args.output =
-        resolve_isolated_training_output(&args.output, args.previous.iter().map(PathBuf::as_path))?;
+        resolve_isolated_training_output(&args.output, args.previous.iter().map(PathBuf::as_path))
+            .map_err(|error| {
+                format!(
+                    "CPU collection output path {} could not be resolved: {error}",
+                    args.output.display()
+                )
+            })?;
     if args.fixture == args.previous.is_some()
         || args.seed == 0
         || !(2..=2048).contains(&args.ticks)
@@ -828,8 +844,17 @@ fn collect_cpu_episode_inner(
         .and_then(|checkpoint| {
             write_json(args.output.join("collector-checkpoint.json"), &checkpoint)
         });
-    collection_result?;
+    let private_recovery = episode.preserve_collection_recovery(&host, &trainer, &args.output);
+    if let Err(error) = collection_result {
+        recovery_result.map_err(|recovery| {
+            format!("{error}; native collection recovery failed: {recovery}")
+        })?;
+        private_recovery
+            .map_err(|recovery| format!("{error}; episode private recovery failed: {recovery}"))?;
+        return Err(error);
+    }
     recovery_result?;
+    private_recovery?;
     if let Some(n) = decision_budget {
         if rows.len() != 1
             || valid_decisions != n + 1

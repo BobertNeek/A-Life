@@ -12,6 +12,24 @@ permissions:
   contents: read
 
 jobs:
+  serial-care-round:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      RUST_MIN_STACK: '33554432'
+      VK_ICD_FILENAMES: /no-vulkan-icd.json
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Serial real-care round, explicit prior and preserved private life
+        run: cargo test --locked -p alife_game_app --features cpu-training --test cpu_care_round -- --nocapture
   cooperative-round:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -72,11 +90,15 @@ jobs:
         run: |
           cargo test --locked -p alife_game_app --features cpu-training --test cpu_care -- --nocapture
           cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::collect_only_tests -- --nocapture
+          cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::admission::tests
+          cargo test --locked -p alife_game_app --features cpu-training --lib foundation_cpu_care::round::tests
+          cargo test --locked -p alife_game_app --features cpu-training --lib collect_only_snapshot_imports_require_current_raw_ledger_bytes_and_keep_exclusions
+          cargo test --locked -p alife_game_app --features cpu-training --lib explicit_training_prior
           cargo test --locked -p alife_game_app --features cpu-training --lib food_outcome
           python -B -m unittest discover -s scripts -p test_cpu_care_serial.py -v
-          cargo build --locked -p alife_game_app --features cpu-training --bin train_cpu_care
+          cargo build --locked -p alife_game_app --features cpu-training --bin train_cpu_care --bin train_cpu_care_round
           python -B scripts/check_cpu_retention_native.py target/debug/train_cpu_care
-          cargo clippy --locked -p alife_game_app --features cpu-training --lib --bin train_cpu_care --test cpu_care -- -D warnings
+          cargo clippy --locked -p alife_game_app --features cpu-training --lib --bin train_cpu_care --bin train_cpu_care_round --test cpu_care --test cpu_care_round -- -D warnings
       - name: Strict CPU source review
         run: cargo clippy --locked -p alife_training --features cpu-backend --lib --bins --test cpu_backend --test cpu_collector --test cpu_collect_only --test cpu_cooperative_round --test cpu_cli --test backend_handoff -- -D warnings
       - name: Compile hardware differential test without requesting an adapter
@@ -103,6 +125,7 @@ jobs:
           if revision != os.environ['EXPECTED_SOURCE_REVISION']:
               raise SystemExit('Checked-out revision mismatch')
           binary = Path('target/debug/train_cpu_care')
+          round_binary = Path('target/debug/train_cpu_care_round')
           versions = re.findall(r'GLIBC_(\d+(?:\.\d+)+)', command('readelf', '--version-info', str(binary)))
           minimum_glibc = max(set(versions), key=lambda value: tuple(map(int, value.split('.')))) if versions else None
           rustc = command('rustc', '-vV')
@@ -114,6 +137,10 @@ jobs:
               'source_tree': command('git', 'rev-parse', 'HEAD^{tree}'),
               'executable_sha256': digest,
               'executable_bytes': binary.stat().st_size,
+              'additional_executables': {round_binary.name: {
+                  'sha256': hashlib.file_digest(round_binary.open('rb'), 'sha256').hexdigest(),
+                  'bytes': round_binary.stat().st_size,
+              }},
               'rustc': rustc,
               'target': next(line.removeprefix('host: ') for line in rustc.splitlines() if line.startswith('host: ')),
               'minimum_glibc': minimum_glibc,
@@ -130,6 +157,7 @@ jobs:
           receipt_bytes = (json.dumps(receipt, indent=2) + '\n').encode('utf-8')
           with tarfile.open(artifact / 'cpu-training.tar.gz', 'w:gz') as archive:
               archive.add(binary, arcname=binary.name)
+              archive.add(round_binary, arcname=round_binary.name)
               info = tarfile.TarInfo('build-receipt.json')
               info.size = len(receipt_bytes)
               info.mode = 0o644

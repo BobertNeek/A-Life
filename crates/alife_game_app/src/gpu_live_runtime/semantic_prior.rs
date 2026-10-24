@@ -184,6 +184,39 @@ pub(crate) struct RuntimeSemanticPrior {
     pub metrics: SemanticPriorMetrics,
 }
 impl RuntimeSemanticPrior {
+    /// Explicit stateless provider for a fresh training life. This path reads
+    /// neither ambient provider settings nor a shared cache, and starts no worker.
+    #[cfg(any(feature = "cpu-training", all(test, feature = "foundation-training")))]
+    pub(crate) fn deterministic_for_training(seed: u64) -> Self {
+        let context_contract = context_contract();
+        let provider_identity = provider_identity(
+            "deterministic",
+            alife_semantic::DETERMINISTIC_PRIOR_ID,
+            &context_contract,
+        );
+        Self {
+            queue: None,
+            retry_not_before: None,
+            reported_empty_contexts: BTreeSet::new(),
+            frozen_recording: false,
+            deterministic: Some(DeterministicPriorProvider),
+            lives: BTreeMap::new(),
+            cache: BTreeMap::new(),
+            unusable_retry_contexts: BTreeSet::new(),
+            next_request: 1,
+            cache_path: std::path::PathBuf::new(),
+            dropout_seed: Some(seed),
+            metrics: SemanticPriorMetrics {
+                backend: "deterministic".into(),
+                context_contract,
+                model: alife_semantic::DETERMINISTIC_PRIOR_ID.into(),
+                provider_identity,
+                model_sha256: "unverified-model".into(),
+                ..Default::default()
+            },
+        }
+    }
+
     pub fn from_environment(
         seed: u64,
         training: bool,
@@ -287,24 +320,7 @@ impl RuntimeSemanticPrior {
                 None
             }
         };
-        let identity = format!(
-            "{backend}:{backend_config}:{context_contract}:{}:{}:{}:{}:{}",
-            blake3::hash(include_bytes!(
-                "../../../alife_semantic/src/local_slm_prior.rs"
-            ))
-            .to_hex(),
-            blake3::hash(include_bytes!("../../../alife_semantic/src/luna_prior.rs")).to_hex(),
-            blake3::hash(include_bytes!(
-                "../../../alife_semantic/src/recorded_prior.rs"
-            ))
-            .to_hex(),
-            blake3::hash(include_bytes!(
-                "../../../alife_semantic/src/deterministic_prior.rs"
-            ))
-            .to_hex(),
-            blake3::hash(include_bytes!("semantic_prior.rs")).to_hex()
-        );
-        let provider_identity = blake3::hash(identity.as_bytes()).to_hex().to_string();
+        let provider_identity = provider_identity(&backend, &backend_config, &context_contract);
         let cache_path = std::path::PathBuf::from("target/slm-prior/cache")
             .join(format!("{provider_identity}.json"));
         let frozen_recording = backend == "recorded";
@@ -1109,6 +1125,27 @@ fn context_builder_source(source: &str) -> &str {
         .expect("context builder end exists")
         + start;
     &source[start..end]
+}
+
+fn provider_identity(backend: &str, backend_config: &str, context_contract: &str) -> String {
+    let identity = format!(
+        "{backend}:{backend_config}:{context_contract}:{}:{}:{}:{}:{}",
+        blake3::hash(include_bytes!(
+            "../../../alife_semantic/src/local_slm_prior.rs"
+        ))
+        .to_hex(),
+        blake3::hash(include_bytes!("../../../alife_semantic/src/luna_prior.rs")).to_hex(),
+        blake3::hash(include_bytes!(
+            "../../../alife_semantic/src/recorded_prior.rs"
+        ))
+        .to_hex(),
+        blake3::hash(include_bytes!(
+            "../../../alife_semantic/src/deterministic_prior.rs"
+        ))
+        .to_hex(),
+        blake3::hash(include_bytes!("semantic_prior.rs")).to_hex()
+    );
+    blake3::hash(identity.as_bytes()).to_hex().to_string()
 }
 
 pub(super) fn context_contract() -> String {
@@ -2240,6 +2277,63 @@ mod tests {
         assert_eq!(prior.metrics.unusable_hint_retry_requests, 0);
         assert!(prior.queue.is_none());
     }
+    #[test]
+    fn explicit_training_prior_has_seed_independent_provider_identity() {
+        let expected = provider_identity(
+            "deterministic",
+            alife_semantic::DETERMINISTIC_PRIOR_ID,
+            &context_contract(),
+        );
+        for seed in [0, 7, u64::MAX] {
+            let prior = RuntimeSemanticPrior::deterministic_for_training(seed);
+            assert_eq!(prior.metrics.provider_identity, expected);
+            assert_eq!(prior.metrics.context_contract, context_contract());
+            assert_eq!(prior.metrics.backend, "deterministic");
+            assert_eq!(prior.metrics.model, alife_semantic::DETERMINISTIC_PRIOR_ID);
+            assert_eq!(prior.metrics.model_sha256, "unverified-model");
+            assert!(prior.metrics.source_provider_identity.is_none());
+            assert!(prior.metrics.recorded_bank_digest.is_none());
+            assert_eq!(prior.dropout_seed, Some(seed));
+            assert!(prior.queue.is_none());
+            assert!(prior.cache_path.as_os_str().is_empty());
+        }
+    }
+
+    #[test]
+    fn explicit_training_priors_collect_independent_lives_and_caches() {
+        let mut first = RuntimeSemanticPrior::deterministic_for_training(7);
+        let mut second = RuntimeSemanticPrior::deterministic_for_training(7);
+        let draft = teacher_draft();
+        first.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
+        assert!(first.ready(5));
+        assert!(!first.cache.is_empty());
+        assert_eq!(first.metrics.requests, 1);
+        assert!(second.lives.is_empty());
+        assert!(second.cache.is_empty());
+        assert_eq!(second.metrics.requests, 0);
+        assert!(second.snapshot(5).unwrap().is_none());
+
+        let prepared = second
+            .prepare(draft.clone(), ExperienceSequenceId(1))
+            .unwrap();
+        assert!(prepared.sensory().semantic_context.is_some());
+        assert_eq!(prepared.sensory().channels, draft.sensory().channels);
+        assert_eq!(
+            prepared.sensory().language_context,
+            draft.sensory().language_context
+        );
+        assert_eq!(second.metrics.requests, 1);
+        assert_eq!(second.metrics.delivered_frames, 1);
+        let retained = second.snapshot(5).unwrap().unwrap();
+        first.cache.clear();
+        first.lives.clear();
+        assert!(!second.cache.is_empty());
+        assert_eq!(second.snapshot(5).unwrap().unwrap(), retained);
+        assert!(first.queue.is_none() && second.queue.is_none());
+        assert!(first.cache_path.as_os_str().is_empty());
+        assert!(second.cache_path.as_os_str().is_empty());
+    }
+
     #[test]
     fn training_and_gameplay_defaults_and_explicit_off_are_separate() {
         assert_eq!(selected_backend(true, None, false), "deterministic");
