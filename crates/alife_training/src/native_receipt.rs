@@ -498,6 +498,14 @@ impl Lineage {
         }
         Ok(())
     }
+    /// Verify a published copy, including the newly retained direct parent.
+    /// Unlike the immutable-source guard, every archive must already exist.
+    pub fn verify_written_at(&self, destination: &Path) -> io::Result<()> {
+        for digest in self.blobs.keys() {
+            self.imported_bytes(destination, digest)?;
+        }
+        Ok(())
+    }
     /// Include the exact direct parent as a new blob, retaining inherited blobs.
     pub fn check_parent(&self, bytes: &[u8]) -> io::Result<String> {
         if bytes.len() > MAX_RECEIPT_BYTES {

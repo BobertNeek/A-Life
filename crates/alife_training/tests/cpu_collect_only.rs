@@ -193,6 +193,15 @@ fn fixture_collection_roundtrips_private_recovery_and_admits_without_optimizer_u
     assert_eq!(trainer.checkpoint(), actor);
     assert_eq!(value.checkpoint(), critic);
     assert_no_training_output(&output);
+    let sealed_before = snapshot(&output);
+    let implicit_continuation = root.join("must-not-promote-collection");
+    assert!(run_cpu_continuation(
+        source_config(output.clone(), implicit_continuation.clone(), seed + 1),
+        &mut DefaultCpuEpisode,
+    )
+    .is_err());
+    assert!(!implicit_continuation.exists());
+    assert_eq!(snapshot(&output), sealed_before);
 }
 
 #[test]
@@ -234,6 +243,49 @@ fn explicit_native_source_retains_full_nonzero_optimizer_history_and_source_byte
     let planned = assignment(&collection, seed);
     collection.seal(planned).unwrap();
     read_cpu_collector_output(&output).unwrap();
+    assert_eq!(snapshot(&source), source_before);
+    assert_no_training_output(&output);
+}
+
+#[test]
+fn missing_newly_retained_parent_rejects_seal_and_keeps_private_recovery_and_source() {
+    let root = FixtureDirectory::new();
+    let source = root.join("synthetic-source");
+    run_cpu_continuation(
+        fixture_config(source.clone(), 0x62_1601),
+        &mut DefaultCpuEpisode,
+    )
+    .unwrap();
+    assert!(!source.join("source-lineage").exists());
+    let source_before = snapshot(&source);
+    let output = root.join("missing-direct-parent");
+    let seed = 0x62_1602;
+    let collection = collect_cpu_episode(
+        source_config(source.clone(), output.clone(), seed),
+        &mut DefaultCpuEpisode,
+    )
+    .unwrap();
+    let planned = assignment(&collection, seed);
+    let lineage_files = fs::read_dir(output.join("source-lineage"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(lineage_files.len(), 1);
+    assert_eq!(
+        lineage_files[0]
+            .extension()
+            .and_then(|value| value.to_str()),
+        Some("json")
+    );
+    fs::remove_file(&lineage_files[0]).unwrap();
+    let private_bytes = fs::read(output.join("collector-checkpoint.json")).unwrap();
+    assert!(collection.seal(planned).is_err());
+    assert!(!output.join("collector-commit.json").exists());
+    assert!(!output.join("collector-shard.json").exists());
+    assert_eq!(
+        fs::read(output.join("collector-checkpoint.json")).unwrap(),
+        private_bytes
+    );
     assert_eq!(snapshot(&source), source_before);
     assert_no_training_output(&output);
 }

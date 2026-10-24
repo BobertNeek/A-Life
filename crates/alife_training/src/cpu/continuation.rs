@@ -325,6 +325,10 @@ impl CpuCollectedEpisode {
                 return Err("retained source copy changed before seal".into());
             }
         }
+        if let Some(lineage) = &self.lineage {
+            lineage.verify_at(&self.args.output.join("source-native"))?;
+            lineage.verify_written_at(&self.args.output)?;
+        }
         let snapshot = CpuCollectionSnapshotV1::capture(
             &self.trainer,
             &self.value,
