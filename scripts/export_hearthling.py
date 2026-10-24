@@ -20,6 +20,8 @@ from refine_hearthling_expression import refine_expression
 refine_expression()
 from refine_hearthling_closeup import refine_closeup
 refine_closeup()
+from refine_hearthling_selected import refine_selected_references
+refine_selected_references()
 from bake_hearthling_fur import bake_fur
 bake_fur()
 rig = bpy.data.objects['Hearthling_Rig']

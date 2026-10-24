@@ -19,11 +19,13 @@ def bake_fur():
     shader=nodes.get('Principled BSDF')
     coord=nodes.new('ShaderNodeTexCoord')
     scale=nodes.new('ShaderNodeVectorMath'); scale.operation='MULTIPLY'
-    scale.inputs[1].default_value=(90,90,15)
+    # Finer, shallower directional relief gives the selected woodland coat a
+    # softer surface without hair geometry or another runtime texture/material.
+    scale.inputs[1].default_value=(180,180,22)
     noise=nodes.new('ShaderNodeTexNoise'); noise.inputs['Scale'].default_value=1
     noise.inputs['Detail'].default_value=2; noise.inputs['Roughness'].default_value=.65
     bump=nodes.new('ShaderNodeBump'); bump.inputs['Strength'].default_value=.30
-    bump.inputs['Distance'].default_value=.006
+    bump.inputs['Distance'].default_value=.003
     links.new(coord.outputs['Generated'],scale.inputs[0])
     links.new(scale.outputs['Vector'],noise.inputs['Vector'])
     links.new(noise.outputs['Fac'],bump.inputs['Height'])
@@ -35,7 +37,7 @@ def bake_fur():
     scene.cycles.samples=1
     bpy.ops.object.bake(type='NORMAL',normal_space='TANGENT',use_clear=False,margin=8)
     for node in [coord,scale,noise,bump]: nodes.remove(node)
-    normal=nodes.new('ShaderNodeNormalMap'); normal.inputs['Strength'].default_value=.70
+    normal=nodes.new('ShaderNodeNormalMap'); normal.inputs['Strength'].default_value=.60
     links.new(texture.outputs['Color'],normal.inputs['Color'])
     links.new(normal.outputs['Normal'],shader.inputs['Normal'])
     # Preserve the crown's named appearance-tint slot after joining its geometry.
