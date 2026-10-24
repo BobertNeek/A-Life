@@ -89,7 +89,7 @@ impl CpuCollectorOutputCommit {
     }
 }
 
-fn owned_root(root: &Path) -> Result<PathBuf> {
+pub(super) fn owned_root(root: &Path) -> Result<PathBuf> {
     let metadata = fs::symlink_metadata(root)?;
     if !metadata.is_dir() || metadata.file_type().is_symlink() {
         return Err(invalid("collector output root must be a real directory").into());
@@ -123,7 +123,7 @@ fn excluded(key: &str) -> bool {
     )
 }
 
-fn fingerprint(path: &Path, sync: bool) -> Result<CpuCollectorArtifact> {
+pub(super) fn fingerprint(path: &Path, sync: bool) -> Result<CpuCollectorArtifact> {
     let before = fs::symlink_metadata(path)?;
     if !before.is_file() || before.file_type().is_symlink() {
         return Err(invalid("collector artifacts must be regular files").into());
@@ -226,7 +226,7 @@ fn validate_inventory(artifacts: &BTreeMap<String, CpuCollectorArtifact>) -> Res
     Ok(())
 }
 
-fn write_pending(path: &Path, value: &impl Serialize, max_bytes: u64) -> Result<()> {
+pub(super) fn write_pending(path: &Path, value: &impl Serialize, max_bytes: u64) -> Result<()> {
     let file = OpenOptions::new().write(true).create_new(true).open(path)?;
     let mut file = io::BufWriter::new(file);
     serde_json::to_writer(&mut file, value)?;
@@ -311,7 +311,7 @@ fn write_with_publish(
     Ok(commit)
 }
 
-fn read_json<T: serde::de::DeserializeOwned>(path: &Path, max_bytes: u64) -> Result<T> {
+pub(super) fn read_json<T: serde::de::DeserializeOwned>(path: &Path, max_bytes: u64) -> Result<T> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > max_bytes {
         return Err(invalid("invalid collector JSON file or byte length").into());
@@ -350,7 +350,7 @@ fn sync_directory(directory: &Path) -> io::Result<()> {
 fn sync_directory(_: &Path) -> io::Result<()> {
     Ok(())
 }
-fn sync_directory_ancestry(root: &Path) -> io::Result<()> {
+pub(super) fn sync_directory_ancestry(root: &Path) -> io::Result<()> {
     for directory in root.ancestors() {
         sync_directory(directory)?;
     }
@@ -358,7 +358,7 @@ fn sync_directory_ancestry(root: &Path) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
+pub(super) fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
     fs::hard_link(pending, sealed)?;
     fs::remove_file(pending)?;
     sync_directory(
@@ -369,7 +369,7 @@ fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
 }
 
 #[cfg(windows)]
-fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
+pub(super) fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     #[link(name = "kernel32")]
     unsafe extern "system" {
@@ -394,7 +394,7 @@ fn publish_new(pending: &Path, sealed: &Path) -> io::Result<()> {
     }
 }
 #[cfg(not(any(unix, windows)))]
-fn publish_new(_: &Path, _: &Path) -> io::Result<()> {
+pub(super) fn publish_new(_: &Path, _: &Path) -> io::Result<()> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
         "durable collector publication unsupported",

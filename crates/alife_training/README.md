@@ -93,3 +93,48 @@ curriculum training with the same starting checkpoint, seeds, lesson doses,
 sampling, effective batches and optimizer budget. Collection speed alone is not
 evidence of synergy; preservation is a constraint and positive transfer is the
 objective. Checkpoint selection and promotion remain outside this boundary.
+
+## Bounded cooperative CPU round
+
+`run_cpu_cooperative_round` joins already sealed collector directories to the
+existing central learner. The caller supplies an exact native CPU
+`FoundationTrainingHandoffV1` file, a sealed `CpuCooperativeRoundPlanV1`, an
+explicit run-ID-to-directory inventory and an isolated output directory. The plan
+pins the raw source handoff and collector-commit bytes, exact frozen snapshot,
+assignments (including seed/counter/lesson provenance), PPO settings, replay
+window/burn-in and effective batch size. Membership is canonical by run ID;
+admission also orders trajectories by organism ID before forming batches.
+
+All source, manifest, private recovery and replay evidence is admitted before
+learning. Inputs are checked again before updates and publication. The round
+restores locally owned actor/critic optimizers, invokes
+`AdmittedCpuCollectorCohort::train` once, and exports/rebinds the existing handoff
+format for a fresh future cohort. No private lifetime host receives new genetics.
+The round is limited to 64 collectors, 65,536 decisions/windows and 256 MiB of
+aggregate shard bytes; the source handoff is limited to 128 MiB. PPO epochs and
+effective batch size remain explicit plan inputs, with at most 65,536 paired
+optimizer updates and no integer-step overflow.
+
+`cooperative-round.json` is a self-contained result receipt containing the plan,
+source and resulting full optimizer handoffs, central update receipt, loss-row
+count and composite window identities. Its validation checks paired global-step
+deltas, exact trainable ages, frozen weights/moments/ages, stage/config and
+compiler continuity. A KL stop before any update retains the exact source
+handoff and its old policy version; it does not invent a completed new policy.
+
+Publication reuses the collect-only exclusive durable file operations. A retry
+validates and re-synchronizes a completed own-plan stage or canonical result
+without learning again. Torn own-plan stages remain intact, and a fresh attempt
+can recompute from the immutable source. Foreign files, different plans,
+tampered complete stages and contradictory completed results fail closed.
+`read_cpu_cooperative_round` recovers the committed handoffs without needing the
+external collector directories; running/retrying the coordinator still requires
+the exact complete input inventory. The caller must exclusively own the output;
+concurrent coordinator writers are unsupported.
+
+This remains a library operation with synthetic correctness tests. It does not
+dispatch concurrent care episodes, isolate the shared live prior cache, change
+whole-episode seed reservations, provide native cooperative continuation
+admission or promote any result. Those adapters and a trainer-removed mixed-skill
+assessment are still needed for an actual synergy comparison against matched
+serial mixed-curriculum learning.

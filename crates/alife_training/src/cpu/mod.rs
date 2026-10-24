@@ -7,21 +7,25 @@ mod cohort;
 mod collector_output;
 mod collector_shard;
 mod continuation;
+mod cooperative_round;
 mod host;
 mod input;
 mod objective;
 mod organism;
 mod replay;
+mod round_output;
 
 pub use activity::*;
 pub use cohort::*;
 pub use collector_output::*;
 pub use collector_shard::*;
 pub use continuation::*;
+pub use cooperative_round::*;
 pub use host::*;
 pub use input::*;
 pub use objective::*;
 pub use organism::*;
+pub use round_output::{read_cpu_cooperative_round, CPU_COOPERATIVE_ROUND_RESULT_FILE};
 
 use crate::{
     AdamWConfig, FoundationTrainerCheckpoint, StageTrainableMask, TrainingError,
