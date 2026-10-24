@@ -192,8 +192,11 @@ fn inventory(root: &Path, sync: bool) -> Result<BTreeMap<String, CpuCollectorArt
         }
         Ok(())
     }
+    // Use one canonical spelling for traversal, relative keys and containment.
+    // Windows canonical paths can carry a verbatim prefix absent from callers.
+    let root = owned_root(root)?;
     let mut artifacts = BTreeMap::new();
-    visit(root, root, sync, &mut artifacts, 0)?;
+    visit(&root, &root, sync, &mut artifacts, 0)?;
     Ok(artifacts)
 }
 
