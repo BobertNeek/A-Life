@@ -945,4 +945,46 @@ fn two_real_care_rounds_continue_exact_founders_and_run_matched_heldout_assessme
     assert_eq!(assessment["actor_checkpoint_unchanged"], true);
     assert_eq!(assessment["teacher_present"], false);
     assert_eq!(tree(&second), source_before);
+    let serial_output = fixture
+        .fixture
+        .join("ordinary-child-of-cooperative-founder");
+    let child = successful(
+        Command::new(&care_binary)
+            .args([
+                "--previous",
+                text(&second),
+                "--output",
+                text(&serial_output),
+                "--seed-history",
+                text(&history_path),
+                "--seed",
+                &(SOURCE_SEED + 23).to_string(),
+                "--lesson",
+                "eat_reachable_food",
+                "--decisions",
+                "1",
+            ])
+            .env("ALIFE_SLM_PRIOR_BACKEND", "deterministic")
+            .env("ALIFE_SLM_PRIOR", "on")
+            .current_dir(fixture.fixture.join("source-process"))
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(
+        child["initial_actor_optimizer_step"],
+        round2.output_handoff.actor.optimizer_step
+    );
+    assert_eq!(
+        child["initial_value_optimizer_step"],
+        round2.output_handoff.value.optimizer_step
+    );
+    assert_eq!(child["actor_optimizer_updates"], 2);
+    assert_eq!(child["value_optimizer_updates"], 2);
+    successful(
+        Command::new(&care_binary)
+            .args(["--validate-output", text(&serial_output)])
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(tree(&second), source_before);
 }

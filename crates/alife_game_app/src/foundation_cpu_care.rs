@@ -493,10 +493,12 @@ impl CpuEpisodeHooks for CareEpisode {
                 &json!({"schema":1,"backend":"native-cpu","collection_policy_sha256":policy_sha,"rows":rows}),
             )?;
         }
-        write(
-            "care-trace.json",
-            &json!({"schema":1,"backend":"native-cpu","lesson":self.request.lesson,"rows":self.traces}),
-        )?;
+        let trace = json!({"schema":1,"backend":"native-cpu","lesson":self.request.lesson,"rows":self.traces});
+        if self.assessment {
+            admission::write_atomic(&output.join("care-trace.json"), &trace)?;
+        } else {
+            write("care-trace.json", &trace)?;
+        }
         admission::write_atomic(&output.join("care-prior-lives.json"), &private_lives)?;
         if let Some(reservation) = self.reservation.as_ref() {
             // Full history/provenance is retained once outside recursive native

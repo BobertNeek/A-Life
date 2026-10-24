@@ -128,7 +128,10 @@ fn validate_header(receipt: &Value, handoff: &FoundationTrainingHandoffV1) -> Re
         || receipt["founder_seed_base"]
             .as_u64()
             .is_none_or(|seed| seed == 0)
-        || receipt["fixture"].as_bool().is_none()
+        || match receipt.get("fixture") {
+            Some(value) => !value.is_boolean(),
+            None => receipt["mode"] == CPU_COOPERATIVE_FOUNDER_MODE,
+        }
         || receipt["new_asset_digest"] != asset_digest(handoff)?
         || handoff.origin != FoundationTrainingBackendV1::NativeCpu
     {

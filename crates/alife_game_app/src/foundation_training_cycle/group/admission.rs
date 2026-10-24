@@ -139,6 +139,10 @@ fn exclusions(value: &Value, seed: u64, assessment: bool) -> Result<()> {
                 // Assessment may replay explicitly held-out seeds across arms;
                 // all training/consumed/world-seed evidence remains exclusionary.
                 if assessment && key == "assessment_seed" {
+                    value
+                        .as_u64()
+                        .filter(|seed| *seed > 0)
+                        .ok_or("assessment seed declaration must be a positive scalar")?;
                     continue;
                 }
                 if key.ends_with("seed_ranges")
@@ -173,7 +177,8 @@ fn exclusions(value: &Value, seed: u64, assessment: bool) -> Result<()> {
                     }
                 } else if key == "assessment_seeds" {
                     for value in value.as_array().ok_or("invalid assessment seed evidence")? {
-                        if !assessment && value.as_u64().ok_or("invalid assessment seed")? == seed {
+                        let declared = value.as_u64().ok_or("invalid assessment seed")?;
+                        if !assessment && declared == seed {
                             return Err("group seed overlaps a known assessment".into());
                         }
                     }
@@ -488,6 +493,12 @@ mod tests {
             assert!(exclusions(&evidence, 11, true).is_err());
         }
         assert!(exclusions(&json!({"assessment_seeds":"malformed"}), 11, true).is_err());
+        for malformed in [
+            json!({"assessment_seed":{"training_seed_ranges":[[11,11]]}}),
+            json!({"assessment_seeds":[11,{"consumed_seed_ranges":[[11,11]]}]}),
+        ] {
+            assert!(exclusions(&malformed, 11, true).is_err());
+        }
     }
     #[test]
     fn nested_exclusions_and_assessments_cannot_be_bypassed() {

@@ -109,7 +109,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let request: alife_game_app::CpuCareEvaluationRequest = read(&values["--spec"])?;
             alife_game_app::evaluate_cpu_care(request)?
         }
-        _ => return Err("expected plan --spec --output, run --plan or inspect --result".into()),
+        _ => {
+            return Err(
+                "expected documented plan, run, inspect, export-source or evaluate arguments"
+                    .into(),
+            )
+        }
     };
     println!("{}", serde_json::to_string(&summary)?);
     Ok(())

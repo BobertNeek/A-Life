@@ -231,7 +231,10 @@ source independently, use `train_cpu_care_round evaluate --spec ABS/assessment.j
 with `previous`, `output`, `seed_history`, `seed`, `decisions`, `temperature` and
 `lesson`; the seed must be listed in that history's `assessment_seeds`. Completed
 assessment reuse verifies source/history/artifact identity. Unsealed lives are
-retained and refused.
+retained and refused. V1 requires the complete living decision dose and real
+bootstrap; death or an incomplete dose retains its checkpoint/trace and aborts
+the comparison instead of fabricating a completed outcome. Survival-rate and
+variable-duration terminal assessment remain unsupported.
 
 The comparison accepts an existing strict complete operator-attested history; it
 does not manufacture completeness or upgrade unknown evidence. Fresh outputs are
