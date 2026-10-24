@@ -56,7 +56,7 @@ pub(crate) fn trained_care_meal_completed(
         && care_meal_completed(Some(summary), summary.organism, summary.target)
 }
 
-pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
+fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfig, CareEpisode)> {
     if !matches!(
         request.lesson,
         FoundationTeacherLesson::EatHeldFood
@@ -78,7 +78,7 @@ pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
         temperature: request.temperature,
         fixture: request.fixture,
     };
-    let mut episode = CareEpisode {
+    let episode = CareEpisode {
         request,
         scenario: None,
         prior: None,
@@ -93,6 +93,11 @@ pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
         generic_consumed: 0,
         reservation: None,
     };
+    Ok((config, episode))
+}
+
+pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
+    let (config, mut episode) = prepare_care_episode(request)?;
     let result = run_cpu_continuation(config, &mut episode);
     if let Some(reservation) = episode.reservation.as_mut() {
         match &result {
@@ -439,5 +444,108 @@ impl CpuEpisodeHooks for CareEpisode {
             metadata,
             artifacts: artifacts.into_iter().map(str::to_owned).collect(),
         })
+    }
+}
+
+#[cfg(test)]
+mod collect_only_tests {
+    use super::*;
+    #[test]
+    fn care_collection_keeps_private_learning_and_seals_without_offline_updates() {
+        // Give the fixture its own environment; never initialize a live prior
+        // provider or race another test's provider/cache configuration.
+        const CHILD: &str = "ALIFE_TEST_COLLECT_ONLY_CHILD";
+        if std::env::var(CHILD).as_deref() != Ok("1") {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "foundation_cpu_care::collect_only_tests::care_collection_keeps_private_learning_and_seals_without_offline_updates", "--nocapture"])
+                .env(CHILD, "1").env("ALIFE_SLM_PRIOR", "on")
+                .env("ALIFE_SLM_PRIOR_BACKEND", "deterministic")
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+            return;
+        }
+        let root = std::env::temp_dir().join(format!(
+            "alife-care-collect-only-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let seed = 0x93_41;
+        let (config, mut episode) = prepare_care_episode(CpuCareRequest {
+            previous: None,
+            output: root.clone(),
+            seed,
+            decisions: 3,
+            temperature: 1.,
+            lesson: FoundationTeacherLesson::EatHeldFood,
+            seed_history: None,
+            known_exclusions: false,
+            record_diagnostic_replay: true,
+            fixture: true,
+        })
+        .unwrap();
+        let collected = collect_cpu_episode(config, &mut episode).unwrap();
+        assert!(episode.reservation.is_none());
+        assert_eq!(collected.actor_checkpoint().optimizer_step, 0);
+        assert_eq!(collected.value_checkpoint().optimizer_step, 0);
+        let checkpoint = collected.host_checkpoint().unwrap();
+        assert_eq!(checkpoint.sampling_counter, 4);
+        assert_eq!(
+            collected.decisions().values().map(Vec::len).sum::<usize>(),
+            4
+        );
+        assert!(checkpoint.residents[0]
+            .neural
+            .eligibility
+            .iter()
+            .any(|v| *v != 0.));
+        let prior: Value =
+            serde_json::from_slice(&std::fs::read(root.join("care-prior-lives.json")).unwrap())
+                .unwrap();
+        assert!(prior["provider_identity"].as_str().is_some());
+        assert_eq!(prior["lives"].as_object().unwrap().len(), 1);
+        let lesson = collected.episode_metadata().unwrap()["lesson"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        collected
+            .seal(alife_training::cpu::CpuCollectorAssignmentV1 {
+                collector_run_id: "synthetic-care".into(),
+                backend: alife_training::FoundationTrainingBackendV1::NativeCpu,
+                producer_revision: "synthetic-collect-only-fixture".into(),
+                world_seed: seed,
+                sampling_seed: seed as u32,
+                sampling_counter_start: 0,
+                sampling_counter_end: checkpoint.sampling_counter,
+                lesson,
+                episode_config_sha256: [42; 32],
+            })
+            .unwrap();
+        let shard = read_cpu_collector_output(&root).unwrap();
+        assert_eq!(shard.trajectories.len(), 1);
+        assert_eq!(shard.trajectories[0].decisions.len(), 4);
+        let after: CpuCanonicalCheckpoint =
+            serde_json::from_slice(&std::fs::read(root.join("collector-checkpoint.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            serde_json::to_vec(&checkpoint).unwrap(),
+            serde_json::to_vec(&after).unwrap()
+        );
+        for name in [
+            "cpu-cycle.json",
+            "training-handoff.json",
+            "trained.alife-foundation",
+        ] {
+            assert!(!root.join(name).exists());
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

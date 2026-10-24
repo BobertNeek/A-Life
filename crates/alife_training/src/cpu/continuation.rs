@@ -163,10 +163,293 @@ fn fixture_asset(seed: u64) -> Result<FoundationWeightAsset> {
         TrainingStageManifest::new(1, 1, 1),
     )?)
 }
-pub fn run_cpu_continuation(
+/// Completed native collection, detached from offline actor/critic learning.
+/// Fields stay private: callers can inspect checkpoints or consume a durable
+/// shard seal; serial learning alone takes ownership of the optimizer objects.
+pub struct CpuCollectedEpisode {
+    args: CpuContinuationConfig,
+    asset: FoundationWeightAsset,
+    founder_seed: u64,
+    source_version: u64,
+    source_bytes: BTreeMap<String, Vec<u8>>,
+    source_hashes: BTreeMap<String, String>,
+    fixture: bool,
+    lineage: Option<crate::native_receipt::Lineage>,
+    parent_ref: Option<String>,
+    seed_admission: Value,
+    inputs: PhenotypeCompilerInputs,
+    trainer: CpuFoundationTrainer,
+    value: CpuValueHead,
+    host: CpuCanonicalHost,
+    before_actor: FoundationTrainerCheckpoint,
+    before_value: PpoValueHeadCheckpoint,
+    collection_start_tick: u64,
+    collection_seconds: f64,
+    all_started: Instant,
+    valid_decisions: usize,
+    consolidations: usize,
+    sleeping: usize,
+    decision_budget: Option<usize>,
+    version: u64,
+    rows: BTreeMap<u64, Vec<CpuCollectedDecision>>,
+    episode_receipt: Option<CpuEpisodeReceipt>,
+    episode_hashes: BTreeMap<String, String>,
+}
+impl CpuCollectedEpisode {
+    pub fn actor_checkpoint(&self) -> FoundationTrainerCheckpoint {
+        self.trainer.checkpoint()
+    }
+    pub fn value_checkpoint(&self) -> PpoValueHeadCheckpoint {
+        self.value.checkpoint()
+    }
+    pub fn host_checkpoint(&self) -> Result<CpuCanonicalCheckpoint> {
+        Ok(self.host.checkpoint(&self.trainer)?)
+    }
+    pub fn compiler_inputs(&self) -> &PhenotypeCompilerInputs {
+        &self.inputs
+    }
+    pub fn policy_version(&self) -> u64 {
+        self.version
+    }
+    pub fn decisions(&self) -> &BTreeMap<u64, Vec<CpuCollectedDecision>> {
+        &self.rows
+    }
+    pub fn output(&self) -> &Path {
+        &self.args.output
+    }
+    pub fn config(&self) -> PpoConfig {
+        PpoConfig {
+            temperature: self.args.temperature,
+            ..Default::default()
+        }
+    }
+    pub fn episode_metadata(&self) -> Option<&Value> {
+        self.episode_receipt.as_ref().map(|r| &r.metadata)
+    }
+    fn collection_metadata(&self) -> Value {
+        json!({"schema_version":1,"mode":"native_cpu_collect_only","backend":"native-cpu",
+            "source_policy_version":self.source_version,"collection_policy_version":self.version,
+            "offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0,
+            "fixture":self.fixture,"world_seed":self.args.seed,
+            "seed_admission":self.seed_admission,"episode":self.episode_metadata(),
+            "completion_authority":"collector-commit.json; phase.txt is informational",
+            "candidate_acceptance":"none; collection is not a trained continuation",
+            "concurrency":"no concurrent reservation or shared live prior cache adapter"})
+    }
+    fn complete_rows(&self) -> Result<usize> {
+        self.rows.iter().try_fold(0, |total, (id, rows)| {
+            let record = self
+                .host
+                .world()
+                .organism_registry()
+                .get(OrganismId(*id))
+                .ok_or("collector lost final organism record")?;
+            Ok(total
+                + rows
+                    .len()
+                    .saturating_sub(usize::from(record.lifecycle().is_alive())))
+        })
+    }
+    fn verify_frozen_and_source(&self) -> Result<()> {
+        if self.trainer.checkpoint() != self.before_actor
+            || self.value.checkpoint() != self.before_value
+        {
+            return Err("offline actor/critic state changed during collection".into());
+        }
+        if let Some(previous) = &self.args.previous {
+            for (name, expected) in &self.source_hashes {
+                if hash(&fs::read(previous.join(name))?) != *expected {
+                    return Err("source changed during CPU collection".into());
+                }
+            }
+            if let Some(lineage) = &self.lineage {
+                lineage.verify_at(previous)?;
+            }
+        }
+        Ok(())
+    }
+    /// Publish only collection evidence. This does not create a trained source,
+    /// advance a policy/optimizer, or accept/promote a candidate.
+    pub fn seal(self, assignment: CpuCollectorAssignmentV1) -> Result<CpuCollectorOutputCommit> {
+        self.verify_frozen_and_source()?;
+        let checkpoint = self.host_checkpoint()?;
+        if assignment.world_seed != self.args.seed
+            || assignment.backend != FoundationTrainingBackendV1::NativeCpu
+            || assignment.sampling_seed != checkpoint.sampling_seed
+            || assignment.sampling_counter_start != 0
+            || assignment.sampling_counter_end != checkpoint.sampling_counter
+            || self
+                .episode_metadata()
+                .and_then(|m| m["lesson"].as_str())
+                .is_some_and(|lesson| lesson != assignment.lesson)
+        {
+            return Err("collector assignment differs from actual native collection".into());
+        }
+        for (name, expected) in [
+            (
+                "collection-policy.alife-foundation",
+                self.asset.encode_canonical()?,
+            ),
+            (
+                "collection-compiler-inputs.json",
+                serde_json::to_vec(&self.inputs)?,
+            ),
+            (
+                "collection-actor-checkpoint.json",
+                serde_json::to_vec(&self.before_actor)?,
+            ),
+            (
+                "initial-value-checkpoint.json",
+                serde_json::to_vec(&self.before_value)?,
+            ),
+            (
+                "collector-checkpoint.json",
+                serde_json::to_vec(&checkpoint)?,
+            ),
+            (
+                "collection-metadata.json",
+                serde_json::to_vec(&self.collection_metadata())?,
+            ),
+        ] {
+            if fs::read(self.args.output.join(name))? != expected {
+                return Err("collector recovery artifact changed before seal".into());
+            }
+        }
+        for (name, expected) in &self.episode_hashes {
+            if hash(&fs::read(self.args.output.join(name))?) != *expected {
+                return Err("episode artifact changed before seal".into());
+            }
+        }
+        for (name, expected) in &self.source_bytes {
+            if fs::read(self.args.output.join("source-native").join(name))? != *expected {
+                return Err("retained source copy changed before seal".into());
+            }
+        }
+        let snapshot = CpuCollectionSnapshotV1::capture(
+            &self.trainer,
+            &self.value,
+            &self.inputs,
+            self.config(),
+            self.version,
+        )?;
+        let mut trajectories = Vec::new();
+        for (id, decisions) in self.rows {
+            let record = self
+                .host
+                .world()
+                .organism_registry()
+                .get(OrganismId(id))
+                .ok_or("collector lost final organism record")?
+                .clone();
+            trajectories.push(CpuCollectorTrajectoryV1 {
+                final_record: record,
+                decisions,
+            });
+        }
+        let shard = CpuCollectorShardV1::seal(snapshot, assignment, trajectories)?;
+        let commit = write_cpu_collector_output(&self.args.output, &shard)?;
+        // The durable commit is authoritative even if an informational update
+        // cannot be written after publication.
+        let _ = fs::write(self.args.output.join("phase.txt"), "sealed-cpu-collector");
+        Ok(commit)
+    }
+    fn training_windows(&self) -> Result<Vec<CpuResidualTrainingWindow>> {
+        let config = self.config();
+        let mut windows = Vec::new();
+        for (id, trajectory) in &self.rows {
+            let record = self
+                .host
+                .world()
+                .organism_registry()
+                .get(OrganismId(*id))
+                .ok_or("collector lost terminal organism record")?;
+            let terminal = (!record.lifecycle().is_alive()).then_some(record);
+            if terminal.is_some() || trajectory.len() >= 2 {
+                windows.extend(cpu_training_windows(
+                    trajectory,
+                    terminal,
+                    &self.trainer,
+                    &self.value,
+                    record.phenotype(),
+                    self.version,
+                    config,
+                    32,
+                    8,
+                )?);
+            }
+        }
+        if windows.is_empty() {
+            return Err(
+            "no trainable complete transitions; retained source and collected prefix remain intact"
+                .into(),
+        );
+        }
+        Ok(windows)
+    }
+    fn finish_episode(
+        &mut self,
+        episode: &mut impl CpuEpisodeHooks,
+        training_rows: usize,
+    ) -> Result<()> {
+        let episode_receipt = episode.finish_collection(
+            &self.host,
+            &self.trainer,
+            &self.rows,
+            training_rows,
+            &self.args.output,
+        )?;
+        let mut episode_hashes = BTreeMap::new();
+        for name in &episode_receipt.artifacts {
+            if Path::new(name).components().count() != 1
+                || !matches!(
+                    Path::new(name).components().next(),
+                    Some(std::path::Component::Normal(_))
+                )
+            {
+                return Err("episode artifact must be a direct output file".into());
+            }
+            let path = self.args.output.join(name);
+            if !fs::symlink_metadata(&path)?.is_file() {
+                return Err("episode artifact must be a regular file".into());
+            }
+            episode_hashes.insert(name.clone(), hash(&fs::read(path)?));
+        }
+        self.episode_receipt = Some(episode_receipt);
+        self.episode_hashes = episode_hashes;
+        self.verify_frozen_and_source()?;
+        Ok(())
+    }
+}
+
+/// Collect under an explicitly supplied native source (or development fixture).
+/// Waking acquired learning remains native and private; no offline update runs.
+/// Hooks keep their existing reservation/prior behavior. This API does not supply
+/// a concurrent reservation adapter or isolate the shared live prior cache.
+pub fn collect_cpu_episode(
+    args: CpuContinuationConfig,
+    episode: &mut impl CpuEpisodeHooks,
+) -> Result<CpuCollectedEpisode> {
+    let mut collected = collect_cpu_episode_inner(args, episode)?;
+    let rows = collected.complete_rows()?;
+    if rows == 0 {
+        return Err("no complete collection transitions; retained recovery remains intact".into());
+    }
+    collected.finish_episode(episode, rows)?;
+    write_json(
+        collected.args.output.join("collection-metadata.json"),
+        &collected.collection_metadata(),
+    )?;
+    fs::write(
+        collected.args.output.join("phase.txt"),
+        "collected-cpu-awaiting-seal",
+    )?;
+    Ok(collected)
+}
+
+fn collect_cpu_episode_inner(
     mut args: CpuContinuationConfig,
     episode: &mut impl CpuEpisodeHooks,
-) -> Result<Value> {
+) -> Result<CpuCollectedEpisode> {
     args.previous = args.previous.map(|p| p.canonicalize()).transpose()?;
     args.output =
         resolve_isolated_training_output(&args.output, args.previous.iter().map(PathBuf::as_path))?;
@@ -423,8 +706,7 @@ pub fn run_cpu_continuation(
     };
     let seed_admission = episode.admit(&args, source_receipt.as_ref(), &source_hashes)?;
     let (game, p, inputs) = compile_game(args.seed, founder_seed, &asset)?;
-    let profile = p.sensor_profile();
-    let mut trainer = if let Some(actor) = actor {
+    let trainer = if let Some(actor) = actor {
         if actor
             .weights
             .iter()
@@ -441,13 +723,12 @@ pub fn run_cpu_continuation(
         )?;
         CpuFoundationTrainer::new(p, asset.clone(), mask, AdamWConfig::default())?
     };
-    let mut value =
-        CpuValueHead::from_checkpoint(value.unwrap_or_else(|| PpoValueHeadCheckpoint {
-            feature_count: trainer.phenotype().neuron_count(),
-            optimizer_step: 0,
-            parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
-            last_updated_policy_version: None,
-        }))?;
+    let value = CpuValueHead::from_checkpoint(value.unwrap_or_else(|| PpoValueHeadCheckpoint {
+        feature_count: trainer.phenotype().neuron_count(),
+        optimizer_step: 0,
+        parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
+        last_updated_policy_version: None,
+    }))?;
     if value.checkpoint().feature_count != trainer.phenotype().neuron_count() {
         return Err("native critic width differs; resizing is not a continuation".into());
     }
@@ -504,36 +785,47 @@ pub fn run_cpu_continuation(
     let mut sleeping = 0;
     let world_tick_budget = decision_budget.map_or(args.ticks, |n| n * 8 + 4096);
     let mut captured = 0;
-    for _ in 0..world_tick_budget {
-        episode.before_step(&mut host, &trainer)?;
-        let step = host.step_with_preparation(&trainer, args.temperature, |draft, sequence| {
-            episode.prepare_draft(draft, sequence)
-        })?;
-        episode.after_step(&host, &trainer, &step)?;
-        captured += step.decisions.len();
-        consolidations += step.sleep_consolidations;
-        sleeping += step.sleeping_organisms;
-        for row in step.decisions {
-            rows.entry(row.organism_id.raw()).or_default().push(row);
+    let collection_result = (|| -> Result<()> {
+        for _ in 0..world_tick_budget {
+            episode.before_step(&mut host, &trainer)?;
+            let step =
+                host.step_with_preparation(&trainer, args.temperature, |draft, sequence| {
+                    episode.prepare_draft(draft, sequence)
+                })?;
+            episode.after_step(&host, &trainer, &step)?;
+            captured += step.decisions.len();
+            consolidations += step.sleep_consolidations;
+            sleeping += step.sleeping_organisms;
+            for row in step.decisions {
+                rows.entry(row.organism_id.raw()).or_default().push(row);
+            }
+            if decision_budget.is_some_and(|n| captured > n) {
+                break;
+            }
+            if host
+                .world()
+                .organism_registry()
+                .iter()
+                .all(|r| !r.lifecycle().is_alive())
+            {
+                break;
+            }
         }
-        if decision_budget.is_some_and(|n| captured > n) {
-            break;
-        }
-        if host
-            .world()
-            .organism_registry()
-            .iter()
-            .all(|r| !r.lifecycle().is_alive())
-        {
-            break;
-        }
-    }
+        Ok(())
+    })();
     let collection_seconds = collection_started.elapsed().as_secs_f64();
     let valid_decisions = rows.values().map(Vec::len).sum::<usize>();
-    write_json(
-        args.output.join("collector-checkpoint.json"),
-        &host.checkpoint(&trainer)?,
-    )?;
+    // A hook failure must not discard the last sealed private native state.
+    // An unsealed output is retained for explicit inspection/reconciliation;
+    // it is never a reusable shard or a trained continuation.
+    let recovery_result = host
+        .checkpoint(&trainer)
+        .map_err(Box::<dyn Error>::from)
+        .and_then(|checkpoint| {
+            write_json(args.output.join("collector-checkpoint.json"), &checkpoint)
+        });
+    collection_result?;
+    recovery_result?;
     if let Some(n) = decision_budget {
         if rows.len() != 1
             || valid_decisions != n + 1
@@ -546,60 +838,81 @@ pub fn run_cpu_continuation(
             return Err("care episode did not capture its complete decision dose and real bootstrap; retained source and collected prefix remain intact".into());
         }
     }
-    let config = PpoConfig {
-        temperature: args.temperature,
-        ..Default::default()
-    };
-    let mut windows = Vec::new();
-    for (id, trajectory) in &rows {
-        let record = host
-            .world()
-            .organism_registry()
-            .get(OrganismId(*id))
-            .ok_or("collector lost terminal organism record")?;
-        let terminal = (!record.lifecycle().is_alive()).then_some(record);
-        if terminal.is_some() || trajectory.len() >= 2 {
-            windows.extend(cpu_training_windows(
-                trajectory,
-                terminal,
-                &trainer,
-                &value,
-                record.phenotype(),
-                version,
-                config,
-                32,
-                8,
-            )?);
-        }
-    }
-    if windows.is_empty() {
-        return Err(
-            "no trainable complete transitions; retained source and collected prefix remain intact"
-                .into(),
-        );
-    }
+    Ok(CpuCollectedEpisode {
+        args,
+        asset,
+        founder_seed,
+        source_version,
+        source_bytes,
+        source_hashes,
+        fixture,
+        lineage,
+        parent_ref,
+        seed_admission,
+        inputs,
+        trainer,
+        value,
+        host,
+        before_actor,
+        before_value,
+        collection_start_tick,
+        collection_seconds,
+        all_started,
+        valid_decisions,
+        consolidations,
+        sleeping,
+        decision_budget,
+        version,
+        rows,
+        episode_receipt: None,
+        episode_hashes: BTreeMap::new(),
+    })
+}
+
+pub fn run_cpu_continuation(
+    args: CpuContinuationConfig,
+    episode: &mut impl CpuEpisodeHooks,
+) -> Result<Value> {
+    let mut collected = collect_cpu_episode_inner(args, episode)?;
+    let config = collected.config();
+    let windows = collected.training_windows()?;
     let training_rows = windows.iter().map(|w| w.actor.batch.len()).sum::<usize>();
-    if decision_budget.is_some_and(|n| training_rows != n) {
+    if collected
+        .decision_budget
+        .is_some_and(|n| training_rows != n)
+    {
         return Err("care replay loss-row dose differs from requested decisions".into());
     }
-    let episode_receipt =
-        episode.finish_collection(&host, &trainer, &rows, training_rows, &args.output)?;
-    let mut episode_hashes = BTreeMap::new();
-    for name in &episode_receipt.artifacts {
-        if Path::new(name).components().count() != 1
-            || !matches!(
-                Path::new(name).components().next(),
-                Some(std::path::Component::Normal(_))
-            )
-        {
-            return Err("episode artifact must be a direct output file".into());
-        }
-        let path = args.output.join(name);
-        if !fs::symlink_metadata(&path)?.is_file() {
-            return Err("episode artifact must be a regular file".into());
-        }
-        episode_hashes.insert(name.clone(), hash(&fs::read(path)?));
-    }
+    collected.finish_episode(episode, training_rows)?;
+    let CpuCollectedEpisode {
+        args,
+        asset,
+        founder_seed,
+        source_version,
+        source_hashes,
+        fixture,
+        lineage,
+        parent_ref,
+        seed_admission,
+        mut trainer,
+        mut value,
+        host,
+        before_actor,
+        before_value,
+        collection_start_tick,
+        collection_seconds,
+        all_started,
+        valid_decisions,
+        consolidations,
+        sleeping,
+        decision_budget,
+        version,
+        episode_receipt,
+        episode_hashes,
+        ..
+    } = collected;
+    let episode_receipt = episode_receipt.ok_or("collection finalization missing")?;
+    let profile = trainer.phenotype().sensor_profile();
     let update_started = Instant::now();
     let update = train_cpu_residual_cohort(
         &mut trainer,

@@ -154,6 +154,18 @@ impl CpuCollectorShardV1 {
         shard.payload_sha256 = shard.digest()?;
         Ok(shard)
     }
+    /// Check transport integrity only. Learner admission additionally validates
+    /// the actual frozen snapshot, approved inventory and every native replay.
+    pub fn validate_seal(&self) -> Result<(), TrainingError> {
+        self.assignment.validate()?;
+        if self.schema_version != 1
+            || self.trajectories.is_empty()
+            || self.payload_sha256 != self.digest()?
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    }
     fn digest(&self) -> Result<[u8; 32], TrainingError> {
         digest(
             b"ALIFE-CPU-COLLECTOR-SHARD-V1",
@@ -250,12 +262,10 @@ pub fn admit_cpu_collector_shards(
         window_trajectories: Vec::new(),
     };
     for shard in shards {
-        if shard.schema_version != 1
-            || shard.snapshot != snapshot
-            || shard.payload_sha256 != shard.digest()?
+        shard.validate_seal()?;
+        if shard.snapshot != snapshot
             || !assignments.contains(&shard.assignment)
             || !seen.insert(shard.assignment.collector_run_id.clone())
-            || shard.trajectories.is_empty()
         {
             return Err(invalid());
         }
