@@ -350,6 +350,17 @@ pub(super) fn scale(appearance: CreatureAppearanceGenome) -> Vec3 {
     Vec3::new(0.60 + mass * 0.14, 0.67 + mass * 0.08, 0.62 + mass * 0.10)
 }
 
+pub(super) fn hand_scale(appearance: CreatureAppearanceGenome) -> Vec3 {
+    // Read the saved arms donor without changing genes or loading donor meshes.
+    // Local Y follows the hand bone; X/Z change the rounded palm profile.
+    match appearance.part_sources.arms.0 {
+        3 | 5 | 11 => Vec3::new(0.95, 0.94, 0.98), // Compact Ettin families.
+        0 | 7 | 9 | 10 => Vec3::new(1.07, 1.02, 1.06), // Broad Grendel families.
+        // Norn families 1, 2, 4, 6, 8 and unknown future families stay neutral.
+        _ => Vec3::ONE,
+    }
+}
+
 fn clip(animation: CreatureAnimationState) -> usize {
     match animation {
         CreatureAnimationState::Sleeping => 2,
@@ -410,6 +421,7 @@ fn ready(
     // Keep it, the eyes, mouth and tongue on their original shared materials.
     // Cream markings inside the coat's COLOR_0 still receive its existing tint.
     let coat_materials = COAT_MATERIAL_NAMES.map(|name| gltf.named_materials[name].id());
+    let inherited_hands = hand_scale(visual.appearance);
     let mut mesh_count = 0;
     for entity in children.iter_descendants(event.entity) {
         if let Ok(name) = names.get(entity) {
@@ -435,6 +447,7 @@ fn ready(
                 "ear.L" | "ear.R" => Some(Vec3::new(1.0, 0.85 + ear * 0.30, 1.0)),
                 "head" => Some(Vec3::new(0.94 + ear * 0.12, 1.0, 1.0)),
                 "tail.00" => Some(Vec3::splat(0.90 + tail * 0.20)),
+                "hand.L" | "hand.R" if inherited_hands != Vec3::ONE => Some(inherited_hands),
                 _ => None,
             };
             if let Some(scale) = scale {
@@ -630,6 +643,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn saved_arm_families_project_bounded_paw_profiles_without_changing_genes() {
+        for (families, expected) in [
+            (&[1, 2, 4, 6, 8][..], Vec3::ONE),
+            (&[3, 5, 11][..], Vec3::new(0.95, 0.94, 0.98)),
+            (&[0, 7, 9, 10][..], Vec3::new(1.07, 1.02, 1.06)),
+            (&[12, 512, u16::MAX - 1][..], Vec3::ONE),
+        ] {
+            for &family in families {
+                let mut appearance = CreatureAppearanceGenome::default();
+                appearance.part_sources.arms = alife_world::CreaturePartFamilyId(family);
+                let before = serde_json::to_vec(&appearance).unwrap();
+                assert_eq!(hand_scale(appearance), expected);
+                assert!(expected
+                    .to_array()
+                    .into_iter()
+                    .all(|axis| (0.94..=1.07).contains(&axis)));
+
+                let mut other_traits = appearance;
+                other_traits.part_sources.head = alife_world::CreaturePartFamilyId(11);
+                other_traits.part_sources.tail = alife_world::CreaturePartFamilyId(0);
+                other_traits.palette_family = (other_traits.palette_family + 1) % 16;
+                other_traits.body_mass_trait = (other_traits.body_mass_trait + 1) % 16;
+                assert_eq!(hand_scale(other_traits), expected);
+                assert_eq!(serde_json::to_vec(&appearance).unwrap(), before);
+            }
+        }
+    }
+
+    #[test]
     fn all_gene_buckets_reuse_a_bounded_material_pool_without_changing_sources() {
         let mut materials = Assets::<StandardMaterial>::default();
         let original = StandardMaterial {
@@ -692,6 +734,43 @@ mod tests {
         ] {
             assert!(names.iter().any(|material| material["name"] == name));
             assert!(!COAT_MATERIAL_NAMES.contains(&name));
+        }
+    }
+
+    #[test]
+    fn shipping_clips_resample_hand_and_other_inherited_bone_scales() {
+        let glb = include_bytes!("../../assets/creatures/hearthling/hearthling.glb");
+        let json_bytes = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        let gltf: serde_json::Value = serde_json::from_slice(&glb[20..20 + json_bytes]).unwrap();
+        for clip_name in [
+            "Hearthling_CuriousIdle",
+            "Hearthling_Walk",
+            "Hearthling_Sleep",
+        ] {
+            let animation = gltf["animations"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|animation| animation["name"] == clip_name)
+                .unwrap();
+            let scaled_bones = animation["channels"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|channel| channel["target"]["path"] == "scale")
+                .map(|channel| {
+                    let node = channel["target"]["node"].as_u64().unwrap() as usize;
+                    gltf["nodes"][node]["name"].as_str().unwrap()
+                })
+                .collect::<BTreeSet<_>>();
+            // A missing track would let the post-animation multiplier accumulate,
+            // including while a paused player resamples its current pose.
+            for bone in ["head", "ear.L", "ear.R", "tail.00", "hand.L", "hand.R"] {
+                assert!(
+                    scaled_bones.contains(bone),
+                    "{clip_name} must resample {bone} scale"
+                );
+            }
         }
     }
 

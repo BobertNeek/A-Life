@@ -70,14 +70,14 @@
     {
       "asset_id": "approved-hearthling",
       "author": "A-Life approved Blender art",
-      "digest": "fnv1a64:affe2be312e23f17",
+      "digest": "fnv1a64:f0ddeb0334d0b8cf",
       "external": false,
       "final_art": false,
       "generated": true,
       "generator": {
         "config_path": "scripts/export_hearthling.py",
-        "date": "2026-09-15",
-        "seed": "bipedal-fox-reference-hearthling-v9-rounded-nose",
+        "date": "2026-10-24",
+        "seed": "bipedal-fox-hearthling-v10-selected-09-16-19-rounded-paws",
         "tool": "Blender-5.2.1-LTS"
       },
       "license": "A-Life-Generated-Source",
@@ -85,7 +85,7 @@
       "local_path": "crates/alife_game_app/assets/creatures/hearthling/hearthling.glb",
       "placeholder": false,
       "replacement_policy": "edit-blender-source-and-refresh-manifest",
-      "size_bytes": 3089688,
+      "size_bytes": 3067564,
       "source": "generated:approved-blender-model",
       "usage_category": "creatures"
     },
