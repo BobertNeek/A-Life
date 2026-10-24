@@ -4,6 +4,7 @@
 
 mod activity;
 mod cohort;
+mod collector_output;
 mod collector_shard;
 mod continuation;
 mod host;
@@ -14,6 +15,7 @@ mod replay;
 
 pub use activity::*;
 pub use cohort::*;
+pub use collector_output::*;
 pub use collector_shard::*;
 pub use continuation::*;
 pub use host::*;

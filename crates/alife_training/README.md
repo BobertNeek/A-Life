@@ -55,6 +55,36 @@ continuation CLIs still use their serial collection path. Older care diagnostic
 rows remain readable with an absent sampling counter; cooperative admission
 rejects that absence instead of fabricating sampling evidence.
 
+## Collect-only extraction
+
+`collect_cpu_episode(config, &mut hooks)` now shares native source admission and
+collection with `run_cpu_continuation`. The source is an explicit `previous`
+directory or a development fixture. The returned `CpuCollectedEpisode` exposes
+read-only actor, critic, compiler and private host checkpoints. No offline actor
+or critic update runs; ordinary waking plasticity, memory, biology and sleep
+remain active in the private host. Serial continuation still prepares its replay
+windows, finishes the same episode hooks, and invokes its existing learner.
+
+Consume `collected.seal(approved_assignment)` to publish the existing
+`CpuCollectorShardV1` plus `collector-commit.json`. Publication synchronizes and
+pins the private checkpoint, collection policy, compiler inputs, frozen optimizer
+checkpoints, source ancestry and hook-produced artifacts before acknowledging the
+commit. `read_cpu_collector_output(directory)` validates the exact inventory and
+every digest before returning a shard for ordinary learner admission. Pending,
+torn or changed outputs fail closed; files remain available for explicit
+inspection/reconciliation. `phase.txt` is informational. The separate
+`collection-metadata.json` records zero offline updates; care hook fields named
+`trained_*` describe rows eligible for subsequent loss, not a completed update.
+
+This is a library boundary, not a concurrent care CLI. Existing `CareEpisode`
+hooks retain their serial whole-episode seed reservation and mutable live prior
+cache behavior. A future adapter must address both before concurrent dispatch.
+Collection outputs contain no trained continuation receipt and cannot become a
+native `previous` source or advance an accepted lineage. Automatic collection
+resume and cooperative continuation/promotion remain unsupported. On hook
+failure, the last valid native host checkpoint is retained when checkpoint
+publication succeeds; an incomplete collection never gets a usable shard seal.
+
 The next experiment can use two complementary lesson assignments plus a mixed
 composition assignment under this same snapshot, retain their private archives,
 and perform one central update before fresh-cohort rebind. Compare subsequent
