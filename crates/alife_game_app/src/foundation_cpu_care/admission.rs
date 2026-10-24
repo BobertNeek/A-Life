@@ -1,8 +1,16 @@
 //! Dedicated CPU lane: exact history, durable exclusions and terminal attempts.
 use super::{CpuCareRequest, Result};
-use crate::foundation_training_cycle::{admit_native_cpu_care_seed, read_native_cpu_care_evidence};
+use crate::foundation_training_cycle::{
+    admit_native_cpu_care_collection_seed, admit_native_cpu_care_seed,
+    read_native_cpu_care_evidence,
+};
 use alife_training::{
-    cpu::CpuContinuationConfig, FoundationTrainerCheckpoint, PpoValueHeadCheckpoint,
+    cpu::{
+        admit_cpu_collector_shards, read_cpu_collector_output, CpuCanonicalCheckpoint,
+        CpuCanonicalHost, CpuCollectionSnapshotV1, CpuCollectorAssignmentV1, CpuContinuationConfig,
+        CpuFoundationTrainer, CpuValueHead, CPU_COLLECTOR_COMMIT_FILE,
+    },
+    FoundationTrainerCheckpoint, FoundationTrainingBackendV1, PpoConfig, PpoValueHeadCheckpoint,
 };
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -12,13 +20,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const LEDGER: &str = ".grab-food-seed-reservations.json";
+pub(super) const LEDGER: &str = ".grab-food-seed-reservations.json";
 const LOCK: &str = ".eat-held-food-owner.lock";
 
 fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-fn write_atomic(path: &Path, value: &Value) -> Result<()> {
+pub(super) fn write_atomic(path: &Path, value: &Value) -> Result<()> {
     let temporary = path.with_extension(format!(
         "{}-{}.pending",
         std::process::id(),
@@ -82,7 +90,7 @@ fn read_ledger(path: &Path) -> Result<Value> {
         if !seeds.insert(seed)
             || !outputs.insert(output)
             || !Path::new(output).is_absolute()
-            || !matches!(status, "pending" | "accepted" | "failed")
+            || !matches!(status, "pending" | "accepted" | "failed" | "collected")
             || status == "pending" && i + 1 != attempts.len()
             || latest.is_some_and(|pins| pins != &attempt["source_sha256"])
             || !ledger["training_seed_ranges"]
@@ -90,6 +98,17 @@ fn read_ledger(path: &Path) -> Result<Value> {
                 .is_some_and(|ranges| ranges.iter().any(|r| r == &json!([seed, seed])))
         {
             return Err("CPU attempt lineage/status/exclusion changed".into());
+        }
+        if attempt.get("collection").is_some() {
+            collection_binding(attempt)?;
+            if status == "accepted" {
+                return Err("CPU collection cannot advance the accepted founder".into());
+            }
+        } else if status == "collected" {
+            return Err("CPU collected attempt lacks its reserved assignment and plan".into());
+        }
+        if status == "collected" && !valid_sha(&attempt["result"]["collector_commit_sha256"]) {
+            return Err("CPU collected attempt lacks its exact collector commit pin".into());
         }
         latest = Some(if status == "accepted" {
             &attempt["native_output_sha256"]
@@ -118,7 +137,56 @@ pub(super) struct CareSeedReservation {
 }
 
 impl CareSeedReservation {
+    pub fn reserve_collection(
+        config: &CpuContinuationConfig,
+        request: &CpuCareRequest,
+        assignment: &CpuCollectorAssignmentV1,
+        plan_sha256: [u8; 32],
+    ) -> Result<Self> {
+        if config.fixture
+            || request.fixture
+            || config.seed != request.seed
+            || config.ticks
+                != request
+                    .decisions
+                    .checked_add(1)
+                    .ok_or("care dose overflow")?
+            || config.temperature.to_bits() != request.temperature.to_bits()
+        {
+            return Err("CPU collection reservation differs from its care request".into());
+        }
+        let binding = json!({"assignment":assignment,"plan_sha256":plan_sha256,
+            "temperature":config.temperature,"provenance_sha256":"0".repeat(64)});
+        collection_binding(&json!({"seed":config.seed,"lesson":request.lesson,
+            "decisions":request.decisions,"collection":binding}))?;
+        let reservation = Self::reserve_inner(config, request, true)?;
+        let mut ledger = read_ledger(&reservation.ledger_path)?;
+        let attempt = ledger["cpu_care_attempts"]
+            .as_array_mut()
+            .and_then(|attempts| attempts.last_mut())
+            .ok_or("CPU collection attempt missing")?;
+        if attempt["status"] != "pending"
+            || attempt["seed"] != config.seed
+            || attempt["output"] != json!(config.output)
+        {
+            return Err("CPU collection attempt changed before binding".into());
+        }
+        attempt["collection"] = binding;
+        attempt["collection"]["provenance_sha256"] =
+            json!(sha(&serde_json::to_vec(&reservation.provenance)?));
+        write_atomic(&reservation.ledger_path, &ledger)?;
+        Ok(reservation)
+    }
+
     pub fn reserve(config: &CpuContinuationConfig, request: &CpuCareRequest) -> Result<Self> {
+        Self::reserve_inner(config, request, false)
+    }
+
+    fn reserve_inner(
+        config: &CpuContinuationConfig,
+        request: &CpuCareRequest,
+        collection: bool,
+    ) -> Result<Self> {
         let previous = config
             .previous
             .as_deref()
@@ -136,7 +204,12 @@ impl CareSeedReservation {
                     .into(),
             );
         }
-        let admitted = admit_native_cpu_care_seed(
+        let admit = if collection {
+            admit_native_cpu_care_collection_seed
+        } else {
+            admit_native_cpu_care_seed
+        };
+        let admitted = admit(
             previous,
             history,
             &config.output,
@@ -145,7 +218,7 @@ impl CareSeedReservation {
         )?;
         fs::create_dir_all(lane)?;
         let lock = lock_lane(lane)?;
-        let provenance = admit_native_cpu_care_seed(
+        let provenance = admit(
             previous,
             history,
             &config.output,
@@ -230,6 +303,9 @@ impl CareSeedReservation {
             .unwrap()
             .last()
             .unwrap();
+        if attempt.get("collection").is_some() {
+            return Err("CPU collection reservation cannot accept a trained founder".into());
+        }
         validate_attempt_output(attempt, receipt)?;
         let pins = [
             "cpu-cycle.json",
@@ -251,7 +327,9 @@ impl CareSeedReservation {
     pub fn fail(&mut self, reason: &str) -> Result<()> {
         // The exclusion survives even a zero-dose failure. A complete seal with
         // a failed acceptance write stays pending for explicit reconciliation.
-        if self.output.join("cpu-cycle.json").exists() {
+        if has_seal(&self.output, "cpu-cycle.json")?
+            || has_seal(&self.output, CPU_COLLECTOR_COMMIT_FILE)?
+        {
             return Err(
                 "CPU output acquired a seal despite failure; keep pending for reconciliation"
                     .into(),
@@ -259,6 +337,339 @@ impl CareSeedReservation {
         }
         self.update("failed", json!({"error":reason,"seed_consumed":true}))
     }
+
+    pub fn collected(&mut self) -> Result<Value> {
+        let ledger = read_ledger(&self.ledger_path)?;
+        let attempt = ledger["cpu_care_attempts"]
+            .as_array()
+            .and_then(|attempts| attempts.last())
+            .ok_or("CPU collection attempt missing")?;
+        if attempt["status"] != "pending"
+            || attempt["seed"] != self.seed
+            || attempt["output"] != json!(self.output)
+        {
+            return Err("CPU collection identity/status changed under owner lock".into());
+        }
+        let receipt = validate_collection_output(attempt, &self.output)?;
+        self.update("collected", receipt.clone())?;
+        Ok(receipt)
+    }
+}
+
+fn has_seal(output: &Path, name: &str) -> Result<bool> {
+    match fs::symlink_metadata(output.join(name)) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn valid_sha(value: &Value) -> bool {
+    value.as_str().is_some_and(|text| {
+        text.len() == 64
+            && text
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
+fn collection_binding(attempt: &Value) -> Result<(CpuCollectorAssignmentV1, [u8; 32], f32)> {
+    let binding = attempt
+        .get("collection")
+        .ok_or("CPU attempt is not collection-bound")?;
+    let assignment: CpuCollectorAssignmentV1 =
+        serde_json::from_value(binding["assignment"].clone())?;
+    let plan: [u8; 32] = serde_json::from_value(binding["plan_sha256"].clone())?;
+    let temperature = binding["temperature"]
+        .as_f64()
+        .ok_or("missing collection temperature")? as f32;
+    let seed = attempt["seed"].as_u64().ok_or("missing collection seed")?;
+    let dose = attempt["decisions"]
+        .as_u64()
+        .filter(|n| (1..=128).contains(n))
+        .ok_or("invalid collection decision dose")?;
+    let text = |s: &str| !s.trim().is_empty() && s.len() <= 256;
+    if plan == [0; 32]
+        || !temperature.is_finite()
+        || temperature <= 0.
+        || !valid_sha(&binding["provenance_sha256"])
+        || !text(&assignment.collector_run_id)
+        || !text(&assignment.producer_revision)
+        || !text(&assignment.lesson)
+        || assignment.backend != FoundationTrainingBackendV1::NativeCpu
+        || seed == 0
+        || assignment.world_seed != seed
+        || assignment.sampling_seed != (seed as u32) ^ ((seed >> 32) as u32)
+        || assignment.sampling_counter_start != 0
+        || u64::from(assignment.sampling_counter_end) != dose + 1
+        || assignment.episode_config_sha256 == [0; 32]
+        || attempt["lesson"] != assignment.lesson
+    {
+        return Err("CPU collection binding differs from its reserved episode".into());
+    }
+    Ok((assignment, plan, temperature))
+}
+
+fn validate_collection_output(attempt: &Value, output: &Path) -> Result<Value> {
+    let (assignment, plan, temperature) = collection_binding(attempt)?;
+    if has_seal(output, "cpu-cycle.json")? {
+        return Err("CPU care output mixes trained and collected receipt domains".into());
+    }
+    let shard = read_cpu_collector_output(output)?;
+    let (commit_bytes, _) = read_native_cpu_care_evidence(&output.join(CPU_COLLECTOR_COMMIT_FILE))?;
+    let (_, metadata) = read_native_cpu_care_evidence(&output.join("collection-metadata.json"))?;
+    let (_, episode) = read_native_cpu_care_evidence(&output.join("care-episode.json"))?;
+    let (provenance_bytes, provenance) =
+        read_native_cpu_care_evidence(&output.join("care-seed-admission.json"))?;
+    let source_version = attempt["source_policy_version"]
+        .as_u64()
+        .ok_or("collection attempt lacks source version")?;
+    let version = source_version
+        .checked_add(1)
+        .ok_or("collection policy version overflow")?;
+    let dose = attempt["decisions"]
+        .as_u64()
+        .ok_or("collection dose missing")? as usize;
+    if shard.assignment != assignment
+        || metadata["schema_version"] != 1
+        || metadata["mode"] != "native_cpu_collect_only"
+        || metadata["backend"] != "native-cpu"
+        || metadata["source_policy_version"] != source_version
+        || metadata["collection_policy_version"] != version
+        || metadata["offline_actor_optimizer_updates"] != 0
+        || metadata["offline_value_optimizer_updates"] != 0
+        || metadata["world_seed"] != assignment.world_seed
+        || metadata["seed_admission"] != attempt["seed_admission"]
+        || metadata["episode"] != episode
+        || episode["kind"] != "care-first-cpu-episode"
+        || episode["lesson"] != attempt["lesson"]
+        || provenance["source_sha256"] != attempt["source_sha256"]
+        || provenance["world_seed"] != assignment.world_seed
+        || provenance["seed_admission"] != attempt["seed_admission"]
+        || json!(sha(&provenance_bytes)) != attempt["collection"]["provenance_sha256"]
+        || shard.trajectories.len() != 1
+    {
+        return Err("sealed CPU collection differs from its bound reservation/provenance".into());
+    }
+    let trajectory = &shard.trajectories[0];
+    if !trajectory.final_record.lifecycle().is_alive() || trajectory.decisions.len() != dose + 1 {
+        return Err(
+            "CPU care collection requires its complete decision dose and real living bootstrap"
+                .into(),
+        );
+    }
+    let recorded = episode["raw_replay_recorded"]
+        .as_bool()
+        .ok_or("collection replay recording metadata missing")?;
+    if recorded != output.join("care-replay.json").is_file() {
+        return Err("CPU collection diagnostic replay differs from metadata".into());
+    }
+    let (_, trace) = read_native_cpu_care_evidence(&output.join("care-trace.json"))?;
+    let trace_rows = trace["rows"]
+        .as_array()
+        .ok_or("collection trace rows missing")?;
+    if trace["backend"] != "native-cpu"
+        || trace["lesson"] != attempt["lesson"]
+        || trace_rows.len() != dose + 1
+        || trace_rows
+            .iter()
+            .enumerate()
+            .any(|(i, row)| row["loss_row"] != (i < dose))
+    {
+        return Err("CPU care trace does not preserve the reserved loss/bootstrap boundary".into());
+    }
+    let source = output.join("source-native");
+    let pins = attempt["source_sha256"]
+        .as_object()
+        .filter(|pins| pins.len() == 4)
+        .ok_or("collection predecessor pins missing")?;
+    let receipt_name = ["cpu-cycle.json", "cycle.json", "group50.json"]
+        .into_iter()
+        .filter(|name| pins.contains_key(*name))
+        .collect::<Vec<_>>();
+    let [receipt_name] = receipt_name.as_slice() else {
+        return Err("collection predecessor receipt domain is ambiguous".into());
+    };
+    for name in [
+        *receipt_name,
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+    ] {
+        let expected = pins
+            .get(name)
+            .filter(|value| valid_sha(value))
+            .ok_or("collection predecessor pin missing or invalid")?;
+        if json!(sha(&fs::read(source.join(name))?)) != *expected {
+            return Err("collection retained predecessor bytes changed".into());
+        }
+    }
+    crate::validate_foundation_training_group_source(&source)?;
+    let (_, native) = read_native_cpu_care_evidence(&source.join(receipt_name))?;
+    // Raw receipt pins and the raw provenance artifact bind both originals.
+    // Timing f64 values need not survive nested JSON reserialization to prove
+    // source identity; compare its continuation-critical scalar fields here.
+    let reserved_native = &provenance["native_source_receipt"];
+    if [
+        "policy_version",
+        "seed",
+        "founder_seed_base",
+        "biological_objective_version",
+        "critic_objective_version",
+        "objective_state_reset",
+        "mode",
+        "backend",
+        "receipt_filename",
+        "handoff_filename",
+    ]
+    .iter()
+    .any(|field| native[*field] != reserved_native[*field])
+        || native["policy_version"] != source_version
+    {
+        return Err("collection source receipt differs from reservation provenance".into());
+    }
+    let imported: FoundationTrainerCheckpoint =
+        serde_json::from_slice(&fs::read(output.join("collection-actor-checkpoint.json"))?)?;
+    let imported_value: PpoValueHeadCheckpoint =
+        serde_json::from_slice(&fs::read(output.join("initial-value-checkpoint.json"))?)?;
+    let source_actor: FoundationTrainerCheckpoint =
+        serde_json::from_slice(&fs::read(source.join("actor-checkpoint.json"))?)?;
+    let source_value: PpoValueHeadCheckpoint =
+        serde_json::from_slice(&fs::read(source.join("value-checkpoint.json"))?)?;
+    let policy_bytes = fs::read(output.join("collection-policy.alife-foundation"))?;
+    if serde_json::to_vec(&imported)? != serde_json::to_vec(&source_actor)?
+        || serde_json::to_vec(&imported_value)? != serde_json::to_vec(&source_value)?
+        || policy_bytes != fs::read(source.join("trained.alife-foundation"))?
+    {
+        return Err(
+            "CPU collection changed its frozen founder or full actor/value optimizers".into(),
+        );
+    }
+    let inputs: alife_core::PhenotypeCompilerInputs =
+        serde_json::from_slice(&fs::read(output.join("collection-compiler-inputs.json"))?)?;
+    let phenotype = alife_core::PhenotypeCompiler::compile_validated(
+        &inputs,
+        &alife_core::BrainCapacityClass::n2048(),
+    )?;
+    let asset = alife_core::FoundationWeightAsset::decode_canonical(&policy_bytes)?;
+    if inputs.n2048_candidate_asset() != Some(&asset) {
+        return Err("CPU collection compiler asset differs".into());
+    }
+    let founder = CpuFoundationTrainer::from_checkpoint(phenotype, asset, imported.clone())?;
+    let value = CpuValueHead::from_checkpoint(imported_value.clone())?;
+    let config = PpoConfig {
+        temperature,
+        ..Default::default()
+    };
+    if CpuCollectionSnapshotV1::capture(&founder, &value, &inputs, config, version)?
+        != shard.snapshot
+    {
+        return Err(
+            "CPU collection snapshot differs from its frozen actor/value/compiler/config".into(),
+        );
+    }
+    let checkpoint: CpuCanonicalCheckpoint =
+        serde_json::from_slice(&fs::read(output.join("collector-checkpoint.json"))?)?;
+    if checkpoint.sampling_seed != assignment.sampling_seed
+        || checkpoint.sampling_counter != assignment.sampling_counter_end
+        || checkpoint.world.config.deterministic_seed != assignment.world_seed
+    {
+        return Err("CPU collection private host sampling provenance differs".into());
+    }
+    let restored = CpuCanonicalHost::from_checkpoint(checkpoint, &founder)?;
+    let record = restored
+        .world()
+        .organism_registry()
+        .get(trajectory.final_record.organism_id())
+        .ok_or("CPU collection private host lost its trajectory organism")?;
+    if serde_json::to_vec(record)? != serde_json::to_vec(&trajectory.final_record)? {
+        return Err("CPU collection trajectory and private host state differ".into());
+    }
+    let (_, lives) = read_native_cpu_care_evidence(&output.join("care-prior-lives.json"))?;
+    if lives["collection_policy_sha256"] != sha(&policy_bytes)
+        || lives["world_tick"] != json!(restored.world().tick())
+    {
+        return Err(
+            "CPU collection private prior archive differs from its frozen host boundary".into(),
+        );
+    }
+    let shard_payload_sha256 = shard.payload_sha256;
+    // This reuses native probability, replay, GAE and terminal/bootstrap
+    // validation without calling the cohort's separate train method.
+    let cohort = admit_cpu_collector_shards(
+        &founder,
+        &value,
+        &inputs,
+        config,
+        version,
+        std::slice::from_ref(&assignment),
+        vec![shard],
+        1,
+        0,
+    )?;
+    if cohort
+        .windows()
+        .iter()
+        .map(|window| window.actor.batch.len())
+        .sum::<usize>()
+        != dose
+    {
+        return Err("CPU collection admitted loss rows differ from reserved dose".into());
+    }
+    if fs::read(output.join(CPU_COLLECTOR_COMMIT_FILE))? != commit_bytes {
+        return Err("CPU collector commit changed during reservation validation".into());
+    }
+    Ok(
+        json!({"collector_commit_sha256":sha(&commit_bytes),"shard_payload_sha256":shard_payload_sha256,
+        "plan_sha256":plan,"source_sha256":attempt["source_sha256"],"source_policy_version":source_version,
+        "collection_policy_version":version,"seed":assignment.world_seed,"lesson":assignment.lesson,
+        "training_rows":dose,"captured_rows":dose+1,"bootstrap_rows":1,
+        "offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0,
+        "actor_optimizer_step":imported.optimizer_step,"value_optimizer_step":imported_value.optimizer_step}),
+    )
+}
+
+/// Read-only reuse of the consumed reservation; this does not seed-admit again.
+pub(super) fn validate_collected_attempt(
+    lane: &Path,
+    output: &Path,
+    assignment: &CpuCollectorAssignmentV1,
+    plan_sha256: [u8; 32],
+) -> Result<Value> {
+    let lane = lane.canonicalize()?;
+    if output.is_symlink() {
+        return Err("collected CPU output must not be a symlink".into());
+    }
+    let output = output.canonicalize()?;
+    if output.parent() != Some(lane.as_path()) {
+        return Err("collected CPU output escaped its dedicated lane".into());
+    }
+    let attempts = collection_attempts(&lane)?;
+    let attempt = attempts
+        .iter()
+        .find(|attempt| attempt["output"] == json!(output))
+        .filter(|attempt| attempt["status"] == "collected")
+        .ok_or("no terminal collected reservation for CPU output")?;
+    let (bound_assignment, bound_plan, _) = collection_binding(attempt)?;
+    if &bound_assignment != assignment || bound_plan != plan_sha256 {
+        return Err("collected CPU reservation differs from requested assignment/plan".into());
+    }
+    let receipt = validate_collection_output(attempt, &output)?;
+    if receipt != attempt["result"] {
+        return Err("collected CPU receipt differs from durable reservation result".into());
+    }
+    Ok(receipt)
+}
+
+pub(super) fn collection_attempts(lane: &Path) -> Result<Vec<Value>> {
+    let path = lane.join(LEDGER);
+    if !has_seal(lane, LEDGER)? {
+        return Ok(Vec::new());
+    }
+    Ok(read_ledger(&path)?["cpu_care_attempts"]
+        .as_array()
+        .ok_or("invalid CPU attempt ledger")?
+        .clone())
 }
 
 fn validate_attempt_output(attempt: &Value, receipt: &Value) -> Result<()> {
@@ -298,7 +709,18 @@ pub(super) fn reconcile(lane: &Path) -> Result<Value> {
         seed: attempt["seed"].as_u64().ok_or("missing pending seed")?,
         _lock: lock,
     };
-    if reservation.output.join("cpu-cycle.json").exists() {
+    let trained = has_seal(&reservation.output, "cpu-cycle.json")?;
+    let collected = has_seal(&reservation.output, CPU_COLLECTOR_COMMIT_FILE)?;
+    if trained && collected {
+        return Err("pending CPU output mixes trained and collected receipt domains".into());
+    }
+    if collected {
+        let receipt = reservation.collected()?;
+        Ok(
+            json!({"status":"collected","output":reservation.output,"seed":reservation.seed,
+            "dispatch":false,"result":receipt}),
+        )
+    } else if trained {
         let (_, receipt) =
             read_native_cpu_care_evidence(&reservation.output.join("cpu-cycle.json"))?;
         reservation.accept(&receipt)?;
@@ -481,4 +903,147 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct Lane(PathBuf);
+    impl Lane {
+        fn new() -> Self {
+            static COUNTER: AtomicU64 = AtomicU64::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "alife-care-collection-admission-{}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+                COUNTER.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&path).unwrap();
+            Self(path.canonicalize().unwrap())
+        }
+    }
+    impl Drop for Lane {
+        fn drop(&mut self) {
+            fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    fn pins(byte: char) -> Value {
+        let digest = byte.to_string().repeat(64);
+        json!({"cpu-cycle.json":digest,"trained.alife-foundation":digest,
+            "actor-checkpoint.json":digest,"value-checkpoint.json":digest})
+    }
+
+    fn attempt(lane: &Path, name: &str, seed: u64) -> Value {
+        json!({"status":"pending","seed":seed,"output":lane.join(name),
+            "source":lane.join("synthetic-source"),"source_sha256":pins('a'),
+            "source_policy_version":1,"lesson":"synthetic-lesson","decisions":2,
+            "seed_admission":{"policy":"strict","historical_freshness":"operator-attested-complete"},
+            "collection":{"assignment":CpuCollectorAssignmentV1 {
+                collector_run_id:format!("synthetic-{seed}"),backend:FoundationTrainingBackendV1::NativeCpu,
+                producer_revision:"synthetic-v1".into(),world_seed:seed,
+                sampling_seed:(seed as u32)^((seed>>32)as u32),sampling_counter_start:0,sampling_counter_end:3,
+                lesson:"synthetic-lesson".into(),episode_config_sha256:[1;32]},
+                "plan_sha256":vec![2u8;32],"temperature":1.0,"provenance_sha256":"a".repeat(64)}})
+    }
+
+    fn ledger(lane: &Path, attempts: Vec<Value>) -> Value {
+        let ranges = attempts
+            .iter()
+            .map(|attempt| json!([attempt["seed"], attempt["seed"]]))
+            .collect::<Vec<_>>();
+        let value = json!({"schema":1,"kind":"grab-food-seed-ledger","cpu_care_schema":1,
+            "training_seed_ranges":ranges,"assessment_seeds":[],"allocations":[],"cpu_care_attempts":attempts});
+        write_atomic(&lane.join(LEDGER), &value).unwrap();
+        value
+    }
+
+    #[test]
+    fn collected_attempt_keeps_original_source_pins_for_the_next_dispatch() {
+        let lane = Lane::new();
+        let mut collected = attempt(&lane.0, "first", 11);
+        collected["status"] = json!("collected");
+        collected["result"] = json!({"collector_commit_sha256":"b".repeat(64)});
+        // Even a stray native-output field cannot advance collection lineage.
+        collected["native_output_sha256"] = pins('b');
+        let pending = attempt(&lane.0, "second", 12);
+        ledger(&lane.0, vec![collected.clone(), pending.clone()]);
+        assert_eq!(collection_attempts(&lane.0).unwrap().len(), 2);
+        let mut changed = pending;
+        changed["source_sha256"] = pins('b');
+        ledger(&lane.0, vec![collected, changed]);
+        assert!(collection_attempts(&lane.0).is_err());
+    }
+
+    #[test]
+    fn collected_requires_bound_plan_and_collection_cannot_be_accepted() {
+        let lane = Lane::new();
+        let mut item = attempt(&lane.0, "first", 11);
+        item["status"] = json!("collected");
+        item["result"] = json!({"collector_commit_sha256":"b".repeat(64)});
+        item.as_object_mut().unwrap().remove("collection");
+        ledger(&lane.0, vec![item]);
+        assert!(collection_attempts(&lane.0).is_err());
+        let mut item = attempt(&lane.0, "first", 11);
+        item["status"] = json!("accepted");
+        item["native_output_sha256"] = pins('b');
+        ledger(&lane.0, vec![item]);
+        assert!(collection_attempts(&lane.0).is_err());
+    }
+
+    #[test]
+    fn failed_collection_with_any_commit_stays_pending_for_reconciliation() {
+        let lane = Lane::new();
+        let output = lane.0.join("first");
+        fs::create_dir(&output).unwrap();
+        let before = ledger(&lane.0, vec![attempt(&lane.0, "first", 11)]);
+        fs::write(output.join(CPU_COLLECTOR_COMMIT_FILE), b"{}").unwrap();
+        let mut reservation = CareSeedReservation {
+            provenance: Value::Null,
+            ledger_path: lane.0.join(LEDGER),
+            output: output.clone(),
+            seed: 11,
+            _lock: lock_lane(&lane.0).unwrap(),
+        };
+        assert!(reservation
+            .fail("synthetic interrupted acknowledgement")
+            .is_err());
+        assert_eq!(read_ledger(&lane.0.join(LEDGER)).unwrap(), before);
+        assert_eq!(
+            fs::read(output.join(CPU_COLLECTOR_COMMIT_FILE)).unwrap(),
+            b"{}"
+        );
+        fs::remove_file(output.join(CPU_COLLECTOR_COMMIT_FILE)).unwrap();
+        reservation.fail("synthetic unsealed failure").unwrap();
+        let failed = read_ledger(&lane.0.join(LEDGER)).unwrap();
+        assert_eq!(failed["cpu_care_attempts"][0]["status"], "failed");
+        assert_eq!(failed["training_seed_ranges"], json!([[11, 11]]));
+    }
+
+    #[test]
+    fn reconciliation_preserves_mixed_seals_and_unbound_collector_evidence() {
+        let lane = Lane::new();
+        let output = lane.0.join("first");
+        fs::create_dir(&output).unwrap();
+        let before = ledger(&lane.0, vec![attempt(&lane.0, "first", 11)]);
+        fs::write(output.join(CPU_COLLECTOR_COMMIT_FILE), b"{}").unwrap();
+        fs::write(output.join("cpu-cycle.json"), b"{}").unwrap();
+        assert!(reconcile(&lane.0).is_err());
+        assert_eq!(read_ledger(&lane.0.join(LEDGER)).unwrap(), before);
+        fs::remove_file(output.join("cpu-cycle.json")).unwrap();
+        let mut unbound = attempt(&lane.0, "first", 11);
+        unbound.as_object_mut().unwrap().remove("collection");
+        let before = ledger(&lane.0, vec![unbound]);
+        assert!(reconcile(&lane.0).is_err());
+        assert_eq!(read_ledger(&lane.0.join(LEDGER)).unwrap(), before);
+        assert_eq!(
+            fs::read(output.join(CPU_COLLECTOR_COMMIT_FILE)).unwrap(),
+            b"{}"
+        );
+    }
 }

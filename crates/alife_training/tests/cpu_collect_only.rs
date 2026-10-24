@@ -336,6 +336,18 @@ impl CpuEpisodeHooks for FailAfterCollection {
 
 struct FailBeforeThirdStep;
 impl CpuEpisodeHooks for FailBeforeThirdStep {
+    fn preserve_collection_recovery(
+        &mut self,
+        host: &CpuCanonicalHost,
+        _founder: &CpuFoundationTrainer,
+        output: &Path,
+    ) -> CpuContinuationResult<()> {
+        fs::write(
+            output.join("synthetic-private-recovery.json"),
+            serde_json::to_vec(&host.world().tick())?,
+        )?;
+        Ok(())
+    }
     fn before_step(
         &mut self,
         host: &mut CpuCanonicalHost,
@@ -362,6 +374,7 @@ fn hook_failure_inside_collection_retains_the_last_sealed_private_host() {
     };
     assert_eq!(error.to_string(), "synthetic early collection interruption");
     let checkpoint: CpuCanonicalCheckpoint = load(output.join("collector-checkpoint.json"));
+    let private_tick: serde_json::Value = load(output.join("synthetic-private-recovery.json"));
     assert!(checkpoint.sampling_counter > 0);
     assert!(checkpoint.residents.iter().any(|resident| resident
         .neural
@@ -376,6 +389,10 @@ fn hook_failure_inside_collection_retains_the_last_sealed_private_host() {
     let trainer = restore_trainer(&inputs, actor);
     let restored = CpuCanonicalHost::from_checkpoint(checkpoint.clone(), &trainer).unwrap();
     assert!(restored.world().tick().raw() >= 2);
+    assert_eq!(
+        private_tick,
+        serde_json::to_value(restored.world().tick()).unwrap()
+    );
     assert_eq!(
         serde_json::to_vec(&restored.checkpoint(&trainer).unwrap()).unwrap(),
         serde_json::to_vec(&checkpoint).unwrap()

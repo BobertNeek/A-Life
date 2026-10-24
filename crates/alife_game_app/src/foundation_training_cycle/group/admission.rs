@@ -122,6 +122,12 @@ if runs:
     Ok(())
 }
 
+#[cfg(feature = "cpu-training")]
+pub(super) fn verify_recovery(previous: &Path, history: &Path, lane: &Path) -> Result<()> {
+    let (bytes, _) = read(history)?;
+    mixed_lane_admission(history, lane, previous, &hash(&bytes), true)
+}
+
 pub(super) fn read(path: &Path) -> Result<(Vec<u8>, Value)> {
     Ok(alife_training::native_receipt::read(path)?)
 }
@@ -250,6 +256,28 @@ pub(super) fn admit(
     seed: u64,
     known_exclusions: bool,
 ) -> Result<Value> {
+    admit_with_lane_snapshots(previous, history, output, seed, known_exclusions, false)
+}
+
+#[cfg(any(test, feature = "cpu-training"))]
+pub(super) fn admit_collection(
+    previous: &Path,
+    history: &Path,
+    output: &Path,
+    seed: u64,
+    known_exclusions: bool,
+) -> Result<Value> {
+    admit_with_lane_snapshots(previous, history, output, seed, known_exclusions, true)
+}
+
+fn admit_with_lane_snapshots(
+    previous: &Path,
+    history: &Path,
+    output: &Path,
+    seed: u64,
+    known_exclusions: bool,
+    allow_immutable_lane_snapshots: bool,
+) -> Result<Value> {
     let (bytes, document) = read(history)?;
     let selected = json!({"policy":if known_exclusions {"known-exclusions"} else {"strict"},
         "historical_freshness":if known_exclusions {"unknown"} else {"operator-attested-complete"}});
@@ -323,8 +351,10 @@ pub(super) fn admit(
         0,
         &mut 0,
     )?;
-    // Existing lane exclusions cannot be silently omitted. Each file must be an
-    // exact-byte history import, including prior group reservations.
+    // Ordinary admission requires each actual ledger path as an exact-byte
+    // import. Collect-only admission may retain an imported immutable snapshot,
+    // but only when its verified raw digest matches the current ledger bytes.
+    let mut lane_ledger_snapshots = Vec::new();
     {
         let lane = output
             .parent()
@@ -339,11 +369,28 @@ pub(super) fn admit(
                 {
                     return Err("seed reservation ledger must not be a symlink".into());
                 }
-                if (name == ".grab-food-seed-reservations.json"
+                if name == ".grab-food-seed-reservations.json"
                     || name == ".mixed-care-seed-reservations.json"
-                    || name.starts_with(".group50-seed-") && name.ends_with(".json"))
-                    && !seen.contains(&entry.path().canonicalize()?)
+                    || name.starts_with(".group50-seed-") && name.ends_with(".json")
                 {
+                    let ledger_path = entry.path().canonicalize()?;
+                    if seen.contains(&ledger_path) {
+                        continue;
+                    }
+                    if allow_immutable_lane_snapshots {
+                        let (ledger_bytes, _) = read(&ledger_path)?;
+                        let ledger_sha256 = hash(&ledger_bytes);
+                        if let Some(record) = records.iter().find(|record| {
+                            record["sha256"].as_str() == Some(ledger_sha256.as_str())
+                        }) {
+                            lane_ledger_snapshots.push(json!({
+                                "ledger_path":ledger_path,
+                                "snapshot_path":record["path"],
+                                "sha256":ledger_sha256,
+                            }));
+                            continue;
+                        }
+                    }
                     return Err(format!(
                         "existing lane ledger requires an explicit exact-byte history import: {}",
                         entry.path().display()
@@ -353,11 +400,20 @@ pub(super) fn admit(
             }
         }
     }
-    Ok(
-        json!({"schema":1,"world_seed":seed,"source_sha256":source_hashes,
+    let mut provenance = json!({"schema":1,"world_seed":seed,"source_sha256":source_hashes,
         "seed_admission":selected,
-        "historical_retry":false,"native_source_receipt":native,"evidence":records,"history_sha256":hash(&bytes)}),
-    )
+        "historical_retry":false,"native_source_receipt":native,"evidence":records,"history_sha256":hash(&bytes)});
+    if allow_immutable_lane_snapshots {
+        // Reservation compares admission before and after taking the lane lock.
+        // Filesystem enumeration order must not change the provenance value.
+        lane_ledger_snapshots.sort_by(|left, right| {
+            left["ledger_path"]
+                .as_str()
+                .cmp(&right["ledger_path"].as_str())
+        });
+        provenance["lane_ledger_snapshots"] = json!(lane_ledger_snapshots);
+    }
+    Ok(provenance)
 }
 
 #[cfg(test)]
@@ -680,6 +736,62 @@ history.write_text(json.dumps(document))
         assert!(f.admit(311, true).is_err());
         std::fs::write(&ledger, b"{}").unwrap();
         assert!(f.admit(200, true).is_err());
+    }
+    #[test]
+    fn collect_only_snapshot_imports_require_current_raw_ledger_bytes_and_keep_exclusions() {
+        let mut f = Fixture::new();
+        let source_before = std::fs::read_dir(&f.source)
+            .unwrap()
+            .map(|entry| {
+                let path = entry.unwrap().path();
+                let bytes = std::fs::read(&path).unwrap();
+                (path, bytes)
+            })
+            .collect::<Vec<_>>();
+        let ledger = f
+            .output
+            .parent()
+            .unwrap()
+            .join(".grab-food-seed-reservations.json");
+        let snapshot = f.root.join("immutable-lane-ledger.json");
+        // Noncanonical spacing is intentional: equality is over raw bytes,
+        // rather than a parsed/re-encoded JSON representation.
+        let bytes = br#"{ "schema": 1, "kind": "grab-food-seed-ledger", "training_seed_ranges": [[310,310]], "assessment_seeds": [311], "allocations": [] }"#;
+        std::fs::write(&ledger, bytes).unwrap();
+        std::fs::write(&snapshot, bytes).unwrap();
+        f.document["imports"] = json!([{"path":snapshot,"sha256":hash(bytes)}]);
+        f.write();
+        assert!(f.admit(200, true).is_err());
+        let accepted = admit_collection(&f.source, &f.history, &f.output, 200, true).unwrap();
+        assert_eq!(
+            accepted["lane_ledger_snapshots"],
+            json!([{"ledger_path":ledger.canonicalize().unwrap(),
+                "snapshot_path":snapshot.canonicalize().unwrap(),"sha256":hash(bytes)}])
+        );
+        assert_eq!(
+            accepted["seed_admission"],
+            json!({"policy":"known-exclusions","historical_freshness":"unknown"})
+        );
+        for seed in [310, 311] {
+            assert!(admit_collection(&f.source, &f.history, &f.output, seed, true).is_err());
+        }
+        std::fs::write(
+            &ledger,
+            serde_json::to_vec(&read(&snapshot).unwrap().1).unwrap(),
+        )
+        .unwrap();
+        assert!(admit_collection(&f.source, &f.history, &f.output, 200, true).is_err());
+        assert_eq!(std::fs::read(&snapshot).unwrap(), bytes);
+        // The ordinary path still accepts the actual ledger import and keeps
+        // its original provenance shape.
+        let ledger_bytes = std::fs::read(&ledger).unwrap();
+        f.document["imports"] = json!([{"path":ledger,"sha256":hash(&ledger_bytes)}]);
+        f.write();
+        let ordinary = f.admit(200, true).unwrap();
+        assert!(ordinary.get("lane_ledger_snapshots").is_none());
+        for (path, bytes) in source_before {
+            assert_eq!(std::fs::read(path).unwrap(), bytes);
+        }
     }
     #[test]
     fn duplicate_exclusion_keys_fail_at_any_depth() {
