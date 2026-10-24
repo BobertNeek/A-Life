@@ -51,7 +51,9 @@ reconstruct a world from a declared seed, admit GPU/mixed-backend evidence, or
 hot-swap genetics into retained private lifetime state. Dead records must seal
 biology at their death tick. SHA-256 seals detect changed evidence; caller-owned
 assignment metadata supplies provenance, not cryptographic attestation. Existing
-continuation CLIs still use their serial collection path.
+continuation CLIs still use their serial collection path. Older care diagnostic
+rows remain readable with an absent sampling counter; cooperative admission
+rejects that absence instead of fabricating sampling evidence.
 
 The next experiment can use two complementary lesson assignments plus a mixed
 composition assignment under this same snapshot, retain their private archives,

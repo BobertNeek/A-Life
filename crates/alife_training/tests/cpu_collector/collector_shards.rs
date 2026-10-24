@@ -207,7 +207,7 @@ fn corrupted_stale_duplicate_and_resealed_invalid_evidence_never_mutates_optimiz
         .final_features[0] += 0.1;
     cases.push(vec![reseal(wrong)]); // Bootstrap is checked too.
     let mut wrong = source.clone();
-    wrong.trajectories[0].decisions[1].sampling_counter = 0;
+    wrong.trajectories[0].decisions[1].sampling_counter = Some(0);
     cases.push(vec![reseal(wrong)]);
     let mut wrong = source.clone();
     wrong.trajectories[0].decisions.swap(0, 1);
@@ -301,6 +301,27 @@ fn invalid_window_bounds_and_incomplete_inventory_are_rejected() {
     let mut incomplete = source;
     incomplete.assignment.sampling_counter_end += 1;
     assert!(admit(&trainer, &value, &inputs, vec![reseal(incomplete)]).is_err());
+}
+
+#[test]
+fn legacy_diagnostic_rows_remain_readable_but_cannot_authorize_new_shards() {
+    let (trainer, value, inputs) = fixture();
+    let mut source = shard(&trainer, &value, &inputs, "a", 42, false);
+    let row = &source.trajectories[0].decisions[0];
+    assert_eq!(row.sampling_counter, Some(0));
+    let mut legacy = serde_json::to_value(row).unwrap();
+    legacy.as_object_mut().unwrap().remove("sampling_counter");
+    let restored: CpuCollectedDecision = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(restored.sampling_counter, None);
+    assert_eq!(restored.patch, row.patch);
+    assert_eq!(restored.action, row.action);
+    assert_eq!(serde_json::to_value(&restored).unwrap(), legacy);
+    source.trajectories[0].decisions[0] = restored;
+    let before_actor = trainer.checkpoint();
+    let before_value = value.checkpoint();
+    assert!(admit(&trainer, &value, &inputs, vec![reseal(source)]).is_err());
+    assert_eq!(trainer.checkpoint(), before_actor);
+    assert_eq!(value.checkpoint(), before_value);
 }
 
 #[test]

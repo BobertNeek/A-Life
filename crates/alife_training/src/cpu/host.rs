@@ -94,8 +94,10 @@ pub struct CpuCanonicalHost {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CpuCollectedDecision {
     pub organism_id: OrganismId,
-    /// Exact counter supplied to native conditional action sampling.
-    pub sampling_counter: u32,
+    /// Exact native sampling counter. Older diagnostic rows lack this evidence;
+    /// they remain readable but cannot be admitted as cooperative shards.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sampling_counter: Option<u32>,
     pub initial: crate::TrainingInitialState,
     pub replay_tick: crate::TrainingReplayTick,
     pub action: crate::PpoJointAction,
@@ -1174,7 +1176,7 @@ impl CpuCanonicalHost {
                 .ok_or(CpuHostError::State("sequence overflow"))?;
             decisions.push(CpuCollectedDecision {
                 organism_id: id,
-                sampling_counter,
+                sampling_counter: Some(sampling_counter),
                 initial: output.initial,
                 replay_tick: output.replay_tick,
                 action,

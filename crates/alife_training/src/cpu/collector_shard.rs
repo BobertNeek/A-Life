@@ -279,6 +279,7 @@ pub fn admit_cpu_collector_shards(
             }
             let mut previous_counter = None;
             for decision in &trajectory.decisions {
+                let counter = decision.sampling_counter.ok_or_else(invalid)?;
                 decision.patch.validate_contract()?;
                 let neural = decision.patch.decision().neural_evidence()?;
                 if decision.organism_id != id
@@ -288,21 +289,21 @@ pub fn admit_cpu_collector_shards(
                     || decision.patch.decision().policy_backend()
                         != alife_core::PolicyBackend::NeuralClosedLoopCpu
                     || decision.patch.outcome().outcome_tick > record.biochemistry().tick
-                    || previous_counter.is_some_and(|c| decision.sampling_counter <= c)
+                    || previous_counter.is_some_and(|c| counter <= c)
                     || !(shard.assignment.sampling_counter_start
                         ..shard.assignment.sampling_counter_end)
-                        .contains(&decision.sampling_counter)
-                    || !counters.insert(decision.sampling_counter)
+                        .contains(&counter)
+                    || !counters.insert(counter)
                     || !sampling_evidence.insert((
                         shard.assignment.world_seed,
                         shard.assignment.sampling_seed,
                         shard.assignment.episode_config_sha256,
-                        decision.sampling_counter,
+                        counter,
                     ))
                 {
                     return Err(invalid());
                 }
-                previous_counter = Some(decision.sampling_counter);
+                previous_counter = Some(counter);
                 // Include the living bootstrap decision, absent from actor loss.
                 validate_decision(trainer, decision, &record, &shard.assignment, config)?;
             }
@@ -364,7 +365,7 @@ fn validate_decision(
         decision.patch.pre_action().perception(),
         &replay.candidate_logits[0],
         assignment.sampling_seed,
-        decision.sampling_counter,
+        decision.sampling_counter.ok_or_else(invalid)?,
         config.temperature,
     )?;
     // Production replay permits the same small numerical tolerance as PPO's
