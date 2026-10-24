@@ -581,7 +581,7 @@ mod distribution_tests {
     #[test]
     fn categorical_preserves_common_logit_shifts_at_nonunit_temperature() {
         let small = categorical(&[0., 0.125, 0.25], 7, 0.7).unwrap();
-        let shifted = categorical(&[1_000_000., 1_000_000.125, 1_000_000.25], 7, 0.7).unwrap();
+        let shifted = categorical(&[0., 0.125, 0.25].map(|v| v + 1_000_000.), 7, 0.7).unwrap();
         for i in 0..3 {
             assert!((small.p[i] - shifted.p[i]).abs() < 1e-6);
             assert!((small.lp[i] - shifted.lp[i]).abs() < 1e-6);

@@ -279,7 +279,7 @@ fn invalid_window_bounds_and_incomplete_inventory_are_rejected() {
             &inputs,
             config(),
             VERSION,
-            &[source.assignment.clone()],
+            std::slice::from_ref(&source.assignment),
             vec![source.clone()],
             window,
             burn,
