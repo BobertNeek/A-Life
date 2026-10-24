@@ -77,6 +77,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: Comparison admission across Windows path aliases
+        run: python -B -m unittest discover -s scripts -p test_compare_cpu_care_rounds.py -v
       - name: Rooted and canonical output admission before filesystem mutation
         run: cargo test --locked -p alife_training --features cpu-backend --lib output_resolution_tests
       - name: Serial real-care continuation and matched assessment without a live prior

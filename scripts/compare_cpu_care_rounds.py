@@ -216,9 +216,13 @@ def qualified_checkout():
                             timeout=30, check=False, text=True)
     require(result.returncode == 0, "known-exclusions comparison requires its qualified source checkout")
     values = result.stdout.splitlines()
-    require(len(values) == 2 and Path(values[0]).resolve(strict=True) == root,
+    require(len(values) == 2 and Path(values[0]).samefile(root),
             "known-exclusions admission checkout does not match this runner")
-    return {"root": str(root), "git_dir": str(Path(values[1]).resolve(strict=True))}
+    # Git emits the ordinary Windows spelling even when Rust launched this
+    # script through a verbatim \\?\ path. Bind filesystem identity, then use
+    # Git's spelling for its child environment rather than comparing aliases.
+    return {"root": str(Path(values[0]).resolve(strict=True)),
+            "git_dir": str(Path(values[1]).resolve(strict=True))}
 
 
 def known_history_inputs(history, paths, documents, pins):

@@ -1,6 +1,7 @@
 """Pure comparison preflight/accounting tests; these do not execute neural training."""
 import copy
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -209,6 +210,23 @@ class ComparisonPreflightTests(unittest.TestCase):
         receipt = compare.read_json(runner.logs / "000.argv.json")
         self.assertEqual(receipt["seed_admission"], compare.KNOWN)
         self.assertEqual(receipt["claim_scope"], compare.UNKNOWN_CLAIM_SCOPE)
+
+    @unittest.skipUnless(os.name == "nt", "Windows verbatim path identity")
+    def test_qualified_checkout_accepts_windows_verbatim_script_path(self):
+        ordinary = compare.qualified_checkout()
+        script = str(Path(compare.__file__).resolve())
+        verbatim = script if script.startswith("\\\\?\\") else "\\\\?\\" + script
+        with patch.object(compare, "__file__", verbatim):
+            qualified = compare.qualified_checkout()
+        self.assertEqual(qualified, ordinary)
+        self.assertTrue(Path(qualified["root"]).samefile(Path(script).parent.parent))
+
+    def test_qualified_checkout_rejects_a_different_existing_directory(self):
+        actual = compare.qualified_checkout()
+        result = SimpleNamespace(returncode=0, stdout=str(self.root) + "\n" + actual["git_dir"] + "\n")
+        with patch.object(compare.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(ValueError, "does not match this runner"):
+                compare.qualified_checkout()
 
     def test_preflight_is_read_only_canonical_and_preserves_existing_attestation(self):
         self.write(self.spec_path, self.spec)
