@@ -239,7 +239,16 @@ impl CpuCareRoundPlanV1 {
         if self.schema_version != 1
             || self.kind != "serial-cpu-care-round"
             || self.payload_sha256 != self.digest()?
-            || self.source_sha256.len() != SOURCE_FILES.len()
+            || !(SOURCE_FILES.len()..=SOURCE_FILES.len() + 3).contains(&self.source_sha256.len())
+            || self.source_sha256.keys().any(|name| {
+                !SOURCE_FILES.contains(&name.as_str())
+                    && !matches!(
+                        name.as_str(),
+                        "compiler-inputs.json"
+                            | "cooperative-source-handoff.json"
+                            | "cooperative-result/cooperative-round.json"
+                    )
+            })
             || SOURCE_FILES
                 .iter()
                 .any(|n| !self.source_sha256.contains_key(*n))
@@ -312,6 +321,16 @@ impl CpuCareRoundPlanV1 {
                 &self.spec.seed_history,
                 &self.spec.output.join("collectors"),
             )?;
+        }
+        let admitted_files =
+            alife_training::cpu::read_cpu_founder_source(&self.spec.previous)?.files;
+        if self.source_sha256
+            != admitted_files
+                .into_iter()
+                .map(|(name, bytes)| (name, format!("{:x}", Sha256::digest(bytes))))
+                .collect()
+        {
+            return Err("care round native source artifact inventory changed".into());
         }
         let handoff = source_handoff(&self.spec.previous)?;
         if capture(&handoff, &self.spec)? != self.snapshot {
@@ -421,10 +440,11 @@ pub fn prepare_cpu_care_round(mut spec: CpuCareRoundSpecV1) -> Result<CpuCareRou
             admission_helpers_sha256.insert(path.clone(), file_sha(&path)?);
         }
     }
-    let source_sha256 = SOURCE_FILES
+    let source_sha256 = alife_training::cpu::read_cpu_founder_source(&spec.previous)?
+        .files
         .into_iter()
-        .map(|name| Ok((name.to_string(), file_sha(&spec.previous.join(name))?)))
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .map(|(name, bytes)| (name, format!("{:x}", Sha256::digest(bytes))))
+        .collect::<BTreeMap<_, _>>();
     let mut evidence = BTreeMap::new();
     for lesson in &spec.collectors {
         let output = spec

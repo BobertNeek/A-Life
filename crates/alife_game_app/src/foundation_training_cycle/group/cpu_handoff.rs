@@ -1,8 +1,10 @@
 //! Read-only import of explicitly CPU-produced founder/optimizer state.
 //! Decisions and individual lifetimes keep their original execution domain.
 use super::*;
+#[cfg(not(feature = "cpu-training"))]
 use alife_training::{FoundationTrainingBackendV1, FoundationTrainingHandoffV1};
 
+#[cfg(not(feature = "cpu-training"))]
 pub(super) fn source(previous: &Path) -> Result<SealedCycleContinuation> {
     let (_, receipt) = admission::read(&previous.join("cpu-cycle.json"))?;
     alife_training::native_receipt::Lineage::load(&receipt, previous)?;
@@ -69,6 +71,40 @@ pub(super) fn source(previous: &Path) -> Result<SealedCycleContinuation> {
         .validate_for(&canonical, admitted.foundation.digest())?;
     if canonical.phenotype_hash() != admitted.phenotype.phenotype_hash() {
         return Err("CPU handoff compiler differs from the canonical group founder".into());
+    }
+    Ok(SealedCycleContinuation {
+        asset: admitted.foundation,
+        actor: admitted.actor,
+        value: admitted.value,
+        policy_version: admitted
+            .policy_version
+            .checked_add(1)
+            .ok_or("policy overflow")?,
+        founder_seed_base,
+        objective_transition_from: None,
+    })
+}
+
+#[cfg(feature = "cpu-training")]
+pub(super) fn source(previous: &Path) -> Result<SealedCycleContinuation> {
+    let source = alife_training::cpu::read_cpu_founder_source(previous)?;
+    let seed = source.receipt["seed"]
+        .as_u64()
+        .ok_or("CPU source seed missing")?;
+    let founder_seed_base = source.receipt["founder_seed_base"]
+        .as_u64()
+        .ok_or("CPU founder seed missing")?;
+    let admitted = source.handoff.admit()?;
+    let canonical = crate::foundation_archived_success_replay::compile_source(
+        admitted.foundation.clone(),
+        seed,
+        founder_seed_base,
+    )?;
+    admitted
+        .actor
+        .validate_for(&canonical, admitted.foundation.digest())?;
+    if canonical.phenotype_hash() != admitted.phenotype.phenotype_hash() {
+        return Err("CPU handoff compiler differs from the canonical founder".into());
     }
     Ok(SealedCycleContinuation {
         asset: admitted.foundation,

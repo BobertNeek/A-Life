@@ -112,9 +112,10 @@ incomplete life resume remains unsupported. Returned collection errors archive
 consumer-owned prior lives alongside the native recovery checkpoint; a process
 kill can occur before that boundary and does not guarantee a complete pair.
 Concurrent invocations are refused
-by the round owner lock. Live/recorded priors, GPU/group/cooperative-result source
-admission, custom mixed-skill episodes, automatic curriculum progression and
-trainer-removed efficacy assessment are outside V1.
+by the round owner lock. Live/recorded priors, GPU/group source admission,
+custom mixed-skill episodes, automatic curriculum progression and exact-life
+resume remain unsupported. A completed cooperative result can now be explicitly
+exported as a fresh-life CPU founder source, as described below.
 
 This is serial **collection from a frozen source**, a dispatch parity control.
 The existing ordinary CPU serial care path learns between episodes and supplies
@@ -141,8 +142,107 @@ Plan both arms from the same immutable evidence before either runs; use isolated
 lane histories. The scheduler retains its existing prior/cache behavior, so run
 it in an isolated process/work directory with explicit prior settings. Compare
 actual optimizer steps and KL-stop receipts before treating the budgets as
-matched. An operator still must choose an authorized source and supply the
-trainer-removed assessment; neither command performs automatic promotion.
+matched. An operator still must choose an authorized source. The following bounded
+comparison command also executes teacher/prior-removed assessment. Neither path
+performs automatic promotion.
+
+
+## Continue and compare two CPU rounds
+
+Export a completed learner result into a new, explicitly selected founder source:
+
+```sh
+target/debug/train_cpu_care_round export-source \
+  --source ABS/EXACT_NATIVE_SOURCE --result ABS/ROUND/learner --output ABS/NEW_FOUNDER
+```
+
+The exporter verifies the raw source handoff and the sealed result before writing.
+It carries the complete output actor/value Adam histories, frozen coordinates,
+compiler inputs, policy version, fixture taint and all member seed exclusions.
+The existing CPU filenames contain an explicit `native_cpu_cooperative_founder`
+receipt and retained round proof. Export runs no biology or optimizer and may be
+retried only against the same exact inputs/bytes. It selects no accepted lineage.
+A next round uses `ABS/NEW_FOUNDER` as `previous` with source-bound history.
+Every new episode is a fresh private life. Earlier lives remain archived under
+their collection policies; recurrent, prior and biological state are never
+transplanted into a changed policy. This is not exact-life resume.
+
+The executable comparison runs exactly two cooperative rounds and an independent
+serial mixed-curriculum learning arm from the same explicit initial source:
+
+```sh
+python -B scripts/compare_cpu_care_rounds.py --spec ABS/comparison.json
+python -B scripts/compare_cpu_care_rounds.py --spec ABS/comparison.json --run
+```
+
+The first command validates and prints a plan without starting executables or
+creating outputs. Example recipe (all paths must be absolute; choose seeds using
+the supplied existing complete history):
+
+```json
+{
+  "schema": 1,
+  "previous": "/ABS/EXPLICIT_NATIVE_CPU_SOURCE",
+  "seed_history": "/ABS/EXISTING_COMPLETE_HISTORY.json",
+  "output": "/ABS/NEW_COMPARISON",
+  "care_binary": "/ABS/A-Life/target/debug/train_cpu_care",
+  "round_binary": "/ABS/A-Life/target/debug/train_cpu_care_round",
+  "temperature": 1.0,
+  "rounds": [
+    [
+      {"collector_run_id":"00-held","seed":551001,"lesson":"eat_held_food","decisions":32},
+      {"collector_run_id":"01-reachable","seed":551002,"lesson":"eat_reachable_food","decisions":32}
+    ],
+    [
+      {"collector_run_id":"00-held","seed":551003,"lesson":"eat_held_food","decisions":32},
+      {"collector_run_id":"01-reachable","seed":551004,"lesson":"eat_reachable_food","decisions":32}
+    ]
+  ],
+  "assessments": [
+    {"seed":551101,"lesson":"obstacle_navigation","decisions":64},
+    {"seed":551102,"lesson":"relocated_food","decisions":64}
+  ]
+}
+```
+
+On Windows use absolute Windows paths and `.exe` executable names. The runner
+isolates both arms and their private lives, uses explicit deterministic training
+priors, exports each cooperative result and feeds it to the next round. The
+serial arm learns between each lesson through the existing native care path.
+Using the same recipe seeds across the two independent arms is intentional
+experimental replication. Held-out seeds are declared before training and kept
+disjoint from every disclosed training/consumed seed.
+
+Matched V1 training doses are 1..32 decisions, with replay32/burn8/batch1: this
+keeps each ordinary serial episode in one window. The standalone collector still
+supports 1..128. `comparison-report.json` records actual PPO settings, full paired
+optimizer-age deltas, loss rows, windows, KL stops, private archive hashes and
+paired held-out outcomes. `budget_matched` requires the recorded settings and
+actual updates to match; a KL stop or budget mismatch is disclosed rather than
+called a matched result. Policy version counters can differ because the arms
+group updates differently. Comparison uses actual Adam updates.
+
+Assessment uses the same physical lessons and ordinary perception, biology,
+private waking learning and sleep, with teacher actors/utterances and the private
+semantic prior disabled. It runs no offline actor/critic update and emits no
+learner shard. Own acquisition, consumption and nourished meals remain distinct;
+bootstrap outcomes are excluded from the evaluated dose. To assess an explicit
+source independently, use `train_cpu_care_round evaluate --spec ABS/assessment.json`
+with `previous`, `output`, `seed_history`, `seed`, `decisions`, `temperature` and
+`lesson`; the seed must be listed in that history's `assessment_seeds`. Completed
+assessment reuse verifies source/history/artifact identity. Unsealed lives are
+retained and refused.
+
+The comparison accepts an existing strict complete operator-attested history; it
+does not manufacture completeness or upgrade unknown evidence. Fresh outputs are
+required: interrupted comparison runs retain all completed/partial artifacts,
+and automatic comparison resume is unsupported. Standalone source export is
+limited to 64 MiB aggregate ancestry blobs; comparison ancestry/history inputs
+have tighter documented bounds (124 receipts/16 MiB). Original sources remain
+untouched if a limit is exceeded. Generic cooperative members carry no inferred
+historical-freshness claim. No result is promoted. Fixture outcomes establish
+mechanical correctness; positive transfer and composition require adequately
+sampled real held-out outcomes against the measured serial-learning control.
 
 ## Ownership
 

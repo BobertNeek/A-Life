@@ -573,52 +573,17 @@ fn collect_cpu_episode_inner(
             return Err("source must retain biological objective2, full residual critic objective1, and objective_state_reset=false".into());
         }
         if receipt_name == "cpu-cycle.json" {
-            if receipt["complete"] != true
-                || receipt["mode"] != "native_cpu_fresh_cohort"
-                || receipt["backend"] != "native-cpu"
-                || receipt["receipt_filename"] != "cpu-cycle.json"
-                || receipt["handoff_filename"] != "training-handoff.json"
-            {
-                return Err("CPU source lacks a sealed typed handoff receipt".into());
-            }
-            let bytes = fs::read(previous.join("training-handoff.json"))?;
-            let handoff: FoundationTrainingHandoffV1 = serde_json::from_slice(&bytes)?;
-            handoff.validate()?;
-            for name in [
-                "trained.alife-foundation",
-                "actor-checkpoint.json",
-                "value-checkpoint.json",
-            ] {
-                if receipt["native_output_sha256"][name].as_str()
-                    != Some(hash(&source_bytes[name]).as_str())
+            let admitted = super::read_cpu_founder_source(&previous)?;
+            for (name, bytes) in admitted.files {
+                if source_bytes
+                    .get(&name)
+                    .is_some_and(|existing| *existing != bytes)
                 {
-                    return Err("CPU source native file differs from its sealed receipt".into());
+                    return Err("CPU source changed during typed founder admission".into());
                 }
+                source_hashes.insert(name.clone(), hash(&bytes));
+                source_bytes.insert(name, bytes);
             }
-            if receipt["native_output_sha256"]["training-handoff.json"].as_str()
-                != Some(hash(&bytes).as_str())
-                || handoff.origin != FoundationTrainingBackendV1::NativeCpu
-                || serde_json::from_slice::<FoundationTrainerCheckpoint>(
-                    &source_bytes["actor-checkpoint.json"],
-                )? != handoff.actor
-                || serde_json::from_slice::<PpoValueHeadCheckpoint>(
-                    &source_bytes["value-checkpoint.json"],
-                )? != handoff.value
-                || receipt["policy_version"].as_u64() != Some(handoff.policy_version)
-                || handoff
-                    .compiler_inputs
-                    .n2048_candidate_asset()
-                    .ok_or("missing typed handoff asset")?
-                    .encode_canonical()?
-                    != source_bytes["trained.alife-foundation"]
-            {
-                return Err(
-                    "CPU source typed handoff differs from its native founder/optimizer files"
-                        .into(),
-                );
-            }
-            source_hashes.insert("training-handoff.json".into(), hash(&bytes));
-            source_bytes.insert("training-handoff.json".into(), bytes);
         }
         if receipt_name == "group50.json"
             && (receipt["schema"] != 1
@@ -783,8 +748,13 @@ fn collect_cpu_episode_inner(
     }
     for (name, bytes) in &source_bytes {
         let dir = args.output.join("source-native");
-        fs::create_dir_all(&dir)?;
-        fs::write(dir.join(name), bytes)?;
+        let destination = dir.join(name);
+        fs::create_dir_all(
+            destination
+                .parent()
+                .ok_or("retained source file lacks parent")?,
+        )?;
+        fs::write(destination, bytes)?;
     }
     fs::write(
         args.output.join("collection-policy.alife-foundation"),
@@ -989,9 +959,14 @@ pub fn run_cpu_continuation(
     let ancestry_hashes = source_hashes
         .iter()
         .filter(|(name, _)| {
-            !matches!(
+            matches!(
                 name.as_str(),
-                "phase.txt" | SERIAL_HANDOFF_FILE | SERIAL_HANDOFF_BINDING_FILE
+                "cycle.json"
+                    | "cpu-cycle.json"
+                    | "group50.json"
+                    | "trained.alife-foundation"
+                    | "actor-checkpoint.json"
+                    | "value-checkpoint.json"
             )
         })
         .map(|(name, hash)| (name.clone(), hash.clone()))
@@ -1004,6 +979,7 @@ pub fn run_cpu_continuation(
   "old_asset_digest":asset_digest(&asset),"new_asset_digest":asset_digest(&trained),"initial_actor_optimizer_step":before_actor.optimizer_step,"initial_value_optimizer_step":before_value.optimizer_step,
   "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint().optimizer_step,"completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,
   "requested_world_ticks":args.ticks,"world_ticks_elapsed":host.world().tick().raw()-collection_start_tick,"collection_start_tick":collection_start_tick,"canonical_valid_decisions":valid_decisions,"training_rows":training_rows,
+  "ppo_config":config,"replay_window_ticks":32,"replay_burn_in":8,"effective_batch_size":windows.len(),"training_windows":windows.len(),"mean_kl_before_updates":update.mean_kl_before_updates,
   "sleeping_organism_ticks":sleeping,"sleep_consolidations":consolidations,"collection_seconds":collection_seconds,"update_seconds":update_seconds,
   "elapsed_seconds":all_started.elapsed().as_secs_f64(),"private_individual_archive":"collector-checkpoint.json","private_archive_policy":"collection-policy.alife-foundation",
   "terminal_gpu_individual_restore_proven":false,"hardware":trainer.hardware_receipt()});

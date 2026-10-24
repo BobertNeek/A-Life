@@ -17,7 +17,9 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
+mod evaluation;
 mod round;
+pub use evaluation::*;
 pub use round::*;
 type Result<T> = CpuContinuationResult<T>;
 
@@ -96,6 +98,7 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         reservation: None,
         collection_binding: None,
         explicit_deterministic_prior: false,
+        assessment: false,
     };
     Ok((config, episode))
 }
@@ -128,6 +131,7 @@ struct CareEpisode {
     reservation: Option<admission::CareSeedReservation>,
     collection_binding: Option<(CpuCollectorAssignmentV1, [u8; 32])>,
     explicit_deterministic_prior: bool,
+    assessment: bool,
 }
 
 impl CareEpisode {
@@ -167,13 +171,37 @@ impl CpuEpisodeHooks for CareEpisode {
         output: &std::path::Path,
     ) -> Result<()> {
         let (_, archive) = self.private_life_archive(host, output)?;
-        admission::write_atomic(&output.join("care-prior-lives.json"), &archive).map_err(|error| {
-            format!(
-                "care prior recovery archive at {} could not be sealed: {error}",
-                output.display()
-            )
-            .into()
-        })
+        admission::write_atomic(&output.join("care-prior-lives.json"), &archive).map_err(
+            |error| {
+                format!(
+                    "care prior recovery archive at {} could not be sealed: {error}",
+                    output.display()
+                )
+            },
+        )?;
+        if self.assessment {
+            let rows = self
+                .traces
+                .iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    let mut row = row.clone();
+                    row["loss_row"] = json!(false);
+                    row["evaluation_row"] = json!(i < self.request.decisions);
+                    row["bootstrap_row"] = json!(i >= self.request.decisions);
+                    row["teacher_heard"] = json!(false);
+                    row
+                })
+                .collect::<Vec<_>>();
+            admission::write_atomic(
+                &output.join("care-trace.json"),
+                &json!({
+                    "schema":1,"backend":"native-cpu","lesson":self.request.lesson,
+                    "complete":false,"recovery_prefix":true,"world_tick":host.world().tick(),"rows":rows
+                }),
+            )?;
+        }
+        Ok(())
     }
     fn decision_budget(&self) -> Option<usize> {
         Some(self.request.decisions)
@@ -192,6 +220,24 @@ impl CpuEpisodeHooks for CareEpisode {
                 json!({"allocation":"development-fixture-only","historical_freshness":"unknown"}),
             );
         }
+        if self.assessment {
+            let provenance =
+                crate::foundation_training_cycle::admit_native_cpu_care_assessment_seed(
+                    config
+                        .previous
+                        .as_deref()
+                        .ok_or("assessment source missing")?,
+                    self.request
+                        .seed_history
+                        .as_deref()
+                        .ok_or("assessment history missing")?,
+                    &config.output,
+                    config.seed,
+                    self.request.known_exclusions,
+                )?;
+            return Ok(json!({"allocation":"assessment-no-training",
+                "seed_admission":provenance["seed_admission"],"source_sha256":provenance["source_sha256"]}));
+        }
         let reservation = match &self.collection_binding {
             Some((assignment, plan)) => admission::CareSeedReservation::reserve_collection(
                 config,
@@ -209,7 +255,9 @@ impl CpuEpisodeHooks for CareEpisode {
         if founder.phenotype().sensor_profile() != SensorProfile::GroundedTerrainVisionV1 {
             return Err("CPU care requires the retained grounded natural-senses policy; sensor conversion is not continuation".into());
         }
-        self.prior = if self.explicit_deterministic_prior {
+        self.prior = if self.assessment {
+            None
+        } else if self.explicit_deterministic_prior {
             Some(RuntimeSemanticPrior::deterministic_for_training(
                 self.request.seed,
             ))
@@ -227,13 +275,18 @@ impl CpuEpisodeHooks for CareEpisode {
         Ok(())
     }
     fn prepare_world(&mut self, world: &mut alife_world::HeadlessWorld) -> Result<()> {
-        let scenario = configure_foundation_scenario(
+        let mut scenario = configure_foundation_scenario(
             world,
             self.request.seed,
             Some(self.request.lesson),
             None,
             true,
         )?;
+        if self.assessment {
+            evaluation::ensure_no_teacher(world)?;
+            scenario.silent_request = true;
+            scenario.teacher_cue_tokens.clear();
+        }
         let learner = world
             .organism_entity_ids()
             .first()
@@ -280,7 +333,11 @@ impl CpuEpisodeHooks for CareEpisode {
                 }
             }
         }
-        expose_foundation_teacher_cue(host.world_mut(), scenario)?;
+        if self.assessment {
+            evaluation::ensure_no_teacher(host.world())?;
+        } else {
+            expose_foundation_teacher_cue(host.world_mut(), scenario)?;
+        }
         if matches!(
             self.request.lesson,
             FoundationTeacherLesson::EatHeldFood | FoundationTeacherLesson::EatReachableFood
@@ -310,6 +367,9 @@ impl CpuEpisodeHooks for CareEpisode {
         founder: &CpuFoundationTrainer,
         step: &CpuCanonicalStep,
     ) -> Result<()> {
+        if self.assessment {
+            evaluation::ensure_no_teacher(host.world())?;
+        }
         let scenario = self.scenario.as_ref().ok_or("care scene missing")?;
         let summary = self
             .summary
@@ -318,6 +378,9 @@ impl CpuEpisodeHooks for CareEpisode {
         for row in &step.decisions {
             row.patch.validate_contract()?;
             let frame = row.patch.pre_action().perception();
+            if self.assessment && evaluation::teacher_heard(frame) {
+                return Err("assessment heard a teacher; retain private recovery without qualifying results".into());
+            }
             let evidence = row.patch.decision().neural_evidence()?;
             if row.organism_id != summary.organism
                 || frame.organism_id() != row.organism_id
@@ -349,6 +412,8 @@ impl CpuEpisodeHooks for CareEpisode {
                 after: ownership(host.world(), summary.target),
             };
             let before = summary.nourished_meal_events;
+            let before_acquisitions = summary.ordinary_acquisition_events;
+            let before_consumptions = summary.consumption_events;
             summary.observe(observation, &row.patch);
             let index = self.traces.len();
             if summary.nourished_meal_events > before {
@@ -360,6 +425,12 @@ impl CpuEpisodeHooks for CareEpisode {
                 "action":row.patch.decision().selected_action,"bundle":row.patch.selected_bundle(),
                 "outcome":row.patch.outcome(),"ppo_action":row.action,
                 "nourished_meal":summary.nourished_meal_events>before});
+            if self.assessment {
+                trace["acquisition_event"] =
+                    json!(summary.ordinary_acquisition_events > before_acquisitions);
+                trace["consumption_event"] =
+                    json!(summary.consumption_events > before_consumptions);
+            }
             if self.request.lesson == FoundationTeacherLesson::RelocatedFood {
                 trace["food_relocated"] = json!(self.relocation_row.is_some());
                 trace["food_position"] = json!(host
@@ -402,7 +473,12 @@ impl CpuEpisodeHooks for CareEpisode {
         let summary = self.summary.as_ref().ok_or("care outcome missing")?;
         let trained_meals = self.meal_rows.iter().filter(|i| **i < train_rows).count();
         for (i, trace) in self.traces.iter_mut().enumerate() {
-            trace["loss_row"] = json!(i < train_rows);
+            trace["loss_row"] = json!(!self.assessment && i < train_rows);
+            if self.assessment {
+                trace["evaluation_row"] = json!(i < train_rows);
+                trace["bootstrap_row"] = json!(i >= train_rows);
+                trace["teacher_heard"] = json!(false);
+            }
         }
         let (policy_sha, private_lives) = self.private_life_archive(host, output)?;
         let write = |name: &str, value: &Value| -> Result<()> {
@@ -469,6 +545,31 @@ impl CpuEpisodeHooks for CareEpisode {
             metadata["care_round_plan_sha256"] = json!(plan);
             metadata["comparison_role"] = json!("serial-collection-parity-control");
             metadata["prior_failure_policy"] = json!("reject-before-collector-seal");
+        }
+        if self.assessment {
+            metadata["kind"] = json!("care-cpu-assessment");
+            metadata["teacher_present"] = json!(false);
+            metadata["teacher_cue_frames"] = json!(0);
+            metadata["semantic_prior_enabled"] = json!(false);
+            metadata["prior_failure_policy"] = json!("disabled-independent-of-environment");
+            metadata["evaluated_decisions"] = json!(train_rows);
+            metadata["evaluated_nourished_meals"] = json!(trained_meals);
+            metadata["evaluated_ordinary_acquisitions"] = json!(self
+                .traces
+                .iter()
+                .take(train_rows)
+                .filter(|r| r["acquisition_event"] == true)
+                .count());
+            metadata["evaluated_consumptions"] = json!(self
+                .traces
+                .iter()
+                .take(train_rows)
+                .filter(|r| r["consumption_event"] == true)
+                .count());
+            metadata["trained_nourished_meals"] = json!(0);
+            metadata["offline_actor_optimizer_updates"] = json!(0);
+            metadata["offline_value_optimizer_updates"] = json!(0);
+            metadata["persistent_learning"] = json!("fresh-private-life-with-ordinary-biology-waking-learning-and-sleep; frozen-founder-and-full-optimizers");
         }
         write("care-episode.json", &metadata)?;
         let mut artifacts = vec![
