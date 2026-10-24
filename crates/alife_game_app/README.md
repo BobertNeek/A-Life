@@ -36,6 +36,38 @@ cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-c
 cargo run -p alife_game_app --features gpu-tests --bin alife_game_app -- gpu-closed-loop-soak --help
 ```
 
+## Relocated-food motion evidence
+
+Native GPU relocated-food pilot/assessment and cycle captures extend the existing
+`food_relocation.rows` diagnostics. Each row binds the organism, sequence,
+decision/outcome ticks, frame digest and dispatch generation to:
+
+- `body_before_decision` and `body_after_outcome`: canonical world entity,
+  position, interval velocity, `body_yaw`, `head_yaw` and `gaze_yaw`. Yaws are
+  radians in the horizontal X/Z plane: zero faces +X, positive turns toward +Z.
+  `head_yaw` is the offset from the body; `gaze_yaw` is their sum, as used by
+  perception. These are capture boundaries, not intermediate channel poses.
+- `selected_commands`: every issued channel's complete command, including
+  direction, intensity, duration, target, stand-off distance and bounded payload.
+  The representative `selected_action` can differ from concurrent locomotion.
+- `applied_motor_channels`: the matching world's adapted commands in execution
+  order, with phase, physical outcome and measured channel observation. World
+  embodiment/locomotor adaptation can change intensity or direction. The complete
+  `channel_outcomes` also remain bound to the sealed patch.
+
+The capture reads existing world state and CPU-side receipts only when this
+lesson's diagnostic collector is active; it adds no neural inputs or GPU
+readback. General `lesson-trace.json` already includes the perception frame's
+gaze quaternion but retains a smaller selected-command projection; sealed replay
+patches already retain complete issued bundles. The new rows join that command
+evidence to world headings and applied receipts absent from headless relocation
+captures. Join records
+using their causal identifiers. Missing historical fields or unavailable body/
+motor evidence mean unknown, and saved receipts are not backfilled. Frame-level
+visibility and motion alone cannot establish memory failure, command conflict
+or sub-tick causality. These diagnostics do not measure learning efficacy or
+performance.
+
 ## Feeding nourishment in mixed-care reports
 
 The native GPU `feeding` cycle writes optional `feeding_food` evidence in

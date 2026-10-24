@@ -84,6 +84,34 @@ pub(crate) struct RelocatedFoodStepStart {
     tick: Tick,
     position: Vec3f,
     ownership: FoodOwnershipSnapshot,
+    body: RelocatedFoodBodyState,
+}
+
+/// Canonical world state, read only at the requested capture boundaries.
+/// Yaws are radians in X/Z: zero faces +X and positive yaw turns toward +Z.
+#[derive(Clone, Copy, serde::Serialize)]
+struct RelocatedFoodBodyState {
+    entity: WorldEntityId,
+    position: Vec3f,
+    velocity: Vec3f,
+    body_yaw: f32,
+    head_yaw: f32,
+    gaze_yaw: f32,
+}
+
+impl RelocatedFoodBodyState {
+    fn capture(world: &alife_world::HeadlessWorld, organism: OrganismId) -> Option<Self> {
+        let entity = world.organism_registry().get(organism)?.world_entity_id();
+        let body = world.entity(entity)?;
+        Some(Self {
+            entity,
+            position: body.position,
+            velocity: body.grounded_physical.velocity,
+            body_yaw: body.body_yaw,
+            head_yaw: body.head_yaw,
+            gaze_yaw: body.body_yaw + body.head_yaw,
+        })
+    }
 }
 
 impl RelocatedFoodCollector {
@@ -171,6 +199,8 @@ impl RelocatedFoodCollector {
             tick: world.tick(),
             position: world.entity(target).ok_or("food missing")?.position,
             ownership: ownership(world, target).ok_or("food missing")?,
+            body: RelocatedFoodBodyState::capture(world, self.receipt.organism)
+                .ok_or("relocated-food learner body missing before capture")?,
         })
     }
 
@@ -179,8 +209,26 @@ impl RelocatedFoodCollector {
         world: &alife_world::HeadlessWorld,
         before: RelocatedFoodStepStart,
         step: &crate::FoundationTrainingStep,
+        summaries: &[crate::LiveBrainTickSummary],
     ) -> Result<()> {
-        self.observe_row(world, before, &step.frame, &step.behavior, &step.patch)
+        let summary = summaries
+            .iter()
+            .find(|summary| {
+                summary.organism_id == step.patch.header().organism_id
+                    && summary.world_tick_before == before.tick
+                    && summary.world_tick_after == step.patch.outcome().outcome_tick
+                    && summary.patch_sealed
+                    && summary.patch_sequence_id == Some(step.patch.header().sequence_id.raw())
+            })
+            .ok_or("relocated-food motor summary identity mismatch")?;
+        self.observe_row(
+            world,
+            before,
+            &step.frame,
+            &step.behavior,
+            &step.patch,
+            summary.motor_execution.as_ref(),
+        )
     }
 
     fn observe_row(
@@ -190,8 +238,27 @@ impl RelocatedFoodCollector {
         frame: &alife_core::PerceptionFrame,
         behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt,
         patch: &alife_core::ExperiencePatch,
+        motor: Option<&crate::LiveMotorExecutionTrace>,
     ) -> Result<()> {
         patch.validate_contract()?;
+        if let Some(motor) = motor {
+            if !patch.selected_bundle().is_some_and(|bundle| {
+                bundle.channels == motor.requested_channels
+                    && patch.outcome().joint.as_ref().is_some_and(|joint| {
+                        joint.channel_outcomes.len() == motor.channel_receipts.len()
+                            && joint
+                                .channel_outcomes
+                                .iter()
+                                .zip(&motor.channel_receipts)
+                                .all(|(outcome, receipt)| {
+                                    outcome.channel == receipt.command.channel
+                                        && outcome.physical == receipt.physical
+                                })
+                    })
+            }) {
+                return Err("relocated-food motor receipt differs from sealed patch".into());
+            }
+        }
         let observation = FoodOutcomeObservation {
             organism: self.receipt.organism,
             target: self.receipt.target,
@@ -201,6 +268,7 @@ impl RelocatedFoodCollector {
             after: ownership(world, self.receipt.target),
         };
         if !observation.matches_row(frame, behavior, patch)
+            || frame.body().pose.translation != before.body.position
             || patch.decision().policy_backend() != alife_core::PolicyBackend::NeuralClosedLoopGpu
             || behavior.behavior != alife_gpu_backend::GpuTrainingBehaviorKind::OnPolicy
             || behavior.sampling.demonstrator.is_some()
@@ -267,16 +335,19 @@ impl RelocatedFoodCollector {
             "dispatch_generation": evidence.dispatch_generation,
             "behavior": behavior.behavior,
             "food_visible": target_visible_in_captured_slots(world, frame, self.receipt.target),
+            "body_before_decision": before.body,
+            "body_after_outcome": RelocatedFoodBodyState::capture(world, self.receipt.organism),
             "selected_action": patch.decision().selected_action,
-            "selected_commands": patch.selected_bundle().map(|bundle| bundle.channels.iter()
-                .filter(|command| command.channel == alife_core::MotorChannel::Manipulation)
-                .map(|command| serde_json::json!({"channel":command.channel,
-                    "primitive":command.primitive,"target":command.target}))
-                .collect::<Vec<_>>()),
+            "selected_commands": patch.selected_bundle().map(|bundle| &bundle.channels),
+            // World-adapted commands, in actual execution order; absence is
+            // unknown, never reconstructed from the representative action.
+            "applied_motor_channels": motor.map(|motor| motor.channel_receipts.iter()
+                .map(|receipt| serde_json::json!({
+                    "command": receipt.command, "phase": format!("{:?}", receipt.phase),
+                    "physical": receipt.physical, "observation": receipt.observation,
+                })).collect::<Vec<_>>()),
             "physical": outcome.physical,
-            "channel_outcomes": outcome.joint.as_ref().map(|joint| joint.channel_outcomes.iter()
-                .filter(|channel| channel.channel == alife_core::MotorChannel::Manipulation)
-                .collect::<Vec<_>>()),
+            "channel_outcomes": outcome.joint.as_ref().map(|joint| &joint.channel_outcomes),
             "physiology": outcome.measured_physiology.map(|transition| serde_json::json!({
                 "before_energy":transition.before.body.energy,"after_energy":transition.after.body.energy,
                 "before_hunger":transition.before.homeostasis.drives.hunger,"after_hunger":transition.after.homeostasis.drives.hunger,
@@ -484,12 +555,21 @@ mod tests {
         .with_measured_physiology(physiology)
         .unwrap();
         let patch = measured::action_patch(frame.clone(), target, outcome, command.action_id, None);
+        let behavior = captured_behavior(&frame, &patch, representative_index);
+        (before, frame, behavior, patch)
+    }
+
+    fn captured_behavior(
+        frame: &PerceptionFrame,
+        patch: &ExperiencePatch,
+        representative_index: u16,
+    ) -> GpuTrainingRolloutReceipt {
         // Synthetic GPU identity/mask data tests host receipt binding over real
         // canonical physical and biological outcomes. This does not claim GPU
         // inference or an actual sampled on-policy success.
-        let behavior = GpuTrainingRolloutReceipt {
-            organism_id: organism.raw(),
-            tick: before.tick.raw(),
+        GpuTrainingRolloutReceipt {
+            organism_id: frame.organism_id().raw(),
+            tick: frame.tick().raw(),
             dispatch_generation: patch
                 .decision()
                 .neural_evidence()
@@ -515,8 +595,7 @@ mod tests {
             behavior: GpuTrainingBehaviorKind::OnPolicy,
             joint_log_probability: Some(0.0),
             policy_joint_log_probability: 0.0,
-        };
-        (before, frame, behavior, patch)
+        }
     }
 
     fn collect(
@@ -527,8 +606,175 @@ mod tests {
         let target = eat.then_some(collector.receipt.target);
         let (before, frame, behavior, patch) = act(world, collector, eat, target);
         collector
-            .observe_row(world, before, &frame, &behavior, &patch)
+            .observe_row(world, before, &frame, &behavior, &patch, None)
             .unwrap();
+    }
+
+    #[test]
+    fn relocation_motion_trace_keeps_world_headings_full_commands_and_applied_order() {
+        use alife_core::{
+            channel_command_for_action, Confidence, MotorChannel, MotorCommandBundle,
+        };
+        use alife_world::HeadlessActionIds as Actions;
+        let (mut world, mut collector) = fixture(42);
+        let (organism, entity) = world.organism_entity_ids()[0];
+        // Ordinary physical setup separates gaze from body heading.
+        let setup = measured::frame(&mut world);
+        let look = setup
+            .candidates()
+            .iter()
+            .find(|c| c.action_id == Actions::LOOK_LEFT)
+            .unwrap()
+            .to_command(organism, Confidence::new(1.0).unwrap())
+            .unwrap();
+        world.apply_command(&look).unwrap();
+        let before = collector.before_step(&mut world).unwrap();
+        let frame = measured::frame(&mut world);
+        assert_ne!(before.body.head_yaw, 0.0);
+        let candidate = |action| {
+            frame
+                .candidates()
+                .iter()
+                .find(|c| c.action_id == action)
+                .unwrap()
+        };
+        let representative_action = Actions::TURN_LEFT;
+        let representative = candidate(representative_action).candidate_index;
+        let channels = [
+            (MotorChannel::Orientation, Actions::TURN_LEFT),
+            (MotorChannel::Locomotion, Actions::STEP_FORWARD),
+            (MotorChannel::Manipulation, Actions::NO_MANIPULATION),
+        ]
+        .into_iter()
+        .map(|(channel, action)| {
+            channel_command_for_action(
+                channel,
+                &candidate(action)
+                    .to_command(organism, Confidence::new(1.0).unwrap())
+                    .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+        let bundle =
+            MotorCommandBundle::new(organism, ExperienceSequenceId(1), frame.tick(), channels)
+                .unwrap();
+        let execution = world
+            .apply_registered_motor_bundle(&bundle, entity)
+            .unwrap();
+        assert_eq!(
+            execution.channel_receipts[0].command.channel,
+            MotorChannel::Locomotion
+        );
+        assert_eq!(
+            execution.channel_receipts[1].command.channel,
+            MotorChannel::Orientation
+        );
+        assert_ne!(world.entity(entity).unwrap().position, before.body.position);
+        assert_ne!(world.entity(entity).unwrap().body_yaw, before.body.body_yaw);
+        world.try_advance_tick().unwrap();
+        let outcome = PostActionOutcome::new(
+            organism,
+            bundle.sequence_id,
+            world.tick(),
+            execution.succeeded,
+            execution.joint.execution,
+            HomeostaticDelta::zero(),
+            SignedValence::ZERO,
+            NormalizedScalar::ZERO,
+            NormalizedScalar::ZERO,
+            SignedValence::ZERO,
+            NormalizedScalar::ZERO,
+        )
+        .unwrap()
+        .with_measured_physiology(
+            alife_core::MeasuredPhysiologyTransition::new(
+                execution.biology_before,
+                execution.biology_after,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let patch = measured::action_patch(
+            frame.clone(),
+            None,
+            outcome,
+            representative_action,
+            Some((bundle.clone(), execution.joint)),
+        );
+        let mut behavior = captured_behavior(&frame, &patch, representative);
+        behavior.motor_indices[2] = candidate(Actions::NO_MANIPULATION).candidate_index;
+        let motor = crate::LiveMotorExecutionTrace {
+            requested_channels: bundle.channels.clone(),
+            channel_receipts: execution.channel_receipts,
+        };
+        // A different issued bundle or physical outcome must not be joined onto this row.
+        let mut wrong = motor.clone();
+        wrong.requested_channels[0].intensity = alife_core::Intensity::new(0.125).unwrap();
+        assert!(collector
+            .observe_row(&world, before, &frame, &behavior, &patch, Some(&wrong))
+            .is_err());
+        let mut wrong = motor.clone();
+        wrong.channel_receipts[0].physical.displacement = Vec3f::ZERO;
+        assert!(collector
+            .observe_row(&world, before, &frame, &behavior, &patch, Some(&wrong))
+            .is_err());
+        assert!(collector.receipt.rows.is_empty());
+        let world_digest = world.canonical_signature_digest().unwrap();
+        let patch_bytes = serde_json::to_vec(&patch).unwrap();
+        collector
+            .observe_row(&world, before, &frame, &behavior, &patch, Some(&motor))
+            .unwrap();
+        assert_eq!(world.canonical_signature_digest().unwrap(), world_digest);
+        assert_eq!(serde_json::to_vec(&patch).unwrap(), patch_bytes);
+        let receipt = collector.finish(1).unwrap();
+        let row = &receipt.rows[0];
+        assert_eq!(row["selected_commands"], serde_json::json!(bundle.channels));
+        assert_eq!(
+            row["selected_action"]["action_id"],
+            representative_action.raw()
+        );
+        assert_eq!(row["body_before_decision"], serde_json::json!(before.body));
+        assert_eq!(
+            row["body_after_outcome"],
+            serde_json::json!(RelocatedFoodBodyState::capture(&world, organism))
+        );
+        assert_eq!(
+            row["body_before_decision"]["gaze_yaw"],
+            serde_json::json!(before.body.body_yaw + before.body.head_yaw)
+        );
+        let applied = row["applied_motor_channels"].as_array().unwrap();
+        assert_eq!(applied.len(), 3);
+        for (json, actual) in applied.iter().zip(&motor.channel_receipts) {
+            assert_eq!(json["command"], serde_json::json!(actual.command));
+            assert_eq!(json["physical"], serde_json::json!(actual.physical));
+            assert_eq!(json["observation"], serde_json::json!(actual.observation));
+        }
+        assert_eq!(
+            row["channel_outcomes"],
+            serde_json::json!(patch.outcome().joint.as_ref().unwrap().channel_outcomes)
+        );
+    }
+
+    #[test]
+    fn relocation_trace_missing_motor_and_historical_body_evidence_remain_unknown() {
+        let (mut world, mut collector) = fixture(42);
+        collect(&mut world, &mut collector, false);
+        let receipt = collector.finish(1).unwrap();
+        assert!(receipt.rows[0]["selected_commands"].is_null());
+        assert!(receipt.rows[0]["applied_motor_channels"].is_null());
+        let mut historical = serde_json::to_value(&receipt).unwrap();
+        let row = historical["rows"][0].as_object_mut().unwrap();
+        for field in [
+            "body_before_decision",
+            "body_after_outcome",
+            "applied_motor_channels",
+        ] {
+            row.remove(field);
+        }
+        let restored: FoundationFoodRelocationReceipt =
+            serde_json::from_value(historical.clone()).unwrap();
+        assert_eq!(serde_json::to_value(restored).unwrap(), historical);
     }
 
     #[test]
@@ -689,7 +935,7 @@ mod tests {
             collector.receipt.target
         ));
         collector
-            .observe_row(&world, before, &frame, &behavior, &patch)
+            .observe_row(&world, before, &frame, &behavior, &patch, None)
             .unwrap();
         assert_eq!(collector.receipt.rows[0]["food_visible"], true);
         let receipt = collector.finish(1).unwrap();
@@ -738,15 +984,15 @@ mod tests {
                 _ => wrong.joint_log_probability = None,
             }
             assert!(collector
-                .observe_row(&world, before, &frame, &wrong, &patch)
+                .observe_row(&world, before, &frame, &wrong, &patch, None)
                 .is_err());
         }
         assert!(collector.receipt.rows.is_empty());
         collector
-            .observe_row(&world, before, &frame, &behavior, &patch)
+            .observe_row(&world, before, &frame, &behavior, &patch, None)
             .unwrap();
         assert!(collector
-            .observe_row(&world, before, &frame, &behavior, &patch)
+            .observe_row(&world, before, &frame, &behavior, &patch, None)
             .is_err());
     }
 
@@ -807,7 +1053,7 @@ mod tests {
                 ));
             }
             collector
-                .observe_row(&world, before, &frame, &behavior, &patch)
+                .observe_row(&world, before, &frame, &behavior, &patch, None)
                 .unwrap();
         }
         assert!(world.entity(other).unwrap().consumed);
@@ -840,7 +1086,7 @@ mod tests {
         // canonical world has already carried out and measured the meal.
         let partial = measured::eating_narration_patch(frame.clone(), target, partial);
         collector
-            .observe_row(&world, before, &frame, &behavior, &partial)
+            .observe_row(&world, before, &frame, &behavior, &partial, None)
             .unwrap();
         let receipt = collector.finish(4).unwrap();
         assert_eq!(receipt.food_outcome.consumption_events, 1);

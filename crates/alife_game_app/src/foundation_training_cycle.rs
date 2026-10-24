@@ -3387,7 +3387,7 @@ fn run_foundation_training_cycle_in_owned_output(
     let feeding_before = feeding_food
         .as_ref()
         .map(|food| food.before_step(runtime.world()));
-    runtime.tick().map_err(|e| {
+    let tick_summaries = runtime.tick().map_err(|e| {
         let _ = std::fs::write(
             output.join("runtime-performance-failed.json"),
             serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
@@ -3410,8 +3410,9 @@ fn run_foundation_training_cycle_in_owned_output(
         food.observe_step(runtime.world(), before, &first[0])?;
     }
     if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before) {
-        collector.observe_step(runtime.world(), before, &first[0])?;
+        collector.observe_step(runtime.world(), before, &first[0], &tick_summaries)?;
     }
+    drop(tick_summaries);
     if let Some(setup) = grab_setup {
         if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
             setup,
@@ -3706,7 +3707,11 @@ fn run_foundation_training_cycle_in_owned_output(
         }
         if let (Some(collector), Some(before)) = (relocation_collector.as_mut(), relocation_before)
         {
-            collector.observe_step(runtime.world(), before, &captured[0])?;
+            let summaries = match &tick_outcome {
+                crate::GpuLiveTickOutcome::Progressed(summaries) => summaries.as_slice(),
+                crate::GpuLiveTickOutcome::NoProgress(_) => &[],
+            };
+            collector.observe_step(runtime.world(), before, &captured[0], summaries)?;
         }
         if let Some(setup) = grab_setup {
             if let Some(acquisition) = crate::foundation_grab_food::observe_grab_acquisition(
