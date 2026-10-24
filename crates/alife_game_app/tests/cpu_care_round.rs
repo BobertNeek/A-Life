@@ -729,16 +729,17 @@ fn an_existing_unsealed_private_life_is_never_reset_or_redispatched() {
         .truncate(false)
         .open(output.join(".care-round-owner.lock"))
         .unwrap();
-    owner.try_lock().unwrap();
     let locked_before = tree(&output);
+    owner.try_lock().unwrap();
     let protected = fixture.protected();
     let locked = round_cli(&fixture.fixture, &["run", "--plan", text(&plan_path)], true);
     assert!(!locked.status.success());
     assert!(String::from_utf8_lossy(&locked.stderr).contains("owner"));
     assert_not_dispatched(&output);
+    // Windows byte-range locks also refuse reads through another file handle.
+    drop(owner);
     assert_eq!(tree(&output), locked_before);
     fixture.assert_protected(&protected);
-    drop(owner);
 
     let interrupted = output.join("collectors/00-held");
     fs::create_dir_all(&interrupted).unwrap();

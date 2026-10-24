@@ -18,6 +18,18 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, Box<dyn std::e
     Ok(serde_json::from_slice(&fs::read(path)?)?)
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Native checkpoint reconstruction and recurrent PPO need more stack than
+    // the Windows executable's main thread. Bound it explicitly as other
+    // offline care tools do; RUST_MIN_STACK does not resize the main thread.
+    std::thread::Builder::new()
+        .name("cpu-care-round".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| run().map_err(|error| error.to_string()))?
+        .join()
+        .map_err(|_| "CPU care round worker panicked; retained output requires inspection")??;
+    Ok(())
+}
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let command = args.next().unwrap_or_else(|| "--help".into());
     if matches!(command.as_str(), "--help" | "-h") {
