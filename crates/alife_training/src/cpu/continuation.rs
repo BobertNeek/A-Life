@@ -466,7 +466,13 @@ fn collect_cpu_episode_inner(
 ) -> Result<CpuCollectedEpisode> {
     args.previous = args.previous.map(|p| p.canonicalize()).transpose()?;
     args.output =
-        resolve_isolated_training_output(&args.output, args.previous.iter().map(PathBuf::as_path))?;
+        resolve_isolated_training_output(&args.output, args.previous.iter().map(PathBuf::as_path))
+            .map_err(|error| {
+                format!(
+                    "CPU collection output path {} could not be resolved: {error}",
+                    args.output.display()
+                )
+            })?;
     if args.fixture == args.previous.is_some()
         || args.seed == 0
         || !(2..=2048).contains(&args.ticks)

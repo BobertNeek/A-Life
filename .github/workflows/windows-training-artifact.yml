@@ -73,6 +73,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
+      - name: Rooted and canonical output admission before filesystem mutation
+        run: cargo test --locked -p alife_training --lib output_resolution_tests
       - name: Serial real-care adapter contracts without a live prior
         run: cargo test --locked -p alife_game_app --features cpu-training --test cpu_care_round -- --nocapture
   build:

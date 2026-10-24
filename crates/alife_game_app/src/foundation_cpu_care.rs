@@ -167,7 +167,13 @@ impl CpuEpisodeHooks for CareEpisode {
         output: &std::path::Path,
     ) -> Result<()> {
         let (_, archive) = self.private_life_archive(host, output)?;
-        admission::write_atomic(&output.join("care-prior-lives.json"), &archive)
+        admission::write_atomic(&output.join("care-prior-lives.json"), &archive).map_err(|error| {
+            format!(
+                "care prior recovery archive at {} could not be sealed: {error}",
+                output.display()
+            )
+            .into()
+        })
     }
     fn decision_budget(&self) -> Option<usize> {
         Some(self.request.decisions)
