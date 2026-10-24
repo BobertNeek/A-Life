@@ -3,6 +3,8 @@ use alife_core::*;
 use alife_runtime::canonical_preparation::foundation_construction_development;
 use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
 use alife_world::*;
+#[path = "cpu_collector/collector_shards.rs"]
+mod collector_shards;
 fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
     fixture_atp(None)
 }
@@ -14,6 +16,16 @@ fn fixture_atp(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
     )
 }
 fn new_game_fixture(atp: Option<f32>) -> (CanonicalNewGame, CpuFoundationTrainer) {
+    let (game, trainer, _) = new_game_with_inputs_fixture(atp);
+    (game, trainer)
+}
+fn new_game_with_inputs_fixture(
+    atp: Option<f32>,
+) -> (
+    CanonicalNewGame,
+    CpuFoundationTrainer,
+    PhenotypeCompilerInputs,
+) {
     let builtin =
         FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
     let mut config = CanonicalNewGameConfig::phase3(0x7A1123, 1).unwrap();
@@ -36,7 +48,7 @@ fn new_game_fixture(atp: Option<f32>) -> (CanonicalNewGame, CpuFoundationTrainer
         TrainingStageManifest::new(1, 1, 1),
     )
     .unwrap();
-    let (p, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+    let (p, inputs) = PhenotypeCompiler::compile_n2048_foundation_candidate(
         genome.clone(),
         development,
         asset.clone(),
@@ -66,7 +78,7 @@ fn new_game_fixture(atp: Option<f32>) -> (CanonicalNewGame, CpuFoundationTrainer
     )
     .unwrap();
     let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
-    (game, trainer)
+    (game, trainer, inputs)
 }
 #[test]
 fn canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd() {
