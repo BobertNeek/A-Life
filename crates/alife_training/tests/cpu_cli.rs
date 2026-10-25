@@ -65,7 +65,6 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
         "collection-actor-checkpoint.json",
         "initial-value-checkpoint.json",
         "collector-checkpoint.json",
-        "compiler-inputs.json",
         "training-handoff.json",
         "actor-checkpoint.json",
         "value-checkpoint.json",
@@ -89,7 +88,29 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
         serde_json::from_slice(&fs::read(first.join("value-checkpoint.json")).unwrap()).unwrap();
     assert_eq!(handoff.actor, actor);
     assert_eq!(handoff.value, value);
+    let compiler_bytes = serde_json::to_vec(&handoff.compiler_inputs).unwrap();
+    let sidecar = first.join("compiler-inputs.json");
+    assert!(!sidecar.exists());
+    let admitted = alife_training::cpu::read_cpu_founder_source(&first).unwrap();
+    assert_eq!(admitted.handoff, handoff);
+    // Historical serial outputs may still carry the optional duplicate. Keep
+    // reading it and rejecting invalid copies instead of weakening admission.
+    fs::write(&sidecar, &compiler_bytes).unwrap();
+    assert_eq!(
+        alife_training::cpu::read_cpu_founder_source(&first)
+            .unwrap()
+            .handoff,
+        handoff
+    );
+    fs::write(&sidecar, b"{}").unwrap();
+    assert!(alife_training::cpu::read_cpu_founder_source(&first).is_err());
+    fs::remove_file(sidecar).unwrap();
     let source_before = snapshot_tree(&first);
+    let files: Vec<_> = source_before.values().filter_map(Option::as_ref).collect();
+    println!(
+        "CPU fixture first episode: {} files, {} logical bytes; omitted duplicate compiler inputs: {} bytes, one file",
+        files.len(), files.iter().map(|bytes| bytes.len()).sum::<usize>(), compiler_bytes.len(),
+    );
     let forbidden_outputs = vec![
         first.clone(),
         first.join("new-parent/experiment"),
@@ -157,6 +178,18 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
             .unwrap();
     assert_eq!(restored_actor, actor);
     assert_eq!(restored_value, value);
+    assert_eq!(serde_json::to_vec(&restored_actor).unwrap(), before[3]);
+    assert_eq!(serde_json::to_vec(&restored_value).unwrap(), before[4]);
+    let restored_inputs: alife_core::PhenotypeCompilerInputs =
+        serde_json::from_slice(&fs::read(second.join("collection-compiler-inputs.json")).unwrap())
+            .unwrap();
+    assert_eq!(restored_inputs, handoff.compiler_inputs);
+    assert_eq!(
+        serde_json::to_vec(&restored_inputs).unwrap(),
+        compiler_bytes
+    );
+    assert!(!second.join("compiler-inputs.json").exists());
+    alife_training::cpu::read_cpu_founder_source(&second).unwrap();
     let a: serde_json::Value = serde_json::from_slice(&before[1]).unwrap();
     let b: serde_json::Value =
         serde_json::from_slice(&fs::read(second.join("cpu-cycle.json")).unwrap()).unwrap();

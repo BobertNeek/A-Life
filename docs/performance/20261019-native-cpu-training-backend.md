@@ -1,6 +1,6 @@
 # Native CPU foundation training backend
 
-Dated implementation/evidence report, updated 2026-10-21. This report covers
+Dated implementation/evidence report, updated 2026-10-25. This report covers
 [PR #110](https://github.com/BobertNeek/A-Life/pull/110) and the care bridge in
 [PR #118](https://github.com/BobertNeek/A-Life/pull/118). Historical measurements
 retain their recorded source scope.
@@ -22,6 +22,30 @@ cargo run --locked -p alife_training --features cpu-backend \
   --previous /path/to/sealed-native-or-cpu-cycle \
   --output /path/to/new-output --seed EXPLICIT_NEW_SEED --ticks 64
 ```
+
+Completed ordinary serial CPU episodes retain the complete compiler inputs in
+their hash-bound `training-handoff.json`; new episodes no longer write a second
+`compiler-inputs.json`. This applies to `train_cpu_foundation` and the serial
+`train_cpu_care` bridge. Collection-time compiler inputs, full actor/value Adam
+state, private recovery checkpoints and life archives remain retained. Existing
+serial outputs with the optional sidecar still admit and validate it, and
+cooperative founder publication still requires its separately pinned copy.
+
+The disposable six-tick N2048 CLI fixture on 2026-10-25 measured a 376,031-byte
+duplicate compiler file. Omitting it reduced that first episode from 12 files
+and 5,828,013 logical bytes to 11 files and 5,451,982 logical bytes. The regression
+also continues through subsequent episodes and compares complete restored actor,
+value and compiler state. Reproduce with:
+
+```sh
+cargo test --locked -p alife_training --features cpu-backend --test cpu_cli -- --nocapture
+```
+
+These are synthetic file-count/file-length results, not allocated disk blocks,
+operational training throughput or gameplay evidence. Each completed serial CPU
+episode avoids one duplicate file; its size depends on the compiler inputs.
+Total checkpoint/ancestry growth remains unbounded, and retained data is not
+deleted or migrated by this change.
 
 A serial `cycle.json` directory must first pass the existing native serial,
 terrain and critic-correction continuity verifier and export a hash-bound typed
