@@ -265,7 +265,8 @@ impl CareSeedReservation {
         ledger["cpu_care_attempts"].as_array_mut().unwrap().push(json!({"status":"pending","seed":config.seed,
             "output":config.output,"source":previous,"source_sha256":provenance["source_sha256"],
             "source_policy_version":provenance["native_source_receipt"]["policy_version"],
-            "lesson":request.lesson,"decisions":request.decisions,"seed_admission":provenance["seed_admission"]}));
+            "lesson":request.lesson,"decisions":request.decisions,"food_need_condition":request.food_need_condition,
+            "seed_admission":provenance["seed_admission"]}));
         write_atomic(&ledger_path, &ledger)?;
         Ok(Self {
             provenance,
@@ -421,6 +422,7 @@ fn validate_collection_output(attempt: &Value, output: &Path) -> Result<Value> {
     let (_, episode) = read_native_cpu_care_evidence(&output.join("care-episode.json"))?;
     let (provenance_bytes, provenance) =
         read_native_cpu_care_evidence(&output.join("care-seed-admission.json"))?;
+    validate_food_need_condition(attempt, &episode)?;
     let source_version = attempt["source_policy_version"]
         .as_u64()
         .ok_or("collection attempt lacks source version")?;
@@ -672,7 +674,41 @@ pub(super) fn collection_attempts(lane: &Path) -> Result<Vec<Value>> {
         .clone())
 }
 
+pub(super) fn validate_food_need_condition(attempt: &Value, episode: &Value) -> Result<()> {
+    // Absence on historical reservations stays unknown; it never authorizes
+    // an explicitly aged prospective episode. Do not rewrite old evidence.
+    let Some(condition) = attempt.get("food_need_condition") else {
+        let Some(initialization) = episode
+            .get("food_need_initialization")
+            .filter(|v| !v.is_null())
+        else {
+            return Ok(());
+        };
+        let actual: crate::FoundationFoodNeedCondition =
+            serde_json::from_value(initialization["condition"].clone())?;
+        if actual != crate::FoundationFoodNeedCondition::NewbornV1 {
+            return Err(
+                "legacy/default CPU reservation cannot authorize an aged food need condition"
+                    .into(),
+            );
+        }
+        return Ok(());
+    };
+    let condition: crate::FoundationFoodNeedCondition = serde_json::from_value(condition.clone())?;
+    let lesson: crate::FoundationTeacherLesson = serde_json::from_value(attempt["lesson"].clone())?;
+    condition.validate_lesson(Some(lesson))?;
+    if matches!(
+        lesson,
+        crate::FoundationTeacherLesson::Feeding | crate::FoundationTeacherLesson::RelocatedFood
+    ) && episode["food_need_initialization"]["condition"] != json!(condition)
+    {
+        return Err("CPU food need condition differs from its reserved attempt".into());
+    }
+    Ok(())
+}
+
 fn validate_attempt_output(attempt: &Value, receipt: &Value) -> Result<()> {
+    validate_food_need_condition(attempt, &receipt["episode"])?;
     if receipt["seed"] != attempt["seed"]
         || receipt["source_policy_version"] != attempt["source_policy_version"]
         || receipt["seed_provenance"]["source_sha256"] != attempt["source_sha256"]
@@ -918,6 +954,38 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn prospective_need_condition_is_bound_without_rewriting_legacy_evidence() {
+        let old = serde_json::json!({"lesson":"feeding"});
+        super::validate_food_need_condition(&old, &serde_json::json!({})).unwrap();
+        super::validate_food_need_condition(
+            &old,
+            &serde_json::json!({"food_need_initialization":{"condition":"newborn_v1"}}),
+        )
+        .unwrap();
+        for condition in [
+            serde_json::json!("ordinary_healthy_aging_v1"),
+            serde_json::json!("unknown"),
+            serde_json::Value::Null,
+            serde_json::json!(true),
+        ] {
+            assert!(super::validate_food_need_condition(
+                &old,
+                &serde_json::json!({"food_need_initialization":{"condition":condition}})
+            )
+            .is_err());
+        }
+        let aged = serde_json::json!({"lesson":"feeding", "food_need_condition":"ordinary_healthy_aging_v1"});
+        assert!(super::validate_food_need_condition(&aged, &serde_json::json!({})).is_err());
+        assert!(super::validate_food_need_condition(
+            &aged,
+            &serde_json::json!({"food_need_initialization":{"condition":"newborn_v1"}})
+        )
+        .is_err());
+        super::validate_food_need_condition(&aged, &serde_json::json!({"food_need_initialization":{"condition":"ordinary_healthy_aging_v1"}})).unwrap();
+        let invalid = serde_json::json!({"lesson":"eat_held_food", "food_need_condition":"ordinary_healthy_aging_v1"});
+        assert!(super::validate_food_need_condition(&invalid, &serde_json::json!({})).is_err());
+    }
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
 

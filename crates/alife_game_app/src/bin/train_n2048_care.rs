@@ -212,6 +212,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut founder_seed_base = None;
     let mut food_position = None;
     let mut lesson = None;
+    let mut food_need_condition = None;
     let mut preserve_objective_from = None;
     let mut sampling_temperature = None;
     let mut center_actor_advantages = false;
@@ -266,6 +267,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .ok_or("missing sampling temperature")?
                     .to_string_lossy()
                     .parse::<f32>()?,
+            );
+        } else if flag == "--food-need-condition" {
+            if food_need_condition.is_some() {
+                return Err("duplicate food need condition".into());
+            }
+            food_need_condition = Some(
+                args.next()
+                    .ok_or("missing food need condition")?
+                    .to_string_lossy()
+                    .parse::<alife_game_app::FoundationFoodNeedCondition>()?,
             );
         } else if flag == "--food-after-world-tick" {
             if food_after_world_tick.is_some() {
@@ -326,6 +337,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         next = args.next();
     }
+    validate_food_need_cycle_option(
+        &mode.to_string_lossy(),
+        food_need_condition,
+        lesson,
+        food_after_world_tick,
+        preserve_objective_from,
+    )?;
     if preserve_objective_from.is_some()
         && (mode != "--resume-cycle" || food_after_world_tick.is_some())
     {
@@ -453,6 +471,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         sampling_temperature.unwrap_or(1.0),
                         epochs,
                     )
+                } else if let Some(condition) = food_need_condition {
+                    alife_game_app::resume_foundation_training_cycle_with_food_need(
+                        previous
+                            .as_deref()
+                            .ok_or("food need condition requires an existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        lesson.ok_or("food need condition requires a lesson")?,
+                        sampling_temperature.unwrap_or(1.0),
+                        condition,
+                    )
                 } else if let Some(temperature) = sampling_temperature {
                     alife_game_app::resume_foundation_training_cycle_with_lesson_temperature(
                         previous
@@ -521,6 +551,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn validate_food_need_cycle_option(
+    mode: &str,
+    condition: Option<alife_game_app::FoundationFoodNeedCondition>,
+    lesson: Option<alife_game_app::FoundationTeacherLesson>,
+    food_after: Option<u64>,
+    objective: Option<u16>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if condition.is_some()
+        && (mode != "--resume-cycle"
+            || !matches!(
+                lesson,
+                Some(
+                    alife_game_app::FoundationTeacherLesson::Feeding
+                        | alife_game_app::FoundationTeacherLesson::RelocatedFood
+                )
+            )
+            || food_after.is_some()
+            || objective.is_some())
+    {
+        return Err("food need condition requires a Feeding/RelocatedFood --resume-cycle without objective or food-delay overrides".into());
+    }
+    Ok(())
+}
+
 fn parse_teacher_lesson(
     value: &str,
 ) -> Result<alife_game_app::FoundationTeacherLesson, &'static str> {
@@ -555,6 +609,7 @@ fn parse_evaluation_options(
 ) -> Result<EvaluationOptions, Box<dyn std::error::Error>> {
     let mut options = EvaluationOptions::default();
     let mut temperature_specified = false;
+    let mut food_need_specified = false;
     let mut i = 0;
     // Preserve the legacy optional X/Z relocation, then accept explicit controls.
     if tail
@@ -583,6 +638,18 @@ fn parse_evaluation_options(
                     .ok_or("missing evaluation sampling temperature")?
                     .to_string_lossy()
                     .parse::<f32>()?;
+            }
+            "--food-need-condition" => {
+                if food_need_specified {
+                    return Err("duplicate food need condition".into());
+                }
+                food_need_specified = true;
+                i += 1;
+                options.evaluation.food_need_condition = tail
+                    .get(i)
+                    .ok_or("missing food need condition")?
+                    .to_string_lossy()
+                    .parse()?;
             }
             "--request-token" => {
                 i += 1;
@@ -619,9 +686,9 @@ fn parse_evaluation_options(
         {
             return Err("request comparison applies to reception without food relocation".into());
         }
-        if temperature_specified {
+        if temperature_specified || food_need_specified {
             return Err(
-                "evaluation sampling temperature does not apply to controlled request comparisons"
+                "evaluation sampling/food need controls do not apply to controlled request comparisons"
                     .into(),
             );
         }
@@ -960,6 +1027,82 @@ mod evaluation_options_tests {
         );
         assert!(options.request_token.is_none());
         assert!(!options.silent);
+    }
+
+    #[test]
+    fn food_need_cycle_option_cannot_be_silently_ignored_by_alternate_modes() {
+        use alife_game_app::FoundationFoodNeedCondition;
+        let condition = Some(FoundationFoodNeedCondition::OrdinaryHealthyAgingV1);
+        for mode in ["--pilot", "--teacher-pilot", "--cycle"] {
+            assert!(validate_food_need_cycle_option(
+                mode,
+                condition,
+                Some(FoundationTeacherLesson::Feeding),
+                None,
+                None
+            )
+            .is_err());
+        }
+        for lesson in [
+            FoundationTeacherLesson::Feeding,
+            FoundationTeacherLesson::RelocatedFood,
+        ] {
+            validate_food_need_cycle_option("--resume-cycle", condition, Some(lesson), None, None)
+                .unwrap();
+            assert!(validate_food_need_cycle_option(
+                "--resume-cycle",
+                condition,
+                Some(lesson),
+                Some(1),
+                None
+            )
+            .is_err());
+            assert!(validate_food_need_cycle_option(
+                "--resume-cycle",
+                condition,
+                Some(lesson),
+                None,
+                Some(1)
+            )
+            .is_err());
+        }
+        assert!(validate_food_need_cycle_option(
+            "--resume-cycle",
+            condition,
+            Some(FoundationTeacherLesson::GrabFood),
+            None,
+            None
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn food_need_condition_is_explicit_and_rejects_unknown_duplicate_or_ignored_values() {
+        use alife_game_app::FoundationFoodNeedCondition;
+        let condition = ["--food-need-condition", "ordinary_healthy_aging_v1"];
+        let parsed = parse(&condition, FoundationTeacherLesson::Feeding).unwrap();
+        assert_eq!(
+            parsed.evaluation.food_need_condition,
+            FoundationFoodNeedCondition::OrdinaryHealthyAgingV1
+        );
+        for values in [
+            vec!["--food-need-condition"],
+            vec!["--food-need-condition", "unknown"],
+            vec![
+                "--food-need-condition",
+                "newborn_v1",
+                "--food-need-condition",
+                "newborn_v1",
+            ],
+            vec![
+                "--request-token",
+                "8",
+                "--food-need-condition",
+                "newborn_v1",
+            ],
+        ] {
+            assert!(parse(&values, FoundationTeacherLesson::VocabularyReception).is_err());
+        }
     }
 
     #[test]

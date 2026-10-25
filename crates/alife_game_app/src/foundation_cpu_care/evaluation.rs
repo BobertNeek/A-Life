@@ -21,6 +21,11 @@ pub struct CpuCareEvaluationRequest {
     pub decisions: usize,
     pub temperature: f32,
     pub lesson: FoundationTeacherLesson,
+    #[serde(
+        default,
+        skip_serializing_if = "FoundationFoodNeedCondition::is_newborn"
+    )]
+    pub food_need_condition: FoundationFoodNeedCondition,
     #[serde(default)]
     pub known_exclusions: bool,
 }
@@ -269,6 +274,14 @@ fn verify_recovery(
         );
     }
     let episode: Value = read_json(&request.output.join("care-episode.json"))?;
+    if !request.food_need_condition.is_newborn()
+        || episode.get("food_need_initialization").is_some()
+    {
+        admission::validate_food_need_condition(
+            &json!({"lesson":request.lesson,"food_need_condition":request.food_need_condition}),
+            &episode,
+        )?;
+    }
     let trace: Value = read_json(&request.output.join("care-trace.json"))?;
     let rows = trace["rows"]
         .as_array()
@@ -303,6 +316,9 @@ fn verify_recovery(
 /// lifetime namespace. A completed exact result is read-only reusable; any other
 /// existing output is preserved and refused, never resumed or overwritten.
 pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value> {
+    request
+        .food_need_condition
+        .validate_lesson(Some(request.lesson))?;
     request.previous = request.previous.canonicalize()?;
     request.seed_history = request.seed_history.canonicalize()?;
     let source = read_cpu_founder_source(&request.previous)?;
@@ -317,6 +333,7 @@ pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value>
         decisions: request.decisions,
         temperature: request.temperature,
         lesson: request.lesson,
+        food_need_condition: request.food_need_condition,
         seed_history: Some(request.seed_history.clone()),
         known_exclusions: request.known_exclusions,
         record_diagnostic_replay: false,
@@ -417,6 +434,21 @@ pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn legacy_request_serialization_preserves_seal_bytes_and_opt_in_is_bound() {
+        let legacy = r#"{"previous":"source","output":"output","seed_history":"history","seed":42,"decisions":3,"temperature":1.0,"lesson":"feeding","known_exclusions":false}"#;
+        let mut request: super::CpuCareEvaluationRequest = serde_json::from_str(legacy).unwrap();
+        assert_eq!(serde_json::to_string(&request).unwrap(), legacy);
+        request.food_need_condition = crate::FoundationFoodNeedCondition::OrdinaryHealthyAgingV1;
+        let encoded = serde_json::to_string(&request).unwrap();
+        assert!(encoded.contains("ordinary_healthy_aging_v1"));
+        assert_ne!(encoded, legacy);
+        assert_eq!(
+            serde_json::from_str::<super::CpuCareEvaluationRequest>(&encoded).unwrap(),
+            request
+        );
+    }
+
     use super::*;
 
     #[test]
@@ -476,6 +508,7 @@ mod tests {
             decisions: 2,
             temperature: 1.,
             lesson: FoundationTeacherLesson::EatHeldFood,
+            food_need_condition: crate::FoundationFoodNeedCondition::default(),
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: false,
@@ -511,6 +544,7 @@ mod tests {
         })).unwrap()).unwrap();
         let history_before = fs::read(&history).unwrap();
         let request = CpuCareEvaluationRequest {
+            food_need_condition: FoundationFoodNeedCondition::default(),
             previous: source.clone(),
             output: fixture.0.join("assessment"),
             seed_history: history.clone(),

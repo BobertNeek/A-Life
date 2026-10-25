@@ -49,7 +49,8 @@ class CpuScheduleTests(unittest.TestCase):
     def command(self, binary, *args):
         self.calls.append(args)
         if args[0] == '--validate-output':
-            return {'policy_version': 31, 'episode': {'trained_nourished_meals': 0, 'lesson_completed': False}}
+            return {'policy_version': 31, 'episode': {'trained_nourished_meals': 0, 'lesson_completed': False,
+                'food_need_initialization': {'condition': self.plan.get('food_need_condition', 'newborn_v1')}}}
         if args[0] == '--reconcile-pending':
             ledger = cpu.read(self.lane / cpu.LEDGER)
             ledger['cpu_care_attempts'][-1]['status'] = 'failed'
@@ -69,7 +70,8 @@ class CpuScheduleTests(unittest.TestCase):
         ledger = cpu.read(path) if path.exists() else {'cpu_care_attempts': []}
         ledger['cpu_care_attempts'].append({'status': 'accepted', 'seed': values['--seed'],
             'output': str(output), 'source_sha256': cpu.pins(previous), 'lesson': values['--lesson'],
-            'decisions': values['--decisions'], 'native_output_sha256': cpu.pins(output)})
+            'decisions': values['--decisions'], 'native_output_sha256': cpu.pins(output),
+            'food_need_condition': values.get('--food-need-condition', 'newborn_v1')})
         self.write(path, ledger)
         return {}
 
@@ -102,6 +104,36 @@ class CpuScheduleTests(unittest.TestCase):
         self.calls.clear()
         self.assertEqual(self.execute(), result)
         self.assertFalse(any(c[0] == '--previous' for c in self.calls))
+
+    def test_need_condition_is_explicit_only_on_approach_and_relocation_dispatch(self):
+        self.plan['food_need_condition'] = 'ordinary_healthy_aging_v1'
+        self.plan['schedule']['steps'] = [dict(lesson=lesson, episodes=1, decisions=2) for lesson in
+                                        ('eat_held_food', 'eat_reachable_food', 'feeding', 'relocated_food')]
+        self.execute()
+        dispatched = [c for c in self.calls if c[0] == '--previous']
+        self.assertEqual(len(dispatched), 4)
+        for index, call in enumerate(dispatched):
+            self.assertEqual('--food-need-condition' in call, index >= 2)
+            if index >= 2:
+                self.assertEqual(call[call.index('--food-need-condition') + 1], 'ordinary_healthy_aging_v1')
+
+    def test_resumed_aged_plan_rejects_a_different_reserved_condition(self):
+        self.plan['food_need_condition'] = 'ordinary_healthy_aging_v1'
+        self.plan['schedule']['steps'][0]['lesson'] = 'feeding'
+        self.execute()
+        saved = cpu.read(self.lane / cpu.LEDGER)
+        saved['cpu_care_attempts'][0]['food_need_condition'] = 'newborn_v1'
+        self.write(self.lane / cpu.LEDGER, saved)
+        self.calls.clear()
+        with self.assertRaises(ValueError):
+            self.execute()
+        self.assertFalse(any(call[0] == '--previous' for call in self.calls))
+
+    def test_invalid_saved_need_condition_fails_before_dispatch(self):
+        self.plan['food_need_condition'] = 'unknown'
+        with self.assertRaises(ValueError):
+            self.execute()
+        self.assertFalse(self.calls)
 
     def test_recent_policy_resumes_without_retired_payloads_or_initial_source(self):
         self.plan['retention'] = {'mode': 'recent-checkpoints', 'keep': 2}

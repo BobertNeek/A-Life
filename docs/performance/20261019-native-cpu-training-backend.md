@@ -116,6 +116,39 @@ A bootstrap-only meal cannot complete the trained lesson. The bridge makes no
 curriculum promotion. The native prior defaults to deterministic training mode;
 optional prior failure follows the existing log-and-continue contract.
 
+Prospective Feeding and RelocatedFood can opt into
+`--food-need-condition ordinary_healthy_aging_v1` on `train_cpu_care` or the CPU
+serial planner. The GPU care lane supports the same flag on
+`train_n2048_care --resume-cycle` and `run_mixed_care_serial.py`. Both planners
+save this condition and apply it only to these two
+lessons. Omission (and historical plans without the key) keeps `newborn_v1`.
+The opt-in reuses only the ordinary biological preparation of held/reachable
+care: advance at most 2,400 setup ticks until hunger >= 0.12 and energy <= 0.9;
+require awake, health >= 0.95, injury/pain <= 0.01 and 0.2 < energy <= 0.9.
+Failure stops setup. This is the existing setup admission bound, not a learning
+dose or episode cap. No action is selected and no learning row is captured during
+setup. Natural developmental and physiological consequences remain real.
+
+Body pose, food placement, obstacles, ownership, teacher/prior behavior and
+relocation geometry stay those of the selected lesson. Relocation still waits
+two world ticks after the prepared scene starts. `food_need_initialization`
+records the condition, organism and before/prepared physiology/ticks in new
+Feeding/RelocatedFood episodes and pilots; new CPU reservations bind the requested
+condition. The CPU assessment request and fresh pilot evaluation config also
+accept the condition. The native GPU cycle records the initialization in both
+`scenario.json` and `cycle.json`; host admission matches it against the saved
+plan/attempt. Unsupported native branches reject the opt-in explicitly.
+
+Aging is a prospective lesson hypothesis. The 0.12 need threshold is deliberately
+the established care threshold; it does not guarantee the innate food salience
+that starts above 0.55. Newborn and aged scenes are different conditions and must
+not be certified as matched checkpoint probes. No historical receipt is rewritten
+or supplied a missing condition. Runtime benefit, retention and useful meals per
+wall-clock time still require qualification from the exact accepted source with
+fresh reserved seeds and the inherited full actor/value optimizers. The parent
+coordinates one safe-owner GPU slice after code review and exact build/CI
+verification; development checks here remain CPU-only and no PC run is changed.
+
 A dedicated CPU lane reserves seeds durably **before** constructing the world,
 trainer or prior. It reuses the existing read-only history/exclusion validator,
 requires exact source-bound history and imports every surviving lane ledger.

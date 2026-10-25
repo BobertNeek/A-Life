@@ -42,6 +42,31 @@ def canonical(value):
         raise InvalidComparisonEvidence("noncanonical/nonfinite comparison input") from error
 
 
+def food_need_initialization(pilot, subject):
+    """Fresh-assessment condition evidence; never infer a missing historical setup."""
+    value = required(pilot, "food_need_initialization")
+    if not isinstance(value, dict) or set(value) != {"condition", "organism", "before", "prepared"}:
+        raise InvalidComparisonEvidence("missing/malformed food need initialization")
+    if value["condition"] not in ("newborn_v1", "ordinary_healthy_aging_v1") or value["organism"] != subject or not uint(value["organism"], 64, positive=True):
+        raise InvalidComparisonEvidence("unsupported food need initialization condition/subject")
+    fields = {"tick", "energy", "hunger", "health", "injury", "pain", "sleeping"}
+    for state in (value["before"], value["prepared"]):
+        if not isinstance(state, dict) or set(state) != fields or not uint(state["tick"], 64) or type(state["sleeping"]) is not bool:
+            raise InvalidComparisonEvidence("malformed food need initialization state")
+        for key in fields - {"tick", "sleeping"}:
+            number(state[key], "food need initialization " + key, 0, 1)
+    before, prepared = value["before"], value["prepared"]
+    if not 0 <= prepared["tick"] - before["tick"] <= 2400:
+        raise InvalidComparisonEvidence("invalid food need setup duration")
+    if value["condition"] == "newborn_v1":
+        if before != prepared:
+            raise InvalidComparisonEvidence("default food need initialization changed state")
+    elif (prepared["sleeping"] or prepared["health"] < 0.95 or prepared["injury"] > 0.01
+          or prepared["pain"] > 0.01 or not 0.2 < prepared["energy"] <= 0.9 or prepared["hunger"] < 0.12):
+        raise InvalidComparisonEvidence("unhealthy or unmeasurable aged food need initialization")
+    return value
+
+
 def load_identity(directory, *, expected_policy_sha256, expected_executable_sha256,
                   assessment_scope=POLICY_WEIGHTS_SCOPE):
     directory = Path(directory)
@@ -100,14 +125,15 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
     if any(type(provenance[k]) is not int or provenance[k] <= 0 for k in ("seed", "founder_seed_base")):
         raise InvalidComparisonEvidence("malformed seed provenance")
     if longitudinal and provenance["lesson"] == "feeding":
-        # Feeding has no hungry-manipulation setup. These are actual native
-        # captures; the world component binds all food geometry/body state.
+        # Bind the explicit scene condition as well as actual native geometry.
+        # Newborn and aged scenes are intentionally different inputs.
         setup = {key: required(pilot, key) for key in ("food_position", "initial_food_distance")}
         if not isinstance(setup["food_position"], list) or len(setup["food_position"]) != 2:
             raise InvalidComparisonEvidence("missing Feeding food position")
         for coordinate in setup["food_position"]:
             number(coordinate, "Feeding food position")
         number(setup["initial_food_distance"], "Feeding initial food distance", 0)
+        setup["food_need_initialization"] = food_need_initialization(pilot, world["subject"])
     else:
         setup = {key: required(pilot, key) for key in ("grab_food_setup", "held_food_setup")}
         lesson_setup = {"grab_food": "grab_food_setup", "eat_held_food": "held_food_setup"}

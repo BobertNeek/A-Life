@@ -91,11 +91,44 @@ class FoundationCheckpointComparisonTests(unittest.TestCase):
                     self.run_comparison()
                 self.pilots = saved
 
+    def test_need_condition_binds_fresh_setup_without_changing_weights_only_v1(self):
+        self.use_feeding()
+        self.assertTrue(self.run_comparison()['matched'])
+        self.pilots[1]['food_need_initialization'].update(condition='ordinary_healthy_aging_v1')
+        self.pilots[1]['food_need_initialization']['prepared'].update(tick=240, hunger=0.12, energy=0.7)
+        result = self.run_comparison()
+        self.assertFalse(result['matched'])
+        self.assertIn('setup', result['mismatched_components'])
+
+    def test_weights_only_v1_does_not_reinterpret_new_condition_evidence(self):
+        before = self.run_comparison(compare.POLICY_WEIGHTS_SCOPE)
+        self.pilots[1]['food_need_initialization'] = {'condition': 'malformed-new-field'}
+        after = self.run_comparison(compare.POLICY_WEIGHTS_SCOPE)
+        self.assertEqual(before, after)
+
+    def test_fresh_need_setup_missing_malformed_or_unsafe_fails_closed(self):
+        self.use_feeding()
+        saved = copy.deepcopy(self.pilots)
+        changes = [lambda p: p.pop('food_need_initialization'),
+                   lambda p: p.update(food_need_initialization=None),
+                   lambda p: p['food_need_initialization'].update(condition='unknown'),
+                   lambda p: p['food_need_initialization'].update(organism=True),
+                   lambda p: p['food_need_initialization']['prepared'].update(tick=1),
+                   lambda p: p['food_need_initialization']['prepared'].update(energy=float('nan'))]
+        for change in changes:
+            self.pilots = copy.deepcopy(saved)
+            change(self.pilots[1])
+            with self.assertRaises(compare.InvalidComparisonEvidence):
+                self.run_comparison()
+
     def use_feeding(self):
         for pilot in self.pilots:
             pilot['lesson'] = 'feeding'
             pilot['food_position'] = [1.0, 2.0]
             pilot['initial_food_distance'] = 2.0
+            state = dict(tick=0, energy=0.7925, hunger=0.0, health=1.0, injury=0.0, pain=0.0, sleeping=False)
+            pilot['food_need_initialization'] = dict(condition='newborn_v1', organism=1,
+                                                     before=state.copy(), prepared=state.copy())
             del pilot['grab_food_setup']
             del pilot['held_food_setup']
 

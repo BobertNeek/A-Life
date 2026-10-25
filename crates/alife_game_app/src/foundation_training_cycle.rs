@@ -14,10 +14,9 @@ use alife_training::{
 
 use crate::foundation_training::teacher_step_consumed as consumed;
 use crate::{
-    configure_foundation_scenario, foundation_replay_source, initial_n2048_care_asset,
-    load_foundation_replay_window, verify_foundation_replay_step, FoundationReplayBudget,
-    FoundationReplayWriter, FoundationTeacherLesson, FoundationWarmupReceipt,
-    GpuDurableSaveManifest, GpuLiveBrainRuntime,
+    foundation_replay_source, initial_n2048_care_asset, load_foundation_replay_window,
+    verify_foundation_replay_step, FoundationReplayBudget, FoundationReplayWriter,
+    FoundationTeacherLesson, FoundationWarmupReceipt, GpuDurableSaveManifest, GpuLiveBrainRuntime,
 };
 
 mod ppo_diagnostics;
@@ -184,6 +183,8 @@ pub struct FoundationCycleReceipt {
     pub food_available_world_tick: Option<u64>,
     #[serde(default)]
     pub lesson: Option<FoundationTeacherLesson>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_need_initialization: Option<crate::FoundationFoodNeedInitialization>,
     /// Exact physical relocation and trained acquisition/nourishment evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub food_relocation: Option<crate::FoundationFoodRelocationReceipt>,
@@ -1024,6 +1025,31 @@ mod sampling_temperature_tests {
     }
 
     #[test]
+    fn prospective_food_need_cycle_requires_source_before_any_world_or_gpu_work() {
+        let missing =
+            std::env::temp_dir().join(format!("alife-need-missing-source-{}", std::process::id()));
+        let output = missing.join("output");
+        assert!(!missing.exists());
+        for lesson in [
+            FoundationTeacherLesson::Feeding,
+            FoundationTeacherLesson::RelocatedFood,
+        ] {
+            let error = resume_foundation_training_cycle_with_food_need(
+                &missing,
+                &output,
+                42,
+                16,
+                lesson,
+                1.0,
+                crate::FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+            )
+            .unwrap_err();
+            assert!(error.downcast_ref::<std::io::Error>().is_some());
+            assert!(!output.exists());
+        }
+    }
+
+    #[test]
     fn relocated_food_rejects_conflicting_delayed_placement_before_source_or_output_access() {
         let error = run_foundation_training_cycle_profiled(
             Path::new("unused-relocated-food-output-fixture"),
@@ -1039,6 +1065,7 @@ mod sampling_temperature_tests {
             false,
             &CycleStageTiming::default(),
             false,
+            crate::FoundationFoodNeedCondition::default(),
         )
         .err()
         .unwrap();
@@ -1062,6 +1089,7 @@ mod sampling_temperature_tests {
                 false,
                 &CycleStageTiming::default(),
                 false,
+                crate::FoundationFoodNeedCondition::default(),
             )
             .err()
             .unwrap();
@@ -1084,6 +1112,7 @@ mod sampling_temperature_tests {
                 false,
                 &CycleStageTiming::default(),
                 false,
+                crate::FoundationFoodNeedCondition::default(),
             )
             .err()
             .unwrap();
@@ -2602,6 +2631,34 @@ pub fn run_foundation_training_cycle_with_lesson(
     )
 }
 
+/// Prospective need condition on an admitted retained founder/full optimizers.
+/// Default callers keep the existing scenario initialization.
+pub fn resume_foundation_training_cycle_with_food_need(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    lesson: FoundationTeacherLesson,
+    sampling_temperature: f32,
+    food_need_condition: crate::FoundationFoodNeedCondition,
+) -> Result<FoundationCycleReceipt> {
+    food_need_condition.validate_lesson(Some(lesson))?;
+    run_foundation_training_cycle_from_with_food_need(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(lesson),
+        None,
+        sampling_temperature,
+        0,
+        None,
+        false,
+        food_need_condition,
+    )
+}
+
 /// Bounded exploration diagnostic on an existing checkpoint. The same fixed
 /// temperature governs collection, PPO likelihood/gradient, and next admission.
 pub fn resume_foundation_training_cycle_with_lesson_temperature(
@@ -2790,6 +2847,37 @@ fn run_foundation_training_cycle_from_with_actor_credit(
     archived_replay: Option<(&Path, u32)>,
     center_actor_advantages: bool,
 ) -> Result<FoundationCycleReceipt> {
+    run_foundation_training_cycle_from_with_food_need(
+        output,
+        seed,
+        training_ticks,
+        previous,
+        food_available_world_tick,
+        lesson,
+        preserve_objective_from,
+        sampling_temperature,
+        rehearsal_epochs,
+        archived_replay,
+        center_actor_advantages,
+        crate::FoundationFoodNeedCondition::default(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_foundation_training_cycle_from_with_food_need(
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    previous: Option<&Path>,
+    food_available_world_tick: Option<u64>,
+    lesson: Option<FoundationTeacherLesson>,
+    preserve_objective_from: Option<u16>,
+    sampling_temperature: f32,
+    rehearsal_epochs: u32,
+    archived_replay: Option<(&Path, u32)>,
+    center_actor_advantages: bool,
+    food_need_condition: crate::FoundationFoodNeedCondition,
+) -> Result<FoundationCycleReceipt> {
     let timing = CycleStageTiming::from_environment(|| {
         serde_json::json!({
             "source_head_declared": std::env::var("ALIFE_PHASE31_SOURCE_HEAD").ok(),
@@ -2803,6 +2891,7 @@ fn run_foundation_training_cycle_from_with_actor_credit(
             "requested_decisions": training_ticks,
             "sampling_temperature": sampling_temperature,
             "lesson": lesson,
+            "food_need_condition": food_need_condition,
             "continuation_requested": previous.is_some(),
             "rehearsal_epochs": rehearsal_epochs,
             "archived_replay_epochs": archived_replay.map(|(_, epochs)| epochs),
@@ -2822,6 +2911,7 @@ fn run_foundation_training_cycle_from_with_actor_credit(
         center_actor_advantages,
         &timing,
         false,
+        food_need_condition,
     );
     let result = result.and_then(|outcome| match outcome {
         FoundationCycleOutcome::Trained(receipt) => Ok(*receipt),
@@ -2871,6 +2961,7 @@ pub fn capture_foundation_critic_trajectory(
         false,
         &timing,
         true,
+        crate::FoundationFoodNeedCondition::default(),
     )
     .and_then(|outcome| match outcome {
         FoundationCycleOutcome::CriticCapture(receipt) => Ok(receipt),
@@ -2897,7 +2988,9 @@ fn run_foundation_training_cycle_profiled(
     center_actor_advantages: bool,
     timing: &CycleStageTiming,
     capture_only: bool,
+    food_need_condition: crate::FoundationFoodNeedCondition,
 ) -> Result<FoundationCycleOutcome> {
+    food_need_condition.validate_lesson(lesson)?;
     let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
     if lesson == Some(FoundationTeacherLesson::RelocatedFood) && food_available_world_tick.is_some()
@@ -3084,6 +3177,7 @@ fn run_foundation_training_cycle_profiled(
                 center_actor_advantages,
                 timing,
                 if capture_only { previous } else { None },
+                food_need_condition,
             )
         },
         |error| {
@@ -3147,6 +3241,7 @@ fn run_foundation_training_cycle_in_owned_output(
     center_actor_advantages: bool,
     timing: &CycleStageTiming,
     capture_source: Option<&Path>,
+    food_need_condition: crate::FoundationFoodNeedCondition,
 ) -> Result<FoundationCycleOutcome> {
     let capture_only = capture_source.is_some();
     let AdmittedCycleState {
@@ -3173,13 +3268,16 @@ fn run_foundation_training_cycle_in_owned_output(
     crate::foundation_training::ground_foundation_training_world(&mut game.world)?;
     game.world.set_age_death_disabled_for_new_game(true)?;
     let mut scenario = if lesson.is_some() {
-        Some(configure_foundation_scenario(
-            &mut game.world,
-            seed,
-            lesson,
-            None,
-            true,
-        )?)
+        Some(
+            crate::foundation_training::configure_foundation_scenario_with_food_need(
+                &mut game.world,
+                seed,
+                lesson,
+                None,
+                true,
+                food_need_condition,
+            )?,
+        )
     } else {
         None
     };
@@ -3271,6 +3369,7 @@ fn run_foundation_training_cycle_in_owned_output(
             "vocabulary_token": scenario.as_ref().and_then(|s|s.vocabulary_token),
             "teacher_cue_tokens": scenario.as_ref().map(|s| &s.teacher_cue_tokens),
             "teacher_cue_kind": "contextual_request_not_completed_action_narration",
+            "food_need_initialization": scenario.as_ref().and_then(|s|s.food_need_initialization.as_ref()),
             "held_food_setup": scenario.as_ref().and_then(|s|s.held_food_setup.as_ref()),
             "reachable_food_setup": scenario.as_ref().and_then(|s|s.reachable_food_setup.as_ref()),
             "grab_food_setup": scenario.as_ref().and_then(|s|s.grab_food_setup.as_ref()),
@@ -4347,6 +4446,9 @@ fn run_foundation_training_cycle_in_owned_output(
         rest_recovery_actions,
         food_available_world_tick,
         lesson,
+        food_need_initialization: scenario
+            .as_ref()
+            .and_then(|s| s.food_need_initialization.clone()),
         food_relocation,
         feeding_food,
         first_consumed_world_tick,
