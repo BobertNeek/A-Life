@@ -1,14 +1,14 @@
 //! CPU care episodes reuse the native lesson world, prior and outcome observer.
 use crate::foundation_training::{
-    care_meal_completed, close_foundation_navigation_gate_in_world, configure_foundation_scenario,
-    expose_foundation_teacher_cue,
+    care_meal_completed, close_foundation_navigation_gate_in_world,
+    configure_foundation_scenario_with_food_need, expose_foundation_teacher_cue,
     food_outcome::{ownership, FoodOutcomeObservation, FoodOwnershipSnapshot},
     grounded_navigation_completed, heard_foundation_teacher_cue, outcome_consumed,
     relocate_unheld_foundation_food, teacher_outcome_blocked, teacher_outcome_moved,
     write_foundation_lesson_prior_readiness, FoundationScenarioSetup,
 };
 use crate::gpu_live_runtime::semantic_prior::RuntimeSemanticPrior;
-use crate::{FoundationFoodOutcome, FoundationTeacherLesson};
+use crate::{FoundationFoodNeedCondition, FoundationFoodOutcome, FoundationTeacherLesson};
 use alife_core::{
     ExperienceSequenceId, PerceptionFrameDraft, ScaffoldContractError, SensorProfile, Validate,
 };
@@ -43,6 +43,7 @@ pub struct CpuCareRequest {
     pub decisions: usize,
     pub temperature: f32,
     pub lesson: FoundationTeacherLesson,
+    pub food_need_condition: FoundationFoodNeedCondition,
     pub seed_history: Option<PathBuf>,
     pub known_exclusions: bool,
     /// Optional bulky debug recording; the in-memory training rows are unchanged.
@@ -87,6 +88,9 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
     {
         return Err("CPU care requires an explicit supported care lesson, 1..=128 decisions and exact seed history (or an unreserved development fixture)".into());
     }
+    request
+        .food_need_condition
+        .validate_lesson(Some(request.lesson))?;
     let config = CpuContinuationConfig {
         previous: request.previous.clone(),
         output: request.output.clone(),
@@ -288,12 +292,13 @@ impl CpuEpisodeHooks for CareEpisode {
         Ok(())
     }
     fn prepare_world(&mut self, world: &mut alife_world::HeadlessWorld) -> Result<()> {
-        let mut scenario = configure_foundation_scenario(
+        let mut scenario = configure_foundation_scenario_with_food_need(
             world,
             self.request.seed,
             Some(self.request.lesson),
             None,
             true,
+            self.request.food_need_condition,
         )?;
         if self.assessment {
             evaluation::ensure_no_teacher(world)?;
@@ -544,6 +549,7 @@ impl CpuEpisodeHooks for CareEpisode {
             "episode_body":"new-prepared-cohort","persistent_learning":"native-founder-and-full-actor-value-optimizer",
             "raw_replay_recorded":self.request.record_diagnostic_replay,
             "setup_ticks_are_training_rows":false,"setup_tick":scenario.start_tick,
+            "food_need_initialization":scenario.food_need_initialization,
             "navigation_gate":scenario.closing_gate,
             "food_relocation_target":self.relocation_target,"food_relocation_row":self.relocation_row,
             "held_food_setup":scenario.held_food_setup,"reachable_food_setup":scenario.reachable_food_setup,
@@ -616,6 +622,53 @@ impl CpuEpisodeHooks for CareEpisode {
 #[cfg(test)]
 mod collect_only_tests {
     use super::*;
+
+    #[test]
+    fn cpu_need_condition_prepares_before_capture_without_changing_lesson_cues() {
+        for lesson in [
+            FoundationTeacherLesson::Feeding,
+            FoundationTeacherLesson::RelocatedFood,
+        ] {
+            let (_, mut episode) = prepare_care_episode(CpuCareRequest {
+                previous: None,
+                output: PathBuf::from("unused-setup-only"),
+                seed: 42,
+                decisions: 3,
+                temperature: 1.0,
+                lesson,
+                food_need_condition: FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
+                seed_history: None,
+                known_exclusions: false,
+                record_diagnostic_replay: false,
+                fixture: true,
+            })
+            .unwrap();
+            let asset = crate::initial_n2048_care_asset(42).unwrap();
+            let mut config = alife_world::CanonicalNewGameConfig::phase3(42, 1).unwrap();
+            config.brain_class = alife_core::BrainScaleTier::Standard2048;
+            config.sensor_profile = asset.manifest().sensor_profile();
+            let mut world =
+                alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                    .unwrap()
+                    .world;
+            episode.prepare_world(&mut world).unwrap();
+            let scene = episode.scenario.as_ref().unwrap();
+            let init = scene.food_need_initialization.as_ref().unwrap();
+            assert_eq!(
+                init.condition,
+                FoundationFoodNeedCondition::OrdinaryHealthyAgingV1
+            );
+            assert_eq!(init.prepared.tick, scene.start_tick);
+            assert!(scene.start_tick > 0);
+            assert!(scene.teacher_cue_tokens.is_empty());
+            assert!(episode.traces.is_empty() && episode.meal_rows.is_empty());
+            assert!(episode.relocation_row.is_none());
+            assert_eq!(
+                episode.relocation_target.is_some(),
+                lesson == FoundationTeacherLesson::RelocatedFood
+            );
+        }
+    }
 
     #[test]
     fn interrupted_care_collection_retains_matching_host_and_private_prior_lives() {
@@ -729,6 +782,7 @@ mod collect_only_tests {
             decisions: 4,
             temperature: 1.,
             lesson: FoundationTeacherLesson::EatHeldFood,
+            food_need_condition: crate::FoundationFoodNeedCondition::default(),
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: false,
@@ -888,6 +942,7 @@ mod collect_only_tests {
             decisions: 3,
             temperature: 1.,
             lesson: FoundationTeacherLesson::EatHeldFood,
+            food_need_condition: crate::FoundationFoodNeedCondition::default(),
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: true,

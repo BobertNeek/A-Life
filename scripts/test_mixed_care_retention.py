@@ -105,6 +105,45 @@ class MixedRetentionTests(unittest.TestCase):
         for path in (self.source, self.output/'attempt-00000', self.output/'attempt-00001'):
             shutil.rmtree(path)
 
+    def aged_run(self, actual_condition='ordinary_healthy_aging_v1'):
+        for directory in self.output.glob('attempt-*'):
+            shutil.rmtree(directory)
+        self.run['attempts'] = []
+        self.plan['schedule']['steps'][0]['episodes'] = 1
+        self.plan['food_need_condition'] = 'ordinary_healthy_aging_v1'
+        self.save()
+        captured = []
+        original = self.trainer
+        def trainer(argv, *args, **kwargs):
+            captured.append(argv)
+            original(argv, *args, **kwargs)
+            directory = Path(argv[3])
+            receipt = json.loads((directory / 'cycle.json').read_text())
+            receipt['food_need_initialization'] = {'condition': actual_condition}
+            (directory / 'cycle.json').write_text(json.dumps(receipt))
+        with patch.object(mixed.host, 'run_child', side_effect=trainer):
+            result = mixed.execute(self.plan, resume=True)
+        return result, captured
+
+    def test_native_gpu_serial_need_condition_is_dispatched_reserved_and_validated(self):
+        before = mixed.file_hashes(self.source)
+        result, argv = self.aged_run()
+        self.assertEqual(result['accepted_episodes'], 1)
+        self.assertEqual(argv[0][-2:], ['--food-need-condition', 'ordinary_healthy_aging_v1'])
+        attempt = mixed.read_ledger(self.root / mixed.LEDGER)['runs'][0]['attempts'][0]
+        self.assertEqual(attempt['food_need_condition'], 'ordinary_healthy_aging_v1')
+        self.assertEqual(attempt['receipt']['food_need_initialization']['condition'], 'ordinary_healthy_aging_v1')
+        self.assertEqual(mixed.file_hashes(self.source), before)
+        self.assertEqual(json.loads((self.output / 'attempt-00000' / 'actor-checkpoint.json').read_text())['optimizer_step'], 22)
+        self.assertEqual(json.loads((self.output / 'attempt-00000' / 'value-checkpoint.json').read_text())['optimizer_step'], 33)
+
+    def test_gpu_serial_condition_mismatch_stays_pending_for_reconciliation(self):
+        with self.assertRaisesRegex(ValueError, 'food need initialization'):
+            self.aged_run('newborn_v1')
+        attempt = mixed.read_ledger(self.root / mixed.LEDGER)['runs'][0]['attempts'][0]
+        self.assertEqual(attempt['status'], 'pending')
+        self.assertTrue((self.output / 'attempt-00000' / 'cycle.json').exists())
+
     def test_resume_without_old_payloads_or_source(self):
         self.retire_synthetic_payloads()
         result = mixed.execute(self.plan, resume=True)

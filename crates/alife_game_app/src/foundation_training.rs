@@ -35,7 +35,9 @@ pub(crate) mod food_outcome;
 pub use evaluation_observation::{
     FoundationEvaluationObservation, FoundationEvaluationOutcome, FoundationEvaluationStopReason,
 };
+mod food_need;
 mod initial_asset;
+pub use food_need::{FoodNeedState, FoundationFoodNeedCondition, FoundationFoodNeedInitialization};
 mod lesson_trace;
 mod play_assessment;
 mod recovery;
@@ -554,6 +556,9 @@ pub struct FoundationPilotReceipt {
     /// Only fresh-body, fresh-private-state foundation replay; absent historically.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_checkpoint_assessment_identity: Option<FoundationCheckpointAssessmentIdentityV1>,
+    /// Prospective scene condition; absent historical receipts remain unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_need_initialization: Option<FoundationFoodNeedInitialization>,
     #[serde(default)]
     pub silent_request: bool,
     #[serde(default)]
@@ -674,6 +679,7 @@ pub fn run_foundation_training_pilot(
             lesson: None,
             asset_override: None,
             silent_request: false,
+            food_need_condition: FoundationFoodNeedCondition::default(),
         },
     )
 }
@@ -695,6 +701,7 @@ pub fn run_foundation_teacher_pilot(
             lesson: None,
             asset_override: None,
             silent_request: false,
+            food_need_condition: FoundationFoodNeedCondition::default(),
         },
     )
 }
@@ -717,6 +724,7 @@ pub fn run_foundation_teacher_pilot_with_scenario(
             lesson: None,
             asset_override: None,
             silent_request: false,
+            food_need_condition: FoundationFoodNeedCondition::default(),
         },
     )
 }
@@ -740,6 +748,7 @@ pub fn run_foundation_teacher_pilot_with_lesson(
             lesson: Some(lesson),
             asset_override: None,
             silent_request: false,
+            food_need_condition: FoundationFoodNeedCondition::default(),
         },
     )
 }
@@ -778,6 +787,7 @@ pub fn run_adapted_foundation_teacher_pilot(
             lesson: Some(lesson),
             asset_override: Some(asset),
             silent_request: false,
+            food_need_condition: FoundationFoodNeedCondition::default(),
         },
     )
 }
@@ -819,6 +829,7 @@ pub fn run_foundation_request_evaluation(
             lesson: Some(FoundationTeacherLesson::VocabularyReception),
             asset_override: Some(asset),
             silent_request: false,
+            food_need_condition: FoundationFoodNeedCondition::default(),
         },
         Some(request),
         1.0,
@@ -828,6 +839,7 @@ pub fn run_foundation_request_evaluation(
 /// Explicit evaluation-only controls. Ordinary in-world lifetime learning remains active.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FoundationEvaluationConfig {
+    pub food_need_condition: FoundationFoodNeedCondition,
     pub food_position: Option<[f32; 2]>,
     pub sampling_temperature: f32,
     pub silent_request: bool,
@@ -836,6 +848,7 @@ pub struct FoundationEvaluationConfig {
 impl Default for FoundationEvaluationConfig {
     fn default() -> Self {
         Self {
+            food_need_condition: FoundationFoodNeedCondition::default(),
             food_position: None,
             sampling_temperature: 1.0,
             silent_request: false,
@@ -904,6 +917,9 @@ pub fn run_foundation_evaluation_pilot_with_config(
     asset: FoundationWeightAsset,
 ) -> Result<FoundationPilotReceipt> {
     evaluation.validate()?;
+    evaluation
+        .food_need_condition
+        .validate_lesson(Some(lesson))?;
     if evaluation.silent_request
         && !matches!(
             lesson,
@@ -925,6 +941,7 @@ pub fn run_foundation_evaluation_pilot_with_config(
             lesson: Some(lesson),
             asset_override: Some(asset),
             silent_request: evaluation.silent_request,
+            food_need_condition: evaluation.food_need_condition,
         },
         None,
         evaluation.sampling_temperature,
@@ -1633,6 +1650,7 @@ struct FoundationPilotOptions {
     lesson: Option<FoundationTeacherLesson>,
     asset_override: Option<FoundationWeightAsset>,
     silent_request: bool,
+    food_need_condition: FoundationFoodNeedCondition,
 }
 
 fn run_foundation_training_pilot_inner(
@@ -1668,6 +1686,7 @@ fn run_foundation_training_pilot_with_request(
         lesson,
         asset_override,
         silent_request,
+        food_need_condition,
     } = options;
     let initial_sampling = foundation_pilot_sampling(seed, sampling_temperature)?;
     if !(1..=2048).contains(&tick_count) || seed == 0 || founder_seed_base == 0 {
@@ -1696,8 +1715,14 @@ fn run_foundation_training_pilot_with_request(
     game.world.set_age_death_disabled_for_new_game(true)?;
     let scenario_lesson =
         lesson.or_else(|| teacher_mode.then_some(FoundationTeacherLesson::Feeding));
-    let mut scenario =
-        configure_foundation_scenario(&mut game.world, seed, scenario_lesson, food_position, true)?;
+    let mut scenario = configure_foundation_scenario_with_food_need(
+        &mut game.world,
+        seed,
+        scenario_lesson,
+        food_position,
+        true,
+        food_need_condition,
+    )?;
     let mut relocation_collector = (scenario_lesson
         == Some(FoundationTeacherLesson::RelocatedFood))
     .then(|| relocated_food::RelocatedFoodCollector::new(&game.world, &scenario, seed))
@@ -2630,6 +2655,7 @@ fn run_foundation_training_pilot_with_request(
         initial_world_signature,
         initial_comparison_identity,
         initial_checkpoint_assessment_identity,
+        food_need_initialization: scenario.food_need_initialization.clone(),
         silent_request: scenario.silent_request,
         request_target: scenario.vocabulary_target,
         request_responses,
@@ -2833,6 +2859,7 @@ pub(crate) fn relocate_unheld_foundation_food(
 #[derive(Debug, Clone)]
 pub(crate) struct FoundationScenarioSetup {
     pub(crate) food: alife_core::WorldEntityId,
+    pub(crate) food_need_initialization: Option<FoundationFoodNeedInitialization>,
     pub(crate) hazard: alife_core::WorldEntityId,
     pub(crate) waypoint: alife_core::WorldEntityId,
     pub(crate) initial_hazard_distance: Option<f32>,
@@ -3252,34 +3279,7 @@ fn establish_foundation_food(
     Option<crate::FoundationGrabFoodSetup>,
 )> {
     let (organism, entity) = world.organism_entity_ids()[0];
-    // Starting biology supplies the need. If expression needs time, age the
-    // ordinary organism instead of assigning reserves or injecting hunger.
-    for _ in 0..2400 {
-        let state = world
-            .organism_registry()
-            .get(organism)
-            .ok_or("held-food organism missing")?
-            .biochemistry();
-        if state.homeostasis.drives.hunger >= 0.12 && state.body.energy <= 0.9 {
-            break;
-        }
-        world.try_advance_tick()?;
-    }
-    let state = world
-        .organism_registry()
-        .get(organism)
-        .ok_or("held-food organism missing")?
-        .biochemistry();
-    if state.body.sleeping
-        || state.body.health < 0.95
-        || state.body.injury > 0.01
-        || state.homeostasis.drives.pain > 0.01
-        || state.body.energy <= 0.2
-        || state.body.energy > 0.9
-        || state.homeostasis.drives.hunger < 0.12
-    {
-        return Err("held-food lesson requires a healthy awake organism with ordinary measurable hunger and reserve headroom".into());
-    }
+    food_need::advance_healthy_need(world, organism)?;
     let food = world.entity(target).ok_or("held-food target missing")?;
     if food.kind != alife_world::WorldObjectKind::Food
         || food.carried_by.is_some()
@@ -3477,6 +3477,26 @@ pub(crate) fn ground_foundation_training_world(
         world.enable_terrain_for_new_game(terrain, alife_core::Vec3f::ZERO)?;
     }
     Ok(())
+}
+
+pub(crate) fn configure_foundation_scenario_with_food_need(
+    world: &mut alife_world::HeadlessWorld,
+    seed: u64,
+    lesson: Option<FoundationTeacherLesson>,
+    food_position: Option<[f32; 2]>,
+    precondition_recovery: bool,
+    condition: FoundationFoodNeedCondition,
+) -> Result<FoundationScenarioSetup> {
+    condition.validate_lesson(lesson)?;
+    let mut scenario =
+        configure_foundation_scenario(world, seed, lesson, food_position, precondition_recovery)?;
+    if condition == FoundationFoodNeedCondition::OrdinaryHealthyAgingV1 {
+        scenario.food_need_initialization = Some(food_need::initialize(world, condition)?);
+        // Relocation and repeated cues measure time from the prepared scene,
+        // never from biological setup time.
+        scenario.start_tick = world.tick().raw();
+    }
+    Ok(scenario)
 }
 
 pub(crate) fn configure_foundation_scenario(
@@ -3901,8 +3921,20 @@ pub(crate) fn configure_foundation_scenario(
     } else {
         Vec::new()
     };
+    let food_need_initialization = if matches!(
+        lesson,
+        Some(FoundationTeacherLesson::Feeding | FoundationTeacherLesson::RelocatedFood)
+    ) {
+        Some(food_need::initialize(
+            world,
+            FoundationFoodNeedCondition::NewbornV1,
+        )?)
+    } else {
+        None
+    };
     Ok(FoundationScenarioSetup {
         food,
+        food_need_initialization,
         hazard,
         waypoint,
         initial_hazard_distance,

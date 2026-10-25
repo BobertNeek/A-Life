@@ -47,7 +47,14 @@ or private states remain equal as the policies act and learn.
 Supported lessons are `grab_food`, `eat_held_food`, and (only under the new scope)
 `feeding`. Feeding uses its captured `food_position` and `initial_food_distance`,
 first target/ownership context and full world geometry; it does not require an
-unrelated manipulation setup. Missing captured controls fail closed.
+unrelated manipulation setup. Newly captured Feeding also requires its explicit
+`food_need_initialization`: `newborn_v1` or `ordinary_healthy_aging_v1`, the subject,
+and actual before/prepared physiology and ticks. The fresh scope validates and
+binds this entire receipt in its setup component. Missing historical condition
+evidence fails closed. Aged and newborn scenes are deliberately different inputs;
+this tool must not certify them as matched. The original weights-only v1 and its
+historical receipts are unchanged. RelocatedFood remains outside this comparison
+scope. Missing captured controls fail closed.
 
 The reported older/newer Feeding observations (13 decisions to eat versus 64
 without pickup) remain two within-case observations with limited paired evidence.

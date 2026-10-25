@@ -139,6 +139,28 @@ def schedule_rows(document, *, supported_lessons=LESSONS):
     return rows
 
 
+def plan_rows(plan):
+    """Old omitted conditions retain the exact schedule/default shape."""
+    rows = schedule_rows(plan["schedule"])
+    condition = plan.get("food_need_condition", "newborn_v1")
+    require(condition in ("newborn_v1", "ordinary_healthy_aging_v1"), "unsupported food need condition")
+    if "food_need_condition" in plan:
+        for row in rows:
+            if row["lesson"] in ("feeding", "relocated_food"):
+                row["food_need_condition"] = condition
+    return rows
+
+
+def validate_food_need_condition(receipt, row):
+    initialization = receipt.get("food_need_initialization")
+    if initialization is None:
+        require("food_need_condition" not in row, "missing prospective food need initialization")
+        return
+    require(isinstance(initialization, dict) and
+            initialization.get("condition") == row.get("food_need_condition", "newborn_v1"),
+            "food need initialization differs from the saved condition")
+
+
 def grab_import(path, expected):
     """Read-only import of Grab exclusions, deliberately preserving their scope."""
     ledger, digest = load(path)
@@ -279,7 +301,7 @@ def reconcile_prior_runs(doc, runs, *, check_payloads=True):
             unchanged(Path(plan["source"]), plan["source_sha256"])
         else:
             old = source_receipt(plan)
-            rows = schedule_rows(plan["schedule"])
+            rows = plan_rows(plan)
         previous = run["plan"]["source"]
         hashes = plan["source_sha256"]
         for index, attempt in enumerate(run["attempts"]):
@@ -522,6 +544,7 @@ def validate_feeding_food(receipt):
 
 
 def validate_receipt(receipt, old, row, seed):
+    validate_food_need_condition(receipt, row)
     require(receipt.get("biological_objective_version") == 2 and
             receipt.get("objective_state_reset") is False, "requires objective2 without reset")
     require(receipt.get("seed") == seed and receipt.get("lesson") == row["lesson"] and
@@ -658,7 +681,7 @@ def execute(plan, *, resume=False, cutoff=None):
         require(len(matches) == 1 and matches[0]["plan"] == plan, "resume plan collision")
         run = matches[0]
         require(run is ledger["runs"][-1], "a newer allocation owns this lineage; cannot resume an older run")
-        rows = schedule_rows(plan["schedule"])
+        rows = plan_rows(plan)
         doc, digest, _, _ = history(Path(plan["history"]), plan["source_sha256"], plan["source_seed"], lane,
                                    admission=seed_admission(plan))
         require(digest == plan["history_sha256"], "history changed on resume")
@@ -695,6 +718,8 @@ def execute(plan, *, resume=False, cutoff=None):
             directory = output / f"attempt-{index:05d}"
             require(attempt.get("directory") == str(directory) and attempt.get("previous") == str(previous)
                     and slot < len(rows), "attempt lineage collision")
+            require(attempt.get("food_need_condition", "newborn_v1") == rows[slot].get("food_need_condition", "newborn_v1"),
+                    "attempt food need condition differs from saved plan")
             if attempt["status"] == "abandoned":
                 require(not (directory / "cycle.json").exists(), "abandoned attempt later acquired a seal; reconcile manually")
                 continue
@@ -749,12 +774,16 @@ def execute(plan, *, resume=False, cutoff=None):
             unchanged(previous, expected)
             directory = output / f"attempt-{index:05d}"
             require(not directory.exists(), "attempt output collision")
+            row = rows[slot]
             attempt = {"slot": slot, "seed": seed, "directory": str(directory), "previous": str(previous), "status": "pending"}
+            if "food_need_condition" in row:
+                attempt["food_need_condition"] = row["food_need_condition"]
             run["attempts"].append(attempt)
             write_ledger(ledger_path, ledger)
-            row = rows[slot]
             argv = [plan["binary"], "--resume-cycle", str(previous), str(directory), str(row["decisions"]),
                     "--seed", str(seed), "--lesson", row["lesson"]]
+            if "food_need_condition" in row:
+                argv += ["--food-need-condition", row["food_need_condition"]]
             deadline = min(cutoff, dt.datetime.now(host.UTC) + dt.timedelta(seconds=plan["command_seconds"]))
             active.clear()
             host.run_child(argv, output / f"attempt-{index:05d}", deadline, guard,
@@ -786,6 +815,8 @@ def arguments():
     parser.add_argument("--seed-history", type=Path)
     parser.add_argument("--seed-admission", choices=tuple(FRESHNESS),
                         help="new-plan policy; default strict, known-exclusions requires incomplete attested history")
+    parser.add_argument("--food-need-condition", choices=("newborn_v1", "ordinary_healthy_aging_v1"),
+                        help="prospective Feeding/RelocatedFood initialization; other lessons keep their setup")
     parser.add_argument("--seed", type=int)
     parser.add_argument("--seed-count", type=int, help="whole reservation, including optional interruption spares")
     parser.add_argument("--cutoff", type=host.cutoff_time)
@@ -809,7 +840,7 @@ def main(argv=None):
         if args.resume or args.start:
             require(args.run, "--start/--resume requires --run")
             require(all(getattr(args, name) is None for name in
-                        ("binary", "checkpoint_inspector", "source", "schedule", "seed_history", "seed", "seed_count", "seed_admission", "keep_checkpoints")),
+                        ("binary", "checkpoint_inspector", "source", "schedule", "seed_history", "seed", "seed_count", "seed_admission", "keep_checkpoints", "food_need_condition")),
                     "saved execution uses the immutable plan; do not supply a new configuration")
             plan, _ = load(output / "plan.json")
             require(plan.get("kind") == "mixed-care-plan" and plan.get("output") == str(output), "saved plan/output collision")
@@ -847,6 +878,7 @@ def main(argv=None):
                     "retention": {"mode": "recent-checkpoints", "keep": keep}, "source_seed": source_seed, "binary": str(binary), "inspector": str(inspector),
                     "binary_sha256": {str(path): host.sha256(path) for path in (binary, inspector)},
                     "history": str(history_path), "history_sha256": digest, "seed_admission": admission, "schedule": schedule,
+                    **({"food_need_condition": args.food_need_condition} if args.food_need_condition else {}),
                     "seed_range": [first, first + count - 1], "cutoff": args.cutoff.isoformat(),
                     "command_seconds": args.command_seconds, "min_disk_gib": args.min_disk_gib,
                     "min_memory_gib": args.min_memory_gib, "idle_seconds": args.idle_seconds,

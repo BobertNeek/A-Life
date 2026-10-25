@@ -71,6 +71,20 @@ class MixedPlanningTests(unittest.TestCase):
         self.assertFalse(self.output.exists())
         self.assertFalse((self.root / mixed.LEDGER).exists())
 
+    def test_opt_in_plan_binds_need_condition_and_only_navigation_care_rows(self):
+        self.assertEqual(self.plan(self.argv + ['--food-need-condition', 'ordinary_healthy_aging_v1'])[0], 0)
+        plan, _ = mixed.load(self.output / 'plan.json')
+        self.assertEqual(plan['food_need_condition'], 'ordinary_healthy_aging_v1')
+        plan['schedule']['steps'] = [dict(lesson=lesson, episodes=1, decisions=2) for lesson in mixed.LESSONS]
+        rows = mixed.plan_rows(plan)
+        for row in rows:
+            self.assertEqual('food_need_condition' in row, row['lesson'] in ('feeding', 'relocated_food'))
+        del plan['food_need_condition']
+        self.assertEqual(mixed.plan_rows(plan), mixed.schedule_rows(plan['schedule']))
+        plan['food_need_condition'] = 'unknown'
+        with self.assertRaises(ValueError):
+            mixed.plan_rows(plan)
+
     def test_planning_hashes_complete_recovery_evidence_once(self):
         original = mixed.host.sha256
         reads = []

@@ -95,6 +95,7 @@ def build_plan(args):
             "lane": str(lane), "history": str(history), "history_sha256": mixed.host.sha256(history),
             "binary": str(binary), "binary_sha256": mixed.host.sha256(binary), "schedule": schedule,
             "seed_range": [first, last], "temperature": args.temperature, "seed_admission": admission,
+            "food_need_condition": getattr(args, "food_need_condition", None) or "newborn_v1",
             "git_head": git("rev-parse", "HEAD"), "git_tree": git("rev-parse", "HEAD^{tree}"),
             "scheduler_sha256": mixed.host.sha256(Path(__file__)),
             "helper_sha256": {name: mixed.host.sha256(root / "scripts" / name) for name in HELPERS},
@@ -140,6 +141,8 @@ def execute(plan):
     require({k: v for k, v in os.environ.items() if k.startswith("ALIFE_SLM_")} == plan["prior_environment"],
             "semantic-prior environment changed")
     rows = mixed.schedule_rows(plan["schedule"], supported_lessons=CPU_LESSONS)
+    food_need_condition = plan.get("food_need_condition", "newborn_v1")
+    require(food_need_condition in ("newborn_v1", "ordinary_healthy_aging_v1"), "unsupported food need condition")
     previous = Path(plan["source"])
     ledger_path = lane / LEDGER
     attempts = read(ledger_path)["cpu_care_attempts"] if ledger_path.exists() else []
@@ -165,6 +168,9 @@ def execute(plan):
                 attempt["source_sha256"] == expected_source and
                 attempt["lesson"] == rows[slot]["lesson"] and attempt["decisions"] == rows[slot]["decisions"],
                 "saved CPU attempt does not match explicit schedule/lineage")
+        if rows[slot]["lesson"] in ("feeding", "relocated_food"):
+            require(attempt.get("food_need_condition", "newborn_v1") == food_need_condition,
+                    "saved CPU attempt food need condition differs from plan")
         if attempt["status"] == "accepted":
             output = Path(attempt["output"])
             expected_source = attempt["native_output_sha256"]
@@ -201,10 +207,17 @@ def execute(plan):
         argv = ["--previous", previous, "--output", output, "--seed-history", history,
                 "--seed", seed, "--lesson", row["lesson"], "--decisions", row["decisions"],
                 "--temperature", plan["temperature"]]
+        if food_need_condition != "newborn_v1" and row["lesson"] in ("feeding", "relocated_food"):
+            argv += ["--food-need-condition", food_need_condition]
         if plan["seed_admission"]["policy"] == "known-exclusions":
             argv.append("--known-exclusions")
         command(binary, *argv)
         receipt = command(binary, "--validate-output", output)
+        if row["lesson"] in ("feeding", "relocated_food"):
+            actual = receipt["episode"].get("food_need_initialization")
+            require((actual is None and food_need_condition == "newborn_v1") or
+                    (isinstance(actual, dict) and actual.get("condition") == food_need_condition),
+                    "CPU output food need condition differs from saved plan")
         attempts = read(ledger_path)["cpu_care_attempts"]
         require(attempts[-1]["status"] == "accepted" and
                 attempts[-1]["native_output_sha256"] == pins(output), "native acceptance missing")
@@ -228,6 +241,8 @@ def main():
     parser.add_argument("--schedule", type=Path)
     parser.add_argument("--seeds", help="explicit nonzero inclusive FIRST:LAST range")
     parser.add_argument("--temperature", type=float, default=1.)
+    parser.add_argument("--food-need-condition", choices=("newborn_v1", "ordinary_healthy_aging_v1"),
+                        help="prospective Feeding/RelocatedFood condition; other lesson setup stays unchanged")
     parser.add_argument("--known-exclusions", action="store_true")
     parser.add_argument("--keep-checkpoints", type=int,
                         help="new plans validate this many recent full checkpoints; old receipts/seeds remain")
@@ -235,7 +250,7 @@ def main():
     args = parser.parse_args()
     if args.resume:
         require(args.run and not any((args.binary, args.previous, args.lane, args.seed_history, args.schedule, args.seeds,
-                                      args.known_exclusions, args.keep_checkpoints)), "resume uses only --resume LANE --run")
+                                      args.known_exclusions, args.keep_checkpoints, args.food_need_condition)), "resume uses only --resume LANE --run")
         lane = args.resume.resolve(strict=True)
         plan = read(lane / PLAN)
         require(same_path(plan["lane"], lane), "saved lane identity changed")

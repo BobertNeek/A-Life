@@ -42,7 +42,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = arguments.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--known-exclusions] [--record-diagnostic-replay]\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
+                println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--food-need-condition newborn_v1|ordinary_healthy_aging_v1] [--known-exclusions] [--record-diagnostic-replay]\n\nThe opt-in ordinary healthy aging condition applies only to Feeding/RelocatedFood and preserves their geometry and cues.\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
                 return Ok(());
             }
             "--fixture" => {
@@ -63,8 +63,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 known_exclusions = true;
             }
-            "--previous" | "--output" | "--seed-history" | "--seed" | "--lesson"
-            | "--decisions" | "--temperature" => {
+            "--previous"
+            | "--output"
+            | "--seed-history"
+            | "--seed"
+            | "--lesson"
+            | "--decisions"
+            | "--temperature"
+            | "--food-need-condition" => {
                 let value = arguments.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
                     return Err("duplicate argument".into());
@@ -95,6 +101,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             .parse()?,
         seed_history: values.remove("--seed-history").map(PathBuf::from),
         lesson,
+        food_need_condition: values
+            .remove("--food-need-condition")
+            .as_deref()
+            .unwrap_or("newborn_v1")
+            .parse()?,
         fixture,
         known_exclusions,
         record_diagnostic_replay,
