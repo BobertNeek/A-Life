@@ -36,6 +36,24 @@ cargo run -p alife_game_app --features gpu-runtime --bin alife_game_app -- gpu-c
 cargo run -p alife_game_app --features gpu-tests --bin alife_game_app -- gpu-closed-loop-soak --help
 ```
 
+## Bounded foundation evaluation outcomes
+
+Native pilot receipts (`pilot.json` and `lesson-trace.json` or
+`lesson-diagnostic.json`) include `evaluation_observation` beside the unchanged
+`lesson_completed` flag. It records the requested ticks, actual tick calls,
+captured waking steps, last world-tick boundary, neural phases, body sleep and
+terminal death evidence for the admitted learner.
+
+`sleep_censored` means collection stopped at a neural sleep boundary before the
+lesson completed. Recovery requires a later awake meal, so this result does not
+establish inability to wake. Ordinary body Rest alone is insufficient evidence
+of neural sleep. `not_completed` means the criterion was false within the stated
+budget or lesson boundary; `terminal_death` requires lifecycle/archive evidence;
+`missing_waking_capture` remains unexplained rather than being assumed asleep.
+Historical receipts without this field have an unknown stop reason. Collection,
+replay and acceptance criteria are unchanged. No neural waking progress is
+claimed by this reporting correction.
+
 ## Relocated-food motion evidence
 
 Native GPU relocated-food pilot/assessment and cycle captures extend the existing

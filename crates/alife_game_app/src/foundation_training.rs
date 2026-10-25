@@ -28,7 +28,11 @@ pub use cohort_replay::{
 mod comparison_identity;
 pub(crate) mod diagnostics;
 pub use comparison_identity::FoundationProbeComparisonIdentityV1;
+mod evaluation_observation;
 pub(crate) mod food_outcome;
+pub use evaluation_observation::{
+    FoundationEvaluationObservation, FoundationEvaluationOutcome, FoundationEvaluationStopReason,
+};
 mod initial_asset;
 mod lesson_trace;
 mod play_assessment;
@@ -531,10 +535,13 @@ pub struct FoundationPilotReceipt {
     pub demonstration_replay_records: usize,
     pub food_position: Option<[f32; 2]>,
     pub initial_food_distance: Option<f32>,
-    /// EatHeldFood uses the admitted learner only; null after death or removal.
+    /// Uses the admitted learner only; null after death or removal.
     pub final_food_distance: Option<f32>,
     pub lesson: Option<FoundationTeacherLesson>,
     pub lesson_completed: Option<bool>,
+    /// Missing in historical receipts; never infer a stop reason from `false`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evaluation_observation: Option<FoundationEvaluationObservation>,
     #[serde(default)]
     pub vocabulary_token: Option<u16>,
     #[serde(default)]
@@ -1783,6 +1790,7 @@ fn run_foundation_training_pilot_with_request(
     let hazard = scenario.hazard;
     let waypoint = scenario.waypoint;
     let initial_hazard_distance = scenario.initial_hazard_distance;
+    let learner = game.world.organism_entity_ids()[0].0;
     let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
@@ -1878,6 +1886,7 @@ fn run_foundation_training_pilot_with_request(
     let mut unprompted_correct_utterances = 0;
     let mut speech_opportunities = 0;
     let mut speech_behavior = FoundationSpeechBehaviorDiagnostics::default();
+    let mut evaluation_observation = FoundationEvaluationObservation::new(tick_count, learner);
     for tick in 0..tick_count {
         if tick != 0 {
             close_foundation_navigation_gate(&mut runtime, &scenario)?;
@@ -1910,6 +1919,7 @@ fn run_foundation_training_pilot_with_request(
                 food_outcome::ownership(runtime.world(), target),
             )
         });
+        evaluation_observation.before_tick(runtime.world());
         let tick_summaries = runtime
             .tick()
             .map_err(|error| format!("pilot production tick {tick}: {error}"))?;
@@ -1938,6 +1948,8 @@ fn run_foundation_training_pilot_with_request(
             // A sleeping or terminal learner has no waking decision to replay.
             // Seal the contiguous segment already observed; failing the whole
             // evaluation would hide the behavioral outcome.
+            evaluation_observation.stop_reason =
+                FoundationEvaluationStopReason::MissingWakingCapture;
             break;
         }
         if collected.len() != 1 {
@@ -2056,6 +2068,7 @@ fn run_foundation_training_pilot_with_request(
             || hazard_settled
             || !grab_food_acquisitions.is_empty()
         {
+            evaluation_observation.stop_reason = FoundationEvaluationStopReason::LessonBoundary;
             break;
         }
     }
@@ -2072,10 +2085,7 @@ fn run_foundation_training_pilot_with_request(
             .as_ref()
             .and_then(|setup| held_food_learner_distance(runtime.world(), food, setup.organism))
     } else {
-        scenario_lesson
-            .is_some()
-            .then(|| teacher_food_distance(&runtime))
-            .transpose()?
+        scenario_lesson.and_then(|_| held_food_learner_distance(runtime.world(), food, learner))
     };
     let held_food_terminal_death_tick = scenario.held_food_setup.as_ref().and_then(|setup| {
         runtime
@@ -2313,10 +2323,18 @@ fn run_foundation_training_pilot_with_request(
             recovery::lesson_completed(food, steps.iter().map(|step| &step.patch))
         }
     });
+    evaluation_observation.finish(
+        runtime.world(),
+        runtime
+            .archive_retirement_receipt(learner)
+            .map(|receipt| receipt.death_tick.raw()),
+        steps.len(),
+        lesson_completed,
+    );
     if let Some(summary) = food_outcome.as_mut() {
         summary.explicit_grab_acquisition_events = grab_food_acquisitions.len();
     }
-    if scenario_lesson.is_some() {
+    if scenario_lesson.is_some() || steps.is_empty() {
         let trace = steps
             .iter()
             .enumerate()
@@ -2354,13 +2372,10 @@ fn run_foundation_training_pilot_with_request(
                 trace
             })
             .collect::<Vec<_>>();
-        std::fs::write(
-            output.join(if lesson_completed == Some(false) {
-                "lesson-diagnostic.json"
-            } else {
-                "lesson-trace.json"
-            }),
-            serde_json::to_vec_pretty(&serde_json::json!({
+        evaluation_observation::write_lesson_receipt(
+            output,
+            &evaluation_observation,
+            serde_json::json!({
                 "lesson": scenario_lesson,
                 "lesson_completed": lesson_completed,
                 "food_outcome": food_outcome,
@@ -2389,14 +2404,21 @@ fn run_foundation_training_pilot_with_request(
                 "semantic_prior": runtime.semantic_prior_metrics(),
                 "vocabulary_target": scenario.vocabulary_target,
                 "language_praises": scenario.language_praise_count.get(),
-                "heard_language_encoder_lanes": steps[0].before.phenotype.sensor_encoder().assignments().iter().filter(|a|a.source_group()==alife_core::SensorEncoderSourceGroup::HeardLanguage).count(),
-                "semantic_prior_encoder_lanes": steps[0].before.phenotype.sensor_encoder().assignments().iter().filter(|a|a.source_group()==alife_core::SensorEncoderSourceGroup::SemanticPrior).count(),
-            }))?,
+                "heard_language_encoder_lanes": steps.first().map(|step| step.before.phenotype.sensor_encoder().assignments().iter().filter(|a|a.source_group()==alife_core::SensorEncoderSourceGroup::HeardLanguage).count()),
+                "semantic_prior_encoder_lanes": steps.first().map(|step| step.before.phenotype.sensor_encoder().assignments().iter().filter(|a|a.source_group()==alife_core::SensorEncoderSourceGroup::SemanticPrior).count()),
+            }),
         )?;
     }
     validate_foundation_lesson_prior(&runtime, output, scenario_lesson)?;
     if lesson_completed == Some(false) && teacher_mode {
         return Err("teacher lesson did not complete its measured world outcome".into());
+    }
+    if steps.is_empty() {
+        return Err(format!(
+            "pilot captured no waking decisions: {:?}; see lesson-diagnostic.json",
+            evaluation_observation.stop_reason
+        )
+        .into());
     }
     let phenotype = steps[0].before.phenotype.as_ref().clone();
     let ids: Vec<u32> = (0..phenotype.synapses().len() as u32).collect();
@@ -2595,6 +2617,7 @@ fn run_foundation_training_pilot_with_request(
         final_food_distance,
         lesson: scenario_lesson,
         lesson_completed,
+        evaluation_observation: Some(evaluation_observation),
         vocabulary_token: scenario.vocabulary_token,
         initial_world_signature,
         initial_comparison_identity,
@@ -6473,6 +6496,7 @@ mod evaluation_sampling_tests {
         });
         let mut receipt: FoundationPilotReceipt = serde_json::from_value(historical).unwrap();
         assert!(receipt.initial_sampling.is_none());
+        assert!(receipt.evaluation_observation.is_none());
         let sampling = foundation_pilot_sampling(53, 32.0).unwrap();
         receipt.initial_sampling = Some(sampling);
         let encoded = serde_json::to_value(&receipt).unwrap();
@@ -6482,6 +6506,7 @@ mod evaluation_sampling_tests {
         );
         let decoded: FoundationPilotReceipt = serde_json::from_value(encoded).unwrap();
         assert_eq!(decoded.initial_sampling, Some(sampling));
+        assert!(decoded.evaluation_observation.is_none());
     }
 }
 
