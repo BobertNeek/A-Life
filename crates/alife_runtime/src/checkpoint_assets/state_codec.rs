@@ -819,7 +819,10 @@ impl GpuCheckpointAssetStore {
         }
 
         let mut entries = Vec::new();
-        let (immutable_phenotype, entry) = self.write_json("phenotype", phenotype)?;
+        // This immutable borrow is still the exact phenotype whose serialized
+        // bytes passed recompilation above. Publish that same encoding once.
+        let (immutable_phenotype, entry) =
+            self.write_serialized_json("phenotype", &phenotype_bytes)?;
         entries.push(entry);
         let (phenotype_compiler_inputs, entry) =
             self.write_json("compiler-inputs", compiler_inputs)?;
