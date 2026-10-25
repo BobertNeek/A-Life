@@ -54,9 +54,18 @@ pub(crate) fn run_headless_max_runtime(
     );
     let started = Instant::now();
     let initial_tick = runtime.world().tick();
+    let mut action_trace =
+        crate::gpu_live_runtime::headless_trace::HeadlessActionTrace::from_environment();
     while !duration.is_some_and(|limit| started.elapsed() >= limit) && !stop_path.exists() {
         match runtime.tick_outcome()? {
-            GpuLiveTickOutcome::Progressed(_) => {}
+            GpuLiveTickOutcome::Progressed(summaries) => {
+                if let Some(trace) = action_trace.as_mut() {
+                    trace.record(runtime.world().tick(), || {
+                        runtime
+                            .headless_action_trace_row(&summaries, started.elapsed().as_secs_f64())
+                    });
+                }
+            }
             GpuLiveTickOutcome::NoProgress(
                 GpuLiveNoProgressReason::CheckpointPublicationPending,
             ) => {
@@ -103,6 +112,7 @@ pub(crate) fn run_headless_max_runtime(
         "run_elapsed_seconds": run_elapsed_seconds,
         "achieved_tps": (final_tick.raw() - initial_tick.raw()) as f64 / run_elapsed_seconds.max(f64::EPSILON),
         "checkpoint_verified": true, "checkpoint": save_path,
+        "action_trace": action_trace.as_ref().map(|trace| trace.status()),
     });
     std::fs::write(
         save_path.with_extension("headless.json"),

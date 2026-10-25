@@ -26,6 +26,8 @@ mod exact_population_checkpoint;
 mod foundation_worlds;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod founder_consequence_tests;
+#[cfg(any(feature = "bevy-app", test))]
+pub(crate) mod headless_trace;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod journal_capacity_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
