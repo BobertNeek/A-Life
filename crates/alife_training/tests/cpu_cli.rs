@@ -178,10 +178,16 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
             .unwrap();
     assert_eq!(restored_actor, actor);
     assert_eq!(restored_value, value);
+    assert_eq!(serde_json::to_vec(&restored_actor).unwrap(), before[3]);
+    assert_eq!(serde_json::to_vec(&restored_value).unwrap(), before[4]);
     let restored_inputs: alife_core::PhenotypeCompilerInputs =
         serde_json::from_slice(&fs::read(second.join("collection-compiler-inputs.json")).unwrap())
             .unwrap();
     assert_eq!(restored_inputs, handoff.compiler_inputs);
+    assert_eq!(
+        serde_json::to_vec(&restored_inputs).unwrap(),
+        compiler_bytes
+    );
     assert!(!second.join("compiler-inputs.json").exists());
     alife_training::cpu::read_cpu_founder_source(&second).unwrap();
     let a: serde_json::Value = serde_json::from_slice(&before[1]).unwrap();
