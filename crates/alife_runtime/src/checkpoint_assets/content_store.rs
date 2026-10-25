@@ -46,9 +46,19 @@ impl GpuCheckpointAssetStore {
         kind: &'static str,
         value: &T,
     ) -> Result<(GpuBrainAssetRef, AssetManifestEntry), GameAppShellError> {
-        validate_kind(kind)?;
         let bytes = serde_json::to_vec(value)?;
-        let digest = PortableAssetDigest::for_bytes(&bytes);
+        self.write_serialized_json(kind, &bytes)
+    }
+
+    /// Publish bytes produced by the caller's typed JSON serialization. Keep
+    /// the content, collision and durability checks identical to `write_json`.
+    pub(super) fn write_serialized_json(
+        &self,
+        kind: &'static str,
+        bytes: &[u8],
+    ) -> Result<(GpuBrainAssetRef, AssetManifestEntry), GameAppShellError> {
+        validate_kind(kind)?;
+        let digest = PortableAssetDigest::for_bytes(bytes);
         let suffix = digest.0.strip_prefix("fnv1a64:").ok_or_else(|| {
             GameAppShellError::InvalidProductionFrontend {
                 message: "GPU checkpoint digest did not use the portable digest ABI".to_string(),
@@ -57,7 +67,7 @@ impl GpuCheckpointAssetStore {
         let asset_id = format!("gpu-brain.{kind}.{suffix}");
         let relative_path = format!("gpu-brain/{kind}-{suffix}.json");
         let destination = self.root.join(&relative_path);
-        write_content_addressed(&destination, &bytes)?;
+        write_content_addressed(&destination, bytes)?;
         let size_bytes = u64::try_from(bytes.len()).map_err(|_| {
             GameAppShellError::InvalidProductionFrontend {
                 message: "GPU checkpoint asset length overflowed u64".to_string(),
@@ -389,6 +399,88 @@ mod tests {
             size_bytes: Some(payload.len() as u64),
             provenance: Some(format!("gpu-checkpoint:{kind}")),
         }
+    }
+
+    #[test]
+    fn serialized_phenotype_publication_matches_typed_bytes_and_manifest() {
+        use alife_core::{
+            BrainCapacityClass, BrainGenome, BrainPhenotype, DevelopmentState, NormalizedScalar,
+            PhenotypeCompiler, Tick,
+        };
+
+        let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "alife-serialized-phenotype-{}-{nonce}",
+            std::process::id()
+        ));
+        let typed = GpuCheckpointAssetStore::new(root.join("typed")).unwrap();
+        let serialized = GpuCheckpointAssetStore::new(root.join("serialized")).unwrap();
+        let capacity = BrainCapacityClass::n2048();
+        let mut previous = None;
+        for seed in [73_131, 73_132] {
+            let genome = BrainGenome::scaffold(seed, capacity.id());
+            let development =
+                DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+            let phenotype = PhenotypeCompiler::compile(
+                &genome,
+                &capacity,
+                &development,
+                SensorProfile::GroundedTerrainVisionV1,
+            )
+            .unwrap();
+            let bytes = serde_json::to_vec(&phenotype).unwrap();
+            let expected = typed.write_json("phenotype", &phenotype).unwrap();
+            let actual = serialized
+                .write_serialized_json("phenotype", &bytes)
+                .unwrap();
+            assert_eq!(actual, expected);
+            assert_eq!(
+                fs::read(typed.root().join(&expected.1.relative_path)).unwrap(),
+                bytes
+            );
+            let mut manifest = AssetManifest::empty();
+            manifest.entries.push(actual.1);
+            let (restored, stored): (BrainPhenotype, _) =
+                serialized.read_json(&manifest, &actual.0).unwrap();
+            assert_eq!(restored, phenotype);
+            assert_eq!(stored, bytes);
+            assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
+            // A later, different phenotype must produce its own content identity.
+            assert_ne!(previous.as_ref(), Some(&actual.0));
+            previous = Some(actual.0);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn serialized_json_preserves_float_bits_and_rejects_corrupt_existing_content() {
+        let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "alife-serialized-json-integrity-{}-{nonce}",
+            std::process::id()
+        ));
+        let store = GpuCheckpointAssetStore::new(&root).unwrap();
+        let value = [-0.0_f32, f32::from_bits(1), f32::MAX];
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert!(store.write_serialized_json("../invalid", &bytes).is_err());
+        assert!(!root.exists());
+        let (reference, entry) = store.write_serialized_json("float-state", &bytes).unwrap();
+        assert_eq!(
+            store.write_json("float-state", &value).unwrap(),
+            (reference.clone(), entry.clone())
+        );
+        let mut manifest = AssetManifest::empty();
+        manifest.entries.push(entry.clone());
+        let (restored, stored): ([f32; 3], _) = store.read_json(&manifest, &reference).unwrap();
+        assert_eq!(restored.map(f32::to_bits), value.map(f32::to_bits));
+        assert_eq!(stored, bytes);
+
+        let path = root.join(&entry.relative_path);
+        fs::write(&path, b"corrupt-existing-content").unwrap();
+        assert!(store.write_serialized_json("float-state", &bytes).is_err());
+        assert!(store.read_json::<[f32; 3]>(&manifest, &reference).is_err());
+        assert_eq!(fs::read(path).unwrap(), b"corrupt-existing-content");
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
