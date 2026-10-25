@@ -660,6 +660,15 @@ fn validate_attempts(plan: &CpuCareRoundPlanV1, lane: &Path, attempts: &[Value])
     }
     Ok(())
 }
+fn validate_collector_prior(prior: Option<&RuntimeSemanticPrior>, expected: &str) -> Result<()> {
+    let prior = prior.ok_or("explicit deterministic prior missing")?;
+    if prior.metrics.provider_identity != expected {
+        return Err("care round prior identity changed; collection remains unsealed".into());
+    }
+    // Optional hint failures are already logged and retained in the episode's
+    // metrics. They do not invalidate an otherwise sound unaided trajectory.
+    Ok(())
+}
 fn collect(
     plan: &CpuCareRoundPlanV1,
     index: usize,
@@ -684,15 +693,7 @@ fn collect(
     episode.explicit_deterministic_prior = true;
     let result = (|| -> Result<()> {
         let collected = collect_cpu_episode(config, &mut episode)?;
-        let prior = episode
-            .prior
-            .as_ref()
-            .ok_or("explicit deterministic prior missing")?;
-        if prior.metrics.provider_identity != plan.prior_provider_identity
-            || prior.metrics.failures != 0
-        {
-            return Err("care round prior failed or changed; collection remains unsealed".into());
-        }
+        validate_collector_prior(episode.prior.as_ref(), &plan.prior_provider_identity)?;
         collected.seal(assignment.clone())?;
         episode
             .reservation
@@ -879,6 +880,62 @@ pub fn cpu_care_round_summary(result: &CpuCooperativeRoundResultV1, directory: &
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn zero_hint_failure_remains_unaided_and_admissible_only_with_the_pinned_provider() {
+        use alife_core::{HomeostaticSnapshot, OrganismId, PerceptionContextBlock, Tick, Vec3f};
+        let mut world = alife_world::HeadlessScenarioBuilder::new(77)
+            .agent("learner", OrganismId(5), Vec3f::ZERO)
+            .build()
+            .unwrap();
+        let draft = world
+            .perception_frame_draft(
+                OrganismId(5),
+                Tick::ZERO,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(Tick::ZERO),
+            )
+            .unwrap();
+        // No observed vocabulary association: the actual pinned provider emits
+        // schema-valid zero hints. Use a seed outside this life's dropout lane.
+        let mut prior = RuntimeSemanticPrior::deterministic_for_training(7);
+        let expected = prior.metrics.provider_identity.clone();
+        prior.require_rich_information();
+        for sequence in 1..=2 {
+            prior
+                .prime_with_receipt(draft.clone(), ExperienceSequenceId(sequence))
+                .unwrap();
+            let prepared = prior
+                .prepare(draft.clone(), ExperienceSequenceId(sequence))
+                .unwrap();
+            assert!(prepared.sensory().semantic_context.is_none());
+            assert_eq!(prepared.sensory().channels, draft.sensory().channels);
+            assert_eq!(
+                prepared.sensory().language_context,
+                draft.sensory().language_context
+            );
+            let frame = prepared.finalize(PerceptionContextBlock::empty()).unwrap();
+            prior.record_decision_input(&frame, sequence, sequence, 128, 0);
+        }
+        assert_eq!(prior.metrics.failures, 1);
+        assert_eq!(prior.metrics.requests, 1);
+        assert_eq!(prior.metrics.unusable_hint_retry_requests, 0);
+        assert_eq!(prior.metrics.decision_frames_without_prior, 2);
+        assert_eq!(prior.metrics.decision_frames_with_prior, 0);
+        assert_eq!(prior.metrics.provider_failures.len(), 1);
+        assert_eq!(prior.metrics.provider_failures[0].organism, 5);
+        assert_eq!(
+            prior.metrics.last_error.as_deref(),
+            Some("schema-valid semantic prior supplied no usable hints")
+        );
+        let evidence = serde_json::to_value(&prior.metrics).unwrap();
+        validate_collector_prior(Some(&prior), &expected).unwrap();
+        assert_eq!(serde_json::to_value(&prior.metrics).unwrap(), evidence);
+        assert!(validate_collector_prior(None, &expected).is_err());
+        prior.metrics.provider_identity = "changed-provider".into();
+        assert!(validate_collector_prior(Some(&prior), &expected).is_err());
+    }
+
     #[test]
     fn legal_run_names_cannot_alias_dispatch_history_and_ledger_snapshots() {
         let mut paths = BTreeSet::new();
