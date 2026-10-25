@@ -7,6 +7,36 @@ on:
     branches: ["main"]
 
 jobs:
+  native-texture-decode:
+    name: Native texture decode (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install Linux controller build dependency
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: Decode and reject zstd KTX2 through the production Bevy image path
+        run: cargo test --locked -p alife_game_app --features production-voxel-frontend --test bevy_texture_decode
+      - name: Check native production targets
+        run: cargo check --locked -p alife_game_app --features production-voxel-frontend --all-targets
+      - name: Strict texture regression Clippy
+        run: cargo clippy --locked -p alife_game_app --features production-voxel-frontend --test bevy_texture_decode -- -D warnings
+
   island-output-changes:
     name: Island output-change frontend CPU regression
     runs-on: ubuntu-latest
