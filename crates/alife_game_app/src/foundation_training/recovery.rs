@@ -617,6 +617,223 @@ mod tests {
     }
 
     #[test]
+    fn headless_trace_follows_meal_and_rest_without_reusing_stale_outcomes() {
+        use crate::gpu_live_runtime::headless_trace::trace_row;
+        // Existing offline world fixture: actual legal Eat/Rest and physiology,
+        // synthetic neural choice. Full neural sleep is tested separately by the
+        // runtime scheduler fixtures, never inferred from body.sleeping here.
+        let (mut world, food) = prepared(true);
+        let (learner, entity) = world.organism_entity_ids()[0];
+        let mut meals = Vec::new();
+        feed(&mut world, food, &mut meals, None);
+        let meal = meals.last().unwrap();
+        let mut summary = crate::LiveBrainTickSummary {
+            schema: "offline-trace-fixture",
+            schema_version: 1,
+            organism_id: learner,
+            tick_before: meal.header().world_tick,
+            tick_after: meal.outcome().outcome_tick,
+            world_tick_before: meal.header().world_tick,
+            world_tick_after: meal.outcome().outcome_tick,
+            status: alife_core::BrainTickStatus::Normal,
+            selected_action_kind: Some(meal.decision().selected_action.kind),
+            selected_action_id: Some(meal.decision().selected_action.action_id),
+            target_entity: Some(food),
+            patch_sealed: true,
+            patch_sequence_id: Some(meal.header().sequence_id.raw()),
+            patch_success: Some(meal.outcome().success),
+            physical_contact: Some(meal.outcome().physical.contact),
+            action_failure: None,
+            motor_execution: None,
+            sealed_patch_count: meals.len(),
+            packed_record_count: 0,
+            memory_updates: 0,
+            topology_updates: 0,
+            learning_updates: 0,
+            invalid_or_rejected_action_count: 0,
+            last_diagnostic: None,
+            causal_stages: Vec::new(),
+        };
+        let signature = world.canonical_signature_digest().unwrap();
+        let row = trace_row(&world, &[summary.clone()], &meals, |_| None, 0.0);
+        assert_eq!(world.canonical_signature_digest().unwrap(), signature);
+        assert_eq!(row["organisms"][0]["organism_id"], learner.raw());
+        assert_eq!(row["organisms"][0]["stable_id"], entity.raw());
+        let measured = &row["actions"][0]["outcome"]["measured_physiology"];
+        assert!(
+            measured["after"]["body"]["energy"].as_f64().unwrap()
+                > measured["before"]["body"]["energy"].as_f64().unwrap()
+        );
+        assert!(world.entity(food).unwrap().consumed);
+
+        let rest = execute(&mut world, ActionKind::Rest.canonical_id(), None, &[]);
+        let row = trace_row(&world, &[], std::slice::from_ref(&rest), |_| None, 0.1);
+        assert_eq!(row["organisms"][0]["organism_id"], learner.raw());
+        assert_eq!(row["organisms"][0]["stable_id"], entity.raw());
+        assert_eq!(row["organisms"][0]["body_sleeping"], true);
+        assert_eq!(row["actions"], serde_json::json!([]));
+
+        // Retained latest meal must not appear on later/sleeping summaries, or
+        // for a different life/sequence. Omission is unknown, never a new meal.
+        for mismatch in 0..4 {
+            let original = summary.clone();
+            match mismatch {
+                0 => summary.patch_sealed = false,
+                1 => summary.world_tick_before = world.tick(),
+                2 => summary.organism_id = alife_core::OrganismId(learner.raw() + 1),
+                _ => summary.patch_sequence_id = Some(meal.header().sequence_id.raw() + 1),
+            }
+            let row = trace_row(&world, &[summary.clone()], &meals, |_| None, 0.2);
+            assert!(row["actions"][0]["outcome"].is_null());
+            summary = original;
+        }
+    }
+
+    #[test]
+    fn headless_trace_retains_identity_through_scheduler_consolidation_and_waking() {
+        use crate::gpu_live_runtime::headless_trace::trace_row;
+        use alife_core::{
+            ConsolidationDriverEvent as Event, ConsolidationIntent, ConsolidationJobId,
+            ConsolidationStagedOutput, GpuConsolidationRequest, OrganismId, PhenotypeHash,
+            ScaffoldContractError, SleepConsolidationConfig, SleepPhase, SleepState,
+        };
+        // Same deterministic driver events as automatic_sleep_scheduler.rs,
+        // queued as scaffolding. Real scheduler/world biology, no GPU weights,
+        // neural inference, durable publication, or learned-behavior claim.
+        #[derive(Default)]
+        struct FixtureDriver(Vec<Event>);
+        impl alife_runtime::GpuSleepConsolidationDriver for FixtureDriver {
+            fn has_bounded_sleep_phase_data(
+                &mut self,
+                _: OrganismId,
+                _: SleepState,
+            ) -> Result<bool, ScaffoldContractError> {
+                Ok(false)
+            }
+            fn progress(
+                &mut self,
+                _: OrganismId,
+                _: SleepState,
+                intent: Option<ConsolidationIntent>,
+            ) -> Result<Option<Event>, ScaffoldContractError> {
+                if let Some(intent) = intent {
+                    let mut request = GpuConsolidationRequest {
+                        schema_version: alife_core::GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+                        request_flags: 0,
+                        cycle_id: intent.cycle_id,
+                        phenotype_hash: PhenotypeHash([21, 22, 23, 24]),
+                        input_generation: 1,
+                        expected_output_generation: 2,
+                        input_digest: [31, 32, 33, 34],
+                        replay_digest: [11, 12, 13, 14],
+                        max_replay_events: 1,
+                        max_replay_eligibility_samples: 1,
+                        request_digest: [0; 4],
+                    };
+                    request.request_digest = request.recompute_request_digest()?;
+                    let job_id = ConsolidationJobId::try_from_raw(1)?;
+                    let mut staged = ConsolidationStagedOutput {
+                        job_id,
+                        output_generation: 2,
+                        output_weight_bank: 1,
+                        output_digest: [41, 42, 43, 44],
+                        eligibility_reset_generation: 2,
+                        output_eligibility_bank: 0,
+                        eligibility_output_digest: [51, 52, 53, 54],
+                        replay_journal_generation: 2,
+                        replay_journal_cursor: 0,
+                        replay_journal_event_count: 0,
+                        replay_journal_output_digest: [61, 62, 63, 64],
+                        staging_digest: [0; 4],
+                        promoted_fast_l1_bits: 0.25_f32.to_bits(),
+                        replay_induced_fast_l1_bits: 0.125_f32.to_bits(),
+                    };
+                    staged.staging_digest = staged.recompute_staging_digest(&request, 1, 1)?;
+                    self.0 = vec![
+                        Event::Committed {
+                            cycle_id: intent.cycle_id,
+                            output_generation: 2,
+                            output_digest: staged.output_digest,
+                        },
+                        Event::Completed { request, staged },
+                        Event::Submitted { request, job_id },
+                        Event::Prepared { request },
+                        Event::ReplayAssetPersisted {
+                            intent,
+                            replay_digest: request.replay_digest,
+                            replay_event_count: 0,
+                            replay_eligibility_sample_count: 0,
+                        },
+                    ];
+                }
+                Ok(self.0.pop())
+            }
+        }
+        let (mut world, food) = prepared(true);
+        let (learner, entity) = world.organism_entity_ids()[0];
+        let mut meals = Vec::new();
+        feed(&mut world, food, &mut meals, None);
+        let mut scheduler = alife_runtime::GpuSleepScheduler::new(SleepConsolidationConfig {
+            // A shorter observation fixture, never a production threshold edit.
+            fatigue_threshold: NormalizedScalar::new(0.12).unwrap(),
+            entering_duration: alife_core::DurationTicks::new(1),
+            waking_duration: alife_core::DurationTicks::new(1),
+            ..SleepConsolidationConfig::reference()
+        })
+        .unwrap();
+        let mut driver = FixtureDriver::default();
+        let mut phases = Vec::new();
+        let mut committed = false;
+        for _ in 0..24 {
+            let next = Tick(world.tick().raw() + 1);
+            let mut record = world.organism_registry().get(learner).unwrap().clone();
+            scheduler
+                .scheduled_tick_with_organism(
+                    &mut record,
+                    alife_core::HomeostaticParameters::reference(),
+                    next,
+                    &mut driver,
+                    false,
+                )
+                .unwrap();
+            world.replace_organism_record_exact(record).unwrap();
+            world.try_advance_tick().unwrap();
+            let state = scheduler.state();
+            let row = trace_row(
+                &world,
+                &[],
+                &meals,
+                |id| (id == learner).then_some(state),
+                0.0,
+            );
+            assert_eq!(row["organisms"][0]["organism_id"], learner.raw());
+            assert_eq!(row["organisms"][0]["stable_id"], entity.raw());
+            assert_eq!(row["actions"], serde_json::json!([]));
+            let decoded: SleepState =
+                serde_json::from_value(row["organisms"][0]["neural_sleep"].clone()).unwrap();
+            assert_eq!(decoded, state);
+            phases.push(decoded.phase);
+            committed |= matches!(
+                decoded.consolidation,
+                alife_core::ConsolidationState::Committed { .. }
+            );
+            if decoded.phase == SleepPhase::Awake && decoded.last_consolidated_cycle_id == 1 {
+                break;
+            }
+        }
+        assert!(phases.contains(&SleepPhase::EnteringSleep));
+        assert!(phases.contains(&SleepPhase::Consolidating));
+        assert!(phases.contains(&SleepPhase::Waking));
+        assert_eq!(phases.last(), Some(&SleepPhase::Awake));
+        assert!(committed);
+        // A later world-owned action is still available to this same life.
+        let awake = execute(&mut world, Ids::LOOK_CENTER, None, &[]);
+        assert_eq!(awake.header().organism_id, learner);
+        assert_eq!(world.organism_entity_ids()[0], (learner, entity));
+        assert!(awake.header().world_tick > meals.last().unwrap().outcome().outcome_tick);
+    }
+
+    #[test]
     fn simultaneous_eat_and_rest_or_food_before_recovery_is_not_reengagement() {
         let (initial_world, food) = prepared(true);
         let mut world = initial_world.clone();

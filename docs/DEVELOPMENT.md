@@ -20,6 +20,74 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_prod
 - `-PreviewCommand` prints the Cargo command without running it.
 - The default graphics profile is `MinSpecComfort1080p`. `MinimumSettings30x30` is a graphics floor; cognition still uses the GPU.
 
+### Observe one production life across meals and sleep
+
+`headless-max` already runs the admitted production runtime without lesson or
+meal stops, including ordinary neural sleep, until the duration or `.stop` file
+boundary, then writes and verifies its normal checkpoint. To observe that path,
+set `ALIFE_ACTION_TRACE_PATH` to a new JSONL file before launch. Headless tracing
+records every progressed world tick, including sleep and empty-population ticks;
+checkpoint publication polls create no rows. No extra neural readback is used.
+
+The default observation horizon is 10,000 ticks. Set
+`ALIFE_HEADLESS_TRACE_MAX_TICKS` to an integer in `1..=1000000` for a longer bounded
+trace. Reaching that limit or losing trace output does not end the life or prevent
+the final checkpoint. The existing `.headless.json` receipt reports the trace's
+first/last world tick, written count, limit, and any error. Compare its coverage
+with the run's final tick before interpreting an unobserved wake. Rows stream to
+disk rather than accumulating training captures in memory.
+
+For a future authorized hardware observation, prepare a **disposable complete
+copy** of an exact production save, its assets and durable manifest/journal,
+matching config and asset manifest. Put the environment manifest at the absolute
+path `COPY_ROOT/assets/environments/environment_manifest.json` and point its
+scenario at the copied fixture root. Production derives its launch root from the
+manifest's third ancestor, **not** the scenario's fixture root. With this layout,
+runtime saves and UI settings go under `COPY_ROOT/target/artifacts/fvr05`; assets
+go under the scenario's copied asset root. Copy the existing exact runtime save
+and its hidden durable manifest/journal siblings into that isolated `fvr05`
+directory, preserving their names. A shallow manifest in the checkout does not
+isolate those output paths. Then run, for example, in PowerShell from the checkout:
+
+```powershell
+$env:ALIFE_ACTION_TRACE_PATH = 'target/artifacts/care-observation.jsonl'
+$env:ALIFE_HEADLESS_TRACE_MAX_TICKS = '100000'
+cargo run --release --locked -p alife_game_app --features production-voxel-frontend --bin alife_game_app -- production-voxel --manifest ABSOLUTE_COPY_ROOT/assets/environments/environment_manifest.json --scenario COPY_SCENARIO_ID --run-mode headless-max --smoke-seconds 120
+```
+
+The output directory must exist and the trace file must not exist. The raw CLI
+accepts a duration in seconds; achieved world ticks depend on hardware. For a
+longer observation omit `--smoke-seconds` and create the announced `.stop` file
+to stop and checkpoint. A direct headless launch is required for a fresh trace;
+switching from a renderer session that already opened the same path refuses to
+overwrite that file and reports the trace error.
+
+The runtime filename is
+`PROFILE_SEED_SAVEIDHASH_runtime_save.json`, where `SAVEIDHASH` is the first 16
+hex characters of BLAKE3 of the save ID. Use the same graphics profile and retain
+the existing filename when copying. Without a matching runtime checkpoint the
+frontend materializes a launch from the source save; this is not evidence of
+exact continuation of the previously admitted life. The announced `.stop` path
+must be inside the disposable root before letting this experiment proceed.
+
+Follow the same `organism_id` and `stable_id` through the rows. `neural_sleep`
+contains the actual scheduler phase, consolidation state, and cycle identity;
+`body_sleeping` alone only describes the body. Action outcomes include measured
+before/after physiology and per-channel physical evidence only when the sealed
+patch matches this tick, organism, and sequence. Check exact Eat target and
+consumption separately from nourishment. Observe later Rest/fatigue relief,
+consolidation, and an actual subsequent waking decision in temporal order;
+there is no new composite success flag or compulsory training gate. Removed
+organisms disappear from the organism snapshot; never substitute another life.
+
+This path can observe a copied exact life only if that complete exact production
+save exists. A foundation asset or CPU actor checkpoint cannot reconstruct its
+body/private state. Starting with `--new-game --founder n2048:...` creates a fresh
+life instead. Foundation evaluation retains its bounded contiguous replay and
+sleep-censoring semantics. Offline world/scheduler fixtures use synthetic neural
+selection/consolidation and do not establish autonomous eating, sleep, or waking
+on a learned policy.
+
 ### Controls & UI
 
 - **Menu**: `Escape` or the menu button opens the pause menu (Play, Save, Load, Speed, Settings, Quit).
