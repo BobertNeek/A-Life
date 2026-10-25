@@ -930,11 +930,12 @@ pub fn run_cpu_continuation(
         args.output.join("trained.alife-foundation"),
         trained.encode_canonical()?,
     )?;
-    write_json(args.output.join("compiler-inputs.json"), &next_inputs)?;
+    // The pinned typed handoff retains the complete compiler inputs. Ordinary
+    // serial sources already admit it without a duplicate compiler sidecar.
     let handoff = FoundationTrainingHandoffV1::new(
         FoundationTrainingBackendV1::NativeCpu,
         version,
-        next_inputs.clone(),
+        next_inputs,
         trainer.checkpoint(),
         value.checkpoint(),
     )?;

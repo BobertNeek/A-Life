@@ -23,6 +23,30 @@ cargo run --locked -p alife_training --features cpu-backend \
   --output /path/to/new-output --seed EXPLICIT_NEW_SEED --ticks 64
 ```
 
+Completed ordinary serial CPU episodes retain the complete compiler inputs in
+their hash-bound `training-handoff.json`; new episodes no longer write a second
+`compiler-inputs.json`. This applies to `train_cpu_foundation` and the serial
+`train_cpu_care` bridge. Collection-time compiler inputs, full actor/value Adam
+state, private recovery checkpoints and life archives remain retained. Existing
+serial outputs with the optional sidecar still admit and validate it, and
+cooperative founder publication still requires its separately pinned copy.
+
+The disposable six-tick N2048 CLI fixture on 2026-10-25 measured a 376,031-byte
+duplicate compiler file. Omitting it reduced that first episode from 12 files
+and 5,828,013 logical bytes to 11 files and 5,451,982 logical bytes. The regression
+also continues through subsequent episodes and compares complete restored actor,
+value and compiler state. Reproduce with:
+
+```sh
+cargo test --locked -p alife_training --features cpu-backend --test cpu_cli -- --nocapture
+```
+
+These are synthetic file-count/file-length results, not allocated disk blocks,
+operational training throughput or gameplay evidence. Each completed serial CPU
+episode avoids one duplicate file; its size depends on the compiler inputs.
+Total checkpoint/ancestry growth remains unbounded, and retained data is not
+deleted or migrated by this change.
+
 A serial `cycle.json` directory must first pass the existing native serial,
 terrain and critic-correction continuity verifier and export a hash-bound typed
 package. The export command reads the original directory without changing it:
@@ -41,27 +65,6 @@ the typed package retains the actual corrected critic age without rewriting the
 historical cycle receipt or resetting either optimizer. The package declares
 biological objective2 / residual critic objective1 and fresh-cohort continuation.
 CPU and group50 sources retain their existing sealed hash/receipt checks.
-
-New serial exports use compact JSON for `training-handoff.json`, retaining all
-founder/compiler inputs and actor/value Adam state. Existing pretty-printed
-packages remain readable with their original byte hashes; do not rewrite retained
-packages. The small binding remains readable JSON and is still written last.
-On 2026-10-25, the disposable N2048 corrected-critic export fixture measured
-2,694,383 bytes with the previous pretty serializer versus 1,130,387 compact
-bytes (58.0% less). The complete seven-file portable package totals 3,852,604
-versus 2,288,608 logical bytes (40.6% less); its 1,157,628 source bytes are copied
-unchanged. Reproduce with:
-
-```sh
-cargo test --locked -p alife_game_app --features foundation-training \
-  --lib foundation_training_cycle::portable_handoff:: -- --nocapture
-```
-
-These are synthetic serialization/file-length results, not allocated disk blocks,
-training throughput or gameplay evidence. This saves bytes on each
-new serial export and its retained source copy in the first CPU continuation;
-routine CPU/native cycle checkpoints already use compact JSON. File counts,
-retained archives and total-history growth are not bounded by this change.
 
 The export is the trust boundary for ordinary historical serial checkpoints:
 the existing native verifier checks their declared continuity but cannot

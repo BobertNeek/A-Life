@@ -108,9 +108,7 @@ pub fn export_native_training_handoff(
     {
         return Err("native source changed during continuity admission".into());
     }
-    // Large founder/Adam arrays need no indentation. Bind the exact emitted
-    // bytes below; retained pretty-printed packages keep their own valid hashes.
-    let handoff_bytes = serde_json::to_vec(&handoff)?;
+    let handoff_bytes = serde_json::to_vec_pretty(&handoff)?;
     let binding = FoundationSerialHandoffBindingV1 {
         schema_version: 1,
         native_serial_continuity_validated: true,
