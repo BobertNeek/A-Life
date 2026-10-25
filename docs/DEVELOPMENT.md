@@ -49,6 +49,48 @@ cargo test --workspace --all-features --all-targets
 
 Record the relevant commands and results with the change. Keep generated outputs under ignored `target/artifacts/` paths.
 
+### Dependency security and texture compatibility
+
+The frontend enables Bevy's `zstd_c` backend, sharing the workspace's existing
+`zstd 0.13.3` dependency. Bevy 0.18.1's `zstd_rust` backend requires
+`ruzstd ^0.8.0`, which cannot resolve the fix (`>=0.9.1`) for
+[RUSTSEC-2026-0344](https://rustsec.org/advisories/RUSTSEC-2026-0344.html).
+Keep KTX2 and tonemapping LUT support enabled when changing this backend.
+The native CI matrix builds the production frontend on Linux and Windows and
+tests valid pixel decoding and invalid/truncated zstd rejection through
+`Image::from_buffer`, the public Bevy KTX2 path:
+
+```text
+cargo test --locked -p alife_game_app --features production-voxel-frontend --test bevy_texture_decode
+```
+
+The targeted lockfile fixes are:
+
+| Package | Fixed version | Advisory and dependency exposure |
+| --- | --- | --- |
+| anyhow | 1.0.103 | [0190](https://rustsec.org/advisories/RUSTSEC-2026-0190.html): optional Hanabi VFX; affected operation is mutable error downcasting after context. |
+| event-listener | 5.4.2 | [0221](https://rustsec.org/advisories/RUSTSEC-2026-0221.html): Bevy async infrastructure; affected operation uses stack listeners with non-Send tags. |
+| memmap2 | 0.9.11 | [0186](https://rustsec.org/advisories/RUSTSEC-2026-0186.html): frontend font/window dependencies; affected operations take unchecked mapping ranges. |
+| quick-xml | 0.41.0 | [0194](https://rustsec.org/advisories/RUSTSEC-2026-0194.html), [0195](https://rustsec.org/advisories/RUSTSEC-2026-0195.html): released `wayland-scanner 0.31.11` accepts `^0.41`, replacing the old `^0.39` restriction. |
+
+Cargo's Linux production graph reaches quick-xml only through the
+`wayland-scanner` proc macro, via Bevy's default platform → winit → Wayland
+dependencies. It reads protocol XML bundled in the registry packages at build
+time (for example, wayland-client's `wayland.xml` and wayland-protocols' bundled
+protocols); it does not parse player or network XML at runtime. The Windows
+production graph does not reach it. The old scanner used plain `Reader` and
+attribute iteration, so the duplicate-attribute CPU issue was relevant to its
+parser, while the namespace-specific `NsReader` issue was not demonstrated.
+
+These were affected locked versions, not established exploits in A-Life. No
+direct `downcast_mut`, mapping `advise_range`, or `Event::with_tag` call was
+found in repository code; transitive affected calls have not been demonstrated.
+The pre-fix frontend compiled the ruzstd KTX2 decoder, but the main tree had no
+`.ktx2`/`.zst` assets and no public remote ingestion endpoint was established.
+The small texture fixtures verify backend compatibility and error handling;
+they do not establish a general decompression resource budget or malware
+clearance. Reassess the resolved feature/platform graph on future updates.
+
 ## Focused persistence and asset checks
 
 ```powershell

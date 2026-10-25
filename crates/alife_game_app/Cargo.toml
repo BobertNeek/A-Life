@@ -103,7 +103,8 @@ bevy-app = [
     "bevy/sprite_picking",
     "bevy/tonemapping_luts",
     "bevy/ui_picking",
-    "bevy/zstd_rust",
+    # Keep zstd-compressed KTX2/tonemapping support on the existing C backend.
+    "bevy/zstd_c",
     "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
