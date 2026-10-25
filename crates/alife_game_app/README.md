@@ -172,6 +172,11 @@ ordinary perception, biology, waking learning/sleep and the existing food
 ownership observer remain active; a generic consumption event is not reported
 as the learner's own pickup or nourished meal.
 
+Prior failures, including schema-valid replies with no usable hints, are logged
+and retained in the episode's metrics. The affected decisions continue unaided
+and may be sealed without replacement hints or repeated blocking retries.
+The pinned provider identity must still match before collector sealing.
+
 Each `collectors/RUN_ID` retains its sealed shard, native private checkpoint,
 prior-life archive, actual care traces and source ancestry. The lane records a
 terminal `collected` attempt with zero offline optimizer updates, never an

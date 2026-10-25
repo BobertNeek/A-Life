@@ -559,7 +559,6 @@ impl CpuEpisodeHooks for CareEpisode {
         if let Some((_, plan)) = &self.collection_binding {
             metadata["care_round_plan_sha256"] = json!(plan);
             metadata["comparison_role"] = json!("serial-collection-parity-control");
-            metadata["prior_failure_policy"] = json!("reject-before-collector-seal");
         }
         if self.assessment {
             metadata["kind"] = json!("care-cpu-assessment");

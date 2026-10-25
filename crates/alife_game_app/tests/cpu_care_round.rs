@@ -339,6 +339,14 @@ fn assert_collection(
         alife_semantic::DETERMINISTIC_PRIOR_ID
     );
     assert_eq!(episode["semantic_prior"]["decision_frames"], 3);
+    assert_eq!(
+        episode["prior_failure_policy"],
+        "log_and_continue_without_prior"
+    );
+    assert_eq!(
+        collection["episode"]["semantic_prior"],
+        episode["semantic_prior"]
+    );
     let trace = load(directory.join("care-trace.json"));
     let rows = trace["rows"].as_array().unwrap();
     assert_eq!(rows.len(), 3);
