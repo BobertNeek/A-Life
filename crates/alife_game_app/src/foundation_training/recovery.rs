@@ -311,6 +311,161 @@ mod tests {
         )
     }
 
+    fn emit_observation(
+        world: &HeadlessWorld,
+        food: WorldEntityId,
+        learner: alife_core::OrganismId,
+        observation: &super::super::FoundationEvaluationObservation,
+        completed: bool,
+    ) -> serde_json::Value {
+        let output = std::env::temp_dir().join(format!(
+            "alife-recovery-observation-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&output).unwrap();
+        super::super::evaluation_observation::write_lesson_receipt(
+            &output,
+            observation,
+            serde_json::json!({
+                "lesson": super::super::FoundationTeacherLesson::Recovery,
+                "lesson_completed": completed,
+                "final_food_distance": super::super::held_food_learner_distance(world, food, learner),
+            }),
+        ).unwrap();
+        let path = output.join(if completed {
+            "lesson-trace.json"
+        } else {
+            "lesson-diagnostic.json"
+        });
+        let document = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        std::fs::remove_dir_all(output).unwrap();
+        document
+    }
+
+    #[test]
+    fn recovery_sleep_boundary_is_censored_while_later_awake_meal_can_complete() {
+        use super::super::{
+            FoundationEvaluationObservation as Observation, FoundationEvaluationStopReason as Stop,
+        };
+        let (mut world, food) = prepared(true);
+        let learner = world.organism_entity_ids()[0].0;
+        let mut patches = recover(&mut world, false, false);
+        assert!(!lesson_completed(food, &patches));
+        // These are executed CPU world/body outcomes, not a neural policy test.
+        assert!(
+            world
+                .organism_registry()
+                .get(learner)
+                .unwrap()
+                .biochemistry()
+                .body
+                .sleeping
+        );
+        let mut observed = Observation::new(patches.len(), learner);
+        observed.before_tick(&world);
+        observed.finish(&world, None, patches.len(), Some(false));
+        assert_eq!(
+            emit_observation(&world, food, learner, &observed, false)["evaluation_observation"]
+                ["lesson_outcome"],
+            "not_completed"
+        );
+
+        // Explicit scheduler-seal fixture for the same missing-capture boundary
+        // used by the evaluator. Body Rest by itself never establishes this.
+        observed.before_tick(&world);
+        world.try_advance_tick().unwrap();
+        let mut record = world.organism_registry().get(learner).unwrap().clone();
+        record
+            .seal_sleep_phase(alife_core::SleepPhase::EnteringSleep, 1, world.tick(), 0)
+            .unwrap();
+        world.replace_organism_record_exact(record).unwrap();
+        observed.stop_reason = Stop::MissingWakingCapture;
+        observed.finish(&world, None, patches.len(), Some(false));
+        let censored = emit_observation(&world, food, learner, &observed, false);
+        assert_eq!(censored["lesson_completed"], false);
+        assert_eq!(
+            censored["evaluation_observation"]["stop_reason"],
+            "neural_sleep"
+        );
+        assert_eq!(
+            censored["evaluation_observation"]["lesson_outcome"],
+            "sleep_censored"
+        );
+
+        let mut record = world.organism_registry().get(learner).unwrap().clone();
+        record
+            .seal_sleep_phase(alife_core::SleepPhase::Awake, 1, world.tick(), 0)
+            .unwrap();
+        world.replace_organism_record_exact(record).unwrap();
+        feed(&mut world, food, &mut patches, None);
+        assert!(lesson_completed(food, &patches));
+        let mut later = Observation::new(patches.len(), learner);
+        later.finish(&world, None, patches.len(), Some(true));
+        assert_eq!(
+            emit_observation(&world, food, learner, &later, true)["evaluation_observation"]
+                ["lesson_outcome"],
+            "completed"
+        );
+    }
+
+    #[test]
+    fn recovery_terminal_receipt_survives_retirement_without_rebinding_to_a_peer() {
+        use super::super::FoundationEvaluationObservation as Observation;
+        for keep_peer in [false, true] {
+            let (mut world, food) = prepared(true);
+            let learner = world.organism_entity_ids()[0].0;
+            let patches = vec![execute(&mut world, Ids::LOOK_CENTER, None, &[])];
+            assert!(!lesson_completed(food, &patches));
+            let mut observed = Observation::new(16, learner);
+            observed.before_tick(&world);
+            world.try_advance_tick().unwrap();
+            let death_tick = world.tick().raw();
+            // Legal terminal/archive fixture; this does not claim natural death.
+            let mut terminal = world.organism_registry().get(learner).unwrap().clone();
+            terminal.mark_dead(world.tick()).unwrap();
+            terminal
+                .link_birth_manifest(alife_core::Blake3Digest::from_bytes([41; 32]))
+                .unwrap();
+            terminal
+                .link_life_manifest(alife_core::Blake3Digest::from_bytes([42; 32]))
+                .unwrap();
+            world.replace_organism_record_exact(terminal).unwrap();
+            observed.finish(&world, None, patches.len(), Some(false));
+            assert_eq!(observed.terminal_death_tick, Some(death_tick));
+            world.retire_dead_organism(learner).unwrap();
+            if keep_peer {
+                world
+                    .spawn_social_agent(
+                        "remaining-peer",
+                        alife_core::OrganismId(99),
+                        Vec3f::new(0.0, 0.0, 0.0),
+                        0.75,
+                    )
+                    .unwrap();
+            }
+            assert_eq!(world.organism_entity_ids().is_empty(), !keep_peer);
+            // The production runtime supplies this retained archive death tick.
+            observed.finish(&world, Some(death_tick), patches.len(), Some(false));
+            let document = emit_observation(&world, food, learner, &observed, false);
+            assert_eq!(document["lesson"], "recovery");
+            assert_eq!(document["lesson_completed"], false);
+            assert!(document["final_food_distance"].is_null());
+            assert_eq!(
+                document["evaluation_observation"]["lesson_outcome"],
+                "terminal_death"
+            );
+            assert_eq!(
+                document["evaluation_observation"]["terminal_death_tick"],
+                death_tick
+            );
+            assert!(document["evaluation_observation"]["final_neural_phase"].is_null());
+        }
+    }
+
     #[test]
     fn counterfactual_nonrest_relief_and_later_awake_meal_require_executed_rest() {
         let (mut world, food) = prepared(true);
