@@ -37,8 +37,11 @@ phenotype fingerprints intentionally differ and remain intact.
 The selected comparison also binds the first sensory context, physiology,
 candidate identities (scores are outputs), sampler and scenario provenance. For
 the new scope, it binds available first prior input and provider configuration;
-missing first prior evidence fails closed. Later prior requests and counters are
-outcomes. This is initial-input matching, not a certification that later inputs
+missing first prior evidence fails closed. Prior `decision_inputs` is a 256-entry
+ring buffer: pilots with more than 256 decisions can lose the first receipt and
+therefore cannot match under this scope. No missing receipt is reconstructed.
+This limit does not affect the reported 64-decision case. Later prior requests
+and counters are outcomes. This is initial-input matching, not a certification that later inputs
 or private states remain equal as the policies act and learn.
 
 Supported lessons are `grab_food`, `eat_held_food`, and (only under the new scope)
