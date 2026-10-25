@@ -95,7 +95,7 @@ def build_plan(args):
             "lane": str(lane), "history": str(history), "history_sha256": mixed.host.sha256(history),
             "binary": str(binary), "binary_sha256": mixed.host.sha256(binary), "schedule": schedule,
             "seed_range": [first, last], "temperature": args.temperature, "seed_admission": admission,
-            "food_need_condition": args.food_need_condition or "newborn_v1",
+            "food_need_condition": getattr(args, "food_need_condition", None) or "newborn_v1",
             "git_head": git("rev-parse", "HEAD"), "git_tree": git("rev-parse", "HEAD^{tree}"),
             "scheduler_sha256": mixed.host.sha256(Path(__file__)),
             "helper_sha256": {name: mixed.host.sha256(root / "scripts" / name) for name in HELPERS},

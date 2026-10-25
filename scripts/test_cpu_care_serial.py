@@ -1,3 +1,4 @@
+import argparse
 import copy
 import json
 import shutil
@@ -78,6 +79,21 @@ class CpuScheduleTests(unittest.TestCase):
     def execute(self):
         with patch.object(cpu, 'command', self.command), patch.object(cpu, 'verify_source'), patch.dict(cpu.os.environ, {}, clear=True):
             return cpu.execute(self.plan)
+
+    def test_legacy_programmatic_plan_namespace_keeps_default_condition(self):
+        schedule = self.root / 'schedule.json'
+        self.write(schedule, self.plan['schedule'])
+        args = argparse.Namespace(previous=self.source, lane=self.lane, binary=self.binary,
+                                  seed_history=self.history, schedule=schedule, seeds='30:33',
+                                  temperature=1., known_exclusions=True, keep_checkpoints=2)
+        with patch.object(cpu.subprocess, 'check_output', side_effect=['', 'head', 'tree']):
+            plan = cpu.build_plan(args)
+        self.assertEqual(plan['food_need_condition'], 'newborn_v1')
+        self.assertEqual(plan['source_sha256'], cpu.pins(self.source))
+        self.assertEqual(plan['retention']['keep'], 2)
+        args.food_need_condition = 'ordinary_healthy_aging_v1'
+        with patch.object(cpu.subprocess, 'check_output', side_effect=['', 'head', 'tree']):
+            self.assertEqual(cpu.build_plan(args)['food_need_condition'], 'ordinary_healthy_aging_v1')
 
     def test_resume_rejects_changed_checkout_or_shared_validator(self):
         root = Path(cpu.__file__).resolve().parent.parent
