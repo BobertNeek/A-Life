@@ -46,6 +46,7 @@ impl GpuCheckpointAssetStore {
         kind: &'static str,
         value: &T,
     ) -> Result<(GpuBrainAssetRef, AssetManifestEntry), GameAppShellError> {
+        validate_kind(kind)?;
         let bytes = serde_json::to_vec(value)?;
         self.write_serialized_json(kind, &bytes)
     }
@@ -481,6 +482,37 @@ mod tests {
         assert!(store.read_json::<[f32; 3]>(&manifest, &reference).is_err());
         assert_eq!(fs::read(path).unwrap(), b"corrupt-existing-content");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn invalid_kind_is_rejected_before_serialization() {
+        use std::cell::Cell;
+
+        struct FailingSerializer<'a>(&'a Cell<usize>);
+        impl Serialize for FailingSerializer<'_> {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                self.0.set(self.0.get() + 1);
+                Err(serde::ser::Error::custom("serialization must not run"))
+            }
+        }
+
+        let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let root = std::env::temp_dir().join(format!(
+            "alife-invalid-kind-order-{}-{nonce}",
+            std::process::id()
+        ));
+        let store = GpuCheckpointAssetStore::new(&root).unwrap();
+        let calls = Cell::new(0);
+        let value = FailingSerializer(&calls);
+        let error = store.write_json("../invalid", &value).unwrap_err();
+        assert!(matches!(
+            error,
+            GameAppShellError::InvalidProductionFrontend { .. }
+        ));
+        assert_eq!(calls.get(), 0);
+        assert!(store.write_json("valid-kind", &value).is_err());
+        assert_eq!(calls.get(), 1);
+        assert!(!root.exists());
     }
 
     #[test]
