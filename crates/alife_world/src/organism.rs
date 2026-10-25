@@ -13,6 +13,12 @@ use thiserror::Error;
 
 const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FoundationComparisonProjection {
+    PolicyWeights,
+    FreshCheckpoint,
+}
+
 fn is_zero_cognitive_work(value: &CognitiveWorkReceipt) -> bool {
     *value == CognitiveWorkReceipt::zero()
 }
@@ -1360,13 +1366,35 @@ impl WorldOrganismRegistry {
         // Validate the actual payload before projecting it. A projection is
         // evidence only; never build or admit an invalid normalized asset.
         asset.encode_canonical()?;
-        self.write_signature(digest, Some(subject))
+        self.write_signature(
+            digest,
+            Some((subject, FoundationComparisonProjection::PolicyWeights)),
+        )
+    }
+
+    pub(crate) fn write_fresh_foundation_checkpoint_comparison_signature(
+        &self,
+        digest: &mut CanonicalDigestBuilder,
+        subject: OrganismId,
+    ) -> Result<(), ScaffoldContractError> {
+        let asset = self
+            .get(subject)
+            .and_then(|record| record.genome.n2048_foundation_candidate.as_ref())
+            .ok_or(ScaffoldContractError::InvalidId)?;
+        if asset.manifest().capacity_class_id() != alife_core::BrainCapacityClass::N2048_ID {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        asset.encode_canonical()?;
+        self.write_signature(
+            digest,
+            Some((subject, FoundationComparisonProjection::FreshCheckpoint)),
+        )
     }
 
     fn write_signature(
         &self,
         digest: &mut CanonicalDigestBuilder,
-        policy_weight_subject: Option<OrganismId>,
+        comparison_subject: Option<(OrganismId, FoundationComparisonProjection)>,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_contract().map_err(|error| match error {
             OrganismRegistryError::InvalidRecord(error) => error,
@@ -1381,7 +1409,9 @@ impl WorldOrganismRegistry {
         digest.write_u16(ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION);
         digest.write_sequence_len(records.len());
         for record in records {
-            let payload = if policy_weight_subject == Some(record.organism_id()) {
+            let payload = if let Some((_, projection)) =
+                comparison_subject.filter(|(subject, _)| *subject == record.organism_id())
+            {
                 let mut projected =
                     serde_json::to_value(record).map_err(|_| ScaffoldContractError::InvalidId)?;
                 let asset = projected
@@ -1389,8 +1419,8 @@ impl WorldOrganismRegistry {
                     .and_then(serde_json::Value::as_object_mut)
                     .ok_or(ScaffoldContractError::InvalidId)?;
                 // Exclude only parameters and their derived content digests.
-                // Every other manifest/provenance field, including count,
-                // remains bound; other organisms are never projected.
+                // The narrow v1 retains every other manifest/provenance field.
+                // Both scopes retain count and never project other organisms.
                 asset
                     .remove("weights")
                     .ok_or(ScaffoldContractError::InvalidId)?;
@@ -1403,14 +1433,32 @@ impl WorldOrganismRegistry {
                     .and_then(serde_json::Value::as_object_mut)
                     .and_then(|reference| reference.remove("digest"))
                     .ok_or(ScaffoldContractError::InvalidId)?;
+                if projection == FoundationComparisonProjection::FreshCheckpoint {
+                    // Only in the fresh explicit-candidate replay path:
+                    // construction validates these but loads weights exactly;
+                    // neither field initializes body or private neural state.
+                    let manifest = asset
+                        .get_mut("manifest")
+                        .and_then(serde_json::Value::as_object_mut)
+                        .ok_or(ScaffoldContractError::InvalidId)?;
+                    for field in ["training_stage", "promotion_receipt"] {
+                        manifest
+                            .remove(field)
+                            .ok_or(ScaffoldContractError::InvalidId)?;
+                    }
+                }
                 // This reference hashes the genome, so its original content
                 // digest also contains the treatment. Rederive only that
                 // digest from the projected genome and unchanged phenotype;
                 // retain ownership, schema, revision, causal tick and graph.
                 // The original record was validated above, before projection.
-                let mut genetics = CanonicalDigestBuilder::new(
-                    b"alife.organism.policy-weight-comparison.genetics-development.v1",
-                );
+                let domain: &[u8] = if projection == FoundationComparisonProjection::FreshCheckpoint
+                {
+                    b"alife.organism.fresh-foundation-checkpoint-comparison.genetics-development.v1"
+                } else {
+                    b"alife.organism.policy-weight-comparison.genetics-development.v1"
+                };
+                let mut genetics = CanonicalDigestBuilder::new(domain);
                 for field in ["genome", "phenotype"] {
                     let bytes = serde_json::to_vec(
                         projected

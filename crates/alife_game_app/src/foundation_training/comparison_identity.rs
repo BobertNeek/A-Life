@@ -1,7 +1,10 @@
 //! Read-only comparison evidence. Never replace the ordinary world identity.
 
 use alife_core::{Blake3Digest, FoundationWeightAsset};
-use alife_world::{HeadlessPolicyWeightComparisonSignatureV1, HeadlessWorld};
+use alife_world::{
+    HeadlessFreshFoundationCheckpointComparisonSignatureV1,
+    HeadlessPolicyWeightComparisonSignatureV1, HeadlessWorld,
+};
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -13,6 +16,40 @@ pub struct FoundationProbeComparisonIdentityV1 {
     pub policy_asset_digest: Blake3Digest,
     pub policy_sha256: String,
     pub executable_sha256: String,
+}
+
+/// Additive assessment evidence, emitted only by the fresh foundation pilot
+/// before runtime admission. Never inferred from an old receipt or used for
+/// ExactResume / DurableLearnedFounder private-state continuation.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FoundationCheckpointAssessmentIdentityV1 {
+    pub schema_version: u16,
+    pub scope: String,
+    pub world: HeadlessFreshFoundationCheckpointComparisonSignatureV1,
+    pub policy_asset_digest: Blake3Digest,
+    pub policy_sha256: String,
+    pub executable_sha256: String,
+}
+
+pub(super) fn initial_identities(
+    world: &HeadlessWorld,
+    asset: &FoundationWeightAsset,
+) -> super::Result<(
+    FoundationProbeComparisonIdentityV1,
+    FoundationCheckpointAssessmentIdentityV1,
+)> {
+    let bound_policy = initial_identity(world, asset)?;
+    let assessment = FoundationCheckpointAssessmentIdentityV1 {
+        schema_version: 1,
+        scope: "fresh_n2048_foundation_checkpoint_v1".into(),
+        world: world
+            .fresh_foundation_checkpoint_comparison_signature_v1(bound_policy.world.subject)?,
+        policy_asset_digest: bound_policy.policy_asset_digest,
+        policy_sha256: bound_policy.policy_sha256.clone(),
+        executable_sha256: bound_policy.executable_sha256.clone(),
+    };
+    Ok((bound_policy, assessment))
 }
 
 pub(super) fn initial_identity(
@@ -61,7 +98,12 @@ mod tests {
         let game =
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
         let before = game.world.canonical_signature_digest().unwrap();
-        let identity = initial_identity(&game.world, &asset).unwrap();
+        let (identity, assessment) = initial_identities(&game.world, &asset).unwrap();
+        assert_eq!(assessment.policy_asset_digest, identity.policy_asset_digest);
+        assert_eq!(assessment.policy_sha256, identity.policy_sha256);
+        assert_eq!(assessment.executable_sha256, identity.executable_sha256);
+        assert_eq!(assessment.world.subject, identity.world.subject);
+        assert_ne!(assessment.world.words, identity.world.words);
         assert_eq!(identity.policy_asset_digest, asset.digest());
         assert_eq!(
             identity.policy_sha256,
@@ -76,6 +118,6 @@ mod tests {
         );
         assert_eq!(game.world.canonical_signature_digest().unwrap(), before);
         let other = crate::initial_n2048_care_asset(539_363_618).unwrap();
-        assert!(initial_identity(&game.world, &other).is_err());
+        assert!(initial_identities(&game.world, &other).is_err());
     }
 }
