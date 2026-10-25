@@ -479,3 +479,119 @@ fn failed_newborn_admission_publishes_nothing_and_retry_reuses_manifest() {
     drop(runtime);
     fs::remove_dir_all(archive_root).unwrap();
 }
+
+/// CPU-only falsification of the longitudinal scope's metadata-inertness claim.
+/// Calls the real fresh resident compiler and GPU upload/bucket builders; no
+/// device, dispatch, training, archive publication or checkpoint restore occurs.
+#[cfg(feature = "foundation-training")]
+#[test]
+fn fresh_foundation_checkpoint_metadata_does_not_change_initial_cognition() {
+    use alife_core::{FoundationPromotionReceipt, TrainingStageManifest};
+    use alife_gpu_backend::{GpuClassBucketPlan, GpuPhenotypeUpload};
+    let source = crate::initial_n2048_care_asset(539_363_617).unwrap();
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(71001, 1).unwrap();
+    config.brain_class = BrainScaleTier::Standard2048;
+    config.founder_seed_base = 539_363_617;
+    config.sensor_profile = source.manifest().sensor_profile();
+    let original =
+        alife_world::create_canonical_new_game_with_n2048_candidate(&config, &source).unwrap();
+    let (baseline, baseline_resident) = GpuLiveBrainRuntime::compile_birth(
+        &original.world,
+        config.brain_class,
+        config.sensor_profile,
+        OrganismId(1),
+    )
+    .unwrap();
+    let stage = TrainingStageManifest::new(1, 2, 3);
+    let receipt = FoundationPromotionReceipt::promoted(
+        stage.digest(),
+        Blake3Digest::from_bytes([1; 32]),
+        Blake3Digest::from_bytes([2; 32]),
+    )
+    .unwrap();
+    let treatment = FoundationWeightAsset::from_promoted_weights(
+        &baseline,
+        source.weights().to_vec(),
+        stage,
+        receipt,
+    )
+    .unwrap();
+    let changed =
+        alife_world::create_canonical_new_game_with_n2048_candidate(&config, &treatment).unwrap();
+    let (phenotype, resident) = GpuLiveBrainRuntime::compile_birth(
+        &changed.world,
+        config.brain_class,
+        config.sensor_profile,
+        OrganismId(1),
+    )
+    .unwrap();
+    assert_ne!(source.digest(), treatment.digest());
+    assert_ne!(baseline.phenotype_hash(), phenotype.phenotype_hash());
+    assert_eq!(
+        original
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .phenotype(),
+        changed
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .phenotype()
+    );
+    assert_eq!(
+        original
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .biochemistry(),
+        changed
+            .world
+            .organism_registry()
+            .get(OrganismId(1))
+            .unwrap()
+            .biochemistry()
+    );
+    let baseline_upload = GpuPhenotypeUpload::try_from(&baseline).unwrap();
+    let mut upload = GpuPhenotypeUpload::try_from(&phenotype).unwrap();
+    assert_ne!(baseline_upload.identity, upload.identity);
+    // The integrity fingerprint records original provenance. Compare every
+    // executable upload field after isolating just that fingerprint.
+    upload.identity = baseline_upload.identity;
+    assert_eq!(baseline_upload, upload);
+    let baseline_bucket = GpuClassBucketPlan::for_phenotype(&baseline).unwrap();
+    let bucket = GpuClassBucketPlan::for_phenotype(&phenotype).unwrap();
+    assert_eq!(
+        baseline_bucket.immutable_plan_words(),
+        bucket.immutable_plan_words()
+    );
+    assert_eq!(
+        baseline_bucket.immutable_weight_words(),
+        bucket.immutable_weight_words()
+    );
+    assert_eq!(
+        baseline_bucket.mutable_state_words(),
+        bucket.mutable_state_words()
+    );
+    assert_eq!(baseline_resident.next_sequence, resident.next_sequence);
+    assert_eq!(baseline_resident.homeostasis, resident.homeostasis);
+    assert_eq!(
+        baseline_resident.last_cognitive_context,
+        resident.last_cognitive_context
+    );
+    assert_eq!(
+        baseline_resident.last_selected_motor_bundle,
+        resident.last_selected_motor_bundle
+    );
+    assert_eq!(
+        baseline_resident.language_grounding,
+        resident.language_grounding
+    );
+    assert_eq!(
+        baseline_resident.attention_hysteresis,
+        resident.attention_hysteresis
+    );
+}

@@ -27,7 +27,9 @@ pub use cohort_replay::{
 };
 mod comparison_identity;
 pub(crate) mod diagnostics;
-pub use comparison_identity::FoundationProbeComparisonIdentityV1;
+pub use comparison_identity::{
+    FoundationCheckpointAssessmentIdentityV1, FoundationProbeComparisonIdentityV1,
+};
 mod evaluation_observation;
 pub(crate) mod food_outcome;
 pub use evaluation_observation::{
@@ -549,6 +551,9 @@ pub struct FoundationPilotReceipt {
     /// Absent in historical artifacts; qualification must not infer a match.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_comparison_identity: Option<FoundationProbeComparisonIdentityV1>,
+    /// Only fresh-body, fresh-private-state foundation replay; absent historically.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_checkpoint_assessment_identity: Option<FoundationCheckpointAssessmentIdentityV1>,
     #[serde(default)]
     pub silent_request: bool,
     #[serde(default)]
@@ -1776,8 +1781,11 @@ fn run_foundation_training_pilot_with_request(
         scenario.fixed_speaker_position = Some(position);
     }
     let initial_world_signature = format!("{:?}", game.world.canonical_signature_digest()?);
-    let initial_comparison_identity =
-        Some(comparison_identity::initial_identity(&game.world, &asset)?);
+    // This pilot builds a new world/body and admits fresh private state below.
+    // Do not emit this scope from a learned-founder or exact-resume path.
+    let (bound_policy, assessment) = comparison_identity::initial_identities(&game.world, &asset)?;
+    let initial_comparison_identity = Some(bound_policy);
+    let initial_checkpoint_assessment_identity = Some(assessment);
     let food = scenario.food;
     let food_position = scenario_lesson.map(|_| {
         let position = game
@@ -2621,6 +2629,7 @@ fn run_foundation_training_pilot_with_request(
         vocabulary_token: scenario.vocabulary_token,
         initial_world_signature,
         initial_comparison_identity,
+        initial_checkpoint_assessment_identity,
         silent_request: scenario.silent_request,
         request_target: scenario.vocabulary_target,
         request_responses,
@@ -6496,10 +6505,14 @@ mod evaluation_sampling_tests {
         });
         let mut receipt: FoundationPilotReceipt = serde_json::from_value(historical).unwrap();
         assert!(receipt.initial_sampling.is_none());
+        assert!(receipt.initial_checkpoint_assessment_identity.is_none());
         assert!(receipt.evaluation_observation.is_none());
         let sampling = foundation_pilot_sampling(53, 32.0).unwrap();
         receipt.initial_sampling = Some(sampling);
         let encoded = serde_json::to_value(&receipt).unwrap();
+        assert!(encoded
+            .get("initial_checkpoint_assessment_identity")
+            .is_none());
         assert_eq!(
             encoded["initial_sampling"],
             serde_json::to_value(sampling).unwrap()

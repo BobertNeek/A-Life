@@ -41,7 +41,10 @@ use crate::habitat::{
     HabitatActor, HabitatAuthority, HabitatAuthorityError, HabitatBreedingKind,
     HabitatBreedingRequest, HabitatId,
 };
-use crate::organism::{OrganismRegistryError, WorldOrganismRecord, WorldOrganismRegistry};
+use crate::organism::{
+    FoundationComparisonProjection, OrganismRegistryError, WorldOrganismRecord,
+    WorldOrganismRegistry,
+};
 use crate::presentation::{
     HabitatCreaturePresentation, HabitatPresentationProjection, PairwiseRelationshipProjection,
     PresentationEvidence,
@@ -1055,6 +1058,18 @@ pub struct HeadlessWorldSignatureDigest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HeadlessPolicyWeightComparisonSignatureV1 {
+    pub schema_version: u16,
+    pub subject: OrganismId,
+    pub words: [u64; 4],
+}
+
+/// World component for fresh N2048 foundation-checkpoint replay assessment.
+/// Excludes the subject's weights, inert training stage/promotion evidence and
+/// their derived digests. All other state remains bound. This does not certify
+/// runtime private-state equivalence or support learned-memory continuation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeadlessFreshFoundationCheckpointComparisonSignatureV1 {
     pub schema_version: u16,
     pub subject: OrganismId,
     pub words: [u64; 4],
@@ -2456,9 +2471,32 @@ impl HeadlessWorld {
         let signature = self.signature_digest(
             b"alife.world.subject-n2048-policy-weight-comparison.v1",
             1,
-            Some(subject),
+            Some((subject, FoundationComparisonProjection::PolicyWeights)),
         )?;
         Ok(HeadlessPolicyWeightComparisonSignatureV1 {
+            schema_version: 1,
+            subject,
+            words: signature.words,
+        })
+    }
+
+    pub fn fresh_foundation_checkpoint_comparison_signature_v1(
+        &self,
+        subject: OrganismId,
+    ) -> Result<HeadlessFreshFoundationCheckpointComparisonSignatureV1, ScaffoldContractError> {
+        if !self
+            .organism_entity_ids()
+            .iter()
+            .any(|(id, _)| *id == subject)
+        {
+            return Err(ScaffoldContractError::InvalidId);
+        }
+        let signature = self.signature_digest(
+            b"alife.world.fresh-n2048-foundation-checkpoint-comparison.v1",
+            1,
+            Some((subject, FoundationComparisonProjection::FreshCheckpoint)),
+        )?;
+        Ok(HeadlessFreshFoundationCheckpointComparisonSignatureV1 {
             schema_version: 1,
             subject,
             words: signature.words,
@@ -2469,11 +2507,11 @@ impl HeadlessWorld {
         &self,
         domain: &[u8],
         schema_version: u16,
-        policy_weight_subject: Option<OrganismId>,
+        comparison_subject: Option<(OrganismId, FoundationComparisonProjection)>,
     ) -> Result<HeadlessWorldSignatureDigest, ScaffoldContractError> {
         let mut digest = CanonicalDigestBuilder::new(domain);
         digest.write_u16(schema_version);
-        if let Some(subject) = policy_weight_subject {
+        if let Some((subject, _)) = comparison_subject {
             digest.write_u16(HEADLESS_WORLD_SIGNATURE_SCHEMA_VERSION);
             digest.write_u64(subject.raw());
         }
@@ -2506,9 +2544,14 @@ impl HeadlessWorld {
         for object in self.objects.values() {
             write_world_object_signature(&mut digest, object)?;
         }
-        if let Some(subject) = policy_weight_subject {
-            self.organism_registry
-                .write_policy_weight_comparison_signature(&mut digest, subject)?;
+        if let Some((subject, projection)) = comparison_subject {
+            if projection == FoundationComparisonProjection::FreshCheckpoint {
+                self.organism_registry
+                    .write_fresh_foundation_checkpoint_comparison_signature(&mut digest, subject)?;
+            } else {
+                self.organism_registry
+                    .write_policy_weight_comparison_signature(&mut digest, subject)?;
+            }
         } else {
             self.organism_registry
                 .write_canonical_signature(&mut digest)?;
