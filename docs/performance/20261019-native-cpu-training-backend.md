@@ -1,6 +1,6 @@
 # Native CPU foundation training backend
 
-Dated implementation/evidence report, updated 2026-10-21. This report covers
+Dated implementation/evidence report, updated 2026-10-25. This report covers
 [PR #110](https://github.com/BobertNeek/A-Life/pull/110) and the care bridge in
 [PR #118](https://github.com/BobertNeek/A-Life/pull/118). Historical measurements
 retain their recorded source scope.
@@ -41,6 +41,27 @@ the typed package retains the actual corrected critic age without rewriting the
 historical cycle receipt or resetting either optimizer. The package declares
 biological objective2 / residual critic objective1 and fresh-cohort continuation.
 CPU and group50 sources retain their existing sealed hash/receipt checks.
+
+New serial exports use compact JSON for `training-handoff.json`, retaining all
+founder/compiler inputs and actor/value Adam state. Existing pretty-printed
+packages remain readable with their original byte hashes; do not rewrite retained
+packages. The small binding remains readable JSON and is still written last.
+On 2026-10-25, the disposable N2048 corrected-critic export fixture measured
+2,694,383 bytes with the previous pretty serializer versus 1,130,387 compact
+bytes (58.0% less). The complete seven-file portable package totals 3,852,604
+versus 2,288,608 logical bytes (40.6% less); its 1,157,628 source bytes are copied
+unchanged. Reproduce with:
+
+```sh
+cargo test --locked -p alife_game_app --features foundation-training \
+  --lib foundation_training_cycle::portable_handoff:: -- --nocapture
+```
+
+These are synthetic serialization/file-length results, not allocated disk blocks,
+training throughput or gameplay evidence. This saves bytes on each
+new serial export and its retained source copy in the first CPU continuation;
+routine CPU/native cycle checkpoints already use compact JSON. File counts,
+retained archives and total-history growth are not bounded by this change.
 
 The export is the trust boundary for ordinary historical serial checkpoints:
 the existing native verifier checks their declared continuity but cannot

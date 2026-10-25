@@ -6,8 +6,51 @@ fn native_serial_export_preserves_corrected_critic_age_and_original_source() {
         SERIAL_HANDOFF_SOURCE_FILES.map(|name| std::fs::read(f.target.join(name)).unwrap());
     let output = f.root.join("portable");
     let binding = export_native_training_handoff(&f.target, &output).unwrap();
-    let handoff: FoundationTrainingHandoffV1 =
-        serde_json::from_slice(&std::fs::read(output.join(SERIAL_HANDOFF_FILE)).unwrap()).unwrap();
+    let restored_binding: FoundationSerialHandoffBindingV1 =
+        serde_json::from_slice(&std::fs::read(output.join(SERIAL_HANDOFF_BINDING_FILE)).unwrap())
+            .unwrap();
+    assert_eq!(restored_binding, binding);
+    let handoff_bytes = std::fs::read(output.join(SERIAL_HANDOFF_FILE)).unwrap();
+    let handoff: FoundationTrainingHandoffV1 = serde_json::from_slice(&handoff_bytes).unwrap();
+    let pretty_bytes = serde_json::to_vec_pretty(&handoff).unwrap();
+    assert!(handoff_bytes.len() < pretty_bytes.len());
+    let source_len: usize = before.iter().map(Vec::len).sum();
+    let package_len: u64 = std::fs::read_dir(&output)
+        .unwrap()
+        .map(|entry| entry.unwrap().metadata().unwrap().len())
+        .sum();
+    eprintln!(
+        "synthetic N2048 export: handoff compact={} pretty={}; unchanged sources={source_len}; package compact={package_len} pretty={}",
+        handoff_bytes.len(), pretty_bytes.len(),
+        package_len + (pretty_bytes.len() - handoff_bytes.len()) as u64,
+    );
+    // Both wire encodings restore every typed field and pass device-free
+    // admission; retained packages keep the digest of their own exact bytes.
+    let pretty_handoff: FoundationTrainingHandoffV1 =
+        serde_json::from_slice(&pretty_bytes).unwrap();
+    assert_eq!(handoff, pretty_handoff);
+    let admitted = handoff.clone().admit().unwrap();
+    pretty_handoff.admit().unwrap();
+    assert_eq!(
+        admitted.actor,
+        serde_json::from_slice::<alife_training::FoundationTrainerCheckpoint>(&before[2]).unwrap()
+    );
+    assert_eq!(
+        admitted.value,
+        serde_json::from_slice::<alife_training::PpoValueHeadCheckpoint>(&before[3]).unwrap()
+    );
+    assert_eq!(admitted.foundation.encode_canonical().unwrap(), before[1]);
+    let pinned = SERIAL_HANDOFF_SOURCE_FILES
+        .iter()
+        .zip(&before)
+        .map(|(name, bytes)| ((*name).to_owned(), sha(bytes)))
+        .collect();
+    let mut legacy_binding = binding.clone();
+    legacy_binding.training_handoff_sha256 = sha(&pretty_bytes);
+    legacy_binding
+        .validate(&pinned, &sha(&pretty_bytes))
+        .unwrap();
+    assert!(binding.validate(&pinned, &sha(&pretty_bytes)).is_err());
     assert_eq!(handoff.actor.optimizer_step, 1);
     assert_eq!(handoff.value.optimizer_step, 6);
     let original_receipt: FoundationCycleReceipt = serde_json::from_slice(&before[0]).unwrap();
@@ -23,12 +66,7 @@ fn native_serial_export_preserves_corrected_critic_age_and_original_source() {
         assert_eq!(std::fs::read(f.target.join(name)).unwrap(), bytes);
         assert_eq!(std::fs::read(output.join(name)).unwrap(), bytes);
     }
-    binding
-        .validate(
-            &binding.source_sha256,
-            &sha(&std::fs::read(output.join(SERIAL_HANDOFF_FILE)).unwrap()),
-        )
-        .unwrap();
+    binding.validate(&pinned, &sha(&handoff_bytes)).unwrap();
     assert!(!output.join("critic-correction.json").exists());
 }
 #[test]
