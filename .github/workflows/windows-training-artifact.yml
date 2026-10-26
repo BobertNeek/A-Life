@@ -13,6 +13,8 @@ on:
       - "crates/alife_runtime/**"
       - "crates/alife_game_app/src/foundation*.rs"
       - "crates/alife_game_app/src/foundation_training/**"
+      - "crates/alife_game_app/src/foundation_training_cycle/**"
+      - "crates/alife_game_app/src/bin/export_native_training_handoff.rs"
       - "crates/alife_game_app/src/foundation_cpu_care/**"
       - "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs"
       - "crates/alife_game_app/src/bin/train_cpu_care_round.rs"
@@ -40,6 +42,8 @@ on:
       - "crates/alife_runtime/**"
       - "crates/alife_game_app/src/foundation*.rs"
       - "crates/alife_game_app/src/foundation_training/**"
+      - "crates/alife_game_app/src/foundation_training_cycle/**"
+      - "crates/alife_game_app/src/bin/export_native_training_handoff.rs"
       - "crates/alife_game_app/src/foundation_cpu_care/**"
       - "crates/alife_game_app/src/gpu_live_runtime/semantic_prior.rs"
       - "crates/alife_game_app/src/bin/train_cpu_care_round.rs"
@@ -134,7 +138,9 @@ jobs:
       - name: Canonical and policy-weight comparison world identity CPU regressions
         run: cargo test --locked -p alife_world --test headless_world_signature --test policy_weight_comparison_signature --test fresh_foundation_checkpoint_comparison -- --test-threads=1
       - name: Build matching training and checkpoint inspection executables
-        run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin inspect_archived_success
+        run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin inspect_archived_success --bin export_native_training_handoff
+      - name: Single-current compiler Adam private recovery and legacy migration contracts
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::portable_handoff -- --nocapture --test-threads=1
       - name: Check rehearsal admission before runtime creation
         run: |
           $taskBinary = (Resolve-Path 'target/debug/train_n2048_care.exe').Path
@@ -159,6 +165,7 @@ jobs:
         run: |
           $taskBinary = 'target/debug/train_n2048_care.exe'
           $taskInspector = 'target/debug/inspect_archived_success.exe'
+          $taskCheckpoint = 'target/debug/export_native_training_handoff.exe'
           $taskRevision = git rev-parse HEAD
           if ($LASTEXITCODE -ne 0 -or $taskRevision -ne $env:GITHUB_SHA) { throw 'Checked-out revision mismatch' }
           $taskTree = git rev-parse 'HEAD^{tree}'
@@ -166,6 +173,7 @@ jobs:
           $taskArtifact = New-Item -ItemType Directory -Path 'target/windows-training-artifact'
           Copy-Item -LiteralPath $taskBinary -Destination $taskArtifact.FullName
           Copy-Item -LiteralPath $taskInspector -Destination $taskArtifact.FullName
+          Copy-Item -LiteralPath $taskCheckpoint -Destination $taskArtifact.FullName
           [ordered]@{
             schema = 1
             source_revision = $taskRevision
@@ -174,6 +182,7 @@ jobs:
             executables = [ordered]@{
               'train_n2048_care.exe' = (Get-FileHash -LiteralPath $taskBinary -Algorithm SHA256).Hash.ToLowerInvariant()
               'inspect_archived_success.exe' = (Get-FileHash -LiteralPath $taskInspector -Algorithm SHA256).Hash.ToLowerInvariant()
+              'export_native_training_handoff.exe' = (Get-FileHash -LiteralPath $taskCheckpoint -Algorithm SHA256).Hash.ToLowerInvariant()
             }
             rustc = (rustc --version)
             target = 'x86_64-pc-windows-msvc'

@@ -1,5 +1,9 @@
 # Simulator based varied rehearsal
 
+For native serial care retention, use [the single-current checkpoint workflow](training-current-checkpoint.md).
+Cassidy's October26 direction supersedes older full-history/recent-rollback
+retention guidance. Historical receipts remain read-only migration inputs.
+
 This is an offline experiment over the ordinary causal runtime, not a learned
 world model. It does not change the game policy, promote a founder, or certify
 unseen-scene generalization.

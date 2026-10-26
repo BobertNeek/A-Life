@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Plan explicit care lessons; --run dispatches one native sealed cycle at a time.
+"""Legacy history-based scheduler and read-only migration/reconciliation helpers.
+
+New native serial runs use run_current_care.py's single-current checkpoint policy.
+This module retains old input/recovery behavior for explicit legacy admission.
 
 The shared ledger is authoritative. Summary receipts are derived, never added to
 on restart. A dispatched attempt is never retried with the same seed or output.

@@ -1,4 +1,221 @@
 use super::*;
+fn current_seeds() -> alife_training::CheckpointSeedsV1 {
+    alife_training::CheckpointSeedsV1 {
+        historical_freshness: "unknown".into(),
+        excluded_ranges: vec![[1, u64::MAX]],
+        pending_range: None,
+    }
+}
+
+fn private_fixture(source: &Path) {
+    let actor_path = source.join("actor-checkpoint.json");
+    let mut actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&std::fs::read(&actor_path).unwrap()).unwrap();
+    actor.first_moment[17] = 0.125;
+    actor.second_moment[17] = 0.03125;
+    actor.update_ages[17] = 1;
+    std::fs::write(actor_path, serde_json::to_vec(&actor).unwrap()).unwrap();
+    use alife_core::{
+        BrainCapacityClass, BrainScaleTier, CreatureGenome, FoundationGeneticIdentity, OrganismId,
+        Tick, Vec3f,
+    };
+    use alife_world::{
+        AssetKind, AssetManifest, AssetManifestEntry, AssetPresence, HeadlessScenarioBuilder,
+        PortableAssetDigest, PortableSaveFile, RuntimeConfig, WorldOrganismRecord,
+    };
+    let receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(source.join("cycle.json")).unwrap()).unwrap();
+    let mut world = HeadlessScenarioBuilder::new(receipt.seed)
+        .agent("private-life", OrganismId(1), Vec3f::ZERO)
+        .build()
+        .unwrap();
+    let genome = CreatureGenome::early_mammal_founder(
+        73128,
+        FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+    )
+    .unwrap();
+    let phenotype = genome.express().unwrap();
+    let record = WorldOrganismRecord::newborn(
+        OrganismId(1),
+        world.entity_id("private-life").unwrap(),
+        genome,
+        phenotype,
+        Tick::ZERO,
+    )
+    .unwrap();
+    world.register_organism_record(record).unwrap();
+    let assets = source.join("world-assets");
+    std::fs::create_dir(&assets).unwrap();
+    let bytes = [0, 128, 255, 42, 0, 3];
+    std::fs::write(assets.join("private-sidecar.bin"), bytes).unwrap();
+    let mut manifest = AssetManifest::empty();
+    manifest.entries.push(AssetManifestEntry {
+        asset_id: "private-sidecar".into(),
+        kind: AssetKind::Other,
+        relative_path: "private-sidecar.bin".into(),
+        digest: PortableAssetDigest::for_bytes(&bytes),
+        presence: AssetPresence::Required,
+        schema_version: 1,
+        size_bytes: Some(bytes.len() as u64),
+        provenance: None,
+    });
+    let save = PortableSaveFile::from_headless_world(
+        "private-current-fixture",
+        &world,
+        RuntimeConfig::deterministic_default(world.seed(), BrainScaleTier::Nano512),
+        manifest,
+        vec![],
+    )
+    .unwrap();
+    GpuDurableSaveManifest::publish_snapshot(source.join("world.json"), &assets, &save).unwrap();
+}
+
+#[test]
+fn current_checkpoint_migration_relocates_without_any_legacy_dependencies() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let legacy = load_cycle_continuation(&f.target, None).unwrap();
+    let current = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    assert_eq!(current.handoff.actor, legacy.actor);
+    assert_eq!(current.handoff.value, legacy.value);
+    assert_eq!(current.handoff.value.optimizer_step, 6); // Corrected age, not old receipt's 1.
+    let compiler_bytes = serde_json::to_vec(&current.handoff.compiler_inputs).unwrap();
+    let bytes = current.encode().unwrap();
+    let first = f.root.join("current.alife-checkpoint");
+    std::fs::write(&first, &bytes).unwrap();
+    let relocated = f.root.join("relocated");
+    std::fs::create_dir(&relocated).unwrap();
+    let copy = relocated.join("current.alife-checkpoint");
+    std::fs::copy(&first, &copy).unwrap();
+    std::fs::remove_file(&first).unwrap();
+    std::fs::remove_dir_all(&f.target).unwrap();
+    std::fs::remove_dir_all(&f.source).unwrap();
+    let restored = read_current_training_checkpoint(&copy).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&restored.handoff.compiler_inputs).unwrap(),
+        compiler_bytes
+    );
+    assert_eq!(restored, current);
+    let admitted = load_cycle_continuation(&copy, None).unwrap();
+    assert_eq!(admitted.actor, legacy.actor);
+    assert_eq!(admitted.value, legacy.value);
+    assert_eq!(
+        admitted.asset.encode_canonical().unwrap(),
+        legacy.asset.encode_canonical().unwrap()
+    );
+    assert_eq!(admitted.policy_version, legacy.policy_version);
+    assert_eq!(admitted.founder_seed_base, legacy.founder_seed_base);
+    assert!(load_cycle_continuation(&copy, Some(1)).is_err());
+    assert_eq!(std::fs::read_dir(&relocated).unwrap().count(), 1);
+    let extracted = relocated.join("extracted-private");
+    extract_current_training_life(&copy, &extracted).unwrap();
+    let (_, loaded) = GpuDurableSaveManifest::open_loaded(
+        extracted.join("world.json"),
+        extracted.join("world-assets"),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_string(&loaded.save).unwrap(),
+        current.life.as_ref().unwrap().world_json
+    );
+    assert_eq!(
+        loaded.save.world.organism_records.as_ref().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        std::fs::read(extracted.join("world-assets/private-sidecar.bin")).unwrap(),
+        [0, 128, 255, 42, 0, 3]
+    );
+    // A fully checksummed outer file cannot conceal a missing/corrupt private asset.
+    let mut corrupt = current;
+    corrupt.life.as_mut().unwrap().assets_base64.clear();
+    std::fs::write(&copy, corrupt.encode().unwrap()).unwrap();
+    assert!(read_current_training_checkpoint(&copy).is_err());
+}
+
+#[test]
+fn current_checkpoint_rejects_corrupt_or_truncated_state_and_legacy_tampering() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let checkpoint = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    let bytes = checkpoint.encode().unwrap();
+    for length in [0, 16, 24, 55, 56, bytes.len() - 1] {
+        assert!(alife_training::CurrentTrainingCheckpointV1::decode(&bytes[..length]).is_err());
+    }
+    for index in [0, 17, 25, 60, bytes.len() - 1] {
+        let mut corrupt = bytes.clone();
+        corrupt[index] ^= 1;
+        assert!(alife_training::CurrentTrainingCheckpointV1::decode(&corrupt).is_err());
+    }
+    let mut trailing = bytes;
+    trailing.push(0);
+    assert!(alife_training::CurrentTrainingCheckpointV1::decode(&trailing).is_err());
+    // A correctly checksummed but inconsistent semantic checkpoint still rejects.
+    let mut wrong = checkpoint;
+    wrong.handoff.actor.first_moment[0] = f32::NAN;
+    assert!(wrong.encode().is_err());
+    let path = f.target.join("actor-checkpoint.json");
+    let mut actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    actor.first_moment[0] = 0.25;
+    std::fs::write(path, serde_json::to_vec(&actor).unwrap()).unwrap();
+    assert!(migrate_current_training_checkpoint(&f.target, current_seeds()).is_err());
+}
+
+#[test]
+fn current_checkpoint_eight_synthetic_publications_keep_only_current_full_state() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let mut checkpoint = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    let original_compiler = serde_json::to_vec(&checkpoint.handoff.compiler_inputs).unwrap();
+    let original_actor = serde_json::to_vec(&checkpoint.handoff.actor).unwrap();
+    let original_life = checkpoint.life.clone();
+    let current = f.root.join("current.alife-checkpoint");
+    let mut measurements = Vec::new();
+    for _ in 0..8 {
+        // Exercise actual codec/admission with nonzero carried moments, without
+        // claiming that these synthetic publications are biological training.
+        checkpoint.handoff.policy_version += 1;
+        checkpoint.handoff.value.last_updated_policy_version =
+            Some(checkpoint.handoff.policy_version);
+        let candidate = f.root.join("candidate");
+        let bytes = checkpoint.encode().unwrap();
+        std::fs::write(&candidate, &bytes).unwrap();
+        read_current_training_checkpoint(&candidate).unwrap();
+        std::fs::rename(&candidate, &current).unwrap();
+        let restored = read_current_training_checkpoint(&current).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&restored.handoff.compiler_inputs).unwrap(),
+            original_compiler
+        );
+        assert_eq!(
+            serde_json::to_vec(&restored.handoff.actor).unwrap(),
+            original_actor
+        );
+        assert_eq!(restored.handoff.value, checkpoint.handoff.value);
+        assert_eq!(restored.life, original_life);
+        let metadata = std::fs::metadata(&current).unwrap();
+        #[cfg(unix)]
+        let allocated = {
+            use std::os::unix::fs::MetadataExt;
+            Some(metadata.blocks() * 512)
+        };
+        #[cfg(not(unix))]
+        let allocated: Option<u64> = None;
+        measurements.push(serde_json::json!({"logical_bytes":metadata.len(), "inode_allocated_bytes":allocated,"checkpoint_files":1}));
+    }
+    assert!(measurements.windows(2).all(|w| w[0] == w[1]));
+    eprintln!(
+        "eight synthetic current publication measurements: {}",
+        serde_json::to_string(&measurements).unwrap()
+    );
+}
 #[test]
 fn native_serial_export_preserves_corrected_critic_age_and_original_source() {
     let f = crate::foundation_critic_correction::tests::full_residual_correction_fixture();

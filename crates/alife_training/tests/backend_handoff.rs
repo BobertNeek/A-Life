@@ -79,6 +79,43 @@ fn device_free_native_handoff_preserves_full_optimizer_and_asset_identity() {
     wrong.actor.weights[0] += 0.01;
     assert!(wrong.validate().is_err());
 }
+
+#[cfg(feature = "receipt-lineage")]
+#[test]
+fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
+    let source = CurrentTrainingCheckpointV1 {
+        schema_version: 1,
+        seed: 7400,
+        founder_seed_base: 7400,
+        seeds: CheckpointSeedsV1 {
+            historical_freshness: "unknown".into(),
+            excluded_ranges: vec![[1, 7400], [9000, 9000]],
+            pending_range: None,
+        },
+        handoff: handoff(),
+        life: None,
+    };
+    let restored = CurrentTrainingCheckpointV1::decode(&source.encode().unwrap()).unwrap();
+    assert_eq!(
+        serde_json::to_vec(&source).unwrap(),
+        serde_json::to_vec(&restored).unwrap()
+    );
+    let mut next = restored;
+    next.seeds.reserve(7401, 7500).unwrap();
+    assert!(next.seeds.reserve(7501, 8999).is_err());
+    for seed in 7401..=7500 {
+        next.seeds.consume(seed).unwrap();
+    }
+    next.seeds.reserve(7501, 8999).unwrap();
+    assert_eq!(next.seeds.excluded_ranges, [[1, 9000]]);
+    assert_eq!(next.seeds.historical_freshness, "unknown");
+    assert!(next.seeds.reserve(9000, 9001).is_err());
+    assert!(next.seeds.reserve(0, 1).is_err());
+    assert!(next.seeds.reserve(9100, 9099).is_err());
+    assert_eq!(next.handoff, source.handoff);
+    next.seeds.excluded_ranges = vec![[1, 3], [4, 7400]];
+    assert!(next.validate().is_err());
+}
 #[cfg(feature = "cpu-backend")]
 #[test]
 fn cpu_updated_founder_exports_to_native_handoff_without_age_or_moment_reset() {

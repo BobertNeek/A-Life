@@ -38,6 +38,8 @@ mod group;
 pub use group::*;
 mod portable_handoff;
 pub use portable_handoff::*;
+mod current;
+pub use current::*;
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
@@ -337,6 +339,24 @@ fn load_cycle_continuation(
     previous: &Path,
     preserve_objective_from: Option<u16>,
 ) -> Result<SealedCycleContinuation> {
+    if previous.is_file() {
+        if preserve_objective_from.is_some() {
+            return Err("current checkpoint requires no objective transition".into());
+        }
+        let checkpoint = read_current_training_checkpoint(previous)?;
+        let admitted = checkpoint.handoff.admit()?;
+        return Ok(SealedCycleContinuation {
+            asset: admitted.foundation,
+            policy_version: admitted
+                .policy_version
+                .checked_add(1)
+                .ok_or("policy overflow")?,
+            founder_seed_base: checkpoint.founder_seed_base,
+            actor: admitted.actor,
+            value: admitted.value,
+            objective_transition_from: None,
+        });
+    }
     let receipt: FoundationCycleReceipt =
         serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
     let objective_transition_from = validate_objective_continuation(
@@ -3177,6 +3197,7 @@ fn run_foundation_training_cycle_profiled(
                 center_actor_advantages,
                 timing,
                 if capture_only { previous } else { None },
+                previous.is_some_and(Path::is_file),
                 food_need_condition,
             )
         },
@@ -3241,6 +3262,7 @@ fn run_foundation_training_cycle_in_owned_output(
     center_actor_advantages: bool,
     timing: &CycleStageTiming,
     capture_source: Option<&Path>,
+    preserve_final_life: bool,
     food_need_condition: crate::FoundationFoodNeedCondition,
 ) -> Result<FoundationCycleOutcome> {
     let capture_only = capture_source.is_some();
@@ -3919,6 +3941,13 @@ fn run_foundation_training_cycle_in_owned_output(
         serde_json::to_vec_pretty(&runtime.performance_metrics())?,
     )?;
     std::fs::write(output.join("phase.txt"), "collection-complete")?;
+    if preserve_final_life {
+        // The single-current boundary retains this latest private individual,
+        // while founder PPO continues into a fresh cohort as before.
+        let exact = runtime.capture_portable_checkpoint()?;
+        GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
+        runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
+    }
     std::fs::write(
         output.join("replay-manifest.json"),
         serde_json::to_vec(&references)?,
