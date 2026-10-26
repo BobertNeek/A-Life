@@ -1,20 +1,52 @@
 //! In-engine screenshots, also usable when Windows desktop capture is unavailable.
 use super::*;
-use bevy::ecs::system::SystemParam;
-use bevy::prelude::{PostUpdate, Query, ViewVisibility};
+use bevy::ecs::system::{EntityCommands, SystemParam};
+use bevy::prelude::{First, PostUpdate, Query, ViewVisibility};
 use std::io::Write;
 
 pub(super) fn install(app: &mut App) {
-    app.add_systems(
-        PostUpdate,
-        // ViewVisibility is reset every frame and then marked by camera/light
-        // checks. Read the finalized values, not the reset or previous frame.
-        capture_player_view
-            .after(bevy::transform::TransformSystems::Propagate)
-            .after(bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible),
-    );
+    app.init_resource::<PrimaryWindowScreenshot>()
+        .add_systems(First, reset_screenshot_request)
+        .add_systems(
+            PostUpdate,
+            // ViewVisibility is reset every frame and then marked by camera/light
+            // checks. Read the finalized values, not the reset or previous frame.
+            capture_player_view
+                .after(bevy::transform::TransformSystems::Propagate)
+                .after(
+                    bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible,
+                ),
+        );
 }
 
+#[derive(Default, Resource)]
+struct PrimaryWindowScreenshot(Option<Entity>);
+
+fn reset_screenshot_request(mut request: ResMut<PrimaryWindowScreenshot>) {
+    // Drop only the frame's cache. Bevy owns in-flight requests and their cleanup.
+    request.0 = None;
+}
+
+#[derive(SystemParam)]
+pub(super) struct PrimaryWindowCapture<'w, 's> {
+    commands: Commands<'w, 's>,
+    request: ResMut<'w, PrimaryWindowScreenshot>,
+}
+
+impl PrimaryWindowCapture<'_, '_> {
+    pub(super) fn request(&mut self) -> EntityCommands<'_> {
+        // Bevy drops duplicate targets during extraction. Share this frame's
+        // image while retaining every purpose's observer and output path.
+        let entity = *self
+            .request
+            .0
+            .get_or_insert_with(|| self.commands.spawn(Screenshot::primary_window()).id());
+        self.commands.entity(entity)
+    }
+}
+
+#[cfg(test)]
+mod screenshot_tests;
 #[cfg(test)]
 mod tests;
 
@@ -68,7 +100,7 @@ pub(super) fn capture_player_view(
     meshes: Res<Assets<Mesh>>,
     visible_meshes: Query<(&Mesh3d, &ViewVisibility)>,
     view: CaptureView,
-    mut commands: Commands,
+    mut screenshots: PrimaryWindowCapture,
 ) {
     let CaptureView {
         cameras,
@@ -272,8 +304,8 @@ pub(super) fn capture_player_view(
     if let Err(error) = fs::write(directory.join(format!("{name}.json")), receipt.to_string()) {
         eprintln!("Player capture metadata could not be written: {error}");
     }
-    commands
-        .spawn(Screenshot::primary_window())
+    screenshots
+        .request()
         .observe(save_to_disk(directory.join(format!("{name}.png"))));
     session.count += 1;
     session.next_at = time.elapsed_secs_f64() + session.interval;

@@ -6036,7 +6036,7 @@ fn file_blake3_hex(path: &Path) -> Result<String, GameAppShellError> {
     reason = "Bevy injects independent ECS system parameters."
 )]
 fn request_fvr03_recorded_screenshot(
-    mut commands: Commands,
+    mut screenshots: graphics_capture::PrimaryWindowCapture,
     mut capture: ResMut<Fvr03ProductionVoxelScreenshotResource>,
     scene: Res<Fvr03ProductionVoxelSceneResource>,
     selection: Res<Fvr03ProductionVoxelSelectionResource>,
@@ -6148,8 +6148,8 @@ fn request_fvr03_recorded_screenshot(
         for mut visibility in &mut overlay_batches {
             *visibility = Visibility::Hidden;
         }
-        commands
-            .spawn(Screenshot::primary_window())
+        screenshots
+            .request()
             .observe(save_recorded_screenshot(capture.path.clone()));
         capture.product_screenshot_requested = true;
         capture.fvr05_next_capture_frame =
@@ -6207,8 +6207,8 @@ fn request_fvr03_recorded_screenshot(
         }
     }
     let path = fvr05_screenshot_path(&capture.path, suffix);
-    commands
-        .spawn(Screenshot::primary_window())
+    screenshots
+        .request()
         .observe(save_recorded_screenshot(path));
     capture.fvr05_capture_index = capture.fvr05_capture_index.saturating_add(1);
     capture.fvr05_next_capture_frame = capture.frame.saturating_add(FVR05_SCREENSHOT_SETTLE_FRAMES);
