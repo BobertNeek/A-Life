@@ -1,6 +1,6 @@
 # Native CPU foundation training backend
 
-Dated implementation/evidence report, updated 2026-10-25. This report covers
+Dated implementation/evidence report, updated 2026-10-26. This report covers
 [PR #110](https://github.com/BobertNeek/A-Life/pull/110) and the care bridge in
 [PR #118](https://github.com/BobertNeek/A-Life/pull/118). Historical measurements
 retain their recorded source scope.
@@ -46,6 +46,74 @@ operational training throughput or gameplay evidence. Each completed serial CPU
 episode avoids one duplicate file; its size depends on the compiler inputs.
 Total checkpoint/ancestry growth remains unbounded, and retained data is not
 deleted or migrated by this change.
+
+### Retained serial history: eight-episode synthetic audit
+
+The 2026-10-26 cloud audit uses the unchanged runtime from main `619bd779` and
+extends the CLI fixture to eight successive explicit-seed episodes (6, 6, then
+six 4-tick episodes). It uses no accepted checkpoints or production training.
+Every continuation compares complete canonical compiler, actor and value/Adam
+bytes with its predecessor, and preserves that predecessor's full file tree.
+Every episode's private checkpoint is also restored and re-encoded byte-for-byte.
+The command above prints `SERIAL_STORAGE` records with per-category file counts
+and logical byte lengths, plus whole-file content-identity groups.
+
+| Episode | Episode files | Episode logical bytes | Cumulative files | Cumulative logical bytes | Cumulative inode allocation bytes (Unix) |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 11 | 5,451,982 | 11 | 5,451,982 | 5,480,448 |
+| 2 | 18 | 8,566,847 | 29 | 14,018,829 | 14,090,240 |
+| 3 | 20 | 8,577,562 | 49 | 22,596,391 | 22,700,032 |
+| 4 | 22 | 8,577,213 | 71 | 31,173,604 | 31,297,536 |
+| 5 | 24 | 8,660,823 | 95 | 39,834,427 | 39,972,864 |
+| 6 | 26 | 8,771,733 | 121 | 48,606,160 | 48,746,496 |
+| 7 | 28 | 8,779,008 | 149 | 57,385,168 | 57,516,032 |
+| 8 | 30 | 8,795,647 | 179 | 66,180,815 | 66,301,952 |
+
+Timing fields and receipt hashes vary slightly between reruns. These are file
+entries and summed logical lengths, not unique physical extents, allocated disk
+blocks or training-throughput measurements. Existing receipt hardlinks can share
+physical storage while every path still contributes to this table.
+
+The Unix allocation column sums `st_blocks * 512` once per `(device, inode)`
+across the retained chain, so hardlink aliases count once. It excludes directory
+and filesystem metadata; it cannot identify shared extents across different
+inodes. Other platforms print `null` for this metric. The eight-output inode
+allocation is 66,301,952 bytes in this cloud run. It is not a filesystem-free-space
+delta or a portable storage estimate. Short synthetic lives also do not model
+long-lived memory or large cohorts. Generic fixture seed freshness remains
+unasserted; accepted reserved-seed admission is not exercised by this fixture.
+
+The audit found 28,292,720 extra logical bytes in repeated complete-file content
+groups across the eight outputs. This is **not a removable-byte or attainable
+savings claim**. The substantial repetitions are a previous actor/value/asset in
+its original output, the next episode's `source-native` snapshot, and the next
+episode's frozen collection files. The previous typed handoff is also copied
+into `source-native`. Root checkpoint/handoff fields duplicate some data within
+individual JSON files; the whole-file hash inventory does not count that.
+
+In episode eight, `source-native` occupies 2,825,143 logical bytes, the full
+private checkpoint 1,490,071, the new typed handoff 1,521,182, and the separate
+new actor checkpoint 1,058,781. The current readers bind these roles separately:
+collect-only publication and its pre-seal checks require frozen recovery files;
+native source checks require the selected predecessor's exact raw bytes; the
+typed handoff validates full compiler and optimizer state. Removing one copy
+without changing these contracts would fail admission or weaken recovery.
+
+Directory-entry growth is a separate bottleneck. The eight outputs contain 49
+`source-lineage` paths, counting both output-root and retained-source archives.
+Each successor materializes the reachable ancestry at both locations. For this
+fixture's ordinary serial layout, source inspection explains the observed
+cumulative count as `N*N + 15*N - 5` files: history paths accumulate quadratically
+even when their immutable receipt bytes are hardlinked. This is an explanation
+of this layout, not an extrapolated production disk measurement.
+
+A disposable 1 MiB copy-on-write probe returned `Operation not supported` in
+both this cloud environment's `/tmp` and `/workspace/scratch`. No reflink savings
+were demonstrated here. Hardlinking mutable checkpoint names would introduce
+write aliasing between distinct recovery roles. Consequently this audit changes
+no storage writer, retention rule or decoder, and deletes no retained data.
+A smaller representation needs a coordinated format/reader change preserving
+these bindings; no further safe, worthwhile drop-in removal was established.
 
 A serial `cycle.json` directory must first pass the existing native serial,
 terrain and critic-correction continuity verifier and export a hash-bound typed
