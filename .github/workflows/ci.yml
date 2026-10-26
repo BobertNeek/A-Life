@@ -73,6 +73,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib hearthling -- --test-threads=1 --color=never'
       - name: Run saved-appearance identity and inheritance CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib appearance -- --test-threads=1 --color=never'
+      - name: Run graphics-capture visibility-order CPU regression
+        run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib graphics_capture::tests -- --test-threads=1 --color=never'
 
   training-continuity:
     name: Training checkpoint continuity

@@ -1,8 +1,22 @@
 //! In-engine screenshots, also usable when Windows desktop capture is unavailable.
 use super::*;
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::{Query, ViewVisibility};
+use bevy::prelude::{PostUpdate, Query, ViewVisibility};
 use std::io::Write;
+
+pub(super) fn install(app: &mut App) {
+    app.add_systems(
+        PostUpdate,
+        // ViewVisibility is reset every frame and then marked by camera/light
+        // checks. Read the finalized values, not the reset or previous frame.
+        capture_player_view
+            .after(bevy::transform::TransformSystems::Propagate)
+            .after(bevy::camera::visibility::VisibilitySystems::MarkNewlyHiddenEntitiesInvisible),
+    );
+}
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Default)]
 pub(super) struct CaptureSession {
