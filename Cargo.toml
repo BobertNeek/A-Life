@@ -43,6 +43,11 @@ opt-level = 2
 [profile.test.package.alife_game_app]
 opt-level = 2
 
+# Cooperative CPU fixtures repeatedly hash full handoffs and recovery artifacts.
+# Optimize test hashing while keeping debug assertions and overflow checks.
+[profile.test.package.sha2]
+opt-level = 2
+
 # Rust 1.96/LLVM 22 on Windows failed code generation with full symbols in
 # these large crates. Keep debug assertions; omit only their debug symbols.
 [profile.dev.package.wgpu-hal]
