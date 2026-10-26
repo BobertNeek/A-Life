@@ -1,5 +1,9 @@
 #![cfg(feature = "cpu-backend")]
 use std::{fs, path::Path, process::Command};
+
+#[path = "cpu_cli/storage.rs"]
+mod storage;
+use storage::{measure_history, verify_recovery};
 fn run(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_train_cpu_foundation"))
         .env("VK_ICD_FILENAMES", "/no-vulkan-icd.json")
@@ -168,6 +172,7 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
     for (name, bytes) in names.iter().zip(&before) {
         assert_eq!(&fs::read(first.join(name)).unwrap(), bytes);
     }
+    assert_eq!(snapshot_tree(&first), source_before);
     // Compact recovery must restore all learned coordinates, moments and exact
     // integer ages, not merely the receipt's optimizer step counters.
     let restored_actor: alife_training::FoundationTrainerCheckpoint =
@@ -202,6 +207,7 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
     assert!(
         b["actor_optimizer_step"].as_u64().unwrap() > a["actor_optimizer_step"].as_u64().unwrap()
     );
+    let second_before = snapshot_tree(&second);
     let third = root.join("third");
     let result = run(&[
         "--previous",
@@ -219,12 +225,40 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
         String::from_utf8_lossy(&result.stderr)
     );
     let c_bytes = fs::read(third.join("cpu-cycle.json")).unwrap();
+    assert_eq!(snapshot_tree(&second), second_before);
     let c: serde_json::Value = serde_json::from_slice(&c_bytes).unwrap();
     assert!(c.get("source_receipt").is_none());
     assert!(c["seed_provenance"].get("native_source_receipt").is_none());
     assert!(c["seed_provenance"]["native_source_receipt_ref"].is_string());
     assert_eq!(c["initial_actor_optimizer_step"], b["actor_optimizer_step"]);
     assert!(c_bytes.len() < 2 * serde_json::to_vec_pretty(&b).unwrap().len());
+    verify_recovery(&second, &third);
+    let mut episodes = vec![first.clone(), second.clone(), third.clone()];
+    for episode in 3..8 {
+        let previous = episodes.last().unwrap();
+        let preserved = snapshot_tree(previous);
+        let next = root.join(format!("serial-{episode}"));
+        let seed = (800000 + episode).to_string();
+        let result = run(&[
+            "--previous",
+            text(previous),
+            "--output",
+            text(&next),
+            "--seed",
+            &seed,
+            "--ticks",
+            "4",
+        ]);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        verify_recovery(previous, &next);
+        assert_eq!(snapshot_tree(previous), preserved);
+        episodes.push(next);
+    }
+    measure_history(&episodes.iter().map(|p| p.as_path()).collect::<Vec<_>>());
     // Synthetic group-output import fixture: these native bytes prove backend
     // continuity only; this test does not claim fifty GPU-collected organisms.
     let group = root.join("synthetic-group-source");
