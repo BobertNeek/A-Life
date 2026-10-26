@@ -441,3 +441,75 @@ fn finalization_failure_and_preseal_archive_change_preserve_collected_recovery()
     assert!(!output.join("collector-commit.json").exists());
     assert_no_training_output(&output);
 }
+
+#[test]
+fn legacy_flat_ancestry_seals_converted_source_copy_without_mutating_predecessor() {
+    let root = FixtureDirectory::new();
+    let initial = root.join("initial");
+    let source = root.join("legacy-flat-source");
+    run_cpu_continuation(
+        fixture_config(initial.clone(), 0x62_1701),
+        &mut DefaultCpuEpisode,
+    )
+    .unwrap();
+    run_cpu_continuation(
+        source_config(initial, source.clone(), 0x62_1702),
+        &mut DefaultCpuEpisode,
+    )
+    .unwrap();
+    let receipt = alife_training::native_receipt::read(&source.join("cpu-cycle.json"))
+        .unwrap()
+        .1;
+    let lineage = alife_training::native_receipt::Lineage::load(&receipt, &source).unwrap();
+    let flat = root.join("flat-export");
+    fs::create_dir(&flat).unwrap();
+    lineage.write_to(&flat).unwrap();
+    fs::rename(
+        source.join("source-lineage"),
+        root.join("original-packed-archive"),
+    )
+    .unwrap();
+    fs::rename(flat.join("source-lineage"), source.join("source-lineage")).unwrap();
+    read_cpu_founder_source(&source).unwrap();
+    let source_before = snapshot(&source);
+    for corrupt in [false, true] {
+        let output = root.join(if corrupt {
+            "corrupt-source-copy"
+        } else {
+            "valid-source-copy"
+        });
+        let seed = if corrupt { 0x62_1704 } else { 0x62_1703 };
+        let collection = collect_cpu_episode(
+            source_config(source.clone(), output.clone(), seed),
+            &mut DefaultCpuEpisode,
+        )
+        .unwrap();
+        let planned = assignment(&collection, seed);
+        assert!(output
+            .join("source-native/source-lineage/manifest.json")
+            .is_file());
+        let private = fs::read(output.join("collector-checkpoint.json")).unwrap();
+        if corrupt {
+            let pack = fs::read_dir(output.join("source-native/source-lineage"))
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .find(|p| p.extension().is_some_and(|e| e == "pack"))
+                .unwrap();
+            let mut raw = fs::read(&pack).unwrap();
+            let n = raw.len() / 2;
+            raw[n] ^= 1;
+            fs::write(pack, raw).unwrap();
+            assert!(collection.seal(planned).is_err());
+            assert!(!output.join("collector-commit.json").exists());
+        } else {
+            collection.seal(planned).unwrap();
+            read_cpu_collector_output(&output).unwrap();
+            read_cpu_founder_source(&output.join("source-native")).unwrap();
+        }
+        assert_eq!(
+            fs::read(output.join("collector-checkpoint.json")).unwrap(),
+            private
+        );
+        assert_eq!(snapshot(&source), source_before);
+    }
+}

@@ -336,7 +336,7 @@ impl CpuCollectedEpisode {
             }
         }
         if let Some(lineage) = &self.lineage {
-            lineage.verify_at(&self.args.output.join("source-native"))?;
+            lineage.verify_inherited_copy_at(&self.args.output.join("source-native"))?;
             lineage.verify_written_at(&self.args.output)?;
         }
         let snapshot = CpuCollectionSnapshotV1::capture(

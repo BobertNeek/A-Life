@@ -543,6 +543,16 @@ impl Lineage {
         if !self.store.same_manifest(&store) {
             return Err(invalid("source ancestry manifest changed"));
         }
+        self.verify_inherited_store(source, &store)
+    }
+    /// A retained source copy may convert flat blobs to packs. Verify every
+    /// inherited raw hash without requiring its storage manifest to be identical
+    /// to the original source. The newly retained parent belongs only at root.
+    pub fn verify_inherited_copy_at(&self, destination: &Path) -> io::Result<()> {
+        let store = packs::Store::open(destination)?;
+        self.verify_inherited_store(destination, &store)
+    }
+    fn verify_inherited_store(&self, source: &Path, store: &packs::Store) -> io::Result<()> {
         for digest in self
             .blobs
             .keys()
