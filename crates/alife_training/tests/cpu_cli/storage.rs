@@ -140,3 +140,107 @@ pub(super) fn verify_recovery(previous: &Path, next: &Path) {
     );
     alife_training::cpu::read_cpu_founder_source(next).unwrap();
 }
+
+/// Ordinary copies must work after every original episode has disappeared.
+pub(super) fn relocate_recovery(root: &Path, episodes: &[std::path::PathBuf]) {
+    use super::{run, text};
+    fn copy_tree(source: &Path, target: &Path) {
+        fs::create_dir(target).unwrap();
+        for entry in fs::read_dir(source).unwrap() {
+            let path = entry.unwrap().path();
+            let to = target.join(path.file_name().unwrap());
+            if path.is_dir() {
+                copy_tree(&path, &to);
+            } else {
+                fs::copy(path, to).unwrap();
+            }
+        }
+    }
+    let latest = episodes.last().unwrap();
+    let expected = alife_training::cpu::read_cpu_founder_source(latest)
+        .unwrap()
+        .handoff;
+    let expected_parent =
+        alife_training::cpu::read_cpu_founder_source(&latest.join("source-native"))
+            .unwrap()
+            .handoff;
+    let moved = root.join("ordinary-copy");
+    let parent = root.join("standalone-founder-copy");
+    copy_tree(latest, &moved);
+    copy_tree(&latest.join("source-native"), &parent);
+    let preserved = snapshot_tree(&moved);
+    for episode in episodes {
+        fs::remove_dir_all(episode).unwrap();
+    }
+    // Other synthetic derivatives must not accidentally supply an ancestor.
+    for name in ["synthetic-group-source", "group-back-to-cpu"] {
+        fs::remove_dir_all(root.join(name)).unwrap();
+    }
+    assert_eq!(
+        alife_training::cpu::read_cpu_founder_source(&moved)
+            .unwrap()
+            .handoff,
+        expected
+    );
+    assert_eq!(
+        alife_training::cpu::read_cpu_founder_source(&parent)
+            .unwrap()
+            .handoff,
+        expected_parent
+    );
+    verify_private_recovery(&moved);
+    let pack = fs::read_dir(moved.join("source-lineage"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| p.extension().is_some_and(|e| e == "pack"))
+        .unwrap();
+    let bytes = fs::read(&pack).unwrap();
+    for corrupt in [false, true] {
+        if corrupt {
+            let mut bad = bytes.clone();
+            let n = bad.len() / 2;
+            bad[n] ^= 1;
+            fs::write(&pack, bad).unwrap();
+        } else {
+            fs::remove_file(&pack).unwrap();
+        }
+        let output = root.join("invalid-ancestor-output");
+        let result = run(&[
+            "--previous",
+            text(&moved),
+            "--output",
+            text(&output),
+            "--seed",
+            "899001",
+            "--ticks",
+            "2",
+        ]);
+        assert!(!result.status.success());
+        assert!(!output.exists());
+        fs::write(&pack, &bytes).unwrap();
+    }
+    for (source, name, seed) in [
+        (&moved, "recovered-copy", "899002"),
+        (&parent, "recovered-founder", "899003"),
+    ] {
+        let output = root.join(name);
+        let result = run(&[
+            "--previous",
+            text(source),
+            "--output",
+            text(&output),
+            "--seed",
+            seed,
+            "--ticks",
+            "2",
+        ]);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        verify_recovery(source, &output);
+        verify_private_recovery(&output);
+    }
+    assert_eq!(snapshot_tree(&moved), preserved);
+}

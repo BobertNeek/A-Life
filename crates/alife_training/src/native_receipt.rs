@@ -1,7 +1,8 @@
-//! Bounded legacy receipt import and flat, hash-addressed native ancestry.
+//! Bounded legacy receipt import and immutable, hash-addressed native ancestry.
 //!
 //! Legacy JSON is accepted unchanged up to an explicit compatibility depth.
-//! New receipts refer to immutable SHA256-named archive blobs. Validate one
+//! Native writers retain flat blobs; CPU writers pack exact raw receipt bytes.
+//! Receipts keep their existing direct predecessor SHA256 pins. Validate one
 //! bounded document at a time; lifetime archive size is not resident state.
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -19,6 +20,7 @@ pub const MAX_LINEAGE_RECEIPTS: usize = 100_000;
 // Full historical payloads remain hash-addressed on disk, never normalized.
 const MAX_LINEAGE_INDEX_BYTES: usize = MAX_RECEIPT_BYTES;
 const DIRECTORY: &str = "source-lineage";
+mod packs;
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
@@ -174,6 +176,7 @@ pub struct Lineage {
     retained: BTreeMap<String, Vec<u8>>,
     index_bytes: usize,
     source_directory: PathBuf,
+    store: packs::Store,
 }
 #[derive(Debug)]
 enum Frame {
@@ -239,7 +242,7 @@ fn digest_name(digest: &str) -> io::Result<String> {
     }
     Ok(format!("{digest}.json"))
 }
-fn load_blob(directory: &Path, digest: &str) -> io::Result<Vec<u8>> {
+fn load_flat_blob(directory: &Path, digest: &str) -> io::Result<Vec<u8>> {
     let base = directory.join(DIRECTORY);
     if fs::symlink_metadata(&base)?.file_type().is_symlink() {
         return Err(invalid("lineage directory must not be a symlink"));
@@ -254,6 +257,10 @@ fn load_blob(directory: &Path, digest: &str) -> io::Result<Vec<u8>> {
     }
     Ok(bytes)
 }
+/// Read a pinned receipt from either a legacy flat archive or CPU receipt packs.
+pub fn read_ancestry_blob(directory: &Path, digest: &str) -> io::Result<Vec<u8>> {
+    packs::Store::open(directory)?.read(directory, digest)
+}
 impl Lineage {
     /// All references use the existing direct predecessor pin; a free-standing
     /// reference can never select a different source. Imported legacy inline
@@ -267,6 +274,7 @@ impl Lineage {
             retained: BTreeMap::new(),
             index_bytes: 0,
             source_directory: directory.to_path_buf(),
+            store: packs::Store::open(directory)?,
         };
         let mut current = root.clone();
         let mut seen = BTreeSet::new();
@@ -329,7 +337,7 @@ impl Lineage {
                 if !seen.insert(expected.to_owned()) {
                     return Err(invalid("cyclic or repeated lineage reference"));
                 }
-                let bytes = load_blob(directory, &expected)?;
+                let bytes = result.store.read(directory, &expected)?;
                 let value = parse(&bytes)?;
                 // The descriptor is resident; the exact historical payload is
                 // already an immutable archive and is released after parsing.
@@ -446,7 +454,11 @@ impl Lineage {
         Ok(found)
     }
     fn imported_bytes(&self, source: &Path, digest: &str) -> io::Result<Vec<u8>> {
-        let bytes = load_blob(source, digest)?;
+        let bytes = if source == self.source_directory {
+            self.store.read(source, digest)?
+        } else {
+            packs::Store::open(source)?.read(source, digest)?
+        };
         if self.blobs.get(digest) != Some(&bytes.len()) {
             return Err(invalid("source lineage length changed"));
         }
@@ -458,6 +470,13 @@ impl Lineage {
     /// These content-addressed files must never be edited in place.
     pub fn write_to(&self, destination: &Path) -> io::Result<()> {
         self.write_with_link(destination, |source, target| fs::hard_link(source, target))
+    }
+    /// CPU-only packed output retains the full closure in logarithmically many files.
+    pub fn write_packed_to(&self, destination: &Path) -> io::Result<()> {
+        packs::write_to(self, destination)
+    }
+    pub fn packed_files(&self) -> io::Result<BTreeMap<String, Vec<u8>>> {
+        packs::files(self)
     }
     /// Verified immutable bytes for a publisher that must resume exact files
     /// without replacing an existing partial output. Includes a retained parent.
@@ -518,20 +537,31 @@ impl Lineage {
     }
     /// Match the original immutable-source guard after collection and export.
     pub fn verify_at(&self, source: &Path) -> io::Result<()> {
+        let store = packs::Store::open(source)?;
+        if !self.store.same_manifest(&store) {
+            return Err(invalid("source ancestry manifest changed"));
+        }
         for digest in self
             .blobs
             .keys()
             .filter(|digest| !self.retained.contains_key(*digest))
         {
-            self.imported_bytes(source, digest)?;
+            let bytes = store.read(source, digest)?;
+            if self.blobs.get(digest) != Some(&bytes.len()) {
+                return Err(invalid("source lineage length changed"));
+            }
         }
         Ok(())
     }
     /// Verify a published copy, including the newly retained direct parent.
     /// Unlike the immutable-source guard, every archive must already exist.
     pub fn verify_written_at(&self, destination: &Path) -> io::Result<()> {
+        let store = packs::Store::open(destination)?;
         for digest in self.blobs.keys() {
-            self.imported_bytes(destination, digest)?;
+            let bytes = store.read(destination, digest)?;
+            if self.blobs.get(digest) != Some(&bytes.len()) {
+                return Err(invalid("source lineage length changed"));
+            }
         }
         Ok(())
     }
@@ -701,7 +731,7 @@ mod tests {
                     .retained
                     .get(digest)
                     .cloned()
-                    .unwrap_or_else(|| load_blob(&tree.0, digest).unwrap())
+                    .unwrap_or_else(|| load_flat_blob(&tree.0, digest).unwrap())
             );
         }
     }
@@ -754,12 +784,15 @@ mod tests {
         lineage.verify_at(&source.0).unwrap();
         for digest in lineage.blobs.keys() {
             assert_eq!(
-                load_blob(&output.0, digest).unwrap(),
-                load_blob(&source.0, digest).unwrap()
+                load_flat_blob(&output.0, digest).unwrap(),
+                load_flat_blob(&source.0, digest).unwrap()
             );
         }
         let terminal_digest = sha256(terminal);
-        assert_eq!(load_blob(&output.0, &terminal_digest).unwrap(), terminal);
+        assert_eq!(
+            load_flat_blob(&output.0, &terminal_digest).unwrap(),
+            terminal
+        );
         drop(source);
         let child = reference("cpu-cycle.json", &parent_digest, 89);
         let restored = Lineage::load(&child, &output.0).unwrap();
@@ -835,7 +868,7 @@ mod tests {
         assert_eq!(lineage.index_bytes, before + 384);
         let output = Tree::new();
         lineage.write_to(&output.0).unwrap();
-        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        assert_eq!(load_flat_blob(&output.0, &digest).unwrap(), bytes);
         let child = reference("cpu-cycle.json", &digest, 8);
         let restored = Lineage::load(&child, &output.0).unwrap();
         let restored_parent = restored.frames().last().unwrap().unwrap();
@@ -865,7 +898,7 @@ mod tests {
         let digest = lineage.retain_parent(bytes.clone()).unwrap();
         let output = Tree::new();
         lineage.write_to(&output.0).unwrap();
-        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        assert_eq!(load_flat_blob(&output.0, &digest).unwrap(), bytes);
         let child = reference("cpu-cycle.json", &digest, 22);
         let restored = Lineage::load(&child, &output.0).unwrap();
         assert_eq!(restored.frames().last().unwrap().unwrap(), terminal);
@@ -892,7 +925,7 @@ mod tests {
             assert_eq!((before.dev(), before.ino()), (after.dev(), after.ino()));
         }
         drop(source);
-        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        assert_eq!(load_flat_blob(&output.0, &digest).unwrap(), bytes);
         assert_eq!(Lineage::load(&root, &output.0).unwrap().frames.len(), 2);
     }
 
@@ -913,7 +946,7 @@ mod tests {
             })
             .unwrap();
         drop(source);
-        assert_eq!(load_blob(&output.0, &digest).unwrap(), bytes);
+        assert_eq!(load_flat_blob(&output.0, &digest).unwrap(), bytes);
         assert_eq!(Lineage::load(&root, &output.0).unwrap().frames.len(), 2);
     }
 

@@ -270,14 +270,11 @@ fn missing_newly_retained_parent_rejects_seal_and_keeps_private_recovery_and_sou
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect::<Vec<_>>();
-    assert_eq!(lineage_files.len(), 1);
-    assert_eq!(
-        lineage_files[0]
-            .extension()
-            .and_then(|value| value.to_str()),
-        Some("json")
-    );
-    fs::remove_file(&lineage_files[0]).unwrap();
+    let pack = lineage_files
+        .iter()
+        .find(|p| p.extension().is_some_and(|e| e == "pack"))
+        .unwrap();
+    fs::remove_file(pack).unwrap();
     let private_bytes = fs::read(output.join("collector-checkpoint.json")).unwrap();
     assert!(collection.seal(planned).is_err());
     assert!(!output.join("collector-commit.json").exists());

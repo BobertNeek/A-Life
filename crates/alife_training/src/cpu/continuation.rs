@@ -736,7 +736,7 @@ fn collect_cpu_episode_inner(
     fs::write(args.output.join("phase.txt"), "collecting-canonical-cpu")?;
     if let Some(lineage) = &lineage {
         fs::create_dir(args.output.join("source-native"))?;
-        lineage.write_to(&args.output.join("source-native"))?;
+        lineage.write_packed_to(&args.output.join("source-native"))?;
     }
     if let Some(lineage) = &mut lineage {
         let name = ["cycle.json", "cpu-cycle.json", "group50.json"]
@@ -744,7 +744,7 @@ fn collect_cpu_episode_inner(
             .find(|name| source_bytes.contains_key(*name))
             .ok_or("missing source receipt")?;
         lineage.retain_parent(source_bytes[name].clone())?;
-        lineage.write_to(&args.output)?;
+        lineage.write_packed_to(&args.output)?;
     }
     for (name, bytes) in &source_bytes {
         let dir = args.output.join("source-native");

@@ -189,12 +189,81 @@ def check_lesson(row, *, training):
                 "collector_run_id must be portable and nonreserved")
 
 
+PACK_MAGIC = b"ALIFE-ANCESTRY1\n"
+PACK_END = b"ALIFE-END\n"
+
+
+def packed_seed_evidence(source, lineage):
+    """Read the same exact raw receipt format as native_receipt::packs."""
+    manifest = read_json(lineage / "manifest.json", 64 * 1024)
+    require(set(manifest) == {"schema_version", "chunks"}
+            and type(manifest["schema_version"]) is int and manifest["schema_version"] == 1,
+            "invalid ancestry manifest")
+    chunks = manifest["chunks"]
+    require(isinstance(chunks, list) and 1 <= len(chunks) <= 17, "invalid ancestry chunks")
+    paths, previous, count = [], 131072, 1
+    root = source / "cpu-cycle.json"
+    require(root.is_file() and not root.is_symlink(), "regular nonsymlink source receipt required")
+    total = root.stat().st_size
+    names = {"manifest.json"}
+    for chunk in chunks:
+        require(isinstance(chunk, dict) and set(chunk) == {"sha256", "receipts"}, "invalid ancestry chunk")
+        digest, size = chunk["sha256"], chunk["receipts"]
+        require(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest), "invalid ancestry object hash")
+        require(type(size) is int and 0 < size < previous and size & (size - 1) == 0,
+                "ancestry pack counts must be decreasing powers of two")
+        previous = size
+        count += size
+        require(count <= 124, "comparison V1 source ancestry exceeds124 receipts")
+        name = digest + ".pack"
+        path = lineage / name
+        require(path.is_file() and not path.is_symlink(), "regular nonsymlink ancestry pack required")
+        length = path.stat().st_size
+        overhead = len(PACK_MAGIC) + 8 + len(PACK_END) + size * 72
+        require(length >= overhead, "truncated ancestry pack")
+        total += length - overhead
+        require(total <= 16 * MIB, "comparison V1 parsed source ancestry exceeds16 MiB")
+        paths.append((path, digest, size, length))
+        names.add(name)
+    require({p.name for p in lineage.iterdir()} == names, "foreign file in packed ancestry")
+    # All count/size bounds precede payload reads and receipt JSON parsing.
+    documents, seen = [], set()
+    for path, digest, size, length in paths:
+        with path.open("rb") as stream:
+            raw = stream.read(length + 1)
+        require(len(raw) == length and hashlib.sha256(raw).hexdigest() == digest,
+                "ancestry pack differs from immutable object hash")
+        require(raw.startswith(PACK_MAGIC) and struct.unpack_from("<Q", raw, len(PACK_MAGIC))[0] == size,
+                "invalid ancestry pack header")
+        offset = len(PACK_MAGIC) + 8
+        for _ in range(size):
+            require(offset + 72 <= len(raw), "truncated ancestry record")
+            receipt_hash = raw[offset:offset + 64].decode("ascii")
+            require(re.fullmatch(r"[0-9a-f]{64}", receipt_hash) and receipt_hash not in seen,
+                    "invalid or duplicate ancestry receipt hash")
+            seen.add(receipt_hash)
+            receipt_size = struct.unpack_from("<Q", raw, offset + 64)[0]
+            offset += 72
+            require(receipt_size <= 64 * MIB and offset + receipt_size <= len(raw), "invalid ancestry receipt size")
+            receipt = raw[offset:offset + receipt_size]
+            require(hashlib.sha256(receipt).hexdigest() == receipt_hash, "ancestry receipt hash mismatch")
+            documents.append(receipt)
+            offset += receipt_size
+        require(raw[offset:] == PACK_END, "trailing or incomplete ancestry pack")
+    return [read_json(root, 16 * MIB), *[decode_json(raw, lineage) for raw in documents]]
+
+
 def source_seed_evidence(source):
     """Preflight a small ancestry set before parsing any retained receipt JSON."""
     paths = [source / "cpu-cycle.json"]
     lineage = source / "source-lineage"
     if lineage.exists():
         require(lineage.is_dir() and not lineage.is_symlink(), "real source-lineage directory required")
+        if (lineage / "manifest.json").exists():
+            require(not (lineage / "manifest.json").is_symlink(), "regular ancestry manifest required")
+            return packed_seed_evidence(source, lineage)
+        require(not any(p.suffix in {".pack", ".pending"} for p in lineage.iterdir()),
+                "incomplete packed ancestry has no manifest")
         for path in lineage.iterdir():
             if path.suffix == ".json":
                 paths.append(path)
