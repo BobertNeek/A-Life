@@ -184,7 +184,7 @@ fn run_visibility_fixture(directory: PathBuf) {
     .unwrap();
 }
 
-fn ux() -> Fvr05ProductionUxStateResource {
+pub(super) fn ux() -> Fvr05ProductionUxStateResource {
     let profile = ProductionFrontendProfileId::MinimumSettings30x30;
     Fvr05ProductionUxStateResource {
         settings: Fvr05ProductionUxSettings {
