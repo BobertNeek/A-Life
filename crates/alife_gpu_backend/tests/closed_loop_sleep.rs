@@ -671,6 +671,55 @@ fn two_same_class_sleep_jobs_do_not_cross_write_slots() {
     );
 }
 
+fn trace_replay_control_state(
+    backend: &mut GpuClosedLoopBackend,
+    handles: [alife_gpu_backend::GpuBrainHandle; 2],
+    stage: &str,
+    tick: Tick,
+) {
+    let a = backend
+        .snapshot_brain(handles[0], tick)
+        .unwrap()
+        .into_parts();
+    let b = backend
+        .snapshot_brain(handles[1], tick)
+        .unwrap()
+        .into_parts();
+    let fa = backend
+        .read_active_fast_weights_for_test(handles[0])
+        .unwrap();
+    let fb = backend
+        .read_active_fast_weights_for_test(handles[1])
+        .unwrap();
+    let differences = fa
+        .iter()
+        .zip(&fb)
+        .enumerate()
+        .filter(|(_, (a, b))| a.to_bits() != b.to_bits())
+        .map(|(i, (a, b))| (i, *a, *b, (*a - *b).abs()))
+        .collect::<Vec<_>>();
+    eprintln!(
+        "TRACE_STATE {}",
+        serde_json::json!({
+            "stage": stage, "tick": tick.raw(), "fast_count": fa.len(),
+            "fast_unequal": differences.len(), "fast_max_delta": differences.iter().map(|x| x.3).fold(0.0_f32, f32::max),
+            "first_fast_differences": differences.iter().take(16).collect::<Vec<_>>(),
+            "activation_a_equal": a.activation_a_bits == b.activation_a_bits,
+            "activation_b_equal": a.activation_b_bits == b.activation_b_bits,
+            "neuron_homeostasis_equal": a.neuron_homeostasis_bits == b.neuron_homeostasis_bits,
+            "lifetime_bank_0_equal": a.lifetime_bank_0_bits == b.lifetime_bank_0_bits,
+            "lifetime_bank_1_equal": a.lifetime_bank_1_bits == b.lifetime_bank_1_bits,
+            "recurrent_eligibility_0_equal": a.recurrent_eligibility_bank_0_bits == b.recurrent_eligibility_bank_0_bits,
+            "recurrent_eligibility_1_equal": a.recurrent_eligibility_bank_1_bits == b.recurrent_eligibility_bank_1_bits,
+            "decoder_eligibility_0_equal": a.decoder_eligibility_bank_0_bits == b.decoder_eligibility_bank_0_bits,
+            "decoder_eligibility_1_equal": a.decoder_eligibility_bank_1_bits == b.decoder_eligibility_bank_1_bits,
+            "replay_event_counts": [a.replay_journal_event_count,b.replay_journal_event_count],
+            "replay_samples_equal": a.replay_samples == b.replay_samples,
+            "active_weight_banks": [a.active_weight_bank,b.active_weight_bank]
+        })
+    );
+}
+
 #[test]
 fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
     const LOGIT_TOLERANCE: f32 = 1.0e-5;
@@ -684,6 +733,7 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
     let handles =
         organisms.map(|organism| backend.insert_brain(organism, phenotype.clone()).unwrap());
     let physiology_fixture = support::test_physiology(5_008, &phenotype).unwrap();
+    trace_replay_control_state(&mut backend, handles, "initial", Tick::ZERO);
 
     for exposure in 0_u64..8 {
         let tick_raw = 5_000 + exposure * 2;
@@ -704,6 +754,29 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
             [&sources[0], &sources[1]],
         )
         .unwrap();
+        let command_a = frame_a.candidates()[usize::from(tick_a.selection.candidate_index)]
+            .to_command(
+                handles[0].organism_id(),
+                Confidence::new(tick_a.selection.confidence.raw()).unwrap(),
+            )
+            .unwrap();
+        let command_b = frame_b.candidates()[usize::from(tick_b.selection.candidate_index)]
+            .to_command(
+                handles[1].organism_id(),
+                Confidence::new(tick_b.selection.confidence.raw()).unwrap(),
+            )
+            .unwrap();
+        eprintln!(
+            "TRACE_CHOICE {}",
+            serde_json::json!({
+                "exposure": exposure, "tick": tick_raw,
+                "candidate_a": tick_a.selection.candidate_index, "candidate_b": tick_b.selection.candidate_index,
+                "logit_a": tick_a.selection.logit, "logit_b": tick_b.selection.logit,
+                "command_a": format!("{command_a:?}"), "command_b": format!("{command_b:?}"),
+                "factorized_a": tick_a.factorized_motor_candidates, "factorized_b": tick_b.factorized_motor_candidates,
+                "pending_a": format!("{:?}", tick_a.pending_eligibility), "pending_b": format!("{:?}", tick_b.pending_eligibility)
+            })
+        );
         let (patch_a, receptors_a) = sealed_reward(
             handles[0],
             &phenotype,
@@ -728,12 +801,32 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
                 ..BodyEventDelta::zero()
             },
         );
+        let credit_a = OutcomeCreditPacket::from_sealed_patch(&patch_a)
+            .unwrap()
+            .with_biochemical_receptors(&receptors_a)
+            .unwrap();
+        let credit_b = OutcomeCreditPacket::from_sealed_patch(&patch_b)
+            .unwrap()
+            .with_biochemical_receptors(&receptors_b)
+            .unwrap();
+        eprintln!(
+            "TRACE_CREDIT {}",
+            serde_json::json!({"exposure":exposure,
+            "receptors_a":receptors_a,"receptors_b":receptors_b,
+            "modulator_a":format!("{:?}",credit_a.modulator()),"modulator_b":format!("{:?}",credit_b.modulator())})
+        );
         backend
             .apply_sealed_outcome_batch(&[
                 (handles[0], &patch_a, &receptors_a),
                 (handles[1], &patch_b, &receptors_b),
             ])
             .unwrap();
+        trace_replay_control_state(
+            &mut backend,
+            handles,
+            &format!("after_exposure_{exposure}"),
+            Tick::new(tick_raw + 1),
+        );
     }
 
     assert_eq!(
