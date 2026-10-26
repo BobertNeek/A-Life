@@ -321,11 +321,12 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         second["seed_provenance"]["native_source_receipt_ref"],
         json!(sha(source.join("cpu-cycle.json")))
     );
-    let blob = output
-        .join("source-lineage")
-        .join(format!("{}.json", sha(source.join("cpu-cycle.json"))));
     assert_eq!(
-        fs::read(blob).unwrap(),
+        alife_training::native_receipt::read_ancestry_blob(
+            &output,
+            &sha(source.join("cpu-cycle.json"))
+        )
+        .unwrap(),
         fs::read(source.join("cpu-cycle.json")).unwrap()
     );
     assert_eq!(
@@ -531,11 +532,12 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
         assert_eq!(frame, &sealed);
     }
     for predecessor in [&output, &source] {
-        let blob = third_output
-            .join("source-lineage")
-            .join(format!("{}.json", sha(predecessor.join("cpu-cycle.json"))));
         assert_eq!(
-            fs::read(blob).unwrap(),
+            alife_training::native_receipt::read_ancestry_blob(
+                &third_output,
+                &sha(predecessor.join("cpu-cycle.json"))
+            )
+            .unwrap(),
             fs::read(predecessor.join("cpu-cycle.json")).unwrap()
         );
     }

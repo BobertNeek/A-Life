@@ -330,6 +330,63 @@ class ComparisonPreflightTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exceeds124"):
                 compare.source_seed_evidence(self.source)
 
+    def pack_receipts(self, documents):
+        import hashlib
+        import struct
+        lineage = self.source / "source-lineage"
+        lineage.mkdir(exist_ok=True)
+        raw = compare.PACK_MAGIC + struct.pack("<Q", len(documents))
+        for document in documents:
+            receipt = json.dumps(document).encode()
+            raw += hashlib.sha256(receipt).hexdigest().encode() + struct.pack("<Q", len(receipt)) + receipt
+        raw += compare.PACK_END
+        digest = hashlib.sha256(raw).hexdigest()
+        path = lineage / (digest + ".pack")
+        path.write_bytes(raw)
+        self.write(lineage / "manifest.json", {"schema_version": 1, "chunks": [{"sha256": digest, "receipts": len(documents)}]})
+        return path
+
+    def test_packed_receipts_preserve_all_seed_exclusions_and_reject_corruption(self):
+        documents = [{"seed": 567}, {"assessment_seeds": [778899], "arbitrary_history": {"training_seeds": [998877]}}]
+        path = self.pack_receipts(documents)
+        evidence = compare.source_seed_evidence(self.source)
+        self.assertEqual(evidence[1:], documents)
+        original = path.read_bytes()
+        path.unlink()
+        with self.assertRaises(ValueError):
+            compare.source_seed_evidence(self.source)
+        path.write_bytes(original[:-1] + b"!")
+        with self.assertRaisesRegex(ValueError, "object hash"):
+            compare.source_seed_evidence(self.source)
+        path.write_bytes(original)
+        (path.parent / "manifest.json").unlink()
+        with self.assertRaisesRegex(ValueError, "no manifest"):
+            compare.source_seed_evidence(self.source)
+
+    def test_packed_historical_seeds_still_exclude_training_and_assessment(self):
+        path = self.pack_receipts([{"seed": 30}])
+        with self.assertRaisesRegex(ValueError, "training seed overlaps"):
+            self.plan()
+        path.unlink()
+        self.pack_receipts([{"seed": 90}])
+        with self.assertRaisesRegex(ValueError, "assessment overlaps known"):
+            self.plan()
+
+    def test_packed_preflight_rejects_count_and_bytes_before_receipt_decode(self):
+        path = self.pack_receipts([{"seed": 1}])
+        with path.open("ab") as stream:
+            stream.truncate(17 * compare.MIB)
+        with patch.object(compare, "decode_json", wraps=compare.decode_json) as decode:
+            with self.assertRaisesRegex(ValueError, "exceeds16 MiB"):
+                compare.source_seed_evidence(self.source)
+            self.assertEqual(decode.call_count, 1)  # bounded manifest only
+        manifest = path.parent / "manifest.json"
+        document = compare.read_json(manifest)
+        document["chunks"][0]["receipts"] = 128
+        self.write(manifest, document)
+        with self.assertRaisesRegex(ValueError, "exceeds124"):
+            compare.source_seed_evidence(self.source)
+
 
 class BudgetAccountingTests(unittest.TestCase):
     def arms(self):

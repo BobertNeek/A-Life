@@ -329,6 +329,7 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
     assert!(!result.status.success());
     assert!(String::from_utf8_lossy(&result.stderr).contains("completed"));
     assert!(!rejected.exists());
+    storage::relocate_recovery(&root, &episodes);
     fs::remove_dir_all(root).unwrap();
 }
 

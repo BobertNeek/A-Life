@@ -248,7 +248,7 @@ fn validate_cooperative(
         .as_str()
         .ok_or_else(|| invalid("cooperative founder lacks its archived predecessor reference"))?;
     // Lineage validated the digest spelling and predecessor domain first.
-    let parent_bytes = read_file(root, &format!("source-lineage/{parent_hash}.json"))?;
+    let parent_bytes = crate::native_receipt::read_ancestry_blob(root, parent_hash)?;
     let parent = native_receipt::parse(&parent_bytes)?;
     validate_header(&parent, &prior)?;
     let parent_lineage = Lineage::load(&parent, root)?;

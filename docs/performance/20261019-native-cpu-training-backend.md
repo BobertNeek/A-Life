@@ -115,6 +115,84 @@ no storage writer, retention rule or decoder, and deletes no retained data.
 A smaller representation needs a coordinated format/reader change preserving
 these bindings; no further safe, worthwhile drop-in removal was established.
 
+### CPU ancestry packs: path growth without external recovery dependencies
+
+The subsequent ordinary serial CPU writer replaces one path per historical receipt with an
+immutable binary-carry forest in each `source-lineage` directory. It stores the
+**exact original raw receipt bytes**; direct predecessor hashes, seed evidence,
+compiler state, actor/value checkpoints, integer ages and Adam moments are
+unchanged. Both the episode root and `source-native` carry their own complete
+ancestry closure. Copying either bundle requires no older episode directory,
+global object store, symlink, reflink or mutable checkpoint hardlink. The root
+bundle also retains its private collector recovery; `source-native` has always
+been a founder snapshot, not a private-life checkpoint.
+
+`manifest.json` schema1 lists content-addressed `.pack` files with distinct,
+decreasing power-of-two receipt counts. Appending one parent merges only equal
+trailing counts. A pack contains `ALIFE-ANCESTRY1\n`, a little-endian u64 count,
+then records of 64 ASCII SHA256 hex bytes, a little-endian u64 length, and the
+original raw receipt; `ALIFE-END\n` terminates it with no trailing data. Readers
+validate object hashes, framing, uniqueness, each reachable receipt's original
+hash/domain, and the existing per-document/count limits. The manifest has a
+64 KiB cap. Cooperative publication retains its flat output format and existing
+64 MiB materialization payload cap so old interrupted publications still resume
+with identical expected files. Serial continuation can stream histories larger than 64 MiB while
+each document remains bounded. Python comparison admission reads the same raw
+records and preflights its existing 124-receipt / 16 MiB limits before parsing
+receipt JSON, preserving historical training and assessment exclusions.
+
+Completed hash-named packs are immutable. Only those packs may be hardlinked;
+unsupported links copy verified bytes. New or merged packs use exclusive files,
+and the manifest is published last. Incomplete output remains preserved and
+invalid; ordinary serial retries cannot overwrite it. Cooperative publication
+keeps its existing flat, exact-file resumable publisher and can import packed
+serial sources. Legacy flat ancestry remains
+readable and `Lineage::write_to` can export flat receipts. Native GPU and cooperative CPU writers continue writing flat ancestry. New packed CPU bundles require this updated
+reader; older binaries fail closed and cannot consume them directly. No existing
+bundle is migrated or removed.
+
+The same eight-episode fixture now measures:
+
+| Metric across eight retained episodes | Prior flat run | Packed run |
+| --- | ---: | ---: |
+| Total files | 179 | 164 |
+| Ancestry files (both locations) | 49 | 34 |
+| Logical bytes | 66,180,815 | 66,187,239 |
+| Inode allocation bytes (Unix) | 66,301,952 | 66,375,680 |
+
+These are separate synthetic reruns with the same doses, seeds and unchanged
+learner; receipt timing fields and hashes can vary. The pack framing/manifests
+add logical bytes, and fewer tiny files do not imply fewer allocated bytes. The
+allocation metric has the same inode/metadata limits described above.
+
+A separate deterministic receipt-only fixture retains 128 successive snapshots
+and compares every recovered frame with the flat baseline. It measures 8,256
+flat files versus 577 packed files, 4,322,691 versus 4,977,410 logical bytes, and
+524,288 versus 1,257,472 inode-allocated bytes in this cloud filesystem. The last
+packed snapshot has two ancestry files (one 128-receipt object and its manifest).
+With `k` ancestors a bundle has `popcount(k) + 1` ancestry files, so retaining N
+bundles uses O(N log N) paths instead of O(N²). Ordinary serial immutable pack reuse allocates
+O(N log N) receipt payload bytes across a same-filesystem chain, versus O(N)
+receipt bytes for the previous hardlinked flat blobs. Copy fallback or copying
+all bundles separately can still duplicate the full history bytes. This is an
+explicit path-count improvement with a byte-allocation cost, **not a total disk
+savings, bounded retained-history or production throughput claim**. Multi-MiB
+learner/private-state copies remain the dominant measured bytes.
+
+Recovery tests ordinarily copy the full episode and its founder-only snapshot,
+remove all original synthetic episodes, then import/continue both copies and
+compare complete compiler/actor/value/Adam state. The full copy also restores
+and re-encodes private collector state exactly. Missing/corrupt objects reject
+before output ownership; injected manifest interruption preserves partial work
+and predecessor bytes. Receipt-only tests force copy fallback, cover history
+over 64 MiB, and compare all exact raw receipt hashes. Reproduce with:
+
+```sh
+cargo test --locked -p alife_training --features cpu-backend --lib native_receipt:: -- --nocapture
+cargo test --locked -p alife_training --features cpu-backend --test cpu_cli --test cpu_collect_only --test cpu_cooperative_round --test backend_handoff -- --nocapture
+python -B -m unittest discover -s scripts -p test_compare_cpu_care_rounds.py
+```
+
 A serial `cycle.json` directory must first pass the existing native serial,
 terrain and critic-correction continuity verifier and export a hash-bound typed
 package. The export command reads the original directory without changing it:
