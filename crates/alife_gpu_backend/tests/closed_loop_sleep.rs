@@ -675,6 +675,10 @@ fn two_same_class_sleep_jobs_do_not_cross_write_slots() {
 fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
     const LOGIT_TOLERANCE: f32 = 1.0e-5;
     const POST_WAKE_PROBE_TICKS: u64 = 32;
+    // Durable organism identities intentionally retain ordinary exploration.
+    // One legal opportunity makes learning attribution and post-wake logits
+    // comparable without disabling exploration or overwriting learned state.
+    const MATCHED_CANDIDATE_COUNT: usize = 1;
 
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organisms = [alife_core::OrganismId(5_008), alife_core::OrganismId(5_009)];
@@ -693,7 +697,7 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
                 tick_raw,
                 alife_core::SensorProfile::PrivilegedAffordanceV1,
                 true,
-                2,
+                MATCHED_CANDIDATE_COUNT,
             )
         });
         let [(frame_a, tick_a), (frame_b, tick_b)] = paired_chemistry_tick(
@@ -704,6 +708,15 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
             [&sources[0], &sources[1]],
         )
         .unwrap();
+        assert_eq!(frame_a.candidates().len(), MATCHED_CANDIDATE_COUNT);
+        assert_eq!(frame_b.candidates().len(), MATCHED_CANDIDATE_COUNT);
+        assert_eq!(tick_a.selection.candidate_index, 0);
+        assert_eq!(tick_b.selection.candidate_index, 0);
+        assert_eq!(tick_a.selection, tick_b.selection);
+        assert_eq!(
+            tick_a.factorized_motor_candidates,
+            tick_b.factorized_motor_candidates
+        );
         let (patch_a, receptors_a) = sealed_reward(
             handles[0],
             &phenotype,
@@ -781,7 +794,7 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
                 5_100 + offset,
                 alife_core::SensorProfile::PrivilegedAffordanceV1,
                 true,
-                2,
+                MATCHED_CANDIDATE_COUNT,
             )
         });
         let ticks = paired_chemistry_tick(
@@ -792,6 +805,10 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
             [&sources[0], &sources[1]],
         )
         .unwrap();
+        for (frame, tick) in &ticks {
+            assert_eq!(frame.candidates().len(), MATCHED_CANDIDATE_COUNT);
+            assert_eq!(tick.selection.candidate_index, 0);
+        }
         max_post_wake_delta = max_post_wake_delta
             .max((ticks[0].1.selection.logit - ticks[1].1.selection.logit).abs());
         for (_, tick) in &ticks {
@@ -800,6 +817,12 @@ fn replay_learning_payload_changes_behavior_within_post_wake_probe_window() {
                 .unwrap();
         }
     }
+    eprintln!(
+        "replay-causality: replay_fast_l1={} ablated_fast_l1={} max_post_wake_same_candidate_logit_delta={} probe_ticks={POST_WAKE_PROBE_TICKS}",
+        replayed_receipt.replay_induced_fast_l1,
+        ablated_receipt.replay_induced_fast_l1,
+        max_post_wake_delta,
+    );
     assert!(
         max_post_wake_delta > LOGIT_TOLERANCE,
         "GPU replay payload must causally alter the selected logit within the bounded post-wake probe window: max_delta={max_post_wake_delta}",
