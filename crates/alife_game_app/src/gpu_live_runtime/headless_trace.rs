@@ -166,6 +166,7 @@ pub(crate) fn trace_row(
                 "health": biology.body.health,
                 "hunger": biology.homeostasis.drives.hunger,
                 "fatigue": biology.homeostasis.drives.fatigue,
+                "sleep_pressure": biology.homeostasis.hormones.sleep_pressure,
                 "brain_atp": biology.homeostasis.drives.brain_atp,
                 "death_tick": record.lifecycle().death_tick(),
             })
