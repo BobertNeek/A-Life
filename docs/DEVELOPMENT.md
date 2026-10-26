@@ -74,8 +74,10 @@ Follow the same `organism_id` and `stable_id` through the rows. `neural_sleep`
 contains the actual scheduler phase, consolidation state, and cycle identity;
 `body_sleeping` alone only describes the body. Action outcomes include measured
 before/after physiology and per-channel physical evidence only when the sealed
-patch matches this tick, organism, and sequence. Check exact Eat target and
-consumption separately from nourishment. Observe later Rest/fatigue relief,
+patch matches this tick, organism, and sequence. Tick snapshots include current
+`fatigue` and endocrine `sleep_pressure` even without waking action outcomes;
+both inform waking readiness and are observations, not new success criteria.
+Check exact Eat target and consumption separately from nourishment. Observe later Rest/fatigue relief,
 consolidation, and an actual subsequent waking decision in temporal order;
 there is no new composite success flag or compulsory training gate. Removed
 organisms disappear from the organism snapshot; never substitute another life.

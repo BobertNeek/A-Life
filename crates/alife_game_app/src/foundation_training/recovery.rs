@@ -659,6 +659,18 @@ mod tests {
         assert_eq!(world.canonical_signature_digest().unwrap(), signature);
         assert_eq!(row["organisms"][0]["organism_id"], learner.raw());
         assert_eq!(row["organisms"][0]["stable_id"], entity.raw());
+        let pressure_before_rest = world
+            .organism_registry()
+            .get(learner)
+            .unwrap()
+            .biochemistry()
+            .homeostasis
+            .hormones
+            .sleep_pressure;
+        assert_eq!(
+            row["organisms"][0]["sleep_pressure"],
+            serde_json::json!(pressure_before_rest)
+        );
         let measured = &row["actions"][0]["outcome"]["measured_physiology"];
         assert!(
             measured["after"]["body"]["energy"].as_f64().unwrap()
@@ -672,6 +684,19 @@ mod tests {
         assert_eq!(row["organisms"][0]["stable_id"], entity.raw());
         assert_eq!(row["organisms"][0]["body_sleeping"], true);
         assert_eq!(row["actions"], serde_json::json!([]));
+        let pressure_after_rest = world
+            .organism_registry()
+            .get(learner)
+            .unwrap()
+            .biochemistry()
+            .homeostasis
+            .hormones
+            .sleep_pressure;
+        assert!(pressure_after_rest < pressure_before_rest);
+        assert_eq!(
+            row["organisms"][0]["sleep_pressure"],
+            serde_json::json!(pressure_after_rest)
+        );
 
         // Retained latest meal must not appear on later/sleeping summaries, or
         // for a different life/sequence. Omission is unknown, never a new meal.
@@ -773,6 +798,14 @@ mod tests {
         let (learner, entity) = world.organism_entity_ids()[0];
         let mut meals = Vec::new();
         feed(&mut world, food, &mut meals, None);
+        let initial_pressure = world
+            .organism_registry()
+            .get(learner)
+            .unwrap()
+            .biochemistry()
+            .homeostasis
+            .hormones
+            .sleep_pressure;
         let mut scheduler = alife_runtime::GpuSleepScheduler::new(SleepConsolidationConfig {
             // A shorter observation fixture, never a production threshold edit.
             fatigue_threshold: NormalizedScalar::new(0.12).unwrap(),
@@ -783,6 +816,7 @@ mod tests {
         .unwrap();
         let mut driver = FixtureDriver::default();
         let mut phases = Vec::new();
+        let mut pressures = Vec::new();
         let mut committed = false;
         for _ in 0..24 {
             let next = Tick(world.tick().raw() + 1);
@@ -799,6 +833,7 @@ mod tests {
             world.replace_organism_record_exact(record).unwrap();
             world.try_advance_tick().unwrap();
             let state = scheduler.state();
+            let signature = world.canonical_signature_digest().unwrap();
             let row = trace_row(
                 &world,
                 &[],
@@ -806,9 +841,25 @@ mod tests {
                 |id| (id == learner).then_some(state),
                 0.0,
             );
+            assert_eq!(world.canonical_signature_digest().unwrap(), signature);
             assert_eq!(row["organisms"][0]["organism_id"], learner.raw());
             assert_eq!(row["organisms"][0]["stable_id"], entity.raw());
             assert_eq!(row["actions"], serde_json::json!([]));
+            // Continuous chemistry must remain visible without waking action
+            // outcomes, including Waking's pressure-dependent readiness period.
+            let pressure = world
+                .organism_registry()
+                .get(learner)
+                .unwrap()
+                .biochemistry()
+                .homeostasis
+                .hormones
+                .sleep_pressure;
+            assert_eq!(
+                row["organisms"][0]["sleep_pressure"],
+                serde_json::json!(pressure)
+            );
+            pressures.push(pressure);
             let decoded: SleepState =
                 serde_json::from_value(row["organisms"][0]["neural_sleep"].clone()).unwrap();
             assert_eq!(decoded, state);
@@ -826,11 +877,34 @@ mod tests {
         assert!(phases.contains(&SleepPhase::Waking));
         assert_eq!(phases.last(), Some(&SleepPhase::Awake));
         assert!(committed);
+        assert!(pressures
+            .iter()
+            .any(|pressure| *pressure < initial_pressure));
         // A later world-owned action is still available to this same life.
         let awake = execute(&mut world, Ids::LOOK_CENTER, None, &[]);
         assert_eq!(awake.header().organism_id, learner);
         assert_eq!(world.organism_entity_ids()[0], (learner, entity));
         assert!(awake.header().world_tick > meals.last().unwrap().outcome().outcome_tick);
+        let awake_pressure = world
+            .organism_registry()
+            .get(learner)
+            .unwrap()
+            .biochemistry()
+            .homeostasis
+            .hormones
+            .sleep_pressure;
+        let row = trace_row(
+            &world,
+            &[],
+            &meals,
+            |id| (id == learner).then_some(scheduler.state()),
+            0.0,
+        );
+        assert_eq!(
+            row["organisms"][0]["sleep_pressure"],
+            serde_json::json!(awake_pressure)
+        );
+        assert_eq!(row["actions"], serde_json::json!([]));
     }
 
     #[test]
