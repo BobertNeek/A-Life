@@ -1,7 +1,7 @@
 //! Bounded legacy receipt import and immutable, hash-addressed native ancestry.
 //!
 //! Legacy JSON is accepted unchanged up to an explicit compatibility depth.
-//! Native writers retain flat blobs; CPU writers pack exact raw receipt bytes.
+//! Native/cooperative writers retain flat blobs; serial CPU writers pack raw bytes.
 //! Receipts keep their existing direct predecessor SHA256 pins. Validate one
 //! bounded document at a time; lifetime archive size is not resident state.
 use serde_json::{json, Value};
@@ -474,9 +474,6 @@ impl Lineage {
     /// CPU-only packed output retains the full closure in logarithmically many files.
     pub fn write_packed_to(&self, destination: &Path) -> io::Result<()> {
         packs::write_to(self, destination)
-    }
-    pub fn packed_files(&self) -> io::Result<BTreeMap<String, Vec<u8>>> {
-        packs::files(self)
     }
     /// Verified immutable bytes for a publisher that must resume exact files
     /// without replacing an existing partial output. Includes a retained parent.

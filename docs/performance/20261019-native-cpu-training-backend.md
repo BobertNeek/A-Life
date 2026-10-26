@@ -117,7 +117,7 @@ these bindings; no further safe, worthwhile drop-in removal was established.
 
 ### CPU ancestry packs: path growth without external recovery dependencies
 
-The subsequent CPU writer replaces one path per historical receipt with an
+The subsequent ordinary serial CPU writer replaces one path per historical receipt with an
 immutable binary-carry forest in each `source-lineage` directory. It stores the
 **exact original raw receipt bytes**; direct predecessor hashes, seed evidence,
 compiler state, actor/value checkpoints, integer ages and Adam moments are
@@ -134,8 +134,9 @@ then records of 64 ASCII SHA256 hex bytes, a little-endian u64 length, and the
 original raw receipt; `ALIFE-END\n` terminates it with no trailing data. Readers
 validate object hashes, framing, uniqueness, each reachable receipt's original
 hash/domain, and the existing per-document/count limits. The manifest has a
-64 KiB cap. Cooperative publication retains its existing 64 MiB materialization
-payload cap; serial continuation can stream histories larger than 64 MiB while
+64 KiB cap. Cooperative publication retains its flat output format and existing
+64 MiB materialization payload cap so old interrupted publications still resume
+with identical expected files. Serial continuation can stream histories larger than 64 MiB while
 each document remains bounded. Python comparison admission reads the same raw
 records and preflights its existing 124-receipt / 16 MiB limits before parsing
 receipt JSON, preserving historical training and assessment exclusions.
@@ -144,9 +145,9 @@ Completed hash-named packs are immutable. Only those packs may be hardlinked;
 unsupported links copy verified bytes. New or merged packs use exclusive files,
 and the manifest is published last. Incomplete output remains preserved and
 invalid; ordinary serial retries cannot overwrite it. Cooperative publication
-keeps its existing exact-file resumable publisher. Legacy flat ancestry remains
-readable and `Lineage::write_to` can export flat receipts. Native GPU writers
-continue writing flat ancestry. New packed CPU bundles require this updated
+keeps its existing flat, exact-file resumable publisher and can import packed
+serial sources. Legacy flat ancestry remains
+readable and `Lineage::write_to` can export flat receipts. Native GPU and cooperative CPU writers continue writing flat ancestry. New packed CPU bundles require this updated
 reader; older binaries fail closed and cannot consume them directly. No existing
 bundle is migrated or removed.
 
@@ -170,7 +171,7 @@ flat files versus 577 packed files, 4,322,691 versus 4,977,410 logical bytes, an
 524,288 versus 1,257,472 inode-allocated bytes in this cloud filesystem. The last
 packed snapshot has two ancestry files (one 128-receipt object and its manifest).
 With `k` ancestors a bundle has `popcount(k) + 1` ancestry files, so retaining N
-bundles uses O(N log N) paths instead of O(N²). Immutable pack reuse allocates
+bundles uses O(N log N) paths instead of O(N²). Ordinary serial immutable pack reuse allocates
 O(N log N) receipt payload bytes across a same-filesystem chain, versus O(N)
 receipt bytes for the previous hardlinked flat blobs. Copy fallback or copying
 all bundles separately can still duplicate the full history bytes. This is an

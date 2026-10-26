@@ -390,33 +390,6 @@ fn write_with(
     publish(&base.join(MANIFEST), &manifest(objects)?)?;
     lineage.verify_written_at(root)
 }
-pub(super) fn files(lineage: &Lineage) -> io::Result<BTreeMap<String, Vec<u8>>> {
-    let total = lineage
-        .blobs
-        .values()
-        .try_fold(0usize, |n, b| n.checked_add(*b))
-        .ok_or_else(|| invalid("ancestry byte count overflow"))?;
-    if total > MAX_RECEIPT_BYTES {
-        return Err(invalid(
-            "cooperative source materialization supports at most64 MiB of ancestry payloads",
-        ));
-    }
-    let mut out = BTreeMap::new();
-    let mut objects = Vec::new();
-    for members in plan(lineage) {
-        let mut bytes = Vec::new();
-        let digest = encode(lineage, &members, &mut bytes)?;
-        objects.push(Object {
-            sha256: digest.clone(),
-            receipts: members.len(),
-        });
-        out.insert(format!("{DIRECTORY}/{}", object_name(&digest)?), bytes);
-    }
-    if !objects.is_empty() {
-        out.insert(format!("{DIRECTORY}/{MANIFEST}"), manifest(objects)?);
-    }
-    Ok(out)
-}
 
 #[cfg(test)]
 mod tests {

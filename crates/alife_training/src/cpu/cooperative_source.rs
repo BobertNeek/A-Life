@@ -405,7 +405,7 @@ pub fn materialize_cpu_cooperative_source(
         "seed_provenance":{"source_sha256":source_pins,"native_source_receipt_ref":parent_hash,"seed_admission":seed_admission},
         "private_lifetime_continuation":"none; fresh lives only","candidate_acceptance":"none; explicit source materialization only"});
     expected.insert(RECEIPT.into(), serde_json::to_vec(&receipt)?);
-    expected.extend(lineage.packed_files()?);
+    expected.extend(lineage.raw_files()?);
     publish_files(&output, &expected)?;
     let admitted = read_cpu_founder_source(&output)?;
     if !exact(&admitted.handoff, handoff)? || admitted.receipt != receipt {
