@@ -313,10 +313,6 @@ impl CpuCollectedEpisode {
                 serde_json::to_vec(&self.before_value)?,
             ),
             (
-                "collector-checkpoint.json",
-                serde_json::to_vec(&checkpoint)?,
-            ),
-            (
                 "collection-metadata.json",
                 serde_json::to_vec(&self.collection_metadata())?,
             ),
@@ -324,6 +320,11 @@ impl CpuCollectedEpisode {
             if fs::read(self.args.output.join(name))? != expected {
                 return Err("collector recovery artifact changed before seal".into());
             }
+        }
+        if read_cpu_private_checkpoint_bytes(&self.args.output, u64::MAX)?
+            != serde_json::to_vec(&checkpoint)?
+        {
+            return Err("collector private recovery changed before seal".into());
         }
         for (name, expected) in &self.episode_hashes {
             if hash(&fs::read(self.args.output.join(name))?) != *expected {
@@ -812,7 +813,8 @@ fn collect_cpu_episode_inner(
         .checkpoint(&trainer)
         .map_err(Box::<dyn Error>::from)
         .and_then(|checkpoint| {
-            write_json(args.output.join("collector-checkpoint.json"), &checkpoint)
+            super::private_checkpoint::write_cpu_private_checkpoint(&args.output, &checkpoint)
+                .map_err(Box::<dyn Error>::from)
         });
     let private_recovery = episode.preserve_collection_recovery(&host, &trainer, &args.output);
     if let Err(error) = collection_result {
@@ -982,7 +984,7 @@ pub fn run_cpu_continuation(
   "requested_world_ticks":args.ticks,"world_ticks_elapsed":host.world().tick().raw()-collection_start_tick,"collection_start_tick":collection_start_tick,"canonical_valid_decisions":valid_decisions,"training_rows":training_rows,
   "ppo_config":config,"replay_window_ticks":32,"replay_burn_in":8,"effective_batch_size":windows.len(),"training_windows":windows.len(),"mean_kl_before_updates":update.mean_kl_before_updates,
   "sleeping_organism_ticks":sleeping,"sleep_consolidations":consolidations,"collection_seconds":collection_seconds,"update_seconds":update_seconds,
-  "elapsed_seconds":all_started.elapsed().as_secs_f64(),"private_individual_archive":"collector-checkpoint.json","private_archive_policy":"collection-policy.alife-foundation",
+  "elapsed_seconds":all_started.elapsed().as_secs_f64(),"private_individual_archive":cpu_private_checkpoint_path(&args.output)?.file_name().and_then(|s|s.to_str()).ok_or("invalid private checkpoint filename")?,"private_archive_policy":"collection-policy.alife-foundation",
   "terminal_gpu_individual_restore_proven":false,"hardware":trainer.hardware_receipt()});
     if parent_ref.is_none() {
         receipt["seed_provenance"]

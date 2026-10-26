@@ -165,8 +165,11 @@ fn fixture_collection_roundtrips_private_recovery_and_admits_without_optimizer_u
         serde_json::to_vec(&restored.checkpoint(&trainer).unwrap()).unwrap(),
         serde_json::to_vec(&checkpoint).unwrap()
     );
-    let private_bytes = fs::read(output.join("collector-checkpoint.json")).unwrap();
-    assert_eq!(private_bytes, serde_json::to_vec(&checkpoint).unwrap());
+    let private_bytes = fs::read(cpu_private_checkpoint_path(&output).unwrap()).unwrap();
+    assert_eq!(
+        read_cpu_private_checkpoint_bytes(&output, u64::MAX).unwrap(),
+        serde_json::to_vec(&checkpoint).unwrap()
+    );
     let config = collection.config();
     let version = collection.policy_version();
     let planned = assignment(&collection, seed);
@@ -174,7 +177,7 @@ fn fixture_collection_roundtrips_private_recovery_and_admits_without_optimizer_u
     let shard = read_cpu_collector_output(&output).unwrap();
     assert_eq!(shard.assignment, planned);
     assert_eq!(
-        fs::read(output.join("collector-checkpoint.json")).unwrap(),
+        fs::read(cpu_private_checkpoint_path(&output).unwrap()).unwrap(),
         private_bytes
     );
     let admitted = admit_cpu_collector_shards(
@@ -275,12 +278,12 @@ fn missing_newly_retained_parent_rejects_seal_and_keeps_private_recovery_and_sou
         .find(|p| p.extension().is_some_and(|e| e == "pack"))
         .unwrap();
     fs::remove_file(pack).unwrap();
-    let private_bytes = fs::read(output.join("collector-checkpoint.json")).unwrap();
+    let private_bytes = fs::read(cpu_private_checkpoint_path(&output).unwrap()).unwrap();
     assert!(collection.seal(planned).is_err());
     assert!(!output.join("collector-commit.json").exists());
     assert!(!output.join("collector-shard.json").exists());
     assert_eq!(
-        fs::read(output.join("collector-checkpoint.json")).unwrap(),
+        fs::read(cpu_private_checkpoint_path(&output).unwrap()).unwrap(),
         private_bytes
     );
     assert_eq!(snapshot(&source), source_before);
@@ -370,7 +373,7 @@ fn hook_failure_inside_collection_retains_the_last_sealed_private_host() {
         Err(error) => error,
     };
     assert_eq!(error.to_string(), "synthetic early collection interruption");
-    let checkpoint: CpuCanonicalCheckpoint = load(output.join("collector-checkpoint.json"));
+    let checkpoint = read_cpu_private_checkpoint(&output).unwrap();
     let private_tick: serde_json::Value = load(output.join("synthetic-private-recovery.json"));
     assert!(checkpoint.sampling_counter > 0);
     assert!(checkpoint.residents.iter().any(|resident| resident
@@ -415,7 +418,7 @@ fn finalization_failure_and_preseal_archive_change_preserve_collected_recovery()
     assert_eq!(actor.optimizer_step, 0);
     assert_eq!(critic.optimizer_step, 0);
     let trainer = restore_trainer(&inputs, actor);
-    let checkpoint: CpuCanonicalCheckpoint = load(interrupted.join("collector-checkpoint.json"));
+    let checkpoint = read_cpu_private_checkpoint(&interrupted).unwrap();
     assert!(checkpoint.sampling_counter > 0);
     let restored = CpuCanonicalHost::from_checkpoint(checkpoint.clone(), &trainer).unwrap();
     assert_eq!(
@@ -431,7 +434,7 @@ fn finalization_failure_and_preseal_archive_change_preserve_collected_recovery()
     let collection =
         collect_cpu_episode(fixture_config(output.clone(), seed), &mut DefaultCpuEpisode).unwrap();
     let planned = assignment(&collection, seed);
-    let path = output.join("collector-checkpoint.json");
+    let path = cpu_private_checkpoint_path(&output).unwrap();
     let mut changed = fs::read(&path).unwrap();
     changed.push(b'\n');
     fs::write(path, changed).unwrap();
@@ -488,7 +491,7 @@ fn legacy_flat_ancestry_seals_converted_source_copy_without_mutating_predecessor
         assert!(output
             .join("source-native/source-lineage/manifest.json")
             .is_file());
-        let private = fs::read(output.join("collector-checkpoint.json")).unwrap();
+        let private = fs::read(cpu_private_checkpoint_path(&output).unwrap()).unwrap();
         if corrupt {
             let pack = fs::read_dir(output.join("source-native/source-lineage"))
                 .unwrap()
@@ -507,9 +510,43 @@ fn legacy_flat_ancestry_seals_converted_source_copy_without_mutating_predecessor
             read_cpu_founder_source(&output.join("source-native")).unwrap();
         }
         assert_eq!(
-            fs::read(output.join("collector-checkpoint.json")).unwrap(),
+            fs::read(cpu_private_checkpoint_path(&output).unwrap()).unwrap(),
             private
         );
         assert_eq!(snapshot(&source), source_before);
     }
+}
+
+#[test]
+fn legacy_plain_private_checkpoint_still_restores_and_seals_exactly() {
+    let root = FixtureDirectory::new();
+    let output = root.join("legacy-private");
+    let seed = 0x62_1801;
+    let collection =
+        collect_cpu_episode(fixture_config(output.clone(), seed), &mut DefaultCpuEpisode).unwrap();
+    let expected = collection.host_checkpoint().unwrap();
+    let raw = serde_json::to_vec(&expected).unwrap();
+    let path = cpu_private_checkpoint_path(&output).unwrap();
+    assert_eq!(path.file_name().unwrap(), CPU_PRIVATE_CHECKPOINT_FILE);
+    fs::remove_file(path).unwrap();
+    fs::write(output.join(CPU_LEGACY_PRIVATE_CHECKPOINT_FILE), &raw).unwrap();
+    assert_eq!(
+        read_cpu_private_checkpoint_bytes(&output, u64::MAX).unwrap(),
+        raw
+    );
+    let trainer = restore_trainer(collection.compiler_inputs(), collection.actor_checkpoint());
+    let restored =
+        CpuCanonicalHost::from_checkpoint(read_cpu_private_checkpoint(&output).unwrap(), &trainer)
+            .unwrap();
+    assert_eq!(
+        serde_json::to_vec(&restored.checkpoint(&trainer).unwrap()).unwrap(),
+        raw
+    );
+    let planned = assignment(&collection, seed);
+    collection.seal(planned).unwrap();
+    read_cpu_collector_output(&output).unwrap();
+    assert_eq!(
+        fs::read(output.join(CPU_LEGACY_PRIVATE_CHECKPOINT_FILE)).unwrap(),
+        raw
+    );
 }

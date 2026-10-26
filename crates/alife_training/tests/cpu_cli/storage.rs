@@ -15,6 +15,9 @@ pub(super) fn measure_history(episodes: &[&Path]) {
     let mut cumulative_bytes = 0;
     for (episode, directory) in episodes.iter().enumerate() {
         verify_private_recovery(directory);
+        if episode == 0 {
+            measure_private_write_cost(directory);
+        }
         let tree = snapshot_tree(directory);
         let mut files = 0;
         let mut bytes = 0;
@@ -107,8 +110,7 @@ fn verify_private_recovery(directory: &Path) {
     )
     .unwrap();
     let saved: CpuCanonicalCheckpoint =
-        serde_json::from_slice(&fs::read(directory.join("collector-checkpoint.json")).unwrap())
-            .unwrap();
+        alife_training::cpu::read_cpu_private_checkpoint(directory).unwrap();
     let restored = CpuCanonicalHost::from_checkpoint(saved.clone(), &founder).unwrap();
     assert_eq!(
         serde_json::to_vec(&restored.checkpoint(&founder).unwrap()).unwrap(),
@@ -189,6 +191,26 @@ pub(super) fn relocate_recovery(root: &Path, episodes: &[std::path::PathBuf]) {
         expected_parent
     );
     verify_private_recovery(&moved);
+    let private_path = alife_training::cpu::cpu_private_checkpoint_path(&moved).unwrap();
+    let private_encoded = fs::read(&private_path).unwrap();
+    for bad in [
+        None,
+        Some(private_encoded[..private_encoded.len() / 2].to_vec()),
+        Some({
+            let mut b = private_encoded.clone();
+            let n = b.len() / 2;
+            b[n] ^= 1;
+            b
+        }),
+    ] {
+        match bad {
+            Some(bytes) => fs::write(&private_path, bytes).unwrap(),
+            None => fs::remove_file(&private_path).unwrap(),
+        }
+        assert!(alife_training::cpu::read_cpu_private_checkpoint(&moved).is_err());
+        fs::write(&private_path, &private_encoded).unwrap();
+    }
+    verify_private_recovery(&moved);
     let pack = fs::read_dir(moved.join("source-lineage"))
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -243,4 +265,64 @@ pub(super) fn relocate_recovery(root: &Path, episodes: &[std::path::PathBuf]) {
         verify_private_recovery(&output);
     }
     assert_eq!(snapshot_tree(&moved), preserved);
+}
+
+/// Same canonical private state, warm local writes. These are debug-build wall
+/// timings, including serialization; they are not training-throughput results.
+fn measure_private_write_cost(directory: &Path) {
+    use alife_training::cpu::{
+        read_cpu_private_checkpoint, read_cpu_private_checkpoint_bytes,
+        write_cpu_private_checkpoint,
+    };
+    use std::{
+        io::Write,
+        time::{Instant, SystemTime, UNIX_EPOCH},
+    };
+    struct Temporary(std::path::PathBuf);
+    impl Drop for Temporary {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let temp = Temporary(std::env::temp_dir().join(format!(
+            "alife-private-write-measure-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        )));
+    fs::create_dir(&temp.0).unwrap();
+    let checkpoint = read_cpu_private_checkpoint(directory).unwrap();
+    let raw = serde_json::to_vec(&checkpoint).unwrap();
+    let (mut plain, mut compressed) = (Vec::new(), Vec::new());
+    for n in 0..7 {
+        let raw_path = temp.0.join(format!("plain-{n}.json"));
+        let started = Instant::now();
+        let bytes = serde_json::to_vec(&checkpoint).unwrap();
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&raw_path)
+            .unwrap();
+        file.write_all(&bytes).unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        plain.push(started.elapsed().as_secs_f64() * 1000.);
+        let compressed_dir = temp.0.join(format!("encoded-{n}"));
+        fs::create_dir(&compressed_dir).unwrap();
+        let started = Instant::now();
+        write_cpu_private_checkpoint(&compressed_dir, &checkpoint).unwrap();
+        compressed.push(started.elapsed().as_secs_f64() * 1000.);
+        assert_eq!(
+            read_cpu_private_checkpoint_bytes(&compressed_dir, u64::MAX).unwrap(),
+            raw
+        );
+    }
+    plain.sort_by(f64::total_cmp);
+    compressed.sort_by(f64::total_cmp);
+    println!(
+        "PRIVATE_WRITE_COST {}",
+        serde_json::json!({"samples":7,"raw_json_bytes":raw.len(),"plain_serialize_write_fsync_median_wall_ms":plain[3],"compressed_full_write_median_wall_ms":compressed[3],"scope":"debug build, warm local fixture; compressed includes serialization, SHA256, encoding, fsync, exact encoded-byte verification and publication"})
+    );
 }

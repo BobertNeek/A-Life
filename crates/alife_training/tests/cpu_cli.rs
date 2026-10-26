@@ -73,7 +73,11 @@ fn executable_continues_native_weights_and_ages_and_rejects_incomplete_source() 
         "actor-checkpoint.json",
         "value-checkpoint.json",
     ] {
-        let bytes = fs::read(first.join(name)).unwrap();
+        let bytes = if name == "collector-checkpoint.json" {
+            alife_training::cpu::read_cpu_private_checkpoint_bytes(&first, u64::MAX).unwrap()
+        } else {
+            fs::read(first.join(name)).unwrap()
+        };
         let document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         let pretty = serde_json::to_vec_pretty(&document).unwrap();
         assert!(bytes.len() < pretty.len(), "{name} retains formatting bulk");

@@ -395,7 +395,6 @@ fn care_continuation_preserves_full_native_state_and_seed_source_isolation() {
     }
     // Full private archive loss or a changed retained moment invalidates a seal.
     for name in [
-        "collector-checkpoint.json",
         "collection-actor-checkpoint.json",
         "source-native/actor-checkpoint.json",
     ] {
