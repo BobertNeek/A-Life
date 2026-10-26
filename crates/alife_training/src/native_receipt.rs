@@ -435,7 +435,7 @@ impl Lineage {
         self.frames.iter().map(|frame| match frame {
             Frame::Inline(value) => Ok(value.clone()),
             Frame::Archived(digest) => {
-                let bytes = self.imported_bytes(&self.source_directory, digest)?;
+                let bytes = self.imported_bytes(digest)?;
                 Ok(header(&parse(&bytes)?))
             }
             Frame::TerminalProof => self
@@ -453,16 +453,21 @@ impl Lineage {
         }
         Ok(found)
     }
-    fn imported_bytes(&self, source: &Path, digest: &str) -> io::Result<Vec<u8>> {
-        let bytes = if source == self.source_directory {
-            self.store.read(source, digest)?
-        } else {
-            packs::Store::open(source)?.read(source, digest)?
-        };
+    fn imported_bytes(&self, digest: &str) -> io::Result<Vec<u8>> {
+        let bytes = self.store.read(&self.source_directory, digest)?;
         if self.blobs.get(digest) != Some(&bytes.len()) {
             return Err(invalid("source lineage length changed"));
         }
         Ok(bytes)
+    }
+    fn verify_flat_blob(&self, destination: &Path, digest: &str) -> io::Result<()> {
+        // write_with_link owns a newly created flat directory. Detecting its
+        // format per blob would repeatedly enumerate the growing archive.
+        let bytes = load_flat_blob(destination, digest)?;
+        if self.blobs.get(digest) != Some(&bytes.len()) {
+            return Err(invalid("source lineage length changed"));
+        }
+        Ok(())
     }
     /// Retain reachable, verified raw blobs without rewriting immutable ancestry.
     /// Same-filesystem hard links keep each output independently addressable even
@@ -495,7 +500,7 @@ impl Lineage {
                     }
                     bytes.clone()
                 } else {
-                    self.imported_bytes(&self.source_directory, digest)?
+                    self.imported_bytes(digest)?
                 };
                 Ok((format!("{DIRECTORY}/{}", digest_name(digest)?), bytes))
             })
@@ -517,18 +522,18 @@ impl Lineage {
             let bytes = if let Some(bytes) = self.retained.get(digest) {
                 bytes.clone()
             } else {
-                let bytes = self.imported_bytes(&self.source_directory, digest)?;
+                let bytes = self.imported_bytes(digest)?;
                 let source = self.source_directory.join(DIRECTORY).join(name);
                 if link(&source, &target).is_ok() {
                     // Check the linked file too, rather than trusting a path that
                     // could have changed between validation and link creation.
-                    self.imported_bytes(destination, digest)?;
+                    self.verify_flat_blob(destination, digest)?;
                     continue;
                 }
                 bytes
             };
             fs::write(target, &bytes)?;
-            self.imported_bytes(destination, digest)?;
+            self.verify_flat_blob(destination, digest)?;
         }
         Ok(())
     }

@@ -254,7 +254,7 @@ fn receipt(lineage: &Lineage, digest: &str) -> io::Result<Vec<u8>> {
     let bytes = if let Some(bytes) = lineage.retained.get(digest) {
         bytes.clone()
     } else {
-        lineage.imported_bytes(&lineage.source_directory, digest)?
+        lineage.imported_bytes(digest)?
     };
     if lineage.blobs.get(digest) != Some(&bytes.len()) || sha256(&bytes) != digest {
         return Err(invalid("retained ancestry bytes changed"));
