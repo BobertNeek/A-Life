@@ -2008,10 +2008,7 @@ pub fn spawn_fvr03_production_voxel_scene(
             .after(bevy::app::AnimationSystems)
             .before(bevy::transform::TransformSystems::Propagate),
     );
-    app.add_systems(
-        bevy::prelude::PostUpdate,
-        graphics_capture::capture_player_view.after(bevy::transform::TransformSystems::Propagate),
-    );
+    graphics_capture::install(app);
     app.add_systems(
         Update,
         (
