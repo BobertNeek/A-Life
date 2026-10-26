@@ -220,7 +220,7 @@ fn metrics(
         "value_checkpoint_before_sha256":value_hash,"value_checkpoint_after_sha256":value_after_hash,
         "offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0,
         "offline_learning_disabled":true,"private_waking_learning":"ordinary","promotion":"none",
-        "trace":request.output.join("care-trace.json"),"private_checkpoint":request.output.join("collector-checkpoint.json")});
+        "trace":request.output.join("care-trace.json"),"private_checkpoint":cpu_private_checkpoint_path(&request.output)?});
     add_unknown_freshness_context(&mut result, request.known_exclusions);
     Ok(result)
 }
@@ -258,8 +258,9 @@ fn verify_recovery(
     let components = source.clone().admit()?;
     let founder =
         CpuFoundationTrainer::from_checkpoint(components.phenotype, components.foundation, actor)?;
-    let checkpoint: CpuCanonicalCheckpoint =
-        read_json(&request.output.join("collector-checkpoint.json"))?;
+    let checkpoint: CpuCanonicalCheckpoint = serde_json::from_slice(
+        &read_cpu_private_checkpoint_bytes(&request.output, 64 * 1024 * 1024)?,
+    )?;
     let host = CpuCanonicalHost::from_checkpoint(checkpoint, &founder)?;
     ensure_no_teacher(host.world())?;
     let prior: Value = read_json(&request.output.join("care-prior-lives.json"))?;
@@ -578,7 +579,7 @@ mod tests {
         )
         .unwrap();
         let checkpoint: CpuCanonicalCheckpoint =
-            read_json(&request.output.join("collector-checkpoint.json")).unwrap();
+            read_cpu_private_checkpoint(&request.output).unwrap();
         assert!(checkpoint.residents.iter().any(|resident| resident
             .neural
             .eligibility

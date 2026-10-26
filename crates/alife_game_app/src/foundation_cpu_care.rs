@@ -593,11 +593,16 @@ impl CpuEpisodeHooks for CareEpisode {
         }
         add_unknown_freshness_context(&mut metadata, self.request.known_exclusions);
         write("care-episode.json", &metadata)?;
+        let private_path = cpu_private_checkpoint_path(output)?;
+        let private_name = private_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or("invalid private checkpoint path")?;
         let mut artifacts = vec![
             "care-trace.json",
             "care-prior-lives.json",
             "care-episode.json",
-            "collector-checkpoint.json",
+            private_name,
             "collection-policy.alife-foundation",
             "collection-compiler-inputs.json",
             "collection-actor-checkpoint.json",
@@ -828,9 +833,7 @@ mod collect_only_tests {
             .chain(&actor.second_moment)
             .all(|m| *m == 0.));
         assert!(value.parameters.iter().all(|parameter| *parameter == 0.));
-        let checkpoint: CpuCanonicalCheckpoint =
-            serde_json::from_slice(&std::fs::read(root.join("collector-checkpoint.json")).unwrap())
-                .unwrap();
+        let checkpoint: CpuCanonicalCheckpoint = read_cpu_private_checkpoint(&root).unwrap();
         assert!(checkpoint.sampling_counter > 0);
         assert!(checkpoint.residents.iter().any(|resident| resident
             .neural
@@ -989,9 +992,7 @@ mod collect_only_tests {
         let shard = read_cpu_collector_output(&root).unwrap();
         assert_eq!(shard.trajectories.len(), 1);
         assert_eq!(shard.trajectories[0].decisions.len(), 4);
-        let after: CpuCanonicalCheckpoint =
-            serde_json::from_slice(&std::fs::read(root.join("collector-checkpoint.json")).unwrap())
-                .unwrap();
+        let after: CpuCanonicalCheckpoint = read_cpu_private_checkpoint(&root).unwrap();
         assert_eq!(
             serde_json::to_vec(&checkpoint).unwrap(),
             serde_json::to_vec(&after).unwrap()

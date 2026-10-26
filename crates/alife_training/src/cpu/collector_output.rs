@@ -19,12 +19,11 @@ const COMMIT_PENDING: &str = "collector-commit.pending";
 const MAX_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_SHARD_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ARTIFACTS: usize = 65_536;
-const REQUIRED: [&str; 5] = [
+const REQUIRED: [&str; 4] = [
     "collection-policy.alife-foundation",
     "collection-compiler-inputs.json",
     "collection-actor-checkpoint.json",
     "initial-value-checkpoint.json",
-    "collector-checkpoint.json",
 ];
 const TRAINED_SOURCE_MARKERS: [&str; 5] = [
     "cpu-cycle.json",
@@ -209,6 +208,21 @@ fn validate_inventory(artifacts: &BTreeMap<String, CpuCollectorArtifact>) -> Res
         })
     {
         return Err(invalid("collect-only output lacks required recovery artifacts").into());
+    }
+    let private = [
+        super::CPU_LEGACY_PRIVATE_CHECKPOINT_FILE,
+        super::CPU_PRIVATE_CHECKPOINT_FILE,
+    ]
+    .iter()
+    .filter_map(|name| artifacts.get(*name))
+    .collect::<Vec<_>>();
+    if private.len() != 1
+        || private[0].encoded_bytes == 0
+        || artifacts.contains_key(super::CPU_PRIVATE_CHECKPOINT_PENDING)
+    {
+        return Err(
+            invalid("collect-only output requires one private checkpoint representation").into(),
+        );
     }
     for key in artifacts.keys() {
         // Require one canonical relative spelling on both Windows and Unix.
@@ -435,7 +449,10 @@ mod tests {
         }
     }
     fn artifacts(root: &Path) {
-        for name in REQUIRED {
+        for name in REQUIRED
+            .into_iter()
+            .chain([super::super::CPU_LEGACY_PRIVATE_CHECKPOINT_FILE])
+        {
             fs::write(root.join(name), format!("synthetic recovery: {name}")).unwrap();
         }
         fs::create_dir(root.join("source-native")).unwrap();
@@ -637,6 +654,39 @@ mod tests {
         )
         .unwrap();
         assert!(read_cpu_collector_output(&root.0).is_err());
+    }
+
+    #[test]
+    fn compressed_private_role_is_pinned_and_pending_or_ambiguous_roles_reject() {
+        let root = Directory::new();
+        artifacts(&root.0);
+        fs::rename(
+            root.0
+                .join(super::super::CPU_LEGACY_PRIVATE_CHECKPOINT_FILE),
+            root.0.join(super::super::CPU_PRIVATE_CHECKPOINT_FILE),
+        )
+        .unwrap();
+        // Inventory transport fixture only; semantic private restoration is
+        // exercised by the complete native collect-only tests.
+        let committed = write_cpu_collector_output(&root.0, &shard()).unwrap();
+        assert!(committed
+            .artifacts
+            .contains_key(super::super::CPU_PRIVATE_CHECKPOINT_FILE));
+        read_cpu_collector_output(&root.0).unwrap();
+        let path = root.0.join(super::super::CPU_PRIVATE_CHECKPOINT_FILE);
+        fs::write(&path, b"changed encoded private state").unwrap();
+        assert!(read_cpu_collector_output(&root.0).is_err());
+        for name in [
+            super::super::CPU_PRIVATE_CHECKPOINT_PENDING,
+            super::super::CPU_PRIVATE_CHECKPOINT_FILE,
+        ] {
+            let unsealed = Directory::new();
+            artifacts(&unsealed.0);
+            fs::write(unsealed.0.join(name), b"preserve private work").unwrap();
+            let before = inventory(&unsealed.0, false).unwrap();
+            assert!(write_cpu_collector_output(&unsealed.0, &shard()).is_err());
+            assert_eq!(inventory(&unsealed.0, false).unwrap(), before);
+        }
     }
 
     #[test]

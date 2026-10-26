@@ -233,6 +233,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.18",
  "wgpu 29.0.3",
+ "zstd",
 ]
 
 [[package]]

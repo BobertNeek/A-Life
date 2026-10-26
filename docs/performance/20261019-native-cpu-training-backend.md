@@ -193,6 +193,105 @@ cargo test --locked -p alife_training --features cpu-backend --test cpu_cli --te
 python -B -m unittest discover -s scripts -p test_compare_cpu_care_rounds.py
 ```
 
+### Lossless private-checkpoint compression
+
+The subsequent CPU writer compresses profitable **new private-life checkpoints**,
+leaving compiler, actor/value, Adam, handoff, frozen-policy and ancestry contents
+unchanged. Existing outputs are not converted or removed. The original compact
+JSON bytes are compressed opaquely, preserving every value and the exact JSON
+SHA256. This changes the storage representation, not cognition or precision.
+
+A disposable N2048 probe at main `11c41cc5` created five biological fixture ticks
+with a frozen founder and no PPO/Adam training. A separate valid synthetic stress
+profile randomized nonzero actor/value moments and integer ages; it is not an
+acquired policy or a model of production entropy. Checksummed Zstd measurements
+used Python zstandard 0.25.0 / libzstd 1.5.7, 15 warmed single-thread samples per
+level. Every decode matched the original bytes. Level1 results were:
+
+| Artifact | Canonical JSON bytes | Zstd frame bytes | Frame inode allocation bytes | Compression / decompression median CPU ms |
+| --- | ---: | ---: | ---: | ---: |
+| Private checkpoint | 1,458,465 | 368,532 | 368,640 | 3.687 / 1.145 |
+| Compiler inputs | 362,880 | 132,256 | 135,168 | 1.185 / 0.318 |
+| Initial actor | 742,766 | 127,806 | 131,072 | 1.290 / 0.372 |
+| Initial handoff | 1,130,546 | 154,115 | 155,648 | 1.555 / 0.491 |
+| Nonzero-Adam actor stress | 1,306,206 | 504,069 | 507,904 | 4.194 / 1.164 |
+| Nonzero-Adam value stress | 67,553 | 27,561 | 28,672 | 0.209 / 0.064 |
+| Nonzero-Adam handoff stress | 1,736,860 | 559,463 | 561,152 | 4.886 / 1.415 |
+
+These frame-only sizes exclude the small implementation header. Level3 and
+level6 did not consistently improve size and took more CPU in this probe; level1
+is used for the private file. Other roles stay JSON because they have broader
+raw-byte consumer/binding contracts. Their measured compression potential is not
+implemented savings.
+
+The same eight-episode serial CLI fixture measured 164 files, **57,285,949 logical
+bytes and 57,475,072 inode-allocated bytes**, versus the earlier recorded packed-
+ancestry baseline's 164 files, 66,187,239 logical bytes and 66,375,680 allocated
+bytes. The observed allocated difference is 8,900,608 bytes (about13.4%). These
+are separate disposable reruns with timing/hash variation; they are not a
+production storage forecast. Episode1's private file held 1,451,631 exact JSON
+bytes in a 366,395-byte encoded file. The allocation metric still excludes
+directory/filesystem metadata and shared extents across distinct inodes.
+
+`PRIVATE_WRITE_COST` in the CLI fixture compares the same private state over
+seven warm local debug-build samples. Plain serialization/write/fsync measured
+36.04 ms median; the complete compressed path measured 62.12 ms, including
+serialization, SHA256, encoding, fsync, exact encoded-byte verification and
+exclusive publication. This is about26 ms extra for that checkpoint write.
+Codec-only CPU timings above omit those other costs. Neither measurement proves
+production end-to-end training throughput or long-life compression ratios.
+
+New profitable files are named `collector-checkpoint.json.zst`. The container
+starts with standard Zstd skippable-frame magic `0x184D2A50`, its little-endian
+u32 payload length, `ALIFE-CPU-PRIVATE1\n`, a little-endian u64 original JSON
+length, and its 32-byte SHA256, followed by exactly one checksummed Zstd frame.
+There is no dictionary, global store or dependency on an older checkpoint.
+Readers reject bad metadata, missing/truncated data, SHA/checksum mismatch,
+trailing frames and decompression claims beyond their limits. Compressed JSON is
+capped at1 GiB; larger lives retain legacy JSON, preserving prior raw-file
+behavior. Existing caller limits also apply to the decompressed bytes, including
+assessment's64 MiB bound; decoder window allocation is bounded by the declared
+JSON size. Small or incompressible snapshots retain JSON when compression would
+save less than4 KiB.
+
+`read_cpu_private_checkpoint` accepts the new representation and legacy
+`collector-checkpoint.json`; two published representations are an error. Care
+and collector seals pin the actual encoded filename/length/SHA, and collection
+sealing still compares the decoded canonical bytes with the live host checkpoint.
+**Old binaries cannot read the new compressed private files.** Use the updated
+reader for care validation/recovery. Standard Zstd decoding can produce the exact
+JSON for inspection in a fresh destination, but rewriting a sealed bundle's
+inventory does not preserve its existing attestation.
+
+A complete private host restore continues to require its frozen collection
+policy, compiler inputs, actor and value companions. Compression adds no new
+recovery dependency and does not turn a founder handoff into a private-life save.
+The copied-bundle test removes original synthetic episodes, restores the full
+private checkpoint exactly, and verifies complete compiler/actor/value/Adam
+continuation. Missing, truncated and corrupt private files reject restoration.
+
+Writes use an exclusive `collector-checkpoint.pending`, synchronize and compare
+its complete encoded bytes, then use the existing exclusive atomic publisher.
+No previous final/pending file is overwritten and no checkpoint from another
+episode is linked. Fully written unpublished pending data can be decoded through
+`read_cpu_private_checkpoint_file(path, limit)` for explicit recovery; it is never
+automatically selected or admitted as a collector commit. An incomplete pending
+file fails closed and remains preserved. Tests inject interruption before and
+after publication, copy pending recovery elsewhere, reject truncated pending
+state, and preserve previously published files. This does not reconstruct bytes
+that were never written during a first interrupted snapshot.
+
+```sh
+cargo test --locked -p alife_training --features cpu-backend --lib cpu::private_checkpoint:: -- --nocapture
+cargo test --locked -p alife_training --features cpu-backend --lib cpu::collector_output::
+cargo test --locked -p alife_training --features cpu-backend --test cpu_cli --test cpu_collect_only --test backend_handoff -- --nocapture
+```
+
+Retaining all learner states and history still grows disk usage. This change
+removes demonstrated representation redundancy in one recurring private file;
+it does not delete learning, bound retention, or compress the remaining founder
+and diagnostic artifacts.
+
 A serial `cycle.json` directory must first pass the existing native serial,
 terrain and critic-correction continuity verifier and export a hash-bound typed
 package. The export command reads the original directory without changing it:

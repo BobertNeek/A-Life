@@ -6,8 +6,9 @@ use crate::foundation_training_cycle::{
 };
 use alife_training::{
     cpu::{
-        admit_cpu_collector_shards, read_cpu_collector_output, CpuCanonicalCheckpoint,
-        CpuCanonicalHost, CpuCollectionSnapshotV1, CpuCollectorAssignmentV1, CpuContinuationConfig,
+        admit_cpu_collector_shards, cpu_private_checkpoint_path, read_cpu_collector_output,
+        read_cpu_private_checkpoint, CpuCanonicalCheckpoint, CpuCanonicalHost,
+        CpuCollectionSnapshotV1, CpuCollectorAssignmentV1, CpuContinuationConfig,
         CpuFoundationTrainer, CpuValueHead, CPU_COLLECTOR_COMMIT_FILE,
     },
     FoundationTrainerCheckpoint, FoundationTrainingBackendV1, PpoConfig, PpoValueHeadCheckpoint,
@@ -570,8 +571,7 @@ fn validate_collection_output(attempt: &Value, output: &Path) -> Result<Value> {
             "CPU collection snapshot differs from its frozen actor/value/compiler/config".into(),
         );
     }
-    let checkpoint: CpuCanonicalCheckpoint =
-        serde_json::from_slice(&fs::read(output.join("collector-checkpoint.json"))?)?;
+    let checkpoint: CpuCanonicalCheckpoint = read_cpu_private_checkpoint(output)?;
     if checkpoint.sampling_seed != assignment.sampling_seed
         || checkpoint.sampling_counter != assignment.sampling_counter_end
         || checkpoint.world.config.deterministic_seed != assignment.world_seed
@@ -814,11 +814,18 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
     {
         return Err("raw replay recording does not match its seal".into());
     }
+    let private_path = cpu_private_checkpoint_path(output)?;
+    let private_name = private_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or("invalid private checkpoint path")?;
+    if !artifacts.contains_key(private_name) {
+        return Err("private recovery artifact missing from care seal".into());
+    }
     for name in [
         "care-trace.json",
         "care-prior-lives.json",
         "care-episode.json",
-        "collector-checkpoint.json",
         "collection-policy.alife-foundation",
         "collection-compiler-inputs.json",
         "collection-actor-checkpoint.json",
@@ -866,7 +873,7 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
         asset,
         imported.clone(),
     )?;
-    let checkpoint = serde_json::from_slice(&fs::read(output.join("collector-checkpoint.json"))?)?;
+    let checkpoint = read_cpu_private_checkpoint(output)?;
     let _restored = alife_training::cpu::CpuCanonicalHost::from_checkpoint(checkpoint, &founder)?;
     let source = output.join("source-native");
     let source_pins = receipt["source_native_sha256"]

@@ -614,8 +614,13 @@ fn serial_real_care_round_preserves_frozen_collectors_and_reuses_their_completed
     let saved_collector_before = tree(&saved_collector);
     fs::create_dir(&held).unwrap();
     fs::copy(
-        saved_collector.join("collector-checkpoint.json"),
-        held.join("collector-checkpoint.json"),
+        alife_training::cpu::cpu_private_checkpoint_path(&saved_collector).unwrap(),
+        held.join(
+            alife_training::cpu::cpu_private_checkpoint_path(&saved_collector)
+                .unwrap()
+                .file_name()
+                .unwrap(),
+        ),
     )
     .unwrap();
     fs::write(
@@ -753,8 +758,13 @@ fn an_existing_unsealed_private_life_is_never_reset_or_redispatched() {
     fs::create_dir_all(&interrupted).unwrap();
     // Use actual native private checkpoint bytes, not an invented archive shape.
     fs::copy(
-        fixture.source.join("collector-checkpoint.json"),
-        interrupted.join("collector-checkpoint.json"),
+        alife_training::cpu::cpu_private_checkpoint_path(&fixture.source).unwrap(),
+        interrupted.join(
+            alife_training::cpu::cpu_private_checkpoint_path(&fixture.source)
+                .unwrap()
+                .file_name()
+                .unwrap(),
+        ),
     )
     .unwrap();
     fs::write(
