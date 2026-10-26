@@ -91,7 +91,7 @@ episode's frozen collection files. The previous typed handoff is also copied
 into `source-native`. Root checkpoint/handoff fields duplicate some data within
 individual JSON files; the whole-file hash inventory does not count that.
 
-In episode eight, `source-native` occupies 2,825,143 logical bytes, the full
+In episode eight, `source-native` occupies 2,825,145 logical bytes, the full
 private checkpoint 1,490,071, the new typed handoff 1,521,182, and the separate
 new actor checkpoint 1,058,781. The current readers bind these roles separately:
 collect-only publication and its pre-seal checks require frozen recovery files;
