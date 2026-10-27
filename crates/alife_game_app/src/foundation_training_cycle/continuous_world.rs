@@ -178,6 +178,8 @@ pub(super) fn run_same_individual_world(
     let mut collection_seconds = 0.0;
     let mut ppo_seconds_total = 0.0;
     let mut install_seconds_total = 0.0;
+    let mut replay_seal_seconds = 0.0;
+    let mut boundary_wait_seconds = 0.0;
     let mut no_progress_total = 0u64;
     let initial_capture_metrics = runtime.foundation_training_capture_metrics();
     let mut captured_total = 0u64;
@@ -188,6 +190,7 @@ pub(super) fn run_same_individual_world(
     // Observe only actual restored/current food entities. No food is spawned,
     // moved, replenished or assigned to the learner by this collector.
     let mut food = BTreeMap::new();
+    let restore_seconds = started.elapsed().as_secs_f64();
     on_update(
         serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"policy_version":policy,
@@ -397,11 +400,15 @@ pub(super) fn run_same_individual_world(
             alife_storage::remove_dir_all(&window_root)?;
             break;
         }
+        let sealing = Instant::now();
         let replay = cohort.seal()?;
         drop(writer);
+        replay_seal_seconds += sealing.elapsed().as_secs_f64();
         // This only drains persistence workers; it does not advance world,
         // cognition, physiology or the exploration stream.
+        let waiting = Instant::now();
         runtime.quiesce_live_foundation_checkpoint(request.finalization_deadline_unix_seconds)?;
+        boundary_wait_seconds += waiting.elapsed().as_secs_f64();
         if runtime.foundation_training_policy_install_blocked_by_sleep(id)? {
             // Retain the actual sleeping individual's exact state with its OLD
             // global heads/Adam. No wake, reset, clock advance or PPO/install is
@@ -694,6 +701,7 @@ pub(super) fn run_same_individual_world(
             "sampling_temperature":sampling.temperature,"generic_consumed_events":generic_total,"exact_nourished_meals":nourished_total,
             "semantic_prior":compact_prior(&runtime),"snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
             "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
+            "restore_seconds":restore_seconds,"replay_seal_seconds":replay_seal_seconds,"boundary_wait_seconds":boundary_wait_seconds,
             "causal_collection":causal_collection,
         }),
     )
