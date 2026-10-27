@@ -6,11 +6,14 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import current_checkpoint_store as cp
 import run_continuous_care as session
+
+GUARD_FACTORY = session.make_guard
 
 
 class Process:
@@ -59,7 +62,9 @@ class ContinuousCareTests(unittest.TestCase):
             checkpoint_tool=self.binary, binary_sha256=session.host.sha256(self.binary),
             checkpoint_tool_sha256=session.host.sha256(self.binary), seed=80, last_seed=87,
             decisions=512, food_need_condition='newborn_v1', hard_end=dt.datetime.now(session.host.UTC) + dt.timedelta(hours=1),
-            final_reserve_seconds=180, max_temporary_bytes=2 * 2**30, reconcile=False)
+            final_reserve_seconds=180, max_temporary_bytes=2 * 2**30, reconcile=False,
+            idle_seconds=300, min_disk_gib=20, min_memory_gib=8, gpu_index=0,
+            max_gpu_c=75, min_gpu_free_mib=2048)
 
     def native(self, binary, *argv):
         mode, *arguments = argv
@@ -130,6 +135,8 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertFalse((self.lane / session.STATE).exists())
         self.assertTrue((self.lane / session.RECEIPT).is_file())
         self.assertEqual(self.child.call_count, 1)
+        self.assertEqual(receipt['native_exit_code'], 0)
+        self.assertEqual(receipt['retained_trained_rows'], 512)
         self.assertIsNone(receipt['causal_speed'])  # Missing instrumentation is unknown.
         self.assertEqual(receipt['observed_rows'][0]['exact_trained_nourishing_events'], 2)
         self.assertEqual(receipt['observed_rows'][0]['generic_consumed_events'], 3)
@@ -143,6 +150,28 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertEqual(final['seeds']['pending_range'], [81, 87])
         self.assertIn('mid-world stop', receipt['native_exit_error'])
         self.assertEqual(receipt['observed_rows'], [])
+        self.assertEqual(receipt['retained_trained_rows'], 0)
+
+    def test_whole_host_wall_includes_admission_before_native_dispatch(self):
+        real_datetime = dt.datetime
+
+        class Clock(real_datetime):
+            offset = dt.timedelta()
+
+            @classmethod
+            def now(cls, tz=None):
+                return real_datetime.now(tz) + cls.offset
+
+        def native(binary, *argv):
+            if argv[0] == '--resident-contract':
+                Clock.offset = dt.timedelta(seconds=120)  # Synthetic admission cost.
+            return self.native(binary, *argv)
+
+        args = self.args()
+        with patch.object(session.dt, 'datetime', Clock), patch.object(session.current, 'tool', side_effect=native):
+            receipt = session.run(args)
+        self.assertGreaterEqual(receipt['host_wall_seconds'], 120)
+        self.assertIn('reconciliation downtime', receipt['host_wall_interval_scope'])
 
     def test_interrupted_publication_reconciles_without_second_world(self):
         publish = cp.Store.publish
@@ -203,6 +232,28 @@ class ContinuousCareTests(unittest.TestCase):
         del report['temporary_budget_enforced_during_writes']
         with self.assertRaisesRegex(ValueError, 'active-writer-budget'):
             session.capabilities(report, 512)
+
+    def test_actual_activity_thermal_and_memory_guards_fail_before_dispatch(self):
+        args = self.args()
+        resources = {'disk_free_bytes': 100 * 2**30, 'available_memory_bytes': 16 * 2**30, 'idle_seconds': 1000}
+        gpu = {'adapter': 'synthetic', 'temperature_c': 40, 'free_memory_mib': 4096, 'utilization_percent': 0}
+        self.mock(session.host, 'resource_snapshot', return_value=resources)
+        self.mock(session, 'gpu_snapshot', return_value=gpu)
+        # Only the module's platform branch is replaced, not global os/path behavior.
+        with patch.object(session, 'os', SimpleNamespace(name='nt')):
+            resources['idle_seconds'] = 0
+            with self.assertRaisesRegex(ValueError, 'interactive input resumed'):
+                GUARD_FACTORY(args, self.lane, self.store)()
+            resources['idle_seconds'] = 1000
+            gpu['temperature_c'] = 76
+            with self.assertRaisesRegex(ValueError, 'GPU thermal'):
+                GUARD_FACTORY(args, self.lane, self.store)()
+            gpu['temperature_c'] = 40
+            resources['available_memory_bytes'] = 1
+            with self.assertRaisesRegex(ValueError, 'disk/memory'):
+                GUARD_FACTORY(args, self.lane, self.store)()
+        self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+        self.assertEqual(self.child.call_count, 0)
 
     def test_plan_has_no_native_or_store_access(self):
         result = session.main(['--store', 'does-not-exist', '--lane', 'also-absent',

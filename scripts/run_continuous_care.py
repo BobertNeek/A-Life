@@ -182,15 +182,19 @@ def finish(lane, state, validate):
         retained_rows = rows[0]['trained_rows']
     receipt = {'kind': 'finite-continuous-care-v1', 'ended_utc': dt.datetime.now(host.UTC).isoformat(),
         'source': state['checkout'], 'executables': state['executables'],
+        'native_argv': state['native_argv'], 'prior_environment': state['prior_environment'],
+        'preflight': state['preflight'], 'guard_configuration': state['guard_configuration'],
         'baseline_sha256': state['baseline_sha256'], 'current_sha256': digest,
         'before': state['before'], 'after': {key: admitted.get(key) for key in state['before']},
         'request': state['request'], 'host_wall_seconds': elapsed,
+        'host_wall_interval_scope': 'host invocation through admitted publication and cleanup; includes crash/reconciliation downtime',
         'retained_trained_rows': retained_rows,
         'retained_decision_rows_per_wall_hour': retained_rows * 3600 / elapsed
             if retained_rows is not None and elapsed > 0 else None,
         'actor_optimizer_step_delta': admitted['actor_optimizer_step'] - state['before']['actor_optimizer_step'],
         'value_optimizer_step_delta': admitted['value_optimizer_step'] - state['before']['value_optimizer_step'],
         'native_exit_error': state.get('native_exit_error'), 'observed_rows': rows,
+        'native_exit_code': state.get('native_exit_code'),
         'recovery': recovery, 'cleanup': cleanup,
         'one_fresh_world': True, 'same_individual_across_sessions': False,
         'causal_speed': rows[0].get('causal_collection') if len(rows) == 1 else None,
@@ -208,6 +212,7 @@ def finish(lane, state, validate):
 
 
 def run(args):
+    invocation_started = dt.datetime.now(host.UTC).isoformat()
     store_root = args.store.resolve(strict=True)
     lane = args.lane.resolve(strict=True)
     require(cp.real_directory(store_root) and cp.real_directory(lane), 'real store/lane directories required')
@@ -224,7 +229,7 @@ def run(args):
         require({p.name for p in lane.iterdir()} <= allowed, 'unknown lane entries; no cleanup')
         if args.reconcile:
             state = cp.read_json(lane / STATE)
-            require(state.get('kind') == 'finite-continuous-owner-v1' and
+            require(state.get('schema') == 1 and state.get('kind') == 'finite-continuous-owner-v1' and
                     state['store'] == str(store_root) and state['binary'] == str(native) and
                     state['inspector'] == str(inspector), 'different resident owner')
             return finish(lane, state, validate)
@@ -253,7 +258,10 @@ def run(args):
             'request': request, 'checkout': checkout, 'prior_environment': current.prior_environment(),
             'executables': {str(native): args.binary_sha256, str(inspector): args.checkpoint_tool_sha256},
             'helpers': {name: host.sha256(Path(__file__).parent / name) for name in HELPERS},
-            'started_utc': dt.datetime.now(host.UTC).isoformat(), 'preflight': preflight,
+            'started_utc': invocation_started, 'preflight': preflight,
+            'native_argv': [str(native), '--resident-serial', str(store_root), str(lane / REQUEST)],
+            'guard_configuration': {key: getattr(args, key) for key in ('idle_seconds', 'min_disk_gib',
+                'min_memory_gib', 'gpu_index', 'max_gpu_c', 'min_gpu_free_mib', 'final_reserve_seconds')},
             'worker': {'pid': None, 'stopped': True}}
         cp.write_json(lane / STATE, state)
         cp.write_json(lane / REQUEST, request)
@@ -268,7 +276,7 @@ def run(args):
         state['worker'] = {'pid': None, 'stopped': False}
         cp.write_json(lane / STATE, state)  # Unknown launch outcomes fail closed.
         try:
-            host.run_child([str(native), '--resident-serial', str(store_root), str(lane / REQUEST)],
+            host.run_child(state['native_argv'],
                 lane / LOG, dt.datetime.fromtimestamp(request['collection_cutoff_unix_seconds'], host.UTC),
                 guard, host.prior_environment(), on_started=started)
         except Exception as error:
@@ -276,6 +284,7 @@ def run(args):
         finally:
             if active and active[0].poll() is not None:
                 state['worker']['stopped'] = True
+                state['native_exit_code'] = active[0].poll()
             # If Popen never called back, retain unknown launch outcome for manual reconciliation.
             cp.write_json(lane / STATE, state)
         return finish(lane, state, validate)
