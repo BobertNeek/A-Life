@@ -9,6 +9,7 @@ on:
       - 'crates/alife_game_app/src/foundation_training*/**'
       - '.github/workflows/resident-output-budget.yml'
       - 'Cargo.*'
+      - 'scripts/check_resident_recovery_native.py'
 jobs:
   quota-primitives:
     strategy:

@@ -25,7 +25,13 @@ def main():
         # runner.tool is the real strict stdout json.loads consumer. A second
         # diagnostic object on stdout must fail here, even after Native exit 0.
         result = runner.tool(native, '--recover-resident', store_root)
-        assert result == runner.tool(native, '--recover-resident', store_root)
+        repeated = runner.tool(native, '--recover-resident', store_root)
+        for response in (result, repeated):
+            budget = response['temporary_budget']
+            assert 0 <= budget['used'] <= budget['high_water'] <= budget['limit']
+            assert budget['used'] + budget['reserved'] <= budget['limit']
+        assert ({k: v for k, v in result.items() if k != 'temporary_budget'} ==
+                {k: v for k, v in repeated.items() if k != 'temporary_budget'})
         assert result['already_published_current'] is False
         candidate = Path(result['candidate'])
         report = validate(candidate)
