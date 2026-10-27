@@ -72,7 +72,8 @@ class ContinuousCareTests(unittest.TestCase):
         if mode == '--resident-contract':
             return {'schema': 1, 'kind': 'native-resident-serial-v1', 'finite_continuous_feeding': True,
                     'max_continuous_feeding_decisions': 36000, 'mid_world_offline_policy_install': False,
-                    'bound_run_cleanup': True, 'temporary_budget_enforced_during_writes': True}
+                    'bound_run_cleanup': True, 'temporary_budget_enforced_during_writes': True,
+                    'recoverable_predispatch_initialization': True}
         if mode == '--inspect-current':
             return cp.read_json(Path(arguments[0]))
         if mode == '--check-current-allocation':
@@ -236,6 +237,20 @@ class ContinuousCareTests(unittest.TestCase):
         del report['temporary_budget_enforced_during_writes']
         with self.assertRaisesRegex(ValueError, 'active-writer-budget'):
             session.capabilities(report, 512)
+
+    def test_old_initialization_contract_is_rejected_before_admission_or_dispatch(self):
+        def native(binary, *argv):
+            report = self.native(binary, *argv)
+            if argv[0] == '--resident-contract':
+                del report['recoverable_predispatch_initialization']
+            return report
+
+        with patch.object(session.current, 'tool', side_effect=native):
+            with self.assertRaisesRegex(ValueError, 'recoverable initialization'):
+                session.run(self.args())
+        self.assertEqual(self.calls, ['--resident-contract'])
+        self.assertEqual(self.child.call_count, 0)
+        self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
 
     def test_new_run_never_overwrites_unreconciled_staging_sidecars(self):
         for name in (session.STATE + '.tmp', session.REQUEST + '.tmp'):
@@ -440,6 +455,80 @@ class ContinuousCareTests(unittest.TestCase):
                     receipt = session.run(args)
                 self.assertEqual(receipt['retained_trained_rows'], 512)
                 self.assertFalse((self.store / marker_name).exists())
+
+    def test_pending_initialization_abort_routes_before_store_without_dispatch_or_publication(self):
+        for marker_name in (session.NATIVE_INITIALIZATION, session.NATIVE_INITIALIZATION_NEXT):
+            with self.subTest(marker=marker_name):
+                self.store = self.root / marker_name.replace('.', '-')
+                self.lane = self.root / (marker_name.replace('.', '-') + '-owner')
+                self.store.mkdir()
+                self.lane.mkdir()
+                cp.write_json(self.store / cp.CURRENT, self.initial)
+                before = cp.digest(self.store / cp.CURRENT)
+
+                def startup(argv, log, deadline, guard, environment, on_started):
+                    on_started(Process())
+                    (self.store / marker_name).write_bytes(b'synthetic bound pre-dispatch commitment')
+                    raise RuntimeError('interrupted Native initialization before run/world creation')
+
+                def native(binary, *argv):
+                    if argv[0] != '--finish-resident-run':
+                        return self.native(binary, *argv)
+                    self.calls.append(argv[0])
+                    # The old Python Store rejects this marker, and this proves
+                    # its lease is not held while Native performs its cleanup.
+                    with cp.writer_lock(self.store):
+                        self.assertFalse((self.store / cp.RUN).exists())
+                        (self.store / marker_name).unlink()
+                    return {'kind': 'resident-initialization-aborted-v1', 'already_published_current': True,
+                        'candidate': str(self.store / cp.CURRENT), 'candidate_sha256': before,
+                        'cleanup_completed': True, 'initialization_aborted': True,
+                        'initialization_binding_verified': marker_name == session.NATIVE_INITIALIZATION,
+                        'dispatched_worlds': 0, 'seeds_consumed': 0, 'new_request_allocation_committed': False,
+                        'temporary_budget': None, 'neural_execution': False}
+
+                self.child.side_effect = startup
+                with patch.object(session.current, 'tool', side_effect=native), \
+                        patch.object(cp.Store, 'publish', side_effect=AssertionError('zero-dispatch abort must not publish')) as publish:
+                    receipt = session.run(self.args())
+                    publish.assert_not_called()
+                self.assertEqual(cp.digest(self.store / cp.CURRENT), before)
+                self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+                self.assertTrue(receipt['recovery']['already_published_current'])
+                self.assertTrue(receipt['recovery']['initialization_aborted'])
+                self.assertTrue(receipt['cleanup']['cleanup_completed'])
+                self.assertEqual(receipt['retained_trained_rows'], 0)
+                self.assertFalse(receipt['one_fresh_world'])
+                self.assertNotIn('--recover-resident', self.calls)
+
+    def test_fresh_admission_refuses_either_initialization_marker_without_finishing_it(self):
+        for marker_name in (session.NATIVE_INITIALIZATION, session.NATIVE_INITIALIZATION_NEXT):
+            with self.subTest(marker=marker_name):
+                path = self.store / marker_name
+                path.write_bytes(b'belongs to existing startup owner')
+                with self.assertRaisesRegex(ValueError, 'reconcile existing native run/owner'):
+                    session.run(self.args())
+                self.assertEqual(path.read_bytes(), b'belongs to existing startup owner')
+                self.assertEqual(self.child.call_count, 0)
+                self.assertEqual(self.calls, [])
+                path.unlink()
+
+    def test_old_final_receipt_cannot_finish_either_fresh_initialization_marker(self):
+        receipt = session.run(self.args())
+        count = len(self.calls)
+        for marker_name in (session.NATIVE_INITIALIZATION, session.NATIVE_INITIALIZATION_NEXT):
+            with self.subTest(marker=marker_name):
+                path = self.store / marker_name
+                path.write_bytes(b'new startup is not owned by the completed receipt')
+                args = self.args()
+                args.reconcile = True
+                with self.assertRaisesRegex(ValueError, 'unexpected native run/retirement'):
+                    session.run(args)
+                self.assertEqual(path.read_bytes(), b'new startup is not owned by the completed receipt')
+                self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+                self.assertEqual(len(self.calls), count)
+                self.assertEqual(self.child.call_count, 1)
+                path.unlink()
 
 
 if __name__ == '__main__':
