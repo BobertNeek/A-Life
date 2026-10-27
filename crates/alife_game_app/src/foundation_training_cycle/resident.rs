@@ -15,6 +15,9 @@ const MAX_EPISODES: usize = 4096;
 const WAL_MAGIC: &[u8; 16] = b"ALIFE-RES-WAL-1\n";
 const MAN_MAGIC: &[u8; 16] = b"ALIFE-RES-MAN-1\n";
 const REC_MAGIC: &[u8; 16] = b"ALIFE-RES-REC-1\n";
+const RET_MAGIC: &[u8; 16] = b"ALIFE-RES-RET-1\n";
+const RETIREMENT: &str = "resident-retirement.bin";
+const RETIREMENT_NEXT: &str = "resident-retirement.next";
 
 // Actual typed recovery peak, NOT a bound on an episode's raw private assets.
 // One encoded candidate plus its admission materialization coexist. In a valid
@@ -265,7 +268,12 @@ fn store_lease(store: &Path) -> Result<fs::File> {
     }
     for entry in fs::read_dir(store)? {
         let name = entry?.file_name();
-        if name != "current.alife-checkpoint" && name != ".current.writer.lock" && name != ".run" {
+        if name != "current.alife-checkpoint"
+            && name != ".current.writer.lock"
+            && name != ".run"
+            && name != RETIREMENT
+            && name != RETIREMENT_NEXT
+        {
             return Err(
                 "resident store needs existing publication recovery or contains unknown entries"
                     .into(),
@@ -521,6 +529,9 @@ pub fn run_resident_serial_care(
     validate_request(&request, now_seconds()?)?;
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    if retirement_pending(&store)? {
+        return Err("finish pending resident retirement before another producer".into());
+    }
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let baseline_bytes = fs::read(&current)?;
@@ -697,6 +708,16 @@ pub fn run_resident_serial_care(
 pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    if retirement_pending(&store)? {
+        drop(_lease);
+        let finished = finish_resident_serial_run(&store)?;
+        let current = store.join("current.alife-checkpoint");
+        return Ok(
+            serde_json::json!({"kind":"resident-recovery-v1", "already_published_current":true,
+            "candidate":current,"candidate_sha256":finished["current_sha256"],
+            "cleanup_completed":true,"neural_execution":false}),
+        );
+    }
     let run = store.join(".run");
     directory(&run)?;
     let manifest: Manifest = read_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC)?;
@@ -716,7 +737,8 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
             .collection_cutoff_unix_seconds
             .saturating_sub(1),
     )?;
-    let budget = alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
+    let _budget =
+        alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
     let _validation = current::validation_scope(&run)?;
     // Producer is stopped and its lease is held. This is only the exact
     // unpublished derived staging path, never a committed snapshot/candidate.
@@ -798,11 +820,6 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
         REC_MAGIC,
         &serde_json::json!({"baseline_sha256":manifest.baseline_sha256,"request_sha256":manifest.request_sha256,"after_sha256":after}),
     )?;
-    let usage = budget.usage()?;
-    emit(
-        serde_json::json!({"kind":"resident-temporary-budget-v1", "logical_bytes":usage.used,
-        "high_water_bytes":usage.high_water,"limit_bytes":usage.limit}),
-    );
     Ok(
         serde_json::json!({"kind":"resident-recovery-v1","candidate":recovery_path,"candidate_sha256":after,
         "policy_version":checkpoint.handoff.policy_version,"actor_optimizer_step":checkpoint.handoff.actor.optimizer_step,
@@ -836,21 +853,244 @@ fn cleanup_entry_is_owned(name: &str, is_directory: bool, dispatched: usize) -> 
 
 /// Retires only this native run, after the external owner published its exact
 /// admitted recovery candidate. It never publishes or resumes a world itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RetiredEntry {
+    name: String,
+    directory: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    binding_sha256: Option<String>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Retirement {
+    schema: u16,
+    kind: String,
+    store: std::path::PathBuf,
+    current_sha256: String,
+    policy_version: u64,
+    baseline_sha256: String,
+    request_sha256: String,
+    dispatched: usize,
+    retained: usize,
+    max_temporary_bytes: u64,
+    entries: Vec<RetiredEntry>,
+}
+fn entry_present(path: &Path) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e.into()),
+    }
+}
+fn retirement_pending(store: &Path) -> Result<bool> {
+    Ok(entry_present(&store.join(RETIREMENT))? || entry_present(&store.join(RETIREMENT_NEXT))?)
+}
+fn validate_retirement(record: &Retirement, store: &Path, current_hash: &str) -> Result<()> {
+    let digest = |value: &str| value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit());
+    if record.schema != 1
+        || record.kind != "native-resident-retirement-v1"
+        || record.store != store
+        || record.current_sha256 != current_hash
+        || !digest(&record.current_sha256)
+        || !digest(&record.baseline_sha256)
+        || !digest(&record.request_sha256)
+        || record.dispatched > MAX_EPISODES
+        || record.retained > record.dispatched
+        || record.max_temporary_bytes < RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM
+    {
+        return Err("resident retirement no longer binds the admitted current/store".into());
+    }
+    let mut names = std::collections::BTreeSet::new();
+    for entry in &record.entries {
+        if !names.insert(entry.name.as_str())
+            || !(cleanup_entry_is_owned(&entry.name, entry.directory, record.dispatched)
+                || entry.name == "alife-current-private-validation-v1" && entry.directory)
+            || entry
+                .binding_sha256
+                .as_ref()
+                .is_some_and(|d| !digest(d) || entry.directory)
+        {
+            return Err("invalid resident retirement entry inventory".into());
+        }
+    }
+    if [
+        "run.json",
+        "seed-wal.bin",
+        "resident-frontier.bin",
+        "recovery-intent.bin",
+        "recovered-current.alife-checkpoint",
+    ]
+    .iter()
+    .any(|name| {
+        !record
+            .entries
+            .iter()
+            .any(|e| e.name == *name && !e.directory && e.binding_sha256.is_some())
+    }) {
+        return Err("resident retirement lacks admitted binding entries".into());
+    }
+    Ok(())
+}
+fn validate_retired_remainder(run: &Path, record: &Retirement) -> Result<()> {
+    directory(run)?;
+    for item in fs::read_dir(run)? {
+        let item = item?;
+        let metadata = fs::symlink_metadata(item.path())?;
+        let name = item
+            .file_name()
+            .into_string()
+            .map_err(|_| "non-UTF8 retired entry")?;
+        let entry = record
+            .entries
+            .iter()
+            .find(|e| e.name == name)
+            .ok_or("new unknown entry appeared during resident retirement")?;
+        if reparse(&metadata)
+            || metadata.is_dir() != entry.directory
+            || !(metadata.is_file() || metadata.is_dir())
+        {
+            return Err("retired entry changed type or became an alias".into());
+        }
+        if let Some(expected) = &entry.binding_sha256 {
+            let limit = if name == "recovered-current.alife-checkpoint" {
+                alife_training::MAX_CURRENT_CHECKPOINT_BYTES
+            } else {
+                (MAX_METADATA + 56) as u64
+            };
+            regular(&item.path(), limit)?;
+            if hash(&fs::read(item.path())?) != *expected {
+                return Err("retired binding entry changed after cleanup commitment".into());
+            }
+        }
+        if name == "alife-current-private-validation-v1" {
+            // Its only initially admitted child was the exact lease marker.
+            // Missing children are normal after an interrupted recursive delete.
+            for child in fs::read_dir(item.path())? {
+                let child = child?;
+                if child.file_name() != "lease" {
+                    return Err("unknown retired validation scratch entry".into());
+                }
+                regular(&child.path(), 128)?;
+                if fs::read(child.path())? != b"alife-current-private-validation-v1\n" {
+                    return Err("retired validation lease changed".into());
+                }
+            }
+        }
+    }
+    logical_bytes(run)?;
+    Ok(())
+}
 pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
+    finish_resident_with_remove(store, |run| alife_storage::remove_dir_all(run))
+}
+fn finish_resident_with_remove(
+    store: &Path,
+    remove: impl FnOnce(&Path) -> std::io::Result<()>,
+) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    let run = store.join(".run");
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let current_hash = hash(&fs::read(&current)?);
-    let run = store.join(".run");
-    if !run.exists() {
+    let marker = store.join(RETIREMENT);
+    let pending = store.join(RETIREMENT_NEXT);
+    let committed = entry_present(&marker)?;
+    let run_exists = match fs::symlink_metadata(&run) {
+        Ok(_) => true,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(e.into()),
+    };
+    if !committed && !run_exists {
+        if entry_present(&pending)? {
+            return Err("uncommitted resident retirement has no intact run".into());
+        }
         let checkpoint = read_current_training_checkpoint(&current)?;
         return Ok(
-            serde_json::json!({"kind":"resident-cleanup-v1","removed_run":false,
-            "already_clean":true,"current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
+            serde_json::json!({"kind":"resident-cleanup-v1","removed_run":false,"already_clean":true,
+            "current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
             "neural_execution":false,"canonical_current_modified":false}),
         );
     }
+    let (record, budget) = if committed {
+        let record: Retirement = read_metadata(&marker, RET_MAGIC)?;
+        validate_retirement(&record, &store, &current_hash)?;
+        // Exact bytes were fully Native-admitted before this durable commitment.
+        // Do not recreate private scratch inside a partially deleted run.
+        let budget = if run_exists {
+            directory(&run)?;
+            Some(alife_storage::OutputBudget::register(
+                &run,
+                record.max_temporary_bytes,
+            )?)
+        } else {
+            None
+        };
+        (record, budget)
+    } else {
+        let (record, budget) = prepare_retirement(&store, &current_hash)?;
+        validate_retirement(&record, &store, &current_hash)?;
+        (record, Some(budget))
+    };
+    let bytes = envelope(RET_MAGIC, &record)?;
+    let pending_bytes = if entry_present(&pending)? {
+        regular(&pending, (MAX_METADATA + 56) as u64)?;
+        let existing = fs::read(&pending)?;
+        if existing != bytes && !bytes.starts_with(&existing) {
+            return Err("complete/conflicting retirement staging; preserving evidence".into());
+        }
+        existing.len() as u64
+    } else {
+        0
+    };
+    let outside_bytes = if committed {
+        fs::metadata(&marker)?.len() + pending_bytes
+    } else {
+        bytes.len() as u64 + pending_bytes
+    };
+    // Small outside-tree authority must survive deletion. Charge its actual
+    // bounded staging bytes to the same allowance while this process owns it.
+    let _outside_capacity = budget
+        .as_ref()
+        .map(|b| b.reserve(outside_bytes))
+        .transpose()?;
+    if run_exists {
+        validate_retired_remainder(&run, &record)?;
+    }
+    if !committed {
+        write_metadata(&marker, RET_MAGIC, &record)?;
+    }
+    if entry_present(&pending)? {
+        regular(&pending, (MAX_METADATA + 56) as u64)?;
+        alife_storage::remove_file(&pending)?;
+    }
+    // This durable outside-tree record now remains even if deletion removes all
+    // original WAL/manifest/owner files before returning an error or dying.
+    if run_exists {
+        remove(&run)?;
+        sync_directory(&store)?;
+    }
+    if hash(&fs::read(&current)?) != record.current_sha256 {
+        return Err("canonical current changed during retirement; marker retained".into());
+    }
+    alife_storage::remove_file(&marker)?;
+    sync_directory(&store)?;
+    Ok(
+        serde_json::json!({"kind":"resident-cleanup-v1","removed_run":run_exists,"already_clean":!run_exists,
+        "retirement_completed":true,"current_sha256":current_hash,"policy_version":record.policy_version,
+        "dispatched_worlds":record.dispatched,"retained_episodes":record.retained,
+        "uncheckpointed_work_may_be_lost":record.dispatched>record.retained,
+        "neural_execution":false,"canonical_current_modified":false}),
+    )
+}
+
+fn prepare_retirement(
+    store: &Path,
+    current_hash: &str,
+) -> Result<(Retirement, alife_storage::OutputBudget)> {
+    let current = store.join("current.alife-checkpoint");
+    let run = store.join(".run");
     directory(&run)?;
     let manifest: Manifest = read_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC)?;
     validate_request(
@@ -860,8 +1100,7 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
             .collection_cutoff_unix_seconds
             .saturating_sub(1),
     )?;
-    let _budget =
-        alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
+    let budget = alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
     let _validation = current::validation_scope(&run)?;
     let checkpoint = read_current_training_checkpoint(&current)?;
     let wal: SeedWal = read_metadata(&run.join("seed-wal.bin"), WAL_MAGIC)?;
@@ -891,38 +1130,57 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
             "resident cleanup is not bound to the published full current/seed cursor".into(),
         );
     }
+    let mut entries = Vec::new();
     for entry in fs::read_dir(&run)? {
         let entry = entry?;
         let metadata = fs::symlink_metadata(entry.path())?;
-        let name = entry.file_name();
+        let name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| "non-UTF8 resident cleanup entry")?;
         if name == "alife-current-private-validation-v1" {
             validate_completed_validation_workspace(&entry.path())?;
-            continue;
-        }
-        if reparse(&metadata)
-            || !cleanup_entry_is_owned(
-                name.to_str().ok_or("non-UTF8 resident cleanup entry")?,
-                metadata.is_dir(),
-                wal.dispatched,
-            )
+        } else if reparse(&metadata)
+            || !cleanup_entry_is_owned(&name, metadata.is_dir(), wal.dispatched)
         {
             return Err("unknown resident cleanup entry; preserving the run".into());
         }
+        let binding_sha256 = if name == "recovered-current.alife-checkpoint" {
+            Some(current_hash.to_string())
+        } else if matches!(
+            name.as_str(),
+            "run.json" | "seed-wal.bin" | "resident-frontier.bin" | "recovery-intent.bin"
+        ) {
+            Some(hash(&fs::read(entry.path())?))
+        } else {
+            None
+        };
+        entries.push(RetiredEntry {
+            name,
+            directory: metadata.is_dir(),
+            binding_sha256,
+        });
     }
-    logical_bytes(&run)?; // Reject aliases/special entries anywhere in owned episodes.
-    let retained = manifest
-        .snapshot
-        .as_ref()
-        .map_or(0, |s| s.completed_episodes);
-    alife_storage::remove_dir_all(&run)?;
-    sync_directory(&store)?;
-    Ok(
-        serde_json::json!({"kind":"resident-cleanup-v1","removed_run":true,"already_clean":false,
-        "current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
-        "dispatched_worlds":wal.dispatched,"retained_episodes":retained,
-        "uncheckpointed_work_may_be_lost":wal.dispatched>retained,
-        "neural_execution":false,"canonical_current_modified":false}),
-    )
+    entries.sort_by(|a, b| a.name.cmp(&b.name));
+    logical_bytes(&run)?;
+    let retirement = Retirement {
+        schema: 1,
+        kind: "native-resident-retirement-v1".into(),
+        store: store.to_path_buf(),
+        current_sha256: current_hash.to_string(),
+        policy_version: checkpoint.handoff.policy_version,
+        baseline_sha256: manifest.baseline_sha256,
+        request_sha256: manifest.request_sha256,
+        dispatched: wal.dispatched,
+        retained: manifest
+            .snapshot
+            .as_ref()
+            .map_or(0, |s| s.completed_episodes),
+        max_temporary_bytes: manifest.request.max_temporary_bytes,
+        entries,
+    };
+    envelope(RET_MAGIC, &retirement)?;
+    Ok((retirement, budget))
 }
 
 fn validate_completed_validation_workspace(path: &Path) -> Result<()> {
@@ -941,6 +1199,8 @@ fn validate_completed_validation_workspace(path: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod quota_tests;
+#[cfg(test)]
+mod retirement_tests;
 
 #[cfg(test)]
 pub(super) fn stage_resident_loss_fixture(
