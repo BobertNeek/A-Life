@@ -3,7 +3,6 @@
 use std::{
     collections::BTreeMap,
     fs::{self, OpenOptions},
-    io::Write,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -725,6 +724,7 @@ pub enum GpuSaveManifestCasOutcome {
 pub struct GpuDurableSaveManifest {
     save_path: PathBuf,
     asset_root: PathBuf,
+    _output_budget: Option<alife_storage::OutputBudget>,
 }
 
 impl GpuDurableSaveManifest {
@@ -756,6 +756,7 @@ impl GpuDurableSaveManifest {
         let asset_root = fs::canonicalize(asset_root)?;
         let canonical_save = fs::canonicalize(&save_path)?;
         let durable = Self {
+            _output_budget: alife_storage::budget_for(&canonical_save)?,
             save_path: canonical_save,
             asset_root,
         };
@@ -1326,7 +1327,7 @@ impl GpuDurableSaveManifest {
                 }
             }
             None => {
-                match fs::remove_file(&self.save_path) {
+                match alife_storage::remove_file(&self.save_path) {
                     Ok(()) => {}
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                     Err(error) => return Err(error.into()),
@@ -1393,6 +1394,7 @@ impl GpuDurableSaveManifest {
         let replacement_bytes = serde_json::to_vec_pretty(replacement)?;
         let replacement_content_digest = GpuSaveManifestDigest::for_bytes(&replacement_bytes);
         let durable = Self {
+            _output_budget: alife_storage::budget_for(&save_path)?,
             save_path: save_path.clone(),
             asset_root: asset_root.clone(),
         };
@@ -1418,6 +1420,7 @@ impl GpuDurableSaveManifest {
         drop(_guard);
 
         let durable = Self {
+            _output_budget: alife_storage::budget_for(&save_path)?,
             save_path: fs::canonicalize(&save_path)?,
             asset_root,
         };
@@ -1584,7 +1587,7 @@ fn write_immutable_authority_artifact(path: &Path, bytes: &[u8]) -> Result<(), G
     match OpenOptions::new().create_new(true).write(true).open(path) {
         Ok(mut file) => {
             if let Err(error) = (|| -> std::io::Result<()> {
-                file.write_all(bytes)?;
+                alife_storage::write_all(path, &mut file, bytes)?;
                 file.sync_all()?;
                 drop(file);
                 sync_parent_directory(path.parent().ok_or_else(|| {
@@ -1594,7 +1597,7 @@ fn write_immutable_authority_artifact(path: &Path, bytes: &[u8]) -> Result<(), G
                     )
                 })?)
             })() {
-                let _ = fs::remove_file(path);
+                let _ = alife_storage::remove_file(path);
                 return Err(error.into());
             }
         }
@@ -1618,7 +1621,7 @@ fn write_immutable_authority_artifact(path: &Path, bytes: &[u8]) -> Result<(), G
 fn write_atomic_manifest(save_path: &Path, bytes: &[u8]) -> Result<(), GameAppShellError> {
     let temporary = prepare_atomic_manifest(save_path, bytes)?;
     if let Err(error) = commit_prepared_manifest(&temporary, save_path) {
-        let _ = fs::remove_file(&temporary);
+        let _ = alife_storage::remove_file(&temporary);
         return Err(error.into());
     }
     if fs::read(save_path)? != bytes {
@@ -1652,12 +1655,12 @@ fn prepare_atomic_manifest(save_path: &Path, bytes: &[u8]) -> Result<PathBuf, Ga
         .write(true)
         .open(&temporary)?;
     if let Err(error) = (|| -> std::io::Result<()> {
-        file.write_all(bytes)?;
+        alife_storage::write_all(&temporary, &mut file, bytes)?;
         file.sync_all()?;
         drop(file);
         Ok(())
     })() {
-        let _ = fs::remove_file(&temporary);
+        let _ = alife_storage::remove_file(&temporary);
         return Err(error.into());
     }
     Ok(temporary)
@@ -1678,35 +1681,37 @@ fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
         MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
     };
 
-    let source = source
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    let destination = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect::<Vec<_>>();
-    // SAFETY: both pointers reference live, NUL-terminated UTF-16 buffers for
-    // the duration of the call, and both paths are on the same directory tree.
-    let moved = unsafe {
-        MoveFileExW(
-            source.as_ptr(),
-            destination.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-    if moved == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    alife_storage::replace_with(source, destination, || {
+        let source = source
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        let destination = destination
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect::<Vec<_>>();
+        // SAFETY: both pointers reference live, NUL-terminated UTF-16 buffers for
+        // the duration of the call, and both paths are on the same directory tree.
+        let moved = unsafe {
+            MoveFileExW(
+                source.as_ptr(),
+                destination.as_ptr(),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        };
+        if moved == 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    })
 }
 
 #[cfg(not(windows))]
 fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    fs::rename(source, destination)
+    alife_storage::rename(source, destination)
 }
 
 #[cfg(unix)]
@@ -1744,6 +1749,50 @@ mod tests {
             Vec::new(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn output_budget_authority_staging_cannot_damage_existing_save() {
+        let root = std::env::temp_dir().join(format!(
+            "budget-authority-{}-{}",
+            std::process::id(),
+            SAVE_CAS_NONCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let assets = root.join("assets");
+        fs::create_dir(&assets).unwrap();
+        let save = current_authority_save("budget-existing");
+        let path = root.join("world.json");
+        GpuDurableSaveManifest::publish_snapshot(&path, &assets, &save).unwrap();
+        let original = fs::read(&path).unwrap();
+        let files = fn_bytes(&root);
+        let budget = alife_storage::OutputBudget::register(&root, files + 8).unwrap();
+        let changed = current_authority_save("budget-distinct-new-save");
+        assert!(GpuDurableSaveManifest::publish_snapshot(&path, &assets, &changed).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(
+            GpuDurableSaveManifest::open_loaded(&path, &assets)
+                .unwrap()
+                .1
+                .save,
+            save
+        );
+        assert!(budget.usage().unwrap().high_water <= files + 8);
+        alife_storage::remove_dir_all(&root).unwrap();
+
+        fn fn_bytes(path: &Path) -> u64 {
+            fs::read_dir(path)
+                .unwrap()
+                .map(|e| {
+                    let path = e.unwrap().path();
+                    if path.is_dir() {
+                        fn_bytes(&path)
+                    } else {
+                        fs::metadata(path).unwrap().len()
+                    }
+                })
+                .sum()
+        }
     }
 
     fn forced_recovery_state(phase: SleepPhase, tick: u64) -> SleepState {
@@ -2181,7 +2230,7 @@ mod tests {
             std::process::id()
         ));
         if root.exists() {
-            fs::remove_dir_all(&root).unwrap();
+            alife_storage::remove_dir_all(&root).unwrap();
         }
         fs::create_dir_all(&root).unwrap();
         let save_path = root.join("current.json");
@@ -2229,6 +2278,6 @@ mod tests {
             .entries
             .is_empty());
 
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 }

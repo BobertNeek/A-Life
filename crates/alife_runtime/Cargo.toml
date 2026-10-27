@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+alife_storage.workspace = true
 alife_core.workspace = true
 alife_gpu_backend = { path = "../alife_gpu_backend" }
 alife_world = { path = "../alife_world" }

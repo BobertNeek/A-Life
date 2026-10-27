@@ -79,7 +79,7 @@ pub(super) fn write_if_enabled(
     // A prepared sidecar alone is never proof of committed optimizer updates.
     let bytes = serde_json::to_vec_pretty(&diagnostic)?;
     let digest = format!("{:x}", Sha256::digest(&bytes));
-    std::fs::write(output.join("ppo-rollout-diagnostics.json"), bytes)?;
+    alife_storage::write(output.join("ppo-rollout-diagnostics.json"), bytes)?;
     Ok(Some(digest))
 }
 

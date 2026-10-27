@@ -248,7 +248,8 @@ fn resident_full_head_json_and_current_roundtrip_preserve_f32_bits() {
     );
 }
 
-fn private_fixture(source: &Path) {
+pub(crate) fn private_fixture(source: &Path) {
+
     let actor_path = source.join("actor-checkpoint.json");
     let mut actor: alife_training::FoundationTrainerCheckpoint =
         serde_json::from_slice(&std::fs::read(&actor_path).unwrap()).unwrap();

@@ -16,6 +16,20 @@ const WAL_MAGIC: &[u8; 16] = b"ALIFE-RES-WAL-1\n";
 const MAN_MAGIC: &[u8; 16] = b"ALIFE-RES-MAN-1\n";
 const REC_MAGIC: &[u8; 16] = b"ALIFE-RES-REC-1\n";
 
+// Actual typed recovery peak, NOT a bound on an episode's raw private assets.
+// One encoded candidate plus its admission materialization coexist. In a valid
+// Current, decoded asset bytes + world/journal UTF-8 are no larger than their
+// JSON/base64 representations within the 256-MiB encoded envelope. Native
+// materialization only loads this closure; it does not generate new authority
+// generations. Committed snapshots/baseline and all active output remain
+// separately charged. Three bounded metadata stages and the 128-byte validation
+// lease cover recovery-intent/WAL/frontier staging; no disk bytes are guessed.
+const RECOVERY_HEADROOM: u64 =
+    2 * alife_training::MAX_CURRENT_CHECKPOINT_BYTES + 3 * (MAX_METADATA as u64 + 56) + 128;
+// Three actual bounded startup records (run JSON, WAL, frontier) and the
+// validation lease must fit in addition to, rather than spend, recovery space.
+const STARTUP_METADATA_HEADROOM: u64 = 3 * (MAX_METADATA as u64 + 56) + 128;
+
 pub(super) struct ResidentLearner {
     pub trainer: FoundationTrainer,
     pub value: PpoTrainingState,
@@ -135,22 +149,25 @@ fn replace(from: &Path, to: &Path) -> Result<()> {
             .encode_wide()
             .chain(Some(0))
             .collect::<Vec<_>>();
-        // Same owned directory; files were flushed first. This is filesystem
-        // publication only, never desktop input or application control.
-        if unsafe {
-            MoveFileExW(
-                a.as_ptr(),
-                b.as_ptr(),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-            )
-        } == 0
-        {
-            return Err(std::io::Error::last_os_error().into());
-        }
+        alife_storage::replace_with(from, to, || {
+            // Same owned directory; files were flushed first. This is filesystem
+            // publication only, never desktop input or application control.
+            if unsafe {
+                MoveFileExW(
+                    a.as_ptr(),
+                    b.as_ptr(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+                )
+            } == 0
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        })?;
     }
     #[cfg(not(windows))]
     {
-        fs::rename(from, to)?;
+        alife_storage::rename(from, to)?;
     }
     sync_directory(to.parent().ok_or("resident publication lacks parent")?)
 }
@@ -159,7 +176,7 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
         .write(true)
         .create_new(true)
         .open(path)?;
-    file.write_all(bytes)?;
+    alife_storage::write_all(path, &mut file, bytes)?;
     file.sync_all()?;
     sync_directory(path.parent().ok_or("resident output lacks parent")?)
 }
@@ -182,7 +199,7 @@ fn write_metadata<T: Serialize>(path: &Path, magic: &[u8; 16], value: &T) -> Res
     // the writer lease; committed source/WAL/frontier files stay authoritative.
     if pending.exists() {
         regular(&pending, (MAX_METADATA + 56) as u64)?;
-        fs::remove_file(&pending)?;
+        alife_storage::remove_file(&pending)?;
     }
     write_new(&pending, &bytes)?;
     replace(&pending, path)
@@ -199,15 +216,19 @@ fn publish_recovery_candidate(path: &Path, bytes: &[u8]) -> Result<()> {
         // is recoverable. A complete different candidate or a committed intent
         // is evidence that must not be overwritten under a repair assumption.
         if root.join("recovery-intent.bin").exists()
-            || read_current_training_checkpoint(path).is_ok()
+            || alife_training::CurrentTrainingCheckpointV1::read(path).is_ok()
         {
             return Err("resident recovery output collision".into());
         }
+        // Only an incomplete/unencoded pre-intent candidate may retire here.
+        // Never classify a valid checkpoint as incomplete because full scratch
+        // admission happened to run out of output capacity.
+        alife_storage::remove_file(path)?;
     }
     let pending = root.join("recovered-current.pending");
     if pending.exists() {
         regular(&pending, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-        fs::remove_file(&pending)?;
+        alife_storage::remove_file(&pending)?;
     }
     write_new(&pending, bytes)?;
     read_current_training_checkpoint(&pending)?;
@@ -265,7 +286,7 @@ fn validate_request(request: &ResidentSerialRequest, now: u64) -> Result<()> {
         || request.checkpoint_every_episodes > MAX_EPISODES
         || request.collection_cutoff_unix_seconds <= now
         || request.collection_cutoff_unix_seconds > now.saturating_add(86400)
-        || request.max_temporary_bytes < alife_training::MAX_CURRENT_CHECKPOINT_BYTES
+        || request.max_temporary_bytes < RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM
     {
         return Err("invalid resident request/cadence/seed range/cutoff/budget".into());
     }
@@ -342,7 +363,7 @@ fn remove_episode(run: &Path, episode: &Path) -> Result<()> {
         return Err("resident cleanup target is not its owned episode".into());
     }
     logical_bytes(episode)?;
-    fs::remove_dir_all(episode)?;
+    alife_storage::remove_dir_all(episode)?;
     sync_directory(run)
 }
 fn emit(value: serde_json::Value) {
@@ -423,11 +444,11 @@ fn snapshot_episode(
 ) -> Result<Snapshot> {
     // This requires the unchanged PRE-PPO final-private-capture branch to have
     // run. No late capture of potentially altered live buffers is substituted.
-    fs::write(
+    alife_storage::write(
         episode.join("actor-checkpoint.json"),
         serde_json::to_vec(&completed.learner.trainer.checkpoint()?)?,
     )?;
-    fs::write(
+    alife_storage::write(
         episode.join("value-checkpoint.json"),
         serde_json::to_vec(
             &completed
@@ -436,7 +457,7 @@ fn snapshot_episode(
                 .checkpoint(completed.learner.trainer.session())?,
         )?,
     )?;
-    fs::write(
+    alife_storage::write(
         episode.join("cycle.json"),
         serde_json::to_vec_pretty(&completed.receipt)?,
     )?;
@@ -481,7 +502,7 @@ fn snapshot_episode(
         if hash(&fs::read(run.join(&old.file))?) != old.sha256 {
             return Err("resident prior snapshot changed; refusing retirement".into());
         }
-        fs::remove_file(run.join(old.file))?;
+        alife_storage::remove_file(run.join(old.file))?;
         sync_directory(run)?;
     }
     emit(
@@ -504,6 +525,10 @@ pub fn run_resident_serial_care(
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let baseline_bytes = fs::read(&current)?;
     let baseline_hash = hash(&baseline_bytes);
+    let run = store.join(".run");
+    fs::create_dir(&run)?;
+    let budget = alife_storage::OutputBudget::register(&run, request.max_temporary_bytes)?;
+    let _validation = current::validation_scope(&run)?;
     let baseline = read_current_training_checkpoint(&current)?;
     let baseline_policy = baseline.handoff.policy_version;
     let initial_seeds = seeds_after(&baseline.seeds, &request, 0)?;
@@ -516,8 +541,9 @@ pub fn run_resident_serial_care(
         seeds: initial_seeds,
     };
     envelope(WAL_MAGIC, &wal)?;
-    let run = store.join(".run");
-    fs::create_dir(&run)?;
+    // Refuse inadequate recovery capacity before writing the seed WAL or
+    // dispatching any world. Ordinary writers cannot spend this reservation.
+    let _recovery_capacity = budget.reserve(RECOVERY_HEADROOM)?;
     // The WAL's directory entry must itself survive before dispatch. Flushing
     // children and .run alone does not persist .run in its Unix parent.
     sync_directory(&store)?;
@@ -690,6 +716,15 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
             .collection_cutoff_unix_seconds
             .saturating_sub(1),
     )?;
+    let budget = alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
+    let _validation = current::validation_scope(&run)?;
+    // Producer is stopped and its lease is held. This is only the exact
+    // unpublished derived staging path, never a committed snapshot/candidate.
+    let pending = run.join("recovered-current.pending");
+    if pending.exists() {
+        regular(&pending, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
+        alife_storage::remove_file(&pending)?;
+    }
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let current_hash = hash(&fs::read(&current)?);
@@ -763,6 +798,11 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
         REC_MAGIC,
         &serde_json::json!({"baseline_sha256":manifest.baseline_sha256,"request_sha256":manifest.request_sha256,"after_sha256":after}),
     )?;
+    let usage = budget.usage()?;
+    emit(
+        serde_json::json!({"kind":"resident-temporary-budget-v1", "logical_bytes":usage.used,
+        "high_water_bytes":usage.high_water,"limit_bytes":usage.limit}),
+    );
     Ok(
         serde_json::json!({"kind":"resident-recovery-v1","candidate":recovery_path,"candidate_sha256":after,
         "policy_version":checkpoint.handoff.policy_version,"actor_optimizer_step":checkpoint.handoff.actor.optimizer_step,
@@ -800,10 +840,11 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
     let current = store.join("current.alife-checkpoint");
-    let checkpoint = read_current_training_checkpoint(&current)?;
+    regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let current_hash = hash(&fs::read(&current)?);
     let run = store.join(".run");
     if !run.exists() {
+        let checkpoint = read_current_training_checkpoint(&current)?;
         return Ok(
             serde_json::json!({"kind":"resident-cleanup-v1","removed_run":false,
             "already_clean":true,"current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
@@ -812,6 +853,17 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
     }
     directory(&run)?;
     let manifest: Manifest = read_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC)?;
+    validate_request(
+        &manifest.request,
+        manifest
+            .request
+            .collection_cutoff_unix_seconds
+            .saturating_sub(1),
+    )?;
+    let _budget =
+        alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
+    let _validation = current::validation_scope(&run)?;
+    let checkpoint = read_current_training_checkpoint(&current)?;
     let wal: SeedWal = read_metadata(&run.join("seed-wal.bin"), WAL_MAGIC)?;
     let intent: serde_json::Value = read_metadata(&run.join("recovery-intent.bin"), REC_MAGIC)?;
     regular(&run.join("run.json"), MAX_METADATA as u64)?;
@@ -843,6 +895,10 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
         let entry = entry?;
         let metadata = fs::symlink_metadata(entry.path())?;
         let name = entry.file_name();
+        if name == "alife-current-private-validation-v1" {
+            validate_completed_validation_workspace(&entry.path())?;
+            continue;
+        }
         if reparse(&metadata)
             || !cleanup_entry_is_owned(
                 name.to_str().ok_or("non-UTF8 resident cleanup entry")?,
@@ -858,7 +914,7 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
         .snapshot
         .as_ref()
         .map_or(0, |s| s.completed_episodes);
-    fs::remove_dir_all(&run)?;
+    alife_storage::remove_dir_all(&run)?;
     sync_directory(&store)?;
     Ok(
         serde_json::json!({"kind":"resident-cleanup-v1","removed_run":true,"already_clean":false,
@@ -868,6 +924,23 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
         "neural_execution":false,"canonical_current_modified":false}),
     )
 }
+
+fn validate_completed_validation_workspace(path: &Path) -> Result<()> {
+    directory(path)?;
+    let entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
+    if entries.len() != 1 || entries[0].file_name() != "lease" {
+        return Err("unknown or active private admission workspace; preserving run".into());
+    }
+    let lease = path.join("lease");
+    regular(&lease, 128)?;
+    if fs::read(lease)? != b"alife-current-private-validation-v1\n" {
+        return Err("private admission workspace lease marker differs".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod quota_tests;
 
 #[cfg(test)]
 pub(super) fn stage_resident_loss_fixture(
@@ -1078,13 +1151,13 @@ mod tests {
         );
         assert!(read_metadata::<serde_json::Value>(&path, MAN_MAGIC).is_err());
         let bytes = fs::read(&path).unwrap();
-        fs::write(&path, &bytes[..bytes.len() - 1]).unwrap();
+        alife_storage::write(&path, &bytes[..bytes.len() - 1]).unwrap();
         assert!(read_metadata::<serde_json::Value>(&path, WAL_MAGIC).is_err());
         let mut corrupt = bytes;
         *corrupt.last_mut().unwrap() ^= 1;
-        fs::write(&path, corrupt).unwrap();
+        alife_storage::write(&path, corrupt).unwrap();
         assert!(read_metadata::<serde_json::Value>(&path, WAL_MAGIC).is_err());
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
     #[test]
     fn resident_writer_lease_excludes_concurrent_producer_and_recovery() {
@@ -1101,8 +1174,8 @@ mod tests {
         assert!(store_lease(&root).is_err());
         drop(lease);
         drop(store_lease(&root).unwrap());
-        fs::write(root.join("unknown-writer-intent"), b"pending").unwrap();
+        alife_storage::write(root.join("unknown-writer-intent"), b"pending").unwrap();
         assert!(store_lease(&root).is_err());
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 }

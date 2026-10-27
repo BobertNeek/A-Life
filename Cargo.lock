@@ -107,6 +107,7 @@ dependencies = [
 name = "alife_archive"
 version = "0.1.0"
 dependencies = [
+ "alife_storage",
  "alife_core",
  "alife_world",
  "blake3",
@@ -135,6 +136,7 @@ dependencies = [
 name = "alife_game_app"
 version = "0.1.0"
 dependencies = [
+ "alife_storage",
  "accesskit",
  "alife_archive",
  "alife_core",
@@ -175,6 +177,7 @@ dependencies = [
 name = "alife_runtime"
 version = "0.1.0"
 dependencies = [
+ "alife_storage",
  "alife_core",
  "alife_gpu_backend",
  "alife_world",
@@ -200,6 +203,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "alife_storage"
+version = "0.1.0"
 
 [[package]]
 name = "alife_tools"
@@ -241,6 +248,7 @@ dependencies = [
 name = "alife_world"
 version = "0.1.0"
 dependencies = [
+ "alife_storage",
  "alife_core",
  "serde",
  "serde_json",

@@ -52,6 +52,29 @@ temporary snapshots and the active episode are retained within the declared byte
 budget. No late private capture after PPO is substituted. No complete private
 packet is required for intermediate non-saving episodes.
 
+`max_temporary_bytes` is an aggregate **logical file-byte** allowance for
+`STORE/.run`, including simultaneous staging names/hard links, raw private
+assets, authority generations, replay, active diagnostics, committed temporary
+snapshots, recovery candidates and native admission scratch. Pre-write accounting
+is shared across cloned worker stores. An oversized write fails before its
+growth reaches disk; partially written bytes stay charged until removed. The
+ordinary paths have no active quota unless explicitly registered. A budgeted
+lineage library rebuilds its derived SQLite index in memory from the same
+canonical manifests; its SQLite journal and temporary pages also stay in memory.
+
+The single durable canonical `current.alife-checkpoint` outside `.run` is
+read-only to this producer and excluded from this temporary allowance. The
+external owner's atomic publication staging, stdout/stderr logs and disk guard
+are outside the native `.run` quota; this flag is not an OS disk-allocation cap.
+Temporary copies inside `.run` are charged. Before dispatch, the producer holds
+two typed 256-MiB Current bounds plus bounded metadata/lease space for one
+recovery candidate and its raw admission materialization. This is recovery
+headroom, **not** an assumed bound on an episode's raw output. Candidate and
+scratch writes still pass through actual accounting. Recovery retires only
+known unpublished staging, reuses an identical complete candidate on retries,
+and keeps consumed seeds even when active collection exhausted its allowance.
+Caps too small for this recovery contract are refused before any WAL dispatch.
+
 After the producer is definitely stopped, `--recover-resident STORE` acquires
 the same writer lease. It validates baseline/request/WAL/snapshot binding and
 fully admits the latest committed snapshot (or the original baseline), then

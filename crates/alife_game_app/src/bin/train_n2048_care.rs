@@ -20,6 +20,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "provisional_until_snapshot":true,"canonical_publication_by_owner":true,
             "finite_continuous_feeding":true,"max_continuous_feeding_decisions":36000,
             "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":false,
+            "temporary_budget_enforced_during_writes":true,
+            "temporary_budget_scope":"STORE/.run logical file bytes including staging and native validation scratch",
             "cleanup_arguments":"--finish-resident-run STORE","bound_run_cleanup":true})
         );
         return Ok(());
