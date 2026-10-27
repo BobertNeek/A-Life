@@ -32,6 +32,7 @@ pub(crate) mod headless_trace;
 mod journal_capacity_tests;
 #[cfg(all(test, feature = "gpu-tests"))]
 mod journal_worker_poll_tests;
+mod live_policy;
 mod neural_receptor_cache;
 #[cfg(test)]
 mod newborn_admission_tests;
@@ -745,7 +746,10 @@ fn restore_resident_authority_from_record(
     )?;
     if let Some(checkpoint) = checkpoint {
         if let Err(compare_error) = compare_resident_checkpoint_metadata(&authority, checkpoint) {
-            if adopt_exact_legacy_nano512_checkpoint(&mut authority, checkpoint).is_err() {
+            if adopt_exact_legacy_nano512_checkpoint(&mut authority, checkpoint).is_err()
+                && live_policy::adopt_exact_live_policy_checkpoint(&mut authority, checkpoint)
+                    .is_err()
+            {
                 return Err(compare_error);
             }
         }
@@ -999,6 +1003,7 @@ struct ExactCognitiveHostSnapshotV1 {
     structural_edit_receipts: Vec<alife_core::StructuralEditBatch>,
     last_sleep_report: Option<alife_core::SleepConsolidationReport>,
     private_semantic_prior: Option<Vec<u8>>,
+    private_training_sampling: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
@@ -1373,6 +1378,7 @@ impl ExactCognitiveHostSnapshotV1 {
             structural_edit_receipts: self.structural_edit_receipts.clone(),
             last_sleep_report: self.last_sleep_report.clone(),
             private_semantic_prior: self.private_semantic_prior.clone(),
+            private_training_sampling: self.private_training_sampling.clone(),
         };
         state.validate()?;
         Ok(state)
@@ -3495,6 +3501,8 @@ pub struct GpuLiveBrainRuntime {
     semantic_prior: Option<semantic_prior::RuntimeSemanticPrior>,
     #[cfg(feature = "foundation-training")]
     training_sampling: Option<alife_gpu_backend::GpuTrainingSamplingConfig>,
+    // Retained in ordinary gameplay saves without enabling the training sampler.
+    training_sampling_resume: BTreeMap<u64, Vec<u8>>,
     #[cfg(feature = "foundation-training")]
     training_demonstrator: Option<FoundationTrainingDemonstrator>,
     #[cfg(feature = "foundation-training")]
@@ -5766,6 +5774,7 @@ impl GpuLiveBrainRuntime {
             )?,
             #[cfg(feature = "foundation-training")]
             training_sampling: options.training_sampling,
+            training_sampling_resume: BTreeMap::new(),
             #[cfg(feature = "foundation-training")]
             training_demonstrator: None,
             #[cfg(feature = "foundation-training")]
@@ -6096,6 +6105,10 @@ impl GpuLiveBrainRuntime {
                     ) {
                         prior.restore_life(organism_id.raw(), world_tick.raw(), bytes)?;
                     }
+                    runtime.restore_private_training_sampling(
+                        organism_id,
+                        &exact_cognitive_state.private_training_sampling,
+                    )?;
                     let ExactCognitiveCheckpointState {
                         cognitive_context,
                         predictor,
@@ -6378,6 +6391,8 @@ impl GpuLiveBrainRuntime {
             .map(|p| p.snapshot(organism_id.raw()))
             .transpose()?
             .flatten();
+        host.private_training_sampling =
+            self.private_training_sampling_for_checkpoint(organism_id)?;
         Ok(host)
     }
 
@@ -6429,6 +6444,7 @@ impl GpuLiveBrainRuntime {
             structural_edit_receipts: resident.last_structural_edit_receipts.clone(),
             last_sleep_report: resident.last_sleep_report.clone(),
             private_semantic_prior: None,
+            private_training_sampling: None,
         })
     }
 
@@ -6925,6 +6941,7 @@ impl GpuLiveBrainRuntime {
         }
         self.residents.remove(&raw);
         self.memories.remove(&raw);
+        self.training_sampling_resume.remove(&raw);
         self.topologies.remove(&raw);
         self.retained_learning.remove(&raw);
         self.pending_recovery_sleep_edges.remove(&raw);

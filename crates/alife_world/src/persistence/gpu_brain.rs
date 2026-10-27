@@ -68,6 +68,10 @@ pub struct ExactCognitiveCheckpointState {
     /// Bounded provider-private resume state. Never inherited into a founder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_semantic_prior: Option<Vec<u8>>,
+    /// Opaque, bounded training-only sampling provenance. Gameplay preserves it
+    /// without enabling training exploration; the training runtime validates it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub private_training_sampling: Option<Vec<u8>>,
 }
 
 impl ExactCognitiveCheckpointState {
@@ -97,6 +101,15 @@ impl ExactCognitiveCheckpointState {
         {
             return Err(PersistenceError::Contract(
                 ScaffoldContractError::InvalidSparseProjectionSchema,
+            ));
+        }
+        if self
+            .private_training_sampling
+            .as_ref()
+            .is_some_and(|bytes| bytes.len() > 4096)
+        {
+            return Err(PersistenceError::Contract(
+                ScaffoldContractError::InvalidDecisionEvidence,
             ));
         }
         self.organism_id.validate()?;

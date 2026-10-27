@@ -209,6 +209,7 @@ fn exact_population_capture_codec_matches_synchronous_completed_sleep_assets() {
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
         private_semantic_prior: None,
+        private_training_sampling: None,
     };
     let captured_exact = exact_state(row.identity().v11.clone());
     let synchronous_exact = exact_state(source.checkpoint_v11(handle).unwrap());
@@ -338,6 +339,7 @@ fn awake_checkpoint_restores_every_mutable_gpu_bank_exactly() {
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
         private_semantic_prior: None,
+        private_training_sampling: None,
     };
     canonical_write
         .attach_exact_cognitive_state(&store, &canonical_exact)
