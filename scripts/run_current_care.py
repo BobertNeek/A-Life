@@ -84,6 +84,8 @@ def import_seeds(source, history, lane, policy):
                 pending = [next_seed, last]
         ranges += ledger['excluded_seed_ranges'] + [run['plan']['seed_range'] for run in runs]
         assessments |= set(ledger['assessment_seeds'])
+    require(pending is None or not any(pending[0] <= seed <= pending[1] for seed in assessments),
+            'unused legacy allocation overlaps declared assessment seeds; reconcile before migration')
     require(mixed.file_hashes(source) == pins, 'legacy source changed during seed admission')
     return {'historical_freshness': admission['historical_freshness'],
             'excluded_ranges': mixed.seeds._ranges(ranges + [[seed, seed] for seed in assessments]),

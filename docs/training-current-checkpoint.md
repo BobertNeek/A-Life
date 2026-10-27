@@ -19,7 +19,9 @@ Only correctness metadata persists: accepted/source and founder seeds, coalesced
 excluded seed ranges, explicitly known/unknown historical freshness and the unused
 tail of the current seed allocation. Reserved, consumed, interrupted and assessment
 seeds stay excluded from new allocations. The owned unused tail must be consumed
-first; its cursor advances durably before dispatch. There is no receipt ledger,
+first; its cursor advances durably before dispatch. Migration rejects a tail that
+conflicts with declared assessment seeds instead of reclassifying them as usable.
+There is no receipt ledger,
 historical checkpoint hash chain, lesson score archive or automatic mastery gate.
 Disjoint exclusions can still grow if seed allocation is fragmented; contiguous
 allocations coalesce. Checkpoint size tracks current state, not episode count.

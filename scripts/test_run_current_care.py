@@ -276,6 +276,27 @@ class CurrentCareTests(unittest.TestCase):
         reconcile.assert_called_once_with({'complete': False}, ledger['runs'], check_payloads=False)
         self.assertEqual(current.mixed.file_hashes(source), pins)
 
+    def test_legacy_unused_tail_cannot_reclassify_a_declared_assessment_seed(self):
+        source, lane = self.root / 'legacy-conflict', self.root / 'legacy-conflict-lane'
+        source.mkdir()
+        lane.mkdir()
+        cp.write_json(source / 'cycle.json', {'seed': 30})
+        for name in current.mixed.FILES:
+            if name != 'cycle.json':
+                (source / name).write_bytes(b'synthetic source identity')
+        pins = current.mixed.file_hashes(source)
+        ledger = {'excluded_seed_ranges': [], 'assessment_seeds': [33], 'runs': [{
+            'plan': {'seed_range': [30, 35]}, 'attempts': [
+                {'status': 'accepted', 'directory': str(source), 'seed': 30, 'sha256': pins},
+                {'status': 'abandoned', 'directory': str(self.root / 'abandoned'), 'seed': 31}]}]}
+        (lane / current.mixed.LEDGER).write_text('synthetic ledger; admission parser mocked')
+        with patch.object(current.mixed, 'history', return_value=({'complete': False}, 'hash', [[1, 20], [30, 35]], set())), \
+             patch.object(current.mixed, 'read_ledger', return_value=ledger), \
+             patch.object(current.mixed, 'reconcile_prior_runs'):
+            with self.assertRaisesRegex(ValueError, 'assessment'):
+                current.import_seeds(source, self.root / 'history', lane, 'known-exclusions')
+        self.assertEqual(current.mixed.file_hashes(source), pins)
+
 
 if __name__ == '__main__':
     unittest.main()
