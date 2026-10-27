@@ -214,20 +214,27 @@ def consumed_cursor_bytes(data, seed):
     """
     if len(data) < 56 or data[:16] != b'ALIFE-CURRENT-1\n':
         return None
+    payload = memoryview(data)[56:]
     require(len(data) <= checkpoints.MAX_BYTES and
             struct.unpack('<Q', data[16:24])[0] == len(data)-56 and
-            hashlib.sha256(data[56:]).digest() == data[24:56],
+            hashlib.sha256(payload).digest() == data[24:56],
             'current cursor source length/digest mismatch')
-    payload = data[56:]
     prefix = re.match(rb'\A\{"schema_version":1,"seed":[0-9]+,"founder_seed_base":[0-9]+,"seeds":', payload)
     if prefix is None:
         return None
     start = prefix.end()
-    metadata, length = json.JSONDecoder().raw_decode(payload[start:].decode('utf-8'))
+    # Canonical seed strings escape quotes, so this unescaped member boundary
+    # terminates the cursor. Never decode the unchanged learned/private suffix.
+    end = data.find(b',"handoff":', 56 + start)
+    if end < 0:
+        return None
+    length = end - 56 - start
+    encoded_metadata = bytes(payload[start:start+length])
+    metadata = json.loads(encoded_metadata)
     # Native seed metadata contains only ASCII; the remainder is never
     # reconstructed, so f32 lexemes, private saves and assets remain exact.
     old = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
-    if payload[start:start+length] != old or payload[start+length:start+length+11] != b',"handoff":':
+    if encoded_metadata != old:
         return None
     require(isinstance(metadata, dict) and set(metadata) ==
             {'historical_freshness', 'excluded_ranges', 'pending_range'}, 'invalid cursor seed metadata')
@@ -238,7 +245,7 @@ def consumed_cursor_bytes(data, seed):
             'dispatch must consume the next owned seed')
     metadata['pending_range'] = [seed+1, pending[1]] if seed < pending[1] else None
     replacement = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
-    changed = payload[:start] + replacement + payload[start+length:]
+    changed = b''.join((payload[:start], replacement, payload[start+length:]))
     require(len(changed)+56 <= checkpoints.MAX_BYTES, 'current cursor candidate exceeds byte limit')
     return b'ALIFE-CURRENT-1\n' + struct.pack('<Q', len(changed)) + hashlib.sha256(changed).digest() + changed
 
