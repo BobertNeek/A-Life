@@ -100,6 +100,34 @@ exclusion or drop unfinished curriculum slots. One world consumes one seed. An
 outer curriculum controller remains responsible for its full remaining lesson
 schedule; replacing one targeted block with a continuous session must be explicit.
 
+### Dated Alberta night window
+
+For automatic-night admission, use `--night-date YYYY-MM-DD` for the intended
+Alberta local date instead of converting the end through host timezone rules.
+For example, `--night-date 2026-11-02` derives a 07:00 UTC opening, 14:57 UTC
+collection cutoff with the default 180-second final-save reserve, and 15:00 UTC
+hard end. An explicitly supplied hard end must agree. The dated policy covers
+2026-10-27 onward: current MDT and [permanent Alberta time (ABT)](https://www.alberta.ca/albertas-new-time-system-abt)
+from November 1, 2026 are both UTC-6, so the local 01:00-09:00 block remains eight
+hours. Stale `America/Edmonton` tzdata that predicts a fall-back must not extend
+it to 16:00 UTC. This application guard neither changes OS timezone settings nor
+rewrites historical Alberta clock rules.
+
+A plan may be prepared before opening, subject to the existing fresh-end bound;
+`--run` refuses early or expired admission before accessing store/owner paths or
+invoking Native. The live resource guard also rechecks the dated collection
+window. Recovery-only `--reconcile --run` remains available after the window so
+an interrupted session can be admitted and retired without starting another
+world. The compact owner/final receipt retains the exact window policy. Without
+`--night-date`, independently authorized idle engineering work keeps its explicit
+aware UTC deadline and existing activity/resource guards.
+
+Keep the user's scheduler DTSTART in `America/Edmonton`; this runtime guard does
+not prove or repair future wake resolution in that service. If stale scheduler
+rules wake an hour late, only the remainder before the same 15:00 UTC end is
+available. Future scheduler occurrences/tzdata must be verified separately when
+exposed. An expired October 27 launcher cannot be reused for a later date.
+
 Lease order is: Python Store admission/publication recovery, **release**, one
 Native producer with its WAL, confirm owned child stopped, Native recovery with
 its own lease, **release**, Python atomic publication, **release**, Native bound
