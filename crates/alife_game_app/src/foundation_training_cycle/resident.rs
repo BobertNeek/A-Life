@@ -289,7 +289,12 @@ fn validate_request(request: &ResidentSerialRequest, now: u64) -> Result<()> {
     }
     cycle_ppo_config(request.sampling_temperature)?;
     for row in &request.rows {
-        if !(1..=128).contains(&row.decisions)
+        let decision_limit = if row.lesson == FoundationTeacherLesson::Feeding {
+            36_000
+        } else {
+            128
+        };
+        if !(1..=decision_limit).contains(&row.decisions)
             || !matches!(
                 row.lesson,
                 FoundationTeacherLesson::EatHeldFood
@@ -298,7 +303,7 @@ fn validate_request(request: &ResidentSerialRequest, now: u64) -> Result<()> {
                     | FoundationTeacherLesson::RelocatedFood
             )
         {
-            return Err("resident serial supports the existing bounded care-first lessons".into());
+            return Err("resident care supports finite Feeding worlds up to36000 decisions; other care rows remain bounded at128".into());
         }
         row.food_need_condition.validate_lesson(Some(row.lesson))?;
     }
@@ -391,10 +396,36 @@ fn row_summary(receipt: &FoundationCycleReceipt) -> serde_json::Value {
             }),
         _ => None,
     };
+    // Compact counts survive normal temporary cleanup. Do not retain the
+    // bounded but detailed context/action receipt rings in every stdout row.
+    let prior = receipt.semantic_prior.as_ref().map(|prior| {
+        serde_json::json!({
+            "backend":prior.backend,"provider_identity":prior.provider_identity,
+            "context_contract":prior.context_contract,
+            "rich_information_required":prior.rich_information_required,
+            "requests":prior.requests,"delivered_frames":prior.delivered_frames,
+            "cache_hits":prior.cache_hits,"stale_replies":prior.stale_replies,
+            "failures":prior.failures,"dropout_frames":prior.dropout_frames,
+            "prime_wait_ms":prior.prime_wait_ms,"prime_timeouts":prior.prime_timeouts,
+            "empty_hint_frames":prior.empty_hint_frames,
+            "validated_provider_replies":prior.validated_provider_replies,
+            "decision_frames":prior.decision_frames,
+            "decision_frames_with_prior":prior.decision_frames_with_prior,
+            "decision_frames_without_prior":prior.decision_frames_without_prior,
+            "decision_frames_with_heard_language":prior.decision_frames_with_heard_language,
+            "unusable_hint_retry_requests":prior.unusable_hint_retry_requests
+        })
+    });
     serde_json::json!({"kind":"resident-provisional-episode-v1","seed":receipt.seed,"policy_version":receipt.policy_version,
         "lesson":receipt.lesson,"trained_rows":receipt.trained_replay_rows,"exact_trained_nourishing_events":exact,
         "generic_consumed_events":receipt.consumed_events,"full_relocation":r["food_relocation"]["lesson_completed"],
         "actor_optimizer_step":receipt.actor_optimizer_step,"value_optimizer_step":receipt.value_optimizer_step,
+        "requested_training_ticks":receipt.requested_training_ticks,"training_ticks":receipt.training_ticks,
+        "captured_replay_rows":receipt.captured_replay_rows,"bootstrap_replay_rows":receipt.bootstrap_replay_rows,
+        "terminal_death_tick":receipt.terminal_death_tick,
+        "actor_optimizer_updates":receipt.actor_optimizer_updates,"value_optimizer_updates":receipt.value_optimizer_updates,
+        "completed_epochs":receipt.completed_epochs,"teacher_cue_frames":receipt.teacher_cue_frames,
+        "semantic_prior":prior,
         "collection_seconds":receipt.collection_seconds,"update_seconds":receipt.update_seconds,
         "causal_collection":receipt.causal_collection,
         "canonical_current_published":false,"durability":"provisional until a full snapshot commits"})
@@ -778,6 +809,103 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
     )
 }
 
+fn cleanup_entry_is_owned(name: &str, is_directory: bool, dispatched: usize) -> bool {
+    if is_directory {
+        return (0..dispatched).any(|index| name == format!("episode-{index:05}"));
+    }
+    matches!(
+        name,
+        "run.json"
+            | "seed-wal.bin"
+            | "seed-wal.next"
+            | "resident-frontier.bin"
+            | "resident-frontier.next"
+            | "recovered-current.alife-checkpoint"
+            | "recovered-current.pending"
+            | "recovery-intent.bin"
+            | "recovery-intent.next"
+            | "STOP"
+    ) || name
+        .strip_prefix("checkpoint-")
+        .and_then(|value| value.strip_suffix(".alife-checkpoint"))
+        .is_some_and(|value| !value.is_empty() && value.bytes().all(|c| c.is_ascii_digit()))
+}
+
+/// Retires only this native run, after the external owner published its exact
+/// admitted recovery candidate. It never publishes or resumes a world itself.
+pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
+    let _lease = store_lease(store)?;
+    let store = store.canonicalize()?;
+    let current = store.join("current.alife-checkpoint");
+    let checkpoint = read_current_training_checkpoint(&current)?;
+    let current_hash = hash(&fs::read(&current)?);
+    let run = store.join(".run");
+    if !run.exists() {
+        return Ok(
+            serde_json::json!({"kind":"resident-cleanup-v1","removed_run":false,
+            "already_clean":true,"current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
+            "neural_execution":false,"canonical_current_modified":false}),
+        );
+    }
+    directory(&run)?;
+    let manifest: Manifest = read_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC)?;
+    let wal: SeedWal = read_metadata(&run.join("seed-wal.bin"), WAL_MAGIC)?;
+    let intent: serde_json::Value = read_metadata(&run.join("recovery-intent.bin"), REC_MAGIC)?;
+    regular(&run.join("run.json"), MAX_METADATA as u64)?;
+    let owner: serde_json::Value = serde_json::from_slice(&fs::read(run.join("run.json"))?)?;
+    let candidate = run.join("recovered-current.alife-checkpoint");
+    regular(&candidate, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
+    if manifest.schema != 1
+        || wal.schema != 1
+        || owner["schema"] != 1
+        || owner["kind"] != "native-resident-serial-run-v1"
+        || owner["baseline_sha256"] != manifest.baseline_sha256
+        || owner["request_sha256"] != manifest.request_sha256
+        || wal.baseline_sha256 != manifest.baseline_sha256
+        || wal.request_sha256 != manifest.request_sha256
+        || hash(&serde_json::to_vec(&manifest.request)?) != manifest.request_sha256
+        || intent["baseline_sha256"] != manifest.baseline_sha256
+        || intent["request_sha256"] != manifest.request_sha256
+        || intent["after_sha256"] != current_hash
+        || hash(&fs::read(&candidate)?) != current_hash
+        || read_current_training_checkpoint(&candidate)? != checkpoint
+        || wal.dispatched > manifest.request.rows.len()
+        || checkpoint.seeds != wal.seeds
+    {
+        return Err(
+            "resident cleanup is not bound to the published full current/seed cursor".into(),
+        );
+    }
+    for entry in fs::read_dir(&run)? {
+        let entry = entry?;
+        let metadata = fs::symlink_metadata(entry.path())?;
+        let name = entry.file_name();
+        if reparse(&metadata)
+            || !cleanup_entry_is_owned(
+                name.to_str().ok_or("non-UTF8 resident cleanup entry")?,
+                metadata.is_dir(),
+                wal.dispatched,
+            )
+        {
+            return Err("unknown resident cleanup entry; preserving the run".into());
+        }
+    }
+    logical_bytes(&run)?; // Reject aliases/special entries anywhere in owned episodes.
+    let retained = manifest
+        .snapshot
+        .as_ref()
+        .map_or(0, |s| s.completed_episodes);
+    fs::remove_dir_all(&run)?;
+    sync_directory(&store)?;
+    Ok(
+        serde_json::json!({"kind":"resident-cleanup-v1","removed_run":true,"already_clean":false,
+        "current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
+        "dispatched_worlds":wal.dispatched,"retained_episodes":retained,
+        "uncheckpointed_work_may_be_lost":wal.dispatched>retained,
+        "neural_execution":false,"canonical_current_modified":false}),
+    )
+}
+
 #[cfg(test)]
 mod quota_tests;
 
@@ -794,6 +922,13 @@ pub(super) fn stage_resident_loss_fixture(
     let seeds = seeds_after(&baseline.seeds, &request, dispatched)?;
     let run = store.join(".run");
     fs::create_dir(&run)?;
+    write_new(
+        &run.join("run.json"),
+        &serde_json::to_vec(&serde_json::json!({
+            "schema":1,"kind":"native-resident-serial-run-v1","pid":std::process::id(),
+            "baseline_sha256":baseline_sha256,"request_sha256":request_sha256
+        }))?,
+    )?;
     write_metadata(
         &run.join("seed-wal.bin"),
         WAL_MAGIC,
@@ -825,6 +960,46 @@ mod carry_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resident_compact_summary_preserves_dose_prior_and_unknown_nourishment() {
+        let receipt: FoundationCycleReceipt = serde_json::from_value(serde_json::json!({
+            "seed":17,"policy_version":4,"training_ticks":10,
+            "requested_training_ticks":512,"captured_replay_rows":10,
+            "trained_replay_rows":10,"bootstrap_replay_rows":0,
+            "terminal_death_tick":21,"lesson":"feeding","consumed_events":2,
+            "actor_optimizer_updates":2,"value_optimizer_updates":3,
+            "collection_seconds":1.0,"update_seconds":1.0,
+            "old_asset_digest":"old","new_asset_digest":"new",
+            "actor_optimizer_step":7,"value_optimizer_step":5,"completed_epochs":1,
+            "next_cohort_tick_captured":true,"next_cohort_optimizer_rebound":true,
+            "semantic_prior":{"backend":"deterministic","decision_frames":10,
+                "decision_frames_with_prior":8,"decision_frames_without_prior":2,
+                "empty_hint_frames":2,"failures":2,"requests":3}
+        }))
+        .unwrap();
+        let row = row_summary(&receipt);
+        assert_eq!(row["requested_training_ticks"], 512);
+        assert_eq!(row["training_ticks"], 10);
+        assert_eq!(row["captured_replay_rows"], 10);
+        assert_eq!(row["bootstrap_replay_rows"], 0);
+        assert_eq!(row["terminal_death_tick"], 21);
+        assert_eq!(row["actor_optimizer_updates"], 2);
+        assert_eq!(row["value_optimizer_updates"], 3);
+        assert_eq!(row["generic_consumed_events"], 2);
+        assert!(row["exact_trained_nourishing_events"].is_null());
+        assert!(row["causal_collection"].is_null());
+        assert_eq!(row["semantic_prior"]["decision_frames_with_prior"], 8);
+        assert_eq!(row["semantic_prior"]["failures"], 2);
+        for raw in [
+            "decision_inputs",
+            "deliveries",
+            "provider_failures",
+            "last_priming",
+        ] {
+            assert!(row["semantic_prior"].get(raw).is_none());
+        }
+    }
     fn request() -> ResidentSerialRequest {
         ResidentSerialRequest {
             schema: 1,
@@ -876,11 +1051,52 @@ mod tests {
         bad.seed_range = [100, 101];
         assert!(validate_request(&bad, 100).is_err());
         let mut bad = r.clone();
-        bad.rows[0].decisions = 129;
+        bad.rows[0].decisions = 36_001;
         assert!(validate_request(&bad, 100).is_err());
         let mut bad = r;
         bad.sampling_temperature = f32::NAN;
         assert!(validate_request(&bad, 100).is_err());
+    }
+    #[test]
+    fn resident_long_world_is_one_explicit_feeding_row_with_existing_horizon_bounds() {
+        let mut r = request();
+        r.rows.truncate(1);
+        r.rows[0].decisions = 512;
+        validate_request(&r, 100).unwrap();
+        assert_eq!(r.rows.len(), 1);
+        r.rows[0].decisions = 36_000;
+        validate_request(&r, 100).unwrap();
+        r.rows[0].decisions = 36_001;
+        assert!(validate_request(&r, 100).is_err());
+        for lesson in [
+            FoundationTeacherLesson::EatHeldFood,
+            FoundationTeacherLesson::EatReachableFood,
+            FoundationTeacherLesson::RelocatedFood,
+        ] {
+            r.rows[0].lesson = lesson;
+            r.rows[0].decisions = 129;
+            assert!(validate_request(&r, 100).is_err());
+            r.rows[0].decisions = 128;
+            validate_request(&r, 100).unwrap();
+        }
+    }
+    #[test]
+    fn resident_cleanup_rejects_unknown_or_undispatched_paths() {
+        assert!(cleanup_entry_is_owned("episode-00001", true, 2));
+        assert!(!cleanup_entry_is_owned("episode-00002", true, 2));
+        assert!(!cleanup_entry_is_owned("../episode-00001", true, 2));
+        assert!(cleanup_entry_is_owned(
+            "checkpoint-10977.alife-checkpoint",
+            false,
+            2
+        ));
+        assert!(!cleanup_entry_is_owned(
+            "checkpoint-../current.alife-checkpoint",
+            false,
+            2
+        ));
+        assert!(!cleanup_entry_is_owned("personal-file", false, 2));
+        assert!(!cleanup_entry_is_owned("recovery-intent.bin", true, 2));
     }
     #[test]
     fn resident_metadata_rejects_partial_corrupt_and_cross_kind_records() {
