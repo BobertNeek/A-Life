@@ -27,7 +27,7 @@ fn request(first: u64) -> ResidentSerialRequest {
         checkpoint_every_episodes: 3,
         sampling_temperature: 1.0,
         collection_cutoff_unix_seconds: now_seconds().unwrap() + 600,
-        max_temporary_bytes: RECOVERY_HEADROOM + 1024 * 1024,
+        max_temporary_bytes: RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM,
     }
 }
 
@@ -36,9 +36,15 @@ fn output_budget_too_small_refuses_before_wal_or_baseline_access() {
     let store = root("too-small");
     let current = store.join("current.alife-checkpoint");
     fs::write(&current, b"not opened: validation must fail first").unwrap();
-    let mut r = request(100);
-    r.max_temporary_bytes = RECOVERY_HEADROOM;
-    assert!(run_resident_serial_care(&store, r).is_err());
+    for bytes in [
+        RECOVERY_HEADROOM,
+        RECOVERY_HEADROOM + 1,
+        RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM - 1,
+    ] {
+        let mut r = request(100);
+        r.max_temporary_bytes = bytes;
+        assert!(run_resident_serial_care(&store, r).is_err());
+    }
     assert!(!store.join(".run").exists());
     assert_eq!(
         fs::read(&current).unwrap(),

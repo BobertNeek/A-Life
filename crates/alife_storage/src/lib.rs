@@ -648,7 +648,7 @@ pub fn remove_file(path: impl AsRef<Path>) -> io::Result<()> {
     Ok(())
 }
 pub fn remove_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
-    remove_tree_with(path.as_ref(), fs::remove_dir_all)
+    remove_tree_with(path.as_ref(), |p| fs::remove_dir_all(p))
 }
 fn remove_tree_with(path: &Path, remove: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
     let Some(b) = budget_for(path)? else {

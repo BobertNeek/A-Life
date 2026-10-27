@@ -26,6 +26,9 @@ const REC_MAGIC: &[u8; 16] = b"ALIFE-RES-REC-1\n";
 // lease cover recovery-intent/WAL/frontier staging; no disk bytes are guessed.
 const RECOVERY_HEADROOM: u64 =
     2 * alife_training::MAX_CURRENT_CHECKPOINT_BYTES + 3 * (MAX_METADATA as u64 + 56) + 128;
+// Three actual bounded startup records (run JSON, WAL, frontier) and the
+// validation lease must fit in addition to, rather than spend, recovery space.
+const STARTUP_METADATA_HEADROOM: u64 = 3 * (MAX_METADATA as u64 + 56) + 128;
 
 pub(super) struct ResidentLearner {
     pub trainer: FoundationTrainer,
@@ -283,7 +286,7 @@ fn validate_request(request: &ResidentSerialRequest, now: u64) -> Result<()> {
         || request.checkpoint_every_episodes > MAX_EPISODES
         || request.collection_cutoff_unix_seconds <= now
         || request.collection_cutoff_unix_seconds > now.saturating_add(86400)
-        || request.max_temporary_bytes <= RECOVERY_HEADROOM
+        || request.max_temporary_bytes < RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM
     {
         return Err("invalid resident request/cadence/seed range/cutoff/budget".into());
     }
