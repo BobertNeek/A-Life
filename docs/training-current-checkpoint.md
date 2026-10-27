@@ -70,6 +70,19 @@ native resume retain their existing behavior; conversion is explicit and read-on
 
 ## Publication and interrupted runs
 
+The host validator keeps at most eight successful encoded-checkpoint SHA-256
+admissions in memory for its locked-store instance. It hashes every validation
+target and pins the native inspector's bytes; only native reports declaring the
+self-contained current format and no external dependencies qualify for reuse.
+New or changed bytes always run full native admission. A fresh admission checks
+both checkpoint and inspector hashes before/after the command; failures clear
+the cache. A new validator/process starts cold. This avoids repeatedly parsing
+the same complete private state at candidate, publication-copy and current paths;
+publication hashes, flushing, atomic replacement and recovery checks are unchanged.
+Cache hits return independent copies of the original native report, preserving
+callers that inspect its fields without allowing a caller to mutate the cache.
+There is no persistent cache or additional checkpoint retained.
+
 The store holds one stable OS writer lock. It never unlinks that lock file. A new
 checkpoint is flushed and admitted, then a flushed publication intent is committed.
 The prior current is copied transiently, the candidate atomically replaces current,
