@@ -18,7 +18,7 @@ fn write_new(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let usage =
-        "export_native_training_handoff SOURCE NEW_OUTPUT\n  --inspect-current FILE\n  --import-current LEGACY_SOURCE SEEDS_JSON NEW_FILE\n  --reserve-current CURRENT FIRST LAST NEW_FILE\n  --consume-current CURRENT SEED NEW_FILE\n  --advance-current CURRENT EPISODE NEW_FILE\n  --extract-current-life CURRENT NEW_DIRECTORY\nRead-only admission; no world or GPU execution. New files must not exist.";
+        "export_native_training_handoff SOURCE NEW_OUTPUT\n  --inspect-current FILE\n  --inspect-native-frontier SOURCE --expected-policy POLICY\n  --import-current LEGACY_SOURCE SEEDS_JSON NEW_FILE\n  --reserve-current CURRENT FIRST LAST NEW_FILE\n  --consume-current CURRENT SEED NEW_FILE\n  --advance-current CURRENT EPISODE NEW_FILE\n  --extract-current-life CURRENT NEW_DIRECTORY\nRead-only admission; no world or GPU execution. New files must not exist.";
     if args.as_slice() == ["--help"] {
         println!("{usage}");
         return Ok(());
@@ -32,6 +32,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ["--inspect-current", path] => Some(alife_game_app::inspect_current_training_checkpoint(
             Path::new(path),
         )?),
+        ["--inspect-native-frontier", source, "--expected-policy", policy] => Some(
+            alife_game_app::inspect_native_training_frontier(Path::new(source), policy.parse()?)?,
+        ),
         ["--import-current", source, seeds, output] => {
             alife_game_app::resolve_current_training_destination(
                 Path::new(source),

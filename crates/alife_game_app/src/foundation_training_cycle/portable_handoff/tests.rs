@@ -1,4 +1,84 @@
 use super::*;
+
+/// This must be dispatched explicitly by the hardware owner, never by ordinary
+/// device-free checkpoint CI. It uses only new disposable worlds and sources.
+#[cfg(feature = "gpu-tests")]
+#[test]
+#[ignore = "requires an exclusively admitted hardware GPU and a qualified test executable"]
+fn directory_opt_in_keeps_final_private_life_across_two_native_continuations() {
+    let root = std::env::temp_dir().join(format!(
+        "alife-directory-final-private-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    struct OwnedRoot(std::path::PathBuf);
+    impl Drop for OwnedRoot {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _owned = OwnedRoot(root.clone());
+    let initial = root.join("initial");
+    let first = root.join("first-opt-in");
+    let second = root.join("second-opt-in");
+    let source = run_foundation_training_cycle(&initial, 90101, 2).unwrap();
+    let mut previous = initial.clone();
+    let mut old_actor = source.actor_optimizer_step;
+    let mut old_value = source.value_optimizer_step;
+    let mut old_policy = source.policy_version;
+    for (output, seed) in [(&first, 90102), (&second, 90103)] {
+        let receipt = resume_foundation_training_cycle_with_final_private_life(
+            &previous,
+            output,
+            seed,
+            2,
+            FoundationTeacherLesson::Feeding,
+            1.0,
+            crate::FoundationFoodNeedCondition::default(),
+        )
+        .unwrap();
+        let (_, loaded) = GpuDurableSaveManifest::open_loaded(
+            output.join("world.json"),
+            output.join("world-assets"),
+        )
+        .unwrap();
+        let final_world = loaded.save.restore_headless_world().unwrap();
+        assert_eq!(final_world.tick().raw(), receipt.world_ticks_elapsed);
+        assert!(
+            receipt.world_ticks_elapsed > 0,
+            "initial-only save cannot pass"
+        );
+        assert_eq!(receipt.policy_version, old_policy + 1);
+        assert_eq!(
+            receipt.actor_optimizer_step - old_actor,
+            receipt.actor_optimizer_updates
+        );
+        assert_eq!(
+            receipt.value_optimizer_step - old_value,
+            receipt.value_optimizer_updates
+        );
+        old_policy = receipt.policy_version;
+        old_actor = receipt.actor_optimizer_step;
+        old_value = receipt.value_optimizer_step;
+        previous = output.clone();
+    }
+    let packed = migrate_current_training_checkpoint(&second, current_seeds()).unwrap();
+    let current = root.join("current.alife-checkpoint");
+    std::fs::write(&current, packed.encode().unwrap()).unwrap();
+    std::fs::remove_dir_all(initial).unwrap();
+    std::fs::remove_dir_all(first).unwrap();
+    std::fs::remove_dir_all(second).unwrap();
+    let admitted = read_current_training_checkpoint(&current).unwrap();
+    assert_eq!(admitted, packed);
+    assert_eq!(admitted.handoff.policy_version, old_policy);
+    assert_eq!(admitted.handoff.actor.optimizer_step, old_actor);
+    assert_eq!(admitted.handoff.value.optimizer_step, old_value);
+}
+
 fn current_seeds() -> alife_training::CheckpointSeedsV1 {
     alife_training::CheckpointSeedsV1 {
         historical_freshness: "unknown".into(),
@@ -68,6 +148,120 @@ fn private_fixture(source: &Path) {
     )
     .unwrap();
     GpuDurableSaveManifest::publish_snapshot(source.join("world.json"), &assets, &save).unwrap();
+}
+
+fn final_private_fixture(source: &Path) {
+    private_fixture(source);
+    // Synthetic fixture only: its persisted private world is at tick zero.
+    // This does not claim a GPU trajectory or a learned biological outcome.
+    let path = source.join("cycle.json");
+    let mut receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    receipt.world_ticks_elapsed = 0;
+    std::fs::write(path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+}
+
+#[test]
+fn native_frontier_admits_full_heads_and_private_state_without_encoding_current() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            final_private_fixture,
+        );
+    let expected = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    let report = inspect_native_training_frontier(&f.target, 5124).unwrap();
+    assert_eq!(report["kind"], "native-training-frontier-v1");
+    assert_eq!(report["policy_version"], 5124);
+    assert_eq!(
+        report["actor_optimizer_step"],
+        expected.handoff.actor.optimizer_step
+    );
+    assert_eq!(report["value_optimizer_step"], 6);
+    assert_eq!(report["final_private_world_tick"], 0);
+    assert_eq!(report["current_file_encoded"], false);
+    assert_eq!(report["neural_execution"], false);
+    assert_eq!(report["weights_modified"], false);
+    assert!(
+        report.get("seeds").is_none(),
+        "not an allocation/freshness authority"
+    );
+    assert_eq!(
+        report["source_dependencies"],
+        serde_json::json!([f.source.canonicalize().unwrap()])
+    );
+    let private = expected.life.unwrap();
+    assert_eq!(
+        report["canonical_private_world_sha256"],
+        format!("{:x}", Sha256::digest(private.world_json.as_bytes()))
+    );
+    assert_eq!(
+        report["canonical_sleep_journal_sha256"],
+        format!(
+            "{:x}",
+            Sha256::digest(private.sleep_journal_json.as_bytes())
+        )
+    );
+    assert_eq!(
+        report["private_assets"]["private-sidecar.bin"]["sha256"],
+        format!("{:x}", Sha256::digest([0, 128, 255, 42, 0, 3]))
+    );
+    assert!(inspect_native_training_frontier(&f.target, 5123).is_err());
+    assert!(!f.target.join("current.alife-checkpoint").exists());
+}
+
+#[test]
+fn native_frontier_rejects_private_world_asset_and_journal_corruption_ignored_by_four_file_inspection(
+) {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            final_private_fixture,
+        );
+    inspect_native_training_frontier(&f.source, 5124).unwrap();
+    let pointer: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(f.source.join("world.json")).unwrap()).unwrap();
+    let journal = pointer["gpu_checkpoint_authority"]["journal"]["file_name"]
+        .as_str()
+        .expect("fixture uses the authoritative published journal");
+    for path in [
+        f.source.join("world.json"),
+        f.source.join("world-assets/private-sidecar.bin"),
+        f.source.join(journal),
+    ] {
+        let original = std::fs::read(&path).ok();
+        std::fs::write(&path, b"corrupt private recovery material").unwrap();
+        assert!(
+            crate::inspect_foundation_checkpoint(&f.source, 5124).is_ok(),
+            "four-file check must not pretend to cover private state"
+        );
+        assert!(
+            inspect_native_training_frontier(&f.source, 5124).is_err(),
+            "{}",
+            path.display(),
+        );
+        if let Some(bytes) = original {
+            std::fs::write(&path, bytes).unwrap();
+        } else {
+            std::fs::remove_file(&path).unwrap();
+        }
+        inspect_native_training_frontier(&f.source, 5124).unwrap();
+    }
+}
+
+#[test]
+fn native_frontier_rejects_initial_only_private_save_at_a_later_collection_boundary() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            final_private_fixture,
+        );
+    let path = f.source.join("cycle.json");
+    let mut receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    receipt.world_ticks_elapsed = 1;
+    std::fs::write(path, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
+    assert!(crate::inspect_foundation_checkpoint(&f.source, 5124).is_ok());
+    assert!(inspect_native_training_frontier(&f.source, 5124)
+        .unwrap_err()
+        .to_string()
+        .contains("final collection boundary"));
 }
 
 #[test]
