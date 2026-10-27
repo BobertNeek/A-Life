@@ -378,10 +378,36 @@ fn row_summary(receipt: &FoundationCycleReceipt) -> serde_json::Value {
             }),
         _ => None,
     };
+    // Compact counts survive normal temporary cleanup. Do not retain the
+    // bounded but detailed context/action receipt rings in every stdout row.
+    let prior = receipt.semantic_prior.as_ref().map(|prior| {
+        serde_json::json!({
+            "backend":prior.backend,"provider_identity":prior.provider_identity,
+            "context_contract":prior.context_contract,
+            "rich_information_required":prior.rich_information_required,
+            "requests":prior.requests,"delivered_frames":prior.delivered_frames,
+            "cache_hits":prior.cache_hits,"stale_replies":prior.stale_replies,
+            "failures":prior.failures,"dropout_frames":prior.dropout_frames,
+            "prime_wait_ms":prior.prime_wait_ms,"prime_timeouts":prior.prime_timeouts,
+            "empty_hint_frames":prior.empty_hint_frames,
+            "validated_provider_replies":prior.validated_provider_replies,
+            "decision_frames":prior.decision_frames,
+            "decision_frames_with_prior":prior.decision_frames_with_prior,
+            "decision_frames_without_prior":prior.decision_frames_without_prior,
+            "decision_frames_with_heard_language":prior.decision_frames_with_heard_language,
+            "unusable_hint_retry_requests":prior.unusable_hint_retry_requests
+        })
+    });
     serde_json::json!({"kind":"resident-provisional-episode-v1","seed":receipt.seed,"policy_version":receipt.policy_version,
         "lesson":receipt.lesson,"trained_rows":receipt.trained_replay_rows,"exact_trained_nourishing_events":exact,
         "generic_consumed_events":receipt.consumed_events,"full_relocation":r["food_relocation"]["lesson_completed"],
         "actor_optimizer_step":receipt.actor_optimizer_step,"value_optimizer_step":receipt.value_optimizer_step,
+        "requested_training_ticks":receipt.requested_training_ticks,"training_ticks":receipt.training_ticks,
+        "captured_replay_rows":receipt.captured_replay_rows,"bootstrap_replay_rows":receipt.bootstrap_replay_rows,
+        "terminal_death_tick":receipt.terminal_death_tick,
+        "actor_optimizer_updates":receipt.actor_optimizer_updates,"value_optimizer_updates":receipt.value_optimizer_updates,
+        "completed_epochs":receipt.completed_epochs,"teacher_cue_frames":receipt.teacher_cue_frames,
+        "semantic_prior":prior,
         "collection_seconds":receipt.collection_seconds,"update_seconds":receipt.update_seconds,
         "causal_collection":receipt.causal_collection,
         "canonical_current_published":false,"durability":"provisional until a full snapshot commits"})
@@ -894,6 +920,46 @@ mod carry_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resident_compact_summary_preserves_dose_prior_and_unknown_nourishment() {
+        let receipt: FoundationCycleReceipt = serde_json::from_value(serde_json::json!({
+            "seed":17,"policy_version":4,"training_ticks":10,
+            "requested_training_ticks":512,"captured_replay_rows":10,
+            "trained_replay_rows":10,"bootstrap_replay_rows":0,
+            "terminal_death_tick":21,"lesson":"feeding","consumed_events":2,
+            "actor_optimizer_updates":2,"value_optimizer_updates":3,
+            "collection_seconds":1.0,"update_seconds":1.0,
+            "old_asset_digest":"old","new_asset_digest":"new",
+            "actor_optimizer_step":7,"value_optimizer_step":5,"completed_epochs":1,
+            "next_cohort_tick_captured":true,"next_cohort_optimizer_rebound":true,
+            "semantic_prior":{"backend":"deterministic","decision_frames":10,
+                "decision_frames_with_prior":8,"decision_frames_without_prior":2,
+                "empty_hint_frames":2,"failures":2,"requests":3}
+        }))
+        .unwrap();
+        let row = row_summary(&receipt);
+        assert_eq!(row["requested_training_ticks"], 512);
+        assert_eq!(row["training_ticks"], 10);
+        assert_eq!(row["captured_replay_rows"], 10);
+        assert_eq!(row["bootstrap_replay_rows"], 0);
+        assert_eq!(row["terminal_death_tick"], 21);
+        assert_eq!(row["actor_optimizer_updates"], 2);
+        assert_eq!(row["value_optimizer_updates"], 3);
+        assert_eq!(row["generic_consumed_events"], 2);
+        assert!(row["exact_trained_nourishing_events"].is_null());
+        assert!(row["causal_collection"].is_null());
+        assert_eq!(row["semantic_prior"]["decision_frames_with_prior"], 8);
+        assert_eq!(row["semantic_prior"]["failures"], 2);
+        for raw in [
+            "decision_inputs",
+            "deliveries",
+            "provider_failures",
+            "last_priming",
+        ] {
+            assert!(row["semantic_prior"].get(raw).is_none());
+        }
+    }
     fn request() -> ResidentSerialRequest {
         ResidentSerialRequest {
             schema: 1,
