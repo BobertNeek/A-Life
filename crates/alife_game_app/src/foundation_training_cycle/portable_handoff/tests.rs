@@ -5,6 +5,18 @@ use super::*;
 #[test]
 #[ignore = "requires an exclusively admitted hardware GPU and a qualified test executable"]
 fn directory_opt_in_keeps_final_private_life_across_two_native_continuations() {
+    // Match the qualified CLI's Windows worker stack. The production runtime's
+    // bounded debug frames do not fit the ordinary test-harness thread stack.
+    std::thread::Builder::new()
+        .name("directory-final-private-life-assay".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(directory_final_private_life_assay)
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+fn directory_final_private_life_assay() {
     let root = std::env::temp_dir().join(format!(
         "alife-directory-final-private-{}-{}",
         std::process::id(),
@@ -17,6 +29,13 @@ fn directory_opt_in_keeps_final_private_life_across_two_native_continuations() {
     struct OwnedRoot(std::path::PathBuf);
     impl Drop for OwnedRoot {
         fn drop(&mut self) {
+            if std::thread::panicking() {
+                eprintln!(
+                    "failed disposable GPU fixture retained: {}",
+                    self.0.display()
+                );
+                return;
+            }
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
