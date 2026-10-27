@@ -276,7 +276,7 @@ class CurrentCareTests(unittest.TestCase):
         reconcile.assert_called_once_with({'complete': False}, ledger['runs'], check_payloads=False)
         self.assertEqual(current.mixed.file_hashes(source), pins)
 
-    def test_legacy_unused_tail_cannot_reclassify_a_declared_assessment_seed(self):
+    def test_legacy_unused_tail_cannot_reclassify_known_seed_exclusions(self):
         source, lane = self.root / 'legacy-conflict', self.root / 'legacy-conflict-lane'
         source.mkdir()
         lane.mkdir()
@@ -295,14 +295,20 @@ class CurrentCareTests(unittest.TestCase):
         history = {'schema': 1, 'kind': 'mixed-care-seed-history', 'complete': True,
             'source_sha256': pins, 'reserved_seed_ranges': [[30, 35]], 'consumed_seed_ranges': [[30, 31]],
             'assessment_seeds': [], 'imports': []}
-        for origin in ('history', 'ledger'):
+        foreign = self.root / 'foreign-seeds.json'
+        cp.write_json(foreign, {'schema': 1, 'kind': 'grab-food-seed-ledger', 'training_seed_ranges': [[33, 33]],
+                               'assessment_seeds': [], 'allocations': []})
+        for origin in ('history-assessment', 'ledger-assessment', 'consumed', 'excluded', 'foreign'):
             with self.subTest(origin=origin):
-                history['assessment_seeds'] = [33] if origin == 'history' else []
-                ledger['assessment_seeds'] = [33] if origin == 'ledger' else []
+                history['assessment_seeds'] = [33] if origin == 'history-assessment' else []
+                ledger['assessment_seeds'] = [33] if origin == 'ledger-assessment' else []
+                history['consumed_seed_ranges'] = [[30, 33]] if origin == 'consumed' else [[30, 31]]
+                ledger['excluded_seed_ranges'] = [[33, 33]] if origin == 'excluded' else []
+                history['imports'] = [{'path': str(foreign), 'sha256': cp.digest(foreign)}] if origin == 'foreign' else []
                 cp.write_json(lane / current.mixed.LEDGER, ledger)
                 cp.write_json(self.root / 'history.json', history)
                 # Exercise the real legacy history/ledger parsers and admission.
-                with self.assertRaisesRegex(ValueError, 'assessment'):
+                with self.assertRaisesRegex(ValueError, 'assessment|exclusions'):
                     current.import_seeds(source, self.root / 'history.json', lane, 'strict')
         self.assertEqual(current.mixed.file_hashes(source), pins)
 

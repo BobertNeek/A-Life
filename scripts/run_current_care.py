@@ -62,6 +62,14 @@ def import_seeds(source, history, lane, policy):
     receipt, _ = mixed.inspector_io.load_json(source / 'cycle.json', mixed.seeds.MAX_DOCUMENT_BYTES)
     admission = {'policy': policy, 'historical_freshness': mixed.FRESHNESS[policy]}
     doc, _, ranges, assessments = mixed.history(history, pins, receipt['seed'], lane, admission=admission)
+    # The owned unused tail may override its own reservation, never a consumed
+    # seed or an exclusion imported from another lane. Keep this distinction
+    # until migration admission; the durable checkpoint then needs only union
+    # ranges and its proven-unused cursor.
+    hard_exclusions = mixed.seeds._ranges(doc.get('consumed_seed_ranges', []))
+    for item in doc.get('imports', []):
+        imported, _ = mixed.grab_import(Path(item['path']).resolve(strict=True), item['sha256'])
+        hard_exclusions += imported
     ledger_path = lane / mixed.LEDGER
     pending = None
     if ledger_path.exists():
@@ -83,9 +91,12 @@ def import_seeds(source, history, lane, policy):
             if next_seed <= last:
                 pending = [next_seed, last]
         ranges += ledger['excluded_seed_ranges'] + [run['plan']['seed_range'] for run in runs]
+        hard_exclusions += ledger['excluded_seed_ranges']
         assessments |= set(ledger['assessment_seeds'])
     require(pending is None or not any(pending[0] <= seed <= pending[1] for seed in assessments),
             'unused legacy allocation overlaps declared assessment seeds; reconcile before migration')
+    require(pending is None or not any(pending[0] <= end and start <= pending[1] for start, end in hard_exclusions),
+            'unused legacy allocation overlaps consumed/imported seed exclusions; reconcile before migration')
     require(mixed.file_hashes(source) == pins, 'legacy source changed during seed admission')
     return {'historical_freshness': admission['historical_freshness'],
             'excluded_ranges': mixed.seeds._ranges(ranges + [[seed, seed] for seed in assessments]),

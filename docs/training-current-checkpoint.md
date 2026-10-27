@@ -20,7 +20,8 @@ excluded seed ranges, explicitly known/unknown historical freshness and the unus
 tail of the current seed allocation. Reserved, consumed, interrupted and assessment
 seeds stay excluded from new allocations. The owned unused tail must be consumed
 first; its cursor advances durably before dispatch. Migration rejects a tail that
-conflicts with declared assessment seeds instead of reclassifying them as usable.
+conflicts with declared consumed, assessment or foreign imported exclusions
+instead of reclassifying them as usable.
 There is no receipt ledger,
 historical checkpoint hash chain, lesson score archive or automatic mastery gate.
 Disjoint exclusions can still grow if seed allocation is fragmented; contiguous
