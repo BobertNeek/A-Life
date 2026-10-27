@@ -537,6 +537,74 @@ mod tests {
         runtime
             .rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)
             .unwrap();
+        let saved_sampling = runtime.foundation_training_sampling_state().unwrap();
+        let saved_biology = *runtime
+            .world()
+            .organism_registry()
+            .get(organism)
+            .unwrap()
+            .biochemistry();
+        let saved_tick = runtime.world().tick();
+        let states = exact
+            .creatures
+            .iter()
+            .filter_map(|c| c.gpu_brain.clone())
+            .collect::<Vec<_>>();
+        let mut restored = GpuLiveBrainRuntime::restore_foundation_rehearsal(
+            runtime.new_staging_like_live().unwrap(),
+            exact.restore_headless_world().unwrap(),
+            seed,
+            BrainScaleTier::Standard2048,
+            &GpuCheckpointAssetStore::new(&asset_root).unwrap(),
+            &exact.assets,
+            &states,
+            alife_gpu_backend::GpuTrainingSamplingConfig {
+                seed: 99,
+                counter: 0,
+                temperature: 1.0,
+                demonstrator: None,
+            },
+        )
+        .unwrap();
+        assert!(restored.foundation_training_sampling_was_restored(organism));
+        assert_eq!(
+            restored.foundation_training_sampling_state().unwrap(),
+            saved_sampling
+        );
+        assert_eq!(restored.world().tick(), saved_tick);
+        assert_eq!(
+            *restored
+                .world()
+                .organism_registry()
+                .get(organism)
+                .unwrap()
+                .biochemistry(),
+            saved_biology
+        );
+        assert_eq!(
+            restored.live_foundation_compiler_inputs(organism).unwrap(),
+            transition.next_inputs()
+        );
+        restored
+            .rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)
+            .unwrap();
+        restored
+            .attach_lineage_archive(
+                LineageLibraryConfig::profile_default(root.join("restored-lineage")),
+                ArchiveLearnedCapturePolicy::GeneticOnly,
+            )
+            .unwrap();
+        restored.tick().unwrap();
+        let after_restore = restored.take_foundation_training_steps();
+        assert_eq!(after_restore.len(), 1);
+        assert!(
+            after_restore[0].patch.pre_action().sequence_id.raw()
+                > next[0].patch.pre_action().sequence_id.raw()
+        );
+        assert!(!restored.last_learning_receipts.is_empty());
+        assert!(restored.last_post_seal_learning_failures.is_empty());
+        drop(restored);
+        drop(runtime);
         // Failure deliberately retains this disposable directory for diagnosis.
         std::fs::remove_dir_all(root).unwrap();
     }
