@@ -139,6 +139,37 @@ impl GpuLiveBrainRuntime {
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
     }
 
+    /// Finish only already-issued persistence work. No world tick, action,
+    /// physiology update or exploration sample is created while waiting.
+    #[cfg(feature = "foundation-training")]
+    pub fn quiesce_live_foundation_policy_boundary(
+        &mut self,
+        organism_id: OrganismId,
+        deadline_unix_seconds: u64,
+    ) -> Result<(), GameAppShellError> {
+        self.flush_sleep_journal_publication_blocking()?;
+        loop {
+            self.poll_persistence_for_shutdown()?;
+            if matches!(
+                self.exact_checkpoint_work,
+                ExactPopulationCheckpointRuntimeWorkV1::Idle
+            ) && self.sleep_journal_publication_worker.is_none()
+                && self.pending_sleep_journal_entries.is_empty()
+                && self.pending_exact_sleep_journal_entries.is_empty()
+            {
+                return Ok(self.ensure_live_foundation_policy_boundary(organism_id)?);
+            }
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|_| ScaffoldContractError::ConsolidationGenerationMismatch)?
+                .as_secs();
+            if now >= deadline_unix_seconds {
+                return Err(ScaffoldContractError::ConsolidationGenerationMismatch.into());
+            }
+            std::thread::yield_now();
+        }
+    }
+
     #[cfg(feature = "foundation-training")]
     pub fn ensure_live_foundation_policy_boundary(
         &self,
