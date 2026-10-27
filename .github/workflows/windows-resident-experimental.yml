@@ -67,13 +67,23 @@ jobs:
             $residentHashes[$residentName] = (Get-FileHash -LiteralPath $residentFile -Algorithm SHA256).Hash.ToLowerInvariant()
             Copy-Item -LiteralPath $residentFile -Destination $residentOutput.FullName
           }
-          [ordered]@{
+          $residentContractJson = & target/debug/train_n2048_care.exe --resident-contract
+          if ($LASTEXITCODE -ne 0) { throw 'Built producer capability query failed' }
+          $residentContract = $residentContractJson | ConvertFrom-Json
+          if ($residentContract.finite_continuous_feeding -ne $true -or $residentContract.temporary_budget_enforced_during_writes -ne $true -or $residentContract.bound_run_cleanup -ne $true) {
+            throw 'Built producer lacks the finite-session/quota/cleanup contract'
+          }
+          $residentReceipt = [ordered]@{
             schema=1; kind='experimental-resident-build-v1'; source_revision=$residentRevision; source_tree=$residentTree
             executables=$residentHashes; rustc=(rustc --version); target='x86_64-pc-windows-msvc'
             features=@('foundation-training'); build_profile='dev'; gpu_training_executed=$false
             experimental=$true; production_qualified=$false
+            resident_producer_contract=$residentContract
             workflow_run="https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $residentOutput.FullName 'build-receipt.json') -Encoding utf8
+          }
+          $residentReceiptJson = $residentReceipt | ConvertTo-Json -Depth 8 -Compress
+          $residentReceiptJson | Set-Content -LiteralPath (Join-Path $residentOutput.FullName 'build-receipt.json') -Encoding utf8
+          Write-Output $residentReceiptJson
           "artifact_path=$($residentOutput.FullName)" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - uses: actions/upload-artifact@v4
         with:
