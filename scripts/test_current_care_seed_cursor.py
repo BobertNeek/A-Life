@@ -26,6 +26,24 @@ def payload(pending=b'[30,31]'):
 
 
 class CursorBytesTests(unittest.TestCase):
+    def test_large_learned_payload_is_not_decoded_as_cursor_metadata(self):
+        # Only the small ASCII cursor belongs to this JSON parser. A complete
+        # checkpoint may carry hundreds of MiB of unchanged learned/private data.
+        before = payload().replace(b'"AQID"', b'"' + b'A' * (4 * 1024 * 1024) + b'"')
+        decoded_lengths = []
+        original_decode = json.JSONDecoder.raw_decode
+
+        def observed_decode(decoder, text, idx=0):
+            decoded_lengths.append(len(text))
+            return original_decode(decoder, text, idx)
+
+        with patch.object(json.JSONDecoder, 'raw_decode', observed_decode):
+            result = runner.consumed_cursor_bytes(encoded(before), 30)
+        self.assertEqual(result, encoded(before.replace(b'"pending_range":[30,31]',
+                                                       b'"pending_range":[31,31]', 1)))
+        self.assertTrue(decoded_lengths)
+        self.assertLess(max(decoded_lengths), 1024)
+
     def test_only_seed_cursor_and_envelope_change(self):
         before = payload()
         result = runner.consumed_cursor_bytes(encoded(before), 30)
@@ -59,6 +77,40 @@ class CursorBytesTests(unittest.TestCase):
         self.assertIsNone(runner.consumed_cursor_bytes(encoded(b' '+payload()), 30))
         spaced = payload().replace(b'"pending_range":[', b'"pending_range": [', 1)
         self.assertIsNone(runner.consumed_cursor_bytes(encoded(spaced), 30))
+        spaced_handoff = payload().replace(b',"handoff":', b', "handoff":', 1)
+        self.assertIsNone(runner.consumed_cursor_bytes(encoded(spaced_handoff), 30))
+
+    def test_large_cursor_and_escaped_marker_remain_byte_exact(self):
+        metadata = {'historical_freshness': 'unknown,"handoff":escaped',
+                    'excluded_ranges': [[100 + i * 2, 100 + i * 2] for i in range(5000)],
+                    'pending_range': [30, 31]}
+        before = payload().split(b'"seeds":', 1)[0] + b'"seeds":'
+        before += json.dumps(metadata, separators=(',', ':')).encode()
+        before += b',"handoff":' + payload().split(b',"handoff":', 1)[1]
+        result = runner.consumed_cursor_bytes(encoded(before), 30)
+        expected = before.replace(b'"pending_range":[30,31]', b'"pending_range":[31,31]', 1)
+        self.assertEqual(result, encoded(expected))
+
+    def test_reordered_or_missing_handoff_requests_native_fallback(self):
+        document = json.loads(payload())
+        reordered = {name: document[name] for name in
+                     ('schema_version', 'seed', 'founder_seed_base', 'seeds', 'life', 'handoff')}
+        self.assertIsNone(runner.consumed_cursor_bytes(
+            encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
+        del reordered['handoff']
+        self.assertIsNone(runner.consumed_cursor_bytes(
+            encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
+
+    def test_prefix_can_end_inside_unchanged_utf8_data(self):
+        leading, rest = payload().split(b',"handoff":{', 1)
+        start = len(leading.split(b'"seeds":', 1)[0]) + len(b'"seeds":')
+        prefix = leading + b',"handoff":{"unchanged_text":"'
+        padding = b'A' * (start + 255 - len(prefix))
+        for character in ('é', '世', '🙂'):
+            before = prefix + padding + character.encode() + b'",' + rest
+            result = runner.consumed_cursor_bytes(encoded(before), 30)
+            expected = before.replace(b'"pending_range":[30,31]', b'"pending_range":[31,31]', 1)
+            self.assertEqual(result, encoded(expected))
 
 
 class CursorAdmissionTests(unittest.TestCase):

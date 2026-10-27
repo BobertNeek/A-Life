@@ -8,6 +8,7 @@ No existing legacy lane/history is removed by this command.
 import argparse
 from collections import OrderedDict
 from copy import deepcopy
+import codecs
 import datetime as dt
 import hashlib
 import json
@@ -214,20 +215,35 @@ def consumed_cursor_bytes(data, seed):
     """
     if len(data) < 56 or data[:16] != b'ALIFE-CURRENT-1\n':
         return None
+    payload = memoryview(data)[56:]
     require(len(data) <= checkpoints.MAX_BYTES and
             struct.unpack('<Q', data[16:24])[0] == len(data)-56 and
-            hashlib.sha256(data[56:]).digest() == data[24:56],
+            hashlib.sha256(payload).digest() == data[24:56],
             'current cursor source length/digest mismatch')
-    payload = data[56:]
     prefix = re.match(rb'\A\{"schema_version":1,"seed":[0-9]+,"founder_seed_base":[0-9]+,"seeds":', payload)
     if prefix is None:
         return None
     start = prefix.end()
-    metadata, length = json.JSONDecoder().raw_decode(payload[start:].decode('utf-8'))
+    # Parse the leading object with the existing JSON decoder, growing only as
+    # far as needed. An incomplete trailing UTF-8 character belongs to the next
+    # prefix, not a malformed cursor. Never decode the complete learned suffix.
+    available = len(payload) - start
+    window = min(256, available)
+    decoder = json.JSONDecoder()
+    while True:
+        text, _ = codecs.utf_8_decode(payload[start:start+window], 'strict', window == available)
+        try:
+            metadata, length = decoder.raw_decode(text)
+            break
+        except json.JSONDecodeError:
+            if window == available:
+                raise
+            window = min(available, window * 2)
+    encoded_metadata = bytes(payload[start:start+length])
     # Native seed metadata contains only ASCII; the remainder is never
     # reconstructed, so f32 lexemes, private saves and assets remain exact.
     old = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
-    if payload[start:start+length] != old or payload[start+length:start+length+11] != b',"handoff":':
+    if encoded_metadata != old or payload[start+length:start+length+11] != b',"handoff":':
         return None
     require(isinstance(metadata, dict) and set(metadata) ==
             {'historical_freshness', 'excluded_ranges', 'pending_range'}, 'invalid cursor seed metadata')
@@ -238,7 +254,7 @@ def consumed_cursor_bytes(data, seed):
             'dispatch must consume the next owned seed')
     metadata['pending_range'] = [seed+1, pending[1]] if seed < pending[1] else None
     replacement = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
-    changed = payload[:start] + replacement + payload[start+length:]
+    changed = b''.join((payload[:start], replacement, payload[start+length:]))
     require(len(changed)+56 <= checkpoints.MAX_BYTES, 'current cursor candidate exceeds byte limit')
     return b'ALIFE-CURRENT-1\n' + struct.pack('<Q', len(changed)) + hashlib.sha256(changed).digest() + changed
 
