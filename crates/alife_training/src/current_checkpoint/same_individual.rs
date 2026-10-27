@@ -4,6 +4,7 @@ use super::*;
 use crate::FoundationContinuationKindV1;
 use alife_core::{BrainCapacityClass, BrainPhenotype, PhenotypeCompiler, PhenotypeCompilerInputs};
 use alife_gpu_backend::GpuTrainingSamplingConfig;
+mod progress;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -150,6 +151,13 @@ fn private_binding(
 impl SameIndividualCurrentV1 {
     pub fn validate(&self, current: &CurrentTrainingCheckpointV1) -> Result<()> {
         let p = &self.progress;
+        progress::validate_session_counts(
+            p.session_start_world_tick,
+            p.world_tick,
+            p.trained_rows,
+            p.completed_updates,
+            10_000_000,
+        )?;
         if self.counting_scope != "retained-same-individual-ppo-since-first-tag"
             || self.schema != 1
             || self.kind != "same-individual-ppo-v1"
@@ -182,20 +190,8 @@ impl SameIndividualCurrentV1 {
                 .baseline_completed_updates
                 .checked_add(p.completed_updates)
                 != Some(self.total_completed_updates)
-            || current
-                .handoff
-                .actor
-                .optimizer_step
-                .checked_sub(self.baseline_actor_optimizer_step)
-                .map(u64::from)
-                .is_none_or(|n| n < p.completed_updates)
-            || current
-                .handoff
-                .value
-                .optimizer_step
-                .checked_sub(self.baseline_value_optimizer_step)
-                .map(u64::from)
-                .is_none_or(|n| n < p.completed_updates)
+            || current.handoff.actor.optimizer_step < self.baseline_actor_optimizer_step
+            || current.handoff.value.optimizer_step < self.baseline_value_optimizer_step
             || self.compiler_inputs_sha256 != sha(&current.handoff.compiler_inputs)?
             || self.actor_sha256 != sha(&current.handoff.actor)?
             || self.value_sha256 != sha(&current.handoff.value)?
@@ -218,15 +214,54 @@ impl SameIndividualCurrentV1 {
 }
 
 impl CurrentTrainingCheckpointV1 {
+    /// Admit the decoded full state while retaining the original file identity.
+    /// JSON whitespace/order is not silently substituted for source provenance.
+    pub fn admitted_source_sha256(&self, bytes: &[u8]) -> Result<String> {
+        if Self::decode(bytes)?.encode()? != self.encode()? {
+            return Err("same-individual baseline bytes differ from admitted source state".into());
+        }
+        Ok(format!("{:x}", Sha256::digest(bytes)))
+    }
+
     pub fn same_individual_successor(
         &self,
+        baseline_bytes: &[u8],
         handoff: FoundationTrainingHandoffV1,
         life: CurrentLifeCheckpointV1,
         progress: SameIndividualProgressV1,
         seeds: CheckpointSeedsV1,
     ) -> Result<Self> {
         self.validate()?;
+        let baseline_current_sha256 = self.admitted_source_sha256(baseline_bytes)?;
         handoff.validate()?;
+        let previous_actor = &self.handoff.actor;
+        let next_actor = &handoff.actor;
+        if previous_actor.stage_mask != next_actor.stage_mask
+            || sha(&previous_actor.config)? != sha(&next_actor.config)?
+            || previous_actor.weights.len() != next_actor.weights.len()
+            || previous_actor.update_ages.len() != next_actor.update_ages.len()
+            || previous_actor.update_ages.len() != previous_actor.weights.len()
+        {
+            return Err(
+                "same-individual optimizer configuration, mask or age coordinates changed".into(),
+            );
+        }
+        for i in 0..previous_actor.weights.len() {
+            if next_actor.update_ages[i] < previous_actor.update_ages[i]
+                || (!previous_actor.stage_mask.is_trainable(i)
+                    && (next_actor.weights[i].to_bits() != previous_actor.weights[i].to_bits()
+                        || next_actor.first_moment[i].to_bits()
+                            != previous_actor.first_moment[i].to_bits()
+                        || next_actor.second_moment[i].to_bits()
+                            != previous_actor.second_moment[i].to_bits()
+                        || next_actor.update_ages[i] != previous_actor.update_ages[i]))
+            {
+                return Err(
+                    "same-individual per-coordinate Adam age rolled back or frozen state changed"
+                        .into(),
+                );
+            }
+        }
         let old_life = self
             .life
             .as_ref()
@@ -252,7 +287,7 @@ impl CurrentTrainingCheckpointV1 {
             schema: 1,
             kind: "same-individual-ppo-v1".into(),
             counting_scope: "retained-same-individual-ppo-since-first-tag".into(),
-            baseline_current_sha256: format!("{:x}", Sha256::digest(self.encode()?)),
+            baseline_current_sha256,
             baseline_policy_version: self.handoff.policy_version,
             baseline_actor_optimizer_step: self.handoff.actor.optimizer_step,
             baseline_value_optimizer_step: self.handoff.value.optimizer_step,

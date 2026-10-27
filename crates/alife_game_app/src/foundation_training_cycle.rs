@@ -44,6 +44,7 @@ mod current;
 pub use current::*;
 mod resident;
 pub use resident::*;
+mod continuous_world;
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {

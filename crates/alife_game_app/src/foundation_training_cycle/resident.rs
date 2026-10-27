@@ -20,6 +20,9 @@ const RETIREMENT: &str = "resident-retirement.bin";
 const RETIREMENT_NEXT: &str = "resident-retirement.next";
 mod initialization;
 use initialization::{initialization_pending, INITIALIZATION, INITIALIZATION_NEXT};
+#[path = "continuous_store.rs"]
+mod continuous_store;
+pub use continuous_store::*;
 
 // Actual typed recovery peak, NOT a bound on an episode's raw private assets.
 // One encoded candidate plus its admission materialization coexist. In a valid
@@ -743,6 +746,9 @@ fn run_resident_with_startup_observer(
 pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    if continuous_store::owns(&store)? {
+        return continuous_store::recover_locked(&store);
+    }
     if initialization_pending(&store)? {
         return initialization::abort(&store);
     }
@@ -1037,6 +1043,9 @@ fn finish_resident_with_remove(
 ) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    if continuous_store::owns(&store)? {
+        return continuous_store::finish_locked(&store);
+    }
     if initialization_pending(&store)? {
         return initialization::abort(&store);
     }

@@ -216,6 +216,46 @@ fn same_individual_handoff_requires_explicit_matching_policy_and_preserves_full_
     wrong.continuation = FoundationContinuationKindV1::FreshCohort;
     assert!(wrong.validate().is_err());
 }
+#[cfg(feature = "receipt-lineage")]
+#[test]
+fn current_source_admission_binds_original_noncanonical_bytes_and_rejects_changed_adam() {
+    use sha2::{Digest, Sha256};
+    let source = CurrentTrainingCheckpointV1 {
+        schema_version: 1,
+        seed: 7400,
+        founder_seed_base: 7400,
+        seeds: CheckpointSeedsV1 {
+            historical_freshness: "unknown".into(),
+            excluded_ranges: vec![[1, 7400]],
+            pending_range: None,
+        },
+        handoff: handoff(),
+        life: None,
+        same_individual: None,
+    };
+    let payload = serde_json::to_vec_pretty(&source).unwrap();
+    let mut bytes = b"ALIFE-CURRENT-1\n".to_vec();
+    bytes.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+    bytes.extend_from_slice(&Sha256::digest(&payload));
+    bytes.extend(payload);
+    let original_sha = format!("{:x}", Sha256::digest(&bytes));
+    assert_ne!(
+        original_sha,
+        format!("{:x}", Sha256::digest(source.encode().unwrap()))
+    );
+    assert_eq!(source.admitted_source_sha256(&bytes).unwrap(), original_sha);
+    let mut changed = source.clone();
+    changed.handoff.actor.first_moment[0] += 0.001;
+    assert!(source
+        .admitted_source_sha256(&changed.encode().unwrap())
+        .is_err());
+    let mut changed = source.clone();
+    changed.handoff.actor.second_moment[0] = -0.;
+    assert!(source
+        .admitted_source_sha256(&changed.encode().unwrap())
+        .is_err());
+}
+
 #[cfg(feature = "cpu-backend")]
 #[test]
 fn cpu_updated_founder_exports_to_native_handoff_without_age_or_moment_reset() {
