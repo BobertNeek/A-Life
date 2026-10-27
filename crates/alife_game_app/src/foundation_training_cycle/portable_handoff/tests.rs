@@ -552,6 +552,11 @@ fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds
     assert!(recovered.seeds.contains(first + 1));
     assert_eq!(std::fs::read(&current).unwrap(), original);
     assert_eq!(report["uncheckpointed_updates_restored"], false);
+    // A recoverable candidate is not permission to retire the only run state
+    // before the owner has published those exact admitted bytes.
+    assert!(finish_resident_serial_run(&store).is_err());
+    assert!(store.join(".run").is_dir());
+    assert_eq!(std::fs::read(&current).unwrap(), original);
     // Recovery retries are idempotent. A committed owner publication is detected.
     std::fs::write(store.join(".run/recovery-intent.next"), b"partial intent").unwrap();
     assert_eq!(recover_resident_serial_checkpoint(&store).unwrap(), report);
@@ -560,6 +565,24 @@ fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds
         recover_resident_serial_checkpoint(&store).unwrap()["already_published_current"],
         true
     );
+    let accepted_bytes = std::fs::read(&current).unwrap();
+    let unknown = store.join(".run/unexpected-owner-data");
+    std::fs::write(&unknown, b"preserve unknown data").unwrap();
+    assert!(finish_resident_serial_run(&store).is_err());
+    assert!(store.join(".run").is_dir());
+    assert_eq!(std::fs::read(&unknown).unwrap(), b"preserve unknown data");
+    assert_eq!(std::fs::read(&current).unwrap(), accepted_bytes);
+    std::fs::remove_file(unknown).unwrap();
+    let retired = finish_resident_serial_run(&store).unwrap();
+    assert_eq!(retired["removed_run"], true);
+    assert_eq!(retired["uncheckpointed_work_may_be_lost"], true);
+    assert!(!store.join(".run").exists());
+    assert_eq!(std::fs::read(&current).unwrap(), accepted_bytes);
+    assert_eq!(
+        finish_resident_serial_run(&store).unwrap()["already_clean"],
+        true
+    );
+    assert_eq!(std::fs::read(&current).unwrap(), accepted_bytes);
 }
 
 #[test]

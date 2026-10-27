@@ -788,6 +788,7 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
     let manifest: Manifest = read_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC)?;
     let wal: SeedWal = read_metadata(&run.join("seed-wal.bin"), WAL_MAGIC)?;
     let intent: serde_json::Value = read_metadata(&run.join("recovery-intent.bin"), REC_MAGIC)?;
+    regular(&run.join("run.json"), MAX_METADATA as u64)?;
     let owner: serde_json::Value = serde_json::from_slice(&fs::read(run.join("run.json"))?)?;
     let candidate = run.join("recovered-current.alife-checkpoint");
     regular(&candidate, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
