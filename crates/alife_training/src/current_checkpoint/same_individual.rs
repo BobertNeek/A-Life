@@ -1,0 +1,283 @@
+//! Exact same-individual continuation. Counts describe retained training, never
+//! inferred policy ages or a freshly generated replacement organism.
+use super::*;
+use crate::FoundationContinuationKindV1;
+use alife_core::{BrainCapacityClass, BrainPhenotype, PhenotypeCompiler, PhenotypeCompilerInputs};
+use alife_gpu_backend::GpuTrainingSamplingConfig;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SameIndividualProgressV1 {
+    pub session_nonce: u64,
+    pub organism_id: u64,
+    pub session_start_world_tick: u64,
+    pub world_tick: u64,
+    /// Explicit session-to-date retained PPO rows and completed PPO updates.
+    pub trained_rows: u64,
+    pub completed_updates: u64,
+    pub sampling_temperature: f32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SameIndividualCurrentV1 {
+    pub schema: u16,
+    pub kind: String,
+    pub progress: SameIndividualProgressV1,
+    pub baseline_current_sha256: String,
+    pub baseline_policy_version: u64,
+    pub baseline_actor_optimizer_step: u32,
+    pub baseline_value_optimizer_step: u32,
+    pub baseline_trained_rows: u64,
+    pub baseline_completed_updates: u64,
+    pub total_trained_rows: u64,
+    pub total_completed_updates: u64,
+    pub compiler_inputs_sha256: String,
+    pub actor_sha256: String,
+    pub value_sha256: String,
+    pub private_life_sha256: String,
+    pub sampling_state: GpuTrainingSamplingConfig,
+}
+
+fn sha(value: &impl Serialize) -> Result<String> {
+    Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
+}
+
+fn private_asset(
+    life: &CurrentLifeCheckpointV1,
+    save: &alife_world::PortableSaveFile,
+    asset_id: &str,
+) -> Result<Vec<u8>> {
+    let mut entries = save
+        .assets
+        .entries
+        .iter()
+        .filter(|e| e.asset_id == asset_id);
+    let entry = entries
+        .next()
+        .ok_or("same-individual private asset missing")?;
+    if entries.next().is_some() {
+        return Err("same-individual private asset identity is ambiguous".into());
+    }
+    life.asset_bytes(&entry.relative_path)
+}
+
+/// Validates actual saved compiler/immutable-head coordinates, without a device
+/// or any fresh-cohort compiler. Native admission additionally validates every
+/// private asset, journal and mutable-state codec through the ordinary loader.
+fn private_binding(
+    life: &CurrentLifeCheckpointV1,
+    handoff: &FoundationTrainingHandoffV1,
+    progress: &SameIndividualProgressV1,
+) -> Result<GpuTrainingSamplingConfig> {
+    let save = alife_world::PortableSaveFile::from_json_str(&life.world_json)?;
+    if save.creatures.len() != 1
+        || save.creatures[0].organism_id.raw() != progress.organism_id
+        || save.world.tick.raw() != progress.world_tick
+    {
+        return Err("same-individual organism or world tick differs from private save".into());
+    }
+    let creature = &save.creatures[0];
+    let gpu = creature
+        .gpu_brain
+        .as_ref()
+        .ok_or("same-individual private GPU state missing")?;
+    if gpu.checkpoint_tick.raw() != progress.world_tick || gpu.organism_id != creature.organism_id {
+        return Err("same-individual private GPU checkpoint boundary differs".into());
+    }
+    let inputs: PhenotypeCompilerInputs = serde_json::from_slice(&private_asset(
+        life,
+        &save,
+        &gpu.phenotype_compiler_inputs.asset_id,
+    )?)?;
+    let phenotype: BrainPhenotype = serde_json::from_slice(&private_asset(
+        life,
+        &save,
+        &gpu.immutable_phenotype.asset_id,
+    )?)?;
+    let compiled = PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048())?;
+    if sha(&inputs)? != sha(&handoff.compiler_inputs)?
+        || sha(&phenotype)? != sha(&compiled)?
+        || gpu.phenotype_hash != compiled.phenotype_hash()
+    {
+        return Err("same-individual private compiler/phenotype differs from global heads".into());
+    }
+    let birth = creature
+        .composite_genetics
+        .as_ref()
+        .ok_or("private birth provenance missing")?;
+    let birth_asset = alife_core::FoundationWeightAsset::decode_canonical(&private_asset(
+        life,
+        &save,
+        &birth.foundation_asset_id,
+    )?)?;
+    if inputs
+        .live_policy()
+        .ok_or("same-individual live policy marker missing")?
+        .birth_foundation_digest
+        != birth_asset.digest()
+    {
+        return Err("same-individual overlay changed private birth founder".into());
+    }
+    let exact = gpu
+        .exact_cognitive_state
+        .as_ref()
+        .ok_or("exact cognitive state missing")?;
+    let packet: serde_json::Value =
+        serde_json::from_slice(&private_asset(life, &save, &exact.asset_id)?)?;
+    // The runtime owns this optional private byte packet. Reading the explicit
+    // field here also allows this admission code to preserve older codecs.
+    let sampling_bytes: Vec<u8> = serde_json::from_value(
+        packet
+            .get("private_training_sampling")
+            .cloned()
+            .ok_or("exact private training sampler missing")?,
+    )?;
+    if sampling_bytes.len() > 4096 {
+        return Err("private training sampler exceeds its bound".into());
+    }
+    let sampling: GpuTrainingSamplingConfig = serde_json::from_slice(&sampling_bytes)?;
+    sampling.validate()?;
+    if sampling.demonstrator.is_some()
+        || sampling.temperature.to_bits() != progress.sampling_temperature.to_bits()
+    {
+        return Err("same-individual sampling configuration differs from private state".into());
+    }
+    Ok(sampling)
+}
+
+impl SameIndividualCurrentV1 {
+    pub fn validate(&self, current: &CurrentTrainingCheckpointV1) -> Result<()> {
+        let p = &self.progress;
+        if self.schema != 1
+            || self.kind != "same-individual-ppo-v1"
+            || current.handoff.continuation != FoundationContinuationKindV1::SameIndividual
+            || p.session_nonce == 0
+            || p.session_nonce == current.seed
+            || p.organism_id == 0
+            || p.world_tick < p.session_start_world_tick
+            || !p.sampling_temperature.is_finite()
+            || !(0.0001..=128.).contains(&p.sampling_temperature)
+            || (p.completed_updates == 0) != (p.trained_rows == 0)
+            || p.completed_updates > p.trained_rows
+            || !current.seeds.contains(p.session_nonce)
+            || current
+                .seeds
+                .pending_range
+                .is_some_and(|[a, b]| a <= p.session_nonce && p.session_nonce <= b)
+            || self.baseline_current_sha256.len() != 64
+            || !self
+                .baseline_current_sha256
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit())
+            || self
+                .baseline_policy_version
+                .checked_add(p.completed_updates)
+                != Some(current.handoff.policy_version)
+            || self.baseline_trained_rows.checked_add(p.trained_rows)
+                != Some(self.total_trained_rows)
+            || self
+                .baseline_completed_updates
+                .checked_add(p.completed_updates)
+                != Some(self.total_completed_updates)
+            || current
+                .handoff
+                .actor
+                .optimizer_step
+                .checked_sub(self.baseline_actor_optimizer_step)
+                .map(u64::from)
+                .is_none_or(|n| n < p.completed_updates)
+            || current
+                .handoff
+                .value
+                .optimizer_step
+                .checked_sub(self.baseline_value_optimizer_step)
+                .map(u64::from)
+                .is_none_or(|n| n < p.completed_updates)
+            || self.compiler_inputs_sha256 != sha(&current.handoff.compiler_inputs)?
+            || self.actor_sha256 != sha(&current.handoff.actor)?
+            || self.value_sha256 != sha(&current.handoff.value)?
+        {
+            return Err(
+                "same-individual identity, exact heads, counters or session nonce mismatch".into(),
+            );
+        }
+        let life = current
+            .life
+            .as_ref()
+            .ok_or("same-individual private life missing")?;
+        if self.private_life_sha256 != sha(life)?
+            || sha(&self.sampling_state)? != sha(&private_binding(life, &current.handoff, p)?)?
+        {
+            return Err("same-individual private closure or exact sampler mismatch".into());
+        }
+        Ok(())
+    }
+}
+
+impl CurrentTrainingCheckpointV1 {
+    pub fn same_individual_successor(
+        &self,
+        handoff: FoundationTrainingHandoffV1,
+        life: CurrentLifeCheckpointV1,
+        progress: SameIndividualProgressV1,
+        seeds: CheckpointSeedsV1,
+    ) -> Result<Self> {
+        self.validate()?;
+        handoff.validate()?;
+        let old_life = self
+            .life
+            .as_ref()
+            .ok_or("same-individual baseline private life missing")?;
+        let old = alife_world::PortableSaveFile::from_json_str(&old_life.world_json)?;
+        let saved = alife_world::PortableSaveFile::from_json_str(&life.world_json)?;
+        if old.creatures.len() != 1
+            || saved.creatures.len() != 1
+            || old.creatures[0].organism_id != saved.creatures[0].organism_id
+            || old.creatures[0].genome_id != saved.creatures[0].genome_id
+            || old.creatures[0].composite_genetics != saved.creatures[0].composite_genetics
+            || progress.session_start_world_tick != old.world.tick.raw()
+            || saved.deterministic_seed != self.seed
+        {
+            return Err(
+                "same-individual successor replaced baseline organism, birth or world".into(),
+            );
+        }
+        let (rows, updates) = self.same_individual.as_ref().map_or((0, 0), |tag| {
+            (tag.total_trained_rows, tag.total_completed_updates)
+        });
+        let tag = SameIndividualCurrentV1 {
+            schema: 1,
+            kind: "same-individual-ppo-v1".into(),
+            baseline_current_sha256: format!("{:x}", Sha256::digest(self.encode()?)),
+            baseline_policy_version: self.handoff.policy_version,
+            baseline_actor_optimizer_step: self.handoff.actor.optimizer_step,
+            baseline_value_optimizer_step: self.handoff.value.optimizer_step,
+            baseline_trained_rows: rows,
+            baseline_completed_updates: updates,
+            total_trained_rows: rows
+                .checked_add(progress.trained_rows)
+                .ok_or("trained rows overflow")?,
+            total_completed_updates: updates
+                .checked_add(progress.completed_updates)
+                .ok_or("update count overflow")?,
+            compiler_inputs_sha256: sha(&handoff.compiler_inputs)?,
+            actor_sha256: sha(&handoff.actor)?,
+            value_sha256: sha(&handoff.value)?,
+            private_life_sha256: sha(&life)?,
+            sampling_state: private_binding(&life, &handoff, &progress)?,
+            progress,
+        };
+        let next = Self {
+            schema_version: 1,
+            seed: self.seed,
+            founder_seed_base: self.founder_seed_base,
+            seeds,
+            handoff,
+            life: Some(life),
+            same_individual: Some(tag),
+        };
+        next.validate()?;
+        Ok(next)
+    }
+}

@@ -98,8 +98,34 @@ fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
         },
         handoff,
         life: None,
+        same_individual: None,
     };
     let restored = CurrentTrainingCheckpointV1::decode(&source.encode().unwrap()).unwrap();
+    #[derive(serde::Serialize)]
+    struct LegacyCurrent<'a> {
+        schema_version: u16,
+        seed: u64,
+        founder_seed_base: u64,
+        seeds: &'a CheckpointSeedsV1,
+        handoff: &'a FoundationTrainingHandoffV1,
+        life: &'a Option<CurrentLifeCheckpointV1>,
+    }
+    let legacy = LegacyCurrent {
+        schema_version: source.schema_version,
+        seed: source.seed,
+        founder_seed_base: source.founder_seed_base,
+        seeds: &source.seeds,
+        handoff: &source.handoff,
+        life: &source.life,
+    };
+    assert_eq!(
+        &source.encode().unwrap()[56..],
+        serde_json::to_vec(&legacy).unwrap()
+    );
+    assert!(serde_json::to_value(&source)
+        .unwrap()
+        .get("same_individual")
+        .is_none());
     assert_eq!(
         restored.handoff.actor.first_moment[1].to_bits(),
         (-0.0_f32).to_bits()
@@ -128,6 +154,67 @@ fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
     assert_eq!(next.handoff, source.handoff);
     next.seeds.excluded_ranges = vec![[1, 3], [4, 7400]];
     assert!(next.validate().is_err());
+}
+
+#[test]
+fn same_individual_handoff_requires_explicit_matching_policy_and_preserves_full_adam() {
+    let original = handoff();
+    let asset = original
+        .compiler_inputs
+        .n2048_candidate_asset()
+        .unwrap()
+        .clone();
+    let inputs = PhenotypeCompilerInputs::try_new_with_live_n2048_policy(
+        original.compiler_inputs.genome().clone(),
+        &BrainCapacityClass::n2048(),
+        original.compiler_inputs.development().clone(),
+        original.compiler_inputs.sensor_profile(),
+        asset.clone(),
+        N2048LivePolicyProvenanceV1 {
+            schema: 1,
+            birth_foundation_digest: asset.digest(),
+            policy_version: original.policy_version,
+        },
+    )
+    .unwrap();
+    let phenotype =
+        PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048()).unwrap();
+    let mut actor = original.actor.clone();
+    actor.phenotype_hash = phenotype.phenotype_hash();
+    assert!(FoundationTrainingHandoffV1::new(
+        original.origin,
+        original.policy_version,
+        inputs.clone(),
+        actor.clone(),
+        original.value.clone()
+    )
+    .is_err());
+    let same = FoundationTrainingHandoffV1::new_same_individual(
+        original.origin,
+        original.policy_version,
+        inputs,
+        actor.clone(),
+        original.value.clone(),
+    )
+    .unwrap();
+    assert_eq!(
+        same.continuation,
+        FoundationContinuationKindV1::SameIndividual
+    );
+    assert_eq!(
+        serde_json::to_vec(&same.actor).unwrap(),
+        serde_json::to_vec(&actor).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_vec(&same.value).unwrap(),
+        serde_json::to_vec(&original.value).unwrap()
+    );
+    let mut wrong = same.clone();
+    wrong.policy_version += 1;
+    assert!(wrong.validate().is_err());
+    let mut wrong = same;
+    wrong.continuation = FoundationContinuationKindV1::FreshCohort;
+    assert!(wrong.validate().is_err());
 }
 #[cfg(feature = "cpu-backend")]
 #[test]

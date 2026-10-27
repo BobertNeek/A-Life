@@ -1,5 +1,6 @@
 //! Admission/migration for the one durable fresh-cohort checkpoint.
 use super::*;
+pub use alife_training::SameIndividualProgressV1;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
 mod life;
@@ -37,6 +38,11 @@ pub fn read_current_training_checkpoint(path: &Path) -> Result<CurrentTrainingCh
             .as_ref()
             .ok_or("native current checkpoint lacks private/lifetime recovery")?,
     )?;
+    if checkpoint.same_individual.is_some() {
+        // The typed Current validates its exact saved compiler/heads/private
+        // closure. A fresh-cohort recompilation would replace this individual.
+        return Ok(checkpoint);
+    }
     let handoff = checkpoint.handoff.clone().admit()?;
     let phenotype = crate::foundation_archived_success_replay::compile_source(
         handoff.foundation.clone(),
@@ -78,6 +84,7 @@ fn read_native_current(
         seeds,
         handoff,
         life: Some(life::capture(source)?),
+        same_individual: None,
     };
     checkpoint.validate()?;
     Ok((checkpoint, receipt))
@@ -89,6 +96,9 @@ pub fn advance_current_training_checkpoint(
     source: &Path,
 ) -> Result<CurrentTrainingCheckpointV1> {
     previous.validate()?;
+    if previous.same_individual.is_some() {
+        return Err("same-individual Current cannot enter a fresh-cohort episode".into());
+    }
     let (next, receipt) = read_native_current(source, previous.seeds.clone())?;
     let asset = previous
         .handoff
@@ -122,6 +132,19 @@ pub fn advance_current_training_checkpoint(
     Ok(next)
 }
 
+/// Seal exact private live state and full matching actor/value Adam heads.
+/// The producer supplies actual retained-row/update counters; policy ages are
+/// checked against these counters rather than used to invent them.
+pub fn seal_same_individual_training_checkpoint(
+    baseline: &CurrentTrainingCheckpointV1,
+    handoff: alife_training::FoundationTrainingHandoffV1,
+    life_directory: &Path,
+    progress: SameIndividualProgressV1,
+    seeds: CheckpointSeedsV1,
+) -> Result<CurrentTrainingCheckpointV1> {
+    baseline.same_individual_successor(handoff, life::capture(life_directory)?, progress, seeds)
+}
+
 pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Value> {
     let checkpoint = read_current_training_checkpoint(path)?;
     let asset = checkpoint
@@ -129,7 +152,7 @@ pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Va
         .compiler_inputs
         .n2048_candidate_asset()
         .ok_or("current asset missing")?;
-    Ok(serde_json::json!({
+    let mut report = serde_json::json!({
         "schema":1, "kind":"single-current-training-checkpoint", "seed":checkpoint.seed,
         "founder_seed_base":checkpoint.founder_seed_base,
         "policy_version":checkpoint.handoff.policy_version,
@@ -142,7 +165,11 @@ pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Va
             "excluded_range_count":checkpoint.seeds.excluded_ranges.len()},
         "neural_execution":false, "weights_modified":false,
         "external_dependencies":[]
-    }))
+    });
+    if let Some(tag) = &checkpoint.same_individual {
+        report["same_individual"] = serde_json::to_value(tag)?;
+    }
+    Ok(report)
 }
 
 /// Admit an exact final portable frontier without serializing a current file.
