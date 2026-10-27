@@ -84,6 +84,8 @@ jobs:
           cargo test --locked -p alife_core --test cpu_neural_evidence --test experience_neural_decision --test packed_experience_logging
           cargo test --locked -p alife_world --test cpu_policy_config
           cargo test --locked -p alife_game_app --features cpu-training --test cpu_policy_boundary
+          cargo test --locked -p alife_game_app --features cpu-training --lib final_private_life
+          cargo test --locked -p alife_game_app --features cpu-training --bin train_n2048_care final_private_life
           ALIFE_CURRENT_FIXTURE_OUTPUT="$RUNNER_TEMP/current-synthetic-$GITHUB_RUN_ID.alife-checkpoint" cargo test --locked -p alife_game_app --features cpu-training --lib foundation_training_cycle::portable_handoff
           cargo build --locked -p alife_game_app --features cpu-training --bin export_native_training_handoff
           python -B scripts/check_current_checkpoint_native.py target/debug/export_native_training_handoff "$RUNNER_TEMP/current-synthetic-$GITHUB_RUN_ID.alife-checkpoint"

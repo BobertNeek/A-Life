@@ -143,3 +143,73 @@ pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Va
         "external_dependencies":[]
     }))
 }
+
+/// Admit an exact final portable frontier without serializing a current file.
+/// Seed allocation remains the host journal's separate authority; this report
+/// deliberately supplies no synthetic pending cursor or freshness assertion.
+pub fn inspect_native_training_frontier(
+    source: &Path,
+    expected_policy: u64,
+) -> Result<serde_json::Value> {
+    let path = source.join("cycle.json");
+    let metadata = std::fs::symlink_metadata(&path)?;
+    if !metadata.is_file() || metadata.len() > 64 * 1024 * 1024 {
+        return Err("native frontier receipt must be a bounded regular file".into());
+    }
+    let receipt: FoundationCycleReceipt = serde_json::from_slice(&std::fs::read(path)?)?;
+    let seeds = CheckpointSeedsV1 {
+        historical_freshness: "unknown".into(),
+        excluded_ranges: vec![[receipt.seed, receipt.seed]],
+        pending_range: None,
+    };
+    let (checkpoint, receipt) = read_native_current(source, seeds)?;
+    if checkpoint.handoff.policy_version != expected_policy {
+        return Err("native frontier policy differs from the expected version".into());
+    }
+    let private = checkpoint
+        .life
+        .as_ref()
+        .ok_or("native frontier lacks private life")?;
+    let world = alife_world::PortableSaveFile::from_json_str(&private.world_json)?;
+    let final_tick = world.restore_headless_world()?.tick().raw();
+    if final_tick != receipt.world_ticks_elapsed {
+        return Err("native frontier private save is not at the final collection boundary".into());
+    }
+    let asset = checkpoint
+        .handoff
+        .compiler_inputs
+        .n2048_candidate_asset()
+        .ok_or("native frontier asset missing")?;
+    let hash = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let mut private_assets = std::collections::BTreeMap::new();
+    for name in private.assets_base64.keys() {
+        let bytes = private.asset_bytes(name)?;
+        private_assets.insert(
+            name.clone(),
+            serde_json::json!({
+                "sha256":hash(&bytes),"bytes":bytes.len(),
+            }),
+        );
+    }
+    let source = source.canonicalize()?;
+    let dependencies = portable_handoff::protected_sources(&source)?
+        .into_iter()
+        .filter(|path| path != &source)
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "schema":1,"kind":"native-training-frontier-v1",
+        "expected_policy_version":expected_policy,"policy_version":checkpoint.handoff.policy_version,
+        "seed":checkpoint.seed,"founder_seed_base":checkpoint.founder_seed_base,
+        "actor_optimizer_step":checkpoint.handoff.actor.optimizer_step,
+        "value_optimizer_step":checkpoint.handoff.value.optimizer_step,
+        "asset_sha256":hash(&asset.encode_canonical()?),
+        "canonical_compiler_inputs_sha256":hash(&serde_json::to_vec(&checkpoint.handoff.compiler_inputs)?),
+        "canonical_actor_checkpoint_sha256":hash(&serde_json::to_vec(&checkpoint.handoff.actor)?),
+        "canonical_value_checkpoint_sha256":hash(&serde_json::to_vec(&checkpoint.handoff.value)?),
+        "canonical_private_world_sha256":hash(private.world_json.as_bytes()),
+        "canonical_sleep_journal_sha256":hash(private.sleep_journal_json.as_bytes()),
+        "private_assets":private_assets,"final_private_world_tick":final_tick,
+        "source_dependencies":dependencies,"native_serial_continuity_validated":true,
+        "neural_execution":false,"weights_modified":false,"current_file_encoded":false,
+    }))
+}

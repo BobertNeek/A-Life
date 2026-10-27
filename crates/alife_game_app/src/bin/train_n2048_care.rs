@@ -7,6 +7,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args
         .next()
         .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N] | --refresh-terrain-founder SOURCE_DIRECTORY OUTPUT_DIRECTORY")?;
+    if mode == "--final-private-life-contract" {
+        if args.next().is_some() {
+            return Err("unexpected final-private-life-contract argument".into());
+        }
+        println!(
+            "{}",
+            serde_json::json!({
+                "schema":1,"kind":"native-final-private-life-capture-v1",
+                "argument":"--preserve-final-private-life",
+                "default_directory_capture":false,"default_current_file_capture":true,
+                "exact_runtime_capture":true,"durable_publish_and_rebind":true,
+            })
+        );
+        return Ok(());
+    }
     if mode == "--prior-context-contract" {
         if args.next().is_some() {
             return Err("unexpected prior-context-contract argument".into());
@@ -216,6 +231,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut preserve_objective_from = None;
     let mut sampling_temperature = None;
     let mut center_actor_advantages = false;
+    let mut preserve_final_private_life = false;
     let mut acquisition_rehearsal_epochs = None;
     let mut archived_success_manifest = None;
     let mut archived_success_epochs = None;
@@ -226,6 +242,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing training seed")?
                 .to_string_lossy()
                 .parse::<u64>()?;
+        } else if flag == "--preserve-final-private-life" {
+            if preserve_final_private_life {
+                return Err("duplicate final private-life capture flag".into());
+            }
+            preserve_final_private_life = true;
         } else if flag == "--center-actor-advantages" {
             if center_actor_advantages {
                 return Err("duplicate actor advantage centering flag".into());
@@ -344,6 +365,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         food_after_world_tick,
         preserve_objective_from,
     )?;
+    validate_final_private_life_cycle_option(
+        &mode.to_string_lossy(),
+        preserve_final_private_life,
+        lesson,
+        preserve_objective_from.is_some()
+            || food_after_world_tick.is_some()
+            || center_actor_advantages
+            || acquisition_rehearsal_epochs.is_some()
+            || archived_success_manifest.is_some()
+            || archived_success_epochs.is_some(),
+    )?;
     if preserve_objective_from.is_some()
         && (mode != "--resume-cycle" || food_after_world_tick.is_some())
     {
@@ -438,7 +470,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .name("foundation-training-cycle".into())
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
-                let result = if center_actor_advantages {
+                let result = if preserve_final_private_life {
+                    alife_game_app::resume_foundation_training_cycle_with_final_private_life(
+                        previous
+                            .as_deref()
+                            .ok_or("final private-life capture needs an existing checkpoint")?,
+                        &output,
+                        seed,
+                        ticks,
+                        lesson.ok_or("final private-life capture requires a lesson")?,
+                        sampling_temperature.unwrap_or(1.0),
+                        food_need_condition.unwrap_or_default(),
+                    )
+                } else if center_actor_advantages {
                     alife_game_app::resume_foundation_grab_cycle_with_centered_actor_advantages(
                         previous
                             .as_deref()
@@ -547,6 +591,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if receipt.food_available_world_tick.is_some() && !receipt.delayed_food_gate_passed {
             return Err("delayed-food survival/meal gate failed; trained checkpoint retained in cycle directory".into());
         }
+    }
+    Ok(())
+}
+
+fn validate_final_private_life_cycle_option(
+    mode: &str,
+    requested: bool,
+    lesson: Option<alife_game_app::FoundationTeacherLesson>,
+    conflicting_override: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if requested && (mode != "--resume-cycle" || lesson.is_none() || conflicting_override) {
+        return Err("final private-life capture requires a sealed --resume-cycle with --lesson and no objective, food-delay, replay or actor-credit override".into());
     }
     Ok(())
 }
@@ -1004,6 +1060,41 @@ mod targeting_tests {
 mod evaluation_options_tests {
     use super::*;
     use alife_game_app::FoundationTeacherLesson;
+
+    #[test]
+    fn final_private_life_option_is_explicit_and_cannot_be_silently_ignored() {
+        for mode in ["--pilot", "--teacher-pilot", "--cycle", "--resume-cycle"] {
+            validate_final_private_life_cycle_option(mode, false, None, true).unwrap();
+            if mode != "--resume-cycle" {
+                assert!(validate_final_private_life_cycle_option(
+                    mode,
+                    true,
+                    Some(FoundationTeacherLesson::Feeding),
+                    false,
+                )
+                .is_err());
+            }
+        }
+        for lesson in [
+            FoundationTeacherLesson::EatHeldFood,
+            FoundationTeacherLesson::EatReachableFood,
+            FoundationTeacherLesson::Feeding,
+            FoundationTeacherLesson::RelocatedFood,
+        ] {
+            validate_final_private_life_cycle_option("--resume-cycle", true, Some(lesson), false)
+                .unwrap();
+            assert!(validate_final_private_life_cycle_option(
+                "--resume-cycle",
+                true,
+                Some(lesson),
+                true,
+            )
+            .is_err());
+        }
+        assert!(
+            validate_final_private_life_cycle_option("--resume-cycle", true, None, false).is_err()
+        );
+    }
 
     fn parse(
         values: &[&str],

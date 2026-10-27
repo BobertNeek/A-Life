@@ -1070,6 +1070,75 @@ mod sampling_temperature_tests {
     }
 
     #[test]
+    fn final_private_life_opt_in_preserves_existing_defaults_and_rejects_unsupported_sources() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-final-private-policy-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let source = root.join("directory");
+        std::fs::create_dir(&source).unwrap();
+        std::fs::write(source.join("cycle.json"), b"{}").unwrap();
+        let file = root.join("current.alife-checkpoint");
+        std::fs::write(&file, b"policy selection only; not an admitted checkpoint").unwrap();
+        assert!(!final_private_life_capture_policy(None, false, false).unwrap());
+        assert!(!final_private_life_capture_policy(Some(&source), false, false).unwrap());
+        assert!(final_private_life_capture_policy(Some(&file), false, false).unwrap());
+        assert!(final_private_life_capture_policy(Some(&file), false, true).unwrap());
+        assert!(final_private_life_capture_policy(Some(&source), false, true).unwrap());
+        assert!(final_private_life_capture_policy(None, false, true).is_err());
+        assert!(final_private_life_capture_policy(Some(&source), true, true).is_err());
+        assert!(
+            final_private_life_capture_policy(Some(&root.join("missing")), false, true).is_err()
+        );
+        for marker in ["adaptation.json", "warmup.json"] {
+            std::fs::write(source.join(marker), b"{}").unwrap();
+            assert!(final_private_life_capture_policy(Some(&source), false, true).is_err());
+            std::fs::remove_file(source.join(marker)).unwrap();
+        }
+        std::fs::remove_file(source.join("cycle.json")).unwrap();
+        assert!(final_private_life_capture_policy(Some(&source), false, true).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn final_private_life_opt_in_still_admits_source_before_creating_a_world_or_output() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-final-private-rejection-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let source = root.join("source");
+        std::fs::create_dir(&source).unwrap();
+        let raw = b"invalid sealed source; no world or GPU may be created";
+        std::fs::write(source.join("cycle.json"), raw).unwrap();
+        let output = root.join("output");
+        let error = resume_foundation_training_cycle_with_final_private_life(
+            &source,
+            &output,
+            42,
+            2,
+            FoundationTeacherLesson::Feeding,
+            1.0,
+            crate::FoundationFoodNeedCondition::default(),
+        )
+        .unwrap_err();
+        assert!(error.downcast_ref::<serde_json::Error>().is_some());
+        assert!(!output.exists());
+        assert_eq!(std::fs::read(source.join("cycle.json")).unwrap(), raw);
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn relocated_food_rejects_conflicting_delayed_placement_before_source_or_output_access() {
         let error = run_foundation_training_cycle_profiled(
             Path::new("unused-relocated-food-output-fixture"),
@@ -1086,6 +1155,7 @@ mod sampling_temperature_tests {
             &CycleStageTiming::default(),
             false,
             crate::FoundationFoodNeedCondition::default(),
+            false,
         )
         .err()
         .unwrap();
@@ -1110,6 +1180,7 @@ mod sampling_temperature_tests {
                 &CycleStageTiming::default(),
                 false,
                 crate::FoundationFoodNeedCondition::default(),
+                false,
             )
             .err()
             .unwrap();
@@ -1133,6 +1204,7 @@ mod sampling_temperature_tests {
                 &CycleStageTiming::default(),
                 false,
                 crate::FoundationFoodNeedCondition::default(),
+                false,
             )
             .err()
             .unwrap();
@@ -2676,6 +2748,37 @@ pub fn resume_foundation_training_cycle_with_food_need(
         None,
         false,
         food_need_condition,
+        false,
+    )
+}
+
+/// Opt-in exact final individual save for a directory-based retained cohort.
+/// Founder/actor/value continuation remains the ordinary fresh-cohort path;
+/// this only retains the collected individual's final private/lifetime state.
+pub fn resume_foundation_training_cycle_with_final_private_life(
+    previous: &Path,
+    output: &Path,
+    seed: u64,
+    training_ticks: usize,
+    lesson: FoundationTeacherLesson,
+    sampling_temperature: f32,
+    food_need_condition: crate::FoundationFoodNeedCondition,
+) -> Result<FoundationCycleReceipt> {
+    food_need_condition.validate_lesson(Some(lesson))?;
+    run_foundation_training_cycle_from_with_food_need(
+        output,
+        seed,
+        training_ticks,
+        Some(previous),
+        None,
+        Some(lesson),
+        None,
+        sampling_temperature,
+        0,
+        None,
+        false,
+        food_need_condition,
+        true,
     )
 }
 
@@ -2880,6 +2983,7 @@ fn run_foundation_training_cycle_from_with_actor_credit(
         archived_replay,
         center_actor_advantages,
         crate::FoundationFoodNeedCondition::default(),
+        false,
     )
 }
 
@@ -2897,6 +3001,7 @@ fn run_foundation_training_cycle_from_with_food_need(
     archived_replay: Option<(&Path, u32)>,
     center_actor_advantages: bool,
     food_need_condition: crate::FoundationFoodNeedCondition,
+    preserve_final_private_life: bool,
 ) -> Result<FoundationCycleReceipt> {
     let timing = CycleStageTiming::from_environment(|| {
         serde_json::json!({
@@ -2913,6 +3018,7 @@ fn run_foundation_training_cycle_from_with_food_need(
             "lesson": lesson,
             "food_need_condition": food_need_condition,
             "continuation_requested": previous.is_some(),
+            "preserve_final_private_life_requested": preserve_final_private_life,
             "rehearsal_epochs": rehearsal_epochs,
             "archived_replay_epochs": archived_replay.map(|(_, epochs)| epochs),
         })
@@ -2932,6 +3038,7 @@ fn run_foundation_training_cycle_from_with_food_need(
         &timing,
         false,
         food_need_condition,
+        preserve_final_private_life,
     );
     let result = result.and_then(|outcome| match outcome {
         FoundationCycleOutcome::Trained(receipt) => Ok(*receipt),
@@ -2982,6 +3089,7 @@ pub fn capture_foundation_critic_trajectory(
         &timing,
         true,
         crate::FoundationFoodNeedCondition::default(),
+        false,
     )
     .and_then(|outcome| match outcome {
         FoundationCycleOutcome::CriticCapture(receipt) => Ok(receipt),
@@ -3009,8 +3117,11 @@ fn run_foundation_training_cycle_profiled(
     timing: &CycleStageTiming,
     capture_only: bool,
     food_need_condition: crate::FoundationFoodNeedCondition,
+    preserve_final_private_life: bool,
 ) -> Result<FoundationCycleOutcome> {
     food_need_condition.validate_lesson(lesson)?;
+    let preserve_final_life =
+        final_private_life_capture_policy(previous, capture_only, preserve_final_private_life)?;
     let admission_stage = timing.stage("source_admission");
     cycle_ppo_config(sampling_temperature)?;
     if lesson == Some(FoundationTeacherLesson::RelocatedFood) && food_available_world_tick.is_some()
@@ -3197,7 +3308,7 @@ fn run_foundation_training_cycle_profiled(
                 center_actor_advantages,
                 timing,
                 if capture_only { previous } else { None },
-                previous.is_some_and(Path::is_file),
+                preserve_final_life,
                 food_need_condition,
             )
         },
@@ -3212,6 +3323,28 @@ fn run_foundation_training_cycle_profiled(
             );
         },
     )
+}
+
+fn final_private_life_capture_policy(
+    previous: Option<&Path>,
+    capture_only: bool,
+    requested: bool,
+) -> Result<bool> {
+    if requested
+        && (capture_only
+            || !previous.is_some_and(|path| {
+                path.is_file()
+                    || path.is_dir()
+                        && path.join("cycle.json").is_file()
+                        && !path.join("adaptation.json").exists()
+                        && !path.join("warmup.json").exists()
+            }))
+    {
+        return Err("final private-life capture requires an existing current file or sealed directory continuation".into());
+    }
+    // Existing defaults are unchanged: current-file continuation captures the
+    // final private life, while the old directory route retains its old cost.
+    Ok(requested || previous.is_some_and(Path::is_file))
 }
 
 fn record_cycle_failure(
