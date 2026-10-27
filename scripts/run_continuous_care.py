@@ -18,6 +18,7 @@ import uuid
 
 import current_checkpoint_store as cp
 import run_current_care as current
+import care_night_window
 
 require = cp.require
 host = current.host
@@ -36,10 +37,21 @@ SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
 MAX_LOG_BYTES = 8 * 1024 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
            'run_mixed_care_serial.py', 'run_eat_held_food_night.py',
-           'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py')
+           'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py', 'care_night_window.py')
+
+
+def nightly_window(args):
+    date = getattr(args, 'night_date', None)
+    if date is None:
+        return None
+    window = care_night_window.for_date(date)
+    require(args.hard_end == window.hard_end,
+            'nightly hard end must be 15:00 UTC for the dated Alberta UTC-6 window')
+    return window
 
 
 def request_for(args, now):
+    nightly_window(args)  # Refuse a stale DST-derived 16:00 UTC hard end, even in a plan.
     require(type(args.decisions) is int and 1 <= args.decisions <= 36000,
             'finite Feeding decisions must be in 1..36000')
     require(type(args.seed) is int and type(args.last_seed) is int and
@@ -95,10 +107,14 @@ def gpu_snapshot(index):
 
 def make_guard(args, lane, store):
     cached_at, gpu = -math.inf, None
+    night = nightly_window(args)
 
     def guard():
         nonlocal cached_at, gpu
-        require(dt.datetime.now(host.UTC) < args.hard_end, 'hard end reached')
+        now = dt.datetime.now(host.UTC)
+        require(now < args.hard_end, 'hard end reached')
+        if night is not None:
+            night.admit(now, args.final_reserve_seconds)
         require(not (store / cp.RUN / 'STOP').exists(), 'owner STOP requested')
         resources = host.resource_snapshot(store)
         require(resources['disk_free_bytes'] >= args.min_disk_gib * 2**30 and
@@ -328,6 +344,8 @@ def finish(lane, state, validate):
         'causal_speed': rows[0].get('causal_collection') if len(rows) == 1 else None,
         'outcome_scope': 'provisional row outcomes; only native admitted snapshot is retained',
         'recent_unsnapshotted_updates_may_be_lost': True}
+    if 'nightly_window' in state:
+        receipt['nightly_window'] = deepcopy(state['nightly_window'])
     require(cp.read_json(lane / STATE) == state and cp.read_json(lane / REQUEST) == state['request'],
             'owner/request changed before committing retirement')
     receipt['retirement'] = {'schema': 1, 'kind': 'finite-continuous-retirement-v1',
@@ -338,6 +356,10 @@ def finish(lane, state, validate):
 
 def run(args):
     invocation_started = dt.datetime.now(host.UTC).isoformat()
+    night = None if args.reconcile else nightly_window(args)
+    if night is not None:
+        # Reject before resolving paths, taking leases or invoking Native.
+        night.admit(dt.datetime.now(host.UTC), args.final_reserve_seconds)
     store_root = args.store.resolve(strict=True)
     lane = args.lane.resolve(strict=True)
     require(cp.real_directory(store_root) and cp.real_directory(lane), 'real store/lane directories required')
@@ -396,6 +418,8 @@ def run(args):
             'guard_configuration': {key: getattr(args, key) for key in ('idle_seconds', 'min_disk_gib',
                 'min_memory_gib', 'gpu_index', 'max_gpu_c', 'min_gpu_free_mib', 'final_reserve_seconds')},
             'worker': {'pid': None, 'stopped': True}}
+        if night is not None:
+            state['nightly_window'] = night.manifest(args.final_reserve_seconds)
         cp.write_json(lane / STATE, state)
         cp.write_json(lane / REQUEST, request)
         active = []
@@ -434,6 +458,8 @@ def main(argv=None):
     parser.add_argument('--decisions', type=int, default=512)
     parser.add_argument('--food-need-condition', choices=('newborn_v1', 'ordinary_healthy_aging_v1'), default='newborn_v1')
     parser.add_argument('--hard-end', type=host.cutoff_time)
+    parser.add_argument('--night-date', type=dt.date.fromisoformat,
+        help='automatic Alberta night: fixed 07:00-15:00 UTC, independent of stale tzdata; not a scheduler')
     parser.add_argument('--final-reserve-seconds', type=int, default=180)
     parser.add_argument('--max-temporary-bytes', type=int, default=2 * 2**30)
     parser.add_argument('--idle-seconds', type=int, default=300)
@@ -449,14 +475,19 @@ def main(argv=None):
             all(math.isfinite(v) and v > 0 for v in (args.min_disk_gib, args.min_memory_gib,
                 args.max_gpu_c, args.min_gpu_free_mib)), 'invalid resource guards')
     if not args.reconcile:
+        if args.night_date is not None and args.hard_end is None:
+            args.hard_end = care_night_window.for_date(args.night_date).hard_end
         require(args.hard_end is not None, '--hard-end is required')
         request = request_for(args, dt.datetime.now(host.UTC))
     else:
         request = None
     if not args.run:
-        return {'kind': 'finite-continuous-plan-v1', 'request': request,
+        result = {'kind': 'finite-continuous-plan-v1', 'request': request,
                 'mutation': False, 'native_execution': False,
                 'required_next_step': 'fresh owner/resource and exact executable admission, then --run'}
+        if not args.reconcile and args.night_date is not None:
+            result['nightly_window'] = nightly_window(args).manifest(args.final_reserve_seconds)
+        return result
     return run(args)
 
 

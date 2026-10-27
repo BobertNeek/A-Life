@@ -294,6 +294,89 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertFalse(result['mutation'])
         self.assertEqual(self.calls, [])
 
+    def clock_at(self, now):
+        class Clock(dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now.astimezone(tz) if tz is not None else now.replace(tzinfo=None)
+        return patch.object(session.dt, 'datetime', Clock)
+
+    def test_nightly_plan_derives_abt_end_without_checkpoint_or_native_access(self):
+        with self.clock_at(dt.datetime(2026, 11, 2, 6, tzinfo=session.host.UTC)):
+            result = session.main(['--store', 'does-not-exist', '--lane', 'also-absent',
+                '--binary', 'absent', '--checkpoint-tool', 'absent', '--seed', '80', '--last-seed', '87',
+                '--night-date', '2026-11-02'])
+        manifest = result['nightly_window']
+        self.assertEqual(manifest['start_utc'], '2026-11-02T07:00:00+00:00')
+        self.assertEqual(manifest['hard_end_utc'], '2026-11-02T15:00:00+00:00')
+        self.assertEqual(result['request']['collection_cutoff_unix_seconds'],
+            int(dt.datetime(2026, 11, 2, 14, 57, tzinfo=session.host.UTC).timestamp()))
+        self.assertFalse(manifest['scheduler_future_wake_verified'])
+        self.assertFalse(result['mutation'])
+        self.assertEqual(self.calls, [])
+
+    def test_nightly_plan_refuses_stale_dst_end(self):
+        with self.clock_at(dt.datetime(2026, 11, 2, 6, tzinfo=session.host.UTC)):
+            with self.assertRaisesRegex(ValueError, '15:00 UTC'):
+                session.main(['--store', 'does-not-exist', '--lane', 'also-absent',
+                    '--binary', 'absent', '--checkpoint-tool', 'absent', '--seed', '80', '--last-seed', '87',
+                    '--night-date', '2026-11-02', '--hard-end', '2026-11-02T16:00:00+00:00'])
+        self.assertEqual(self.calls, [])
+
+    def test_nightly_early_and_expired_runs_refuse_before_path_or_native_access(self):
+        args = self.args()
+        args.night_date = dt.date(2026, 11, 2)
+        args.hard_end = dt.datetime(2026, 11, 2, 15, tzinfo=session.host.UTC)
+        args.store = self.root / 'does-not-exist'
+        for now in (dt.datetime(2026, 11, 2, 6, 59, tzinfo=session.host.UTC),
+                    dt.datetime(2026, 11, 2, 14, 57, tzinfo=session.host.UTC),
+                    dt.datetime(2026, 11, 3, 7, tzinfo=session.host.UTC)):
+            with self.subTest(now=now), self.clock_at(now):
+                with self.assertRaisesRegex(ValueError, 'dated Alberta'):
+                    session.run(args)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.child.call_count, 0)
+        self.assertFalse((self.lane / session.STATE).exists())
+
+    def test_nightly_guard_rechecks_window_and_generic_idle_mode_remains_available(self):
+        args = self.args()
+        args.night_date = dt.date(2026, 11, 2)
+        args.hard_end = dt.datetime(2026, 11, 2, 15, tzinfo=session.host.UTC)
+        self.mock(session.host, 'resource_snapshot', return_value={
+            'disk_free_bytes': 100 * 2**30, 'available_memory_bytes': 16 * 2**30, 'idle_seconds': 1000})
+        self.mock(session, 'gpu_snapshot', return_value={
+            'adapter': 'synthetic', 'temperature_c': 40, 'free_memory_mib': 4096, 'utilization_percent': 0})
+        guard = GUARD_FACTORY(args, self.lane, self.store)
+        with self.clock_at(dt.datetime(2026, 11, 2, 7, tzinfo=session.host.UTC)):
+            guard()
+        for hour, minute in ((6, 59), (14, 57)):
+            with self.clock_at(dt.datetime(2026, 11, 2, hour, minute, tzinfo=session.host.UTC)):
+                with self.assertRaisesRegex(ValueError, 'dated Alberta'):
+                    guard()
+        args.night_date = None  # Independently authorized idle work retains its explicit UTC deadline.
+        with self.clock_at(dt.datetime(2026, 11, 2, 6, 59, tzinfo=session.host.UTC)):
+            GUARD_FACTORY(args, self.lane, self.store)()
+
+    def test_nightly_publication_retains_window_and_expired_recovery_never_starts_a_world(self):
+        args = self.args()
+        args.night_date = dt.date(2026, 11, 2)
+        args.hard_end = dt.datetime(2026, 11, 2, 15, tzinfo=session.host.UTC)
+        with self.clock_at(dt.datetime(2026, 11, 2, 8, tzinfo=session.host.UTC)):
+            original_receipt = self.stage_nightly_retirement(args)
+        args.reconcile = True
+        with self.clock_at(dt.datetime(2026, 11, 3, 16, tzinfo=session.host.UTC)):
+            receipt = session.run(args)
+        self.assertEqual(receipt, original_receipt)
+        self.assertEqual(receipt['nightly_window']['hard_end_utc'], '2026-11-02T15:00:00+00:00')
+        self.assertEqual(self.child.call_count, 1)
+        self.assertFalse((self.lane / session.STATE).exists())
+
+    def stage_nightly_retirement(self, args):
+        with patch.object(session, 'retire_sidecars', side_effect=RuntimeError('before sidecar retirement')):
+            with self.assertRaisesRegex(RuntimeError, 'before sidecar'):
+                session.run(args)
+        return cp.read_json(self.lane / session.RECEIPT)
+
     def stage_committed_retirement(self):
         with patch.object(session, 'retire_sidecars', side_effect=RuntimeError('before sidecar retirement')):
             with self.assertRaisesRegex(RuntimeError, 'before sidecar'):
