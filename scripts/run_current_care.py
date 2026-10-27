@@ -7,6 +7,7 @@ No existing legacy lane/history is removed by this command.
 """
 import argparse
 from collections import OrderedDict
+from copy import deepcopy
 import datetime as dt
 import json
 import math
@@ -38,7 +39,7 @@ def validator(binary):
     """Repeat publication copies need hashes, not repeated full private admission.
 
     The cache is private to this validator/OS-writer lifetime and contains only
-    eight successful content digests. New bytes always receive native admission.
+    eight successful digest-bound reports. New bytes always receive native admission.
     Only the native self-contained format (no external dependencies) is eligible.
     """
     binary = Path(binary).resolve(strict=True)
@@ -50,7 +51,7 @@ def validator(binary):
         before = checkpoints.digest(path)  # Also rejects aliases/nonregular/oversized files.
         if before in admitted:
             admitted.move_to_end(before)
-            return None
+            return deepcopy(admitted[before])
         try:
             report = tool(binary, '--inspect-current', path)
             require(checkpoints.digest(path) == before, 'checkpoint changed during native admission')
@@ -59,10 +60,10 @@ def validator(binary):
             admitted.clear()
             raise
         if isinstance(report, dict) and report.get('kind') == 'single-current-training-checkpoint' and report.get('external_dependencies') == []:
-            admitted[before] = None
+            admitted[before] = deepcopy(report)
             if len(admitted) > 8:
                 admitted.popitem(last=False)
-        return report
+        return deepcopy(report)
 
     return validate
 

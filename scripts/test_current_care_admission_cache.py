@@ -44,6 +44,20 @@ class AdmissionCacheTests(unittest.TestCase):
             os.chdir(previous)
         self.native.assert_called_once_with(self.binary.resolve(strict=True), '--inspect-current', self.path)
 
+    def test_cached_native_report_is_returned_and_isolated_from_caller_mutation(self):
+        self.report.update(policy_version=42, seeds={'pending_range': [100, 101]})
+        first = self.validate(self.path)
+        first['policy_version'] = 999
+        first['seeds']['pending_range'][0] = 1
+        self.assertEqual(self.report['policy_version'], 42)
+        self.assertEqual(self.report['seeds']['pending_range'], [100, 101])
+        cached = self.validate(self.path)
+        self.assertEqual(cached['policy_version'], 42)
+        self.assertEqual(cached['seeds']['pending_range'], [100, 101])
+        cached['seeds']['pending_range'][1] = 999
+        self.assertEqual(self.validate(self.path)['seeds']['pending_range'], [100, 101])
+        self.assertEqual(self.native.call_count, 1)
+
     def test_native_failure_is_never_cached_and_invalidates_prior_reuse(self):
         self.validate(self.path)
         other = self.root / 'different'

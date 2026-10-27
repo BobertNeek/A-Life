@@ -79,6 +79,8 @@ both checkpoint and inspector hashes before/after the command; failures clear
 the cache. A new validator/process starts cold. This avoids repeatedly parsing
 the same complete private state at candidate, publication-copy and current paths;
 publication hashes, flushing, atomic replacement and recovery checks are unchanged.
+Cache hits return independent copies of the original native report, preserving
+callers that inspect its fields without allowing a caller to mutate the cache.
 There is no persistent cache or additional checkpoint retained.
 
 The store holds one stable OS writer lock. It never unlinks that lock file. A new
