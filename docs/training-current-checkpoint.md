@@ -67,6 +67,14 @@ completed seal exactly once and clears the old owned run. Live/unknown worker PI
 unknown store entries, changed pinned executables/helpers or invalid current block
 cleanup. No process outside this run is stopped.
 
+Private-save admission uses one lease-protected scratch workspace in the OS temp
+directory. Each validation removes its copied world/assets on completion; the
+next validation reclaims a killed validator's orphan only after acquiring the
+OS lease. It never sweeps arbitrary temporary directories. The empty workspace's
+small lease marker persists, without historical private snapshots or a recovery
+dependency; copying just current still suffices. Unknown entries or aliases block
+cleanup. GPU episode/recovery/rerun artifacts remain under the owned `.run`.
+
 Unsealed interrupted learning is retained automatically. `--reconcile --run`
 reports it instead of guessing that a missing seal means no useful work. Recover
 and seal it with the original tools when possible. If the owner explicitly chooses

@@ -4,6 +4,7 @@ use alife_training::CurrentLifeCheckpointV1;
 use std::{
     collections::BTreeSet,
     fs,
+    io::{Read, Write},
     path::{Component, PathBuf},
 };
 
@@ -103,23 +104,104 @@ fn materialize(snapshot: &CurrentLifeCheckpointV1, root: &Path) -> Result<()> {
     loaded.save.restore_headless_world()?;
     Ok(())
 }
-struct Temporary(PathBuf);
-impl Drop for Temporary {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+pub(super) struct Temporary {
+    path: PathBuf,
+    _lease: fs::File,
+}
+impl AsRef<Path> for Temporary {
+    fn as_ref(&self) -> &Path {
+        &self.path
     }
 }
+impl Drop for Temporary {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.path);
+    }
+}
+fn real_directory(path: &Path) -> Result<bool> {
+    let metadata = fs::symlink_metadata(path)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Ok(false);
+        }
+    }
+    Ok(metadata.is_dir() && !metadata.file_type().is_symlink())
+}
+pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
+    #[cfg(unix)]
+    let created = {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new().mode(0o700).create(root)
+    };
+    #[cfg(not(unix))]
+    let created = fs::create_dir(root);
+    match created {
+        Ok(()) => (),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(error) => return Err(error.into()),
+    }
+    if !real_directory(root)? {
+        return Err("invalid private validation workspace".into());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if fs::metadata(root)?.permissions().mode() & 0o077 != 0 {
+            return Err("private validation workspace permissions are not private".into());
+        }
+    }
+    let lock = root.join("lease");
+    match fs::symlink_metadata(&lock) {
+        Ok(metadata)
+            if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 128 =>
+        {
+            return Err("invalid private validation lease".into())
+        }
+        Ok(_) => (),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+        Err(error) => return Err(error.into()),
+    }
+    let mut lease = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock)?;
+    // The lease survives file-name reuse and is never unlinked. A killed
+    // process releases it; another validator may then remove only this owned
+    // workspace's interrupted materialization. Never sweep arbitrary temp files.
+    lease.lock()?;
+    let mut marker = String::new();
+    lease.read_to_string(&mut marker)?;
+    let expected = "alife-current-private-validation-v1\n";
+    let entries = fs::read_dir(root)?
+        .map(|e| e.map(|e| e.file_name()))
+        .collect::<std::io::Result<BTreeSet<_>>>()?;
+    if marker.is_empty() && entries == BTreeSet::from([std::ffi::OsString::from("lease")]) {
+        lease.write_all(expected.as_bytes())?;
+        lease.sync_all()?;
+    } else if marker != expected || entries.iter().any(|name| name != "lease" && name != "work") {
+        return Err("unknown private validation workspace contents; refusing cleanup".into());
+    }
+    let path = root.join("work");
+    if path.exists() || path.is_symlink() {
+        if !real_directory(&path)? {
+            return Err("private validation scratch must be a real directory".into());
+        }
+        fs::remove_dir_all(&path)?;
+    }
+    fs::create_dir(&path)?;
+    Ok(Temporary {
+        path,
+        _lease: lease,
+    })
+}
 pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
-    let root = std::env::temp_dir().join(format!(
-        "alife-current-life-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos()
-    ));
-    fs::create_dir(&root)?;
-    let temporary = Temporary(root);
-    materialize(snapshot, &temporary.0)
+    let root = std::env::temp_dir().join("alife-current-private-validation-v1");
+    let temporary = workspace_at(&root)?;
+    materialize(snapshot, &temporary.path)
 }
 
 /// Restore a portable private world/organism bundle into a fresh directory.

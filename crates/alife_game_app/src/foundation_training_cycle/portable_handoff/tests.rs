@@ -301,6 +301,48 @@ fn current_checkpoint_advancement_preserves_full_state_and_rejects_wrong_predece
     assert!(advance_current_training_checkpoint(&current, &episode).is_err());
     assert_eq!(current.encode().unwrap(), before);
 }
+
+#[test]
+fn current_private_validation_cleans_process_exit_orphans_and_preserves_unknown_files() {
+    const FLAG: &str = "ALIFE_CURRENT_VALIDATION_FAULT_ROOT";
+    if let Some(root) = std::env::var_os(FLAG) {
+        let workspace = current::validation_workspace_for_test(Path::new(&root)).unwrap();
+        std::fs::write(
+            workspace.as_ref().join("orphan-private-copy"),
+            b"disposable synthetic private bytes",
+        )
+        .unwrap();
+        std::process::exit(0); // No Drop: simulate loss of the validator process.
+    }
+    let root = std::env::temp_dir().join(format!(
+        "alife-validation-fault-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "foundation_training_cycle::portable_handoff::tests::current_private_validation_cleans_process_exit_orphans_and_preserves_unknown_files"])
+        .env(FLAG, &root).output().unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert!(root.join("work/orphan-private-copy").exists());
+    let workspace = current::validation_workspace_for_test(&root).unwrap();
+    assert!(!workspace.as_ref().join("orphan-private-copy").exists());
+    drop(workspace);
+    assert!(!root.join("work").exists());
+    std::fs::write(root.join("other-owner"), b"preserve unknown data").unwrap();
+    assert!(current::validation_workspace_for_test(&root).is_err());
+    assert_eq!(
+        std::fs::read(root.join("other-owner")).unwrap(),
+        b"preserve unknown data"
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
 #[test]
 fn native_serial_export_preserves_corrected_critic_age_and_original_source() {
     let f = crate::foundation_critic_correction::tests::full_residual_correction_fixture();

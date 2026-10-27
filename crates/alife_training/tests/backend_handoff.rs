@@ -83,6 +83,10 @@ fn device_free_native_handoff_preserves_full_optimizer_and_asset_identity() {
 #[cfg(feature = "receipt-lineage")]
 #[test]
 fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
+    let mut handoff = handoff();
+    handoff.actor.first_moment[1] = -0.0;
+    handoff.actor.second_moment[2] = f32::from_bits(1);
+    handoff.value.parameters[0] = -0.0;
     let source = CurrentTrainingCheckpointV1 {
         schema_version: 1,
         seed: 7400,
@@ -92,10 +96,19 @@ fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
             excluded_ranges: vec![[1, 7400], [9000, 9000]],
             pending_range: None,
         },
-        handoff: handoff(),
+        handoff,
         life: None,
     };
     let restored = CurrentTrainingCheckpointV1::decode(&source.encode().unwrap()).unwrap();
+    assert_eq!(
+        restored.handoff.actor.first_moment[1].to_bits(),
+        (-0.0_f32).to_bits()
+    );
+    assert_eq!(restored.handoff.actor.second_moment[2].to_bits(), 1);
+    assert_eq!(
+        restored.handoff.value.parameters[0].to_bits(),
+        (-0.0_f32).to_bits()
+    );
     assert_eq!(
         serde_json::to_vec(&source).unwrap(),
         serde_json::to_vec(&restored).unwrap()
