@@ -2,6 +2,10 @@
 #![recursion_limit = "256"]
 
 mod backend_handoff;
+#[cfg(feature = "receipt-lineage")]
+mod current_checkpoint;
+#[cfg(feature = "receipt-lineage")]
+pub use current_checkpoint::*;
 #[cfg(feature = "cpu-backend")]
 pub mod cpu;
 mod founder_demonstrations;

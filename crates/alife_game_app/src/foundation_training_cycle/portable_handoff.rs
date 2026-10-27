@@ -11,7 +11,9 @@ fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn protected_sources(previous: &Path) -> Result<std::collections::BTreeSet<std::path::PathBuf>> {
+pub(super) fn protected_sources(
+    previous: &Path,
+) -> Result<std::collections::BTreeSet<std::path::PathBuf>> {
     let mut roots = std::collections::BTreeSet::new();
     let mut pending = vec![previous.canonicalize()?];
     while let Some(root) = pending.pop() {
@@ -39,21 +41,12 @@ fn protected_sources(previous: &Path) -> Result<std::collections::BTreeSet<std::
     Ok(roots)
 }
 
-/// Export a portable founder/optimizer boundary without running a world or GPU.
-/// The source remains read-only, including all individual/correction evidence.
-pub fn export_native_training_handoff(
-    previous: &Path,
-    output: &Path,
-) -> Result<FoundationSerialHandoffBindingV1> {
-    let previous = previous.canonicalize()?;
-    let sources = protected_sources(&previous)?;
-    let output =
-        resolve_isolated_training_output(output, sources.iter().map(std::path::PathBuf::as_path))?;
-    if output.exists() {
-        return Err("handoff output must be a new directory".into());
-    }
-    let previous = previous.as_path();
-    let output = output.as_path();
+pub(super) struct VerifiedSerialHandoff {
+    pub handoff: FoundationTrainingHandoffV1,
+    pub receipt: FoundationCycleReceipt,
+    pub source_bytes: BTreeMap<&'static str, Vec<u8>>,
+}
+pub(super) fn verified_serial_handoff(previous: &Path) -> Result<VerifiedSerialHandoff> {
     let source_bytes = SERIAL_HANDOFF_SOURCE_FILES
         .into_iter()
         .map(|name| {
@@ -108,6 +101,38 @@ pub fn export_native_training_handoff(
     {
         return Err("native source changed during continuity admission".into());
     }
+    for (name, bytes) in &source_bytes {
+        if std::fs::read(previous.join(name))? != *bytes {
+            return Err("native source changed during continuity admission".into());
+        }
+    }
+    Ok(VerifiedSerialHandoff {
+        handoff,
+        receipt,
+        source_bytes,
+    })
+}
+
+/// Export a portable founder/optimizer boundary without running a world or GPU.
+/// The source remains read-only, including all individual/correction evidence.
+pub fn export_native_training_handoff(
+    previous: &Path,
+    output: &Path,
+) -> Result<FoundationSerialHandoffBindingV1> {
+    let previous = previous.canonicalize()?;
+    let sources = protected_sources(&previous)?;
+    let output =
+        resolve_isolated_training_output(output, sources.iter().map(std::path::PathBuf::as_path))?;
+    if output.exists() {
+        return Err("handoff output must be a new directory".into());
+    }
+    let previous = previous.as_path();
+    let output = output.as_path();
+    let VerifiedSerialHandoff {
+        handoff,
+        source_bytes,
+        ..
+    } = verified_serial_handoff(previous)?;
     let handoff_bytes = serde_json::to_vec_pretty(&handoff)?;
     let binding = FoundationSerialHandoffBindingV1 {
         schema_version: 1,

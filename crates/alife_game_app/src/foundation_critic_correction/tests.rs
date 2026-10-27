@@ -34,7 +34,17 @@ pub(crate) fn residual_fixture() -> Fixture {
 pub(crate) fn full_residual_correction_fixture() -> Fixture {
     fixture_with_residual(Some(b"{\"optimizer_updates\":2}"), 1)
 }
+pub(crate) fn full_residual_correction_fixture_with_source(prepare: impl FnOnce(&Path)) -> Fixture {
+    fixture_with_residual_prepared(Some(b"{\"optimizer_updates\":2}"), 1, prepare)
+}
 fn fixture_with_residual(residual: Option<&[u8]>, critic_objective: u16) -> Fixture {
+    fixture_with_residual_prepared(residual, critic_objective, |_| {})
+}
+fn fixture_with_residual_prepared(
+    residual: Option<&[u8]>,
+    critic_objective: u16,
+    prepare: impl FnOnce(&Path),
+) -> Fixture {
     let source = crate::foundation_archived_success_replay::tests::checkpoint_fixture(5124);
     let root = source.with_file_name(format!(
         "{}-correction",
@@ -57,11 +67,13 @@ fn fixture_with_residual(residual: Option<&[u8]>, critic_objective: u16) -> Fixt
     }
     std::fs::create_dir(source.join("nested")).unwrap();
     std::fs::write(source.join("nested/preserved.bin"), b"exact acquired state").unwrap();
+    prepare(&source);
     let target = root.join("target");
     std::fs::create_dir(&target).unwrap();
     std::fs::create_dir(target.join("nested")).unwrap();
     let source_files = snapshot(&source).unwrap();
     for name in source_files.keys() {
+        std::fs::create_dir_all(target.join(name).parent().unwrap()).unwrap();
         std::fs::copy(source.join(name), target.join(name)).unwrap();
     }
     edit(&target.join("value-checkpoint.json"), |data| {

@@ -1,5 +1,9 @@
 # Native CPU foundation training backend
 
+The October26 single-current retention decision supersedes this report's older
+retain-history/rollback recommendations. See [the current native serial workflow](../training-current-checkpoint.md).
+Historical byte measurements below retain their original scope.
+
 Dated implementation/evidence report, updated 2026-10-26. This report covers
 [PR #110](https://github.com/BobertNeek/A-Life/pull/110) and the care bridge in
 [PR #118](https://github.com/BobertNeek/A-Life/pull/118). Historical measurements
