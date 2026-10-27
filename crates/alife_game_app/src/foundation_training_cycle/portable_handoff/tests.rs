@@ -249,7 +249,6 @@ fn resident_full_head_json_and_current_roundtrip_preserve_f32_bits() {
 }
 
 pub(crate) fn private_fixture(source: &Path) {
-
     let actor_path = source.join("actor-checkpoint.json");
     let mut actor: alife_training::FoundationTrainerCheckpoint =
         serde_json::from_slice(&std::fs::read(&actor_path).unwrap()).unwrap();
@@ -560,7 +559,11 @@ fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds
     assert_eq!(std::fs::read(&current).unwrap(), original);
     // Recovery retries are idempotent. A committed owner publication is detected.
     std::fs::write(store.join(".run/recovery-intent.next"), b"partial intent").unwrap();
-    assert_eq!(recover_resident_serial_checkpoint(&store).unwrap(), report);
+    let mut repeated = recover_resident_serial_checkpoint(&store).unwrap();
+    let mut expected = report.clone();
+    repeated.as_object_mut().unwrap().remove("temporary_budget");
+    expected.as_object_mut().unwrap().remove("temporary_budget");
+    assert_eq!(repeated, expected);
     std::fs::copy(candidate, &current).unwrap();
     assert_eq!(
         recover_resident_serial_checkpoint(&store).unwrap()["already_published_current"],

@@ -715,7 +715,7 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
         return Ok(
             serde_json::json!({"kind":"resident-recovery-v1", "already_published_current":true,
             "candidate":current,"candidate_sha256":finished["current_sha256"],
-            "cleanup_completed":true,"neural_execution":false}),
+            "cleanup_completed":true,"temporary_budget":null,"neural_execution":false}),
         );
     }
     let run = store.join(".run");
@@ -737,8 +737,7 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
             .collection_cutoff_unix_seconds
             .saturating_sub(1),
     )?;
-    let _budget =
-        alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
+    let budget = alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
     let _validation = current::validation_scope(&run)?;
     // Producer is stopped and its lease is held. This is only the exact
     // unpublished derived staging path, never a committed snapshot/candidate.
@@ -760,8 +759,9 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
             return Err("canonical current changed outside this resident recovery".into());
         }
         read_current_training_checkpoint(&current)?;
+        let temporary_budget = temporary_budget_report(&budget)?;
         return Ok(
-            serde_json::json!({"kind":"resident-recovery-v1","already_published_current":true,"candidate":current,"candidate_sha256":current_hash,"neural_execution":false}),
+            serde_json::json!({"kind":"resident-recovery-v1","already_published_current":true,"candidate":current,"candidate_sha256":current_hash,"temporary_budget":temporary_budget,"neural_execution":false}),
         );
     }
     let baseline = read_current_training_checkpoint(&current)?;
@@ -820,12 +820,21 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
         REC_MAGIC,
         &serde_json::json!({"baseline_sha256":manifest.baseline_sha256,"request_sha256":manifest.request_sha256,"after_sha256":after}),
     )?;
+    let temporary_budget = temporary_budget_report(&budget)?;
     Ok(
         serde_json::json!({"kind":"resident-recovery-v1","candidate":recovery_path,"candidate_sha256":after,
         "policy_version":checkpoint.handoff.policy_version,"actor_optimizer_step":checkpoint.handoff.actor.optimizer_step,
         "value_optimizer_step":checkpoint.handoff.value.optimizer_step,"seeds":checkpoint.seeds,
         "already_published_current":false,"neural_execution":false,"weights_modified":false,
-        "uncheckpointed_updates_restored":false,"canonical_current_published":false}),
+        "uncheckpointed_updates_restored":false,"canonical_current_published":false,"temporary_budget":temporary_budget}),
+    )
+}
+
+fn temporary_budget_report(budget: &alife_storage::OutputBudget) -> Result<serde_json::Value> {
+    let usage = budget.usage()?;
+    Ok(
+        serde_json::json!({"used":usage.used,"reserved":usage.reserved,"high_water":usage.high_water,
+        "limit":usage.limit,"scope":"STORE/.run logical file bytes","sample":"this recovery invocation"}),
     )
 }
 

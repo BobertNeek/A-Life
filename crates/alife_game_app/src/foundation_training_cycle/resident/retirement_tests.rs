@@ -55,47 +55,56 @@ fn published_store(test: impl FnOnce(&Path)) {
 
 #[test]
 fn output_budget_retirement_retry_after_binding_removal_preserves_conflicts_and_current() {
-    published_store(|store| {
-        let current = store.join("current.alife-checkpoint");
-        let original = fs::read(&current).unwrap();
-        assert!(finish_resident_with_remove(store, |run| {
-            fs::remove_file(run.join("run.json"))?;
-            fs::remove_file(run.join("seed-wal.bin"))?;
-            fs::remove_file(run.join("resident-frontier.bin"))?;
-            Err(std::io::Error::other(
-                "injected interruption after binding deletion",
-            ))
-        })
-        .is_err());
-        assert!(store.join(RETIREMENT).is_file());
-        assert!(store.join(".run").is_dir());
-        fs::write(store.join(".run/unknown-writer"), b"preserve").unwrap();
-        assert!(finish_resident_serial_run(store).is_err());
-        assert_eq!(
-            fs::read(store.join(".run/unknown-writer")).unwrap(),
-            b"preserve"
-        );
-        fs::remove_file(store.join(".run/unknown-writer")).unwrap();
-        let mut changed = original.clone();
-        changed.push(0);
-        fs::write(&current, &changed).unwrap();
-        assert!(finish_resident_serial_run(store).is_err());
-        assert_eq!(fs::read(&current).unwrap(), changed);
-        fs::write(&current, &original).unwrap();
-        // Recover routes the committed retirement even though its old WAL and
-        // frontier no longer exist. It dispatches no world and returns one object.
-        assert_eq!(
-            recover_resident_serial_checkpoint(store).unwrap()["cleanup_completed"],
-            true
-        );
-        assert!(!store.join(".run").exists());
-        assert!(!store.join(RETIREMENT).exists());
-        assert_eq!(fs::read(&current).unwrap(), original);
-        assert_eq!(
-            finish_resident_serial_run(store).unwrap()["already_clean"],
-            true
-        );
-    });
+    let bindings = [
+        "run.json",
+        "seed-wal.bin",
+        "resident-frontier.bin",
+        "recovery-intent.bin",
+        "recovered-current.alife-checkpoint",
+    ];
+    for removed in 1..=bindings.len() {
+        published_store(|store| {
+            let current = store.join("current.alife-checkpoint");
+            let original = fs::read(&current).unwrap();
+            assert!(finish_resident_with_remove(store, |run| {
+                for name in &bindings[..removed] {
+                    fs::remove_file(run.join(name))?;
+                }
+                Err(std::io::Error::other(
+                    "injected interruption after binding deletion",
+                ))
+            })
+            .is_err());
+            assert!(store.join(RETIREMENT).is_file());
+            assert!(store.join(".run").is_dir());
+            fs::write(store.join(".run/unknown-writer"), b"preserve").unwrap();
+            assert!(finish_resident_serial_run(store).is_err());
+            assert_eq!(
+                fs::read(store.join(".run/unknown-writer")).unwrap(),
+                b"preserve"
+            );
+            fs::remove_file(store.join(".run/unknown-writer")).unwrap();
+            let mut changed = original.clone();
+            changed.push(0);
+            fs::write(&current, &changed).unwrap();
+            assert!(finish_resident_serial_run(store).is_err());
+            assert_eq!(fs::read(&current).unwrap(), changed);
+            fs::write(&current, &original).unwrap();
+            // Recover routes the committed retirement even though its old WAL and
+            // frontier no longer exist. It dispatches no world and returns one object.
+            assert_eq!(
+                recover_resident_serial_checkpoint(store).unwrap()["cleanup_completed"],
+                true
+            );
+            assert!(!store.join(".run").exists());
+            assert!(!store.join(RETIREMENT).exists());
+            assert_eq!(fs::read(&current).unwrap(), original);
+            assert_eq!(
+                finish_resident_serial_run(store).unwrap()["already_clean"],
+                true
+            );
+        });
+    }
 }
 
 #[test]
