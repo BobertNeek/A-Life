@@ -1,0 +1,28 @@
+name: Resident output budget
+on:
+  pull_request:
+    paths:
+      - 'crates/alife_storage/**'
+      - 'crates/alife_archive/**'
+      - 'crates/alife_runtime/src/checkpoint_assets/**'
+      - 'crates/alife_game_app/src/foundation_training*'
+      - 'crates/alife_game_app/src/foundation_training*/**'
+      - '.github/workflows/resident-output-budget.yml'
+      - 'Cargo.*'
+jobs:
+  quota-primitives:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo test --locked -p alife_storage
+      - run: cargo clippy --locked -p alife_storage --all-targets -- -D warnings
