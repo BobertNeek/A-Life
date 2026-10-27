@@ -6,6 +6,7 @@ mid-life. The canonical checkpoint changes only after native stopped-run recover
 and atomic full-state admission. This does not schedule a night or close apps.
 """
 import argparse
+from copy import deepcopy
 import datetime as dt
 import json
 import math
@@ -23,6 +24,12 @@ STATE = 'continuous-session.json'
 REQUEST = 'continuous-request.json'
 RECEIPT = 'last-continuous-session.json'
 LOG = 'continuous-native'
+NATIVE_RETIREMENT = 'resident-retirement.bin'
+NATIVE_RETIREMENT_NEXT = 'resident-retirement.next'
+# Retain STATE until last, but keep independent committed authority for retries
+# even if STATE has already disappeared. Missing recorded files stay missing.
+SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
+            STATE + '.tmp', REQUEST + '.tmp', STATE)
 MAX_LOG_BYTES = 8 * 1024 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
            'run_mixed_care_serial.py', 'run_eat_held_food_night.py',
@@ -128,6 +135,84 @@ def read_events(lane):
     return events
 
 
+def sidecar_identity(path):
+    if not path.exists():
+        require(not path.is_symlink(), 'sidecar alias refused')
+        return None
+    before = cp.regular(path)
+    digest = cp.digest(path)
+    after = cp.regular(path)
+
+    def fields(info):
+        return {'device': info.st_dev, 'inode': info.st_ino, 'bytes': info.st_size,
+                'mtime_ns': info.st_mtime_ns, 'ctime_ns': info.st_ctime_ns}
+
+    require(fields(before) == fields(after), 'sidecar changed while recording retirement')
+    return {**fields(after), 'sha256': digest}
+
+
+def committed_retirement(lane, state=None):
+    path = lane / RECEIPT
+    if not path.exists():
+        require(not path.is_symlink(), 'receipt alias refused')
+        return None
+    receipt = cp.read_json(path)
+    commitment = receipt.get('retirement')
+    if not isinstance(commitment, dict) or commitment.get('kind') != 'finite-continuous-retirement-v1':
+        return None  # Historical receipts have no authority to remove leftovers.
+    require(commitment.get('schema') == 1 and receipt.get('kind') == 'finite-continuous-care-v1',
+            'invalid final retirement commitment')
+    return receipt if state is None or commitment.get('owner') == state else None
+
+
+def native_retirement_pending(store):
+    return any((store / name).exists() or (store / name).is_symlink()
+               for name in (NATIVE_RETIREMENT, NATIVE_RETIREMENT_NEXT))
+
+
+def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
+    """Retry the committed final housekeeping without rebuilding outcome counts."""
+    commitment = receipt['retirement']
+    state = commitment['owner']
+    require(state.get('schema') == 1 and state.get('kind') == 'finite-continuous-owner-v1' and
+            receipt['source'] == state['checkout'] and receipt['executables'] == state['executables'] and
+            receipt['request'] == state['request'] and
+            state['native_argv'] == [state['binary'], '--resident-serial', state['store'], str(lane / REQUEST)],
+            'retirement owner/receipt/path mismatch')
+    check_pins(state)
+    worker = state['worker']
+    require(worker['stopped'] or (worker['pid'] is not None and not cp.pid_alive(worker['pid'])),
+            'retirement writer still alive or launch outcome unknown')
+    store_root = Path(state['store'])
+    # Native retirement must already have completed before this receipt commits.
+    # Never use an old receipt to finish a different/new Native run.
+    require(not (store_root / cp.RUN).exists() and not (store_root / cp.RUN).is_symlink() and
+            not native_retirement_pending(store_root),
+            'unexpected native run/retirement after final receipt; preserving sidecars')
+    require(set(commitment['sidecars']) == set(SIDECARS), 'incomplete sidecar retirement binding')
+    allowed = {cp.LOCK, RECEIPT, *SIDECARS}
+    require({p.name for p in lane.iterdir()} <= allowed, 'unknown lane entries during retirement')
+    require(committed_retirement(lane) == receipt, 'final retirement receipt changed')
+    with cp.Store(store_root, validate) as store:
+        require(not (store_root / cp.RUN).exists() and
+                not native_retirement_pending(store_root) and
+                cp.digest(store.current) == receipt['current_sha256'],
+                'published current changed before sidecar retirement')
+        # Validate every survivor BEFORE removing any more. Identity and digest
+        # reject a new session's identical-looking request or recreated log.
+        for name, expected in commitment['sidecars'].items():
+            actual = sidecar_identity(lane / name)
+            require(actual is None or actual == expected, 'sidecar retirement identity/digest conflict')
+        for name in SIDECARS:
+            path = lane / name
+            if path.exists():
+                require(sidecar_identity(path) == commitment['sidecars'][name], 'sidecar changed before removal')
+                path.unlink()
+                cp.sync_directory(lane)
+                after_remove(name)
+    return receipt
+
+
 def reconcile(lane, state, validate):
     """Native and Python publishers never hold the same store lease together."""
     check_pins(state)
@@ -136,6 +221,11 @@ def reconcile(lane, state, validate):
             'native writer still alive or launch outcome unknown; preserving recovery files')
     store_root = Path(state['store'])
     native = Path(state['binary'])
+    pending_cleanup = None
+    if native_retirement_pending(store_root):
+        # Python Store deliberately refuses Native's root-level retirement marker.
+        # Native owns its validation/retry; do this before any Python store lease.
+        pending_cleanup = current.tool(native, '--finish-resident-run', store_root)
     # Finish any interrupted Python atomic publication before Native takes its lease.
     with cp.Store(store_root, validate) as store:
         actual = cp.digest(store.current)
@@ -144,7 +234,7 @@ def reconcile(lane, state, validate):
         require(actual == state.get('published_sha256', state['baseline_sha256']),
                 'no native WAL and unexpected canonical state; preserve owner record')
         recovery = {'already_published_current': actual != state['baseline_sha256']}
-        cleanup = {'already_clean': True}
+        cleanup = pending_cleanup or {'already_clean': True}
     else:
         recovery = current.tool(native, '--recover-resident', store_root)
         after = recovery['candidate_sha256']
@@ -171,6 +261,9 @@ def reconcile(lane, state, validate):
 
 
 def finish(lane, state, validate):
+    committed = committed_retirement(lane, state)
+    if committed is not None:
+        return retire_sidecars(lane, committed, validate)
     admitted, digest, recovery, cleanup = reconcile(lane, state, validate)
     events = read_events(lane)
     rows = [e for e in events if e['kind'] == 'resident-provisional-episode-v1']
@@ -200,15 +293,12 @@ def finish(lane, state, validate):
         'causal_speed': rows[0].get('causal_collection') if len(rows) == 1 else None,
         'outcome_scope': 'provisional row outcomes; only native admitted snapshot is retained',
         'recent_unsnapshotted_updates_may_be_lost': True}
+    require(cp.read_json(lane / STATE) == state and cp.read_json(lane / REQUEST) == state['request'],
+            'owner/request changed before committing retirement')
+    receipt['retirement'] = {'schema': 1, 'kind': 'finite-continuous-retirement-v1',
+        'owner': deepcopy(state), 'sidecars': {name: sidecar_identity(lane / name) for name in SIDECARS}}
     cp.write_json(lane / RECEIPT, receipt)
-    # Fixed, bounded sidecars only. Native owns and validates all .run deletion.
-    for name in (STATE, REQUEST, LOG + '.stdout.log', LOG + '.stderr.log'):
-        path = lane / name
-        if path.exists():
-            cp.regular(path)
-            path.unlink()
-    cp.sync_directory(lane)
-    return receipt
+    return retire_sidecars(lane, receipt, validate)
 
 
 def run(args):
@@ -224,15 +314,20 @@ def run(args):
     inspector = args.checkpoint_tool.resolve(strict=True)
     validate = current.validator(inspector)
     with cp.writer_lock(lane):
-        allowed = {cp.LOCK, STATE, STATE + '.tmp', REQUEST, RECEIPT, RECEIPT + '.tmp',
-                   LOG + '.stdout.log', LOG + '.stderr.log'}
+        allowed = {cp.LOCK, RECEIPT, RECEIPT + '.tmp', *SIDECARS}
         require({p.name for p in lane.iterdir()} <= allowed, 'unknown lane entries; no cleanup')
         if args.reconcile:
-            state = cp.read_json(lane / STATE)
+            if (lane / STATE).exists():
+                state = cp.read_json(lane / STATE)
+                committed = committed_retirement(lane, state)
+            else:
+                committed = committed_retirement(lane)
+                require(committed is not None, 'no bound retirement authority for missing owner state')
+                state = committed['retirement']['owner']
             require(state.get('schema') == 1 and state.get('kind') == 'finite-continuous-owner-v1' and
                     state['store'] == str(store_root) and state['binary'] == str(native) and
                     state['inspector'] == str(inspector), 'different resident owner')
-            return finish(lane, state, validate)
+            return retire_sidecars(lane, committed, validate) if committed is not None else finish(lane, state, validate)
         require(not (lane / STATE).exists() and not (store_root / cp.RUN).exists(),
                 'reconcile existing native run/owner before dispatch')
         require(all(not (lane / n).exists() for n in (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log')),

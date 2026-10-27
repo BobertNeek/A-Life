@@ -120,6 +120,7 @@ class ContinuousCareTests(unittest.TestCase):
                 'policy_version': 41, 'exact_trained_nourishing_events': 2,
                 'generic_consumed_events': 3, 'causal_collection': None}
             Path(str(log) + '.stdout.log').write_text(json.dumps(event) + '\n')
+            Path(str(log) + '.stderr.log').write_text('synthetic device warning\n')
 
     def test_one_long_world_full_state_publication_and_bound_cleanup(self):
         receipt = session.run(self.args())
@@ -262,6 +263,139 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertEqual(result['request']['rows'][0]['decisions'], 512)
         self.assertFalse(result['mutation'])
         self.assertEqual(self.calls, [])
+
+    def stage_committed_retirement(self):
+        with patch.object(session, 'retire_sidecars', side_effect=RuntimeError('before sidecar retirement')):
+            with self.assertRaisesRegex(RuntimeError, 'before sidecar'):
+                session.run(self.args())
+        return cp.read_json(self.lane / session.RECEIPT)
+
+    def test_retirement_retries_after_every_sidecar_removal_without_losing_outcomes(self):
+        original_retire = session.retire_sidecars
+        for index, target in enumerate(session.SIDECARS):
+            with self.subTest(removed=target):
+                self.store = self.root / f'store-retire-{index}'
+                self.lane = self.root / f'owner-retire-{index}'
+                self.store.mkdir()
+                self.lane.mkdir()
+                cp.write_json(self.store / cp.CURRENT, self.initial)
+
+                def native(binary, *argv):
+                    result = self.native(binary, *argv)
+                    if argv[0] == '--finish-resident-run':
+                        for name in (session.STATE + '.tmp', session.REQUEST + '.tmp'):
+                            (self.lane / name).write_bytes(b'owned bounded staging bytes')
+                    return result
+
+                def interrupted(lane, receipt, validate):
+                    def after_remove(name):
+                        if name == target:
+                            raise RuntimeError('synthetic sidecar retirement interruption')
+                    return original_retire(lane, receipt, validate, after_remove=after_remove)
+
+                count = self.child.call_count
+                with patch.object(session.current, 'tool', side_effect=native), \
+                        patch.object(session, 'retire_sidecars', side_effect=interrupted):
+                    with self.assertRaisesRegex(RuntimeError, 'sidecar retirement interruption'):
+                        session.run(self.args())
+                committed = cp.read_json(self.lane / session.RECEIPT)
+                args = self.args()
+                args.reconcile = True
+                resumed = session.run(args)
+                self.assertEqual(resumed, committed)
+                self.assertEqual(resumed['observed_rows'][0]['exact_trained_nourishing_events'], 2)
+                self.assertEqual(resumed['retained_trained_rows'], 512)
+                self.assertTrue(all(not (self.lane / n).exists() for n in session.SIDECARS))
+                self.assertEqual(self.child.call_count, count + 1)
+
+    def test_missing_state_with_original_leftovers_uses_bound_receipt(self):
+        receipt = self.stage_committed_retirement()
+        (self.lane / session.STATE).unlink()  # Reproduce the reviewed old deletion order.
+        self.assertTrue((self.lane / session.REQUEST).exists())
+        args = self.args()
+        args.reconcile = True
+        self.assertEqual(session.run(args), receipt)
+        self.assertEqual(self.child.call_count, 1)
+
+    def test_retirement_refuses_changed_current_without_removing_sidecars(self):
+        receipt = self.stage_committed_retirement()
+        changed = cp.read_json(self.store / cp.CURRENT)
+        changed['policy_version'] += 1
+        cp.write_json(self.store / cp.CURRENT, changed)
+        args = self.args()
+        args.reconcile = True
+        with self.assertRaisesRegex(ValueError, 'published current changed'):
+            session.run(args)
+        self.assertTrue((self.lane / session.STATE).exists())
+        self.assertTrue((self.lane / session.REQUEST).exists())
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+
+    def test_old_receipt_cannot_retire_recreated_identical_request(self):
+        receipt = self.stage_committed_retirement()
+        (self.lane / session.STATE).unlink()
+        path = self.lane / session.REQUEST
+        contents = path.read_bytes()
+        path.unlink()
+        path.write_bytes(contents)
+        args = self.args()
+        args.reconcile = True
+        with self.assertRaisesRegex(ValueError, 'identity/digest conflict'):
+            session.run(args)
+        self.assertEqual(path.read_bytes(), contents)
+        self.assertTrue((self.lane / (session.LOG + '.stdout.log')).exists())
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+
+    def test_retirement_refuses_changed_log_and_unknown_file(self):
+        receipt = self.stage_committed_retirement()
+        log = self.lane / (session.LOG + '.stdout.log')
+        log.write_text('different session\n')
+        args = self.args()
+        args.reconcile = True
+        with self.assertRaisesRegex(ValueError, 'identity/digest conflict'):
+            session.run(args)
+        unknown = self.lane / 'unrelated-world-save'
+        unknown.write_bytes(b'must preserve')
+        with self.assertRaisesRegex(ValueError, 'unknown lane entries'):
+            session.run(args)
+        self.assertTrue((self.lane / session.REQUEST).exists())
+        self.assertEqual(unknown.read_bytes(), b'must preserve')
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+
+    def test_pending_native_retirement_routes_before_python_store_even_without_run(self):
+        first = True
+        for marker_name in (session.NATIVE_RETIREMENT, session.NATIVE_RETIREMENT_NEXT):
+            with self.subTest(marker=marker_name):
+                # A new isolated session per marker form.
+                self.store = self.root / marker_name.replace('.', '-')
+                self.lane = self.root / (marker_name.replace('.', '-') + '-owner')
+                self.store.mkdir()
+                self.lane.mkdir()
+                cp.write_json(self.store / cp.CURRENT, self.initial)
+                first = True
+
+                def native(binary, *argv):
+                    nonlocal first
+                    marker = self.store / marker_name
+                    if argv[0] == '--finish-resident-run' and marker.exists():
+                        with cp.writer_lock(self.store):
+                            marker.unlink()
+                        return {'removed_run': True, 'retirement_completed': True}
+                    result = self.native(binary, *argv)
+                    if argv[0] == '--finish-resident-run' and first:
+                        first = False
+                        marker.write_bytes(b'synthetic native-owned marker')
+                        raise RuntimeError('after Native run removed, before marker retirement')
+                    return result
+
+                with patch.object(session.current, 'tool', side_effect=native):
+                    with self.assertRaisesRegex(RuntimeError, 'before marker retirement'):
+                        session.run(self.args())
+                    self.assertFalse((self.store / cp.RUN).exists())
+                    args = self.args()
+                    args.reconcile = True
+                    receipt = session.run(args)
+                self.assertEqual(receipt['retained_trained_rows'], 512)
+                self.assertFalse((self.store / marker_name).exists())
 
 
 if __name__ == '__main__':

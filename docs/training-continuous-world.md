@@ -108,6 +108,16 @@ guard observations, with possible between-observation overshoot). After admitted
 publication, Native cleanup removes the run, and the host clears those sidecars.
 One bounded `last-continuous-session.json` remains with compact outcomes and
 identities; no episode archive or additional learned checkpoint is retained.
+That receipt also commits the stopped owner and exact identity/digest of each
+temporary sidecar before removal. Retirement checks the admitted published
+current under its writer lease, validates every surviving sidecar, and removes
+the owner state last. A retry can use the committed receipt even if the owner
+state is absent, without rereading deleted logs or replacing known outcomes with
+unknowns. Recreated/conflicting files, changed current and unknown lane entries
+are preserved. Historical receipts without this commitment cannot authorize
+cleanup. Pending Native `resident-retirement.bin`/`.next` is finished by Native
+before Python Store admission while the stopped run owner is still available;
+an old final receipt cannot retire a different Native run.
 
 ## Measurement and first comparison
 
