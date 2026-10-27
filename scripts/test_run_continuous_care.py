@@ -234,6 +234,18 @@ class ContinuousCareTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'active-writer-budget'):
             session.capabilities(report, 512)
 
+    def test_new_run_never_overwrites_unreconciled_staging_sidecars(self):
+        for name in (session.STATE + '.tmp', session.REQUEST + '.tmp'):
+            with self.subTest(sidecar=name):
+                path = self.lane / name
+                path.write_bytes(b'original interrupted host metadata')
+                with self.assertRaisesRegex(ValueError, 'unexplained prior sidecars'):
+                    session.run(self.args())
+                self.assertEqual(path.read_bytes(), b'original interrupted host metadata')
+                self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+                self.assertEqual(self.child.call_count, 0)
+                path.unlink()
+
     def test_actual_activity_thermal_and_memory_guards_fail_before_dispatch(self):
         args = self.args()
         resources = {'disk_free_bytes': 100 * 2**30, 'available_memory_bytes': 16 * 2**30, 'idle_seconds': 1000}

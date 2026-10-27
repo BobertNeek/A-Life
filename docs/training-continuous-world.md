@@ -115,7 +115,7 @@ the owner state last. A retry can use the committed receipt even if the owner
 state is absent, without rereading deleted logs or replacing known outcomes with
 unknowns. Recreated/conflicting files, changed current and unknown lane entries
 are preserved. Historical receipts without this commitment cannot authorize
-cleanup. Pending Native `resident-retirement.bin`/`.next` is finished by Native
+cleanup. Pending Native `resident-retirement.bin` or `resident-retirement.next` is finished by Native
 before Python Store admission while the stopped run owner is still available;
 an old final receipt cannot retire a different Native run.
 

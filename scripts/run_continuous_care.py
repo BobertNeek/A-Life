@@ -330,7 +330,7 @@ def run(args):
             return retire_sidecars(lane, committed, validate) if committed is not None else finish(lane, state, validate)
         require(not (lane / STATE).exists() and not (store_root / cp.RUN).exists(),
                 'reconcile existing native run/owner before dispatch')
-        require(all(not (lane / n).exists() for n in (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log')),
+        require(all(not (lane / n).exists() and not (lane / n).is_symlink() for n in SIDECARS),
                 'unexplained prior sidecars; preserving files')
         request = request_for(args, dt.datetime.now(host.UTC))
         require(host.sha256(native) == args.binary_sha256 and host.sha256(inspector) == args.checkpoint_tool_sha256,
