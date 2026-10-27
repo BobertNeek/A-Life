@@ -126,6 +126,10 @@ snapshot/readback traffic, not all GPU traffic or total GPU time. Do not substit
 the older `collection_seconds` denominator. Require the actual object before
 reporting simulated seconds/wall second. Whole-session retained rows/hour also
 includes restore, setup, optimizer, save, native recovery and publication.
+Its exact endpoint follows Native cleanup, final admission and event reading;
+the final compact-receipt write and host-sidecar housekeeping are excluded.
+If a crashed host is reconciled later, that downtime is included in this interval
+and must be disclosed when comparing runs.
 
 The first hardware assay is pending resource admission. On disposable clones of
 one admitted baseline, use the same source/backend, explicit prior, need condition

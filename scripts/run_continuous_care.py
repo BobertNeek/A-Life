@@ -187,7 +187,7 @@ def finish(lane, state, validate):
         'baseline_sha256': state['baseline_sha256'], 'current_sha256': digest,
         'before': state['before'], 'after': {key: admitted.get(key) for key in state['before']},
         'request': state['request'], 'host_wall_seconds': elapsed,
-        'host_wall_interval_scope': 'host invocation through admitted publication and cleanup; includes crash/reconciliation downtime',
+        'host_wall_interval_scope': 'host invocation through admission, native recovery/publication/cleanup, final admission and event read; includes crash/reconciliation downtime; excludes final compact receipt and sidecar housekeeping',
         'retained_trained_rows': retained_rows,
         'retained_decision_rows_per_wall_hour': retained_rows * 3600 / elapsed
             if retained_rows is not None and elapsed > 0 else None,
