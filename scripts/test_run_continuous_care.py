@@ -102,22 +102,25 @@ class ContinuousCareTests(unittest.TestCase):
         request = cp.read_json(Path(argv[3]))
         self.assertEqual(len(request['rows']), 1)
         self.assertEqual(request['rows'][0]['decisions'], 512)
-        self.assertEqual(request['seed_range'], [80, 87])  # Preserve the unused owned tail.
+        self.assertEqual(request['seed_range'], self.initial['seeds']['pending_range'])  # Preserve the unused owned tail.
         self.assertEqual(int(deadline.timestamp()), request['collection_cutoff_unix_seconds'])
         with cp.writer_lock(self.store):
             self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
             run = self.store / cp.RUN
             run.mkdir()
             candidate = copy.deepcopy(self.initial)
-            candidate['seeds']['pending_range'] = [81, 87]
+            first, last = candidate['seeds']['pending_range']
+            candidate['seeds']['pending_range'] = [first + 1, last] if first < last else None
             if not self.crash:
-                candidate.update(policy_version=41, actor_optimizer_step=102, value_optimizer_step=203)
+                candidate.update(policy_version=self.initial['policy_version'] + 1,
+                    actor_optimizer_step=self.initial['actor_optimizer_step'] + 2,
+                    value_optimizer_step=self.initial['value_optimizer_step'] + 3)
                 candidate['private_lifetime'] = [7, 8]
             cp.write_json(run / 'recovered-current.alife-checkpoint', candidate)
             if self.crash:
                 raise RuntimeError('synthetic mid-world stop, unsnapshotted updates lost')
-            event = {'kind': 'resident-provisional-episode-v1', 'seed': 80, 'trained_rows': 512,
-                'policy_version': 41, 'exact_trained_nourishing_events': 2,
+            event = {'kind': 'resident-provisional-episode-v1', 'seed': first, 'trained_rows': 512,
+                'policy_version': candidate['policy_version'], 'exact_trained_nourishing_events': 2,
                 'generic_consumed_events': 3, 'causal_collection': None}
             Path(str(log) + '.stdout.log').write_text(json.dumps(event) + '\n')
             Path(str(log) + '.stderr.log').write_text('synthetic device warning\n')
@@ -341,6 +344,35 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertTrue((self.lane / session.STATE).exists())
         self.assertTrue((self.lane / session.REQUEST).exists())
         self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+
+    def test_committed_same_session_changed_state_never_reconstructs_outcomes(self):
+        receipt = self.stage_committed_retirement()
+        # Simulate partial log retirement while the owner state survives.
+        (self.lane / (session.LOG + '.stdout.log')).unlink()
+        state = cp.read_json(self.lane / session.STATE)
+        state['native_exit_error'] = 'changed after final receipt commit'
+        cp.write_json(self.lane / session.STATE, state)
+        args = self.args()
+        args.reconcile = True
+        with self.assertRaisesRegex(ValueError, 'committed retirement owner conflict'):
+            session.run(args)
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+        self.assertTrue((self.lane / session.STATE).exists())
+        self.assertTrue((self.lane / session.REQUEST).exists())
+
+    def test_fresh_next_session_binds_and_replaces_prior_completed_receipt(self):
+        previous = session.run(self.args())
+        previous_digest = cp.digest(self.lane / session.RECEIPT)
+        self.initial = cp.read_json(self.store / cp.CURRENT)
+        args = self.args()
+        args.seed = 81
+        receipt = session.run(args)
+        owner = receipt['retirement']['owner']
+        self.assertNotEqual(owner['session_id'], previous['retirement']['owner']['session_id'])
+        self.assertEqual(owner['previous_receipt_sha256'], previous_digest)
+        self.assertEqual(receipt['after']['policy_version'], 42)
+        self.assertEqual(receipt['retained_trained_rows'], 512)
+        self.assertEqual(self.child.call_count, 2)
 
     def test_old_receipt_cannot_retire_recreated_identical_request(self):
         receipt = self.stage_committed_retirement()

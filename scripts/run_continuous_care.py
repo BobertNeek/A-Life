@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import subprocess
 import time
+import uuid
 
 import current_checkpoint_store as cp
 import run_current_care as current
@@ -162,7 +163,16 @@ def committed_retirement(lane, state=None):
         return None  # Historical receipts have no authority to remove leftovers.
     require(commitment.get('schema') == 1 and receipt.get('kind') == 'finite-continuous-care-v1',
             'invalid final retirement commitment')
-    return receipt if state is None or commitment.get('owner') == state else None
+    if state is None or commitment.get('owner') == state:
+        return receipt
+    # An old completed receipt may coexist with a genuinely new admitted run.
+    # Same-session owner changes must not fall through and rebuild known results
+    # from partially deleted logs. New admission binds the exact prior receipt.
+    require(isinstance(state.get('session_id'), str) and bool(state['session_id']) and
+            state['session_id'] != commitment['owner'].get('session_id') and
+            state.get('previous_receipt_sha256') == cp.digest(path),
+            'committed retirement owner conflict; preserving original outcomes')
+    return None
 
 
 def native_retirement_pending(store):
@@ -348,6 +358,8 @@ def run(args):
             baseline = cp.digest(store.current)
             current.tool(inspector, '--check-current-allocation', store.current, args.seed, args.last_seed)
         state = {'schema': 1, 'kind': 'finite-continuous-owner-v1', 'store': str(store_root),
+            'session_id': str(uuid.uuid4()),
+            'previous_receipt_sha256': cp.digest(lane / RECEIPT) if (lane / RECEIPT).exists() else None,
             'binary': str(native), 'inspector': str(inspector), 'baseline_sha256': baseline,
             'before': {key: before[key] for key in ('policy_version', 'actor_optimizer_step', 'value_optimizer_step')},
             'request': request, 'checkout': checkout, 'prior_environment': current.prior_environment(),
