@@ -141,6 +141,10 @@ jobs:
           cargo test --locked -p alife_game_app --features foundation-training --lib prospective_food_need_cycle_requires_source_before_any_world_or_gpu_work -- --test-threads=1
       - name: Need condition native CLI controls CPU contracts
         run: cargo test --locked -p alife_game_app --features foundation-training --bin train_n2048_care food_need -- --test-threads=1
+      - name: Check opt-in final private life capture controls without a GPU
+        run: |
+          cargo test --locked -p alife_game_app --features foundation-training --lib final_private_life -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --bin train_n2048_care final_private_life -- --test-threads=1
       - name: Canonical and policy-weight comparison world identity CPU regressions
         run: cargo test --locked -p alife_world --test headless_world_signature --test policy_weight_comparison_signature --test fresh_foundation_checkpoint_comparison -- --test-threads=1
       - name: Build matching training and checkpoint inspection executables
