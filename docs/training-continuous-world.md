@@ -1,27 +1,33 @@
-# Finite continuous-world care sessions
+# Resident continuous-life training
 
-`scripts/run_continuous_care.py` is an opt-in host for **one ordinary fresh
-Feeding world/body/runtime**, normally 512 waking training decisions. It reuses
-the resident producer, recurrent PPO and atomic current-checkpoint publisher.
-It does not concatenate ended episodes, schedule an overnight run, replace
-targeted lessons, or claim a measured speedup. The default invocation only prints
-a plan and does not inspect a checkpoint, run a native command or reserve seeds.
+`scripts/run_continuous_care.py` defaults to restoring **the living world and
+individual in Current**, collecting 512 trained decisions per PPO update, and
+installing the updated genetic policy into that same runtime. Its default total
+budget is one million trained decisions, bounded by the dated cutoff and
+temporary-storage quota. It neither concatenates fresh episodes nor changes
+simulation time. Without `--run`, it only prints a plan: no checkpoint inspection,
+native command, seed reservation or world execution occurs.
 
-The accepted founder's learned actor, value state, compiler state and both Adam
-histories initialize the session. This is a **fresh cohort**, consistent with the
-existing care curriculum. Recurrent memory, ordinary lifetime plasticity,
-biology, physics and food ecology then continue within that one world. World
-setup and the optional need-aging preparation happen once. Food regrowth uses
-the existing world ecology; this host adds no food, hunger, reward or action
-override. `newborn_v1` and `ordinary_healthy_aging_v1` remain distinct conditions.
+Actor/value weights and full Adam history, the saved body/world/ecology,
+recurrent memory and ordinary lifetime plasticity are retained. Restored-life
+mode rejects food/need preconditioning; it does not reset hunger, move food or
+prepare a lesson again. New policies use an explicit compiler overlay over
+unchanged biological inputs. Mutable neural state and the runtime sampling
+stream must survive policy installation. Legacy missing sampling provenance must
+be reported explicitly; a declared new stream is not reconstructed history.
 
-The genetic actor is frozen during collection. PPO runs after collection, using
-the ordinary real bootstrap on a living horizon and terminal handling on death.
-There is no supported installation of the newly trained global actor into the
-same living individual. Final private capture remains **pre-PPO**, paired with
-post-PPO global heads under the existing fresh-cohort handoff contract. The next
-session therefore starts a new ordinary private life; this is not a solution to
-continuous same-individual online policy installation.
+Each rollout uses one frozen policy version. PPO updates on scratch after that
+rollout, then the checked new policy is installed before collection continues.
+Snapshots must pair those installed heads and optimizer ages with the exact same
+live private state. Natural death terminates that individual; this host does not
+resurrect it or silently substitute a new body. Unfinished targeted care lessons
+remain in the curriculum handoff and are not credited by continuous exposure.
+
+`--fresh-world` explicitly selects the older diagnostic: one new Feeding world,
+frozen actor throughout collection, final **pre-PPO** private capture and
+post-PPO global heads. Only that mode accepts `--food-need-condition`, with
+`newborn_v1` and `ordinary_healthy_aging_v1` kept separate. It is not a fallback
+when a binary lacks the live-policy continuation contract.
 
 The living collection limit is an artificial truncation, not death. The final
 successor value is retained; only confirmed death zeroes it. Obtaining that
@@ -33,7 +39,7 @@ pass reads recorded states on offline trainer scratch and does not advance the
 authoritative world. Do not call the whole bootstrap acquisition an observational
 peek or claim that its action had no physical effect.
 
-The 512-row value reads and 256-row PPO spans are offline slices after collection;
+The 512-row value reads and 256-row PPO spans are offline slices within an update;
 they do not recreate the live body. Each replay window starts from its captured
 recurrent/homeostatic/dendritic state and per-row acquired-weight offsets. Four
 separate 128-decision sessions instead create four fresh private lives and, when
@@ -42,15 +48,17 @@ cannot establish chunk invariance. A future 1x512 versus 4x128 continuity assay
 must keep one world, complete initial state/RNG and lifetime learning, disable
 PPO updates in both arms, match actual ticks, and reuse a boundary successor
 record or provide a genuinely observational acquisition seam. That resumable
-same-world chunk seam and hardware equality have not been established here.
+same-world no-update chunk-equality assay remains distinct from comparing
+different PPO update schedules. Hardware equivalence/speed needs actual evidence.
 
-The native bridge permits explicit Feeding horizons 1..36000, the existing
-single-cycle bound. Other resident care lessons keep their 1..128 limits. Longer
+Live requests stream up to ten million total trained decisions in windows of
+1..36000. The older fresh Feeding cycle keeps its 1..36000 horizon and other
+fresh resident care lessons keep their 1..128 limits. Longer
 requests do not change logical time: the authoritative loop is still 20 world
 ticks per simulated second and runs without deliberate real-time pacing. Sleep
 and no-capture ticks still execute ordinary causality; captured segments and
 sleep-gap physiology accounting remain in use. A row budget is not elapsed
-simulation time. The existing absolute world guard, `8 * decisions + 4096`,
+simulation time. The fresh-cycle absolute world guard, `8 * decisions + 4096`,
 includes setup; the raw replay cap is 4 GiB. A request can hit world, RAM, VRAM or
 temporary-storage limits before reaching its decision horizon. In particular,
 allowing 512 decisions does not prove the default 2 GiB producer quota suffices
@@ -71,6 +79,12 @@ telemetry implementation uses `nvidia-smi`; other adapters need a supported
 telemetry implementation before this host can admit them. Host adapter telemetry
 alone does not establish the native runtime's selected adapter/backend.
 
+The default also requires `same_individual_ppo`, `restore_current_private_world`,
+`full_sampling_state_checkpoint` and `in_world_cutoff`, plus sufficient advertised
+total/update limits. Missing support is a refusal, not permission to run a fresh
+world. `export_native_training_handoff.exe` supplies full Current admission and
+allocation checks; `inspect_archived_success.exe` is a different tool.
+
 Create a dedicated empty owner directory **outside** the source checkout and
 checkpoint store. All cooperating launchers must use that same owner directory.
 Its stable OS lease prevents duplicate host owners, while the checkpoint store's
@@ -88,15 +102,21 @@ $env:ALIFE_SLM_PRIOR_BACKEND = 'deterministic'
 python -B scripts/run_continuous_care.py `
   --store C:\A-Life\current --lane C:\A-Life\continuous-owner `
   --binary C:\A-Life\qualified\train_n2048_care.exe `
-  --checkpoint-tool C:\A-Life\qualified\inspect_archived_success.exe `
+  --checkpoint-tool C:\A-Life\qualified\export_native_training_handoff.exe `
   --binary-sha256 EXACT_NATIVE_SHA256 --checkpoint-tool-sha256 EXACT_INSPECTOR_SHA256 `
-  --seed FIRST_UNUSED --last-seed OWNED_ALLOCATION_END `
-  --decisions 512 --hard-end FRESH_UTC_END --final-reserve-seconds 180
+  --auto-seed --night-date FRESH_ALBERTA_DATE `
+  --decisions 512 --total-decisions 1000000 --snapshot-every-updates 32 `
+  --final-reserve-seconds 180
 ```
 
-Add `--run` only after admission. An existing pending allocation must be resumed
+Add `--run` only after admission. `--auto-seed` selects the admitted pending tail,
+or one nonce after the highest known exclusion if no allocation is pending. A
+dry plan leaves this unresolved and never opens Current. Unknown historical
+freshness remains unknown. A restored session consumes one reservation nonce;
+that nonce does not replace the retained physical world seed or, when present,
+the saved sampling stream. An existing pending allocation must be resumed
 exactly, including its unused tail; the host does not silently allocate over an
-exclusion or drop unfinished curriculum slots. One world consumes one seed. An
+exclusion or drop unfinished curriculum slots. An
 outer curriculum controller remains responsible for its full remaining lesson
 schedule; replacing one targeted block with a continuous session must be explicit.
 
@@ -142,15 +162,20 @@ same store/lane/binary/inspector resumes **recovery only**, never another world.
 An unknown process-launch outcome fails closed and retains the owner record.
 Do not delete that record or launch another worker to bypass it.
 
-The host stops its own producer at `hard-end - final-reserve-seconds` and reserves
-at least 180 seconds for recovery, admission/publication and cleanup. Measure the
-actual final-save cost before reducing or relying on that reserve. Native STOP
-and collection cutoff are checked between rows, so the host deadline can abort
-a long active world. One row saves only at its end: a crash, guard stop or forced
-deadline can lose **all** new updates in the session, with its seed still
-consumed. No periodic mid-world full snapshot is claimed. The previously validated
-accepted baseline remains recoverable. This implements the accepted recent-work
-risk rather than demanding full persistence on every waking decision.
+The default native path checks the soft collection cutoff inside the world and
+has until `hard-end - 60 seconds` to finish its snapshot. The host then reserves
+60 seconds for stopped recovery/admission/publication; it never extends the hard
+end. With the default 180-second reserve, this gives 120 seconds for native
+finalization. Measure actual save/recovery costs before relying on these reserves.
+Input/resource guards remain active during finalization. The explicit fresh-world
+path retains its earlier forced collection-cutoff stop contract.
+
+The default cadence saves every 32 updates (normally 16,384 trained rows), at
+controlled completion and final shutdown. That is a decision bound, not a fixed
+wall-clock interval. A crash or guard stop may lose unsnapshotted actor/value and
+private-life progress since the last complete snapshot; the reservation remains
+consumed and the previous validated baseline is retained. No per-decision durable
+save or zero-recent-loss guarantee is imposed.
 
 Native temporary data stays inside its declared aggregate quota. Host control
 metadata and two logs are separate, bounded sidecars (each log at most 8 MiB at
@@ -204,16 +229,17 @@ the final compact-receipt write and host-sidecar housekeeping are excluded.
 If a crashed host is reconciled later, that downtime is included in this interval
 and must be disclosed when comparing runs.
 
-The first hardware assay is pending resource admission. On disposable clones of
-one admitted baseline, use the same source/backend, explicit prior, need condition
-and total requested decision exposure: one 512-decision world versus eight
-64-decision fresh worlds. Reserve disjoint fresh seed sets and preserve both
-baselines. Record actual trained/bootstrapped rows, committed world ticks, control
-and whole-host wall time, PPO epochs and actor/value optimizer-step deltas,
-death/truncation, exact nourishing events, physiology and actual prior delivery.
-Equal decision exposure does **not** imply equal PPO updates (one long collection
-may make two updates while eight short collections make sixteen). Different
-world age, food encounters, setup frequency and update cadence are changed
-workload/treatment, not a controlled claim of better learning. Follow with matched
-held/reachable retention and repeated need-driven care before claiming benefit.
-This source change has no measured simulation multiplier or hardware qualification.
+The first hardware slice uses a disposable copy of one admitted living Current:
+at least two small PPO windows, one installed-policy boundary, a snapshot and
+exact restore. Verify stable world/body identity, monotonic real ticks, retained
+private/sampling state and actor/value optimizer ages before a longer timed run.
+Keep the accepted baseline immutable and experimental reservations separate.
+Record trained versus bootstrap decisions, whole-world unique ticks, collection
+and whole-host wall time, PPO/save costs, death/truncation, real nourishing events
+and actual prior delivery. A source/mock pass alone is not hardware evidence.
+
+A later one-world versus fresh-world comparison changes world age, food
+encounters, setup frequency and update cadence; it is not a controlled claim of
+better learning. Equal decision exposure does not imply equal PPO updates.
+Follow with retained care competence and repeated need-driven cycles before
+claiming benefit. No simulation multiplier is established by this documentation.

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Plan, run or reconcile ONE finite same-world resident Feeding session.
+"""Plan, run or reconcile one resident continuous-life training session.
 
-The accepted founder starts one ordinary fresh life. No policy is installed
-mid-life. The canonical checkpoint changes only after native stopped-run recovery
-and atomic full-state admission. This does not schedule a night or close apps.
+The default restores Current's living world and continues it across PPO updates.
+--fresh-world explicitly selects the older frozen-policy Feeding diagnostic.
+Canonical publication still requires native stopped-run recovery and full-state
+admission. This host neither schedules a wake nor closes applications.
 """
 import argparse
-from copy import deepcopy
+from copy import copy, deepcopy
 import datetime as dt
 import json
 import math
@@ -38,6 +39,39 @@ MAX_LOG_BYTES = 8 * 1024 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
            'run_mixed_care_serial.py', 'run_eat_held_food_night.py',
            'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py', 'care_night_window.py')
+OWNER_RECOVERY_SECONDS = 60
+
+
+def producer_mode(args):
+    return 'fresh_world' if getattr(args, 'fresh_world', False) else 'same_individual'
+
+
+def native_command(mode):
+    require(mode in ('fresh_world', 'same_individual'), 'unknown continuous producer mode')
+    return '--resident-serial' if mode == 'fresh_world' else '--resident-continuous'
+
+
+def producer_deadline(args):
+    reserve = args.final_reserve_seconds if producer_mode(args) == 'fresh_world' else OWNER_RECOVERY_SECONDS
+    return args.hard_end - dt.timedelta(seconds=reserve)
+
+
+def admitted_seed_range(report):
+    """Keep an owned tail intact; otherwise choose after KNOWN exclusions only."""
+    seeds = report['seeds']
+    pending = seeds['pending_range']
+    if pending is not None:
+        require(isinstance(pending, list) and len(pending) == 2 and
+                all(type(v) is int for v in pending) and 1 <= pending[0] <= pending[1] <= 2**64 - 1,
+                'invalid admitted pending allocation')
+        return pending[:]
+    ranges = seeds['excluded_ranges']
+    require(isinstance(ranges, list) and all(isinstance(r, list) and len(r) == 2 and
+        all(type(v) is int for v in r) and 1 <= r[0] <= r[1] <= 2**64 - 1 for r in ranges),
+        'invalid admitted exclusions')
+    seed = max((r[1] for r in ranges), default=0) + 1
+    require(seed <= 2**64 - 1, 'known seed namespace exhausted')
+    return [seed, seed]
 
 
 def nightly_window(args):
@@ -54,8 +88,14 @@ def request_for(args, now):
     nightly_window(args)  # Refuse a stale DST-derived 16:00 UTC hard end, even in a plan.
     require(type(args.decisions) is int and 1 <= args.decisions <= 36000,
             'finite Feeding decisions must be in 1..36000')
-    require(type(args.seed) is int and type(args.last_seed) is int and
-            0 <= args.seed <= args.last_seed <= 2**64 - 1, 'invalid seed allocation')
+    automatic_seed = getattr(args, 'auto_seed', False)
+    if automatic_seed:
+        require(args.seed is None and args.last_seed is None, '--auto-seed cannot replace an explicit allocation')
+        seed_range = None  # Planning does not open Current or reserve anything.
+    else:
+        require(type(args.seed) is int and type(args.last_seed) is int and
+                1 <= args.seed <= args.last_seed <= 2**64 - 1, 'invalid seed allocation')
+        seed_range = [args.seed, args.last_seed]
     require(type(args.final_reserve_seconds) is int and 180 <= args.final_reserve_seconds <= 3600,
             'reserve 180..3600 seconds for stopped recovery/publication')
     require(now < args.hard_end <= now + dt.timedelta(hours=24), 'fresh hard end required within 24 hours')
@@ -63,17 +103,30 @@ def request_for(args, now):
     require(cutoff > now, 'not enough time before final-save reserve')
     require(type(args.max_temporary_bytes) is int and args.max_temporary_bytes >= 2**30,
             'continuous session requires at least 1 GiB temporary allowance')
+    common = {'schema': 1, 'seed_range': seed_range, 'sampling_temperature': 1.0,
+        'collection_cutoff_unix_seconds': int(cutoff.timestamp()),
+        'max_temporary_bytes': args.max_temporary_bytes}
+    if automatic_seed:
+        common['allocation_admission_required'] = True
+    if producer_mode(args) == 'same_individual':
+        total = getattr(args, 'total_decisions', 1_000_000)
+        cadence = getattr(args, 'snapshot_every_updates', 32)
+        require(type(total) is int and args.decisions <= total <= 10_000_000,
+                'continuous total must cover one update and be at most 10000000')
+        require(type(cadence) is int and 1 <= cadence <= 10000, 'invalid resident snapshot cadence')
+        require(args.food_need_condition is None, 'restored life does not accept food/need preparation')
+        return {**common, 'total_trained_decisions': total, 'decisions_per_update': args.decisions,
+            'snapshot_every_updates': cadence,
+            'finalization_deadline_unix_seconds': int(producer_deadline(args).timestamp())}
     require(args.food_need_condition in ('newborn_v1', 'ordinary_healthy_aging_v1'),
             'unsupported food need initialization')
-    return {'schema': 1, 'seed_range': [args.seed, args.last_seed],
+    return {**common,
             'rows': [{'lesson': 'feeding', 'decisions': args.decisions,
                       'food_need_condition': args.food_need_condition}],
-            'checkpoint_every_episodes': 1, 'sampling_temperature': 1.0,
-            'collection_cutoff_unix_seconds': int(cutoff.timestamp()),
-            'max_temporary_bytes': args.max_temporary_bytes}
+            'checkpoint_every_episodes': 1}
 
 
-def capabilities(report, decisions):
+def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
     require(report.get('schema') == 1 and report.get('kind') == 'native-resident-serial-v1' and
             report.get('finite_continuous_feeding') is True and
             report.get('max_continuous_feeding_decisions', 0) >= decisions and
@@ -82,6 +135,12 @@ def capabilities(report, decisions):
             report.get('recoverable_predispatch_initialization') is True and
             report.get('temporary_budget_enforced_during_writes') is True,
             'native finite-session, bound-cleanup, recoverable initialization and active-writer-budget capabilities required')
+    if mode == 'same_individual':
+        require(all(report.get(field) is True for field in ('same_individual_ppo',
+                'restore_current_private_world', 'full_sampling_state_checkpoint', 'in_world_cutoff')) and
+                report.get('max_total_trained_decisions', 0) >= total_decisions and
+                report.get('max_decisions_per_update', 0) >= decisions,
+                'native same-individual restore/PPO/sampling/cutoff capabilities required; no fresh-world fallback')
 
 
 def check_pins(state):
@@ -105,7 +164,7 @@ def gpu_snapshot(index):
             'free_memory_mib': float(free_mib), 'utilization_percent': float(utilization)}
 
 
-def make_guard(args, lane, store):
+def make_guard(args, lane, store, *, allow_finalization=False):
     cached_at, gpu = -math.inf, None
     night = nightly_window(args)
 
@@ -114,7 +173,10 @@ def make_guard(args, lane, store):
         now = dt.datetime.now(host.UTC)
         require(now < args.hard_end, 'hard end reached')
         if night is not None:
-            night.admit(now, args.final_reserve_seconds)
+            if allow_finalization:
+                require(night.start <= now < producer_deadline(args), 'outside dated native finalization window')
+            else:
+                night.admit(now, args.final_reserve_seconds)
         require(not (store / cp.RUN / 'STOP').exists(), 'owner STOP requested')
         resources = host.resource_snapshot(store)
         require(resources['disk_free_bytes'] >= args.min_disk_gib * 2**30 and
@@ -150,7 +212,8 @@ def read_events(lane):
         except ValueError:
             continue  # Device warnings are not fabricated telemetry.
         if isinstance(event, dict) and event.get('kind') in (
-                'resident-provisional-episode-v1', 'resident-serial-finished-v1'):
+                'resident-provisional-episode-v1', 'resident-serial-finished-v1',
+                'resident-continuous-update-v1', 'resident-continuous-finished-v1'):
             events.append(event)
     return events
 
@@ -207,7 +270,8 @@ def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
     require(state.get('schema') == 1 and state.get('kind') == 'finite-continuous-owner-v1' and
             receipt['source'] == state['checkout'] and receipt['executables'] == state['executables'] and
             receipt['request'] == state['request'] and
-            state['native_argv'] == [state['binary'], '--resident-serial', state['store'], str(lane / REQUEST)],
+            state['native_argv'] == [state['binary'], native_command(state.get('producer_mode', 'fresh_world')),
+                                    state['store'], str(lane / REQUEST)],
             'retirement owner/receipt/path mismatch')
     check_pins(state)
     worker = state['worker']
@@ -317,12 +381,16 @@ def finish(lane, state, validate):
     admitted, digest, recovery, cleanup = reconcile(lane, state, validate)
     events = read_events(lane)
     rows = [e for e in events if e['kind'] == 'resident-provisional-episode-v1']
+    updates = [e for e in events if e['kind'] == 'resident-continuous-update-v1']
+    mode = state.get('producer_mode', 'fresh_world')
     elapsed = (dt.datetime.now(host.UTC) - dt.datetime.fromisoformat(state['started_utc'])).total_seconds()
     retained_rows = None
     if admitted['policy_version'] == state['before']['policy_version']:
         retained_rows = 0
     elif len(rows) == 1 and admitted['policy_version'] == rows[0]['policy_version']:
         retained_rows = rows[0]['trained_rows']
+    if mode == 'same_individual':
+        retained_rows = retained_continuous_rows(state['before'], admitted, updates)
     receipt = {'kind': 'finite-continuous-care-v1', 'ended_utc': dt.datetime.now(host.UTC).isoformat(),
         'source': state['checkout'], 'executables': state['executables'],
         'native_argv': state['native_argv'], 'prior_environment': state['prior_environment'],
@@ -337,10 +405,14 @@ def finish(lane, state, validate):
         'actor_optimizer_step_delta': admitted['actor_optimizer_step'] - state['before']['actor_optimizer_step'],
         'value_optimizer_step_delta': admitted['value_optimizer_step'] - state['before']['value_optimizer_step'],
         'native_exit_error': state.get('native_exit_error'), 'observed_rows': rows,
+        'observed_updates': updates[-8:], 'observed_update_count': len(updates), 'producer_mode': mode,
+        'native_summary': next((e for e in reversed(events)
+            if e['kind'] == 'resident-continuous-finished-v1'), None),
+        'seed_admission': state.get('seed_admission'),
         'native_exit_code': state.get('native_exit_code'),
         'recovery': recovery, 'cleanup': cleanup,
-        'one_fresh_world': not recovery.get('initialization_aborted', False),
-        'same_individual_across_sessions': False,
+        'one_fresh_world': mode == 'fresh_world' and not recovery.get('initialization_aborted', False),
+        'same_individual_across_sessions': mode == 'same_individual' and not recovery.get('initialization_aborted', False),
         'causal_speed': rows[0].get('causal_collection') if len(rows) == 1 else None,
         'outcome_scope': 'provisional row outcomes; only native admitted snapshot is retained',
         'recent_unsnapshotted_updates_may_be_lost': True}
@@ -352,6 +424,29 @@ def finish(lane, state, validate):
         'owner': deepcopy(state), 'sidecars': {name: sidecar_identity(lane / name) for name in SIDECARS}}
     cp.write_json(lane / RECEIPT, receipt)
     return retire_sidecars(lane, receipt, validate)
+
+
+def retained_continuous_rows(before, admitted, updates):
+    """Count only a complete emitted prefix ending at the admitted snapshot.
+
+    Missing/invalid telemetry is unknown, never a reason to discard an otherwise
+    valid recovered brain. Provisional later updates are not claimed retained.
+    """
+    count = admitted['policy_version'] - before['policy_version']
+    if count == 0:
+        return 0
+    retained = [u for u in updates if type(u.get('policy_version')) is int and
+                before['policy_version'] < u['policy_version'] <= admitted['policy_version']]
+    if count < 0 or len(retained) != count:
+        return None
+    for expected, update in zip(range(before['policy_version'] + 1, admitted['policy_version'] + 1), retained):
+        if update['policy_version'] != expected or type(update.get('trained_rows')) is not int or not 1 <= update['trained_rows'] <= 36000:
+            return None
+    last = retained[-1]
+    if any(type(last.get(key)) is not int or last[key] != admitted[key]
+           for key in ('actor_optimizer_step', 'value_optimizer_step')):
+        return None
+    return sum(u['trained_rows'] for u in retained)
 
 
 def run(args):
@@ -393,18 +488,29 @@ def run(args):
         request = request_for(args, dt.datetime.now(host.UTC))
         require(host.sha256(native) == args.binary_sha256 and host.sha256(inspector) == args.checkpoint_tool_sha256,
                 'explicit admitted executable hashes required')
-        capabilities(current.tool(native, '--resident-contract'), args.decisions)
+        mode = producer_mode(args)
+        capabilities(current.tool(native, '--resident-contract'), args.decisions,
+                     mode=mode, total_decisions=request.get('total_trained_decisions', 0))
         checkout = current.checkout_context()
         require(current.prior_environment().get('ALIFE_SLM_PRIOR_BACKEND') == 'deterministic' and
                 current.prior_environment().get('ALIFE_SLM_PRIOR') == 'on',
                 'explicit ALIFE_SLM_PRIOR=on and ALIFE_SLM_PRIOR_BACKEND=deterministic required')
-        guard = make_guard(args, lane, store_root)
+        guard = make_guard(args, lane, store_root, allow_finalization=mode == 'same_individual')
         preflight = guard()
         host.assert_lane_idle()
         with cp.Store(store_root, validate) as store:
             before = validate(store.current)
             baseline = cp.digest(store.current)
-            current.tool(inspector, '--check-current-allocation', store.current, args.seed, args.last_seed)
+            resolved = copy(args)
+            if getattr(args, 'auto_seed', False):
+                resolved.seed, resolved.last_seed = admitted_seed_range(before)
+                resolved.auto_seed = False
+                request = request_for(resolved, dt.datetime.now(host.UTC))
+            current.tool(inspector, '--check-current-allocation', store.current, resolved.seed, resolved.last_seed)
+        if night is not None:
+            night.admit(dt.datetime.now(host.UTC), args.final_reserve_seconds)
+        require(dt.datetime.now(host.UTC).timestamp() < request['collection_cutoff_unix_seconds'],
+                'collection cutoff reached during admission; no dispatch')
         state = {'schema': 1, 'kind': 'finite-continuous-owner-v1', 'store': str(store_root),
             'session_id': str(uuid.uuid4()),
             'previous_receipt_sha256': cp.digest(lane / RECEIPT) if (lane / RECEIPT).exists() else None,
@@ -414,7 +520,12 @@ def run(args):
             'executables': {str(native): args.binary_sha256, str(inspector): args.checkpoint_tool_sha256},
             'helpers': {name: host.sha256(Path(__file__).parent / name) for name in HELPERS},
             'started_utc': invocation_started, 'preflight': preflight,
-            'native_argv': [str(native), '--resident-serial', str(store_root), str(lane / REQUEST)],
+            'producer_mode': mode,
+            'seed_admission': {'historical_freshness': before['seeds']['historical_freshness'],
+                'basis': 'admitted owned tail or next after known exclusions' if getattr(args, 'auto_seed', False)
+                         else 'explicit allocation checked against admitted current',
+                'allocation': request['seed_range']},
+            'native_argv': [str(native), native_command(mode), str(store_root), str(lane / REQUEST)],
             'guard_configuration': {key: getattr(args, key) for key in ('idle_seconds', 'min_disk_gib',
                 'min_memory_gib', 'gpu_index', 'max_gpu_c', 'min_gpu_free_mib', 'final_reserve_seconds')},
             'worker': {'pid': None, 'stopped': True}}
@@ -434,7 +545,7 @@ def run(args):
         cp.write_json(lane / STATE, state)  # Unknown launch outcomes fail closed.
         try:
             host.run_child(state['native_argv'],
-                lane / LOG, dt.datetime.fromtimestamp(request['collection_cutoff_unix_seconds'], host.UTC),
+                lane / LOG, producer_deadline(args),
                 guard, host.prior_environment(), on_started=started)
         except Exception as error:
             state['native_exit_error'] = f'{type(error).__name__}: {error}'
@@ -455,8 +566,14 @@ def main(argv=None):
     parser.add_argument('--checkpoint-tool-sha256')
     parser.add_argument('--seed', type=int)
     parser.add_argument('--last-seed', type=int)
+    parser.add_argument('--auto-seed', action='store_true',
+        help='at admitted dispatch, keep pending tail or choose one seed after known exclusions; dry plans do not inspect Current')
+    parser.add_argument('--fresh-world', action='store_true',
+        help='explicit legacy diagnostic: a fresh Feeding world with a frozen actor; default restores the living Current')
     parser.add_argument('--decisions', type=int, default=512)
-    parser.add_argument('--food-need-condition', choices=('newborn_v1', 'ordinary_healthy_aging_v1'), default='newborn_v1')
+    parser.add_argument('--total-decisions', type=int, default=1_000_000)
+    parser.add_argument('--snapshot-every-updates', type=int, default=32)
+    parser.add_argument('--food-need-condition', choices=('newborn_v1', 'ordinary_healthy_aging_v1'))
     parser.add_argument('--hard-end', type=host.cutoff_time)
     parser.add_argument('--night-date', type=dt.date.fromisoformat,
         help='automatic Alberta night: fixed 07:00-15:00 UTC, independent of stale tzdata; not a scheduler')
@@ -471,6 +588,8 @@ def main(argv=None):
     parser.add_argument('--reconcile', action='store_true')
     parser.add_argument('--run', action='store_true')
     args = parser.parse_args(argv)
+    if args.fresh_world and args.food_need_condition is None:
+        args.food_need_condition = 'newborn_v1'
     require(0 <= args.idle_seconds <= 3600 and args.gpu_index >= 0 and
             all(math.isfinite(v) and v > 0 for v in (args.min_disk_gib, args.min_memory_gib,
                 args.max_gpu_c, args.min_gpu_free_mib)), 'invalid resource guards')
