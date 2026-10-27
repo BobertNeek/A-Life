@@ -97,6 +97,9 @@ class CursorBytesTests(unittest.TestCase):
                      ('schema_version', 'seed', 'founder_seed_base', 'seeds', 'life', 'handoff')}
         self.assertIsNone(runner.consumed_cursor_bytes(
             encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
+        del reordered['handoff']
+        self.assertIsNone(runner.consumed_cursor_bytes(
+            encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
 
     def test_prefix_can_end_inside_unchanged_utf8_data(self):
         leading, rest = payload().split(b',"handoff":{', 1)
@@ -108,9 +111,6 @@ class CursorBytesTests(unittest.TestCase):
             result = runner.consumed_cursor_bytes(encoded(before), 30)
             expected = before.replace(b'"pending_range":[30,31]', b'"pending_range":[31,31]', 1)
             self.assertEqual(result, encoded(expected))
-        del reordered['handoff']
-        self.assertIsNone(runner.consumed_cursor_bytes(
-            encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
 
 
 class CursorAdmissionTests(unittest.TestCase):
