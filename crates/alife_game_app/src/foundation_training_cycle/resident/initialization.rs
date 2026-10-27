@@ -1,6 +1,9 @@
 //! A once-per-producer, pre-dispatch commitment. It never authorizes an episode.
 use super::*;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 
 pub(super) const INITIALIZATION: &str = "resident-initialization.bin";
 pub(super) const INITIALIZATION_NEXT: &str = "resident-initialization.next";
@@ -189,6 +192,11 @@ fn abort_with_remove(
 
 fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -> Result<()> {
     let mut expected = BTreeMap::<PathBuf, Vec<u8>>::new();
+    let mut directories = BTreeSet::from([
+        PathBuf::from(WORKSPACE),
+        PathBuf::from(WORKSPACE).join("work"),
+        PathBuf::from(WORKSPACE).join("work/world-assets"),
+    ]);
     expected.insert(
         PathBuf::from("run.json"),
         serde_json::to_vec(&serde_json::json!({"schema":1,"kind":"native-resident-serial-run-v1",
@@ -249,11 +257,22 @@ fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -
                 {
                     continue;
                 }
+                let asset = work.join("world-assets").join(path);
+                // materialize creates these exact canonical parents BEFORE it
+                // decodes the leaf. A crash may leave them empty when decoding
+                // fails, but never authorizes an undecodable leaf or sibling.
+                directories.extend(
+                    asset
+                        .ancestors()
+                        .skip(1)
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .map(Path::to_path_buf),
+                );
                 // Native computes/decode-validates bytes before creating this
                 // leaf. Failed derivation must not strand an otherwise empty
                 // initialization; a leaf without valid expected bytes refuses.
                 if let Ok(bytes) = life.asset_bytes(name) {
-                    expected.insert(work.join("world-assets").join(path), bytes);
+                    expected.insert(asset, bytes);
                 }
             }
             expected.insert(work.join("world.json"), life.world_json.into_bytes());
@@ -263,7 +282,12 @@ fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -
             );
         }
     }
-    fn visit(root: &Path, here: &Path, expected: &BTreeMap<PathBuf, Vec<u8>>) -> Result<()> {
+    fn visit(
+        root: &Path,
+        here: &Path,
+        expected: &BTreeMap<PathBuf, Vec<u8>>,
+        directories: &BTreeSet<PathBuf>,
+    ) -> Result<()> {
         for entry in fs::read_dir(here)? {
             let path = entry?.path();
             let metadata = fs::symlink_metadata(&path)?;
@@ -271,13 +295,8 @@ fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -
             if reparse(&metadata) {
                 return Err("initialization output alias refused".into());
             }
-            if metadata.is_dir()
-                && (expected
-                    .keys()
-                    .any(|p| p.starts_with(relative) && p != relative)
-                    || relative == Path::new(WORKSPACE).join("work/world-assets"))
-            {
-                visit(root, &path, expected)?;
+            if metadata.is_dir() && directories.contains(relative) {
+                visit(root, &path, expected, directories)?;
             } else if metadata.is_file() {
                 let bytes = expected
                     .get(relative)
@@ -293,7 +312,7 @@ fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -
         }
         Ok(())
     }
-    visit(run, run, &expected)
+    visit(run, run, &expected, &directories)
 }
 
 #[cfg(test)]

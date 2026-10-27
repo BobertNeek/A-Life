@@ -307,3 +307,46 @@ fn output_budget_initialization_failed_admission_can_abort_without_certifying_in
         unchanged(store, &invalid_asset_bytes);
     });
 }
+
+#[test]
+fn output_budget_initialization_invalid_nested_asset_preserves_unknown_leaves_but_retires_created_parents(
+) {
+    fixture(|store, original, request| {
+        let mut baseline = alife_training::CurrentTrainingCheckpointV1::decode(original).unwrap();
+        let life = baseline.life.as_mut().unwrap();
+        let old = life.assets_base64.keys().next().unwrap().clone();
+        let nested = "nested/deep/private-sidecar.bin";
+        life.assets_base64.remove(&old);
+        life.assets_base64
+            .insert(nested.into(), "invalid base64!".into());
+        let mut save = alife_world::PortableSaveFile::from_json_str(&life.world_json).unwrap();
+        save.assets
+            .entries
+            .iter_mut()
+            .find(|entry| entry.relative_path == old)
+            .unwrap()
+            .relative_path = nested.into();
+        life.world_json = serde_json::to_string(&save).unwrap();
+        let bytes = baseline.encode().unwrap();
+        fs::write(store.join("current.alife-checkpoint"), &bytes).unwrap();
+        interrupt(store, &request, "run-created");
+        // Saved state from a crash before the failed materialization's Temporary
+        // destructor removes work: parents exist, undecodable leaf never did.
+        let workspace = store.join(".run").join(WORKSPACE);
+        let assets = workspace.join("work/world-assets");
+        let leaf = assets.join(nested);
+        fs::create_dir_all(leaf.parent().unwrap()).unwrap();
+        fs::write(workspace.join("lease"), WORKSPACE_LEASE).unwrap();
+        let foreign = leaf.parent().unwrap().join("foreign-sibling");
+        fs::write(&foreign, b"preserve").unwrap();
+        assert!(finish_resident_serial_run(store).is_err());
+        assert_eq!(fs::read(&foreign).unwrap(), b"preserve");
+        fs::remove_file(&foreign).unwrap();
+        fs::write(&leaf, b"no valid expected bytes").unwrap();
+        assert!(finish_resident_serial_run(store).is_err());
+        assert_eq!(fs::read(&leaf).unwrap(), b"no valid expected bytes");
+        fs::remove_file(leaf).unwrap();
+        finish_resident_serial_run(store).unwrap();
+        unchanged(store, &bytes);
+    });
+}
