@@ -118,6 +118,31 @@ fn hard_link_staging_is_counted_and_duplicate_publication_does_not_charge_again(
     assert_eq!(fs::read(final_path).unwrap(), b"123456");
 }
 
+#[cfg(unix)]
+#[test]
+fn rename_between_hard_link_names_is_a_charged_successful_noop() {
+    let f = Fixture::new();
+    let budget = OutputBudget::register(&f.0, 8).unwrap();
+    let a = f.0.join("a");
+    let b = f.0.join("b");
+    write(&a, b"1234").unwrap();
+    hard_link(&a, &b).unwrap();
+    rename(&a, &b).unwrap();
+    assert!(a.exists());
+    assert!(b.exists());
+    assert_eq!(budget.usage().unwrap().used, 8);
+    assert!(write(f.0.join("c"), b"5678").is_err());
+    let actual: u64 = fs::read_dir(&f.0)
+        .unwrap()
+        .map(|e| e.unwrap().metadata().unwrap().len())
+        .sum();
+    assert_eq!(actual, 8);
+    assert_eq!(budget.usage().unwrap().used, actual);
+    remove_file(&a).unwrap();
+    write(f.0.join("c"), b"5678").unwrap();
+    assert_eq!(budget.usage().unwrap().used, 8);
+}
+
 #[test]
 fn staged_replace_preserves_existing_bytes_on_quota_error() {
     let f = Fixture::new();
