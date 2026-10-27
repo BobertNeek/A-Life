@@ -4,9 +4,35 @@ use alife_training::CurrentLifeCheckpointV1;
 use std::{
     collections::BTreeSet,
     fs,
-    io::{Read, Write},
+    io::Read,
     path::{Component, PathBuf},
 };
+
+thread_local! {
+    // This only chooses admission scratch placement. Actual writer accounting
+    // is process-wide and retained by stores cloned into worker threads.
+    static VALIDATION_ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+pub(crate) struct ValidationScope {
+    previous: Option<PathBuf>,
+    _thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+impl Drop for ValidationScope {
+    fn drop(&mut self) {
+        VALIDATION_ROOT.with(|root| *root.borrow_mut() = self.previous.take());
+    }
+}
+pub(crate) fn validation_scope(root: &Path) -> Result<ValidationScope> {
+    let root = root.canonicalize()?;
+    if alife_storage::budget_for(&root)?.is_none() {
+        return Err("resident validation scratch requires its registered output budget".into());
+    }
+    let previous = VALIDATION_ROOT.with(|value| value.replace(Some(root)));
+    Ok(ValidationScope {
+        previous,
+        _thread: std::marker::PhantomData,
+    })
+}
 
 fn relative(name: &str) -> Result<()> {
     if name.is_empty()
@@ -84,10 +110,10 @@ fn materialize(snapshot: &CurrentLifeCheckpointV1, root: &Path) -> Result<()> {
         relative(name)?;
         let path = assets.join(name);
         fs::create_dir_all(path.parent().ok_or("private asset has no parent")?)?;
-        fs::write(path, snapshot.asset_bytes(name)?)?;
+        alife_storage::write(path, snapshot.asset_bytes(name)?)?;
     }
-    fs::write(root.join("world.json"), &snapshot.world_json)?;
-    fs::write(
+    alife_storage::write(root.join("world.json"), &snapshot.world_json)?;
+    alife_storage::write(
         root.join(".world.json.sleep-journal-v2.json"),
         &snapshot.sleep_journal_json,
     )?;
@@ -115,7 +141,7 @@ impl AsRef<Path> for Temporary {
 }
 impl Drop for Temporary {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
+        let _ = alife_storage::remove_dir_all(&self.path);
     }
 }
 fn real_directory(path: &Path) -> Result<bool> {
@@ -180,7 +206,7 @@ pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
         .map(|e| e.map(|e| e.file_name()))
         .collect::<std::io::Result<BTreeSet<_>>>()?;
     if marker.is_empty() && entries == BTreeSet::from([std::ffi::OsString::from("lease")]) {
-        lease.write_all(expected.as_bytes())?;
+        alife_storage::write_all(&lock, &mut lease, expected.as_bytes())?;
         lease.sync_all()?;
     } else if marker != expected || entries.iter().any(|name| name != "lease" && name != "work") {
         return Err("unknown private validation workspace contents; refusing cleanup".into());
@@ -190,7 +216,7 @@ pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
         if !real_directory(&path)? {
             return Err("private validation scratch must be a real directory".into());
         }
-        fs::remove_dir_all(&path)?;
+        alife_storage::remove_dir_all(&path)?;
     }
     fs::create_dir(&path)?;
     Ok(Temporary {
@@ -199,7 +225,10 @@ pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
     })
 }
 pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
-    let root = std::env::temp_dir().join("alife-current-private-validation-v1");
+    let root = VALIDATION_ROOT
+        .with(|value| value.borrow().clone())
+        .unwrap_or_else(std::env::temp_dir)
+        .join("alife-current-private-validation-v1");
     let temporary = workspace_at(&root)?;
     materialize(snapshot, &temporary.path)
 }

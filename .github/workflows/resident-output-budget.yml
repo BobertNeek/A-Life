@@ -1,0 +1,60 @@
+name: Resident output budget
+on:
+  pull_request:
+    paths:
+      - 'crates/alife_storage/**'
+      - 'crates/alife_archive/**'
+      - 'crates/alife_runtime/src/checkpoint_assets/**'
+      - 'crates/alife_game_app/src/foundation_training*'
+      - 'crates/alife_game_app/src/foundation_training*/**'
+      - '.github/workflows/resident-output-budget.yml'
+      - 'Cargo.*'
+      - 'scripts/check_resident_recovery_native.py'
+jobs:
+  quota-primitives:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - run: cargo test --locked -p alife_storage
+      - run: cargo clippy --locked -p alife_storage --all-targets -- -D warnings
+  quota-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_MIN_STACK: '33554432'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-output-budget
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - run: cargo test --locked -p alife_archive --test lineage_library output_budget -- --test-threads=1
+      - run: cargo test --locked -p alife_runtime --lib output_budget -- --test-threads=1
+      - name: Native quota recovery retirement and disposable CLI fixture
+        env:
+          ALIFE_RESIDENT_RECOVERY_FIXTURE_OUTPUT: ${{ runner.temp }}/resident-stopped-${{ github.run_id }}
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib output_budget -- --test-threads=1
+      - name: Exercise actual strict recovery JSON native admission publication and finish
+        run: |
+          cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff
+          python -B scripts/check_resident_recovery_native.py target/debug/train_n2048_care target/debug/export_native_training_handoff "${{ runner.temp }}/resident-stopped-${{ github.run_id }}"
+      - run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings

@@ -136,7 +136,7 @@ impl CycleStageTiming {
         };
         let result = serde_json::to_vec_pretty(&receipt)
             .map_err(std::io::Error::other)
-            .and_then(|bytes| std::fs::write(output.join("stage-timing.json"), bytes));
+            .and_then(|bytes| alife_storage::write(output.join("stage-timing.json"), bytes));
         if let Err(error) = result {
             // Profiling failure must not replace a training error, or turn a
             // successfully sealed cycle into a failed cycle.
@@ -298,7 +298,7 @@ mod tests {
 
     impl Drop for Directory {
         fn drop(&mut self) {
-            std::fs::remove_dir_all(&self.0).unwrap();
+            alife_storage::remove_dir_all(&self.0).unwrap();
         }
     }
 
@@ -306,7 +306,7 @@ mod tests {
     fn existing_output_is_never_claimed_or_overwritten_by_profiler() {
         let directory = Directory::new();
         let output = &directory.0;
-        std::fs::write(output.join("stage-timing.json"), b"foreign timing").unwrap();
+        alife_storage::write(output.join("stage-timing.json"), b"foreign timing").unwrap();
         let (timing, clock) = fixture();
         let admission = timing.stage("source_admission");
         clock.set(2);

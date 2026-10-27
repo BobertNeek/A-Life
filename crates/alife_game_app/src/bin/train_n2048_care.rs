@@ -7,6 +7,67 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args
         .next()
         .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N] | --refresh-terrain-founder SOURCE_DIRECTORY OUTPUT_DIRECTORY")?;
+    if mode == "--resident-contract" {
+        if args.next().is_some() {
+            return Err("unexpected resident-contract argument".into());
+        }
+        println!(
+            "{}",
+            serde_json::json!({"schema":1,"kind":"native-resident-serial-v1",
+            "producer_arguments":"--resident-serial STORE REQUEST_JSON",
+            "recovery_arguments":"--recover-resident STORE",
+            "actor_Adam_resident":true,"critic_RAM_continuity":true,"fresh_private_cohorts":true,
+            "provisional_until_snapshot":true,"canonical_publication_by_owner":true,
+            "finite_continuous_feeding":true,"max_continuous_feeding_decisions":36000,
+            "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":false,
+            "temporary_budget_enforced_during_writes":true,
+            "temporary_budget_scope":"STORE/.run logical file bytes including staging and native validation scratch",
+            "cleanup_arguments":"--finish-resident-run STORE","bound_run_cleanup":true})
+        );
+        return Ok(());
+    }
+    if mode == "--recover-resident" {
+        let store = std::path::PathBuf::from(args.next().ok_or("missing resident store")?);
+        if args.next().is_some() {
+            return Err("unexpected resident recovery argument".into());
+        }
+        println!(
+            "{}",
+            alife_game_app::recover_resident_serial_checkpoint(&store)?
+        );
+        return Ok(());
+    }
+    if mode == "--finish-resident-run" {
+        let store = std::path::PathBuf::from(args.next().ok_or("missing resident store")?);
+        if args.next().is_some() {
+            return Err("unexpected resident cleanup argument".into());
+        }
+        println!("{}", alife_game_app::finish_resident_serial_run(&store)?);
+        return Ok(());
+    }
+    if mode == "--resident-serial" {
+        let store = std::path::PathBuf::from(args.next().ok_or("missing resident store")?);
+        let request = std::path::PathBuf::from(args.next().ok_or("missing resident request JSON")?);
+        if args.next().is_some() {
+            return Err("unexpected resident serial argument".into());
+        }
+        let metadata = std::fs::symlink_metadata(&request)?;
+        if !metadata.is_file() || metadata.len() > 1024 * 1024 {
+            return Err("resident request must be a bounded regular JSON file".into());
+        }
+        let request: alife_game_app::ResidentSerialRequest =
+            serde_json::from_slice(&std::fs::read(request)?)?;
+        let report = std::thread::Builder::new()
+            .name("resident-serial-care".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || {
+                alife_game_app::run_resident_serial_care(&store, request).map_err(|e| e.to_string())
+            })?
+            .join()
+            .map_err(|_| "resident serial worker panicked")??;
+        println!("{report}");
+        return Ok(());
+    }
     if mode == "--final-private-life-contract" {
         if args.next().is_some() {
             return Err("unexpected final-private-life-contract argument".into());

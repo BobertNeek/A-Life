@@ -126,7 +126,7 @@ pub(super) fn write_lesson_receipt(
             "lesson-trace.json"
         };
     document["evaluation_observation"] = serde_json::to_value(observation)?;
-    std::fs::write(output.join(filename), serde_json::to_vec_pretty(&document)?)?;
+    alife_storage::write(output.join(filename), serde_json::to_vec_pretty(&document)?)?;
     Ok(())
 }
 

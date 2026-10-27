@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_runtime", "crates/alife_training", "crates/alife_archive", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
+members = ["crates/alife_storage", "crates/alife_core", "crates/alife_world", "crates/alife_gpu_backend", "crates/alife_runtime", "crates/alife_training", "crates/alife_archive", "crates/alife_school", "crates/alife_semantic", "crates/alife_tools", "crates/alife_game_app"]
 resolver = "2"
 
 [workspace.package]
@@ -9,6 +9,7 @@ license = "MIT"
 repository = "https://github.com/BobertNeek/A-Life"
 
 [workspace.dependencies]
+alife_storage = { path = "crates/alife_storage" }
 alife_core = { path = "crates/alife_core" }
 bevy = { version = "=0.18.0", default-features = false }
 bincode = { version = "2.0.1", features = ["serde"] }

@@ -22,6 +22,8 @@ use crate::{
 mod ppo_diagnostics;
 mod stage_timing;
 use stage_timing::CycleStageTiming;
+mod causal_collection;
+pub use causal_collection::{FoundationCausalCaptureMetrics, FoundationCausalCollectionMetrics};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const BIOLOGICAL_OBJECTIVE_VERSION: u16 = 2;
@@ -40,6 +42,8 @@ mod portable_handoff;
 pub use portable_handoff::*;
 mod current;
 pub use current::*;
+mod resident;
+pub use resident::*;
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
@@ -171,6 +175,9 @@ pub struct FoundationCycleReceipt {
     pub delayed_food_gate_passed: bool,
     #[serde(default)]
     pub world_ticks_elapsed: u64,
+    /// Measured control interval only; absent on historical receipts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub causal_collection: Option<FoundationCausalCollectionMetrics>,
     #[serde(default)]
     pub consumed_events: u64,
     #[serde(default)]
@@ -941,31 +948,31 @@ pub fn continue_foundation_to_terrain_with_legacy(
     crate::foundation_training_output::in_new_directory(
         output,
         || {
-            std::fs::write(
+            alife_storage::write(
                 output.join("trained.alife-foundation"),
                 asset.encode_canonical()?,
             )?;
-            std::fs::write(
+            alife_storage::write(
                 output.join("actor-checkpoint.json"),
                 serde_json::to_vec(&actor)?,
             )?;
             for name in ["cycle.json", "value-checkpoint.json"] {
-                std::fs::copy(previous.join(name), output.join(name))?;
+                alife_storage::copy(previous.join(name), output.join(name))?;
             }
             let cycle: FoundationCycleReceipt =
                 serde_json::from_slice(&std::fs::read(previous.join("cycle.json"))?)?;
             if cycle.critic_residual_update_sha256.is_some() {
                 let name = crate::foundation_critic_correction::RESIDUAL_UPDATE;
-                std::fs::copy(previous.join(name), output.join(name))?;
+                alife_storage::copy(previous.join(name), output.join(name))?;
             }
-            std::fs::write(
+            alife_storage::write(
                 output.join("terrain-continuation.json"),
                 serde_json::to_vec_pretty(&receipt)?,
             )?;
             Ok(())
         },
         |error| {
-            let _ = std::fs::write(output.join("failure.txt"), error.to_string());
+            let _ = alife_storage::write(output.join("failure.txt"), error.to_string());
         },
     )?;
     Ok(receipt)
@@ -992,7 +999,7 @@ mod sampling_temperature_tests {
             ));
             std::fs::create_dir(&source).unwrap();
             for name in names {
-                std::fs::write(source.join(name), b"{}").unwrap();
+                alife_storage::write(source.join(name), b"{}").unwrap();
             }
             let output = source.join("must-not-exist");
             let error = resume_foundation_training_cycle(&source, &output, 17, 16).unwrap_err();
@@ -1003,7 +1010,7 @@ mod sampling_temperature_tests {
             for name in names {
                 assert_eq!(std::fs::read(source.join(name)).unwrap(), b"{}");
             }
-            std::fs::remove_dir_all(source).unwrap();
+            alife_storage::remove_dir_all(source).unwrap();
         }
     }
 
@@ -1082,9 +1089,9 @@ mod sampling_temperature_tests {
         std::fs::create_dir(&root).unwrap();
         let source = root.join("directory");
         std::fs::create_dir(&source).unwrap();
-        std::fs::write(source.join("cycle.json"), b"{}").unwrap();
+        alife_storage::write(source.join("cycle.json"), b"{}").unwrap();
         let file = root.join("current.alife-checkpoint");
-        std::fs::write(&file, b"policy selection only; not an admitted checkpoint").unwrap();
+        alife_storage::write(&file, b"policy selection only; not an admitted checkpoint").unwrap();
         assert!(!final_private_life_capture_policy(None, false, false).unwrap());
         assert!(!final_private_life_capture_policy(Some(&source), false, false).unwrap());
         assert!(final_private_life_capture_policy(Some(&file), false, false).unwrap());
@@ -1096,13 +1103,13 @@ mod sampling_temperature_tests {
             final_private_life_capture_policy(Some(&root.join("missing")), false, true).is_err()
         );
         for marker in ["adaptation.json", "warmup.json"] {
-            std::fs::write(source.join(marker), b"{}").unwrap();
+            alife_storage::write(source.join(marker), b"{}").unwrap();
             assert!(final_private_life_capture_policy(Some(&source), false, true).is_err());
-            std::fs::remove_file(source.join(marker)).unwrap();
+            alife_storage::remove_file(source.join(marker)).unwrap();
         }
-        std::fs::remove_file(source.join("cycle.json")).unwrap();
+        alife_storage::remove_file(source.join("cycle.json")).unwrap();
         assert!(final_private_life_capture_policy(Some(&source), false, true).is_err());
-        std::fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1119,7 +1126,7 @@ mod sampling_temperature_tests {
         let source = root.join("source");
         std::fs::create_dir(&source).unwrap();
         let raw = b"invalid sealed source; no world or GPU may be created";
-        std::fs::write(source.join("cycle.json"), raw).unwrap();
+        alife_storage::write(source.join("cycle.json"), raw).unwrap();
         let output = root.join("output");
         let error = resume_foundation_training_cycle_with_final_private_life(
             &source,
@@ -1135,7 +1142,7 @@ mod sampling_temperature_tests {
         assert!(!output.exists());
         assert_eq!(std::fs::read(source.join("cycle.json")).unwrap(), raw);
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
-        std::fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1343,9 +1350,9 @@ pub fn refresh_terrain_founder(
     let refresh_bytes = serde_json::to_vec_pretty(&refresh)?;
     // create_dir rejects existing destinations, including the immutable source.
     std::fs::create_dir(output)?;
-    std::fs::write(output.join("trained.alife-foundation"), asset_bytes)?;
-    std::fs::write(output.join("adaptation.json"), adaptation_bytes)?;
-    std::fs::write(output.join("founder-refresh.json"), refresh_bytes)?;
+    alife_storage::write(output.join("trained.alife-foundation"), asset_bytes)?;
+    alife_storage::write(output.join("adaptation.json"), adaptation_bytes)?;
+    alife_storage::write(output.join("founder-refresh.json"), refresh_bytes)?;
     Ok(refresh)
 }
 
@@ -1578,11 +1585,11 @@ mod founder_refresh_tests {
         assert_residual_checkpoint_admission(&fixture.source, true);
         assert_residual_checkpoint_admission(&fixture.target, true);
         for changed in [b"{\"optimizer_updates\":3}".as_slice(), b""] {
-            std::fs::write(&path, changed).unwrap();
+            alife_storage::write(&path, changed).unwrap();
             assert_residual_checkpoint_admission(&fixture.source, false);
             assert_eq!(std::fs::read(&path).unwrap(), changed);
         }
-        std::fs::remove_file(&path).unwrap();
+        alife_storage::remove_file(&path).unwrap();
         assert_residual_checkpoint_admission(&fixture.source, false);
         assert!(!path.exists());
         std::fs::create_dir(&path).unwrap();
@@ -1597,15 +1604,15 @@ mod founder_refresh_tests {
             std::fs::metadata(&path).unwrap().len(),
             128 * 1024 * 1024 + 1
         );
-        std::fs::remove_file(&path).unwrap();
+        alife_storage::remove_file(&path).unwrap();
         #[cfg(unix)]
         {
             // Even an exact-hash symlink must not substitute for the regular sidecar.
             std::os::unix::fs::symlink(fixture.target.join(RESIDUAL_UPDATE), &path).unwrap();
             assert_residual_checkpoint_admission(&fixture.source, false);
-            std::fs::remove_file(&path).unwrap();
+            alife_storage::remove_file(&path).unwrap();
         }
-        std::fs::write(&path, &bytes).unwrap();
+        alife_storage::write(&path, &bytes).unwrap();
         for malformed in [
             String::new(),
             "A".repeat(64),
@@ -1614,20 +1621,20 @@ mod founder_refresh_tests {
         ] {
             let mut receipt: FoundationCycleReceipt = serde_json::from_slice(&cycle).unwrap();
             receipt.critic_residual_update_sha256 = Some(malformed);
-            std::fs::write(
+            alife_storage::write(
                 fixture.source.join("cycle.json"),
                 serde_json::to_vec(&receipt).unwrap(),
             )
             .unwrap();
             assert_residual_checkpoint_admission(&fixture.source, false);
         }
-        std::fs::write(fixture.source.join("cycle.json"), cycle).unwrap();
+        alife_storage::write(fixture.source.join("cycle.json"), cycle).unwrap();
         assert_residual_checkpoint_admission(&fixture.source, true);
         assert_residual_checkpoint_admission(&fixture.target, true);
         let target_path = fixture.target.join(RESIDUAL_UPDATE);
-        std::fs::remove_file(&target_path).unwrap();
+        alife_storage::remove_file(&target_path).unwrap();
         assert_residual_checkpoint_admission(&fixture.target, false);
-        std::fs::write(&target_path, b"tampered correction evidence").unwrap();
+        alife_storage::write(&target_path, b"tampered correction evidence").unwrap();
         assert_residual_checkpoint_admission(&fixture.target, false);
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
@@ -1644,7 +1651,7 @@ mod founder_refresh_tests {
         let path = fixture
             .source
             .join(crate::foundation_critic_correction::RESIDUAL_UPDATE);
-        std::fs::write(&path, b"unreferenced historical evidence").unwrap();
+        alife_storage::write(&path, b"unreferenced historical evidence").unwrap();
         assert_residual_checkpoint_admission(&fixture.source, true);
         assert_eq!(
             std::fs::read(&path).unwrap(),
@@ -2073,7 +2080,7 @@ mod founder_refresh_tests {
             ("value-checkpoint.json", serde_json::to_vec(&value).unwrap()),
         ];
         for (name, bytes) in &files {
-            std::fs::write(directory.join(name), bytes).unwrap();
+            alife_storage::write(directory.join(name), bytes).unwrap();
         }
         assert!(load_cycle_continuation(&directory, None).is_err());
         assert!(load_cycle_continuation(&directory, Some(2)).is_err());
@@ -2094,7 +2101,7 @@ mod founder_refresh_tests {
         );
         for (name, bytes) in &files {
             assert_eq!(std::fs::read(directory.join(name)).unwrap(), *bytes);
-            std::fs::remove_file(directory.join(name)).unwrap();
+            alife_storage::remove_file(directory.join(name)).unwrap();
         }
         std::fs::remove_dir(directory).unwrap();
     }
@@ -2112,14 +2119,14 @@ mod founder_refresh_tests {
             std::process::id()
         ));
         std::fs::create_dir(&directory).unwrap();
-        std::fs::write(
+        alife_storage::write(
             directory.join("cycle.json"),
             serde_json::to_vec(&receipt).unwrap(),
         )
         .unwrap();
         let output = directory.join("must-not-exist");
         let source_hash = blake3::hash(&std::fs::read(directory.join("cycle.json")).unwrap());
-        std::fs::write(
+        alife_storage::write(
             directory.join("failure.json"),
             b"preserved source diagnostic",
         )
@@ -2137,8 +2144,8 @@ mod founder_refresh_tests {
             std::fs::read(directory.join("failure.json")).unwrap(),
             b"preserved source diagnostic"
         );
-        std::fs::remove_file(directory.join("failure.json")).unwrap();
-        std::fs::remove_file(directory.join("cycle.json")).unwrap();
+        alife_storage::remove_file(directory.join("failure.json")).unwrap();
+        alife_storage::remove_file(directory.join("cycle.json")).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }
 
@@ -2170,9 +2177,9 @@ mod founder_refresh_tests {
             std::fs::create_dir(&source).unwrap();
             std::fs::create_dir(&foreign).unwrap();
             for (name, bytes) in &files {
-                std::fs::write(source.join(name), bytes).unwrap();
+                alife_storage::write(source.join(name), bytes).unwrap();
             }
-            std::fs::write(foreign.join("failure.json"), b"foreign diagnostic").unwrap();
+            alife_storage::write(foreign.join("failure.json"), b"foreign diagnostic").unwrap();
             let output = if alias { &source } else { &foreign };
             let error = resume_foundation_training_cycle(&source, output, 17, 1).unwrap_err();
             assert_eq!(
@@ -2184,13 +2191,13 @@ mod founder_refresh_tests {
                     blake3::hash(&std::fs::read(source.join(name)).unwrap()),
                     blake3::hash(bytes)
                 );
-                std::fs::remove_file(source.join(name)).unwrap();
+                alife_storage::remove_file(source.join(name)).unwrap();
             }
             assert_eq!(
                 std::fs::read(foreign.join("failure.json")).unwrap(),
                 b"foreign diagnostic"
             );
-            std::fs::remove_file(foreign.join("failure.json")).unwrap();
+            alife_storage::remove_file(foreign.join("failure.json")).unwrap();
             std::fs::remove_dir(&source).unwrap();
             std::fs::remove_dir(&foreign).unwrap();
             std::fs::remove_dir(&directory).unwrap();
@@ -2218,7 +2225,7 @@ mod founder_refresh_tests {
         assert_eq!(diagnostic["error"], "CPU-only diagnostic failure");
         assert_eq!(diagnostic["seed"], 17);
         assert_eq!(diagnostic["requested_waking_decisions"], 32);
-        std::fs::remove_file(output.join("failure.json")).unwrap();
+        alife_storage::remove_file(output.join("failure.json")).unwrap();
         std::fs::remove_dir(output).unwrap();
     }
 
@@ -2304,7 +2311,7 @@ mod founder_refresh_tests {
             ));
         }
         for (name, bytes) in &files {
-            std::fs::write(original.join(name), bytes).unwrap();
+            alife_storage::write(original.join(name), bytes).unwrap();
         }
         let conversion = continue_foundation_to_terrain(&original, &output, None).unwrap();
         assert!(!conversion.optimizer_reset && !conversion.value_state_reset);
@@ -2317,11 +2324,11 @@ mod founder_refresh_tests {
         let sidecar = output.join(crate::foundation_critic_correction::RESIDUAL_UPDATE);
         if residual {
             assert_eq!(std::fs::read(&sidecar).unwrap(), residual_bytes);
-            std::fs::remove_file(&sidecar).unwrap();
+            alife_storage::remove_file(&sidecar).unwrap();
             assert!(load_cycle_continuation(&output, None).is_err());
-            std::fs::write(&sidecar, b"tampered terrain evidence").unwrap();
+            alife_storage::write(&sidecar, b"tampered terrain evidence").unwrap();
             assert!(load_cycle_continuation(&output, None).is_err());
-            std::fs::write(&sidecar, residual_bytes).unwrap();
+            alife_storage::write(&sidecar, residual_bytes).unwrap();
             assert!(load_cycle_continuation(&output, None).is_ok());
         } else {
             assert!(!sidecar.exists());
@@ -2336,7 +2343,7 @@ mod founder_refresh_tests {
             serde_json::from_slice(&std::fs::read(output.join("actor-checkpoint.json")).unwrap())
                 .unwrap();
         corrupt.first_moment[0] += 0.125;
-        std::fs::write(
+        alife_storage::write(
             output.join("actor-checkpoint.json"),
             serde_json::to_vec(&corrupt).unwrap(),
         )
@@ -2345,7 +2352,7 @@ mod founder_refresh_tests {
         for (name, bytes) in &files {
             assert_eq!(std::fs::read(original.join(name)).unwrap(), *bytes);
         }
-        std::fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -2485,18 +2492,18 @@ mod founder_refresh_tests {
             "founder-refresh.json",
             "README.md",
         ] {
-            std::fs::copy(directory.join(name), package.join(name)).unwrap();
+            alife_storage::copy(directory.join(name), package.join(name)).unwrap();
         }
         for name in ["actor-checkpoint.json", "value-checkpoint.json"] {
-            std::fs::write(package.join(name), b"{}").unwrap();
+            alife_storage::write(package.join(name), b"{}").unwrap();
             let rejection = prepare_terrain_founder_refresh(&package, &receipt, &source)
                 .unwrap_err()
                 .to_string();
             assert!(rejection.contains("rejects mutable checkpoints"));
-            std::fs::remove_file(package.join(name)).unwrap();
+            alife_storage::remove_file(package.join(name)).unwrap();
         }
         // This directory was created exclusively by this test under temp_dir.
-        std::fs::remove_dir_all(package).unwrap();
+        alife_storage::remove_dir_all(package).unwrap();
     }
 }
 
@@ -2593,11 +2600,11 @@ pub fn adapt_foundation_to_terrain(
         founder_biology_calibration: 2,
     };
     std::fs::create_dir(output)?;
-    std::fs::write(
+    alife_storage::write(
         output.join("trained.alife-foundation"),
         adapted.encode_canonical()?,
     )?;
-    std::fs::write(
+    alife_storage::write(
         output.join("adaptation.json"),
         serde_json::to_vec_pretty(&result)?,
     )?;
@@ -3045,6 +3052,9 @@ fn run_foundation_training_cycle_from_with_food_need(
         FoundationCycleOutcome::CriticCapture(_) => {
             Err("unexpected critic capture in training".into())
         }
+        FoundationCycleOutcome::Resident(_) => {
+            Err("unexpected resident learner in ordinary training".into())
+        }
     });
     timing.finish(result.as_ref().err().map(|error| error.as_ref()));
     result
@@ -3053,6 +3063,7 @@ fn run_foundation_training_cycle_from_with_food_need(
 enum FoundationCycleOutcome {
     Trained(Box<FoundationCycleReceipt>),
     CriticCapture(serde_json::Value),
+    Resident(Box<resident::ResidentEpisode>),
 }
 
 /// Capture an independently seeded trajectory under the exact sealed actor.
@@ -3095,6 +3106,9 @@ pub fn capture_foundation_critic_trajectory(
         FoundationCycleOutcome::CriticCapture(receipt) => Ok(receipt),
         FoundationCycleOutcome::Trained(_) => {
             Err("critic capture unexpectedly trained actor".into())
+        }
+        FoundationCycleOutcome::Resident(_) => {
+            Err("critic capture unexpectedly retained a learner".into())
         }
     });
     timing.finish(result.as_ref().err().map(|error| error.as_ref()));
@@ -3289,6 +3303,7 @@ fn run_foundation_training_cycle_profiled(
         founder_seed_base,
         objective_state_reset,
         objective_transition_from,
+        resident: None,
     };
     admission_stage.finish();
     crate::foundation_training_output::in_new_directory(
@@ -3310,6 +3325,7 @@ fn run_foundation_training_cycle_profiled(
                 if capture_only { previous } else { None },
                 preserve_final_life,
                 food_need_condition,
+                false,
             )
         },
         |error| {
@@ -3355,7 +3371,7 @@ fn record_cycle_failure(
     food_available_world_tick: Option<u64>,
     lesson: Option<FoundationTeacherLesson>,
 ) {
-    let _ = std::fs::write(
+    let _ = alife_storage::write(
         output.join("failure.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "error": error.to_string(),
@@ -3376,6 +3392,7 @@ struct AdmittedCycleState {
     founder_seed_base: u64,
     objective_state_reset: bool,
     objective_transition_from: Option<u16>,
+    resident: Option<resident::ResidentLearner>,
 }
 
 #[expect(
@@ -3397,6 +3414,7 @@ fn run_foundation_training_cycle_in_owned_output(
     capture_source: Option<&Path>,
     preserve_final_life: bool,
     food_need_condition: crate::FoundationFoodNeedCondition,
+    retain_resident: bool,
 ) -> Result<FoundationCycleOutcome> {
     let capture_only = capture_source.is_some();
     let AdmittedCycleState {
@@ -3407,12 +3425,16 @@ fn run_foundation_training_cycle_in_owned_output(
         founder_seed_base,
         objective_state_reset,
         objective_transition_from,
+        resident,
     } = admitted;
-    std::fs::write(
+    if resident.is_some() && (!retain_resident || capture_only) {
+        return Err("resident learner cannot enter a capture-only or ordinary cycle".into());
+    }
+    alife_storage::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
     )?;
-    std::fs::write(output.join("phase.txt"), "source-written")?;
+    alife_storage::write(output.join("phase.txt"), "source-written")?;
 
     let world_stage = timing.stage("world_lesson_setup");
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
@@ -3467,7 +3489,15 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     world_stage.finish();
     let backend_stage = timing.stage("backend_runtime_setup");
-    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let backend = if let Some(learner) = &resident {
+        learner
+            .trainer
+            .session()
+            .backend()
+            .new_staging_like_live()?
+    } else {
+        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?
+    };
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
         game.world,
@@ -3510,7 +3540,7 @@ fn run_foundation_training_cycle_in_owned_output(
             .position
             .to_array())
     };
-    std::fs::write(
+    alife_storage::write(
         output.join("scenario.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "world_seed": seed,
@@ -3566,7 +3596,7 @@ fn run_foundation_training_cycle_in_owned_output(
     if timing.enabled() {
         runtime.set_performance_measurement_enabled(true);
     }
-    std::fs::write(output.join("phase.txt"), "runtime-admitted")?;
+    alife_storage::write(output.join("phase.txt"), "runtime-admitted")?;
 
     let organism_id = runtime
         .world()
@@ -3641,8 +3671,14 @@ fn run_foundation_training_cycle_in_owned_output(
     let feeding_before = feeding_food
         .as_ref()
         .map(|food| food.before_step(runtime.world()));
+    // Setup, ordinary need aging, initial durable capture and first prior prime
+    // are complete. Measure actual causal world advances from this boundary.
+    let control_start_tick = runtime.world().tick().raw();
+    let control_capture_before = runtime.foundation_training_capture_metrics();
+    let control_started = Instant::now();
+    let mut no_progress_calls = 0_u64;
     let tick_summaries = runtime.tick().map_err(|e| {
-        let _ = std::fs::write(
+        let _ = alife_storage::write(
             output.join("runtime-performance-failed.json"),
             serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
         );
@@ -3713,33 +3749,41 @@ fn run_foundation_training_cycle_in_owned_output(
         food_hidden = false;
         food_available_elapsed_seconds = Some(started.elapsed().as_secs_f64());
     }
-    std::fs::write(output.join("phase.txt"), "first-capture")?;
+    alife_storage::write(output.join("phase.txt"), "first-capture")?;
     crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     first_stage.finish();
     let trainer_stage = timing.stage("trainer_construction_restore");
     let phenotype = first[0].before.phenotype.as_ref().clone();
-    let mask = if let Some(checkpoint) = &restored_actor {
-        checkpoint.stage_mask.clone()
+    let (mut trainer, carried_value) = if let Some(mut learner) = resident {
+        learner
+            .trainer
+            .rebind_for_next_cohort(phenotype.clone(), asset.clone())?;
+        (learner.trainer, Some(learner.value))
     } else {
-        StageTrainableMask::from_synapse_indices(
-            &phenotype,
-            &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
-        )?
+        let mask = if let Some(checkpoint) = &restored_actor {
+            checkpoint.stage_mask.clone()
+        } else {
+            StageTrainableMask::from_synapse_indices(
+                &phenotype,
+                &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
+            )?
+        };
+        let staging = runtime.new_staging_like_live()?;
+        let mut trainer = FoundationTrainer::from_session(
+            alife_runtime::GpuAuthoritativeSession::new(
+                staging,
+                alife_runtime::GpuSessionConsumerKind::Training,
+            ),
+            phenotype.clone(),
+            asset.clone(),
+            mask,
+            AdamWConfig::default(),
+        )?;
+        if let Some(checkpoint) = &restored_actor {
+            trainer.restore_checkpoint(checkpoint)?;
+        }
+        (trainer, None)
     };
-    let staging = runtime.new_staging_like_live()?;
-    let mut trainer = FoundationTrainer::from_session(
-        alife_runtime::GpuAuthoritativeSession::new(
-            staging,
-            alife_runtime::GpuSessionConsumerKind::Training,
-        ),
-        phenotype.clone(),
-        asset.clone(),
-        mask,
-        AdamWConfig::default(),
-    )?;
-    if let Some(checkpoint) = &restored_actor {
-        trainer.restore_checkpoint(checkpoint)?;
-    }
     trainer_stage.finish();
     let initial_actor_stage = timing.stage("initial_actor_checkpoint_capture");
     let initial_checkpoint = initial_actor_checkpoint_bytes(restored_actor.as_ref(), || {
@@ -3758,7 +3802,7 @@ fn run_foundation_training_cycle_in_owned_output(
         &asset,
         budget,
     )?;
-    std::fs::write(output.join("phase.txt"), "replay-writer-ready")?;
+    alife_storage::write(output.join("phase.txt"), "replay-writer-ready")?;
     let mut references = Vec::with_capacity(training_ticks + 1);
     budget
         .check_additional((training_ticks as u64 + 1) * u64::from(phenotype.neuron_count()) * 4)?;
@@ -3844,7 +3888,7 @@ fn run_foundation_training_cycle_in_owned_output(
             .as_ref()
             .map(|food| food.before_step(runtime.world()));
         let tick_outcome = runtime.tick_outcome().map_err(|e| {
-            let _ = std::fs::write(
+            let _ = alife_storage::write(
                 output.join("runtime-performance-failed.json"),
                 serde_json::to_vec_pretty(&runtime.performance_metrics()).unwrap_or_default(),
             );
@@ -3853,14 +3897,14 @@ fn run_foundation_training_cycle_in_owned_output(
         production_tick_seconds += tick_started.elapsed().as_secs_f64();
         let after = runtime.world().tick().raw();
         if after != before && after % 64 == 0 {
-            std::fs::write(
+            alife_storage::write(
                 output.join("phase.txt"),
                 format!(
                     "collecting world_tick={after} waking_records={}",
                     references.len()
                 ),
             )?;
-            std::fs::write(
+            alife_storage::write(
                 output.join("progress.json"),
                 serde_json::to_vec_pretty(&serde_json::json!({
                     "world_tick": after,
@@ -3875,9 +3919,10 @@ fn run_foundation_training_cycle_in_owned_output(
             )?;
         }
         if after == before {
+            no_progress_calls += 1;
             let reason = format!("{tick_outcome:?}");
             if last_stall_reason.as_ref() != Some(&reason) {
-                std::fs::write(
+                alife_storage::write(
                     output.join("stall.json"),
                     serde_json::to_vec_pretty(&serde_json::json!({
                         "world_tick": before,
@@ -4017,6 +4062,15 @@ fn run_foundation_training_cycle_in_owned_output(
             break;
         }
     }
+    let causal_collection = FoundationCausalCollectionMetrics::measure(
+        control_start_tick,
+        runtime.world().tick().raw(),
+        control_started.elapsed().as_secs_f64(),
+        references.len(),
+        no_progress_calls,
+        control_capture_before,
+        runtime.foundation_training_capture_metrics(),
+    )?;
     crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     let collection_seconds = started.elapsed().as_secs_f64();
     remaining_collection_stage.finish();
@@ -4061,7 +4115,7 @@ fn run_foundation_training_cycle_in_owned_output(
     } else {
         organism_energy(&runtime, organism_id)?
     };
-    std::fs::write(
+    alife_storage::write(
         output.join("timing.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "production_tick_seconds": production_tick_seconds,
@@ -4069,11 +4123,11 @@ fn run_foundation_training_cycle_in_owned_output(
             "collection_total_seconds": collection_seconds,
         }))?,
     )?;
-    std::fs::write(
+    alife_storage::write(
         output.join("runtime-performance.json"),
         serde_json::to_vec_pretty(&runtime.performance_metrics())?,
     )?;
-    std::fs::write(output.join("phase.txt"), "collection-complete")?;
+    alife_storage::write(output.join("phase.txt"), "collection-complete")?;
     if preserve_final_life {
         // The single-current boundary retains this latest private individual,
         // while founder PPO continues into a fresh cohort as before.
@@ -4081,23 +4135,31 @@ fn run_foundation_training_cycle_in_owned_output(
         GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &exact)?;
         runtime.rebind_durable_checkpoint_boundary(&save_path, &asset_root, &exact)?;
     }
-    std::fs::write(
+    alife_storage::write(
         output.join("replay-manifest.json"),
         serde_json::to_vec(&references)?,
     )?;
     let targets_stage = timing.stage("old_value_and_rollout_target_preparation");
-    let value_optimizer_step_before = restored_value
-        .as_ref()
-        .map_or(0, |checkpoint| checkpoint.optimizer_step);
-    let mut expected_value_checkpoint = restored_value
-        .as_ref()
-        .map(serde_json::to_vec)
-        .transpose()?;
-    let mut value = if let Some(checkpoint) = restored_value {
-        PpoTrainingState::from_checkpoint(checkpoint)?
-    } else {
-        PpoTrainingState::default()
-    };
+    let (mut value, value_optimizer_step_before, mut expected_value_checkpoint) =
+        if let Some(value) = carried_value {
+            let checkpoint = value.checkpoint(trainer.session())?;
+            let age = checkpoint.optimizer_step;
+            (value, age, Some(serde_json::to_vec(&checkpoint)?))
+        } else {
+            let age = restored_value
+                .as_ref()
+                .map_or(0, |checkpoint| checkpoint.optimizer_step);
+            let expected = restored_value
+                .as_ref()
+                .map(serde_json::to_vec)
+                .transpose()?;
+            let value = if let Some(checkpoint) = restored_value {
+                PpoTrainingState::from_checkpoint(checkpoint)?
+            } else {
+                PpoTrainingState::default()
+            };
+            (value, age, expected)
+        };
     // The exact production start state is stored at every replay row. Predict
     // old values before any update in bounded chunks; keep only scalar targets.
     let mut values = Vec::with_capacity(references.len());
@@ -4287,7 +4349,7 @@ fn run_foundation_training_cycle_in_owned_output(
             .flatten()
             .flat_map(|value| value.to_le_bytes())
             .collect();
-        std::fs::write(output.join("critic-features.f32le"), &feature_bytes)?;
+        alife_storage::write(output.join("critic-features.f32le"), &feature_bytes)?;
         let mut source_files = serde_json::Map::new();
         for name in [
             "cycle.json",
@@ -4302,7 +4364,7 @@ fn run_foundation_training_cycle_in_owned_output(
             );
         }
         for name in ["actor-checkpoint.json", "value-checkpoint.json"] {
-            std::fs::copy(previous.join(name), output.join(name))?;
+            alife_storage::copy(previous.join(name), output.join(name))?;
         }
         let rows: Vec<_> = transitions.iter().enumerate().map(|(i, transition)| {
             let terminal = transition.boundary == PpoBoundary::Terminated;
@@ -4350,11 +4412,11 @@ fn run_foundation_training_cycle_in_owned_output(
             "rows": rows, "transitions": rows,
             "truncation_semantics": "actual_next_state_continuation; only_confirmed_death_zeroes_bootstrap",
         });
-        std::fs::write(
+        alife_storage::write(
             output.join("critic-capture.json"),
             serde_json::to_vec_pretty(&receipt)?,
         )?;
-        std::fs::write(
+        alife_storage::write(
             output.join("phase.txt"),
             "critic-capture-complete-no-optimizer-update",
         )?;
@@ -4464,11 +4526,11 @@ fn run_foundation_training_cycle_in_owned_output(
         use sha2::{Digest, Sha256};
         format!("{:x}", Sha256::digest(&residual_bytes))
     };
-    std::fs::write(output.join("critic-residual-update.json"), residual_bytes)?;
+    alife_storage::write(output.join("critic-residual-update.json"), residual_bytes)?;
     ppo_stage.finish();
     let acquisition_rehearsal = if rehearsal_epochs != 0 {
         let rehearsal_stage = timing.stage("acquisition_rehearsal");
-        std::fs::write(output.join("phase.txt"), "acquisition-rehearsal")?;
+        alife_storage::write(output.join("phase.txt"), "acquisition-rehearsal")?;
         let event = grab_food_acquisitions.iter().find(|event| {
             event.row < train_rows && grab_reward_gate.reward(event.row, train_rows) > 0.0
         });
@@ -4495,7 +4557,7 @@ fn run_foundation_training_cycle_in_owned_output(
     };
     let archived_success_replay = if let Some((manifest, epochs)) = archived_replay {
         let archived_stage = timing.stage("archived_success_replay");
-        std::fs::write(output.join("phase.txt"), "archived-success-replay")?;
+        alife_storage::write(output.join("phase.txt"), "archived-success-replay")?;
         let receipt = Some(
             crate::foundation_archived_success_replay::rehearse_archived_successes(
                 &mut trainer,
@@ -4513,7 +4575,7 @@ fn run_foundation_training_cycle_in_owned_output(
         None
     };
     let final_actor_optimizer_step = trainer.optimizer_step();
-    std::fs::write(output.join("phase.txt"), "update-complete")?;
+    alife_storage::write(output.join("phase.txt"), "update-complete")?;
     let update_seconds = started.elapsed().as_secs_f64();
     update_stage.finish();
     let export_stage = timing.stage("export_write_redecode");
@@ -4521,7 +4583,7 @@ fn run_foundation_training_cycle_in_owned_output(
         u16::try_from(policy_version.checked_add(1).ok_or("stage overflow")?)?;
     let trained =
         trainer.export_candidate(TrainingStageManifest::new(1, 1, completed_stage_count))?;
-    std::fs::write(
+    alife_storage::write(
         output.join("trained.alife-foundation"),
         trained.encode_canonical()?,
     )?;
@@ -4564,25 +4626,28 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     next_stage.finish();
     let rebind_stage = timing.stage("trainer_rebind");
+    let resident_asset = retain_resident.then(|| admitted_asset.clone());
     trainer.rebind_for_next_cohort(
         next_steps[0].before.phenotype.as_ref().clone(),
         admitted_asset,
     )?;
     rebind_stage.finish();
     let next_cohort_optimizer_rebound = true;
-    let actor_stage = timing.stage("final_actor_capture_write");
-    std::fs::write(
-        output.join("actor-checkpoint.json"),
-        serde_json::to_vec(&trainer.checkpoint()?)?,
-    )?;
-    actor_stage.finish();
-    let value_stage = timing.stage("final_value_capture_write");
-    std::fs::write(
-        output.join("value-checkpoint.json"),
-        serde_json::to_vec(&value.checkpoint(trainer.session())?)?,
-    )?;
-    value_stage.finish();
-    std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
+    if !retain_resident {
+        let actor_stage = timing.stage("final_actor_capture_write");
+        alife_storage::write(
+            output.join("actor-checkpoint.json"),
+            serde_json::to_vec(&trainer.checkpoint()?)?,
+        )?;
+        actor_stage.finish();
+        let value_stage = timing.stage("final_value_capture_write");
+        alife_storage::write(
+            output.join("value-checkpoint.json"),
+            serde_json::to_vec(&value.checkpoint(trainer.session())?)?,
+        )?;
+        value_stage.finish();
+    }
+    alife_storage::write(output.join("phase.txt"), "next-cohort-admitted")?;
     let receipt = FoundationCycleReceipt {
         critic_objective_version: critic_residual::OBJECTIVE_VERSION,
         critic_residual_update_sha256: Some(critic_residual_update_sha256),
@@ -4601,6 +4666,7 @@ fn run_foundation_training_cycle_in_owned_output(
         terminal_death_tick,
         delayed_food_gate_passed,
         world_ticks_elapsed,
+        causal_collection: Some(causal_collection),
         consumed_events,
         blocked_actions,
         collision_actions,
@@ -4672,10 +4738,29 @@ fn run_foundation_training_cycle_in_owned_output(
         ppo_rollout_diagnostics_sha256,
     };
     let receipt_stage = timing.stage("final_receipt_write");
-    std::fs::write(
-        output.join("cycle.json"),
+    alife_storage::write(
+        output.join(if retain_resident {
+            "provisional-cycle.json"
+        } else {
+            "cycle.json"
+        }),
         serde_json::to_vec_pretty(&receipt)?,
     )?;
     receipt_stage.finish();
-    Ok(FoundationCycleOutcome::Trained(Box::new(receipt)))
+    if retain_resident {
+        Ok(FoundationCycleOutcome::Resident(Box::new(
+            resident::ResidentEpisode {
+                learner: resident::ResidentLearner {
+                    trainer,
+                    value,
+                    asset: resident_asset.ok_or("resident asset missing")?,
+                    next_policy: policy_version.checked_add(1).ok_or("policy overflow")?,
+                    founder_seed_base,
+                },
+                receipt,
+            },
+        )))
+    } else {
+        Ok(FoundationCycleOutcome::Trained(Box::new(receipt)))
+    }
 }

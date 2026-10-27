@@ -50,6 +50,7 @@ name = "inspect_saved_policy"
 required-features = ["foundation-training"]
 
 [dependencies]
+alife_storage.workspace = true
 accesskit = { version = "=0.21.1", optional = true }
 alife_core = { path = "../alife_core" }
 alife_archive = { path = "../alife_archive", optional = true }

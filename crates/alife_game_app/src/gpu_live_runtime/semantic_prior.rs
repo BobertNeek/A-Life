@@ -2278,6 +2278,37 @@ mod tests {
         assert!(prior.queue.is_none());
     }
     #[test]
+    fn deterministic_nonrich_priming_matches_inline_current_context_delivery() {
+        let mut primed = RuntimeSemanticPrior::deterministic_for_training(7);
+        let mut inline = RuntimeSemanticPrior::deterministic_for_training(7);
+        assert!(!primed.metrics.rich_information_required);
+        assert!(!inline.metrics.rich_information_required);
+        assert_eq!(primed.dropout_seed, Some(7));
+        let frame = teacher_draft();
+        primed
+            .prime(frame.clone(), ExperienceSequenceId(1))
+            .unwrap();
+        let a = primed
+            .prepare(frame.clone(), ExperienceSequenceId(1))
+            .unwrap();
+        let b = inline
+            .prepare(frame.clone(), ExperienceSequenceId(1))
+            .unwrap();
+        assert!(a.sensory().semantic_context.is_some());
+        assert_eq!(a.sensory().semantic_context, b.sensory().semantic_context);
+        assert_eq!(a.sensory().language_context, b.sensory().language_context);
+        assert_eq!(a.sensory().channels, b.sensory().channels);
+        assert_eq!(a.grounded_object_slots(), b.grounded_object_slots());
+        for prior in [&primed, &inline] {
+            assert!(prior.queue.is_none());
+            assert!(!prior.pending(5));
+            assert_eq!(prior.metrics.requests, 1);
+            assert_eq!(prior.metrics.delivered_frames, 1);
+            assert_eq!(prior.metrics.failures, 0);
+            assert!(!prior.metrics.rich_information_required);
+        }
+    }
+    #[test]
     fn explicit_training_prior_has_seed_independent_provider_identity() {
         let expected = provider_identity(
             "deterministic",

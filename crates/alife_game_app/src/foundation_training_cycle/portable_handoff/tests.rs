@@ -1,5 +1,63 @@
 use super::*;
 
+#[test]
+#[ignore = "requires exclusively admitted hardware GPU; resident driver is experimental"]
+fn resident_two_episode_final_snapshot_keeps_actor_value_ages_and_private_state() {
+    std::thread::Builder::new().name("resident-continuity-assay".into())
+        .stack_size(32 * 1024 * 1024).spawn(|| {
+            let root = std::env::temp_dir().join(format!("alife-resident-gpu-{}-{}", std::process::id(),
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            std::fs::create_dir(&root).unwrap();
+            eprintln!("resident disposable fixture: {}", root.display());
+            let initial = root.join("initial-policy-zero");
+            let bootstrap = run_foundation_training_cycle(&initial, 90701, 2).unwrap();
+            assert_eq!(bootstrap.policy_version, 0);
+            let source = root.join("source");
+            // The ordinary bootstrap is policy zero, deliberately inadmissible
+            // as a portable handoff. Reach policy one through a genuine update;
+            // do not rewrite its receipt, weights, ages or admission rules.
+            let continued = resume_foundation_training_cycle_with_final_private_life(
+                &initial, &source, 90702, 2, FoundationTeacherLesson::Feeding,
+                1.0, Default::default(),
+            ).unwrap();
+            assert_eq!(continued.policy_version, 1);
+            let seeds = alife_training::CheckpointSeedsV1 { historical_freshness: "unknown".into(),
+                excluded_ranges: vec![[90701, 90702]], pending_range: None };
+            let baseline = migrate_current_training_checkpoint(&source, seeds).unwrap();
+            let store = root.join("store"); std::fs::create_dir(&store).unwrap();
+            let current = store.join("current.alife-checkpoint");
+            let original = baseline.encode().unwrap(); std::fs::write(&current, &original).unwrap();
+            let request = ResidentSerialRequest {
+                schema: 1, seed_range: [90703, 90704],
+                rows: vec![ResidentSerialRow { lesson: FoundationTeacherLesson::Feeding, decisions: 2,
+                    food_need_condition: Default::default() }; 2],
+                checkpoint_every_episodes: 2, sampling_temperature: 1.0,
+                collection_cutoff_unix_seconds: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 1800,
+                max_temporary_bytes: 2 * 1024 * 1024 * 1024,
+            };
+            let started = std::time::Instant::now();
+            let report = run_resident_serial_care(&store, request).unwrap();
+            assert_eq!(report["completed_provisional_episodes"], 2);
+            assert_eq!(report["canonical_current_unchanged"], true);
+            let recovered = recover_resident_serial_checkpoint(&store).unwrap();
+            let saved = read_current_training_checkpoint(std::path::Path::new(recovered["candidate"].as_str().unwrap())).unwrap();
+            assert_eq!(saved.handoff.policy_version, baseline.handoff.policy_version + 2);
+            assert!(saved.handoff.actor.optimizer_step > baseline.handoff.actor.optimizer_step);
+            assert!(saved.handoff.value.optimizer_step > baseline.handoff.value.optimizer_step);
+            assert_eq!(saved.seeds.pending_range, None);
+            assert_eq!(saved.seed, 90704);
+            assert!(saved.life.is_some());
+            assert_eq!(std::fs::read(&current).unwrap(), original);
+            std::fs::remove_dir_all(source).unwrap();
+            std::fs::remove_dir_all(initial).unwrap();
+            assert_eq!(read_current_training_checkpoint(std::path::Path::new(recovered["candidate"].as_str().unwrap())).unwrap(), saved);
+            eprintln!("resident continuity elapsed_seconds={} actor_before={} actor_after={} value_before={} value_after={}", started.elapsed().as_secs_f64(),
+                baseline.handoff.actor.optimizer_step, saved.handoff.actor.optimizer_step,
+                baseline.handoff.value.optimizer_step, saved.handoff.value.optimizer_step);
+            std::fs::remove_dir_all(root).unwrap();
+        }).unwrap().join().unwrap();
+}
+
 /// This must be dispatched explicitly by the hardware owner, never by ordinary
 /// device-free checkpoint CI. It uses only new disposable worlds and sources.
 #[test]
@@ -105,7 +163,92 @@ fn current_seeds() -> alife_training::CheckpointSeedsV1 {
     }
 }
 
-fn private_fixture(source: &Path) {
+#[test]
+fn resident_full_head_json_and_current_roundtrip_preserve_f32_bits() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let mut current = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    let samples = [
+        0.0_f32,
+        -0.0,
+        f32::from_bits(1),
+        -f32::from_bits(1),
+        f32::MIN_POSITIVE,
+        -f32::MIN_POSITIVE,
+        f32::MAX,
+        -f32::MAX,
+        f32::from_bits(1.0_f32.to_bits() + 1),
+        f32::from_bits(1.0_f32.to_bits() - 1),
+    ];
+    // Serialization stress only, not a claim that these extreme moments form
+    // a useful optimizer trajectory. All values satisfy native restore bounds.
+    let width = current.handoff.value.feature_count as usize + 1;
+    for (i, value) in samples.iter().copied().enumerate() {
+        current.handoff.actor.first_moment[i] = value;
+        current.handoff.actor.second_moment[i] = if value == 0.0 { value } else { value.abs() };
+        current.handoff.actor.update_ages[i] = 1;
+        current.handoff.value.parameters[i] = value;
+        current.handoff.value.parameters[width + i] = value;
+        current.handoff.value.parameters[2 * width + i] =
+            if value == 0.0 { value } else { value.abs() };
+    }
+    current.handoff.validate().unwrap();
+    let actor_json = serde_json::to_vec(&current.handoff.actor).unwrap();
+    let actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&actor_json).unwrap();
+    let value_json = serde_json::to_vec(&current.handoff.value).unwrap();
+    let value: alife_training::PpoValueHeadCheckpoint =
+        serde_json::from_slice(&value_json).unwrap();
+    let path = f.root.join("bit-roundtrip.alife-checkpoint");
+    std::fs::write(&path, current.encode().unwrap()).unwrap();
+    let restored = read_current_training_checkpoint(&path).unwrap();
+    let bits = |values: &[f32]| {
+        values
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>()
+    };
+    for decoded in [&actor, &restored.handoff.actor] {
+        assert_eq!(bits(&decoded.weights), bits(&current.handoff.actor.weights));
+        assert_eq!(
+            bits(&decoded.first_moment),
+            bits(&current.handoff.actor.first_moment)
+        );
+        assert_eq!(
+            bits(&decoded.second_moment),
+            bits(&current.handoff.actor.second_moment)
+        );
+        assert_eq!(decoded.update_ages, current.handoff.actor.update_ages);
+        assert_eq!(decoded.config, current.handoff.actor.config);
+        assert_eq!(decoded.stage_mask, current.handoff.actor.stage_mask);
+        assert_eq!(decoded.optimizer_step, current.handoff.actor.optimizer_step);
+    }
+    assert_eq!(
+        bits(&value.parameters),
+        bits(&current.handoff.value.parameters)
+    );
+    assert_eq!(
+        bits(&restored.handoff.value.parameters),
+        bits(&current.handoff.value.parameters)
+    );
+    assert_eq!(
+        restored.handoff.value.last_updated_policy_version,
+        current.handoff.value.last_updated_policy_version
+    );
+    assert_eq!(
+        restored.handoff.value.optimizer_step,
+        current.handoff.value.optimizer_step
+    );
+    assert_eq!(restored.life, current.life);
+    assert_eq!(
+        restored.handoff.compiler_inputs,
+        current.handoff.compiler_inputs
+    );
+}
+
+pub(crate) fn private_fixture(source: &Path) {
     let actor_path = source.join("actor-checkpoint.json");
     let mut actor: alife_training::FoundationTrainerCheckpoint =
         serde_json::from_slice(&std::fs::read(&actor_path).unwrap()).unwrap();
@@ -345,6 +488,105 @@ fn current_checkpoint_migration_relocates_without_any_legacy_dependencies() {
     corrupt.life.as_mut().unwrap().assets_base64.clear();
     std::fs::write(&copy, corrupt.encode().unwrap()).unwrap();
     assert!(read_current_training_checkpoint(&copy).is_err());
+}
+
+#[test]
+fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let mut baseline = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    baseline.seeds = alife_training::CheckpointSeedsV1 {
+        historical_freshness: "unknown".into(),
+        excluded_ranges: vec![[1, baseline.seed]],
+        pending_range: None,
+    };
+    let store = f.root.join("resident-store");
+    std::fs::create_dir(&store).unwrap();
+    let current = store.join("current.alife-checkpoint");
+    let original = baseline.encode().unwrap();
+    std::fs::write(&current, &original).unwrap();
+    let first = baseline.seed + 100;
+    let request = super::super::resident::ResidentSerialRequest {
+        schema: 1,
+        seed_range: [first, first + 4],
+        rows: vec![
+            super::super::resident::ResidentSerialRow {
+                lesson: FoundationTeacherLesson::Feeding,
+                decisions: 16,
+                food_need_condition: Default::default(),
+            };
+            3
+        ],
+        checkpoint_every_episodes: 3,
+        sampling_temperature: 1.0,
+        collection_cutoff_unix_seconds: 1,
+        max_temporary_bytes: 1024 * 1024 * 1024,
+    };
+    // Simulate a crash after two WAL dispatches and before any full snapshot.
+    super::super::resident::stage_resident_loss_fixture(&store, request, 2).unwrap();
+    // Both the original experimental direct-write failure and an interrupted
+    // new staging write must be repairable without touching accepted current.
+    std::fs::write(
+        store.join(".run/recovered-current.alife-checkpoint"),
+        b"partial candidate",
+    )
+    .unwrap();
+    std::fs::write(
+        store.join(".run/recovered-current.pending"),
+        b"partial staging",
+    )
+    .unwrap();
+    std::fs::remove_dir_all(&f.target).unwrap();
+    std::fs::remove_dir_all(&f.source).unwrap();
+    let report = recover_resident_serial_checkpoint(&store).unwrap();
+    let candidate = std::path::Path::new(report["candidate"].as_str().unwrap());
+    let recovered = read_current_training_checkpoint(candidate).unwrap();
+    assert_eq!(recovered.handoff, baseline.handoff);
+    assert_eq!(recovered.life, baseline.life);
+    assert_eq!(recovered.seed, baseline.seed);
+    assert_eq!(recovered.founder_seed_base, baseline.founder_seed_base);
+    assert_eq!(recovered.seeds.pending_range, Some([first + 2, first + 4]));
+    assert!(recovered.seeds.contains(first));
+    assert!(recovered.seeds.contains(first + 1));
+    assert_eq!(std::fs::read(&current).unwrap(), original);
+    assert_eq!(report["uncheckpointed_updates_restored"], false);
+    // A recoverable candidate is not permission to retire the only run state
+    // before the owner has published those exact admitted bytes.
+    assert!(finish_resident_serial_run(&store).is_err());
+    assert!(store.join(".run").is_dir());
+    assert_eq!(std::fs::read(&current).unwrap(), original);
+    // Recovery retries are idempotent. A committed owner publication is detected.
+    std::fs::write(store.join(".run/recovery-intent.next"), b"partial intent").unwrap();
+    let mut repeated = recover_resident_serial_checkpoint(&store).unwrap();
+    let mut expected = report.clone();
+    repeated.as_object_mut().unwrap().remove("temporary_budget");
+    expected.as_object_mut().unwrap().remove("temporary_budget");
+    assert_eq!(repeated, expected);
+    std::fs::copy(candidate, &current).unwrap();
+    assert_eq!(
+        recover_resident_serial_checkpoint(&store).unwrap()["already_published_current"],
+        true
+    );
+    let accepted_bytes = std::fs::read(&current).unwrap();
+    let unknown = store.join(".run/unexpected-owner-data");
+    std::fs::write(&unknown, b"preserve unknown data").unwrap();
+    assert!(finish_resident_serial_run(&store).is_err());
+    assert!(store.join(".run").is_dir());
+    assert_eq!(std::fs::read(&unknown).unwrap(), b"preserve unknown data");
+    assert_eq!(std::fs::read(&current).unwrap(), accepted_bytes);
+    std::fs::remove_file(unknown).unwrap();
+    let retired = finish_resident_serial_run(&store).unwrap();
+    assert_eq!(retired["removed_run"], true);
+    assert_eq!(retired["uncheckpointed_work_may_be_lost"], true);
+    assert!(!store.join(".run").exists());
+    assert_eq!(std::fs::read(&current).unwrap(), accepted_bytes);
+    assert_eq!(
+        finish_resident_serial_run(&store).unwrap()["already_clean"],
+        true
+    );
+    assert_eq!(std::fs::read(&current).unwrap(), accepted_bytes);
 }
 
 #[test]

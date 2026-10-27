@@ -405,7 +405,7 @@ fn persist_content_addressed_asset(
             });
         }
     } else {
-        fs::write(&path, bytes)?;
+        alife_storage::write(&path, bytes)?;
     }
     Ok(AssetManifestEntry {
         asset_id: format!("{directory}-{digest_suffix}"),
@@ -1471,7 +1471,7 @@ impl PortableSaveFile {
     }
 
     pub fn to_json_file(&self, path: impl AsRef<Path>) -> Result<(), PersistenceError> {
-        fs::write(path, serde_json::to_string_pretty(self)?)?;
+        alife_storage::write(path, serde_json::to_string_pretty(self)?)?;
         Ok(())
     }
 

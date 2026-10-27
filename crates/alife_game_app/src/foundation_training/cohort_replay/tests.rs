@@ -31,6 +31,20 @@ fn source() -> FoundationReplaySource {
     }
 }
 
+#[test]
+fn output_budget_replay_stream_refuses_before_disk_growth() {
+    let fixture = Fixture::new();
+    let budget = alife_storage::OutputBudget::register(&fixture.0, 8).unwrap();
+    let mut replay = CohortReplayWriter::new(&fixture.0, source()).unwrap();
+    append(&mut replay, 1, 0);
+    assert!(replay.file.flush().is_err());
+    drop(replay);
+    assert_eq!(std::fs::metadata(fixture.0.join(PENDING)).unwrap().len(), 0);
+    assert_eq!(budget.usage().unwrap().used, 0);
+    assert!(budget.usage().unwrap().high_water <= 8);
+    assert!(!fixture.0.join(SEALED).exists());
+}
+
 // Opaque bytes exercise storage integrity and crash semantics, not neural math.
 fn append(
     writer: &mut CohortReplayWriter,
