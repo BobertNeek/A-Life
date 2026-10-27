@@ -430,6 +430,18 @@ fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds
     };
     // Simulate a crash after two WAL dispatches and before any full snapshot.
     super::super::resident::stage_resident_loss_fixture(&store, request, 2).unwrap();
+    // Both the original experimental direct-write failure and an interrupted
+    // new staging write must be repairable without touching accepted current.
+    std::fs::write(
+        store.join(".run/recovered-current.alife-checkpoint"),
+        b"partial candidate",
+    )
+    .unwrap();
+    std::fs::write(
+        store.join(".run/recovered-current.pending"),
+        b"partial staging",
+    )
+    .unwrap();
     std::fs::remove_dir_all(&f.target).unwrap();
     std::fs::remove_dir_all(&f.source).unwrap();
     let report = recover_resident_serial_checkpoint(&store).unwrap();
@@ -445,6 +457,7 @@ fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds
     assert_eq!(std::fs::read(&current).unwrap(), original);
     assert_eq!(report["uncheckpointed_updates_restored"], false);
     // Recovery retries are idempotent. A committed owner publication is detected.
+    std::fs::write(store.join(".run/recovery-intent.next"), b"partial intent").unwrap();
     assert_eq!(recover_resident_serial_checkpoint(&store).unwrap(), report);
     std::fs::copy(candidate, &current).unwrap();
     assert_eq!(

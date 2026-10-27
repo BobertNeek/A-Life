@@ -178,7 +178,39 @@ fn envelope<T: Serialize>(magic: &[u8; 16], value: &T) -> Result<Vec<u8>> {
 fn write_metadata<T: Serialize>(path: &Path, magic: &[u8; 16], value: &T) -> Result<()> {
     let bytes = envelope(magic, value)?;
     let pending = path.with_extension("next");
+    // Only an uncommitted derived staging file is replaceable. The caller owns
+    // the writer lease; committed source/WAL/frontier files stay authoritative.
+    if pending.exists() {
+        regular(&pending, (MAX_METADATA + 56) as u64)?;
+        fs::remove_file(&pending)?;
+    }
     write_new(&pending, &bytes)?;
+    replace(&pending, path)
+}
+
+fn publish_recovery_candidate(path: &Path, bytes: &[u8]) -> Result<()> {
+    let root = path.parent().ok_or("resident recovery lacks parent")?;
+    if path.exists() {
+        regular(path, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
+        if hash(&fs::read(path)?) == hash(bytes) {
+            return Ok(());
+        }
+        // An interrupted pre-intent write from the first experimental version
+        // is recoverable. A complete different candidate or a committed intent
+        // is evidence that must not be overwritten under a repair assumption.
+        if root.join("recovery-intent.bin").exists()
+            || read_current_training_checkpoint(path).is_ok()
+        {
+            return Err("resident recovery output collision".into());
+        }
+    }
+    let pending = root.join("recovered-current.pending");
+    if pending.exists() {
+        regular(&pending, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
+        fs::remove_file(&pending)?;
+    }
+    write_new(&pending, bytes)?;
+    read_current_training_checkpoint(&pending)?;
     replace(&pending, path)
 }
 fn read_metadata<T: serde::de::DeserializeOwned>(path: &Path, magic: &[u8; 16]) -> Result<T> {
@@ -687,14 +719,7 @@ pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Va
     checkpoint.validate()?;
     let bytes = checkpoint.encode()?;
     let after = hash(&bytes);
-    if recovery_path.exists() {
-        regular(&recovery_path, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-        if hash(&fs::read(&recovery_path)?) != after {
-            return Err("resident recovery output collision".into());
-        }
-    } else {
-        write_new(&recovery_path, &bytes)?;
-    }
+    publish_recovery_candidate(&recovery_path, &bytes)?;
     if read_current_training_checkpoint(&recovery_path)? != checkpoint {
         return Err("resident recovery candidate changed".into());
     }
