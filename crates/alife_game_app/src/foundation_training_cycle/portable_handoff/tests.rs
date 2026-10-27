@@ -215,6 +215,91 @@ fn current_checkpoint_eight_synthetic_publications_keep_only_current_full_state(
         "eight synthetic current publication measurements: {}",
         serde_json::to_string(&measurements).unwrap()
     );
+    if let Some(output) = std::env::var_os("ALIFE_CURRENT_FIXTURE_OUTPUT") {
+        use std::io::Write;
+        checkpoint.seeds.excluded_ranges = vec![[checkpoint.seed, checkpoint.seed]];
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(output)
+            .unwrap();
+        file.write_all(&checkpoint.encode().unwrap()).unwrap();
+        file.sync_all().unwrap();
+    }
+}
+
+#[test]
+fn current_checkpoint_advancement_preserves_full_state_and_rejects_wrong_predecessor() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let current = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    let before = current.encode().unwrap();
+    let episode = f.root.join("synthetic-next");
+    std::fs::create_dir(&episode).unwrap();
+    for name in SERIAL_HANDOFF_SOURCE_FILES
+        .into_iter()
+        .chain(["critic-residual-update.json"])
+    {
+        std::fs::copy(f.target.join(name), episode.join(name)).unwrap();
+    }
+    std::fs::copy(
+        f.target.join("trained.alife-foundation"),
+        episode.join("initial.alife-foundation"),
+    )
+    .unwrap();
+    let receipt_path = episode.join("cycle.json");
+    let mut receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&std::fs::read(&receipt_path).unwrap()).unwrap();
+    receipt.seed += 1;
+    receipt.policy_version += 1;
+    receipt.actor_optimizer_step = current.handoff.actor.optimizer_step + 1;
+    receipt.value_optimizer_step = current.handoff.value.optimizer_step + 1;
+    receipt.actor_optimizer_updates = 1;
+    receipt.value_optimizer_updates = 1;
+    std::fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    private_fixture(&episode);
+    let mut actor = current.handoff.actor.clone();
+    actor.optimizer_step += 1;
+    actor.update_ages[17] += 1;
+    actor.first_moment[17] = 0.25;
+    actor.second_moment[17] = 0.0625;
+    let mut value = current.handoff.value.clone();
+    value.optimizer_step += 1;
+    value.last_updated_policy_version = Some(receipt.policy_version);
+    value.parameters[0] = -0.125;
+    std::fs::write(
+        episode.join("actor-checkpoint.json"),
+        serde_json::to_vec(&actor).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        episode.join("value-checkpoint.json"),
+        serde_json::to_vec(&value).unwrap(),
+    )
+    .unwrap();
+    let next = advance_current_training_checkpoint(&current, &episode).unwrap();
+    assert_eq!(next.handoff.actor, actor);
+    assert_eq!(next.handoff.value, value);
+    assert_eq!(
+        next.handoff.compiler_inputs,
+        current.handoff.compiler_inputs
+    );
+    assert_eq!(next.seeds, current.seeds);
+    assert_eq!(current.encode().unwrap(), before);
+    receipt.actor_optimizer_updates = 0;
+    std::fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    assert!(advance_current_training_checkpoint(&current, &episode).is_err());
+    receipt.actor_optimizer_updates = 1;
+    std::fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    std::fs::write(
+        episode.join("initial.alife-foundation"),
+        b"wrong predecessor",
+    )
+    .unwrap();
+    assert!(advance_current_training_checkpoint(&current, &episode).is_err());
+    assert_eq!(current.encode().unwrap(), before);
 }
 #[test]
 fn native_serial_export_preserves_corrected_critic_age_and_original_source() {

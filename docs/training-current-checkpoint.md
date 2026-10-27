@@ -24,6 +24,17 @@ historical checkpoint hash chain, lesson score archive or automatic mastery gate
 Disjoint exclusions can still grow if seed allocation is fragmented; contiguous
 allocations coalesce. Checkpoint size tracks current state, not episode count.
 
+The Linux synthetic native fixture measured 1,196,536 logical bytes and 1,200,128
+inode-allocated bytes for the current checkpoint at each of eight publications,
+with one checkpoint file each time. This includes a full N2048 compiler/actor/value
+handoff with nonzero Adam moments and a small private world plus a byte asset.
+It does not represent PC10641's private GPU tensors or prove PC storage/throughput
+savings. Host lifecycle tests separately check two durable store files: current
+and the one-byte stable lock. Directory allocation and temporary peak space are
+additional; full native CLI publication/relocation is checked on Linux and Windows.
+Full-state/private admission adds CPU/I/O work and the final private capture adds
+GPU checkpoint work; neither PC cost nor training throughput is measured here.
+
 New-format serial episodes capture the final private world at the confirmed
 collection boundary. A legacy migration preserves the latest **persisted** private
 save and sleep journal, without inventing later state that was never saved. It
@@ -102,7 +113,9 @@ steps after matching-binary admission, while training and old launchers are stop
    Seed202610222681 is abandoned/excluded; 202610222682–202610222688 are reserved
    unused. Verify these against the actual immutable plan/attempts before import.
    Preserve the unfinished schedule cursor and remaining rows as the next explicit
-   temporary run plan. Do not launch expired Oct26 cutoffs or reserve another tail.
+   temporary run plan, including its food-need initialization and deterministic
+   prior environment. Do not replace them with defaults. Do not launch expired
+   Oct26 cutoffs or reserve another tail.
 3. Build/admit the new checkpoint tool and native trainer together. The previous
    runtime is PR160 `f7f7cd5187efda697897c67d9dd7a253702cc2e5`; do not silently swap
    the old launcher chain. It currently runs `care-first-night-20261026/run-night.py`

@@ -21,6 +21,9 @@ on:
       - "crates/alife_game_app/tests/cpu_care_round.rs"
       - "scripts/compare_cpu_care_rounds.py"
       - "scripts/test_compare_cpu_care_rounds.py"
+      - "scripts/check_current_checkpoint_native.py"
+      - "scripts/current_checkpoint_store.py"
+      - "scripts/run_current_care.py"
       - "crates/alife_game_app/Cargo.toml"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
@@ -50,6 +53,9 @@ on:
       - "crates/alife_game_app/tests/cpu_care_round.rs"
       - "scripts/compare_cpu_care_rounds.py"
       - "scripts/test_compare_cpu_care_rounds.py"
+      - "scripts/check_current_checkpoint_native.py"
+      - "scripts/current_checkpoint_store.py"
+      - "scripts/run_current_care.py"
       - "crates/alife_game_app/Cargo.toml"
       - "crates/alife_world/src/headless.rs"
       - "crates/alife_world/src/organism.rs"
@@ -140,7 +146,11 @@ jobs:
       - name: Build matching training and checkpoint inspection executables
         run: cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin inspect_archived_success --bin export_native_training_handoff
       - name: Single-current compiler Adam private recovery and legacy migration contracts
+        env:
+          ALIFE_CURRENT_FIXTURE_OUTPUT: ${{ runner.temp }}/current-synthetic-${{ github.run_id }}.alife-checkpoint
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::portable_handoff -- --nocapture --test-threads=1
+      - name: Admit publish relocate and extract the synthetic current checkpoint through native CLI
+        run: python -B scripts/check_current_checkpoint_native.py target/debug/export_native_training_handoff.exe "${{ runner.temp }}/current-synthetic-${{ github.run_id }}.alife-checkpoint"
       - name: Check rehearsal admission before runtime creation
         run: |
           $taskBinary = (Resolve-Path 'target/debug/train_n2048_care.exe').Path
@@ -188,7 +198,7 @@ jobs:
             target = 'x86_64-pc-windows-msvc'
             features = @('foundation-training')
             build_profile = 'dev'
-            cpu_checks = @('training shader composition across line endings', 'acquisition rehearsal', 'next-cohort archive run identity', 'actor-centering CLI admission', 'native policy/executable comparison identity', 'native sensory serialization', 'relocated-food physical outcomes, bounds and backward receipts', 'relocated-food CLI admission', 'world and policy-weight comparison identities', 'CLI bounds 0 and 513 rejected; 512 reaches sealed-source admission', 'rejected admission preserves absent output')
+            cpu_checks = @('training shader composition across line endings', 'acquisition rehearsal', 'next-cohort archive run identity', 'actor-centering CLI admission', 'native policy/executable comparison identity', 'native sensory serialization', 'relocated-food physical outcomes, bounds and backward receipts', 'relocated-food CLI admission', 'world and policy-weight comparison identities', 'CLI bounds 0 and 513 rejected; 512 reaches sealed-source admission', 'rejected admission preserves absent output', 'single-current full-state migration, corruption, relocation and native publication/extraction')
             gpu_training_executed = $false
             founder_promoted = $false
             workflow_run = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"

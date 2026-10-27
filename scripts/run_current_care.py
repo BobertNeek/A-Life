@@ -210,6 +210,22 @@ def reconcile(store, *, abandon_unsealed=False):
         state['cursor'] += 1
         clean_attempt(store, state)
         return state
+    if publication is not None:
+        require(actual == publication['before'], 'current differs from admitted candidate predecessor')
+        candidates = [path for path in run.glob('*.alife-checkpoint')
+                      if checkpoints.digest(path) == publication['after']]
+        require(candidates, 'admitted candidate missing/corrupt; accepted current and temporary work retained')
+        # The exact candidate hash was durably recorded only after native
+        # admission and biological/predecessor checks. Recovery needs that full
+        # candidate, not the disposable episode/replay inputs used to produce it.
+        report = tool(binary, '--inspect-current', candidates[0])
+        old = tool(binary, '--inspect-current', store.current)
+        require(report['seed'] == attempt['seed'] and report['policy_version'] == old['policy_version'] + 1,
+                'admitted candidate identity changed')
+        store.publish(candidates[0], actual)
+        state['cursor'] += 1
+        clean_attempt(store, state)
+        return state
     consumption = attempt['consumption']
     if actual == consumption['before']:
         store.publish(run / consumption['file'], actual)

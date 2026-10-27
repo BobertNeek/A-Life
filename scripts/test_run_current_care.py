@@ -5,6 +5,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -187,6 +188,25 @@ class CurrentCareTests(unittest.TestCase):
         self.assertEqual(self.calls, [30, 31, 32])
         self.assertEqual(result['policy_version'], 12)
 
+    def test_admitted_candidate_recovers_without_episode_or_replay_inputs(self):
+        class Crash(BaseException):
+            pass
+        def crash(stage):
+            pending = self.store_root / cp.NEXT
+            if stage == 'candidate-written' and pending.exists() and cp.read_json(pending)['policy_version'] == 11:
+                raise Crash()
+        with self.assertRaises(Crash):
+            with self.store(crash) as store:
+                current.execute(store, current.start(store, self.args()))
+        shutil.rmtree(self.store_root / cp.RUN / 'episode')
+        (self.store_root / cp.RUN / 'source.alife-checkpoint').unlink()
+        with self.store() as store:
+            state = current.reconcile(store)
+            self.assertEqual(state['cursor'], 1)
+            self.assertEqual(cp.read_json(store.current)['policy_version'], 11)
+            current.execute(store, state)
+        self.assertEqual(self.calls, [30, 31])
+
     def test_active_or_unknown_writer_cannot_be_abandoned(self):
         with self.store() as store:
             state = current.start(store, self.args())
@@ -205,6 +225,30 @@ class CurrentCareTests(unittest.TestCase):
         self.assertEqual(current.main(['--store', str(root), '--checkpoint-tool', str(self.binary),
                                        '--schedule', str(self.schedule)]), 0)
         self.assertFalse(root.exists())
+
+    def test_legacy_seed_reduction_preserves_exclusions_unknown_freshness_and_unused_tail(self):
+        source = self.root / 'legacy'
+        source.mkdir()
+        cp.write_json(source / 'cycle.json', {'seed': 30})
+        for name in current.mixed.FILES:
+            if name != 'cycle.json':
+                (source / name).write_bytes(b'synthetic native source pin')
+        pins = current.mixed.file_hashes(source)
+        ledger = {'excluded_seed_ranges': [[100, 102]], 'assessment_seeds': [103], 'runs': [{
+            'plan': {'seed_range': [30, 35]}, 'attempts': [
+                {'status': 'accepted', 'directory': str(source), 'seed': 30, 'sha256': pins},
+                {'status': 'abandoned', 'directory': str(self.root / 'abandoned'), 'seed': 31}]}]}
+        lane = self.root / 'legacy-lane'
+        lane.mkdir()
+        (lane / current.mixed.LEDGER).write_text('synthetic ledger; parser mocked in this reduction test')
+        with patch.object(current.mixed, 'history', return_value=({'complete': False}, 'hash', [[1, 20], [30, 35]], {29})), \
+             patch.object(current.mixed, 'read_ledger', return_value=ledger), \
+             patch.object(current.mixed, 'reconcile_prior_runs') as reconcile:
+            metadata = current.import_seeds(source, self.root / 'history', lane, 'known-exclusions')
+        self.assertEqual(metadata, {'historical_freshness': 'unknown',
+            'excluded_ranges': [[1, 20], [29, 35], [100, 103]], 'pending_range': [32, 35]})
+        reconcile.assert_called_once_with({'complete': False}, ledger['runs'], check_payloads=False)
+        self.assertEqual(current.mixed.file_hashes(source), pins)
 
 
 if __name__ == '__main__':
