@@ -31,7 +31,14 @@ def main():
         for seed in range(first, first + 8):
             candidate = root / f'candidate-{seed}'
             with cp.Store(store_root, validate) as store:
-                result = runner.tool(binary, '--consume-current', store.current, seed, candidate)
+                if seed == first:
+                    reference = root / 'native-cursor-reference'
+                    runner.tool(binary, '--consume-current', store.current, seed, reference)
+                assert runner.consumed_cursor_bytes(store.current.read_bytes(), seed) is not None, 'native fixture must exercise byte-preserving cursor path'
+                result = runner.consume_current(store, {}, seed, candidate)
+                if seed == first:
+                    assert candidate.read_bytes() == reference.read_bytes(), 'host cursor differs from native codec'
+                    reference.unlink()
                 store.publish(candidate, cp.digest(store.current))
                 for key in ('policy_version', 'actor_optimizer_step', 'value_optimizer_step', 'asset_sha256'):
                     assert result[key] == source[key]
@@ -53,7 +60,8 @@ def main():
         assert (relocated / 'private-life/world.json').is_file()
         assert all(m['store_files'] == 2 for m in measurements)
         print(json.dumps({'kind': 'synthetic-native-publication', 'neural_execution': False,
-                          'measurements': measurements, 'relocated_private_extraction': True}))
+                          'measurements': measurements, 'native_cursor_byte_equivalence': True,
+                          'relocated_private_extraction': True}))
 
 
 if __name__ == '__main__':

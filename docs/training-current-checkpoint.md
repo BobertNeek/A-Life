@@ -83,6 +83,31 @@ Cache hits return independent copies of the original native report, preserving
 callers that inspect its fields without allowing a caller to mutate the cache.
 There is no persistent cache or additional checkpoint retained.
 
+For canonical V1 files, consuming the next reserved seed changes only the seed
+metadata bytes and the length/SHA-256 envelope. The compiler, actor/value weights,
+Adam state and complete private-life byte suffix are copied exactly, including
+their original floating-point spellings. This is not admission: the locked runner
+admits the source and runs full native admission on the new candidate before
+recording or publishing consumption. Its native report must differ only in the
+unused-tail cursor. Unknown/noncanonical encodings use the original native CLI.
+Publication, pre-dispatch durability, exactly-once recovery and retention remain
+unchanged. Native synthetic integration compares the resulting bytes with the
+ordinary native consume command, including final-tail exhaustion and independent
+private-state extraction.
+
+Runner changes also need a compact throughput comparison, not just correctness
+tests: accepted episodes/hour, trained decision rows/hour, lesson mix and phase
+durations. Separate restore/collection/PPO/capture from cursor work, admission,
+packing/publication and observable idle time. Use existing timestamps where
+possible and state unmatched-world/runtime limits. An October 27 PC observation
+after admission caching still spent about 36.5 seconds in native seed consumption
+and 44.5 seconds in advancement, versus 53.9 seconds in one 16-row native learner
+process (which includes restore and capture). These are process wall times, not
+GPU kernel timings or a promise of improvement. The earlier serial path's reported
+2,455 decision rows/hour remains an unmatched historical comparator; green tests
+alone do not establish recovery of that throughput. Cleanup may occur at the end
+of a bounded night; it must not silently become indefinite history retention.
+
 The store holds one stable OS writer lock. It never unlinks that lock file. A new
 checkpoint is flushed and admitted, then a flushed publication intent is committed.
 The prior current is copied transiently, the candidate atomically replaces current,
