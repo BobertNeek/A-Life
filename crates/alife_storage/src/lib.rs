@@ -589,6 +589,26 @@ pub fn replace_with(
         return Err(invalid("cannot replace an active destination writer"));
     }
     replace()?;
+    // POSIX rename(a,b) is a successful no-op when a and b name the same
+    // inode. Success therefore does not imply that the source name vanished.
+    // Keep both logical charges when both verified trees remain intact.
+    match fs::symlink_metadata(&src) {
+        Ok(_) => {
+            if verify_accounted_tree(&src, &s).is_err() || verify_accounted_tree(&dst, &s).is_err()
+            {
+                s.poisoned = true;
+                return Err(invalid(
+                    "atomic replacement left an unaccounted output shape",
+                ));
+            }
+            return Ok(());
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => (),
+        Err(e) => {
+            s.poisoned = true;
+            return Err(e);
+        }
+    }
     let removed = s
         .entries
         .keys()
