@@ -361,11 +361,12 @@ fn same_recorded_replay_assay() {
     let config = cycle_ppo_config(1.0).unwrap();
     let batch = PpoBatch::from_rollout(policy, transitions, config).unwrap();
     let feature_bytes = fs::read(capture_dir.join("critic-features.f32le")).unwrap();
-    let floats = feature_bytes
-        .chunks_exact(4)
-        .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+    let (encoded_floats, remainder) = feature_bytes.as_chunks::<4>();
+    assert!(remainder.is_empty());
+    let floats = encoded_floats
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
         .collect::<Vec<_>>();
-    assert_eq!(feature_bytes.len() % 4, 0);
     let features = floats
         .chunks_exact(phenotype.neuron_count() as usize)
         .map(|r| r.to_vec())
