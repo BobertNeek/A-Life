@@ -486,6 +486,9 @@ pub fn run_resident_serial_care(
     envelope(WAL_MAGIC, &wal)?;
     let run = store.join(".run");
     fs::create_dir(&run)?;
+    // The WAL's directory entry must itself survive before dispatch. Flushing
+    // children and .run alone does not persist .run in its Unix parent.
+    sync_directory(&store)?;
     write_new(
         &run.join("run.json"),
         &serde_json::to_vec(
