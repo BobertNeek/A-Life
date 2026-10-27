@@ -396,6 +396,7 @@ fn row_summary(receipt: &FoundationCycleReceipt) -> serde_json::Value {
         "generic_consumed_events":receipt.consumed_events,"full_relocation":r["food_relocation"]["lesson_completed"],
         "actor_optimizer_step":receipt.actor_optimizer_step,"value_optimizer_step":receipt.value_optimizer_step,
         "collection_seconds":receipt.collection_seconds,"update_seconds":receipt.update_seconds,
+        "causal_collection":receipt.causal_collection,
         "canonical_current_published":false,"durability":"provisional until a full snapshot commits"})
 }
 
@@ -817,6 +818,9 @@ pub(super) fn stage_resident_loss_fixture(
         },
     )
 }
+
+#[cfg(test)]
+mod carry_tests;
 
 #[cfg(test)]
 mod tests {

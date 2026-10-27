@@ -22,6 +22,8 @@ use crate::{
 mod ppo_diagnostics;
 mod stage_timing;
 use stage_timing::CycleStageTiming;
+mod causal_collection;
+pub use causal_collection::{FoundationCausalCaptureMetrics, FoundationCausalCollectionMetrics};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const BIOLOGICAL_OBJECTIVE_VERSION: u16 = 2;
@@ -173,6 +175,9 @@ pub struct FoundationCycleReceipt {
     pub delayed_food_gate_passed: bool,
     #[serde(default)]
     pub world_ticks_elapsed: u64,
+    /// Measured control interval only; absent on historical receipts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub causal_collection: Option<FoundationCausalCollectionMetrics>,
     #[serde(default)]
     pub consumed_events: u64,
     #[serde(default)]
@@ -3666,6 +3671,12 @@ fn run_foundation_training_cycle_in_owned_output(
     let feeding_before = feeding_food
         .as_ref()
         .map(|food| food.before_step(runtime.world()));
+    // Setup, ordinary need aging, initial durable capture and first prior prime
+    // are complete. Measure actual causal world advances from this boundary.
+    let control_start_tick = runtime.world().tick().raw();
+    let control_capture_before = runtime.foundation_training_capture_metrics();
+    let control_started = Instant::now();
+    let mut no_progress_calls = 0_u64;
     let tick_summaries = runtime.tick().map_err(|e| {
         let _ = alife_storage::write(
             output.join("runtime-performance-failed.json"),
@@ -3908,6 +3919,7 @@ fn run_foundation_training_cycle_in_owned_output(
             )?;
         }
         if after == before {
+            no_progress_calls += 1;
             let reason = format!("{tick_outcome:?}");
             if last_stall_reason.as_ref() != Some(&reason) {
                 alife_storage::write(
@@ -4050,6 +4062,15 @@ fn run_foundation_training_cycle_in_owned_output(
             break;
         }
     }
+    let causal_collection = FoundationCausalCollectionMetrics::measure(
+        control_start_tick,
+        runtime.world().tick().raw(),
+        control_started.elapsed().as_secs_f64(),
+        references.len(),
+        no_progress_calls,
+        control_capture_before,
+        runtime.foundation_training_capture_metrics(),
+    )?;
     crate::foundation_training::validate_foundation_lesson_prior(&runtime, output, lesson)?;
     let collection_seconds = started.elapsed().as_secs_f64();
     remaining_collection_stage.finish();
@@ -4645,6 +4666,7 @@ fn run_foundation_training_cycle_in_owned_output(
         terminal_death_tick,
         delayed_food_gate_passed,
         world_ticks_elapsed,
+        causal_collection: Some(causal_collection),
         consumed_events,
         blocked_actions,
         collision_actions,

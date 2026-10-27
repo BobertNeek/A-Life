@@ -163,7 +163,93 @@ fn current_seeds() -> alife_training::CheckpointSeedsV1 {
     }
 }
 
+#[test]
+fn resident_full_head_json_and_current_roundtrip_preserve_f32_bits() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let mut current = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    let samples = [
+        0.0_f32,
+        -0.0,
+        f32::from_bits(1),
+        -f32::from_bits(1),
+        f32::MIN_POSITIVE,
+        -f32::MIN_POSITIVE,
+        f32::MAX,
+        -f32::MAX,
+        f32::from_bits(1.0_f32.to_bits() + 1),
+        f32::from_bits(1.0_f32.to_bits() - 1),
+    ];
+    // Serialization stress only, not a claim that these extreme moments form
+    // a useful optimizer trajectory. All values satisfy native restore bounds.
+    let width = current.handoff.value.feature_count as usize + 1;
+    for (i, value) in samples.iter().copied().enumerate() {
+        current.handoff.actor.first_moment[i] = value;
+        current.handoff.actor.second_moment[i] = if value == 0.0 { value } else { value.abs() };
+        current.handoff.actor.update_ages[i] = 1;
+        current.handoff.value.parameters[i] = value;
+        current.handoff.value.parameters[width + i] = value;
+        current.handoff.value.parameters[2 * width + i] =
+            if value == 0.0 { value } else { value.abs() };
+    }
+    current.handoff.validate().unwrap();
+    let actor_json = serde_json::to_vec(&current.handoff.actor).unwrap();
+    let actor: alife_training::FoundationTrainerCheckpoint =
+        serde_json::from_slice(&actor_json).unwrap();
+    let value_json = serde_json::to_vec(&current.handoff.value).unwrap();
+    let value: alife_training::PpoValueHeadCheckpoint =
+        serde_json::from_slice(&value_json).unwrap();
+    let path = f.root.join("bit-roundtrip.alife-checkpoint");
+    std::fs::write(&path, current.encode().unwrap()).unwrap();
+    let restored = read_current_training_checkpoint(&path).unwrap();
+    let bits = |values: &[f32]| {
+        values
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<Vec<_>>()
+    };
+    for decoded in [&actor, &restored.handoff.actor] {
+        assert_eq!(bits(&decoded.weights), bits(&current.handoff.actor.weights));
+        assert_eq!(
+            bits(&decoded.first_moment),
+            bits(&current.handoff.actor.first_moment)
+        );
+        assert_eq!(
+            bits(&decoded.second_moment),
+            bits(&current.handoff.actor.second_moment)
+        );
+        assert_eq!(decoded.update_ages, current.handoff.actor.update_ages);
+        assert_eq!(decoded.config, current.handoff.actor.config);
+        assert_eq!(decoded.stage_mask, current.handoff.actor.stage_mask);
+        assert_eq!(decoded.optimizer_step, current.handoff.actor.optimizer_step);
+    }
+    assert_eq!(
+        bits(&value.parameters),
+        bits(&current.handoff.value.parameters)
+    );
+    assert_eq!(
+        bits(&restored.handoff.value.parameters),
+        bits(&current.handoff.value.parameters)
+    );
+    assert_eq!(
+        restored.handoff.value.last_updated_policy_version,
+        current.handoff.value.last_updated_policy_version
+    );
+    assert_eq!(
+        restored.handoff.value.optimizer_step,
+        current.handoff.value.optimizer_step
+    );
+    assert_eq!(restored.life, current.life);
+    assert_eq!(
+        restored.handoff.compiler_inputs,
+        current.handoff.compiler_inputs
+    );
+}
+
 pub(crate) fn private_fixture(source: &Path) {
+
     let actor_path = source.join("actor-checkpoint.json");
     let mut actor: alife_training::FoundationTrainerCheckpoint =
         serde_json::from_slice(&std::fs::read(&actor_path).unwrap()).unwrap();
