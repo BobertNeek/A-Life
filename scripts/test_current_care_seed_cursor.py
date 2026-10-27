@@ -91,6 +91,27 @@ class CursorBytesTests(unittest.TestCase):
         expected = before.replace(b'"pending_range":[30,31]', b'"pending_range":[31,31]', 1)
         self.assertEqual(result, encoded(expected))
 
+    def test_reordered_or_missing_handoff_requests_native_fallback(self):
+        document = json.loads(payload())
+        reordered = {name: document[name] for name in
+                     ('schema_version', 'seed', 'founder_seed_base', 'seeds', 'life', 'handoff')}
+        self.assertIsNone(runner.consumed_cursor_bytes(
+            encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
+
+    def test_prefix_can_end_inside_unchanged_utf8_data(self):
+        leading, rest = payload().split(b',"handoff":{', 1)
+        start = len(leading.split(b'"seeds":', 1)[0]) + len(b'"seeds":')
+        prefix = leading + b',"handoff":{"unchanged_text":"'
+        padding = b'A' * (start + 255 - len(prefix))
+        for character in ('é', '世', '🙂'):
+            before = prefix + padding + character.encode() + b'",' + rest
+            result = runner.consumed_cursor_bytes(encoded(before), 30)
+            expected = before.replace(b'"pending_range":[30,31]', b'"pending_range":[31,31]', 1)
+            self.assertEqual(result, encoded(expected))
+        del reordered['handoff']
+        self.assertIsNone(runner.consumed_cursor_bytes(
+            encoded(json.dumps(reordered, separators=(',', ':')).encode()), 30))
+
 
 class CursorAdmissionTests(unittest.TestCase):
     def setUp(self):

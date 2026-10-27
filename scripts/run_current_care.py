@@ -8,6 +8,7 @@ No existing legacy lane/history is removed by this command.
 import argparse
 from collections import OrderedDict
 from copy import deepcopy
+import codecs
 import datetime as dt
 import hashlib
 import json
@@ -223,18 +224,26 @@ def consumed_cursor_bytes(data, seed):
     if prefix is None:
         return None
     start = prefix.end()
-    # Canonical seed strings escape quotes, so this unescaped member boundary
-    # terminates the cursor. Never decode the unchanged learned/private suffix.
-    end = data.find(b',"handoff":', 56 + start)
-    if end < 0:
-        return None
-    length = end - 56 - start
+    # Parse the leading object with the existing JSON decoder, growing only as
+    # far as needed. An incomplete trailing UTF-8 character belongs to the next
+    # prefix, not a malformed cursor. Never decode the complete learned suffix.
+    available = len(payload) - start
+    window = min(256, available)
+    decoder = json.JSONDecoder()
+    while True:
+        text, _ = codecs.utf_8_decode(payload[start:start+window], 'strict', window == available)
+        try:
+            metadata, length = decoder.raw_decode(text)
+            break
+        except json.JSONDecodeError:
+            if window == available:
+                raise
+            window = min(available, window * 2)
     encoded_metadata = bytes(payload[start:start+length])
-    metadata = json.loads(encoded_metadata)
     # Native seed metadata contains only ASCII; the remainder is never
     # reconstructed, so f32 lexemes, private saves and assets remain exact.
     old = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
-    if encoded_metadata != old:
+    if encoded_metadata != old or payload[start+length:start+length+11] != b',"handoff":':
         return None
     require(isinstance(metadata, dict) and set(metadata) ==
             {'historical_freshness', 'excluded_ranges', 'pending_range'}, 'invalid cursor seed metadata')
