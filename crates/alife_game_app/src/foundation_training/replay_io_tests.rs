@@ -1,6 +1,98 @@
 use super::*;
 use std::io::{Cursor, Read};
 
+fn continuity_boundary() -> ReplayContinuity {
+    ReplayContinuity {
+        organism_id: 17,
+        slot: 2,
+        slot_generation: 3,
+        dispatch_generation: 41,
+        activation_side: 1,
+        weight_generation: 13,
+        weight_bank: 1,
+        recurrent_digest: [7; 32],
+        weight_digest: [11; 32],
+        dendrites_digest: [19; 32],
+    }
+}
+
+#[test]
+fn replay_boundary_refuses_recurrent_homeostasis_and_dendritic_resets() {
+    // The recurrent digest covers both activations and homeostasis. These are
+    // validator fixtures, not evidence of body or GPU trajectory equivalence.
+    let previous = continuity_boundary();
+    assert!(previous.validate_next(&previous).is_ok());
+    let mut reset = previous.clone();
+    reset.recurrent_digest = [0; 32];
+    assert!(previous.validate_next(&reset).is_err());
+    reset = previous.clone();
+    reset.dendrites_digest = [0; 32];
+    assert!(previous.validate_next(&reset).is_err());
+}
+
+#[test]
+fn replay_boundary_preserves_recorded_plastic_state_and_allows_new_generations() {
+    let previous = continuity_boundary();
+    let mut next = previous.clone();
+    next.weight_digest = [0; 32];
+    assert!(previous.validate_next(&next).is_err());
+    next = previous.clone();
+    next.weight_bank ^= 1;
+    assert!(previous.validate_next(&next).is_err());
+    next = previous.clone();
+    next.weight_generation -= 1;
+    assert!(previous.validate_next(&next).is_err());
+
+    // Ordinary lifetime learning may publish a new bank/generation between
+    // decisions. Replay uses that row's recorded offsets; it must not demand
+    // that acquired weights stay frozen for an entire collection.
+    next = previous.clone();
+    next.weight_generation += 1;
+    next.weight_bank ^= 1;
+    next.weight_digest = [23; 32];
+    assert!(previous.validate_next(&next).is_ok());
+}
+
+#[test]
+fn replay_boundary_requires_the_same_individual_and_recurrent_dispatch() {
+    let previous = continuity_boundary();
+    let mut changed = Vec::new();
+    let mut next = previous.clone();
+    next.organism_id += 1;
+    changed.push(next);
+    let mut next = previous.clone();
+    next.slot += 1;
+    changed.push(next);
+    let mut next = previous.clone();
+    next.slot_generation += 1;
+    changed.push(next);
+    let mut next = previous.clone();
+    next.dispatch_generation += 1;
+    changed.push(next);
+    let mut next = previous.clone();
+    next.activation_side ^= 1;
+    changed.push(next);
+    for next in changed {
+        assert!(previous.validate_next(&next).is_err());
+    }
+}
+
+#[test]
+fn replay_boundary_validation_does_not_mutate_either_recorded_state() {
+    let previous = continuity_boundary();
+    let previous_before = previous.clone();
+    let mut next = previous.clone();
+    let next_before = next.clone();
+    previous.validate_next(&next).unwrap();
+    assert_eq!(previous, previous_before);
+    assert_eq!(next, next_before);
+    next.recurrent_digest = [0; 32];
+    let invalid_before = next.clone();
+    assert!(previous.validate_next(&next).is_err());
+    assert_eq!(previous, previous_before);
+    assert_eq!(next, invalid_before);
+}
+
 #[test]
 fn verified_encoding_checks_all_bytes_and_bounds_the_read() {
     let bytes = b"complete compressed encoding";

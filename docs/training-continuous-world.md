@@ -23,6 +23,27 @@ post-PPO global heads under the existing fresh-cohort handoff contract. The next
 session therefore starts a new ordinary private life; this is not a solution to
 continuous same-individual online policy installation.
 
+The living collection limit is an artificial truncation, not death. The final
+successor value is retained; only confirmed death zeroes it. Obtaining that
+successor record currently executes one more **ordinary waking decision**, plus
+any intervening normal non-capture ticks. Its cognition, recurrent/lifetime
+learning, motor action and biology are real. It is excluded from PPO loss but
+included in the subsequent final private-life capture. The later frozen value
+pass reads recorded states on offline trainer scratch and does not advance the
+authoritative world. Do not call the whole bootstrap acquisition an observational
+peek or claim that its action had no physical effect.
+
+The 512-row value reads and 256-row PPO spans are offline slices after collection;
+they do not recreate the live body. Each replay window starts from its captured
+recurrent/homeostatic/dendritic state and per-row acquired-weight offsets. Four
+separate 128-decision sessions instead create four fresh private lives and, when
+all survive, capture 516 decisions rather than the single session's 513. They
+cannot establish chunk invariance. A future 1x512 versus 4x128 continuity assay
+must keep one world, complete initial state/RNG and lifetime learning, disable
+PPO updates in both arms, match actual ticks, and reuse a boundary successor
+record or provide a genuinely observational acquisition seam. That resumable
+same-world chunk seam and hardware equality have not been established here.
+
 The native bridge permits explicit Feeding horizons 1..36000, the existing
 single-cycle bound. Other resident care lessons keep their 1..128 limits. Longer
 requests do not change logical time: the authoritative loop is still 20 world
