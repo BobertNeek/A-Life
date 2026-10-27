@@ -152,12 +152,12 @@ pub fn export_native_training_handoff(
     std::fs::create_dir_all(output.parent().unwrap_or(Path::new(".")))?;
     std::fs::create_dir(output)?;
     for (name, bytes) in source_bytes {
-        std::fs::write(output.join(name), bytes)?;
+        alife_storage::write(output.join(name), bytes)?;
     }
-    std::fs::write(output.join(SERIAL_HANDOFF_FILE), handoff_bytes)?;
-    std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
+    alife_storage::write(output.join(SERIAL_HANDOFF_FILE), handoff_bytes)?;
+    alife_storage::write(output.join("phase.txt"), "next-cohort-admitted")?;
     // Last write commits this portable package; incomplete output is inadmissible.
-    std::fs::write(
+    alife_storage::write(
         output.join(SERIAL_HANDOFF_BINDING_FILE),
         serde_json::to_vec_pretty(&binding)?,
     )?;
@@ -165,4 +165,4 @@ pub fn export_native_training_handoff(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

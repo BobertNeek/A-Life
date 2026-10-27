@@ -26,3 +26,27 @@ jobs:
           components: clippy
       - run: cargo test --locked -p alife_storage
       - run: cargo clippy --locked -p alife_storage --all-targets -- -D warnings
+  quota-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_MIN_STACK: '33554432'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-output-budget
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - run: cargo test --locked -p alife_archive --test lineage_library output_budget -- --test-threads=1
+      - run: cargo test --locked -p alife_runtime --lib output_budget -- --test-threads=1
+      - run: cargo test --locked -p alife_game_app --features foundation-training --lib output_budget -- --test-threads=1
+      - run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings

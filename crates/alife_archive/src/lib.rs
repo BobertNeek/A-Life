@@ -11,7 +11,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     fs::{self, OpenOptions},
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
@@ -583,6 +583,7 @@ pub struct LifeArchiveInput<'a> {
 pub struct LineageLibrary {
     config: LineageLibraryConfig,
     connection: Connection,
+    _output_budget: Option<alife_storage::OutputBudget>,
 }
 
 impl LineageLibrary {
@@ -595,17 +596,22 @@ impl LineageLibrary {
         clear_archive_staging_for_open(&archive_root)?;
         fs::create_dir_all(archive_root.join("staging"))?;
 
+        let output_budget = alife_storage::budget_for(&config.root)?;
         let database = config.root.join("lineage.db");
-        let connection = match open_index(&database) {
+        let connection = match open_index(&database, output_budget.is_some()) {
             Ok(connection) => connection,
             Err(_) => {
                 if database.exists() {
-                    fs::remove_file(&database)?;
+                    alife_storage::remove_file(&database)?;
                 }
-                open_index(&database)?
+                open_index(&database, output_budget.is_some())?
             }
         };
-        let mut library = Self { config, connection };
+        let mut library = Self {
+            config,
+            connection,
+            _output_budget: output_budget,
+        };
         library.rebuild_index()?;
         Ok(library)
     }
@@ -2012,7 +2018,7 @@ impl LineageLibrary {
                 reference.pages.iter().zip(&compressed_pages).enumerate()
             {
                 let path = staged.join(format!("{index:08}-{}.zst", digest_hex(reference.digest)));
-                fs::write(path, compressed)?;
+                alife_storage::write(path, compressed)?;
             }
             let cleanup_staged = || -> Result<(), ArchiveError> {
                 let archive_root = canonical_archive_root(&self.config.root)?;
@@ -2024,7 +2030,7 @@ impl LineageLibrary {
                     &archive_root.join("staging").join(name),
                 )
             };
-            match fs::rename(&staged, &destination) {
+            match alife_storage::rename(&staged, &destination) {
                 Ok(()) => {}
                 Err(_) if destination.exists() => {
                     cleanup_staged()?;
@@ -2449,7 +2455,7 @@ fn prepare_composite_birth_publication_lease(archive_root: &Path) -> Result<(), 
         .write(true)
         .truncate(true)
         .open(&checked_lease.canonical_path)?;
-    lease.write_all(b"ready")?;
+    alife_storage::write_all(&checked_lease.canonical_path, &mut lease, b"ready")?;
     lease.sync_all()?;
     wait_for_composite_birth_lease_release(archive_root, COMPOSITE_BIRTH_PUBLICATION_LEASE_FILE)
 }
@@ -2482,7 +2488,7 @@ fn stage_composite_payloads(
                 final_path: prepared_payload_path(archive_root, *destination, payload.digest),
                 staged_path: staged_path.clone(),
             });
-            file.write_all(&payload.bytes)?;
+            alife_storage::write_all(&staged_path, &mut file, &payload.bytes)?;
             file.sync_all()?;
             drop(file);
             let written = fs::read(&staged_path)?;
@@ -2503,7 +2509,7 @@ fn rename_staged_publication(staged_path: &Path, final_path: &Path) -> Result<()
     {
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            match fs::rename(staged_path, final_path) {
+            match alife_storage::rename(staged_path, final_path) {
                 Ok(()) => return Ok(()),
                 Err(error) if error.raw_os_error() == Some(32) && Instant::now() < deadline => {
                     std::thread::yield_now();
@@ -2515,7 +2521,7 @@ fn rename_staged_publication(staged_path: &Path, final_path: &Path) -> Result<()
 
     #[cfg(not(windows))]
     {
-        fs::rename(staged_path, final_path)
+        alife_storage::rename(staged_path, final_path)
     }
 }
 
@@ -2746,7 +2752,7 @@ fn remove_tree_without_following(archive_root: &Path, target: &Path) -> Result<(
         let Some(delete_path) = revalidate_archive_deletion_target(archive_root, &path)? else {
             return Ok(());
         };
-        fs::remove_file(delete_path)?;
+        alife_storage::remove_file(delete_path)?;
     }
     Ok(())
 }
@@ -2867,7 +2873,7 @@ fn cleanup_failed_composite_batch(
         else {
             continue;
         };
-        if let Err(error) = fs::remove_file(&delete_path) {
+        if let Err(error) = alife_storage::remove_file(&delete_path) {
             if error.kind() != std::io::ErrorKind::NotFound {
                 failures.push(format!(
                     "could not remove {}: {error}",
@@ -3096,7 +3102,7 @@ fn cleanup_batch_staging_directory(
                 continue;
             }
         };
-        if let Err(error) = fs::remove_file(&delete_path) {
+        if let Err(error) = alife_storage::remove_file(&delete_path) {
             if error.kind() != std::io::ErrorKind::NotFound {
                 failures.push(format!(
                     "could not remove staging path {}: {error}",
@@ -3394,7 +3400,7 @@ mod archive_path_tests {
         let digest = super::digest_bytes(&bytes);
         let staged_path = batch.join(format!("payload-00000000-{}", super::digest_hex(digest)));
         let sentinel = b"pre-existing staged payload";
-        std::fs::write(&staged_path, sentinel).unwrap();
+        alife_storage::write(&staged_path, sentinel).unwrap();
         let payload = super::PreparedArchivePayload {
             digest,
             bytes,
@@ -3409,7 +3415,7 @@ mod archive_path_tests {
         assert!(error.to_string().contains("exists"));
         assert!(publications.is_empty());
         assert_eq!(std::fs::read(&staged_path).unwrap(), sentinel);
-        std::fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3431,7 +3437,7 @@ mod archive_path_tests {
             .operation
             .to_string()
             .contains(&batch.display().to_string()));
-        std::fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3693,11 +3699,22 @@ fn observe_prepared_final_file(
     })
 }
 
-fn open_index(path: &Path) -> Result<Connection, ArchiveError> {
-    let connection = Connection::open(path)?;
+fn open_index(path: &Path, memory_only: bool) -> Result<Connection, ArchiveError> {
+    // The index is derived: open() always rebuilds it from canonical manifests.
+    // Budgeted runs keep SQLite, its journal, and sort/temp pages in memory; no
+    // unmetered SQLite VFS file can escape the aggregate disk allowance.
+    let connection = if memory_only {
+        Connection::open_in_memory()?
+    } else {
+        Connection::open(path)?
+    };
+    if memory_only {
+        connection.execute_batch("PRAGMA temp_store=MEMORY; PRAGMA journal_mode=MEMORY;")?;
+    } else {
+        connection.execute_batch("PRAGMA journal_mode=WAL;")?;
+    }
     connection.execute_batch(
-        "PRAGMA journal_mode=WAL;
-         CREATE TABLE IF NOT EXISTS manifests(
+        "CREATE TABLE IF NOT EXISTS manifests(
            digest TEXT PRIMARY KEY,
            source_run_id TEXT NOT NULL,
            organism_id TEXT NOT NULL,
@@ -3787,10 +3804,10 @@ fn write_content_addressed(
         .create_new(true)
         .write(true)
         .open(&staged)?;
-    file.write_all(bytes)?;
+    alife_storage::write_all(&staged, &mut file, bytes)?;
     file.sync_all()?;
     drop(file);
-    match fs::rename(&staged, destination) {
+    match alife_storage::rename(&staged, destination) {
         Ok(()) => Ok(true),
         Err(_) if destination.exists() && fs::read(destination)? == bytes => {
             remove_exact_content_staging_file(&canonical_staging, &staged, bytes)?;
@@ -3889,7 +3906,7 @@ fn remove_exact_content_staging_file(
             staged_path.display()
         )));
     }
-    fs::remove_file(checked.canonical_path)?;
+    alife_storage::remove_file(checked.canonical_path)?;
     Ok(())
 }
 

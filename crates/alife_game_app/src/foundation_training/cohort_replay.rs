@@ -39,7 +39,7 @@ pub struct FoundationCohortReplayCommit {
 
 pub(crate) struct CohortReplayWriter {
     root: PathBuf,
-    file: std::io::BufWriter<File>,
+    file: std::io::BufWriter<alife_storage::BudgetWriter<File>>,
     index: Index,
     bytes: u64,
     poisoned: bool,
@@ -58,7 +58,10 @@ impl CohortReplayWriter {
             .open(root.join(PENDING))?;
         Ok(Self {
             root: root.to_owned(),
-            file: std::io::BufWriter::with_capacity(256 * 1024, file),
+            file: std::io::BufWriter::with_capacity(
+                256 * 1024,
+                alife_storage::writer(root.join(PENDING), file)?,
+            ),
             index: Index {
                 schema: 1,
                 source,
@@ -93,7 +96,9 @@ impl CohortReplayWriter {
     fn append_encoding(
         &mut self,
         mut reference: FoundationReplayRecordRef,
-        encode: impl FnOnce(&mut std::io::BufWriter<File>) -> Result<(u64, [u8; 32])>,
+        encode: impl FnOnce(
+            &mut std::io::BufWriter<alife_storage::BudgetWriter<File>>,
+        ) -> Result<(u64, [u8; 32])>,
     ) -> Result<FoundationReplayRecordRef> {
         if self.poisoned || self.index.records.len() >= MAX_RECORDS {
             return Err("invalid or exhausted pending replay cohort".into());
@@ -310,8 +315,8 @@ fn sync_directory_ancestry(_: &Path) -> std::io::Result<()> {
 #[cfg(unix)]
 fn publish_new(pending: &Path, sealed: &Path) -> std::io::Result<()> {
     // Exclusive publication cannot overwrite any accepted or foreign bundle.
-    std::fs::hard_link(pending, sealed)?;
-    std::fs::remove_file(pending)?;
+    alife_storage::hard_link(pending, sealed)?;
+    alife_storage::remove_file(pending)?;
     File::open(
         sealed
             .parent()
@@ -324,23 +329,25 @@ fn publish_new(pending: &Path, sealed: &Path) -> std::io::Result<()> {
 fn publish_new(pending: &Path, sealed: &Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
-    let pending = pending
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
-    let sealed = sealed
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect::<Vec<_>>();
-    // SAFETY: same-directory paths own live NUL-terminated UTF-16 buffers. Omitting
-    // REPLACE_EXISTING preserves exclusive ownership; WRITE_THROUGH seals rename.
-    if unsafe { MoveFileExW(pending.as_ptr(), sealed.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
+    alife_storage::replace_with(pending, sealed, || {
+        let pending = pending
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        let sealed = sealed
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
+        // SAFETY: same-directory paths own live NUL-terminated UTF-16 buffers. Omitting
+        // REPLACE_EXISTING preserves exclusive ownership; WRITE_THROUGH seals rename.
+        if unsafe { MoveFileExW(pending.as_ptr(), sealed.as_ptr(), MOVEFILE_WRITE_THROUGH) } == 0 {
+            Err(std::io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    })
 }
 
 #[cfg(not(any(unix, windows)))]

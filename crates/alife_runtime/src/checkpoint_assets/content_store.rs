@@ -3,7 +3,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, OpenOptions},
-    io::Write,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -24,6 +23,7 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GpuCheckpointAssetStore {
     root: PathBuf,
+    _output_budget: Option<alife_storage::OutputBudget>,
 }
 
 impl GpuCheckpointAssetStore {
@@ -34,7 +34,11 @@ impl GpuCheckpointAssetStore {
                 message: "GPU checkpoint asset root is empty".to_string(),
             });
         }
-        Ok(Self { root })
+        let output_budget = alife_storage::budget_for(&root)?;
+        Ok(Self {
+            root,
+            _output_budget: output_budget,
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -299,7 +303,7 @@ fn write_content_addressed(path: &Path, bytes: &[u8]) -> Result<(), GameAppShell
         .create_new(true)
         .write(true)
         .open(&temporary)?;
-    file.write_all(bytes)?;
+    alife_storage::write_all(&temporary, &mut file, bytes)?;
     file.sync_all()?;
     drop(file);
     publish_temporary_content_addressed(&temporary, path, bytes)
@@ -310,14 +314,14 @@ fn publish_temporary_content_addressed(
     path: &Path,
     bytes: &[u8],
 ) -> Result<(), GameAppShellError> {
-    match fs::hard_link(temporary, path) {
+    match alife_storage::hard_link(temporary, path) {
         Ok(()) => {
-            fs::remove_file(temporary)?;
+            alife_storage::remove_file(temporary)?;
             sync_parent(path)
         }
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
             let existing = fs::read(path);
-            let cleanup = fs::remove_file(temporary);
+            let cleanup = alife_storage::remove_file(temporary);
             match existing {
                 Ok(existing) if existing == bytes => {
                     cleanup?;
@@ -339,7 +343,7 @@ fn publish_temporary_content_addressed(
             }
         }
         Err(error) => {
-            let _ = fs::remove_file(temporary);
+            let _ = alife_storage::remove_file(temporary);
             Err(error.into())
         }
     }
@@ -367,6 +371,40 @@ mod tests {
         },
         CanonicalNewGameConfig,
     };
+
+    #[test]
+    fn output_budget_private_cas_retains_worker_scope_and_counts_staging_peak() {
+        let root = std::env::temp_dir().join(format!(
+            "budget-cas-{}-{}",
+            std::process::id(),
+            TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&root).unwrap();
+        let budget = alife_storage::OutputBudget::register(&root, 12).unwrap();
+        let store = GpuCheckpointAssetStore::new(&root).unwrap();
+        let worker = store.clone();
+        drop(store);
+        drop(budget);
+        let worker = std::thread::spawn(move || {
+            let first = worker.write_serialized_json("payload", b"123456").unwrap();
+            assert_eq!(
+                worker.write_serialized_json("payload", b"123456").unwrap(),
+                first
+            );
+            assert!(worker.write_serialized_json("other", b"1234567").is_err());
+            worker
+        })
+        .join()
+        .unwrap();
+        let usage = worker._output_budget.as_ref().unwrap().usage().unwrap();
+        assert!(usage.used <= 12);
+        assert!(usage.high_water <= 12);
+        assert_eq!(
+            usage.high_water, 12,
+            "CAS temporary and hard-link names coexist"
+        );
+        alife_storage::remove_dir_all(&root).unwrap();
+    }
 
     fn current_save() -> PortableSaveFile {
         let foundation =
@@ -450,7 +488,7 @@ mod tests {
             assert_ne!(previous.as_ref(), Some(&actual.0));
             previous = Some(actual.0);
         }
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -477,11 +515,11 @@ mod tests {
         assert_eq!(stored, bytes);
 
         let path = root.join(&entry.relative_path);
-        fs::write(&path, b"corrupt-existing-content").unwrap();
+        alife_storage::write(&path, b"corrupt-existing-content").unwrap();
         assert!(store.write_serialized_json("float-state", &bytes).is_err());
         assert!(store.read_json::<[f32; 3]>(&manifest, &reference).is_err());
         assert_eq!(fs::read(path).unwrap(), b"corrupt-existing-content");
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -650,7 +688,7 @@ mod tests {
             std::process::id()
         ));
         if root.exists() {
-            fs::remove_dir_all(&root).unwrap();
+            alife_storage::remove_dir_all(&root).unwrap();
         }
         let store = GpuCheckpointAssetStore::new(&root).unwrap();
         let (_, stale) = store
@@ -667,7 +705,7 @@ mod tests {
 
         assert!(save.assets.entries.is_empty());
         assert!(stale_path.exists());
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -678,13 +716,13 @@ mod tests {
             std::process::id()
         ));
         if root.exists() {
-            fs::remove_dir_all(&root).unwrap();
+            alife_storage::remove_dir_all(&root).unwrap();
         }
         fs::create_dir_all(&root).unwrap();
         let destination = root.join("asset.json");
         let temporary = root.join("asset.tmp");
-        fs::write(&destination, b"existing-authority").unwrap();
-        fs::write(&temporary, b"racing-candidate").unwrap();
+        alife_storage::write(&destination, b"existing-authority").unwrap();
+        alife_storage::write(&temporary, b"racing-candidate").unwrap();
 
         assert!(
             publish_temporary_content_addressed(&temporary, &destination, b"racing-candidate")
@@ -693,6 +731,6 @@ mod tests {
         assert_eq!(fs::read(&destination).unwrap(), b"existing-authority");
         assert!(!temporary.exists());
 
-        fs::remove_dir_all(root).unwrap();
+        alife_storage::remove_dir_all(root).unwrap();
     }
 }

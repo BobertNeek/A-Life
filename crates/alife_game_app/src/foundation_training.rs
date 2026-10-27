@@ -105,7 +105,7 @@ pub(crate) fn write_foundation_lesson_prior_readiness(
             && metrics.decision_frames_without_prior == 0
             && metrics.decision_frames_with_prior == metrics.decision_frames
     });
-    std::fs::write(
+    alife_storage::write(
         output.join("semantic-prior-readiness.json"),
         serde_json::to_vec_pretty(&serde_json::json!({
             "lesson": lesson,
@@ -1703,7 +1703,7 @@ fn run_foundation_training_pilot_with_request(
     } else {
         initial_n2048_care_asset(founder_seed_base)?
     };
-    std::fs::write(
+    alife_storage::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
     )?;
@@ -2472,7 +2472,7 @@ fn run_foundation_training_pilot_with_request(
     if teacher_mode {
         let checkpoint = serde_json::to_vec(&trainer.checkpoint()?)?;
         let source = foundation_replay_source(&steps[0].before.phenotype, &asset, 0, &checkpoint)?;
-        std::fs::write(
+        alife_storage::write(
             output.join("replay-source.json"),
             serde_json::to_vec_pretty(&source)?,
         )?;
@@ -2487,11 +2487,11 @@ fn run_foundation_training_pilot_with_request(
             .iter()
             .map(|step| writer.append(step))
             .collect::<Result<Vec<_>>>()?;
-        std::fs::write(
+        alife_storage::write(
             output.join("replay-manifest.json"),
             serde_json::to_vec(&references)?,
         )?;
-        std::fs::write(output.join("actor-checkpoint.json"), checkpoint)?;
+        alife_storage::write(output.join("actor-checkpoint.json"), checkpoint)?;
         let labels = DemonstrationSpeechLabels {
             source,
             record_digests: references.iter().map(|r| r.digest).collect(),
@@ -2513,7 +2513,7 @@ fn run_foundation_training_pilot_with_request(
                 })
                 .collect(),
         };
-        std::fs::write(
+        alife_storage::write(
             output.join("speech-labels.json"),
             serde_json::to_vec(&labels)?,
         )?;
@@ -2682,7 +2682,7 @@ fn run_foundation_training_pilot_with_request(
         maze_nodes_reached,
         maze_route_nodes: scenario.demonstration_route.len(),
     };
-    std::fs::write(
+    alife_storage::write(
         output.join("pilot.json"),
         serde_json::to_vec_pretty(&receipt)?,
     )?;
@@ -4467,7 +4467,7 @@ impl FoundationReplayWriter {
             .ok_or_else(invalid)?;
         if next_bytes > FOUNDATION_REPLAY_DISK_LIMIT_BYTES {
             if reference.cohort.is_none() {
-                std::fs::remove_file(self.directory.join(reference.file_name()))?;
+                alife_storage::remove_file(self.directory.join(reference.file_name()))?;
             }
             return Err("compact replay would exceed its 4 GiB disk ceiling".into());
         }
@@ -4636,18 +4636,19 @@ fn write_replay_record(
         .create_new(true)
         .open(&temporary)?;
     let result = (|| -> Result<_> {
-        let mut writer = std::io::BufWriter::with_capacity(64 * 1024, file);
+        let mut writer =
+            std::io::BufWriter::with_capacity(64 * 1024, alife_storage::writer(&temporary, file)?);
         let (bytes, digest) = encode_replay_record(&mut writer, record)?;
         writer.flush()?;
         writer.get_ref().sync_all()?;
         reference.encoded_bytes = bytes;
         reference.digest = digest;
         drop(writer);
-        std::fs::rename(&temporary, &destination)?;
+        alife_storage::rename(&temporary, &destination)?;
         Ok(reference)
     })();
     if result.is_err() {
-        let _ = std::fs::remove_file(temporary);
+        let _ = alife_storage::remove_file(temporary);
     }
     result
 }

@@ -163,7 +163,7 @@ fn current_seeds() -> alife_training::CheckpointSeedsV1 {
     }
 }
 
-fn private_fixture(source: &Path) {
+pub(crate) fn private_fixture(source: &Path) {
     let actor_path = source.join("actor-checkpoint.json");
     let mut actor: alife_training::FoundationTrainerCheckpoint =
         serde_json::from_slice(&std::fs::read(&actor_path).unwrap()).unwrap();

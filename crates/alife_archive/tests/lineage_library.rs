@@ -593,6 +593,62 @@ fn fixture(seed: u64, organism_raw: u64) -> (BrainGenome, alife_core::BrainPheno
 }
 
 #[test]
+fn output_budget_lineage_uses_rebuildable_memory_index_without_sqlite_disk_files() {
+    let root = temp_root("output-budget-index");
+    fs::create_dir(&root).unwrap();
+    let budget = alife_storage::OutputBudget::register(&root, 16 * 1024 * 1024).unwrap();
+    let (genome, phenotype) = fixture(101, 7);
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let digest = library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "budget-rebuild",
+            organism_id: OrganismId(7),
+            birth_tick: Tick(4),
+            genome: &genome,
+            phenotype: &phenotype,
+            foundation_asset_bytes: None,
+        })
+        .unwrap();
+    let admitted = library.load_manifest(digest).unwrap();
+    drop(library);
+    assert!(!root.join("lineage.db").exists());
+    assert!(!root.join("lineage.db-wal").exists());
+    assert!(!root.join("lineage.db-journal").exists());
+    let library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    assert_eq!(library.latest_manifest_digests().unwrap(), vec![digest]);
+    assert_eq!(library.load_manifest(digest).unwrap(), admitted);
+    assert_eq!(library.load_brain_genome(&admitted).unwrap(), genome);
+    assert!(budget.usage().unwrap().high_water <= budget.usage().unwrap().limit);
+    drop(library);
+    alife_storage::remove_dir_all(&root).unwrap();
+    assert_eq!(budget.usage().unwrap().used, 0);
+}
+
+#[test]
+fn output_budget_lineage_content_refuses_before_allowance_is_exceeded() {
+    let root = temp_root("output-budget-denied");
+    fs::create_dir(&root).unwrap();
+    let budget = alife_storage::OutputBudget::register(&root, 16).unwrap();
+    let mut library = LineageLibrary::open(LineageLibraryConfig::profile_default(&root)).unwrap();
+    let (genome, phenotype) = fixture(101, 7);
+    assert!(library
+        .archive_birth(GeneticArchiveInput {
+            source_run_id: "budget-denied",
+            organism_id: OrganismId(7),
+            birth_tick: Tick(4),
+            genome: &genome,
+            phenotype: &phenotype,
+            foundation_asset_bytes: None,
+        })
+        .is_err());
+    assert!(budget.usage().unwrap().used <= 16);
+    assert!(budget.usage().unwrap().high_water <= 16);
+    assert!(library.latest_manifest_digests().unwrap().is_empty());
+    drop(library);
+    alife_storage::remove_dir_all(&root).unwrap();
+}
+
+#[test]
 fn legacy_nano512_v1_founder_archive_opens_for_display_but_not_runtime_admission() {
     let root = temp_root("legacy-nano512-display");
     let digest = install_checked_player_legacy_nano512_v1_archive(&root);

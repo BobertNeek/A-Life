@@ -199,14 +199,14 @@ impl LineageLibrary {
             TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed),
             kind.byte()
         ));
-        fs::write(&staging, compressed)?;
+        alife_storage::write(&staging, compressed)?;
         if let Some(parent) = destination.parent() {
             fs::create_dir_all(parent)?;
         }
-        match fs::rename(&staging, destination) {
+        match alife_storage::rename(&staging, destination) {
             Ok(()) => Ok(()),
             Err(error) => {
-                let _ = fs::remove_file(staging);
+                let _ = alife_storage::remove_file(staging);
                 Err(error.into())
             }
         }
@@ -743,7 +743,7 @@ fn rollback_bundle_import(
             failures.push(format!("preserved changed import path {}", path.display()));
             continue;
         }
-        if let Err(error) = fs::remove_file(path) {
+        if let Err(error) = alife_storage::remove_file(path) {
             if error.kind() != std::io::ErrorKind::NotFound {
                 failures.push(format!("could not remove {}: {error}", path.display()));
             }
@@ -1464,9 +1464,9 @@ mod tests {
 
         drop(imported);
         drop(source);
-        let _ = fs::remove_dir_all(source_root);
-        let _ = fs::remove_dir_all(import_root);
-        let _ = fs::remove_file(bundle_path);
+        let _ = alife_storage::remove_dir_all(source_root);
+        let _ = alife_storage::remove_dir_all(import_root);
+        let _ = alife_storage::remove_file(bundle_path);
     }
 
     #[test]
@@ -1528,9 +1528,9 @@ mod tests {
 
         drop(imported);
         drop(source);
-        let _ = fs::remove_dir_all(source_root);
-        let _ = fs::remove_dir_all(import_root);
-        let _ = fs::remove_file(bundle_path);
+        let _ = alife_storage::remove_dir_all(source_root);
+        let _ = alife_storage::remove_dir_all(import_root);
+        let _ = alife_storage::remove_file(bundle_path);
     }
 
     #[test]
@@ -1548,7 +1548,7 @@ mod tests {
         let (kind, mut entries) = decode_bundle(&encoded).unwrap();
         entries.retain(|entry| !entry.path.starts_with("assets/"));
         let malformed = encode_bundle(kind, &entries).unwrap();
-        fs::write(
+        alife_storage::write(
             &bad_path,
             zstd::stream::encode_all(malformed.as_slice(), 3).unwrap(),
         )
@@ -1569,10 +1569,10 @@ mod tests {
 
         drop(imported);
         drop(source);
-        let _ = fs::remove_dir_all(source_root);
-        let _ = fs::remove_dir_all(import_root);
-        let _ = fs::remove_file(bundle_path);
-        let _ = fs::remove_file(bad_path);
+        let _ = alife_storage::remove_dir_all(source_root);
+        let _ = alife_storage::remove_dir_all(import_root);
+        let _ = alife_storage::remove_file(bundle_path);
+        let _ = alife_storage::remove_file(bad_path);
     }
 
     #[test]
@@ -1607,7 +1607,7 @@ mod tests {
             .unwrap();
         manifest_entry.path = format!("manifests/{}.json", digest_hex(fake_digest));
         let malformed = encode_bundle(kind, &entries).unwrap();
-        fs::write(
+        alife_storage::write(
             &bad_path,
             zstd::stream::encode_all(malformed.as_slice(), 3).unwrap(),
         )
@@ -1628,10 +1628,10 @@ mod tests {
 
         drop(imported);
         drop(source);
-        let _ = fs::remove_dir_all(source_root);
-        let _ = fs::remove_dir_all(import_root);
-        let _ = fs::remove_file(bundle_path);
-        let _ = fs::remove_file(bad_path);
+        let _ = alife_storage::remove_dir_all(source_root);
+        let _ = alife_storage::remove_dir_all(import_root);
+        let _ = alife_storage::remove_file(bundle_path);
+        let _ = alife_storage::remove_file(bad_path);
     }
 
     #[test]
@@ -1654,7 +1654,7 @@ mod tests {
             bytes,
         });
         let malformed = encode_bundle(kind, &entries).unwrap();
-        fs::write(
+        alife_storage::write(
             &bad_path,
             zstd::stream::encode_all(malformed.as_slice(), 3).unwrap(),
         )
@@ -1671,10 +1671,10 @@ mod tests {
 
         drop(imported);
         drop(source);
-        let _ = fs::remove_dir_all(source_root);
-        let _ = fs::remove_dir_all(import_root);
-        let _ = fs::remove_file(bundle_path);
-        let _ = fs::remove_file(bad_path);
+        let _ = alife_storage::remove_dir_all(source_root);
+        let _ = alife_storage::remove_dir_all(import_root);
+        let _ = alife_storage::remove_file(bundle_path);
+        let _ = alife_storage::remove_file(bad_path);
     }
 
     #[test]
@@ -1747,7 +1747,7 @@ mod tests {
         );
         assert!(result.is_err());
         drop(library);
-        let _ = fs::remove_dir_all(root);
+        let _ = alife_storage::remove_dir_all(root);
     }
 
     #[test]
@@ -1799,7 +1799,7 @@ mod tests {
         assert!(save_root.join("founders/cohort.json").is_file());
 
         drop(library);
-        let _ = fs::remove_dir_all(archive_root);
-        let _ = fs::remove_dir_all(save_root);
+        let _ = alife_storage::remove_dir_all(archive_root);
+        let _ = alife_storage::remove_dir_all(save_root);
     }
 }

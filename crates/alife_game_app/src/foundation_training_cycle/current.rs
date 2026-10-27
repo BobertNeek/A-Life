@@ -4,6 +4,7 @@ use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
 mod life;
 pub use life::extract_current_training_life;
+pub(super) use life::validation_scope;
 #[cfg(test)]
 pub(super) fn validation_workspace_for_test(root: &Path) -> Result<impl AsRef<Path>> {
     life::workspace_at(root)
