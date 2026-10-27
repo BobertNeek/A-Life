@@ -9,16 +9,26 @@ fn resident_two_episode_final_snapshot_keeps_actor_value_ages_and_private_state(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
             std::fs::create_dir(&root).unwrap();
             eprintln!("resident disposable fixture: {}", root.display());
+            let initial = root.join("initial-policy-zero");
+            let bootstrap = run_foundation_training_cycle(&initial, 90701, 2).unwrap();
+            assert_eq!(bootstrap.policy_version, 0);
             let source = root.join("source");
-            run_foundation_training_cycle(&source, 90701, 2).unwrap();
+            // The ordinary bootstrap is policy zero, deliberately inadmissible
+            // as a portable handoff. Reach policy one through a genuine update;
+            // do not rewrite its receipt, weights, ages or admission rules.
+            let continued = resume_foundation_training_cycle_with_final_private_life(
+                &initial, &source, 90702, 2, FoundationTeacherLesson::Feeding,
+                1.0, Default::default(),
+            ).unwrap();
+            assert_eq!(continued.policy_version, 1);
             let seeds = alife_training::CheckpointSeedsV1 { historical_freshness: "unknown".into(),
-                excluded_ranges: vec![[90701, 90701]], pending_range: None };
+                excluded_ranges: vec![[90701, 90702]], pending_range: None };
             let baseline = migrate_current_training_checkpoint(&source, seeds).unwrap();
             let store = root.join("store"); std::fs::create_dir(&store).unwrap();
             let current = store.join("current.alife-checkpoint");
             let original = baseline.encode().unwrap(); std::fs::write(&current, &original).unwrap();
             let request = ResidentSerialRequest {
-                schema: 1, seed_range: [90702, 90703],
+                schema: 1, seed_range: [90703, 90704],
                 rows: vec![ResidentSerialRow { lesson: FoundationTeacherLesson::Feeding, decisions: 2,
                     food_need_condition: Default::default() }; 2],
                 checkpoint_every_episodes: 2, sampling_temperature: 1.0,
@@ -35,10 +45,11 @@ fn resident_two_episode_final_snapshot_keeps_actor_value_ages_and_private_state(
             assert!(saved.handoff.actor.optimizer_step > baseline.handoff.actor.optimizer_step);
             assert!(saved.handoff.value.optimizer_step > baseline.handoff.value.optimizer_step);
             assert_eq!(saved.seeds.pending_range, None);
-            assert_eq!(saved.seed, 90703);
+            assert_eq!(saved.seed, 90704);
             assert!(saved.life.is_some());
             assert_eq!(std::fs::read(&current).unwrap(), original);
             std::fs::remove_dir_all(source).unwrap();
+            std::fs::remove_dir_all(initial).unwrap();
             assert_eq!(read_current_training_checkpoint(std::path::Path::new(recovered["candidate"].as_str().unwrap())).unwrap(), saved);
             eprintln!("resident continuity elapsed_seconds={} actor_before={} actor_after={} value_before={} value_after={}", started.elapsed().as_secs_f64(),
                 baseline.handoff.actor.optimizer_step, saved.handoff.actor.optimizer_step,
