@@ -39,7 +39,7 @@ fn fixture() -> (PhenotypeCompilerInputs, FoundationWeightAsset) {
 fn overlay_changes_only_learned_weights_and_bound_policy_identity() {
     let (before, trained) = fixture();
     let transition = N2048LivePolicyTransition::prepare(&before, 7, trained.clone()).unwrap();
-    assert_eq!(transition.previous_policy(), 7);
+    assert_eq!(transition.previous_policy(), Some(7));
     assert_eq!(transition.next_policy(), 8);
     assert_eq!(transition.next_inputs().genome(), before.genome());
     assert_eq!(transition.next_inputs().development(), before.development());
@@ -108,5 +108,19 @@ fn stale_policy_overflow_and_forged_provenance_are_rejected() {
             .live_policy()
             .unwrap()
             .birth_foundation_digest
+    );
+}
+
+#[test]
+fn legacy_install_preserves_unknown_private_policy_age_without_extra_global_update() {
+    let (before, trained) = fixture();
+    let transition =
+        N2048LivePolicyTransition::adopt_existing_policy(&before, 7, trained.clone()).unwrap();
+    assert_eq!(transition.previous_policy(), None);
+    assert_eq!(transition.next_policy(), 7);
+    assert_eq!(transition.next_inputs().genome(), before.genome());
+    assert!(
+        N2048LivePolicyTransition::adopt_existing_policy(transition.next_inputs(), 7, trained)
+            .is_err()
     );
 }

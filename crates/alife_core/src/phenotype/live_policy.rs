@@ -29,13 +29,44 @@ pub struct N2048LivePolicyTransition {
     previous_phenotype: BrainPhenotype,
     next_phenotype: BrainPhenotype,
     next_inputs: PhenotypeCompilerInputs,
-    previous_policy: u64,
+    previous_policy: Option<u64>,
+    next_policy: u64,
 }
 
 impl N2048LivePolicyTransition {
     pub fn prepare(
         previous_inputs: &PhenotypeCompilerInputs,
         previous_policy: u64,
+        next_asset: FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        let next_policy = previous_policy
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        Self::prepare_bound(
+            previous_inputs,
+            Some(previous_policy),
+            next_policy,
+            next_asset,
+        )
+    }
+
+    /// A legacy private packet predates explicit runtime policy provenance.
+    /// Install the admitted global head without inventing its private policy age.
+    pub fn adopt_existing_policy(
+        previous_inputs: &PhenotypeCompilerInputs,
+        policy_version: u64,
+        next_asset: FoundationWeightAsset,
+    ) -> Result<Self, ScaffoldContractError> {
+        if previous_inputs.live_policy().is_some() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        Self::prepare_bound(previous_inputs, None, policy_version, next_asset)
+    }
+
+    fn prepare_bound(
+        previous_inputs: &PhenotypeCompilerInputs,
+        previous_policy: Option<u64>,
+        policy_version: u64,
         next_asset: FoundationWeightAsset,
     ) -> Result<Self, ScaffoldContractError> {
         let capacity = BrainCapacityClass::n2048();
@@ -45,13 +76,10 @@ impl N2048LivePolicyTransition {
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         if previous_inputs
             .live_policy()
-            .is_some_and(|p| p.policy_version != previous_policy)
+            .is_some_and(|p| Some(p.policy_version) != previous_policy)
         {
             return Err(ScaffoldContractError::PhenotypeCompile);
         }
-        let policy_version = previous_policy
-            .checked_add(1)
-            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let birth_foundation_digest = previous_inputs
             .live_policy()
             .map_or(previous_asset.digest(), |p| p.birth_foundation_digest);
@@ -75,6 +103,7 @@ impl N2048LivePolicyTransition {
             next_phenotype,
             next_inputs,
             previous_policy,
+            next_policy: policy_version,
         })
     }
 
@@ -87,11 +116,11 @@ impl N2048LivePolicyTransition {
     pub const fn next_inputs(&self) -> &PhenotypeCompilerInputs {
         &self.next_inputs
     }
-    pub const fn previous_policy(&self) -> u64 {
+    pub const fn previous_policy(&self) -> Option<u64> {
         self.previous_policy
     }
     pub const fn next_policy(&self) -> u64 {
-        self.previous_policy + 1
+        self.next_policy
     }
 }
 
