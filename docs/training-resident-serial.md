@@ -13,6 +13,23 @@ qualification or throughput result is implied by this source change.
 admission. STORE must contain the admitted `current.alife-checkpoint`, its stable
 writer lock, and no pending publication. An existing `.run` is refused.
 
+Startup writes one flushed, Current/store/request-bound
+`resident-initialization.bin` commitment before creating `.run`. This remains
+until the baseline is fully admitted and the zero-dispatch WAL/frontier and
+learner are ready; it is removed and its parent synced before any seed consume.
+`--recover-resident` and `--finish-resident-run` can abort an interrupted startup
+by verifying unchanged Current and only the exact known metadata/private scratch
+prefixes. They preserve original seed reservations/exclusions; the new request's
+allocation is still uncommitted and no world is consumed. Unknown or changed
+files and aliases are refused. The commitment survives partial cleanup for retry.
+An unpublished torn `resident-initialization.next` can be retired only when no
+`.run` exists; that narrower action cannot claim full Current/request binding.
+Both marker forms block new producers and must route Native cleanup before a
+Python Store opens. Once startup commits, ordinary WAL/snapshot recovery applies.
+This adds no per-world admission or save; baseline admission still runs once.
+The bounded outside marker/staging peak is checked before writing, and retained
+marker bytes reserve the same temporary allowance while `.run` exists.
+
 Example request (replace the seeds and cutoff after checking current metadata):
 
 ```json

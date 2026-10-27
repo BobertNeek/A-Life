@@ -27,6 +27,8 @@ RECEIPT = 'last-continuous-session.json'
 LOG = 'continuous-native'
 NATIVE_RETIREMENT = 'resident-retirement.bin'
 NATIVE_RETIREMENT_NEXT = 'resident-retirement.next'
+NATIVE_INITIALIZATION = 'resident-initialization.bin'
+NATIVE_INITIALIZATION_NEXT = 'resident-initialization.next'
 # Retain STATE until last, but keep independent committed authority for retries
 # even if STATE has already disappeared. Missing recorded files stay missing.
 SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
@@ -65,8 +67,9 @@ def capabilities(report, decisions):
             report.get('max_continuous_feeding_decisions', 0) >= decisions and
             report.get('mid_world_offline_policy_install') is False and
             report.get('bound_run_cleanup') is True and
+            report.get('recoverable_predispatch_initialization') is True and
             report.get('temporary_budget_enforced_during_writes') is True,
-            'native finite-session, bound-cleanup and active-writer-budget capabilities required')
+            'native finite-session, bound-cleanup, recoverable initialization and active-writer-budget capabilities required')
 
 
 def check_pins(state):
@@ -175,9 +178,10 @@ def committed_retirement(lane, state=None):
     return None
 
 
-def native_retirement_pending(store):
+def native_cleanup_pending(store):
     return any((store / name).exists() or (store / name).is_symlink()
-               for name in (NATIVE_RETIREMENT, NATIVE_RETIREMENT_NEXT))
+               for name in (NATIVE_RETIREMENT, NATIVE_RETIREMENT_NEXT,
+                            NATIVE_INITIALIZATION, NATIVE_INITIALIZATION_NEXT))
 
 
 def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
@@ -197,7 +201,7 @@ def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
     # Native retirement must already have completed before this receipt commits.
     # Never use an old receipt to finish a different/new Native run.
     require(not (store_root / cp.RUN).exists() and not (store_root / cp.RUN).is_symlink() and
-            not native_retirement_pending(store_root),
+            not native_cleanup_pending(store_root),
             'unexpected native run/retirement after final receipt; preserving sidecars')
     require(set(commitment['sidecars']) == set(SIDECARS), 'incomplete sidecar retirement binding')
     allowed = {cp.LOCK, RECEIPT, *SIDECARS}
@@ -205,7 +209,7 @@ def retire_sidecars(lane, receipt, validate, after_remove=lambda _: None):
     require(committed_retirement(lane) == receipt, 'final retirement receipt changed')
     with cp.Store(store_root, validate) as store:
         require(not (store_root / cp.RUN).exists() and
-                not native_retirement_pending(store_root) and
+                not native_cleanup_pending(store_root) and
                 cp.digest(store.current) == receipt['current_sha256'],
                 'published current changed before sidecar retirement')
         # Validate every survivor BEFORE removing any more. Identity and digest
@@ -232,10 +236,25 @@ def reconcile(lane, state, validate):
     store_root = Path(state['store'])
     native = Path(state['binary'])
     pending_cleanup = None
-    if native_retirement_pending(store_root):
-        # Python Store deliberately refuses Native's root-level retirement marker.
+    initialization_pending = any((store_root / name).exists() or (store_root / name).is_symlink()
+        for name in (NATIVE_INITIALIZATION, NATIVE_INITIALIZATION_NEXT))
+    if native_cleanup_pending(store_root):
+        # Python Store deliberately refuses Native's root-level markers.
         # Native owns its validation/retry; do this before any Python store lease.
         pending_cleanup = current.tool(native, '--finish-resident-run', store_root)
+        if initialization_pending:
+            require(pending_cleanup.get('kind') == 'resident-initialization-aborted-v1' and
+                    pending_cleanup.get('already_published_current') is True and
+                    pending_cleanup.get('cleanup_completed') is True and
+                    pending_cleanup.get('initialization_aborted') is True and
+                    isinstance(pending_cleanup.get('initialization_binding_verified'), bool) and
+                    pending_cleanup.get('dispatched_worlds') == 0 and
+                    pending_cleanup.get('seeds_consumed') == 0 and
+                    pending_cleanup.get('new_request_allocation_committed') is False and
+                    pending_cleanup.get('neural_execution') is False and
+                    not (store_root / cp.RUN).exists() and not (store_root / cp.RUN).is_symlink() and
+                    not native_cleanup_pending(store_root),
+                    'native initialization abort did not finish; preserving owner state')
     # Finish any interrupted Python atomic publication before Native takes its lease.
     with cp.Store(store_root, validate) as store:
         actual = cp.digest(store.current)
@@ -245,6 +264,11 @@ def reconcile(lane, state, validate):
                 'no native WAL and unexpected canonical state; preserve owner record')
         recovery = {'already_published_current': actual != state['baseline_sha256']}
         cleanup = pending_cleanup or {'already_clean': True}
+        if initialization_pending:
+            require(actual == state['baseline_sha256'] == pending_cleanup['candidate_sha256'] and
+                    os.path.samefile(pending_cleanup['candidate'], store_root / cp.CURRENT),
+                    'initialization abort changed its bound current')
+            recovery = pending_cleanup
     else:
         recovery = current.tool(native, '--recover-resident', store_root)
         after = recovery['candidate_sha256']
@@ -299,7 +323,8 @@ def finish(lane, state, validate):
         'native_exit_error': state.get('native_exit_error'), 'observed_rows': rows,
         'native_exit_code': state.get('native_exit_code'),
         'recovery': recovery, 'cleanup': cleanup,
-        'one_fresh_world': True, 'same_individual_across_sessions': False,
+        'one_fresh_world': not recovery.get('initialization_aborted', False),
+        'same_individual_across_sessions': False,
         'causal_speed': rows[0].get('causal_collection') if len(rows) == 1 else None,
         'outcome_scope': 'provisional row outcomes; only native admitted snapshot is retained',
         'recent_unsnapshotted_updates_may_be_lost': True}
@@ -338,7 +363,8 @@ def run(args):
                     state['store'] == str(store_root) and state['binary'] == str(native) and
                     state['inspector'] == str(inspector), 'different resident owner')
             return retire_sidecars(lane, committed, validate) if committed is not None else finish(lane, state, validate)
-        require(not (lane / STATE).exists() and not (store_root / cp.RUN).exists(),
+        require(not (lane / STATE).exists() and not (store_root / cp.RUN).exists() and
+                not native_cleanup_pending(store_root),
                 'reconcile existing native run/owner before dispatch')
         require(all(not (lane / n).exists() and not (lane / n).is_symlink() for n in SIDECARS),
                 'unexplained prior sidecars; preserving files')

@@ -2,7 +2,8 @@
 """Consume a disposable Rust stopped-run fixture through the real Native CLIs.
 
 No GPU, world dispatch, training, production checkpoint or legacy cleanup.
-The source fixture stays unchanged; only a fresh temporary copy is published.
+The stopped-run source fixture stays unchanged. The optional separately generated
+initialization fixture is disposable and bound to its exact path by Native.
 """
 import json
 from pathlib import Path
@@ -15,7 +16,7 @@ import run_current_care as runner
 
 
 def main():
-    native, inspector, fixture = (Path(p).resolve(strict=True) for p in sys.argv[1:])
+    native, inspector, fixture = (Path(p).resolve(strict=True) for p in sys.argv[1:4])
     validate = runner.validator(inspector)
     with tempfile.TemporaryDirectory(prefix='alife-resident-native-') as temporary:
         store_root = Path(temporary) / 'store'
@@ -53,6 +54,27 @@ def main():
         print(json.dumps({'kind': 'synthetic-native-resident-recovery', 'strict_single_json': True,
                           'consumed_seeds_preserved': True, 'exact_current_published': True,
                           'bound_retirement_completed': True, 'neural_execution': False}))
+    if len(sys.argv) == 5:
+        startup = Path(sys.argv[4]).resolve(strict=True)
+        before = validate(startup / cp.CURRENT)
+        old_digest = cp.digest(startup / cp.CURRENT)
+        result = runner.tool(native, '--recover-resident', startup)
+        assert result['initialization_aborted'] is True
+        assert result['initialization_binding_verified'] is True
+        assert result['already_published_current'] is True
+        assert result['dispatched_worlds'] == result['seeds_consumed'] == 0
+        assert result['new_request_allocation_committed'] is False
+        assert result['cleanup_completed'] is True
+        assert not (startup / cp.RUN).exists()
+        for name in ('resident-initialization.bin', 'resident-initialization.next'):
+            assert not (startup / name).exists()
+        assert cp.digest(startup / cp.CURRENT) == old_digest
+        with cp.Store(startup, validate) as store:
+            assert validate(store.current) == before
+        assert runner.tool(native, '--finish-resident-run', startup)['already_clean'] is True
+        print(json.dumps({'kind': 'synthetic-native-predispatch-recovery',
+                          'strict_single_json': True, 'initialization_aborted': True,
+                          'canonical_seed_state_unchanged': True, 'neural_execution': False}))
 
 
 if __name__ == '__main__':

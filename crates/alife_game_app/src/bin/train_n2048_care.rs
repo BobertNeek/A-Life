@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "finite_continuous_feeding":true,"max_continuous_feeding_decisions":36000,
             "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":false,
             "temporary_budget_enforced_during_writes":true,
+            "recoverable_predispatch_initialization":true,
             "temporary_budget_scope":"STORE/.run logical file bytes including staging and native validation scratch",
             "cleanup_arguments":"--finish-resident-run STORE","bound_run_cleanup":true})
         );

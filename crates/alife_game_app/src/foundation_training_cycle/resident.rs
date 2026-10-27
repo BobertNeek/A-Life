@@ -18,6 +18,8 @@ const REC_MAGIC: &[u8; 16] = b"ALIFE-RES-REC-1\n";
 const RET_MAGIC: &[u8; 16] = b"ALIFE-RES-RET-1\n";
 const RETIREMENT: &str = "resident-retirement.bin";
 const RETIREMENT_NEXT: &str = "resident-retirement.next";
+mod initialization;
+use initialization::{initialization_pending, INITIALIZATION, INITIALIZATION_NEXT};
 
 // Actual typed recovery peak, NOT a bound on an episode's raw private assets.
 // One encoded candidate plus its admission materialization coexist. In a valid
@@ -273,6 +275,8 @@ fn store_lease(store: &Path) -> Result<fs::File> {
             && name != ".run"
             && name != RETIREMENT
             && name != RETIREMENT_NEXT
+            && name != INITIALIZATION
+            && name != INITIALIZATION_NEXT
         {
             return Err(
                 "resident store needs existing publication recovery or contains unknown entries"
@@ -526,21 +530,38 @@ pub fn run_resident_serial_care(
     store: &Path,
     request: ResidentSerialRequest,
 ) -> Result<serde_json::Value> {
+    run_resident_with_startup_observer(store, request, |_, _| Ok(()))
+}
+fn run_resident_with_startup_observer(
+    store: &Path,
+    request: ResidentSerialRequest,
+    mut observe: impl FnMut(&str, &Path) -> Result<()>,
+) -> Result<serde_json::Value> {
     validate_request(&request, now_seconds()?)?;
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
-    if retirement_pending(&store)? {
-        return Err("finish pending resident retirement before another producer".into());
+    if retirement_pending(&store)? || initialization_pending(&store)? {
+        return Err(
+            "finish pending resident initialization/retirement before another producer".into(),
+        );
     }
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let baseline_bytes = fs::read(&current)?;
     let baseline_hash = hash(&baseline_bytes);
     let run = store.join(".run");
+    if entry_present(&run)? {
+        return Err("resident run already exists; recover it before another producer".into());
+    }
+    let initialization = initialization::commit(&store, &baseline_hash, &request, &mut observe)?;
     fs::create_dir(&run)?;
+    sync_directory(&store)?;
+    observe("run-created", &store)?;
     let budget = alife_storage::OutputBudget::register(&run, request.max_temporary_bytes)?;
+    let initialization_capacity = budget.reserve(initialization.len() as u64)?;
     let _validation = current::validation_scope(&run)?;
     let baseline = read_current_training_checkpoint(&current)?;
+    observe("baseline-admitted", &store)?;
     let baseline_policy = baseline.handoff.policy_version;
     let initial_seeds = seeds_after(&baseline.seeds, &request, 0)?;
     let request_hash = hash(&serde_json::to_vec(&request)?);
@@ -564,6 +585,7 @@ pub fn run_resident_serial_care(
             &serde_json::json!({"schema":1,"kind":"native-resident-serial-run-v1","pid":std::process::id(),"baseline_sha256":baseline_hash,"request_sha256":request_hash}),
         )?,
     )?;
+    observe("owner-written", &store)?;
     let mut manifest = Manifest {
         schema: 1,
         baseline_sha256: baseline_hash.clone(),
@@ -573,7 +595,9 @@ pub fn run_resident_serial_care(
         previous_snapshot: None,
     };
     write_metadata(&run.join("seed-wal.bin"), WAL_MAGIC, &wal)?;
+    observe("wal-written", &store)?;
     write_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC, &manifest)?;
+    observe("frontier-written", &store)?;
     let admitted = baseline.handoff.clone().admit()?;
     let mut state = Some(AdmittedCycleState {
         asset: admitted.foundation,
@@ -588,6 +612,17 @@ pub fn run_resident_serial_care(
         objective_transition_from: None,
         resident: None,
     });
+    // The marker is the durable proof that no world has dispatched. Only retire
+    // it after ALL admission/initialization succeeded, before the first consume.
+    if fs::read(store.join(INITIALIZATION))? != initialization
+        || hash(&fs::read(&current)?) != baseline_hash
+    {
+        return Err("resident initialization/current changed before dispatch".into());
+    }
+    alife_storage::remove_file(store.join(INITIALIZATION))?;
+    sync_directory(&store)?;
+    drop(initialization_capacity);
+    observe("initialization-complete", &store)?;
     let mut completed_count = 0usize;
     let mut trained_rows = 0usize;
     let mut last_policy = baseline_policy;
@@ -708,6 +743,9 @@ pub fn run_resident_serial_care(
 pub fn recover_resident_serial_checkpoint(store: &Path) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    if initialization_pending(&store)? {
+        return initialization::abort(&store);
+    }
     if retirement_pending(&store)? {
         drop(_lease);
         let finished = finish_resident_serial_run(&store)?;
@@ -999,6 +1037,9 @@ fn finish_resident_with_remove(
 ) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
+    if initialization_pending(&store)? {
+        return initialization::abort(&store);
+    }
     let run = store.join(".run");
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;

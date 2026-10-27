@@ -41,7 +41,8 @@ baseline, rather than bypass the quota.
 Use a verified exact-source native build containing the finite-row bridge,
 causal metrics, bound cleanup and completed shared active-write quota repair.
 The launcher rejects old binaries lacking the contract flag
-`temporary_budget_enforced_during_writes=true`. Inspect the build receipt and
+`temporary_budget_enforced_during_writes=true` or
+`recoverable_predispatch_initialization=true`. Inspect the build receipt and
 binary/inspector SHA-256 before supplying their explicit hashes. A caller's hash
 alone does not authenticate a binary's source revision. The source checkout must
 be clean and the current checkpoint already fully admitted. The initial GPU
@@ -122,6 +123,15 @@ receipt to coexist without granting it authority over the new session's files.
 Pending Native `resident-retirement.bin` or `resident-retirement.next` is finished by Native
 before Python Store admission while the stopped run owner is still available;
 an old final receipt cannot retire a different Native run.
+The same pre-Store routing handles Native `resident-initialization.bin` and
+`resident-initialization.next` under the stopped startup owner. Native admits the
+bound current and aborts only that known zero-dispatch initialization; the host
+does not publish a replacement or consume a seed. A fresh launch and a completed
+old receipt both refuse those markers rather than adopting another startup.
+For a torn first stage, Native may honestly report
+`initialization_binding_verified=false`; retain that distinction instead of
+claiming a complete request binding. The host still checks the unchanged
+admitted baseline and canonical candidate after the zero-dispatch abort.
 
 ## Measurement and first comparison
 
