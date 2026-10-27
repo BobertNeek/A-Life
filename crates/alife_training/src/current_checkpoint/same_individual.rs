@@ -23,6 +23,7 @@ pub struct SameIndividualProgressV1 {
 pub struct SameIndividualCurrentV1 {
     pub schema: u16,
     pub kind: String,
+    pub counting_scope: String,
     pub progress: SameIndividualProgressV1,
     pub baseline_current_sha256: String,
     pub baseline_policy_version: u64,
@@ -149,7 +150,8 @@ fn private_binding(
 impl SameIndividualCurrentV1 {
     pub fn validate(&self, current: &CurrentTrainingCheckpointV1) -> Result<()> {
         let p = &self.progress;
-        if self.schema != 1
+        if self.counting_scope != "retained-same-individual-ppo-since-first-tag"
+            || self.schema != 1
             || self.kind != "same-individual-ppo-v1"
             || current.handoff.continuation != FoundationContinuationKindV1::SameIndividual
             || p.session_nonce == 0
@@ -249,6 +251,7 @@ impl CurrentTrainingCheckpointV1 {
         let tag = SameIndividualCurrentV1 {
             schema: 1,
             kind: "same-individual-ppo-v1".into(),
+            counting_scope: "retained-same-individual-ppo-since-first-tag".into(),
             baseline_current_sha256: format!("{:x}", Sha256::digest(self.encode()?)),
             baseline_policy_version: self.handoff.policy_version,
             baseline_actor_optimizer_step: self.handoff.actor.optimizer_step,
