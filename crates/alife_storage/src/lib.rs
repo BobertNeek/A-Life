@@ -582,6 +582,12 @@ pub fn replace_with(
     if moved.iter().any(|(_, e)| e.writers != 0) {
         return Err(invalid("cannot rename an active output writer"));
     }
+    if s.entries
+        .iter()
+        .any(|(p, e)| p.starts_with(&dst) && e.writers != 0)
+    {
+        return Err(invalid("cannot replace an active destination writer"));
+    }
     replace()?;
     let removed = s
         .entries
