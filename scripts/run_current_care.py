@@ -9,12 +9,15 @@ import argparse
 from collections import OrderedDict
 from copy import deepcopy
 import datetime as dt
+import hashlib
 import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
+import struct
 import sys
 import uuid
 
@@ -202,6 +205,63 @@ def new_candidate(run):
     return run / (uuid.uuid4().hex + '.alife-checkpoint')
 
 
+def consumed_cursor_bytes(data, seed):
+    """Change only canonical V1 seed metadata; preserve all learned bytes.
+
+    This is a byte edit, not admission. The caller must admit both source and
+    resulting candidate with the pinned native validator before publication.
+    Unrecognized/noncanonical encodings use the ordinary native mutation path.
+    """
+    if len(data) < 56 or data[:16] != b'ALIFE-CURRENT-1\n':
+        return None
+    require(len(data) <= checkpoints.MAX_BYTES and
+            struct.unpack('<Q', data[16:24])[0] == len(data)-56 and
+            hashlib.sha256(data[56:]).digest() == data[24:56],
+            'current cursor source length/digest mismatch')
+    payload = data[56:]
+    prefix = re.match(rb'\A\{"schema_version":1,"seed":[0-9]+,"founder_seed_base":[0-9]+,"seeds":', payload)
+    if prefix is None:
+        return None
+    start = prefix.end()
+    metadata, length = json.JSONDecoder().raw_decode(payload[start:].decode('utf-8'))
+    # Native seed metadata contains only ASCII; the remainder is never
+    # reconstructed, so f32 lexemes, private saves and assets remain exact.
+    old = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
+    if payload[start:start+length] != old or payload[start+length:start+length+11] != b',"handoff":':
+        return None
+    require(isinstance(metadata, dict) and set(metadata) ==
+            {'historical_freshness', 'excluded_ranges', 'pending_range'}, 'invalid cursor seed metadata')
+    pending = metadata['pending_range']
+    require(type(seed) is int and 1 <= seed <= 2**64-1 and isinstance(pending, list) and
+            len(pending) == 2 and all(type(x) is int for x in pending) and
+            1 <= pending[0] <= pending[1] <= 2**64-1 and seed == pending[0],
+            'dispatch must consume the next owned seed')
+    metadata['pending_range'] = [seed+1, pending[1]] if seed < pending[1] else None
+    replacement = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
+    changed = payload[:start] + replacement + payload[start+length:]
+    require(len(changed)+56 <= checkpoints.MAX_BYTES, 'current cursor candidate exceeds byte limit')
+    return b'ALIFE-CURRENT-1\n' + struct.pack('<Q', len(changed)) + hashlib.sha256(changed).digest() + changed
+
+
+def consume_current(store, state, seed, candidate):
+    before = checkpoints.digest(store.current)
+    old = store.validate(store.current)
+    data = store.current.read_bytes()
+    require(hashlib.sha256(data).hexdigest() == before, 'current changed during cursor preparation')
+    changed = consumed_cursor_bytes(data, seed) if old.get('kind') == 'single-current-training-checkpoint' else None
+    if changed is None:
+        return owned_tool(store, state, '--consume-current', store.current, seed, candidate)
+    checkpoints.write_new(candidate, changed)
+    report = store.validate(candidate)  # Full private/native admission for these new bytes.
+    expected = deepcopy(old)
+    first, last = expected['seeds']['pending_range']
+    require(first == seed, 'native source cursor differs from encoded cursor')
+    expected['seeds']['pending_range'] = [first+1, last] if first < last else None
+    require(report == expected, 'cursor mutation changed native learned-state identity')
+    require(checkpoints.digest(store.current) == before, 'current changed during cursor admission')
+    return report
+
+
 def clean_attempt(store, state):
     """Called only after durable acceptance or explicit stopped-unsealed reconciliation."""
     run = store.root / checkpoints.RUN
@@ -295,7 +355,7 @@ def reconcile(store, *, abandon_unsealed=False):
         clean_attempt(store, state)
         return state
     receipt, _ = mixed.inspector_io.load_json(episode / 'cycle.json', mixed.seeds.MAX_DOCUMENT_BYTES)
-    old = tool(binary, '--inspect-current', store.current)
+    old = store.validate(store.current)
     mixed.validate_receipt(receipt, old, state['rows'][state['cursor']], attempt['seed'])
     require(host.sha256(episode / 'initial.alife-foundation') == old['asset_sha256'], 'episode initial asset changed')
     candidate = new_candidate(run)
@@ -377,7 +437,7 @@ def execute(store, state):
         shutil.copyfile(store.current, source)
         before = checkpoints.digest(store.current)
         consumed = new_candidate(run)
-        owned_tool(store, state, '--consume-current', store.current, seed, consumed)
+        consume_current(store, state, seed, consumed)
         after = checkpoints.digest(consumed)
         state['attempt'] = {'seed': seed, 'before': after,
                             'consumption': {'before': before, 'after': after, 'file': consumed.name}}
