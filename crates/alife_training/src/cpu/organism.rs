@@ -516,8 +516,11 @@ fn waking_fast_update(
     max: f32,
 ) -> Result<f32, TrainingError> {
     let effective = genetic + lifetime + alpha * fast;
-    let delta =
-        learning_rate * alpha * factor * eligibility - normalization_rate * post * post * effective;
+    // Match WGSL fast_plasticity_delta: both terms follow this synapse's
+    // outcome-decayed credit, including its magnitude on normalization.
+    let signed_credit = factor * eligibility;
+    let delta = learning_rate * alpha * signed_credit
+        - normalization_rate * signed_credit.abs() * post * post * effective;
     let next = fast + delta;
     finite(&[effective, delta, next])?;
     Ok(next.clamp(min, max))
@@ -888,11 +891,94 @@ mod tests {
     fn waking_hebbian_oja_uses_all_three_weight_components_and_alpha() {
         let next =
             waking_fast_update(0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 0.1, 0.2, -0.5, -1., 1.).unwrap();
-        // Effective=.7, Hebbian=-.02, Oja=-.0504, fast=.3296.
-        assert!((next - 0.3296).abs() < 1e-6);
+        // Effective=.7, signed credit=-.4, Hebbian=-.02, Oja=-.02016.
+        assert!((next - 0.35984).abs() < 1e-6);
         assert!(
             waking_fast_update(f32::MAX, f32::MAX, 0., 0., 0., 0., 0., 0., 0., -1., 1.).is_err()
         );
+    }
+    #[test]
+    fn waking_normalization_follows_signed_local_credit_magnitude() {
+        // Same ordinary update as the production WGSL law: inherited .2,
+        // lifetime .3 and expressed fast .5*.4 give effective strength .7.
+        // Opposite signs reverse the Hebbian drive, never the contraction.
+        for (factor, eligibility, expected) in [
+            (0.0, 0.8, 0.4),
+            (0.5, 0.0, 0.4),
+            (-0.5, 0.0, 0.4),
+            (0.5, 0.8, 0.39984),
+            (-0.5, 0.8, 0.35984),
+            (0.5, -0.8, 0.35984),
+            (-0.5, -0.8, 0.39984),
+        ] {
+            let next = waking_fast_update(
+                0.2,
+                0.3,
+                0.4,
+                0.5,
+                0.6,
+                eligibility,
+                0.1,
+                0.2,
+                factor,
+                -1.,
+                1.,
+            )
+            .unwrap();
+            assert!(
+                (next - expected).abs() < 1e-7,
+                "factor={factor}, eligibility={eligibility}: {next} != {expected}"
+            );
+            if factor == 0.0 || eligibility == 0.0 {
+                assert_eq!(next.to_bits(), 0.4_f32.to_bits());
+            }
+        }
+        // A receptor event cannot erase retained fast state on an uncredited
+        // route/readout, even across repeated outcomes with an active post.
+        let mut fast = 0.4;
+        for factor in [0.0, 0.5, -0.5].into_iter().cycle().take(1000) {
+            fast = waking_fast_update(0.2, 0.3, fast, 0.5, 0.6, 0.0, 0.1, 0.2, factor, -1., 1.)
+                .unwrap();
+        }
+        assert_eq!(fast.to_bits(), 0.4_f32.to_bits());
+    }
+    #[test]
+    fn waking_fast_update_matches_documented_production_coordination_vectors() {
+        // Independent numeric vectors recorded with the final WGSL law in
+        // docs/reports/oja-plasticity-credit-2026-10-20.md. No device is used.
+        for (factor, expected_delta) in [
+            (0.0, 0.0),
+            (0.01, 0.0000092),
+            (-0.01, -0.0000108),
+            (1.0, 0.00092),
+            (-1.0, -0.00108),
+        ] {
+            let next =
+                waking_fast_update(0.5, 0.25, 0.2, 0.25, 0.5, 0.4, 0.01, 0.001, factor, -2., 2.)
+                    .unwrap();
+            assert!(
+                (next - (0.2 + expected_delta)).abs() < 2e-8,
+                "factor={factor}: {next}"
+            );
+        }
+    }
+    #[test]
+    fn waking_credit_gating_preserves_clipping_and_alpha_semantics() {
+        for (factor, expected) in [(1.0, 0.5), (-1.0, -0.5)] {
+            assert_eq!(
+                waking_fast_update(0.2, 0.3, 0.4, 1., 0.6, 1., 1., 0.2, factor, -0.5, 0.5).unwrap(),
+                expected
+            );
+        }
+        // Zero credit still enforces existing bounds on already invalid fast
+        // values. Alpha zero suppresses drive, not eligible normalization.
+        assert_eq!(
+            waking_fast_update(0.2, 0.3, 2., 0.5, 0.6, 0., 0.1, 0.2, 0., -1., 1.).unwrap(),
+            1.
+        );
+        let latent =
+            waking_fast_update(0.2, 0.3, 0.4, 0., 0.6, 0.8, 0.1, 0.2, -0.5, -1., 1.).unwrap();
+        assert!((latent - 0.3856).abs() < 1e-7);
     }
     #[test]
     fn eligibility_decay_uses_elapsed_simulation_ticks_including_high_word() {

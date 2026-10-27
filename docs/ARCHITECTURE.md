@@ -87,10 +87,14 @@ inheritance path. A sealed biology snapshot stores the expressed profile and
 validates it against its phenotype; the world cannot choose those weights.
 
 Baseline dopamine and cortisol modulate measured consequences rather than
-rewarding/punishing an action merely for existing. In WGSL waking fast plasticity
-(`closed_loop_plasticity.wgsl`), Oja homeostatic normalization is gated by
-`clamp(abs(local_third_factor * credited_eligibility), 0.0, 1.0)` so unrewarded
-activity does not decay `genetic + lifetime` weights. The founder PPO objective
+rewarding/punishing an action merely for existing. WGSL waking fast plasticity
+(`closed_loop_plasticity.wgsl`) and the opt-in native CPU backend use the same
+per-synapse credit `q = local_third_factor * credited_eligibility`, with
+`delta_fast = learning_rate * alpha * q - normalization_rate * abs(q) * post^2 * effective`.
+Thus zero local credit does not cancel expressed genetic/lifetime strength through
+fast weights; existing fast-weight bounds still apply. This corrects future CPU
+updates without rewriting acquired state, changing GPU arithmetic or migrating
+checkpoints. The founder PPO objective
 uses this same causal frame and the inherited action-credit receptor profile.
 
 ## Production voxel startup
