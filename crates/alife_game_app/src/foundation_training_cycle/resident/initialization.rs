@@ -213,7 +213,7 @@ fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -
                     dispatched: 0,
                     seeds,
                 },
-            )?;
+            );
             let frontier = envelope(
                 MAN_MAGIC,
                 &Manifest {
@@ -224,29 +224,37 @@ fn validate_startup_tree(run: &Path, record: &Initialization, baseline: &[u8]) -
                     snapshot: None,
                     previous_snapshot: None,
                 },
-            )?;
-            for name in ["seed-wal.bin", "seed-wal.next"] {
-                expected.insert(PathBuf::from(name), wal.clone());
+            );
+            if let Ok(wal) = wal {
+                for name in ["seed-wal.bin", "seed-wal.next"] {
+                    expected.insert(PathBuf::from(name), wal.clone());
+                }
             }
-            for name in ["resident-frontier.bin", "resident-frontier.next"] {
-                expected.insert(PathBuf::from(name), frontier.clone());
+            if let Ok(frontier) = frontier {
+                for name in ["resident-frontier.bin", "resident-frontier.next"] {
+                    expected.insert(PathBuf::from(name), frontier.clone());
+                }
             }
         }
         if let Some(life) = baseline.life {
             let work = PathBuf::from(WORKSPACE).join("work");
             for name in life.assets_base64.keys() {
                 let path = Path::new(name);
-                if name.contains(['\\', ':'])
+                if name.is_empty()
+                    || name.contains(['\\', ':'])
+                    || name.split('/').any(|p| matches!(p, "" | "." | ".."))
                     || !path
                         .components()
                         .all(|c| matches!(c, std::path::Component::Normal(_)))
                 {
-                    return Err("invalid initialization private asset path".into());
+                    continue;
                 }
-                expected.insert(
-                    work.join("world-assets").join(path),
-                    life.asset_bytes(name)?,
-                );
+                // Native computes/decode-validates bytes before creating this
+                // leaf. Failed derivation must not strand an otherwise empty
+                // initialization; a leaf without valid expected bytes refuses.
+                if let Ok(bytes) = life.asset_bytes(name) {
+                    expected.insert(work.join("world-assets").join(path), bytes);
+                }
             }
             expected.insert(work.join("world.json"), life.world_json.into_bytes());
             expected.insert(

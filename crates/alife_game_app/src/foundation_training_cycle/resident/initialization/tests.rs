@@ -276,5 +276,34 @@ fn output_budget_initialization_failed_admission_can_abort_without_certifying_in
         interrupt(store, &request, "frontier-written");
         finish_resident_serial_run(store).unwrap();
         unchanged(store, &reserved_bytes);
+        let mut oversized = alife_training::CurrentTrainingCheckpointV1::decode(original).unwrap();
+        oversized
+            .seeds
+            .excluded_ranges
+            .extend((0..40_000u64).map(|i| {
+                let first = 1_000_000_000_000 + i * 4;
+                [first, first]
+            }));
+        let oversized_bytes = oversized.encode().unwrap();
+        assert!(serde_json::to_vec(&oversized.seeds).unwrap().len() > MAX_METADATA);
+        fs::write(store.join("current.alife-checkpoint"), &oversized_bytes).unwrap();
+        assert!(run_resident_serial_care(store, request.clone()).is_err());
+        finish_resident_serial_run(store).unwrap();
+        unchanged(store, &oversized_bytes);
+        let mut invalid_asset =
+            alife_training::CurrentTrainingCheckpointV1::decode(original).unwrap();
+        *invalid_asset
+            .life
+            .as_mut()
+            .unwrap()
+            .assets_base64
+            .values_mut()
+            .next()
+            .unwrap() = "invalid base64!".into();
+        let invalid_asset_bytes = invalid_asset.encode().unwrap();
+        fs::write(store.join("current.alife-checkpoint"), &invalid_asset_bytes).unwrap();
+        assert!(run_resident_serial_care(store, request).is_err());
+        finish_resident_serial_run(store).unwrap();
+        unchanged(store, &invalid_asset_bytes);
     });
 }
