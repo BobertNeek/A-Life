@@ -90,6 +90,43 @@ sleep-censoring semantics. Offline world/scheduler fixtures use synthetic neural
 selection/consolidation and do not establish autonomous eating, sleep, or waking
 on a learned policy.
 
+### Native CPU need-condition comparison
+
+The disposable collector evaluation runs the native N2048 decision loop without
+a graphics device or a retained checkpoint:
+
+```sh
+VK_ICD_FILENAMES=/no-vulkan-icd.json cargo test --locked -p alife_training --features cpu-backend --test cpu_collector native_need_switching -- --nocapture
+```
+
+It compares one untrained procedural founder with identical initial private
+neural state and sampling seed across hungry/fatigued, fed/fatigued and
+fed/rested preparations. Ordinary aging, scripted legal Eat and Rest establish
+those conditions before neural collection. Elapsed time, pose and each layout's
+unscored candidates are matched; all resulting drive/hormone values are reported.
+These are whole physiological conditions, not isolated single-drive ablations.
+Nearby food removes the navigation requirement; distant forward and rearward
+food check movement and sensory access. The eight-tick native windows report
+candidate logits, representative choices, Rest channels, consumption and movement.
+Exact checkpoint replay must reproduce the decisions and final private state;
+the shared founder/optimizer remains unchanged. No checkpoint is written or promoted.
+
+Native CPU ticks commit their observed tracking identities with their decisions.
+Canonical private CPU checkpoints use schema2, retaining each observer's
+tracked-object records and next-ID cursor. Read-only semantic-prior priming stages
+perception on a world copy. Schema1 checkpoint bytes remain decodable for
+inspection, but exact private-life restore rejects them: their omitted tracking
+state cannot be recovered from the saved neural tensors. There is no automatic
+migration. Founder/Adam continuation into a fresh CPU cohort is a separate path
+and does not restore the previous individual's life. GPU save formats are unchanged.
+
+This evaluates CPU execution and the comparison controls. It does not qualify
+the accepted trained GPU brain, autonomous setup actions, generalization, or a
+same-life eating/sleep/waking sequence. The collector's existing
+`forced_sleep_completes_wake_and_resumes_real_decisions` test separately exercises
+native CPU consolidation and subsequent decisions after an explicit recovery
+request; that request is not autonomous neural Rest.
+
 ### Controls & UI
 
 - **Menu**: `Escape` or the menu button opens the pause menu (Play, Save, Load, Speed, Settings, Quit).
