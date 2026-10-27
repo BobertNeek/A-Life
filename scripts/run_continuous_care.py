@@ -40,6 +40,7 @@ HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_
            'run_mixed_care_serial.py', 'run_eat_held_food_night.py',
            'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py', 'care_night_window.py')
 OWNER_RECOVERY_SECONDS = 60
+WORLD_TICKS_PER_SECOND = 20
 
 
 def producer_mode(args):
@@ -139,7 +140,8 @@ def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
         require(all(report.get(field) is True for field in ('same_individual_ppo',
                 'restore_current_private_world', 'full_sampling_state_checkpoint', 'in_world_cutoff')) and
                 report.get('max_total_trained_decisions', 0) >= total_decisions and
-                report.get('max_decisions_per_update', 0) >= decisions,
+                report.get('max_decisions_per_update', 0) >= decisions and
+                report.get('world_ticks_per_second') == WORLD_TICKS_PER_SECOND,
                 'native same-individual restore/PPO/sampling/cutoff capabilities required; no fresh-world fallback')
 
 
@@ -390,7 +392,10 @@ def finish(lane, state, validate):
     elif len(rows) == 1 and admitted['policy_version'] == rows[0]['policy_version']:
         retained_rows = rows[0]['trained_rows']
     if mode == 'same_individual':
-        retained_rows = retained_continuous_rows(state['before'], admitted, updates)
+        retained_rows = retained_continuous_rows(state['before'], admitted, updates,
+            baseline_sha256=state['baseline_sha256'], session_nonce=state['request']['seed_range'][0])
+    progress = bound_continuous_progress(state['before'], admitted, state['baseline_sha256'],
+        state['request']['seed_range'][0]) if mode == 'same_individual' else None
     receipt = {'kind': 'finite-continuous-care-v1', 'ended_utc': dt.datetime.now(host.UTC).isoformat(),
         'source': state['checkout'], 'executables': state['executables'],
         'native_argv': state['native_argv'], 'prior_environment': state['prior_environment'],
@@ -412,7 +417,13 @@ def finish(lane, state, validate):
         'native_exit_code': state.get('native_exit_code'),
         'recovery': recovery, 'cleanup': cleanup,
         'one_fresh_world': mode == 'fresh_world' and not recovery.get('initialization_aborted', False),
-        'same_individual_across_sessions': mode == 'same_individual' and not recovery.get('initialization_aborted', False),
+        'same_individual_across_sessions': progress is not None if mode == 'same_individual' else False,
+        'retained_continuous_progress': progress,
+        'retained_simulation_seconds': progress['unique_world_ticks'] / WORLD_TICKS_PER_SECOND
+            if progress is not None else None,
+        'retained_simulation_seconds_per_host_second':
+            progress['unique_world_ticks'] / WORLD_TICKS_PER_SECOND / elapsed
+            if progress is not None and elapsed > 0 else None,
         'causal_speed': rows[0].get('causal_collection') if len(rows) == 1 else None,
         'outcome_scope': 'provisional row outcomes; only native admitted snapshot is retained',
         'recent_unsnapshotted_updates_may_be_lost': True}
@@ -426,12 +437,59 @@ def finish(lane, state, validate):
     return retire_sidecars(lane, receipt, validate)
 
 
-def retained_continuous_rows(before, admitted, updates):
-    """Count only a complete emitted prefix ending at the admitted snapshot.
+def bound_continuous_progress(before, admitted, baseline_sha256, session_nonce):
+    """Use Native-admitted counters bound to THIS baseline and session.
+
+    Totals begin at the first explicit same-individual tag; they do not fabricate
+    older lineage exposure. The native validator owns exact private/head hashes.
+    """
+    tag = admitted.get('same_individual')
+    previous = before.get('same_individual')
+    if not isinstance(tag, dict) or (previous is not None and not isinstance(previous, dict)):
+        return None
+    p = tag.get('progress')
+    if not isinstance(p, dict) or tag.get('baseline_current_sha256') != baseline_sha256:
+        return None
+    for key in ('policy_version', 'actor_optimizer_step', 'value_optimizer_step'):
+        if tag.get('baseline_' + key) != before[key]:
+            return None
+    fields = ('trained_rows', 'completed_updates')
+    for key in fields:
+        base = previous.get('total_' + key) if previous else 0
+        if (type(base) is not int or base < 0 or type(p.get(key)) is not int or p[key] < 0 or
+                tag.get('baseline_' + key) != base or type(tag.get('total_' + key)) is not int or
+                tag['total_' + key] != base + p[key]):
+            return None
+    if (type(p.get('session_nonce')) is not int or p['session_nonce'] != session_nonce or
+            type(p.get('organism_id')) is not int or p['organism_id'] <= 0 or
+            any(type(p.get(k)) is not int or p[k] < 0 for k in ('session_start_world_tick', 'world_tick')) or
+            p['world_tick'] < p['session_start_world_tick'] or
+            p['trained_rows'] > p['world_tick'] - p['session_start_world_tick'] or
+            p['completed_updates'] != admitted['policy_version'] - before['policy_version']):
+        return None
+    if previous and p['organism_id'] != previous.get('progress', {}).get('organism_id'):
+        return None
+    return {'trained_rows': p['trained_rows'], 'completed_updates': p['completed_updates'],
+        'unique_world_ticks': p['world_tick'] - p['session_start_world_tick'],
+        'session_start_world_tick': p['session_start_world_tick'], 'world_tick': p['world_tick'],
+        'organism_id': p['organism_id'], 'session_nonce': session_nonce,
+        'counting_scope': 'this session; cumulative totals begin at first explicit same-individual tag'}
+
+
+def retained_continuous_rows(before, admitted, updates, *, baseline_sha256=None, session_nonce=None):
+    """Prefer exact Native-admitted counters; legacy helper use may count a prefix.
 
     Missing/invalid telemetry is unknown, never a reason to discard an otherwise
     valid recovered brain. Provisional later updates are not claimed retained.
     """
+    if baseline_sha256 is not None:
+        progress = bound_continuous_progress(before, admitted, baseline_sha256, session_nonce)
+        if progress is not None:
+            return progress['trained_rows']
+        if all(admitted[key] == before[key] for key in
+               ('policy_version', 'actor_optimizer_step', 'value_optimizer_step')):
+            return 0
+        return None
     count = admitted['policy_version'] - before['policy_version']
     if count == 0:
         return 0
@@ -529,6 +587,8 @@ def run(args):
             'guard_configuration': {key: getattr(args, key) for key in ('idle_seconds', 'min_disk_gib',
                 'min_memory_gib', 'gpu_index', 'max_gpu_c', 'min_gpu_free_mib', 'final_reserve_seconds')},
             'worker': {'pid': None, 'stopped': True}}
+        if mode == 'same_individual':
+            state['before']['same_individual'] = before.get('same_individual')
         if night is not None:
             state['nightly_window'] = night.manifest(args.final_reserve_seconds)
         cp.write_json(lane / STATE, state)

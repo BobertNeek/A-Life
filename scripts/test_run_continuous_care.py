@@ -393,7 +393,8 @@ class ContinuousCareTests(unittest.TestCase):
         if argv[0] == '--resident-contract':
             report.update(same_individual_ppo=True, restore_current_private_world=True,
                 full_sampling_state_checkpoint=True, in_world_cutoff=True,
-                max_total_trained_decisions=10_000_000, max_decisions_per_update=36000)
+                max_total_trained_decisions=10_000_000, max_decisions_per_update=36000,
+                world_ticks_per_second=20)
         return report
 
     def continuous_producer(self, argv, log, deadline, guard, environment, on_started):
@@ -419,6 +420,12 @@ class ContinuousCareTests(unittest.TestCase):
             candidate['seeds']['pending_range'] = [first + 1, last] if first < last else None
             candidate.update(policy_version=42, actor_optimizer_step=104, value_optimizer_step=206)
             candidate['private_lifetime'] = [7, 8]
+            candidate['same_individual'] = {'baseline_current_sha256': cp.digest(self.store / cp.CURRENT),
+                'baseline_policy_version':40, 'baseline_actor_optimizer_step':100,
+                'baseline_value_optimizer_step':200, 'baseline_trained_rows':0, 'baseline_completed_updates':0,
+                'total_trained_rows':1024, 'total_completed_updates':2,
+                'progress':{'session_nonce':first, 'organism_id':1, 'session_start_world_tick':100,
+                    'world_tick':1126, 'trained_rows':1024, 'completed_updates':2, 'sampling_temperature':1.0}}
             cp.write_json(run / 'recovered-current.alife-checkpoint', candidate)
             # A later provisional event is deliberately absent from the admitted snapshot.
             events = [{'kind': 'resident-continuous-update-v1', 'policy_version': 41+i,
@@ -459,6 +466,8 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertEqual(receipt['after']['value_optimizer_step'], 206)
         self.assertFalse(receipt['one_fresh_world'])
         self.assertTrue(receipt['same_individual_across_sessions'])
+        self.assertEqual(receipt['retained_continuous_progress']['unique_world_ticks'], 1026)
+        self.assertEqual(receipt['retained_simulation_seconds'], 51.3)
         self.assertIsNone(receipt['causal_speed'])
         self.assertFalse((self.store / cp.RUN).exists())
 
@@ -491,6 +500,23 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertIsNone(session.retained_continuous_rows(before, admitted, updates[1:]))
         updates[-1]['actor_optimizer_step'] = 999
         self.assertIsNone(session.retained_continuous_rows(before, admitted, updates))
+
+    def test_admitted_counters_count_without_logs_but_reject_wrong_session_or_baseline(self):
+        before={'policy_version':40,'actor_optimizer_step':100,'value_optimizer_step':200,'same_individual':None}
+        admitted={'policy_version':42,'actor_optimizer_step':104,'value_optimizer_step':206,
+            'same_individual':{'baseline_current_sha256':'baseline', 'baseline_policy_version':40,
+                'baseline_actor_optimizer_step':100,'baseline_value_optimizer_step':200,
+                'baseline_trained_rows':0,'baseline_completed_updates':0,'total_trained_rows':1024,
+                'total_completed_updates':2,'progress':{'session_nonce':80,'organism_id':1,
+                    'session_start_world_tick':100,'world_tick':1126,'trained_rows':1024,'completed_updates':2}}}
+        self.assertEqual(session.retained_continuous_rows(before,admitted,[],
+            baseline_sha256='baseline',session_nonce=80),1024)
+        self.assertIsNone(session.retained_continuous_rows(before,admitted,[],
+            baseline_sha256='changed',session_nonce=80))
+        self.assertIsNone(session.retained_continuous_rows(before,admitted,[],
+            baseline_sha256='baseline',session_nonce=81))
+        admitted['same_individual']['total_trained_rows']=1025
+        self.assertIsNone(session.bound_continuous_progress(before,admitted,'baseline',80))
 
     def test_restore_mode_refuses_need_repreparation_and_invalid_horizon(self):
         args = self.live_args()
