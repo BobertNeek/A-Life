@@ -255,10 +255,6 @@ pub fn budget_for(path: impl AsRef<Path>) -> io::Result<Option<OutputBudget>> {
     let key = resolved(path)?;
     let registry = lock(REGISTRY.get_or_init(|| Mutex::new(Vec::new())))?;
     for inner in registry.iter().filter_map(Weak::upgrade) {
-        let m = fs::symlink_metadata(&inner.root)?;
-        if reparse(&m) || !m.is_dir() || fs::canonicalize(&inner.root)? != inner.root {
-            return Err(invalid("registered output root changed"));
-        }
         let mut belongs = key.starts_with(&inner.root);
         // A descendant reparse point can resolve out of the root. Recognize its
         // existing root ancestor rather than silently treating it as unscoped.
@@ -268,6 +264,10 @@ pub fn budget_for(path: impl AsRef<Path>) -> io::Result<Option<OutputBudget>> {
                 .any(|p| fs::canonicalize(p).is_ok_and(|p| p == inner.root));
         }
         if belongs {
+            let m = fs::symlink_metadata(&inner.root)?;
+            if reparse(&m) || !m.is_dir() || fs::canonicalize(&inner.root)? != inner.root {
+                return Err(invalid("registered output root changed"));
+            }
             let absolute = if path.is_absolute() {
                 path.to_path_buf()
             } else {

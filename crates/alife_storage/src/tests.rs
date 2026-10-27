@@ -71,6 +71,18 @@ fn concurrent_writers_share_one_cap() {
 }
 
 #[test]
+fn retired_other_scope_does_not_break_an_independent_writer() {
+    let retired = Fixture::new();
+    let a = OutputBudget::register(&retired.0, 4).unwrap();
+    let live = Fixture::new();
+    let b = OutputBudget::register(&live.0, 4).unwrap();
+    remove_dir_all(&retired.0).unwrap();
+    write(live.0.join("payload"), b"1234").unwrap();
+    assert_eq!(a.usage().unwrap().used, 0);
+    assert_eq!(b.usage().unwrap().used, 4);
+}
+
+#[test]
 fn retained_worker_handle_survives_initiating_handle_drop() {
     let f = Fixture::new();
     let b = OutputBudget::register(&f.0, 8).unwrap();

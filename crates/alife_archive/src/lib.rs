@@ -598,13 +598,17 @@ impl LineageLibrary {
 
         let output_budget = alife_storage::budget_for(&config.root)?;
         let database = config.root.join("lineage.db");
-        let connection = match open_index(&database, output_budget.is_some()) {
-            Ok(connection) => connection,
-            Err(_) => {
-                if database.exists() {
-                    alife_storage::remove_file(&database)?;
+        let connection = if output_budget.is_some() {
+            open_index(&database, true)?
+        } else {
+            match open_index(&database, false) {
+                Ok(connection) => connection,
+                Err(_) => {
+                    if database.exists() {
+                        alife_storage::remove_file(&database)?;
+                    }
+                    open_index(&database, false)?
                 }
-                open_index(&database, output_budget.is_some())?
             }
         };
         let mut library = Self {

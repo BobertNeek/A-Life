@@ -837,10 +837,11 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
     let _lease = store_lease(store)?;
     let store = store.canonicalize()?;
     let current = store.join("current.alife-checkpoint");
-    let checkpoint = read_current_training_checkpoint(&current)?;
+    regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let current_hash = hash(&fs::read(&current)?);
     let run = store.join(".run");
     if !run.exists() {
+        let checkpoint = read_current_training_checkpoint(&current)?;
         return Ok(
             serde_json::json!({"kind":"resident-cleanup-v1","removed_run":false,
             "already_clean":true,"current_sha256":current_hash,"policy_version":checkpoint.handoff.policy_version,
@@ -849,6 +850,17 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
     }
     directory(&run)?;
     let manifest: Manifest = read_metadata(&run.join("resident-frontier.bin"), MAN_MAGIC)?;
+    validate_request(
+        &manifest.request,
+        manifest
+            .request
+            .collection_cutoff_unix_seconds
+            .saturating_sub(1),
+    )?;
+    let _budget =
+        alife_storage::OutputBudget::register(&run, manifest.request.max_temporary_bytes)?;
+    let _validation = current::validation_scope(&run)?;
+    let checkpoint = read_current_training_checkpoint(&current)?;
     let wal: SeedWal = read_metadata(&run.join("seed-wal.bin"), WAL_MAGIC)?;
     let intent: serde_json::Value = read_metadata(&run.join("recovery-intent.bin"), REC_MAGIC)?;
     regular(&run.join("run.json"), MAX_METADATA as u64)?;
@@ -880,6 +892,10 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
         let entry = entry?;
         let metadata = fs::symlink_metadata(entry.path())?;
         let name = entry.file_name();
+        if name == "alife-current-private-validation-v1" {
+            validate_completed_validation_workspace(&entry.path())?;
+            continue;
+        }
         if reparse(&metadata)
             || !cleanup_entry_is_owned(
                 name.to_str().ok_or("non-UTF8 resident cleanup entry")?,
@@ -895,7 +911,7 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
         .snapshot
         .as_ref()
         .map_or(0, |s| s.completed_episodes);
-    fs::remove_dir_all(&run)?;
+    alife_storage::remove_dir_all(&run)?;
     sync_directory(&store)?;
     Ok(
         serde_json::json!({"kind":"resident-cleanup-v1","removed_run":true,"already_clean":false,
@@ -904,6 +920,20 @@ pub fn finish_resident_serial_run(store: &Path) -> Result<serde_json::Value> {
         "uncheckpointed_work_may_be_lost":wal.dispatched>retained,
         "neural_execution":false,"canonical_current_modified":false}),
     )
+}
+
+fn validate_completed_validation_workspace(path: &Path) -> Result<()> {
+    directory(path)?;
+    let entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
+    if entries.len() != 1 || entries[0].file_name() != "lease" {
+        return Err("unknown or active private admission workspace; preserving run".into());
+    }
+    let lease = path.join("lease");
+    regular(&lease, 128)?;
+    if fs::read(lease)? != b"alife-current-private-validation-v1\n" {
+        return Err("private admission workspace lease marker differs".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

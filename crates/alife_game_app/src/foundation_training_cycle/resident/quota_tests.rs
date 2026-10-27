@@ -99,4 +99,12 @@ fn output_budget_exhaustion_still_recovers_consumed_seeds_and_exact_full_baselin
     assert!(!run
         .join("alife-current-private-validation-v1/work")
         .exists());
+    fs::copy(Path::new(report["candidate"].as_str().unwrap()), &current).unwrap();
+    let published = fs::read(&current).unwrap();
+    assert_eq!(
+        finish_resident_serial_run(&store).unwrap()["removed_run"],
+        true
+    );
+    assert!(!run.exists());
+    assert_eq!(fs::read(&current).unwrap(), published);
 }
