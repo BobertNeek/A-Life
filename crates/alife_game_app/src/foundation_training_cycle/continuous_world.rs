@@ -175,6 +175,11 @@ pub(super) fn run_same_individual_world(
     let mut saved_tick = start_tick;
     let mut saved_policy = initial_policy;
     let mut snapshot_seconds = 0.0;
+    let mut collection_seconds = 0.0;
+    let mut ppo_seconds_total = 0.0;
+    let mut install_seconds_total = 0.0;
+    let mut no_progress_total = 0u64;
+    let initial_capture_metrics = runtime.foundation_training_capture_metrics();
     let mut captured_total = 0u64;
     let mut generic_total = 0u64;
     let mut nourished_total = 0u64;
@@ -236,11 +241,13 @@ pub(super) fn run_same_individual_world(
                     .or_insert_with(|| crate::FoundationFoodOutcome::new(id, object.id));
             }
         }
+        crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
         let collection = Instant::now();
         let first_tick = runtime.world().tick().raw();
         let capture_before = runtime.foundation_training_capture_metrics();
         let mut no_progress = 0;
         let mut stalled = Instant::now();
+        let mut first_control_call = true;
         loop {
             if now()? >= request.collection_cutoff_unix_seconds {
                 stop = "collection_cutoff";
@@ -263,7 +270,10 @@ pub(super) fn run_same_individual_world(
                     )
                 })
                 .collect::<BTreeMap<_, _>>();
-            crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
+            if !first_control_call {
+                crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
+            }
+            first_control_call = false;
             runtime.tick_outcome()?;
             let mut steps = runtime.take_foundation_training_steps();
             if runtime.world().tick() == before_tick {
@@ -362,6 +372,8 @@ pub(super) fn run_same_individual_world(
             capture_before,
             runtime.foundation_training_capture_metrics(),
         )?;
+        collection_seconds += causal.collection_wall_seconds;
+        no_progress_total += no_progress;
         captured_total += refs.len() as u64;
         generic_total += generic_rows.len() as u64;
         nourished_total += meal_rows.len() as u64;
@@ -389,10 +401,21 @@ pub(super) fn run_same_individual_world(
         drop(writer);
         // This only drains persistence workers; it does not advance world,
         // cognition, physiology or the exploration stream.
-        runtime.quiesce_live_foundation_policy_boundary(
-            id,
-            request.finalization_deadline_unix_seconds,
-        )?;
+        runtime.quiesce_live_foundation_checkpoint(request.finalization_deadline_unix_seconds)?;
+        if runtime.foundation_training_policy_install_blocked_by_sleep(id)? {
+            // Retain the actual sleeping individual's exact state with its OLD
+            // global heads/Adam. No wake, reset, clock advance or PPO/install is
+            // invented to make a deadline. All this window's rows are untrained.
+            stop = "sleep_consolidation_install_deferred";
+            alife_storage::remove_dir_all(&window_root)?;
+            on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
+                "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
+                "stop_reason":stop,"causal_collection":causal,
+                "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
+                "policy_version":policy,"semantic_prior":compact_prior(&runtime)}))?;
+            break;
+        }
+        runtime.ensure_live_foundation_policy_boundary(id)?;
         let ppo_started = Instant::now();
         let mut values = Vec::with_capacity(refs.len());
         let mut rewards: Vec<(PpoJointAction, f32)> = Vec::with_capacity(rows);
@@ -549,6 +572,7 @@ pub(super) fn run_same_individual_world(
         )?;
         value = PpoTrainingState::from_checkpoint(critic)?;
         let ppo_seconds = ppo_started.elapsed().as_secs_f64();
+        ppo_seconds_total += ppo_seconds;
         let install_started = Instant::now();
         // Curriculum metadata is independent of unbounded u64 policy updates.
         let trained = trainer.export_candidate(asset.manifest().training_stage())?;
@@ -567,6 +591,7 @@ pub(super) fn run_same_individual_world(
         completed_updates += 1;
         let value_age = value.checkpoint(trainer.session())?.optimizer_step;
         let install_seconds = install_started.elapsed().as_secs_f64();
+        install_seconds_total += install_seconds;
         let event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"update":completed_updates,
             "policy_before":policy-1,"policy_after":policy,"trained_rows":rows,
@@ -589,10 +614,8 @@ pub(super) fn run_same_individual_world(
                 return Err("deadline before periodic snapshot".into());
             }
             let snapshot = Instant::now();
-            runtime.quiesce_live_foundation_policy_boundary(
-                id,
-                request.finalization_deadline_unix_seconds,
-            )?;
+            runtime
+                .quiesce_live_foundation_checkpoint(request.finalization_deadline_unix_seconds)?;
             let exact = runtime.capture_portable_checkpoint()?;
             GpuDurableSaveManifest::publish_snapshot(&save_path, &assets, &exact)?;
             runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &exact)?;
@@ -621,10 +644,7 @@ pub(super) fn run_same_individual_world(
     }
     if alive(&runtime, id) && now()? < request.finalization_deadline_unix_seconds {
         let snapshot = Instant::now();
-        runtime.quiesce_live_foundation_policy_boundary(
-            id,
-            request.finalization_deadline_unix_seconds,
-        )?;
+        runtime.quiesce_live_foundation_checkpoint(request.finalization_deadline_unix_seconds)?;
         let exact = runtime.capture_portable_checkpoint()?;
         GpuDurableSaveManifest::publish_snapshot(&save_path, &assets, &exact)?;
         runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &exact)?;
@@ -649,6 +669,15 @@ pub(super) fn run_same_individual_world(
     } else if alive(&runtime, id) {
         stop = "finalization_deadline_unsaved_suffix";
     }
+    let causal_collection = FoundationCausalCollectionMetrics::measure(
+        start_tick,
+        runtime.world().tick().raw(),
+        collection_seconds,
+        usize::try_from(captured_total)?,
+        no_progress_total,
+        initial_capture_metrics,
+        runtime.foundation_training_capture_metrics(),
+    )?;
     Ok(
         serde_json::json!({"schema":1,"kind":"continuous-world-finished-v1", "session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
@@ -657,12 +686,15 @@ pub(super) fn run_same_individual_world(
             "unique_world_ticks":runtime.world().tick().raw().checked_sub(start_tick),
             "policy_version":policy,"actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint(trainer.session())?.optimizer_step,
             "trained_rows":trained_rows,"completed_updates":completed_updates,"captured_rows":captured_total,
+            "untrained_captured_rows_including_bootstrap":captured_total-trained_rows,
             "saved_trained_rows":saved_rows,"saved_completed_updates":saved_updates,"saved_world_tick":saved_tick,"saved_policy_version":saved_policy,
             "unsaved_trained_rows":trained_rows-saved_rows,"unsaved_world_ticks":runtime.world().tick().raw().saturating_sub(saved_tick),
             "stop_reason":stop,"terminal":!alive(&runtime,id),"terminal_death_tick":terminal_death_tick,
             "sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"generic_consumed_events":generic_total,"exact_nourished_meals":nourished_total,
             "semantic_prior":compact_prior(&runtime),"snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
+            "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
+            "causal_collection":causal_collection,
         }),
     )
 }

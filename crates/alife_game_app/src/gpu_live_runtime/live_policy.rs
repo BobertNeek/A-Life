@@ -2,6 +2,16 @@
 //! biological genes, memory, recurrent/lifetime banks or exploration counter.
 use super::*;
 
+fn sleep_allows_policy_install(state: ConsolidationState) -> bool {
+    // Pending/Prepared/Submitted/Completed belong to the old neural authority.
+    // Completed -> Committed is an ordinary sleep transaction, never a reset
+    // performed merely to install a new offline actor.
+    matches!(
+        state,
+        ConsolidationState::None | ConsolidationState::Committed { .. }
+    )
+}
+
 #[cfg(feature = "foundation-training")]
 fn decode_sampling(
     bytes: &[u8],
@@ -142,9 +152,8 @@ impl GpuLiveBrainRuntime {
     /// Finish only already-issued persistence work. No world tick, action,
     /// physiology update or exploration sample is created while waiting.
     #[cfg(feature = "foundation-training")]
-    pub fn quiesce_live_foundation_policy_boundary(
+    pub fn quiesce_live_foundation_checkpoint(
         &mut self,
-        organism_id: OrganismId,
         deadline_unix_seconds: u64,
     ) -> Result<(), GameAppShellError> {
         self.flush_sleep_journal_publication_blocking()?;
@@ -157,7 +166,7 @@ impl GpuLiveBrainRuntime {
                 && self.pending_sleep_journal_entries.is_empty()
                 && self.pending_exact_sleep_journal_entries.is_empty()
             {
-                return Ok(self.ensure_live_foundation_policy_boundary(organism_id)?);
+                return Ok(());
             }
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -168,6 +177,30 @@ impl GpuLiveBrainRuntime {
             }
             std::thread::yield_now();
         }
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn quiesce_live_foundation_policy_boundary(
+        &mut self,
+        organism_id: OrganismId,
+        deadline_unix_seconds: u64,
+    ) -> Result<(), GameAppShellError> {
+        self.quiesce_live_foundation_checkpoint(deadline_unix_seconds)?;
+        Ok(self.ensure_live_foundation_policy_boundary(organism_id)?)
+    }
+
+    #[cfg(feature = "foundation-training")]
+    pub fn foundation_training_policy_install_blocked_by_sleep(
+        &self,
+        organism_id: OrganismId,
+    ) -> Result<bool, ScaffoldContractError> {
+        let resident = self
+            .residents
+            .get(&organism_id.raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
+        Ok(!sleep_allows_policy_install(
+            resident.sleep_scheduler.state().consolidation,
+        ))
     }
 
     #[cfg(feature = "foundation-training")]
@@ -182,6 +215,7 @@ impl GpuLiveBrainRuntime {
             .get(organism_id)
             .is_some_and(|record| record.lifecycle().is_alive());
         if !alive
+            || self.foundation_training_policy_install_blocked_by_sleep(organism_id)?
             || self.training_sampling.is_none()
             || !self.last_foundation_training_steps.is_empty()
             || !self.retained_learning.is_empty()
@@ -268,6 +302,40 @@ impl GpuLiveBrainRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prepared_sleep_request_cannot_cross_a_policy_identity_boundary() {
+        let request = alife_core::GpuConsolidationRequest {
+            schema_version: alife_core::GPU_CONSOLIDATION_REQUEST_SCHEMA_VERSION,
+            request_flags: 0,
+            cycle_id: 1,
+            phenotype_hash: alife_core::PhenotypeHash([1; 4]),
+            input_generation: 1,
+            expected_output_generation: 2,
+            input_digest: [1; 4],
+            replay_digest: [2; 4],
+            max_replay_events: 1,
+            max_replay_eligibility_samples: 1,
+            request_digest: [0; 4],
+        };
+        let mut request = request;
+        request.request_digest = request.recompute_request_digest().unwrap();
+        assert!(!sleep_allows_policy_install(ConsolidationState::Prepared {
+            request
+        }));
+        assert!(!sleep_allows_policy_install(
+            ConsolidationState::Submitted {
+                request,
+                job_id: alife_core::ConsolidationJobId::try_from_raw(1).unwrap()
+            }
+        ));
+        assert!(sleep_allows_policy_install(ConsolidationState::None));
+        assert!(sleep_allows_policy_install(ConsolidationState::Committed {
+            cycle_id: 1,
+            output_generation: 2,
+            output_digest: [3; 4]
+        }));
+    }
     fn transition_fixture() -> (ResidentAuthorityPlan, alife_core::N2048LivePolicyTransition) {
         let capacity = BrainCapacityClass::n2048();
         let genome = BrainGenome::scaffold(0x2048_0F03, capacity.id());
@@ -493,6 +561,51 @@ mod tests {
         let world = runtime.world().canonical_signature_digest().unwrap();
         let sampling = runtime.foundation_training_sampling_state().unwrap();
         let old_handle = runtime.handles[&organism.raw()];
+        let replay = runtime
+            .backend
+            .build_sleep_replay_batch(old_handle)
+            .unwrap();
+        let request = runtime
+            .backend
+            .prepare_sleep_consolidation(
+                old_handle,
+                alife_core::ConsolidationIntent { cycle_id: 1 },
+                &replay,
+            )
+            .unwrap();
+        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler.clone();
+        let state = alife_core::SleepState {
+            phase: alife_core::SleepPhase::Consolidating,
+            phase_started_tick: runtime.world().tick(),
+            entered_sleep_tick: Some(runtime.world().tick()),
+            active_cycle_id: 1,
+            consolidation: ConsolidationState::Prepared { request },
+            ..alife_core::SleepState::awake_at(runtime.world().tick())
+        };
+        runtime
+            .residents
+            .get_mut(&organism.raw())
+            .unwrap()
+            .sleep_scheduler =
+            GpuSleepScheduler::restore(sleep_consolidation_config_for(&phenotype).unwrap(), state)
+                .unwrap();
+        assert!(
+            runtime
+                .install_live_foundation_policy(organism, &transition)
+                .is_err(),
+            "prepared old-policy sleep request must reject before an irreversible install"
+        );
+        assert_eq!(runtime.handles[&organism.raw()], old_handle);
+        assert_eq!(runtime.world().canonical_signature_digest().unwrap(), world);
+        assert_eq!(
+            runtime.foundation_training_sampling_state().unwrap(),
+            sampling
+        );
+        runtime
+            .residents
+            .get_mut(&organism.raw())
+            .unwrap()
+            .sleep_scheduler = original_sleep;
         let authority =
             capture_sleep_journal_neural_authority(&mut runtime.backend, old_handle).unwrap();
         runtime
