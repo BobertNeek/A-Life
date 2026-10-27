@@ -285,16 +285,25 @@ class CurrentCareTests(unittest.TestCase):
             if name != 'cycle.json':
                 (source / name).write_bytes(b'synthetic source identity')
         pins = current.mixed.file_hashes(source)
-        ledger = {'excluded_seed_ranges': [], 'assessment_seeds': [33], 'runs': [{
-            'plan': {'seed_range': [30, 35]}, 'attempts': [
-                {'status': 'accepted', 'directory': str(source), 'seed': 30, 'sha256': pins},
-                {'status': 'abandoned', 'directory': str(self.root / 'abandoned'), 'seed': 31}]}]}
-        (lane / current.mixed.LEDGER).write_text('synthetic ledger; admission parser mocked')
-        with patch.object(current.mixed, 'history', return_value=({'complete': False}, 'hash', [[1, 20], [30, 35]], set())), \
-             patch.object(current.mixed, 'read_ledger', return_value=ledger), \
-             patch.object(current.mixed, 'reconcile_prior_runs'):
-            with self.assertRaisesRegex(ValueError, 'assessment'):
-                current.import_seeds(source, self.root / 'history', lane, 'known-exclusions')
+        plan = {'source': str(source), 'source_sha256': pins, 'seed_range': [30, 35]}
+        ledger = {'schema': 1, 'kind': 'mixed-care-seed-ledger', 'excluded_seed_ranges': [],
+            'assessment_seeds': [], 'runs': [{'output': str(lane / 'old-run'), 'plan': plan,
+                'plan_sha256': current.mixed.object_hash(plan), 'history_import': {'complete': True},
+                'attempts': [
+                    {'status': 'accepted', 'directory': str(source), 'seed': 30, 'slot': 0, 'sha256': pins},
+                    {'status': 'abandoned', 'directory': str(self.root / 'abandoned'), 'seed': 31, 'slot': 1}]}]}
+        history = {'schema': 1, 'kind': 'mixed-care-seed-history', 'complete': True,
+            'source_sha256': pins, 'reserved_seed_ranges': [[30, 35]], 'consumed_seed_ranges': [[30, 31]],
+            'assessment_seeds': [], 'imports': []}
+        for origin in ('history', 'ledger'):
+            with self.subTest(origin=origin):
+                history['assessment_seeds'] = [33] if origin == 'history' else []
+                ledger['assessment_seeds'] = [33] if origin == 'ledger' else []
+                cp.write_json(lane / current.mixed.LEDGER, ledger)
+                cp.write_json(self.root / 'history.json', history)
+                # Exercise the real legacy history/ledger parsers and admission.
+                with self.assertRaisesRegex(ValueError, 'assessment'):
+                    current.import_seeds(source, self.root / 'history.json', lane, 'strict')
         self.assertEqual(current.mixed.file_hashes(source), pins)
 
 
