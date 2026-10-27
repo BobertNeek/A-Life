@@ -133,6 +133,26 @@ fn staged_replace_preserves_existing_bytes_on_quota_error() {
     assert_eq!(fs::read(original).unwrap(), b"next");
 }
 
+#[test]
+fn rename_cannot_unlink_a_live_destination_writer() {
+    let f = Fixture::new();
+    let budget = OutputBudget::register(&f.0, 16).unwrap();
+    let destination = f.0.join("destination");
+    let staged = f.0.join("staged");
+    let mut active = writer(&destination, File::create(&destination).unwrap()).unwrap();
+    active.write_all(b"old").unwrap();
+    write(&staged, b"replacement").unwrap();
+    let before = budget.usage().unwrap();
+    assert!(rename(&staged, &destination).is_err());
+    assert_eq!(fs::read(&staged).unwrap(), b"replacement");
+    assert_eq!(fs::read(&destination).unwrap(), b"old");
+    assert_eq!(budget.usage().unwrap(), before);
+    drop(active);
+    rename(&staged, &destination).unwrap();
+    assert_eq!(fs::read(destination).unwrap(), b"replacement");
+    assert_eq!(budget.usage().unwrap().used, 11);
+}
+
 struct PartialFailure(File);
 impl Write for PartialFailure {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
