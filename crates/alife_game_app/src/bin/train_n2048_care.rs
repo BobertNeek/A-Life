@@ -17,7 +17,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "producer_arguments":"--resident-serial STORE REQUEST_JSON",
             "recovery_arguments":"--recover-resident STORE",
             "actor_Adam_resident":true,"critic_RAM_continuity":true,"fresh_private_cohorts":true,
-            "provisional_until_snapshot":true,"canonical_publication_by_owner":true})
+            "provisional_until_snapshot":true,"canonical_publication_by_owner":true,
+            "finite_continuous_feeding":true,"max_continuous_feeding_decisions":36000,
+            "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":false,
+            "cleanup_arguments":"--finish-resident-run STORE","bound_run_cleanup":true})
         );
         return Ok(());
     }
@@ -30,6 +33,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "{}",
             alife_game_app::recover_resident_serial_checkpoint(&store)?
         );
+        return Ok(());
+    }
+    if mode == "--finish-resident-run" {
+        let store = std::path::PathBuf::from(args.next().ok_or("missing resident store")?);
+        if args.next().is_some() {
+            return Err("unexpected resident cleanup argument".into());
+        }
+        println!("{}", alife_game_app::finish_resident_serial_run(&store)?);
         return Ok(());
     }
     if mode == "--resident-serial" {
