@@ -1,5 +1,10 @@
 # Experimental finite resident serial care
 
+The opt-in [finite continuous-world host](training-continuous-world.md) runs one
+longer Feeding world through the same producer, atomic publisher and bound Native
+cleanup. It does not install a new PPO policy into a living world or concatenate
+separate private lives. Its initial 512-decision horizon remains hardware-unqualified.
+
 This opt-in producer does not replace the qualified training launcher. No GPU
 qualification or throughput result is implied by this source change.
 

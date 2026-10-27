@@ -38,6 +38,7 @@ world perception + unscored legal candidates
 | `alife_gpu_backend` | GPU buffers, WGSL neural execution, plasticity, sleep, and state capture |
 | `alife_runtime` | Shared GPU session and checkpoint authority |
 | `alife_archive` | Immutable birth/life manifests, content-addressed assets, lineage, and learned checkpoints |
+| `alife_storage` | Optional shared logical-byte budgets for exclusively owned temporary output trees |
 | `alife_school` | In-world language nursery and speech exposure |
 | `alife_semantic` | Private local SLM prior and bounded speech translation |
 | `alife_training` | Offline neural training, replay, and CPU/GPU state handoff |
