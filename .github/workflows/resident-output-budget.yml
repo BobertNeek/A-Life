@@ -52,9 +52,10 @@ jobs:
       - name: Native quota recovery retirement and disposable CLI fixture
         env:
           ALIFE_RESIDENT_RECOVERY_FIXTURE_OUTPUT: ${{ runner.temp }}/resident-stopped-${{ github.run_id }}
+          ALIFE_RESIDENT_INITIALIZATION_FIXTURE_OUTPUT: ${{ runner.temp }}/resident-initializing-${{ github.run_id }}
         run: cargo test --locked -p alife_game_app --features foundation-training --lib output_budget -- --test-threads=1
       - name: Exercise actual strict recovery JSON native admission publication and finish
         run: |
           cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff
-          python -B scripts/check_resident_recovery_native.py target/debug/train_n2048_care target/debug/export_native_training_handoff "${{ runner.temp }}/resident-stopped-${{ github.run_id }}"
+          python -B scripts/check_resident_recovery_native.py target/debug/train_n2048_care target/debug/export_native_training_handoff "${{ runner.temp }}/resident-stopped-${{ github.run_id }}" "${{ runner.temp }}/resident-initializing-${{ github.run_id }}"
       - run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
