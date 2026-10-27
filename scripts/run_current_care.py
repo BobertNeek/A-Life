@@ -6,6 +6,7 @@ atomically replace current. All episode/replay/private-life files live in .run.
 No existing legacy lane/history is removed by this command.
 """
 import argparse
+from collections import OrderedDict
 import datetime as dt
 import json
 import math
@@ -34,7 +35,35 @@ def tool(binary, *arguments, on_started=None):
 
 
 def validator(binary):
-    return lambda path: tool(binary, '--inspect-current', path)
+    """Repeat publication copies need hashes, not repeated full private admission.
+
+    The cache is private to this validator/OS-writer lifetime and contains only
+    eight successful content digests. New bytes always receive native admission.
+    Only the native self-contained format (no external dependencies) is eligible.
+    """
+    binary_digest = host.sha256(binary)
+    admitted = OrderedDict()
+
+    def validate(path):
+        require(host.sha256(binary) == binary_digest, 'checkpoint admission binary changed')
+        before = checkpoints.digest(path)  # Also rejects aliases/nonregular/oversized files.
+        if before in admitted:
+            admitted.move_to_end(before)
+            return None
+        try:
+            report = tool(binary, '--inspect-current', path)
+            require(checkpoints.digest(path) == before, 'checkpoint changed during native admission')
+            require(host.sha256(binary) == binary_digest, 'checkpoint admission binary changed')
+        except BaseException:
+            admitted.clear()
+            raise
+        if isinstance(report, dict) and report.get('kind') == 'single-current-training-checkpoint' and report.get('external_dependencies') == []:
+            admitted[before] = None
+            if len(admitted) > 8:
+                admitted.popitem(last=False)
+        return report
+
+    return validate
 
 
 def checkout_context():
