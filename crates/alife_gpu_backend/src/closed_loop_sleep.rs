@@ -496,9 +496,21 @@ impl GpuClosedLoopBackend {
         self.ensure_ready()?;
         self.validate_handle_backend(handle)?;
         request.validate_contract()?;
+        // Completed-cycle tombstones outlive policy installations. Validate the
+        // CURRENT resident before an idempotent cache hit, and never return an
+        // old-policy success for either its stale handle or a new handle.
+        self.class_buckets
+            .get(&handle.class_id().raw())
+            .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?
+            .resident(handle)?;
+        if request.phenotype_hash != handle.phenotype_hash() {
+            return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
+        }
         let key = sleep_commit_key(handle, request.cycle_id);
         if let Some(receipt) = self.committed_sleep.get(&key).copied() {
-            if receipt.staged.staged == *staged
+            if receipt.staged.handle == handle
+                && receipt.staged.phenotype_hash == request.phenotype_hash
+                && receipt.staged.staged == *staged
                 && receipt.staged.input_digest == request.input_digest
                 && receipt.staged.replay_digest == request.replay_digest
             {

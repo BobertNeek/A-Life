@@ -529,6 +529,60 @@ fn sequence_guard_restore_validates_bound_replay_identity() {
 }
 
 #[test]
+fn sequence_guard_policy_rebind_preserves_cursor_and_rejects_replay_and_old_tokens() {
+    let last = OutcomeCreditReplayKey {
+        organism_id: ORGANISM,
+        phenotype_hash: PHENOTYPE,
+        sequence_id: sequence(42),
+    };
+    let mut guard =
+        LearningSequenceGuard::restore_validated(ORGANISM, PHENOTYPE, Some(last)).unwrap();
+    let old_next = OutcomeCreditReplayKey {
+        sequence_id: sequence(43),
+        ..last
+    };
+    let old_token = guard.validate_next(old_next).unwrap();
+    let new_hash = PhenotypeHash([7, 11, 13, 17]);
+    let original = guard.clone();
+    assert!(guard
+        .rebind_phenotype(PhenotypeHash([8; 4]), new_hash)
+        .is_err());
+    assert_eq!(guard, original);
+    guard.rebind_phenotype(PHENOTYPE, new_hash).unwrap();
+    assert_eq!(
+        guard.last_committed().unwrap().sequence_id,
+        last.sequence_id
+    );
+    assert_eq!(guard.last_committed().unwrap().organism_id, ORGANISM);
+    assert_eq!(
+        guard.validate_next(OutcomeCreditReplayKey {
+            phenotype_hash: new_hash,
+            ..last
+        }),
+        Err(ScaffoldContractError::LearningReplayRejected)
+    );
+    assert_eq!(
+        guard.validate_next(old_next),
+        Err(ScaffoldContractError::LearningEvidenceMismatch)
+    );
+    assert_eq!(
+        guard.commit_validated(old_token),
+        Err(ScaffoldContractError::LearningReplayRejected)
+    );
+    let next = OutcomeCreditReplayKey {
+        phenotype_hash: new_hash,
+        ..old_next
+    };
+    let token = guard.validate_next(next).unwrap();
+    guard.commit_validated(token).unwrap();
+    assert_eq!(guard.last_committed(), Some(next));
+    assert!(
+        LearningSequenceGuard::restore_validated(ORGANISM, new_hash, guard.last_committed())
+            .is_ok()
+    );
+}
+
+#[test]
 fn fast_weight_semantics_is_an_explicit_versioned_contract() {
     let value = FastWeightSemantics::ImmediateThreeFactor;
     let round_trip: FastWeightSemantics =

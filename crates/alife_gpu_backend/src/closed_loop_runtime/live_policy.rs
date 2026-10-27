@@ -38,6 +38,11 @@ impl GpuClosedLoopBackend {
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
+        let mut rebound_guard = slot.learning_sequence_guard.clone();
+        rebound_guard.rebind_phenotype(
+            handle.phenotype_hash,
+            transition.next_phenotype().phenotype_hash(),
+        )?;
         // Reconstruct the SAME live structural additions on both immutable
         // plans. Target-major insertions can shift baseline weight coordinates.
         let before =
@@ -97,6 +102,7 @@ impl GpuClosedLoopBackend {
         slot.phenotype = transition.next_phenotype().clone();
         slot.brain_slot = after.brain_slot().clone();
         slot.training_phenotype = None;
+        slot.learning_sequence_guard = rebound_guard;
         self.organisms.insert(handle.organism_id.raw(), new_handle);
         self.training_structural_cache.retain(|key, _| {
             !(key.0 == class && key.1 == handle.slot && key.2 == handle.generation)
@@ -188,6 +194,30 @@ mod tests {
                 bytemuck::cast_slice(&[0.125_f32]),
             );
         }
+        let replay = backend.build_sleep_replay_batch(handle).unwrap();
+        let request = backend
+            .prepare_sleep_consolidation(
+                handle,
+                alife_core::ConsolidationIntent { cycle_id: 41 },
+                &replay,
+            )
+            .unwrap();
+        let job = backend
+            .submit_sleep_consolidation(handle, &request, &replay)
+            .unwrap();
+        let staged = backend
+            .poll_sleep_consolidation(handle, job)
+            .unwrap()
+            .unwrap();
+        let committed = backend
+            .commit_sleep_consolidation(handle, &request, &staged.staged)
+            .unwrap();
+        assert_eq!(
+            backend
+                .commit_sleep_consolidation(handle, &request, &staged.staged)
+                .unwrap(),
+            committed
+        );
         let before = backend
             .capture_training_state(handle, Tick::new(11))
             .unwrap();
@@ -237,5 +267,17 @@ mod tests {
                 .read_immutable_genetic_weights_for_test(other)
                 .unwrap()
         );
+        assert!(backend
+            .commit_sleep_consolidation(handle, &request, &staged.staged)
+            .is_err());
+        assert!(backend
+            .commit_sleep_consolidation(installed.handle, &request, &staged.staged)
+            .is_err());
+        assert!(backend
+            .committed_sleep
+            .contains_key(&crate::closed_loop_sleep::sleep_commit_key(
+                installed.handle,
+                41
+            )));
     }
 }
