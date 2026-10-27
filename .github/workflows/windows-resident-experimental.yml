@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/windows-resident-experimental.yml'
       - 'crates/alife_game_app/src/foundation_training_cycle/resident.rs'
+      - 'crates/alife_game_app/src/foundation_training_cycle/resident/**'
+      - 'scripts/run_continuous_care.py'
+      - 'scripts/test_run_continuous_care.py'
 permissions:
   contents: read
 concurrency:
@@ -39,6 +42,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Resident contracts failed' }
           cargo test --locked -p alife_game_app --features foundation-training --lib deterministic_nonrich_priming -- --nocapture --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Deterministic non-rich prior contract failed' }
+      - name: Finite continuous-session host lifecycle contracts
+        run: |
+          python -B -m unittest discover -s scripts -p test_run_continuous_care.py -v
+          if ($LASTEXITCODE -ne 0) { throw 'Continuous-session host contracts failed' }
       - name: Compile experimental CLI and full-state inspector
         run: |
           cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff --bin inspect_archived_success
