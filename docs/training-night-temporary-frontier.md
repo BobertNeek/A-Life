@@ -129,10 +129,11 @@ authorize the separately pending permanent legacy-quarantine purge.
 
 This slice adds device-free policy/early-admission regressions and CLI option
 validation. Native compilation/tests are not claimed run by source formatting.
-An explicitly ignored `gpu-tests` regression creates only disposable worlds,
+An explicitly ignored hardware-GPU regression creates only disposable worlds,
 executes two directory continuations with the opt-in, checks saved private-world
 tick equals the actual collection boundary, verifies policy and optimizer deltas,
-then packs and re-admits after removing all directory sources. It must be run by
+then packs and re-admits after removing all directory sources. Its body is
+compiled by ordinary foundation-training CI but not executed. It must be run by
 the hardware owner on a qualified executable at a safe interval; ordinary CI
 must not accidentally launch it alongside training.
 

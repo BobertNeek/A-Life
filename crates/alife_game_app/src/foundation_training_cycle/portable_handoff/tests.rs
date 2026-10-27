@@ -2,7 +2,6 @@ use super::*;
 
 /// This must be dispatched explicitly by the hardware owner, never by ordinary
 /// device-free checkpoint CI. It uses only new disposable worlds and sources.
-#[cfg(feature = "gpu-tests")]
 #[test]
 #[ignore = "requires an exclusively admitted hardware GPU and a qualified test executable"]
 fn directory_opt_in_keeps_final_private_life_across_two_native_continuations() {
