@@ -153,7 +153,7 @@ fn partial_io_error_keeps_actual_bytes_charged_until_cleanup() {
     let f = Fixture::new();
     let b = OutputBudget::register(&f.0, 8).unwrap();
     let path = f.0.join("partial");
-    let mut w = writer(&path, PartialFailure(File::create(&path).unwrap())).unwrap();
+    let mut w = writer_inner(&path, PartialFailure(File::create(&path).unwrap())).unwrap();
     assert!(w.write_all(b"12345678").is_err());
     drop(w);
     assert_eq!(b.usage().unwrap().used, 2);
@@ -188,6 +188,24 @@ fn cleanup_and_directory_publication_update_all_child_accounting() {
     assert_eq!(b.usage().unwrap().used, 7);
     remove_dir_all(&final_path).unwrap();
     assert_eq!(b.usage().unwrap().used, 0);
+}
+
+#[test]
+fn partial_cleanup_releases_only_confirmed_removed_files() {
+    let f = Fixture::new();
+    let budget = OutputBudget::register(&f.0, 8).unwrap();
+    write(f.0.join("a"), b"1234").unwrap();
+    write(f.0.join("b"), b"5678").unwrap();
+    let error = remove_tree_with(&f.0, |root| {
+        fs::remove_file(root.join("a"))?;
+        Err(io::Error::other("injected cleanup interruption"))
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("cleanup interruption"));
+    assert_eq!(budget.usage().unwrap().used, 4);
+    assert_eq!(fs::read(f.0.join("b")).unwrap(), b"5678");
+    write(f.0.join("c"), b"next").unwrap();
+    assert_eq!(budget.usage().unwrap().used, 8);
 }
 
 #[test]

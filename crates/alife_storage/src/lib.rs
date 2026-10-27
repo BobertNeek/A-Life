@@ -298,7 +298,19 @@ pub struct BudgetWriter<W> {
 }
 /// Wrap a non-append handle. Append handles must use `append_writer`, because
 /// seeking an OS append handle does not change where its next write lands.
-pub fn writer<W: Write + Seek>(
+/// The quota belongs inside a buffer: accepting a buffered inner writer would
+/// release reservations before its bytes reached disk.
+/// ```compile_fail
+/// let file = std::fs::File::create("not-executed").unwrap();
+/// let buffered = std::io::BufWriter::new(file);
+/// let _ = alife_storage::writer("not-executed", buffered);
+/// ```
+pub fn writer(path: impl AsRef<Path>, inner: File) -> io::Result<BudgetWriter<File>> {
+    writer_inner(path, inner)
+}
+// Production factories only supply unbuffered File or &mut File. This private
+// generic seam permits tests to inject partial underlying I/O errors.
+fn writer_inner<W: Write + Seek>(
     path: impl AsRef<Path>,
     mut inner: W,
 ) -> io::Result<BudgetWriter<W>> {
@@ -346,11 +358,8 @@ pub fn writer<W: Write + Seek>(
         append: false,
     })
 }
-pub fn append_writer<W: Write + Seek>(
-    path: impl AsRef<Path>,
-    inner: W,
-) -> io::Result<BudgetWriter<W>> {
-    let mut value = writer(path, inner)?;
+pub fn append_writer(path: impl AsRef<Path>, inner: File) -> io::Result<BudgetWriter<File>> {
+    let mut value = writer_inner(path, inner)?;
     value.append = true;
     Ok(value)
 }
@@ -437,7 +446,7 @@ impl<W: Seek> Seek for BudgetWriter<W> {
 }
 
 pub fn write_all(path: impl AsRef<Path>, file: &mut File, bytes: &[u8]) -> io::Result<()> {
-    writer(path, file)?.write_all(bytes)
+    writer_inner(path, file)?.write_all(bytes)
 }
 /// Open/truncate and register under the same accounting lock. Another scoped
 /// writer cannot be truncated between admission and handle registration.
@@ -639,9 +648,11 @@ pub fn remove_file(path: impl AsRef<Path>) -> io::Result<()> {
     Ok(())
 }
 pub fn remove_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
-    let path = path.as_ref();
+    remove_tree_with(path.as_ref(), fs::remove_dir_all)
+}
+fn remove_tree_with(path: &Path, remove: impl FnOnce(&Path) -> io::Result<()>) -> io::Result<()> {
     let Some(b) = budget_for(path)? else {
-        return fs::remove_dir_all(path);
+        return remove(path);
     };
     let key = resolved(path)?;
     let mut s = lock(&b.0.state)?;
@@ -654,13 +665,19 @@ pub fn remove_dir_all(path: impl AsRef<Path>) -> io::Result<()> {
     if names.iter().any(|p| s.entries[p].writers != 0) {
         return Err(invalid("cannot remove an active output writer"));
     }
-    fs::remove_dir_all(path)?;
+    let result = remove(path);
     for p in names {
-        if let Some(e) = s.entries.remove(&p) {
-            s.used -= e.bytes;
+        match fs::symlink_metadata(&p) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                if let Some(e) = s.entries.remove(&p) {
+                    s.used -= e.bytes;
+                }
+            }
+            Ok(m) if m.is_file() && !reparse(&m) && m.len() == s.entries[&p].bytes => (),
+            _ => s.poisoned = true,
         }
     }
-    Ok(())
+    result
 }
 
 #[cfg(test)]
