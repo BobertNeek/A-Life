@@ -257,6 +257,8 @@ pub struct FoundationCycleReceipt {
     pub captured_replay_rows: usize,
     #[serde(default)]
     pub trained_replay_rows: usize,
+    /// Extra ordinary waking decisions used only for successor value, not loss.
+    /// Their world/neural effects precede final private capture; this is not a peek.
     #[serde(default)]
     pub bootstrap_replay_rows: usize,
     #[serde(default)]
@@ -2645,6 +2647,8 @@ fn joint_action(behavior: &alife_gpu_backend::GpuTrainingRolloutReceipt) -> Resu
 
 /// A single pinned-policy cohort. The extra captured decision supplies the
 /// actual next-state value for a time-limit truncation; it is not trained on.
+/// Capturing it advances normal world/cognition/lifetime learning and actions.
+/// Frozen value prediction over that record later runs only on replay scratch.
 pub fn run_foundation_training_cycle(
     output: &Path,
     seed: u64,
