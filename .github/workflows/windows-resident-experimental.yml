@@ -37,6 +37,8 @@ jobs:
         run: |
           cargo test --locked -p alife_game_app --features foundation-training --lib resident -- --nocapture --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Resident contracts failed' }
+          cargo test --locked -p alife_game_app --features foundation-training --lib deterministic_nonrich_priming -- --nocapture --test-threads=1
+          if ($LASTEXITCODE -ne 0) { throw 'Deterministic non-rich prior contract failed' }
       - name: Compile experimental CLI and full-state inspector
         run: |
           cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff --bin inspect_archived_success

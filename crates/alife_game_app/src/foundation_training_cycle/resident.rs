@@ -779,6 +779,9 @@ pub(super) fn stage_resident_loss_fixture(
 }
 
 #[cfg(test)]
+mod carry_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     fn request() -> ResidentSerialRequest {
