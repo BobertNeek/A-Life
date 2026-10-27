@@ -77,6 +77,14 @@ fn output_budget_exhaustion_still_recovers_consumed_seeds_and_exact_full_baselin
     fs::write(&current, &original).unwrap();
     let first = baseline.seed + 100;
     let r = request(first);
+    // Optional disposable export for the hosted real-CLI JSON/publication
+    // consumer. This is never a production founder or GPU/training fixture.
+    if let Some(output) = std::env::var_os("ALIFE_RESIDENT_RECOVERY_FIXTURE_OUTPUT") {
+        let output = std::path::PathBuf::from(output);
+        fs::create_dir(&output).unwrap();
+        fs::write(output.join("current.alife-checkpoint"), &original).unwrap();
+        stage_resident_loss_fixture(&output, r.clone(), 2).unwrap();
+    }
     stage_resident_loss_fixture(&store, r.clone(), 2).unwrap();
     let run = store.join(".run");
     let budget = alife_storage::OutputBudget::register(&run, r.max_temporary_bytes).unwrap();
