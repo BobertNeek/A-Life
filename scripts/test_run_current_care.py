@@ -226,6 +226,29 @@ class CurrentCareTests(unittest.TestCase):
                                        '--schedule', str(self.schedule)]), 0)
         self.assertFalse(root.exists())
 
+    def test_oversized_schedule_is_rejected_before_any_run_or_checkpoint_mutation(self):
+        cp.write_json(self.schedule, {'schema': 1, 'steps': [{'lesson': 'feeding', 'episodes': 20000, 'decisions': 2}]})
+        with self.store() as store:
+            before = {path.name: path.read_bytes() for path in self.store_root.iterdir()}
+            with self.assertRaisesRegex(ValueError, 'metadata (byte limit|budget)'):
+                current.start(store, self.args(count=20000))
+            self.assertEqual({path.name: path.read_bytes() for path in self.store_root.iterdir()}, before)
+            self.assertFalse((self.store_root / cp.RUN).exists())
+        self.assertFalse(self.calls)
+
+    def test_supported_large_schedule_stays_readable_and_resumable(self):
+        cp.write_json(self.schedule, {'schema': 1, 'steps': [{'lesson': 'feeding', 'episodes': 12000, 'decisions': 2}]})
+        with self.store() as store:
+            state = current.start(store, self.args(count=12000))
+            state['worker'] = {'pid': os.getpid(), 'stopped': True}
+            current.save(store, state)
+        with self.store() as store:
+            restored = current.reconcile(store)
+            self.assertEqual(restored['rows'], state['rows'])
+            self.assertEqual(restored['cursor'], 0)
+            self.assertEqual(restored['next_seed'], 30)
+            self.assertLess((self.store_root / cp.RUN / 'run.json').stat().st_size, cp.MAX_METADATA_BYTES)
+
     def test_legacy_seed_reduction_preserves_exclusions_unknown_freshness_and_unused_tail(self):
         source = self.root / 'legacy'
         source.mkdir()

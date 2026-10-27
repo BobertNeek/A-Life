@@ -148,6 +148,16 @@ class StoreTests(unittest.TestCase):
                 pass
         self.assertTrue((self.store / cp.RUN / 'private-recovery').exists())
 
+    def test_oversized_metadata_update_preserves_the_last_readable_state(self):
+        state = self.run_state()
+        path = self.store / cp.RUN / 'run.json'
+        before = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'metadata byte limit'):
+            cp.write_json(path, {**state, 'oversized': 'x' * cp.MAX_METADATA_BYTES})
+        self.assertEqual(path.read_bytes(), before)
+        self.assertEqual(cp.read_json(path), state)
+        self.assertFalse(path.with_name('run.json.tmp').exists())
+
     def test_os_lock_excludes_another_process_and_releases_after_exit(self):
         script = '''import pathlib,sys
 import current_checkpoint_store as cp

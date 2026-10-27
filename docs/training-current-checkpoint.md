@@ -34,12 +34,29 @@ and the one-byte stable lock. Directory allocation and temporary peak space are
 additional; full native CLI publication/relocation is checked on Linux and Windows.
 Full-state/private admission adds CPU/I/O work and the final private capture adds
 GPU checkpoint work; neither PC cost nor training throughput is measured here.
+Encoded checkpoints are bounded at 256 MiB; oversized candidates fail closed
+without removing accepted current or the recoverable episode. Run metadata has a
+separate 1 MiB bound. Expanded schedules are size-checked before creating `.run`,
+with room reserved for bounded attempt bookkeeping; oversized updates preserve
+the last readable metadata. Split oversized schedules explicitly rather than
+truncating their lessons or silently dropping seed exclusions.
 
 New-format serial episodes capture the final private world at the confirmed
 collection boundary. A legacy migration preserves the latest **persisted** private
 save and sleep journal, without inventing later state that was never saved. It
 must pass the existing native terrain/corrected-critic verifier and private-save
 loader before publication. Unsupported or missing legacy state stops migration.
+
+The device-free relocation regression executes the real current-file branch in
+`load_cycle_continuation` and compares its complete actor/value state to the
+admitted legacy source, including actual corrected critic age. It also compares
+compiler bytes and private save/asset bytes after source removal. The advancement
+regression checks full heads and rejects wrong optimizer deltas or initial asset.
+These tests do **not** execute GPU trainer restoration or the final live-runtime
+capture/publish/rebind calls. Their placement before PPO update is source-reviewed
+and compile-checked; actual hardware GPU continuation remains for the PC owner's
+matching-runtime admission. The native CLI fixture executes no neural decisions,
+and host scheduler tests mock the GPU child.
 
 The versioned binary header records JSON payload length and SHA-256; asset bytes
 inside the payload use lossless base64, without reducing floating-point precision.

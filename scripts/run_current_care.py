@@ -21,6 +21,10 @@ import run_mixed_care_serial as mixed
 
 require = checkpoints.require
 host = mixed.host
+# Per-attempt hashes, a UUID filename, worker identity, cursor and reconciliation
+# fields are bounded bookkeeping. Reserve space before creating any run files;
+# the shared JSON writer also enforces the reader's limit on every later update.
+RUN_BOOKKEEPING_RESERVE = 2048
 
 
 def tool(binary, *arguments, on_started=None):
@@ -94,16 +98,21 @@ def migrate(root, source, history, lane, binary, policy):
     host.assert_lane_idle()
     tool(binary, '--check-current-destination', source, root)
     metadata = import_seeds(source, history, lane, policy)
+    seed_bytes = json.dumps(metadata, allow_nan=False, separators=(',', ':')).encode()
+    require(len(seed_bytes) <= checkpoints.MAX_BYTES, 'seed input exceeds checkpoint byte budget')
+    # Seed input is consumed by the native checkpoint codec, not the 1 MiB run
+    # metadata reader. Preflight both documents before creating the destination.
+    state = {'schema': 1, 'kind': 'single-current-temporary-run', 'mode': 'import',
+             'source': str(source), 'tool': str(binary), 'tool_sha256': host.sha256(binary),
+             'worker': None}
+    checkpoints.encode_json(state)
     root.mkdir(parents=True)
     with checkpoints.Store(root, validator(binary)) as store:
         run = root / checkpoints.RUN
         run.mkdir()
-        checkpoints.write_json(run / 'seeds.json', metadata)
         # This owned import run survives interruption; its source remains read-only.
-        state = {'schema': 1, 'kind': 'single-current-temporary-run', 'mode': 'import',
-                 'source': str(source), 'tool': str(binary), 'tool_sha256': host.sha256(binary),
-                 'worker': None}
         checkpoints.write_json(run / 'run.json', state)
+        checkpoints.write_new(run / 'seeds.json', seed_bytes)
         candidate = run / 'import.alife-checkpoint'
         report = owned_tool(store, state, '--import-current', source, run / 'seeds.json', candidate)
         state['candidate_sha256'] = checkpoints.digest(candidate)
@@ -273,9 +282,6 @@ def start(store, args):
     tool_binary = args.checkpoint_tool.resolve(strict=True)
     tool(tool_binary, '--check-current-allocation', store.current, first, last)
     run = store.root / checkpoints.RUN
-    run.mkdir()
-    source = run / 'source.alife-checkpoint'
-    shutil.copyfile(store.current, source)
     before = checkpoints.digest(store.current)
     reserved = run / 'reserved.alife-checkpoint'
     helpers = ('run_current_care.py', 'current_checkpoint_store.py', 'run_mixed_care_serial.py',
@@ -289,6 +295,10 @@ def start(store, args):
              'cutoff': args.cutoff.isoformat(), 'command_seconds': args.command_seconds,
              'min_disk_gib': args.min_disk_gib, 'min_memory_gib': args.min_memory_gib,
              'idle_seconds': args.idle_seconds, 'attempt': None, 'worker': None}
+    require(len(checkpoints.encode_json(state)) + RUN_BOOKKEEPING_RESERVE <= checkpoints.MAX_METADATA_BYTES,
+            'expanded schedule exceeds temporary metadata budget; use smaller explicit schedules')
+    run.mkdir()
+    shutil.copyfile(store.current, run / 'source.alife-checkpoint')
     save(store, state)
     owned_tool(store, state, '--reserve-current', store.current, first, last, reserved)
     state['phase'] = 'reserving'

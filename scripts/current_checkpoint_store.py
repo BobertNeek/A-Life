@@ -19,6 +19,7 @@ INTENT_NEXT = '.current.intent.next'
 LOCK = '.current.writer.lock'
 RUN = '.run'
 MAX_BYTES = 256 * 1024 * 1024
+MAX_METADATA_BYTES = 1024 * 1024
 
 
 def require(condition, message):
@@ -80,20 +81,27 @@ def write_new(path, data):
     sync_directory(path.parent)
 
 
+def encode_json(value):
+    data = json.dumps(value, allow_nan=False, separators=(',', ':')).encode()
+    require(len(data) <= MAX_METADATA_BYTES, 'temporary metadata byte limit exceeded')
+    return data
+
+
 def write_json(path, value):
+    data = encode_json(value)  # Reject before touching the last readable state or its temporary.
     temporary = path.with_name(path.name + '.tmp')
     require(not temporary.is_symlink(), 'temporary metadata must not be a symlink')
     # Only this owned, locked run's fixed metadata temporary may be retried.
     if temporary.exists():
         regular(temporary)
         temporary.unlink()
-    write_new(temporary, json.dumps(value, allow_nan=False, separators=(',', ':')).encode())
+    write_new(temporary, data)
     replace(temporary, path)
 
 
 def read_json(path):
     regular(path)
-    require(path.stat().st_size <= 1024 * 1024, 'temporary metadata byte limit exceeded')
+    require(path.stat().st_size <= MAX_METADATA_BYTES, 'temporary metadata byte limit exceeded')
     def pairs(items):
         result = {}
         for key, value in items:
