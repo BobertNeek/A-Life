@@ -40,6 +40,8 @@ mod portable_handoff;
 pub use portable_handoff::*;
 mod current;
 pub use current::*;
+mod resident;
+pub use resident::*;
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
@@ -3045,6 +3047,9 @@ fn run_foundation_training_cycle_from_with_food_need(
         FoundationCycleOutcome::CriticCapture(_) => {
             Err("unexpected critic capture in training".into())
         }
+        FoundationCycleOutcome::Resident(_) => {
+            Err("unexpected resident learner in ordinary training".into())
+        }
     });
     timing.finish(result.as_ref().err().map(|error| error.as_ref()));
     result
@@ -3053,6 +3058,7 @@ fn run_foundation_training_cycle_from_with_food_need(
 enum FoundationCycleOutcome {
     Trained(Box<FoundationCycleReceipt>),
     CriticCapture(serde_json::Value),
+    Resident(Box<resident::ResidentEpisode>),
 }
 
 /// Capture an independently seeded trajectory under the exact sealed actor.
@@ -3095,6 +3101,9 @@ pub fn capture_foundation_critic_trajectory(
         FoundationCycleOutcome::CriticCapture(receipt) => Ok(receipt),
         FoundationCycleOutcome::Trained(_) => {
             Err("critic capture unexpectedly trained actor".into())
+        }
+        FoundationCycleOutcome::Resident(_) => {
+            Err("critic capture unexpectedly retained a learner".into())
         }
     });
     timing.finish(result.as_ref().err().map(|error| error.as_ref()));
@@ -3289,6 +3298,7 @@ fn run_foundation_training_cycle_profiled(
         founder_seed_base,
         objective_state_reset,
         objective_transition_from,
+        resident: None,
     };
     admission_stage.finish();
     crate::foundation_training_output::in_new_directory(
@@ -3310,6 +3320,7 @@ fn run_foundation_training_cycle_profiled(
                 if capture_only { previous } else { None },
                 preserve_final_life,
                 food_need_condition,
+                false,
             )
         },
         |error| {
@@ -3376,6 +3387,7 @@ struct AdmittedCycleState {
     founder_seed_base: u64,
     objective_state_reset: bool,
     objective_transition_from: Option<u16>,
+    resident: Option<resident::ResidentLearner>,
 }
 
 #[expect(
@@ -3397,6 +3409,7 @@ fn run_foundation_training_cycle_in_owned_output(
     capture_source: Option<&Path>,
     preserve_final_life: bool,
     food_need_condition: crate::FoundationFoodNeedCondition,
+    retain_resident: bool,
 ) -> Result<FoundationCycleOutcome> {
     let capture_only = capture_source.is_some();
     let AdmittedCycleState {
@@ -3407,7 +3420,11 @@ fn run_foundation_training_cycle_in_owned_output(
         founder_seed_base,
         objective_state_reset,
         objective_transition_from,
+        resident,
     } = admitted;
+    if resident.is_some() && (!retain_resident || capture_only) {
+        return Err("resident learner cannot enter a capture-only or ordinary cycle".into());
+    }
     std::fs::write(
         output.join("initial.alife-foundation"),
         asset.encode_canonical()?,
@@ -3467,7 +3484,15 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     world_stage.finish();
     let backend_stage = timing.stage("backend_runtime_setup");
-    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
+    let backend = if let Some(learner) = &resident {
+        learner
+            .trainer
+            .session()
+            .backend()
+            .new_staging_like_live()?
+    } else {
+        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?
+    };
     let mut runtime = GpuLiveBrainRuntime::new_profiled_foundation_training(
         backend,
         game.world,
@@ -3718,28 +3743,36 @@ fn run_foundation_training_cycle_in_owned_output(
     first_stage.finish();
     let trainer_stage = timing.stage("trainer_construction_restore");
     let phenotype = first[0].before.phenotype.as_ref().clone();
-    let mask = if let Some(checkpoint) = &restored_actor {
-        checkpoint.stage_mask.clone()
+    let (mut trainer, carried_value) = if let Some(mut learner) = resident {
+        learner
+            .trainer
+            .rebind_for_next_cohort(phenotype.clone(), asset.clone())?;
+        (learner.trainer, Some(learner.value))
     } else {
-        StageTrainableMask::from_synapse_indices(
-            &phenotype,
-            &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
-        )?
+        let mask = if let Some(checkpoint) = &restored_actor {
+            checkpoint.stage_mask.clone()
+        } else {
+            StageTrainableMask::from_synapse_indices(
+                &phenotype,
+                &(0..phenotype.synapses().len() as u32).collect::<Vec<_>>(),
+            )?
+        };
+        let staging = runtime.new_staging_like_live()?;
+        let mut trainer = FoundationTrainer::from_session(
+            alife_runtime::GpuAuthoritativeSession::new(
+                staging,
+                alife_runtime::GpuSessionConsumerKind::Training,
+            ),
+            phenotype.clone(),
+            asset.clone(),
+            mask,
+            AdamWConfig::default(),
+        )?;
+        if let Some(checkpoint) = &restored_actor {
+            trainer.restore_checkpoint(checkpoint)?;
+        }
+        (trainer, None)
     };
-    let staging = runtime.new_staging_like_live()?;
-    let mut trainer = FoundationTrainer::from_session(
-        alife_runtime::GpuAuthoritativeSession::new(
-            staging,
-            alife_runtime::GpuSessionConsumerKind::Training,
-        ),
-        phenotype.clone(),
-        asset.clone(),
-        mask,
-        AdamWConfig::default(),
-    )?;
-    if let Some(checkpoint) = &restored_actor {
-        trainer.restore_checkpoint(checkpoint)?;
-    }
     trainer_stage.finish();
     let initial_actor_stage = timing.stage("initial_actor_checkpoint_capture");
     let initial_checkpoint = initial_actor_checkpoint_bytes(restored_actor.as_ref(), || {
@@ -4086,18 +4119,26 @@ fn run_foundation_training_cycle_in_owned_output(
         serde_json::to_vec(&references)?,
     )?;
     let targets_stage = timing.stage("old_value_and_rollout_target_preparation");
-    let value_optimizer_step_before = restored_value
-        .as_ref()
-        .map_or(0, |checkpoint| checkpoint.optimizer_step);
-    let mut expected_value_checkpoint = restored_value
-        .as_ref()
-        .map(serde_json::to_vec)
-        .transpose()?;
-    let mut value = if let Some(checkpoint) = restored_value {
-        PpoTrainingState::from_checkpoint(checkpoint)?
-    } else {
-        PpoTrainingState::default()
-    };
+    let (mut value, value_optimizer_step_before, mut expected_value_checkpoint) =
+        if let Some(value) = carried_value {
+            let checkpoint = value.checkpoint(trainer.session())?;
+            let age = checkpoint.optimizer_step;
+            (value, age, Some(serde_json::to_vec(&checkpoint)?))
+        } else {
+            let age = restored_value
+                .as_ref()
+                .map_or(0, |checkpoint| checkpoint.optimizer_step);
+            let expected = restored_value
+                .as_ref()
+                .map(serde_json::to_vec)
+                .transpose()?;
+            let value = if let Some(checkpoint) = restored_value {
+                PpoTrainingState::from_checkpoint(checkpoint)?
+            } else {
+                PpoTrainingState::default()
+            };
+            (value, age, expected)
+        };
     // The exact production start state is stored at every replay row. Predict
     // old values before any update in bounded chunks; keep only scalar targets.
     let mut values = Vec::with_capacity(references.len());
@@ -4564,24 +4605,27 @@ fn run_foundation_training_cycle_in_owned_output(
     }
     next_stage.finish();
     let rebind_stage = timing.stage("trainer_rebind");
+    let resident_asset = retain_resident.then(|| admitted_asset.clone());
     trainer.rebind_for_next_cohort(
         next_steps[0].before.phenotype.as_ref().clone(),
         admitted_asset,
     )?;
     rebind_stage.finish();
     let next_cohort_optimizer_rebound = true;
-    let actor_stage = timing.stage("final_actor_capture_write");
-    std::fs::write(
-        output.join("actor-checkpoint.json"),
-        serde_json::to_vec(&trainer.checkpoint()?)?,
-    )?;
-    actor_stage.finish();
-    let value_stage = timing.stage("final_value_capture_write");
-    std::fs::write(
-        output.join("value-checkpoint.json"),
-        serde_json::to_vec(&value.checkpoint(trainer.session())?)?,
-    )?;
-    value_stage.finish();
+    if !retain_resident {
+        let actor_stage = timing.stage("final_actor_capture_write");
+        std::fs::write(
+            output.join("actor-checkpoint.json"),
+            serde_json::to_vec(&trainer.checkpoint()?)?,
+        )?;
+        actor_stage.finish();
+        let value_stage = timing.stage("final_value_capture_write");
+        std::fs::write(
+            output.join("value-checkpoint.json"),
+            serde_json::to_vec(&value.checkpoint(trainer.session())?)?,
+        )?;
+        value_stage.finish();
+    }
     std::fs::write(output.join("phase.txt"), "next-cohort-admitted")?;
     let receipt = FoundationCycleReceipt {
         critic_objective_version: critic_residual::OBJECTIVE_VERSION,
@@ -4673,9 +4717,28 @@ fn run_foundation_training_cycle_in_owned_output(
     };
     let receipt_stage = timing.stage("final_receipt_write");
     std::fs::write(
-        output.join("cycle.json"),
+        output.join(if retain_resident {
+            "provisional-cycle.json"
+        } else {
+            "cycle.json"
+        }),
         serde_json::to_vec_pretty(&receipt)?,
     )?;
     receipt_stage.finish();
-    Ok(FoundationCycleOutcome::Trained(Box::new(receipt)))
+    if retain_resident {
+        Ok(FoundationCycleOutcome::Resident(Box::new(
+            resident::ResidentEpisode {
+                learner: resident::ResidentLearner {
+                    trainer,
+                    value,
+                    asset: resident_asset.ok_or("resident asset missing")?,
+                    next_policy: policy_version.checked_add(1).ok_or("policy overflow")?,
+                    founder_seed_base,
+                },
+                receipt,
+            },
+        )))
+    } else {
+        Ok(FoundationCycleOutcome::Trained(Box::new(receipt)))
+    }
 }

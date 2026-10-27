@@ -1,0 +1,71 @@
+name: Experimental Windows resident learner
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-resident-experimental.yml'
+      - 'crates/alife_game_app/src/foundation_training_cycle/resident.rs'
+permissions:
+  contents: read
+concurrency:
+  group: resident-experimental-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  focused-native:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUST_MIN_STACK: '33554432'
+      RUST_TEST_THREADS: '1'
+      EXPECTED_SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-foundation-native
+      - name: Device-free resident loss recovery and ownership contracts
+        run: |
+          cargo test --locked -p alife_game_app --features foundation-training --lib resident -- --nocapture --test-threads=1
+          if ($LASTEXITCODE -ne 0) { throw 'Resident contracts failed' }
+      - name: Compile experimental CLI and full-state inspector
+        run: |
+          cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff --bin inspect_archived_success
+          if ($LASTEXITCODE -ne 0) { throw 'Native compile failed' }
+          target/debug/train_n2048_care.exe --resident-contract
+          if ($LASTEXITCODE -ne 0) { throw 'Native capability query failed' }
+      - name: Bind artifact to exact source and executable bytes
+        run: |
+          $residentRevision = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $residentRevision -ne $env:EXPECTED_SOURCE) { throw 'Unexpected compiled source revision' }
+          if (git status --porcelain --untracked-files=no) { throw 'Compiled source changed' }
+          $residentTree = git rev-parse 'HEAD^{tree}'
+          $residentOutput = New-Item -ItemType Directory -Path target/resident-experimental
+          $residentHashes = [ordered]@{}
+          foreach ($residentName in @('train_n2048_care.exe','export_native_training_handoff.exe','inspect_archived_success.exe')) {
+            $residentFile = Join-Path target/debug $residentName
+            $residentHashes[$residentName] = (Get-FileHash -LiteralPath $residentFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            Copy-Item -LiteralPath $residentFile -Destination $residentOutput.FullName
+          }
+          [ordered]@{
+            schema=1; kind='experimental-resident-build-v1'; source_revision=$residentRevision; source_tree=$residentTree
+            executables=$residentHashes; rustc=(rustc --version); target='x86_64-pc-windows-msvc'
+            features=@('foundation-training'); build_profile='dev'; gpu_training_executed=$false
+            experimental=$true; production_qualified=$false
+            workflow_run="https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $residentOutput.FullName 'build-receipt.json') -Encoding utf8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-resident-experimental-${{ env.EXPECTED_SOURCE }}
+          path: target/resident-experimental
+          if-no-files-found: error
+          retention-days: 2

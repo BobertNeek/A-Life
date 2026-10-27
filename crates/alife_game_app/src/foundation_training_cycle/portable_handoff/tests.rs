@@ -1,5 +1,52 @@
 use super::*;
 
+#[test]
+#[ignore = "requires exclusively admitted hardware GPU; resident driver is experimental"]
+fn resident_two_episode_final_snapshot_keeps_actor_value_ages_and_private_state() {
+    std::thread::Builder::new().name("resident-continuity-assay".into())
+        .stack_size(32 * 1024 * 1024).spawn(|| {
+            let root = std::env::temp_dir().join(format!("alife-resident-gpu-{}-{}", std::process::id(),
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+            std::fs::create_dir(&root).unwrap();
+            eprintln!("resident disposable fixture: {}", root.display());
+            let source = root.join("source");
+            run_foundation_training_cycle(&source, 90701, 2).unwrap();
+            let seeds = alife_training::CheckpointSeedsV1 { historical_freshness: "unknown".into(),
+                excluded_ranges: vec![[90701, 90701]], pending_range: None };
+            let baseline = migrate_current_training_checkpoint(&source, seeds).unwrap();
+            let store = root.join("store"); std::fs::create_dir(&store).unwrap();
+            let current = store.join("current.alife-checkpoint");
+            let original = baseline.encode().unwrap(); std::fs::write(&current, &original).unwrap();
+            let request = ResidentSerialRequest {
+                schema: 1, seed_range: [90702, 90703],
+                rows: vec![ResidentSerialRow { lesson: FoundationTeacherLesson::Feeding, decisions: 2,
+                    food_need_condition: Default::default() }; 2],
+                checkpoint_every_episodes: 2, sampling_temperature: 1.0,
+                collection_cutoff_unix_seconds: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() + 1800,
+                max_temporary_bytes: 2 * 1024 * 1024 * 1024,
+            };
+            let started = std::time::Instant::now();
+            let report = run_resident_serial_care(&store, request).unwrap();
+            assert_eq!(report["completed_provisional_episodes"], 2);
+            assert_eq!(report["canonical_current_unchanged"], true);
+            let recovered = recover_resident_serial_checkpoint(&store).unwrap();
+            let saved = read_current_training_checkpoint(std::path::Path::new(recovered["candidate"].as_str().unwrap())).unwrap();
+            assert_eq!(saved.handoff.policy_version, baseline.handoff.policy_version + 2);
+            assert!(saved.handoff.actor.optimizer_step > baseline.handoff.actor.optimizer_step);
+            assert!(saved.handoff.value.optimizer_step > baseline.handoff.value.optimizer_step);
+            assert_eq!(saved.seeds.pending_range, None);
+            assert_eq!(saved.seed, 90703);
+            assert!(saved.life.is_some());
+            assert_eq!(std::fs::read(&current).unwrap(), original);
+            std::fs::remove_dir_all(source).unwrap();
+            assert_eq!(read_current_training_checkpoint(std::path::Path::new(recovered["candidate"].as_str().unwrap())).unwrap(), saved);
+            eprintln!("resident continuity elapsed_seconds={} actor_before={} actor_after={} value_before={} value_after={}", started.elapsed().as_secs_f64(),
+                baseline.handoff.actor.optimizer_step, saved.handoff.actor.optimizer_step,
+                baseline.handoff.value.optimizer_step, saved.handoff.value.optimizer_step);
+            std::fs::remove_dir_all(root).unwrap();
+        }).unwrap().join().unwrap();
+}
+
 /// This must be dispatched explicitly by the hardware owner, never by ordinary
 /// device-free checkpoint CI. It uses only new disposable worlds and sources.
 #[test]
@@ -345,6 +392,65 @@ fn current_checkpoint_migration_relocates_without_any_legacy_dependencies() {
     corrupt.life.as_mut().unwrap().assets_base64.clear();
     std::fs::write(&copy, corrupt.encode().unwrap()).unwrap();
     assert!(read_current_training_checkpoint(&copy).is_err());
+}
+
+#[test]
+fn resident_crash_recovery_preserves_full_baseline_but_consumes_lost_world_seeds() {
+    let f =
+        crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
+            private_fixture,
+        );
+    let mut baseline = migrate_current_training_checkpoint(&f.target, current_seeds()).unwrap();
+    baseline.seeds = alife_training::CheckpointSeedsV1 {
+        historical_freshness: "unknown".into(),
+        excluded_ranges: vec![[1, baseline.seed]],
+        pending_range: None,
+    };
+    let store = f.root.join("resident-store");
+    std::fs::create_dir(&store).unwrap();
+    let current = store.join("current.alife-checkpoint");
+    let original = baseline.encode().unwrap();
+    std::fs::write(&current, &original).unwrap();
+    let first = baseline.seed + 100;
+    let request = super::super::resident::ResidentSerialRequest {
+        schema: 1,
+        seed_range: [first, first + 4],
+        rows: vec![
+            super::super::resident::ResidentSerialRow {
+                lesson: FoundationTeacherLesson::Feeding,
+                decisions: 16,
+                food_need_condition: Default::default(),
+            };
+            3
+        ],
+        checkpoint_every_episodes: 3,
+        sampling_temperature: 1.0,
+        collection_cutoff_unix_seconds: 1,
+        max_temporary_bytes: 1024 * 1024 * 1024,
+    };
+    // Simulate a crash after two WAL dispatches and before any full snapshot.
+    super::super::resident::stage_resident_loss_fixture(&store, request, 2).unwrap();
+    std::fs::remove_dir_all(&f.target).unwrap();
+    std::fs::remove_dir_all(&f.source).unwrap();
+    let report = recover_resident_serial_checkpoint(&store).unwrap();
+    let candidate = std::path::Path::new(report["candidate"].as_str().unwrap());
+    let recovered = read_current_training_checkpoint(candidate).unwrap();
+    assert_eq!(recovered.handoff, baseline.handoff);
+    assert_eq!(recovered.life, baseline.life);
+    assert_eq!(recovered.seed, baseline.seed);
+    assert_eq!(recovered.founder_seed_base, baseline.founder_seed_base);
+    assert_eq!(recovered.seeds.pending_range, Some([first + 2, first + 4]));
+    assert!(recovered.seeds.contains(first));
+    assert!(recovered.seeds.contains(first + 1));
+    assert_eq!(std::fs::read(&current).unwrap(), original);
+    assert_eq!(report["uncheckpointed_updates_restored"], false);
+    // Recovery retries are idempotent. A committed owner publication is detected.
+    assert_eq!(recover_resident_serial_checkpoint(&store).unwrap(), report);
+    std::fs::copy(candidate, &current).unwrap();
+    assert_eq!(
+        recover_resident_serial_checkpoint(&store).unwrap()["already_published_current"],
+        true
+    );
 }
 
 #[test]
