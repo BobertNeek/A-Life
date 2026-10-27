@@ -1,5 +1,6 @@
 """Native admission is mocked; publication/recovery and file mutations are real."""
 from pathlib import Path
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -32,6 +33,16 @@ class AdmissionCacheTests(unittest.TestCase):
         other.write_bytes(b'new-Adam-private-or-seed-state')
         self.validate(other)
         self.assertEqual(self.native.call_count, 2)
+
+    def test_bare_relative_inspector_invokes_the_exact_absolute_file_hashed(self):
+        previous = Path.cwd()
+        try:
+            os.chdir(self.root)
+            validate = current.validator(Path(self.binary.name))
+            validate(self.path)
+        finally:
+            os.chdir(previous)
+        self.native.assert_called_once_with(self.binary.resolve(strict=True), '--inspect-current', self.path)
 
     def test_native_failure_is_never_cached_and_invalidates_prior_reuse(self):
         self.validate(self.path)

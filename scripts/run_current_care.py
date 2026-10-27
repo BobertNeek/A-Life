@@ -41,6 +41,7 @@ def validator(binary):
     eight successful content digests. New bytes always receive native admission.
     Only the native self-contained format (no external dependencies) is eligible.
     """
+    binary = Path(binary).resolve(strict=True)
     binary_digest = host.sha256(binary)
     admitted = OrderedDict()
 
