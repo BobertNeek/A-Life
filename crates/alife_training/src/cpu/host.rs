@@ -77,6 +77,10 @@ pub struct CpuCanonicalCheckpoint {
     pub sampling_seed: u32,
     pub sampling_counter: u32,
     pub world: PortableSaveFile,
+    /// CPU saves have no GPU brain sidecar to carry world perception identity.
+    /// Version1 omitted this registry and cannot establish exact object continuity.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tracked_objects: Vec<alife_world::TrackedObjectRegistrySaveState>,
     pub residents: Vec<CpuResidentCheckpoint>,
 }
 /// Complete in-memory pre-success branch state. Restoring it restores the world,
@@ -279,6 +283,7 @@ impl CpuCanonicalHost {
     ) -> Result<Vec<(PerceptionFrameDraft, ExperienceSequenceId)>, CpuHostError> {
         self.validate_founder(founder)?;
         let tick = self.world.tick();
+        let mut perception_world = self.world.clone();
         let mut result = Vec::new();
         for (&raw, resident) in &self.residents {
             let id = OrganismId(raw);
@@ -290,7 +295,7 @@ impl CpuCanonicalHost {
             if record.lifecycle().is_alive() && resident.sleep.state().phase == SleepPhase::Awake {
                 let homeostasis = record.biochemistry().homeostasis;
                 result.push((
-                    self.world.perception_frame_draft(
+                    perception_world.perception_frame_draft(
                         id,
                         tick,
                         founder.phenotype().sensor_profile(),
@@ -407,12 +412,17 @@ impl CpuCanonicalHost {
             })
             .collect::<Result<_, CpuHostError>>()?;
         Ok(CpuCanonicalCheckpoint {
-            schema_version: 1,
+            schema_version: 2,
             phenotype_hash: self.phenotype_hash,
             founder_weight_digest: self.founder_weight_digest,
             sampling_seed: self.sampling_seed,
             sampling_counter: self.sampling_counter,
             world,
+            tracked_objects: self
+                .residents
+                .keys()
+                .map(|&id| self.world.tracked_objects().save_state(OrganismId(id)))
+                .collect::<Result<_, _>>()?,
             residents,
         })
     }
@@ -420,7 +430,10 @@ impl CpuCanonicalHost {
         checkpoint: CpuCanonicalCheckpoint,
         founder: &CpuFoundationTrainer,
     ) -> Result<Self, CpuHostError> {
-        if checkpoint.schema_version != 1
+        if checkpoint.schema_version == 1 {
+            return Err(CpuHostError::State("version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2"));
+        }
+        if checkpoint.schema_version != 2
             || checkpoint.world.config.brain_policy.policy != PolicyBackend::NeuralClosedLoopCpu
         {
             return Err(CpuHostError::State(
@@ -429,7 +442,29 @@ impl CpuCanonicalHost {
         }
         checkpoint.world.config.validate()?;
         let creatures = checkpoint.world.creatures.clone();
-        let world = checkpoint.world.restore_headless_world()?;
+        let mut world = checkpoint.world.restore_headless_world()?;
+        let owners = checkpoint
+            .residents
+            .iter()
+            .map(|r| r.neural.organism_id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        let tracked_owners = checkpoint
+            .tracked_objects
+            .iter()
+            .map(|s| s.organism_id.raw())
+            .collect::<std::collections::BTreeSet<_>>();
+        if owners != tracked_owners
+            || owners.len() != checkpoint.residents.len()
+            || checkpoint
+                .tracked_objects
+                .iter()
+                .any(|s| s.records.iter().any(|r| r.last_seen_tick > world.tick()))
+        {
+            return Err(CpuHostError::State(
+                "checkpoint tracked-object owner or clock mismatch",
+            ));
+        }
+        world.restore_tracked_object_states(checkpoint.tracked_objects)?;
         let mut residents = BTreeMap::new();
         let p = founder.phenotype();
         let profile = profile_identity(p);
@@ -1186,6 +1221,18 @@ impl CpuCanonicalHost {
                 patch,
             });
         }
+        // The batch uses one pre-action scene. Commit the identities actually
+        // observed there along with its decisions; priming stays read-only.
+        let tracked_objects = self
+            .residents
+            .keys()
+            .map(|&id| {
+                perception_world
+                    .tracked_objects()
+                    .save_state(OrganismId(id))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        self.world.restore_tracked_object_states(tracked_objects)?;
         let tick_after = self
             .world
             .try_advance_tick_with_body_events_in_staged_tick(&body_events)?;

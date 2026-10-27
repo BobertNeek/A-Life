@@ -5,6 +5,8 @@ use alife_training::{cpu::*, AdamWConfig, StageTrainableMask};
 use alife_world::*;
 #[path = "cpu_collector/collector_shards.rs"]
 mod collector_shards;
+#[path = "cpu_collector/need_switching.rs"]
+mod need_switching;
 fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
     fixture_atp(None)
 }
@@ -26,10 +28,35 @@ fn new_game_with_inputs_fixture(
     CpuFoundationTrainer,
     PhenotypeCompilerInputs,
 ) {
-    let builtin =
-        FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
+    new_game_with_profile_fixture(atp, SensorProfile::GroundedObjectSlotsV1)
+}
+fn new_game_with_profile_fixture(
+    atp: Option<f32>,
+    profile: SensorProfile,
+) -> (
+    CanonicalNewGame,
+    CpuFoundationTrainer,
+    PhenotypeCompilerInputs,
+) {
+    let builtin = if profile == SensorProfile::GroundedTerrainVisionV1 {
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0x7A1123, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let phenotype = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            profile,
+        )
+        .unwrap();
+        FoundationWeightAsset::from_phenotype_for_genetic_birth(&phenotype).unwrap()
+    } else {
+        FoundationWeightAsset::builtin_n2048_v1(profile).unwrap()
+    };
     let mut config = CanonicalNewGameConfig::phase3(0x7A1123, 1).unwrap();
     config.brain_class = BrainScaleTier::Standard2048;
+    config.sensor_profile = profile;
     let game = create_canonical_new_game_with_n2048_candidate(&config, &builtin).unwrap();
     let record = game.world.organism_registry().iter().next().unwrap();
     let genome = &record.phenotype().brain_genome;
@@ -80,6 +107,93 @@ fn new_game_with_inputs_fixture(
     let trainer = CpuFoundationTrainer::new(p, asset, mask, AdamWConfig::default()).unwrap();
     (game, trainer, inputs)
 }
+#[test]
+fn canonical_restore_retains_observed_objects_and_their_identity_cursor() {
+    let (mut host, trainer) = fixture();
+    let id = host.world().organism_entity_ids()[0].0;
+    let homeostasis = host
+        .world()
+        .organism_registry()
+        .get(id)
+        .unwrap()
+        .biochemistry()
+        .homeostasis;
+    host.world_mut()
+        .perception_frame(
+            id,
+            Tick::ZERO,
+            trainer.phenotype().sensor_profile(),
+            homeostasis,
+        )
+        .unwrap();
+    let tracked = host.world().tracked_objects().save_state(id).unwrap();
+    assert!(!tracked.records.is_empty());
+    let saved = host.checkpoint(&trainer).unwrap();
+    let saved = serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap();
+    let mut restored = CpuCanonicalHost::from_checkpoint(saved, &trainer).unwrap();
+    assert_eq!(
+        restored.world().tracked_objects().save_state(id).unwrap(),
+        tracked
+    );
+    let a = host.step(&trainer, 1.0).unwrap();
+    let b = restored.step(&trainer, 1.0).unwrap();
+    assert!(serde_json::to_vec(&a.decisions).unwrap() == serde_json::to_vec(&b.decisions).unwrap());
+}
+
+#[test]
+fn canonical_restore_rejects_missing_or_inconsistent_perception_identity() {
+    let (mut host, trainer) = fixture();
+    host.step(&trainer, 1.0).unwrap();
+    let good = host.checkpoint(&trainer).unwrap();
+    assert!(
+        !good.tracked_objects[0].records.is_empty(),
+        "native perception must commit its tracked identities"
+    );
+    let mut invalid = Vec::new();
+    let mut legacy = serde_json::to_value(&good).unwrap();
+    legacy["schema_version"] = serde_json::json!(1);
+    legacy.as_object_mut().unwrap().remove("tracked_objects");
+    // Old bytes remain decodable/inspectable, but lack evidence for exact resume.
+    invalid.push(serde_json::from_value(legacy).unwrap());
+    let mut missing = good.clone();
+    missing.tracked_objects.clear();
+    invalid.push(missing);
+    let mut duplicate = good.clone();
+    duplicate
+        .tracked_objects
+        .push(duplicate.tracked_objects[0].clone());
+    invalid.push(duplicate);
+    let mut foreign = good.clone();
+    foreign.tracked_objects[0].organism_id = OrganismId(2);
+    invalid.push(foreign);
+    let mut future = good;
+    future.tracked_objects[0].records[0].last_seen_tick = Tick(host.world().tick().raw() + 1);
+    invalid.push(future);
+    for checkpoint in invalid {
+        assert!(CpuCanonicalHost::from_checkpoint(checkpoint, &trainer).is_err());
+    }
+}
+
+#[test]
+fn canonical_native_perception_commits_the_identity_used_by_each_frame() {
+    let (mut host, trainer) = fixture();
+    let mut observed = 0;
+    for _ in 0..3 {
+        for row in host.step(&trainer, 1.0).unwrap().decisions {
+            for slot in row.patch.pre_action().perception().grounded_object_slots() {
+                let tracked = host
+                    .world()
+                    .tracked_objects()
+                    .record(row.organism_id, slot.tracked_object_id)
+                    .expect("sealed perception identity missing from world");
+                assert_eq!(tracked.last_seen_tick, row.patch.pre_action().tick);
+                observed += 1;
+            }
+        }
+    }
+    assert!(observed > 0);
+}
+
 #[test]
 fn canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd() {
     let (mut host, trainer) = fixture();
