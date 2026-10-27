@@ -195,6 +195,40 @@ fn canonical_native_perception_commits_the_identity_used_by_each_frame() {
 }
 
 #[test]
+fn sealed_native_outcome_retains_uncredited_inherited_readouts() {
+    let (mut host, trainer) = fixture();
+    let founder = trainer.checkpoint();
+    let before = host.checkpoint(&trainer).unwrap();
+    let step = host.step(&trainer, 1.0).unwrap();
+    assert_eq!(step.decisions.len(), 1);
+    step.decisions[0].patch.validate_contract().unwrap();
+    let after = host.checkpoint(&trainer).unwrap();
+    let mut uncredited = 0;
+    for (i, synapse) in trainer.phenotype().synapses().iter().enumerate() {
+        let receptor =
+            &trainer.phenotype().plasticity_receptors()[synapse.receptor_index() as usize];
+        let old = &before.residents[0].neural;
+        let new = &after.residents[0].neural;
+        if matches!(synapse.kind(), CompiledSynapseKind::Decoder(_))
+            && new.eligibility[i] == 0.0
+            && receptor.normalization_rate() > 0.0
+            && new.neural.activations[synapse.target() as usize] != 0.0
+            && trainer.weights()[i] != 0.0
+        {
+            assert_eq!(
+                new.fast[i].to_bits(),
+                old.fast[i].to_bits(),
+                "uncredited readout {i} canceled inherited strength"
+            );
+            uncredited += 1;
+        }
+        assert_eq!(new.lifetime[i].to_bits(), old.lifetime[i].to_bits());
+    }
+    assert!(uncredited > 0);
+    assert_eq!(trainer.checkpoint(), founder);
+}
+
+#[test]
 fn canonical_cpu_seals_biology_memory_and_exact_restore_without_an_icd() {
     let (mut host, trainer) = fixture();
     let started = std::time::Instant::now();
