@@ -18,8 +18,29 @@ pub struct TrainingAttemptOriginV1 {
     pub value_optimizer_step: u32,
     pub handoff_sha256: String,
     pub private_life_sha256: String,
-    /// Compact prior terminal origins, never prior brains or private assets.
-    pub previous: Option<Box<TrainingAttemptOriginV1>>,
+    /// Oldest first, constant-depth evidence. Never prior brains/private assets.
+    pub previous: Vec<TrainingAttemptEvidenceV1>,
+    pub record_sha256: String,
+}
+
+/// One flat hash-chained origin. It cannot contain another ancestry collection.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TrainingAttemptEvidenceV1 {
+    pub schema: u16,
+    pub kind: String,
+    pub attempt_nonce: u64,
+    pub source_current_sha256: String,
+    pub source_terminal: CurrentTerminalDispositionV1,
+    pub retained_world_seed: u64,
+    pub retained_world_tick: u64,
+    pub organism_id: u64,
+    pub policy_version: u64,
+    pub actor_optimizer_step: u32,
+    pub value_optimizer_step: u32,
+    pub handoff_sha256: String,
+    pub private_life_sha256: String,
+    pub previous_record_sha256: Option<String>,
     pub record_sha256: String,
 }
 
@@ -29,13 +50,13 @@ fn sha(value: &impl Serialize) -> Result<String> {
 fn is_hash(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
-impl TrainingAttemptOriginV1 {
+impl TrainingAttemptEvidenceV1 {
     fn digest(&self) -> Result<String> {
         let mut value = self.clone();
         value.record_sha256.clear();
         sha(&value)
     }
-    fn validate_record(&self) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         let t = &self.source_terminal;
         let e = &t.terminal_event;
         if self.schema != 1
@@ -72,17 +93,53 @@ impl TrainingAttemptOriginV1 {
                 "training attempt origin differs from its bound terminal observation".into(),
             );
         }
-        if let Some(previous) = &self.previous {
-            previous.validate_record()?;
-            if previous.attempt_nonce == self.attempt_nonce
-                || previous.retained_world_seed != self.retained_world_seed
-                || previous.organism_id != self.organism_id
-                || previous.policy_version > self.policy_version
-                || previous.actor_optimizer_step > self.actor_optimizer_step
-                || previous.value_optimizer_step > self.value_optimizer_step
+        Ok(())
+    }
+}
+
+impl TrainingAttemptOriginV1 {
+    fn evidence(&self) -> TrainingAttemptEvidenceV1 {
+        TrainingAttemptEvidenceV1 {
+            schema: self.schema,
+            kind: self.kind.clone(),
+            attempt_nonce: self.attempt_nonce,
+            source_current_sha256: self.source_current_sha256.clone(),
+            source_terminal: self.source_terminal.clone(),
+            retained_world_seed: self.retained_world_seed,
+            retained_world_tick: self.retained_world_tick,
+            organism_id: self.organism_id,
+            policy_version: self.policy_version,
+            actor_optimizer_step: self.actor_optimizer_step,
+            value_optimizer_step: self.value_optimizer_step,
+            handoff_sha256: self.handoff_sha256.clone(),
+            private_life_sha256: self.private_life_sha256.clone(),
+            previous_record_sha256: self.previous.last().map(|p| p.record_sha256.clone()),
+            record_sha256: self.record_sha256.clone(),
+        }
+    }
+    fn digest(&self) -> Result<String> {
+        self.evidence().digest()
+    }
+    fn validate_record(&self) -> Result<()> {
+        let current = self.evidence();
+        let mut previous: Option<&TrainingAttemptEvidenceV1> = None;
+        let mut nonces = std::collections::BTreeSet::new();
+        for record in self.previous.iter().chain(std::iter::once(&current)) {
+            record.validate()?;
+            if record.previous_record_sha256.as_deref()
+                != previous.map(|p| p.record_sha256.as_str())
+                || !nonces.insert(record.attempt_nonce)
+                || previous.is_some_and(|p| {
+                    p.retained_world_seed != record.retained_world_seed
+                        || p.organism_id != record.organism_id
+                        || p.policy_version > record.policy_version
+                        || p.actor_optimizer_step > record.actor_optimizer_step
+                        || p.value_optimizer_step > record.value_optimizer_step
+                })
             {
                 return Err("training attempt origin ancestry or optimizer history changed".into());
             }
+            previous = Some(record);
         }
         Ok(())
     }
@@ -181,7 +238,14 @@ impl CurrentTrainingCheckpointV1 {
             value_optimizer_step: self.handoff.value.optimizer_step,
             handoff_sha256: sha(&self.handoff)?,
             private_life_sha256: sha(life)?,
-            previous: self.training_attempt_origin.clone().map(Box::new),
+            previous: self
+                .training_attempt_origin
+                .as_ref()
+                .map_or_else(Vec::new, |p| {
+                    let mut records = p.previous.clone();
+                    records.push(p.evidence());
+                    records
+                }),
             record_sha256: String::new(),
         };
         origin.record_sha256 = origin.digest()?;

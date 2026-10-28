@@ -22,7 +22,9 @@ The caller selects `NEXT_NONCE` from the admitted pending tail, or a fresh unuse
 nonce when no tail remains, respecting the recorded historical-freshness limit.
 `training_attempt_origin` binds that intended first dispatch to the original
 Current digest, full terminal disposition/event, saved world/individual identity,
-head/private hashes and optimizer ages. Prior compact origins persist. No prior
+head/private hashes and optimizer ages. Prior compact origins persist in a flat,
+hash-chained list; repeated attempts do not increase JSON nesting depth. The
+existing checkpoint byte cap bounds total ancestry storage. No prior
 brain or private-state archive is embedded. The usual native WAL consumes the
 nonce only at real dispatch; a different first nonce is rejected before native
 initialization. Later same-individual checkpoints and recovery retain the origin.
