@@ -190,11 +190,25 @@ pub(super) fn observed_terminal_event(
                 .archive_retirement_receipt(id)
                 .map(|receipt| receipt.death_tick.raw())
         });
+    let final_biology = runtime.foundation_terminal_biology(id).or_else(|| {
+        runtime
+            .world()
+            .organism_registry()
+            .get(id)
+            .map(|record| *record.biochemistry())
+    });
+    let final_biology = final_biology.map(|biology| {
+        serde_json::json!({
+            "tick":biology.tick.raw(), "energy":biology.body.energy, "health":biology.body.health,
+            "injury":biology.body.injury, "hunger":biology.homeostasis.drives.hunger,
+            "fatigue":biology.homeostasis.drives.fatigue, "pain":biology.homeostasis.drives.pain,
+        })
+    });
     Some(
         serde_json::json!({"kind":"continuous-terminal-v1","terminal":true,
         "session_nonce":session_nonce,"source_world_seed":world_seed,"organism_id":id.raw(),
         "world_tick":runtime.world().tick().raw(),"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
-        "terminal_death_tick":death_tick}),
+        "terminal_death_tick":death_tick,"final_biology":final_biology}),
     )
 }
 
