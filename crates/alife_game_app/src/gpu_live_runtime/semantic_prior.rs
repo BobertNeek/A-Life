@@ -1619,18 +1619,39 @@ mod tests {
     fn empty_hints_are_not_readiness_and_receipts_are_bounded() {
         let draft = draft();
         let mut prior = prior();
+        // This tests cached empty-hint readiness/receipts, not live feedback.
+        // Freeze the recording to prevent prime() from queuing feedback to the
+        // deliberately failing worker, whose reply otherwise races prepare().
+        // Dedicated tests below retain live retry/provider-failure coverage.
+        prior.frozen_recording = true;
         prior.require_rich_information();
         let mut empty = output();
         empty.lexicon_associations[0].salience = 0.0;
         empty.validate().unwrap();
-        prior.cache.insert(bounded_context(&draft, &[]), empty);
+        let key = bounded_context(&draft, &[]);
+        prior.cache.insert(key.clone(), empty.clone());
         prior.prime(draft.clone(), ExperienceSequenceId(1)).unwrap();
         assert!(!prior.ready(5));
+        assert!(!prior.pending(5));
+        assert_eq!(prior.metrics.requests, 0);
+        assert_eq!(prior.metrics.unusable_hint_retry_requests, 0);
+        prior.record_priming_status(5, 0, "cached_readiness_fixture");
+        let status = prior.metrics.last_priming.as_ref().unwrap();
+        assert!(status.cache_match);
+        assert_eq!(status.context, key);
+        assert_eq!(status.cache_output.as_ref(), Some(&empty));
+        assert_eq!(status.cache_usable_hints, 0);
+        assert_eq!(status.status, PriorInputStatus::EmptyHints);
         let frame = prior
             .prepare(draft, ExperienceSequenceId(1))
             .unwrap()
             .finalize(PerceptionContextBlock::empty())
             .unwrap();
+        assert!(frame.sensory().semantic_context.is_none());
+        assert!(!prior.ready(5));
+        assert!(!prior.pending(5));
+        assert_eq!(prior.metrics.requests, 0);
+        assert_eq!(prior.metrics.unusable_hint_retry_requests, 0);
         for sequence in 1..=300 {
             prior.record_decision_input(&frame, sequence, sequence, 128, 0);
         }
