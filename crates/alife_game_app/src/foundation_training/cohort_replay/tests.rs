@@ -31,6 +31,81 @@ fn source() -> FoundationReplaySource {
     }
 }
 
+#[cfg(windows)]
+#[test]
+fn resident_continuous_replay_loader_uses_the_individuals_cohort_parent() {
+    // Authenticated I/O/codec fixture, not neural execution. A valid zstd
+    // stream with an unsupported schema proves the real loader found and read
+    // the intended cohort before rejecting the deliberately incomplete record.
+    let fixture = Fixture::new();
+    let window = fixture.0.join("window-00000000");
+    let individual = window.join("individual");
+    std::fs::create_dir_all(&individual).unwrap();
+    let mut writer = CohortReplayWriter::new(&window, source()).unwrap();
+    let raw = bincode::serde::encode_to_vec(1u32, bincode::config::standard()).unwrap();
+    let bytes = zstd::stream::encode_all(raw.as_slice(), 3).unwrap();
+    let template = FoundationReplayRecordRef {
+        record_index: 0,
+        segment: 0,
+        tick: 1,
+        encoded_bytes: 0,
+        digest: [0; 32],
+        cohort: Some(FoundationCohortReplayLocation {
+            offset: 0,
+            organism_id: 1,
+        }),
+    };
+    let reference = writer
+        .append_encoding(template, |out| {
+            out.write_all(&bytes)?;
+            Ok((bytes.len() as u64, *blake3::hash(&bytes).as_bytes()))
+        })
+        .unwrap();
+    writer.seal().unwrap();
+    let capacity = alife_core::BrainCapacityClass::n2048();
+    let genome = alife_core::BrainGenome::scaffold(91305, capacity.id());
+    let development = alife_core::DevelopmentState::new(
+        genome.id,
+        alife_core::Tick::ZERO,
+        alife_core::NormalizedScalar::new(1.0).unwrap(),
+    );
+    let phenotype = alife_core::PhenotypeCompiler::compile_testing_procedural_baseline(
+        &genome,
+        &capacity,
+        &development,
+        alife_core::SensorProfile::GroundedTerrainVisionV1,
+    )
+    .unwrap();
+    let refs = [reference];
+    let wrong = load_foundation_replay_window(
+        &window,
+        &refs,
+        0,
+        &source(),
+        &phenotype,
+        FoundationReplayBudget::default(),
+    )
+    .err()
+    .expect("the old one-level-high lookup must fail");
+    assert_eq!(
+        wrong.downcast_ref::<std::io::Error>().unwrap().kind(),
+        std::io::ErrorKind::NotFound
+    );
+    let correct = load_foundation_replay_window(
+        &individual,
+        &refs,
+        0,
+        &source(),
+        &phenotype,
+        FoundationReplayBudget::default(),
+    )
+    .err()
+    .expect("the incomplete schema fixture must remain rejected");
+    assert!(correct
+        .to_string()
+        .contains("unsupported compact replay schema 1"));
+}
+
 #[test]
 fn output_budget_replay_stream_refuses_before_disk_growth() {
     let fixture = Fixture::new();

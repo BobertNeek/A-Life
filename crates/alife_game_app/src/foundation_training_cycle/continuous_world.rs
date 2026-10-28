@@ -381,6 +381,9 @@ pub(super) fn run_same_individual_world(
             .decisions_per_update
             .min((request.total_trained_decisions as u64 - trained_rows) as usize);
         let window_root = work.join(format!("window-{completed_updates:08}"));
+        // The life directory's parent owns the sealed cohort bundle. Use the
+        // same directory for collection and both subsequent replay passes.
+        let replay_dir = window_root.join("individual");
         let phenotype = alife_core::PhenotypeCompiler::compile_validated(
             runtime.live_foundation_compiler_inputs(id)?,
             &alife_core::BrainCapacityClass::n2048(),
@@ -397,7 +400,7 @@ pub(super) fn run_same_individual_world(
         let mut cohort =
             crate::foundation_training::CohortReplayWriter::new(&window_root, source.clone())?;
         let mut writer = FoundationReplayWriter::new(
-            &window_root.join("individual"),
+            &replay_dir,
             source.clone(),
             phenotype.clone(),
             &asset,
@@ -612,13 +615,16 @@ pub(super) fn run_same_individual_world(
                 .map_or(refs.len(), |offset| segment_start + offset);
             for (chunk, slice) in refs[segment_start..end].chunks(512).enumerate() {
                 let window = load_foundation_replay_window(
-                    &window_root,
+                    &replay_dir,
                     slice,
                     0,
                     &source,
                     &phenotype,
                     budget,
-                )?;
+                )
+                .map_err(|error| {
+                    format!("continuous value replay {}: {error}", replay_dir.display())
+                })?;
                 values.extend(value.predict_values(&mut trainer, &window.sequence)?);
                 for (row, (behavior, patch)) in
                     window.behavior.iter().zip(&window.patches).enumerate()
@@ -706,14 +712,15 @@ pub(super) fn run_same_individual_world(
             |index| {
                 let (burn, start, end) = spans[index];
                 let replay = load_foundation_replay_window(
-                    &window_root,
+                    &replay_dir,
                     &refs[burn..end],
                     start - burn,
                     &source,
                     &phenotype,
                     budget,
                 )
-                .map_err(|_| {
+                .map_err(|error| {
+                    eprintln!("continuous PPO replay {}: {error}", replay_dir.display());
                     alife_training::TrainingError::from(
                         ScaffoldContractError::InvalidDecisionEvidence,
                     )
