@@ -141,7 +141,7 @@ fn persistent_batches_match_reconstruction_growth_and_exact_restart() {
     let mut overflow = rows[..1].to_vec();
     overflow[0].reward = f32::MAX;
     persistent
-        .replace_batch(&session, &[vec![10.0; 2]; 2], &overflow, 1)
+        .replace_batch(&session, &[vec![10.0; 2], vec![10.0; 2]], &overflow, 1)
         .unwrap();
     assert!(persistent
         .step_with_coefficient(&session, config, 1.0)
