@@ -29,6 +29,17 @@ def sha256(value):
     return hashlib.sha256(value).hexdigest()
 
 
+def policy_asset_identity(path):
+    """Hash every asset byte and retain its digest trailer in bounded memory."""
+    digest, trailer = hashlib.sha256(), b""
+    with path.open("rb") as stream:
+        while block := stream.read(65536):
+            digest.update(block)
+            # A short final/read fragment can complete a trailer begun earlier.
+            trailer = block[-32:] if len(block) >= 32 else (trailer + block)[-32:]
+    return digest.hexdigest(), trailer
+
+
 def checked_sha(value, label):
     if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{64}", value):
         raise InvalidComparisonEvidence(f"invalid {label} SHA-256")
@@ -90,11 +101,11 @@ def load_identity(directory, *, expected_policy_sha256, expected_executable_sha2
         raise InvalidComparisonEvidence("unsupported world signature/subject")
     if not isinstance(world["words"], list) or len(world["words"]) != 4 or any(type(w) is not int or not 0 <= w < 2**64 for w in world["words"]):
         raise InvalidComparisonEvidence("malformed world signature words")
-    asset = (directory / "initial.alife-foundation").read_bytes()
-    if sha256(asset) != expected_policy_sha256 or checked_sha(identity["policy_sha256"], "recorded policy") != expected_policy_sha256:
+    asset_sha256, asset_trailer = policy_asset_identity(directory / "initial.alife-foundation")
+    if asset_sha256 != expected_policy_sha256 or checked_sha(identity["policy_sha256"], "recorded policy") != expected_policy_sha256:
         raise InvalidComparisonEvidence("policy asset does not match the predeclared treatment")
     digest = identity["policy_asset_digest"]
-    if not isinstance(digest, list) or len(digest) != 32 or any(type(x) is not int or not 0 <= x <= 255 for x in digest) or len(asset) < 32 or bytes(digest) != asset[-32:]:
+    if not isinstance(digest, list) or len(digest) != 32 or any(type(x) is not int or not 0 <= x <= 255 for x in digest) or len(asset_trailer) < 32 or bytes(digest) != asset_trailer:
         raise InvalidComparisonEvidence("policy digest is not bound to the canonical asset")
     if required(pilot, "source_asset_digest") != bytes(digest).hex():
         raise InvalidComparisonEvidence("pilot policy provenance differs from native identity")

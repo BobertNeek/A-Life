@@ -1,9 +1,11 @@
 """CPU-only evidence tests; synthetic assets are never admitted or executed."""
 import copy
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import compare_foundation_probes as compare
 
@@ -162,6 +164,86 @@ class FoundationCheckpointComparisonTests(unittest.TestCase):
         (self.candidate / 'initial.alife-foundation').write_bytes(b'corrupt')
         with self.assertRaises(compare.InvalidComparisonEvidence):
             self.run_comparison()
+
+    def test_complete_comparison_uses_bounded_asset_reads(self):
+        expected = self.run_comparison()
+        original_open, reads = Path.open, []
+        test = self
+
+        class BoundedReader:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.stream.close()
+
+            def read(self, size=-1):
+                test.assertGreater(size, 0, 'asset must not be read all at once')
+                test.assertLessEqual(size, 65536)
+                data = self.stream.read(size)
+                reads.append(len(data))
+                return data
+
+        def opened(path, *args, **kwargs):
+            stream = original_open(path, *args, **kwargs)
+            return BoundedReader(stream) if path.name == 'initial.alife-foundation' else stream
+
+        with patch.object(Path, 'open', opened):
+            self.assertEqual(self.run_comparison(), expected)
+        self.assertEqual(sum(reads), sum((p / 'initial.alife-foundation').stat().st_size
+                                        for p in (self.control, self.candidate)))
+
+    def test_asset_hash_and_trailer_match_complete_bytes_at_read_boundaries(self):
+        path = self.control / 'initial.alife-foundation'
+        for size in (0, 1, 31, 32, 33, 65535, 65536, 65537, 131073):
+            with self.subTest(size=size):
+                data = (bytes(range(256)) * (size // 256 + 1))[:size]
+                path.write_bytes(data)
+                self.assertEqual(compare.policy_asset_identity(path),
+                                 (compare.sha256(data), data[-32:]))
+
+    def test_asset_trailer_survives_short_nonfinal_reads(self):
+        data = bytes(range(100))
+
+        class FragmentedReader(io.BytesIO):
+            def read(self, size=-1):
+                return super().read(min(size, 7))
+
+        with patch.object(Path, 'open', return_value=FragmentedReader(data)):
+            self.assertEqual(compare.policy_asset_identity(Path('unused')),
+                             (compare.sha256(data), data[-32:]))
+
+    def test_short_asset_still_fails_canonical_trailer_binding(self):
+        path = self.candidate / 'initial.alife-foundation'
+        for size in (0, 1, 31):
+            with self.subTest(size=size):
+                data = b'x' * size
+                path.write_bytes(data)
+                self.hashes[1] = compare.sha256(data)
+                self.pilots[1]['initial_checkpoint_assessment_identity']['policy_sha256'] = self.hashes[1]
+                with self.assertRaisesRegex(compare.InvalidComparisonEvidence, 'canonical asset'):
+                    self.run_comparison()
+
+    def test_asset_bytes_in_every_chunk_remain_bound_in_both_scopes(self):
+        path = self.candidate / 'initial.alife-foundation'
+        digest = bytes(self.pilots[1]['initial_checkpoint_assessment_identity']['policy_asset_digest'])
+        data = b'x' * (3 * 65536) + digest
+        self.hashes[1] = compare.sha256(data)
+        for key in ('initial_checkpoint_assessment_identity', 'initial_comparison_identity'):
+            self.pilots[1][key]['policy_sha256'] = self.hashes[1]
+        for scope in compare.SCOPES:
+            for index in (0, 65536, 2 * 65536, len(data) - 1):
+                with self.subTest(scope=scope, index=index):
+                    changed = bytearray(data)
+                    changed[index] ^= 1
+                    path.write_bytes(changed)
+                    with self.assertRaisesRegex(compare.InvalidComparisonEvidence, 'predeclared treatment'):
+                        self.run_comparison(scope)
+            path.write_bytes(data)
+            self.run_comparison(scope)
 
     def test_nuisance_mismatches_still_bind(self):
         mutations = (
