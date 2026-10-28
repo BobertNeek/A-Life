@@ -258,8 +258,147 @@ fn terminal_recovery_case(injected_failure: Option<&str>) {
     assert_eq!(fs::read(&copied).unwrap(), copied_before);
     // Optional output is a disposable synthetic CPU fixture for actual CLI gates.
     if injected_failure.is_none() {
+        explicit_training_branch_case(&fixture.root, &copied, &retired, nonce, &baseline);
         if let Some(path) = std::env::var_os("ALIFE_CONTINUOUS_TERMINAL_FIXTURE_OUTPUT") {
             write_new(Path::new(&path), &copied_before).unwrap();
         }
     }
+}
+
+fn explicit_training_branch_case(
+    root: &Path,
+    source: &Path,
+    retired: &CurrentTrainingCheckpointV1,
+    old_nonce: u64,
+    original_baseline: &CurrentTrainingCheckpointV1,
+) {
+    let original = fs::read(source).unwrap();
+    let nonce = old_nonce + 1; // The actual first reserved-unused tail.
+    assert!(original_baseline
+        .begin_training_attempt_from_terminal(&original_baseline.encode().unwrap(), nonce)
+        .is_err());
+    for invalid in [0, retired.seed, old_nonce, nonce + 1] {
+        assert!(retired
+            .begin_training_attempt_from_terminal(&original, invalid)
+            .is_err());
+    }
+    let branch = retired
+        .begin_training_attempt_from_terminal(&original, nonce)
+        .unwrap();
+    assert_eq!(fs::read(source).unwrap(), original);
+    assert_eq!(branch.handoff, retired.handoff);
+    assert_eq!(branch.life, retired.life);
+    assert_eq!(branch.seeds, retired.seeds); // No reserve or consume at reset.
+    assert_eq!(branch.same_individual, retired.same_individual);
+    assert!(branch.terminal_disposition.is_none());
+    let origin = branch.training_attempt_origin.as_ref().unwrap();
+    assert_eq!(origin.attempt_nonce, nonce);
+    assert_eq!(origin.source_current_sha256, hash(&original));
+    assert_eq!(
+        Some(&origin.source_terminal),
+        retired.terminal_disposition.as_ref()
+    );
+    assert!(origin.previous.is_none());
+    assert!(branch.require_training_session_nonce(nonce).is_ok());
+    assert!(branch.require_training_session_nonce(nonce + 1).is_err());
+    assert!(branch.require_fresh_cohort_continuation().is_err());
+    assert_eq!(
+        CurrentTrainingCheckpointV1::decode(&branch.encode().unwrap()).unwrap(),
+        branch
+    );
+    let mut changed_heads = branch.clone();
+    changed_heads.handoff.actor.first_moment[0] += 0.001;
+    assert!(changed_heads.encode().is_err());
+    let mut changed = branch.clone();
+    changed
+        .training_attempt_origin
+        .as_mut()
+        .unwrap()
+        .source_terminal
+        .terminal_event["world_tick"] = 0.into();
+    assert!(changed.encode().is_err());
+
+    let store = root.join("explicit-training-branch");
+    fs::create_dir(&store).unwrap();
+    let store = store.canonicalize().unwrap();
+    let current = store.join("current.alife-checkpoint");
+    let bytes = branch.encode().unwrap();
+    fs::write(&current, &bytes).unwrap();
+    assert_eq!(read_current_training_checkpoint(&current).unwrap(), branch);
+    let now = now_seconds().unwrap();
+    let mut request = ResidentContinuousRequest {
+        schema: 1,
+        seed_range: [nonce + 1, nonce + 2],
+        total_trained_decisions: 100,
+        decisions_per_update: 10,
+        snapshot_every_updates: 1,
+        sampling_temperature: 1.,
+        collection_cutoff_unix_seconds: now + 3600,
+        finalization_deadline_unix_seconds: now + 7200,
+        max_temporary_bytes: 2 * 1024 * 1024 * 1024,
+    };
+    assert!(run_resident_continuous_care(&store, request.clone())
+        .unwrap_err()
+        .to_string()
+        .contains("attempt nonce"));
+    assert!(!store.join(".run").exists());
+    assert!(!store.join(INITIALIZATION).exists());
+    // Simulate the real dispatch WAL boundary, without a world/GPU execution.
+    // Recovery must retain all acquired state and origin, and consume only nonce.
+    request.seed_range = [nonce, nonce + 1];
+    let owner = Owner {
+        schema: 1,
+        kind: KIND.into(),
+        store: store.clone(),
+        pid: std::process::id(),
+        baseline_sha256: hash(&bytes),
+        request_sha256: hash(&serde_json::to_vec(&request).unwrap()),
+        request: request.clone(),
+    };
+    let run = store.join(".run");
+    fs::create_dir(&run).unwrap();
+    write_new(&run.join("run.json"), &serde_json::to_vec(&owner).unwrap()).unwrap();
+    write_new(&run.join("baseline.alife-checkpoint"), &bytes).unwrap();
+    let mut wal = initial_wal(&owner, &branch).unwrap();
+    wal.consumed = true;
+    wal.seeds = session_seeds(&branch.seeds, &request, true).unwrap();
+    write_metadata(&run.join("seed-wal.bin"), WAL, &wal).unwrap();
+    write_metadata(
+        &run.join("continuous-frontier.bin"),
+        FRONTIER,
+        &initial_frontier(&owner),
+    )
+    .unwrap();
+    let report = recover_resident_serial_checkpoint(&store).unwrap();
+    let successor =
+        read_current_training_checkpoint(Path::new(report["candidate"].as_str().unwrap())).unwrap();
+    assert_eq!(
+        successor.training_attempt_origin,
+        branch.training_attempt_origin
+    );
+    assert_eq!(successor.handoff, branch.handoff);
+    assert_eq!(successor.life, branch.life);
+    assert_eq!(successor.seeds.pending_range, Some([nonce + 1, nonce + 1]));
+    assert!(successor.require_training_session_nonce(nonce + 1).is_ok());
+    assert_eq!(report["seeds_consumed"], 1);
+    // A later observed terminal retains this origin rather than erasing it.
+    let mut event = origin.source_terminal.terminal_event.clone();
+    event["session_nonce"] = nonce.into();
+    let terminal = successor
+        .with_terminal_disposition(&hash(&bytes), &owner.request_sha256, nonce, event)
+        .unwrap();
+    let second = terminal
+        .begin_training_attempt_from_terminal(&terminal.encode().unwrap(), nonce + 1)
+        .unwrap();
+    assert_eq!(
+        second
+            .training_attempt_origin
+            .as_ref()
+            .unwrap()
+            .previous
+            .as_deref(),
+        Some(origin)
+    );
+    assert_eq!(second.seeds, terminal.seeds);
+    assert_eq!(fs::read(source).unwrap(), original);
 }
