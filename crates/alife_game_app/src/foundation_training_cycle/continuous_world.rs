@@ -1350,6 +1350,7 @@ mod tests {
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
                 .unwrap()
                 .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
         for label in ["hazard-01", "obstacle-02"] {
             let entity = world.entity_id(label).unwrap();
             world.editor_remove_object(entity).unwrap();
