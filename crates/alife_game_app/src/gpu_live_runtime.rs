@@ -205,6 +205,10 @@ struct StagedSleepAuthority {
     sealed_patch_count: usize,
     retained_learning: BTreeMap<u64, RetainedLearningRecovery>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    // Learned global heads may advance between periodic exact snapshots. Before
+    // a sleep journal can bind a request to those heads, establish a new exact
+    // private epoch; do not reuse the older packet's phenotype identity.
+    live_policy_exact_base_required: bool,
     pending_recovery_sleep_edges: BTreeMap<u64, PendingRecoverySleepEdge>,
     pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
     pending_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
@@ -227,6 +231,7 @@ impl StagedSleepAuthority {
             sealed_patch_count: runtime.sealed_patch_count,
             retained_learning: runtime.retained_learning.clone(),
             sleep_journal_neural_authorities: runtime.sleep_journal_neural_authorities.clone(),
+            live_policy_exact_base_required: runtime.live_policy_exact_base_required,
             pending_recovery_sleep_edges: runtime.pending_recovery_sleep_edges.clone(),
             pending_exact_sleep_journal_entries: runtime
                 .pending_exact_sleep_journal_entries
@@ -251,6 +256,7 @@ impl StagedSleepAuthority {
         runtime.retained_learning = self.retained_learning;
         if !runtime.post_irreversible_gpu_commit_fail_stop_armed {
             runtime.sleep_journal_neural_authorities = self.sleep_journal_neural_authorities;
+            runtime.live_policy_exact_base_required = self.live_policy_exact_base_required;
             runtime.pending_recovery_sleep_edges = self.pending_recovery_sleep_edges;
             runtime.pending_exact_sleep_journal_entries = self.pending_exact_sleep_journal_entries;
             runtime.pending_sleep_journal_entries = self.pending_sleep_journal_entries;
@@ -3518,6 +3524,7 @@ pub struct GpuLiveBrainRuntime {
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     sleep_journal_neural_authorities: BTreeMap<u64, SleepJournalNeuralAuthority>,
+    live_policy_exact_base_required: bool,
     // Process-local transitions made before the staged tick observes the scheduler.
     pending_recovery_sleep_edges: BTreeMap<u64, PendingRecoverySleepEdge>,
     pending_exact_sleep_journal_entries: Vec<GpuSleepTransactionJournalEntryV2>,
@@ -5790,6 +5797,7 @@ impl GpuLiveBrainRuntime {
             memories: BTreeMap::new(),
             topologies: BTreeMap::new(),
             sleep_journal_neural_authorities: BTreeMap::new(),
+            live_policy_exact_base_required: false,
             pending_recovery_sleep_edges: BTreeMap::new(),
             pending_exact_sleep_journal_entries: Vec::new(),
             sleep_journal_publication_worker: None,

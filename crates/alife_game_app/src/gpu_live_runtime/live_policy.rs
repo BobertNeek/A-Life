@@ -275,6 +275,7 @@ impl GpuLiveBrainRuntime {
             .expect("prevalidated resident");
         resident.phenotype = transition.next_phenotype().clone();
         resident.compiler_inputs = transition.next_inputs().clone();
+        self.live_policy_exact_base_required = true;
         resident.neural_receptors = receptors;
         self.handles.insert(organism_id.raw(), receipt.handle);
         if self
@@ -716,6 +717,76 @@ mod tests {
         );
         assert!(!restored.last_learning_receipts.is_empty());
         assert!(restored.last_post_seal_learning_failures.is_empty());
+        // Another in-memory policy version does NOT require an immediate full
+        // save. Its first real sleep edge must nevertheless get a new exact
+        // epoch before a request-bound compact journal can reuse that base.
+        let current_inputs = restored
+            .live_foundation_compiler_inputs(organism)
+            .unwrap()
+            .clone();
+        let next_transition = alife_core::N2048LivePolicyTransition::prepare(
+            &current_inputs,
+            transition.next_policy(),
+            current_inputs.n2048_candidate_asset().unwrap().clone(),
+        )
+        .unwrap();
+        restored
+            .install_live_foundation_policy(organism, &next_transition)
+            .unwrap();
+        assert!(restored.live_policy_exact_base_required);
+        let old_base_hash = restored
+            .checkpoint_durability
+            .as_ref()
+            .unwrap()
+            .published
+            .save
+            .creatures[0]
+            .gpu_brain
+            .as_ref()
+            .unwrap()
+            .phenotype_hash;
+        assert_ne!(
+            old_base_hash,
+            next_transition.next_phenotype().phenotype_hash()
+        );
+        restored.request_recovery_sleep(organism).unwrap();
+        let deadline = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 120;
+        let mut requested_exact = restored.exact_checkpoint_coordinator.is_active();
+        for _ in 0..128 {
+            if requested_exact {
+                break;
+            }
+            restored.tick_outcome().unwrap();
+            restored.take_foundation_training_steps();
+            requested_exact = restored.exact_checkpoint_coordinator.is_active();
+        }
+        assert!(
+            requested_exact,
+            "first post-install sleep edge needs a new exact epoch"
+        );
+        restored
+            .quiesce_live_foundation_checkpoint(deadline)
+            .unwrap();
+        assert!(!restored.live_policy_exact_base_required);
+        let sleep_base = &restored
+            .checkpoint_durability
+            .as_ref()
+            .unwrap()
+            .published
+            .save;
+        assert_eq!(
+            sleep_base.creatures[0]
+                .gpu_brain
+                .as_ref()
+                .unwrap()
+                .phenotype_hash,
+            next_transition.next_phenotype().phenotype_hash()
+        );
+        sleep_base.validate_with_asset_root(&asset_root).unwrap();
         drop(restored);
         drop(runtime);
         // Failure deliberately retains this disposable directory for diagnosis.
