@@ -1370,6 +1370,7 @@ mod tests {
             .unwrap();
         let subject_position = subject.position;
         let target = world.entity(scenario.food).unwrap();
+        let target_position = target.position;
         let distance =
             (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z);
         assert!((distance - 1.0).abs() < 0.001);
@@ -1392,13 +1393,22 @@ mod tests {
                 homeostasis,
             )
             .unwrap();
-        assert!(frame
-            .candidates()
-            .iter()
-            .any(
-                |candidate| candidate.action_id == alife_world::HeadlessActionIds::EAT
+        assert!(
+            frame.candidates().iter().any(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
                     && candidate.target.entity == Some(scenario.food)
-            ));
+            }),
+            "food {:?}; body {:?}; target {:?}; visible {:?}; candidate targets {:?}",
+            scenario.food,
+            subject_position,
+            target_position,
+            report.visible_entities,
+            frame
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.action_id, candidate.target.entity))
+                .collect::<Vec<_>>()
+        );
         let far = alife_core::Vec3f::new(
             subject_position.x + 10.0,
             subject_position.y,
