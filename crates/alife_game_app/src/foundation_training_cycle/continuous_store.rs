@@ -6,6 +6,7 @@ use alife_training::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
+    io::{ErrorKind, Read},
     path::PathBuf,
 };
 
@@ -22,6 +23,24 @@ mod protocol;
 #[cfg(test)]
 #[path = "continuous_store/terminal_tests.rs"]
 mod terminal_tests;
+
+/// Hash identity-only reads without allocating another encoded checkpoint.
+/// Callers retain their regular-file and size admission checks.
+fn hash_file(path: &Path) -> Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = match file.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(count) => count,
+            Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error.into()),
+        };
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -347,10 +366,10 @@ fn abort_initialization(store: &Path) -> Result<serde_json::Value> {
         }
         let current = store.join("current.alife-checkpoint");
         regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-        let digest = hash(&fs::read(&current)?);
+        let digest = hash_file(&current)?;
         alife_storage::remove_file(&pending)?;
         sync_directory(store)?;
-        if hash(&fs::read(&current)?) != digest {
+        if hash_file(&current)? != digest {
             return Err("Current changed during unbound continuous startup cleanup".into());
         }
         return Ok(initialization_report(store, &digest, false));
@@ -430,7 +449,7 @@ fn abort_initialization(store: &Path) -> Result<serde_json::Value> {
         alife_storage::remove_dir_all(&run)?;
         sync_directory(store)?;
     }
-    if hash(&fs::read(current)?) != o.baseline_sha256 {
+    if hash_file(&current)? != o.baseline_sha256 {
         return Err("Current changed during continuous startup cleanup".into());
     }
     if pending.exists() {
@@ -530,7 +549,7 @@ pub fn run_resident_continuous_care(
     write_metadata(&run.join("seed-wal.bin"), WAL, &wal)?;
     write_metadata(&run.join("continuous-frontier.bin"), FRONTIER, &frontier)?;
     if fs::read(store.join(INITIALIZATION))? != init_bytes
-        || hash(&fs::read(&current)?) != o.baseline_sha256
+        || hash_file(&current)? != o.baseline_sha256
     {
         return Err("continuous initialization or canonical Current changed".into());
     }
@@ -569,7 +588,7 @@ pub fn run_resident_continuous_care(
             Ok(())
         },
     )?;
-    if hash(&fs::read(&current)?) != o.baseline_sha256 {
+    if hash_file(&current)? != o.baseline_sha256 {
         return Err("immutable Current changed during continuous producer".into());
     }
     persist_outcome(&run, &o, "continuous-result.bin", &result)?;
@@ -665,7 +684,7 @@ fn commit_snapshot(
     if let Some(old) = obsolete {
         let p = run.join(old.file);
         regular(&p, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-        if hash(&fs::read(&p)?) != old.sha256 {
+        if hash_file(&p)? != old.sha256 {
             return Err("obsolete continuous snapshot changed; preserving it".into());
         }
         alife_storage::remove_file(p)?;
@@ -691,7 +710,7 @@ fn admitted_run(
     directory(&run)?;
     let base_path = run.join("baseline.alife-checkpoint");
     regular(&base_path, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-    if hash(&fs::read(&base_path)?) != o.baseline_sha256 {
+    if hash_file(&base_path)? != o.baseline_sha256 {
         return Err("continuous baseline copy changed".into());
     }
     let base = read_current_training_checkpoint(&base_path)?;
@@ -737,7 +756,7 @@ fn restored_snapshot(
     }
     let path = run.join(&s.file);
     regular(&path, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-    if hash(&fs::read(&path)?) != s.sha256 {
+    if hash_file(&path)? != s.sha256 {
         return Err("continuous committed snapshot changed".into());
     }
     let saved = read_current_training_checkpoint(&path)?;
@@ -780,7 +799,7 @@ pub(super) fn recover_locked(store: &Path) -> Result<serde_json::Value> {
     let (o, base, wal, frontier) = admitted_run(store)?;
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-    let current_hash = hash(&fs::read(&current)?);
+    let current_hash = hash_file(&current)?;
     let candidate_path = run.join("recovered-current.alife-checkpoint");
     let mut checkpoint = match &frontier.snapshot {
         Some(s) => restored_snapshot(&run, &o, &base, &wal, s)?,
@@ -860,7 +879,7 @@ fn inventory(
             inventory(root, &p, files, dirs)?;
         } else {
             regular(&p, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-            files.insert(relative, hash(&fs::read(p)?));
+            files.insert(relative, hash_file(&p)?);
         }
     }
     Ok(())
@@ -924,7 +943,7 @@ pub(super) fn finish_locked(store: &Path) -> Result<serde_json::Value> {
     let run = store.join(".run");
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
-    let current_hash = hash(&fs::read(&current)?);
+    let current_hash = hash_file(&current)?;
     let marker = store.join(RETIREMENT);
     let pending = store.join(RETIREMENT_NEXT);
     let record: ContinuousRetirement = if marker.exists() {
@@ -1031,7 +1050,7 @@ pub(super) fn finish_locked(store: &Path) -> Result<serde_json::Value> {
         alife_storage::remove_dir_all(&run)?;
         sync_directory(store)?;
     }
-    if hash(&fs::read(&current)?) != current_hash {
+    if hash_file(&current)? != current_hash {
         return Err("Current changed during continuous retirement".into());
     }
     if pending.exists() {
@@ -1164,6 +1183,42 @@ mod tests {
         }
     }
     #[test]
+    fn file_hash_matches_checkpoint_bytes_across_read_boundaries() {
+        let f = Fixture::new();
+        let path = f.0.join("hash-input");
+        assert!(hash_file(&path).is_err());
+        for size in [0, 1, 65535, 65536, 65537, 2 * 65536, 2 * 65536 + 17] {
+            let bytes: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
+            fs::write(&path, &bytes).unwrap();
+            assert_eq!(hash_file(&path).unwrap(), hash(&bytes), "size {size}");
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn changed_multichunk_baseline_refuses_recovery() {
+        let f = Fixture::new();
+        let mut o = f.initialized();
+        let current = fs::read(f.0.join("current.alife-checkpoint")).unwrap();
+        let path = f.0.join(".run/baseline.alife-checkpoint");
+        let mut bytes = vec![7; 2 * 65536 + 17];
+        o.baseline_sha256 = hash(&bytes);
+        fs::write(f.0.join(".run/run.json"), serde_json::to_vec(&o).unwrap()).unwrap();
+        *bytes.last_mut().unwrap() ^= 1;
+        fs::write(&path, &bytes).unwrap();
+        let _lease = store_lease(&f.0).unwrap();
+        let error = admitted_run(&f.0).unwrap_err().to_string();
+        assert!(error.contains("continuous baseline copy changed"));
+        assert!(f.0.join(".run").is_dir());
+        assert!(f.0.join(INITIALIZATION).is_file());
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        assert_eq!(
+            fs::read(f.0.join("current.alife-checkpoint")).unwrap(),
+            current
+        );
+    }
+
+    #[test]
     fn interrupted_initialization_accepts_only_its_exact_unpublished_prefixes() {
         let f = Fixture::new();
         let o = f.initialized();
@@ -1233,13 +1288,13 @@ mod tests {
     #[test]
     fn torn_initialization_reports_unchanged_candidate_without_invented_binding() {
         let f = Fixture::new();
-        let source = b"unchanged source, not certified by initializer abort";
-        fs::write(f.0.join("current.alife-checkpoint"), source).unwrap();
+        let source = vec![42; 2 * 65536 + 17];
+        fs::write(f.0.join("current.alife-checkpoint"), &source).unwrap();
         fs::write(f.0.join(INITIALIZATION_NEXT), &INIT[..4]).unwrap();
         let _lease = store_lease(&f.0).unwrap();
         assert!(owns(&f.0).unwrap());
         let report = recover_locked(&f.0).unwrap();
-        assert_initialization_report(&f.0, &report, source, false);
+        assert_initialization_report(&f.0, &report, &source, false);
         assert_eq!(
             fs::read(f.0.join("current.alife-checkpoint")).unwrap(),
             source
@@ -1285,7 +1340,8 @@ mod tests {
         let run = f.0.join(".run");
         fs::create_dir(&run).unwrap();
         fs::write(run.join("a"), b"a").unwrap();
-        fs::write(run.join("b"), b"b").unwrap();
+        let mut source = vec![9; 2 * 65536 + 17];
+        fs::write(run.join("b"), &source).unwrap();
         let mut files = BTreeMap::new();
         let mut directories = BTreeSet::new();
         inventory(&run, &run, &mut files, &mut directories).unwrap();
@@ -1303,8 +1359,10 @@ mod tests {
         fs::write(run.join("new"), b"unrelated").unwrap();
         assert!(validate_retirement_tree(&run, &r).is_err());
         fs::remove_file(run.join("new")).unwrap();
-        fs::write(run.join("b"), b"changed").unwrap();
+        *source.last_mut().unwrap() ^= 1;
+        fs::write(run.join("b"), &source).unwrap();
         assert!(validate_retirement_tree(&run, &r).is_err());
+        assert_eq!(fs::read(run.join("b")).unwrap(), source);
     }
 
     #[test]
