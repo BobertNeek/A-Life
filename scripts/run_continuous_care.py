@@ -223,6 +223,7 @@ def read_events(lane):
                 'resident-provisional-episode-v1', 'resident-serial-finished-v1',
                 'continuous-started-v1', 'continuous-update-v1',
                 'continuous-untrained-window-v1', 'continuous-terminal-v1', 'continuous-care-assistance-v1',
+                'continuous-care-reposition-v1',
                 'continuous-world-finished-v1'):
             events.append(event)
     return events
@@ -431,6 +432,7 @@ def finish(lane, state, validate):
         'value_optimizer_step_delta': admitted['value_optimizer_step'] - state['before']['value_optimizer_step'],
         'native_exit_error': state.get('native_exit_error'),
         'care_assistance': next((e for e in events if e['kind'] == 'continuous-care-assistance-v1'), None),
+        'care_food_reposition_events': sum(e['kind'] == 'continuous-care-reposition-v1' for e in events),
         'observed_rows': rows,
         'observed_updates': updates[-8:], 'observed_update_count': len(updates), 'producer_mode': mode,
         'native_summary': recovery.get('producer_result') or next((e for e in reversed(events)
