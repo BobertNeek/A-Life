@@ -24,6 +24,8 @@ from refine_hearthling_selected import refine_selected_references
 refine_selected_references()
 from bake_hearthling_fur import bake_fur
 bake_fur()
+from refine_hearthling_extremities import refine_extremities
+refine_extremities()
 rig = bpy.data.objects['Hearthling_Rig']
 scene = bpy.context.scene
 p = rig.pose.bones

@@ -27,3 +27,43 @@ The re-import review checks every authored frame at compact, neutral and broad
 paw scales, then renders the three clips and facial blinks. Set
 `HEARTHLING_REVIEW_CPU=1` for CPU Cycles review; these previews are asset checks,
 not native gameplay or frame-time evidence.
+
+## Chubby raccoon-shaped extremities (2026-10-28)
+
+The existing Hearthling now has five rounded, varied-length digits per hand,
+a short fifth side digit and cushioned palm, plus five distinct toes and a longer,
+flatter sole. This changes the extremities, not the selected creature identity.
+Palm pads and finger curl share the same side; fifth-digit placement is mirrored
+with the correct chirality. The wrist is welded into the forearm and the ankle
+into the leg, rather than covering either joint with overlapping mitten shapes.
+
+The native source retains the original 34-joint rig and three clips. Individual
+fingers do not add bones or independently animate; they reuse each existing hand
+bone and the compact/neutral/broad presentation scale. The six materials, one
+packed normal atlas and its two texture registrations are unchanged. New smooth
+surfaces use a checked, flat corner of that atlas. The original sculpt and all
+prior refinement stages remain the reproducible source chain.
+
+`refine_hearthling_extremities.py` applies this pass once to a pre-extremity
+checkpoint (for example the editable asset at commit `240f434c`). Reapplication
+is rejected before writing. To keep a review export separate:
+
+```sh
+blender --background --python-exit-code 1 --python scripts/refine_hearthling_extremities.py -- --source /path/to/pre-pass/hearthling.blend --output-dir /path/to/review
+```
+
+The full `export_hearthling.py` pipeline includes the same pass after the fur
+bake. Bridge tessellation is explicitly nondegenerate, and the entry point checks
+3D and UV area for every new hand/foot triangle before saving. Source and runtime
+asset inspection covers all 657 authored clip/profile samples, grounding and eye
+occlusion; CPU Cycles previews are not a native gameplay/FPS benchmark.
+
+| Shipping cost | Before | This pass |
+| --- | ---: | ---: |
+| Triangles | 32,694 | 32,718 |
+| Exported vertices | 33,027 | 33,952 |
+| GLB bytes | 3,067,564 | 3,123,208 |
+| Meshes / material primitives | 1 / 6 | 1 / 6 |
+
+The increase is 24 triangles, 925 exported vertices and 55,644 bytes, without new
+material, texture, joint or clip cost. Native frame-time impact remains unmeasured.

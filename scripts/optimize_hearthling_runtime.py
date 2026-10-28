@@ -4,7 +4,8 @@ The editable Blender source remains untouched. Run after export_hearthling.py.
 import bpy, json
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-HERE=ROOT/'crates/alife_game_app/assets/creatures/hearthling'
+# A review entry point may isolate output without editing the exporter source.
+HERE=Path(globals().get('HEARTHLING_ASSET_DIR', ROOT/'crates/alife_game_app/assets/creatures/hearthling'))
 bpy.ops.wm.open_mainfile(filepath=str(HERE/'hearthling.blend'))
 normal=bpy.data.images['Hearthling_FurNormal']
 normal.scale(1024,1024)
