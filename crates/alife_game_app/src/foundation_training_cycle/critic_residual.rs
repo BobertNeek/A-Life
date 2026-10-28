@@ -387,5 +387,30 @@ mod tests {
         )
         .is_err());
         assert_eq!(checkpoint, before);
+
+        // An accepted finite weight update can still overflow the subsequent
+        // predictions. The after-evaluation error must also prevent publication.
+        let explosive = PpoValueHeadCheckpoint {
+            parameters: vec![0.0; 9],
+            ..checkpoint
+        };
+        let features = vec![vec![1000.0; 2]; 2];
+        let transitions = vec![transition(PpoBoundary::Truncated, 60.0)];
+        let config = PpoConfig {
+            value_optimizer: alife_training::AdamWConfig {
+                learning_rate: f32::MAX / 10.0,
+                ..config.value_optimizer
+            },
+            ..config
+        };
+        let rows = residual_rows(&transitions, 2, 60.0).unwrap();
+        let mut residual =
+            FrozenCriticResidualExperiment::new(&session, &explosive, &features, &rows, 1).unwrap();
+        assert!(residual.evaluate(&session).is_ok());
+        assert!(residual
+            .step_with_coefficient(&session, config.value_optimizer, config.value_coefficient)
+            .is_ok());
+        assert!(residual.evaluate(&session).is_err());
+        assert!(train(&session, explosive, &features, &transitions, config, 1, 12).is_err());
     }
 }

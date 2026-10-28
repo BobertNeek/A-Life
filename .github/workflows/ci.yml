@@ -101,8 +101,12 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib gpu_live_runtime::headless_trace::tests'
       - name: Group-50 native admission and replay CPU contracts
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group::'
-      - name: Compile opt-in group-50 hardware fixture
-        run: cargo check --locked -p alife_game_app --features foundation-training,gpu-tests --test group50_gpu
+      - name: Residual critic batching CPU regression
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::critic_residual::
+      - name: Compile opt-in residual critic hardware fixture
+        run: cargo check --locked -p alife_training --features gpu-tests --lib --tests
+      - name: Compile opt-in training hardware fixtures
+        run: cargo check --locked -p alife_game_app --features foundation-training,gpu-tests --all-targets
       - name: Objective continuation CPU tests
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::founder_refresh_tests::objective_continuation
       - name: Initial actor checkpoint CPU tests
