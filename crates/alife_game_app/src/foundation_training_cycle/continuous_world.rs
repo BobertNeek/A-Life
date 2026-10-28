@@ -213,26 +213,70 @@ fn care_food_position_in_gaze(
     Some(position)
 }
 
+struct ContinuousCareAssistance {
+    food: alife_core::WorldEntityId,
+    start_tick: u64,
+}
+
 fn prepare_care_assistance(
     world: &mut alife_world::HeadlessWorld,
     id: OrganismId,
-    session_nonce: u64,
-) -> Result<crate::foundation_training::FoundationScenarioSetup> {
+) -> Result<ContinuousCareAssistance> {
     let position =
         care_food_position_in_gaze(world, id).ok_or("no walkable care placement in gaze")?;
-    let mut scenario = crate::foundation_training::configure_foundation_scenario(
+    let food = world.entity_id("food-01").ok_or("care food missing")?;
+    if !world.entity(food).is_some_and(care_food_ready)
+        || !crate::foundation_training::relocate_unheld_foundation_food(world, food, position)?
+    {
+        return Err("care food is unavailable for placement".into());
+    }
+    Ok(ContinuousCareAssistance {
+        food,
+        start_tick: world.tick().raw(),
+    })
+}
+
+fn expose_care_cue(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+    care: &ContinuousCareAssistance,
+) -> Result<()> {
+    let position = world
+        .entity(care.food)
+        .ok_or("care cue food missing")?
+        .position;
+    alife_school::LanguageNursery::speak_in_world(
         world,
-        session_nonce,
-        Some(crate::FoundationTeacherLesson::Feeding),
-        Some([position.x, position.z]),
-        false,
+        id,
+        alife_core::Vec3f::new(position.x, position.y, position.z + 2.0),
+        [8, 1]
+            .into_iter()
+            .map(alife_core::LanguageTokenId::new)
+            .collect::<std::result::Result<Vec<_>, _>>()?,
     )?;
-    scenario.teacher_cue_tokens = vec![8, 1];
-    Ok(scenario)
+    Ok(())
 }
 
 fn care_cue_due(tick: u64, start: u64, available: bool, last: Option<u64>) -> bool {
     available && tick.saturating_sub(start).is_multiple_of(24) && last != Some(tick)
+}
+
+fn care_food_is_far(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> bool {
+    let Some(subject) = world
+        .organism_registry()
+        .get(id)
+        .and_then(|record| world.entity(record.world_entity_id()))
+    else {
+        return false;
+    };
+    let Some(target) = world.entity(food).filter(|food| care_food_ready(food)) else {
+        return false;
+    };
+    (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z) > 4.0
 }
 
 fn tick_limit(decisions: usize) -> Result<u64> {
@@ -550,7 +594,7 @@ pub(super) fn run_same_individual_world(
     // Unassisted mode only observes actual food. Opt-in care assistance records
     // each movement of existing safe loose food; it never feeds the learner.
     let mut food = BTreeMap::new();
-    let mut care_scenario: Option<crate::foundation_training::FoundationScenarioSetup> = None;
+    let mut care_scenario: Option<ContinuousCareAssistance> = None;
     let mut care_cue_emissions = 0u64;
     let mut care_food_repositions = 0u64;
     let mut last_care_cue_tick = None;
@@ -681,8 +725,7 @@ pub(super) fn run_same_individual_world(
                         .is_some_and(care_food_ready)
                         && care_food_position_in_gaze(runtime.world(), id).is_some();
                     if ready {
-                        let scenario =
-                            prepare_care_assistance(runtime.world_mut(), id, session_nonce)?;
+                        let scenario = prepare_care_assistance(runtime.world_mut(), id)?;
                         on_update(serde_json::json!({"kind":"continuous-care-assistance-v1",
                             "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
                             "mode":"ordinary_feeding_scene_and_spatial_eat_food_cues",
@@ -699,10 +742,34 @@ pub(super) fn run_same_individual_world(
                         .entity(scenario.food)
                         .is_some_and(|food| !food.consumed);
                     if care_cue_due(tick, scenario.start_tick, available, last_care_cue_tick) {
-                        crate::foundation_training::expose_foundation_teacher_cue(
-                            runtime.world_mut(),
-                            scenario,
-                        )?;
+                        // Ordinary food can regrow after an actual meal while the
+                        // learner walks away within a 512-decision window. Keep
+                        // the assistance explicit and bounded to the cue cadence.
+                        if care_food_is_far(runtime.world(), id, scenario.food) {
+                            let before = care_world_observation(runtime.world(), id);
+                            let moved = match care_food_position_in_gaze(runtime.world(), id) {
+                                Some(position) => {
+                                    crate::foundation_training::relocate_unheld_foundation_food(
+                                        runtime.world_mut(),
+                                        scenario.food,
+                                        position,
+                                    )?
+                                }
+                                None => false,
+                            };
+                            if moved {
+                                care_food_repositions += 1;
+                                on_update(
+                                    serde_json::json!({"kind":"continuous-care-reposition-v1",
+                                    "session_nonce":session_nonce,"world_tick":tick,
+                                    "food_target":scenario.food.raw(),"mode":"training_assistance_in_gaze",
+                                    "trigger":"periodic_cue", "before":before,
+                                    "after":care_world_observation(runtime.world(), id),
+                                    "forced_action":false,"reward_override":false,"biology_override":false}),
+                                )?;
+                            }
+                        }
+                        expose_care_cue(runtime.world_mut(), id, scenario)?;
                         care_cue_emissions += 1;
                         last_care_cue_tick = Some(tick);
                     }
@@ -1283,10 +1350,14 @@ mod tests {
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
                 .unwrap()
                 .world;
+        for label in ["hazard-01", "obstacle-02"] {
+            let entity = world.entity_id(label).unwrap();
+            world.editor_remove_object(entity).unwrap();
+        }
         let id = world.organism_entity_ids()[0].0;
         let before = *world.organism_registry().get(id).unwrap().biochemistry();
         let tick = world.tick();
-        let scenario = prepare_care_assistance(&mut world, id, seed).unwrap();
+        let scenario = prepare_care_assistance(&mut world, id).unwrap();
         assert_eq!(
             *world.organism_registry().get(id).unwrap().biochemistry(),
             before
@@ -1326,12 +1397,39 @@ mod tests {
                 |candidate| candidate.action_id == alife_world::HeadlessActionIds::EAT
                     && candidate.target.entity == Some(scenario.food)
             ));
-        assert_eq!(scenario.teacher_cue_tokens, vec![8, 1]);
-        crate::foundation_training::expose_foundation_teacher_cue(&mut world, &scenario).unwrap();
+        let far = alife_core::Vec3f::new(
+            subject.position.x + 10.0,
+            subject.position.y,
+            subject.position.z,
+        );
+        world.editor_move_object(scenario.food, far).unwrap();
+        assert!(care_food_is_far(&world, id, scenario.food));
+        let nearby = care_food_position_in_gaze(&world, id).unwrap();
+        assert!(crate::foundation_training::relocate_unheld_foundation_food(
+            &mut world,
+            scenario.food,
+            nearby
+        )
+        .unwrap());
+        assert!(!care_food_is_far(&world, id, scenario.food));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+        expose_care_cue(&mut world, id, &scenario).unwrap();
         assert!(world
             .audible_utterances()
             .iter()
-            .any(|utterance| utterance.source_kind == alife_core::UtteranceSourceKind::Teacher));
+            .any(
+                |utterance| utterance.source_kind == alife_core::UtteranceSourceKind::Teacher
+                    && utterance.addressee == Some(id)
+                    && utterance
+                        .tokens
+                        .iter()
+                        .map(|token| token.raw())
+                        .collect::<Vec<_>>()
+                        == [8, 1]
+            ));
         assert!(!world.entity(scenario.food).unwrap().consumed);
         assert!(care_cue_due(tick.raw(), tick.raw(), true, None));
         assert!(!care_cue_due(
