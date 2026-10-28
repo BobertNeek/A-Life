@@ -14,6 +14,44 @@ fn now() -> Result<u64> {
     Ok(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs())
 }
 
+/// Create only the producer's NEW direct child of its already-owned .run.
+/// Native registered the aggregate budget before dispatch; materialization's
+/// own create-new directory is one level below this working directory.
+fn prepare_live_work_directory(work: &Path) -> Result<std::path::PathBuf> {
+    let parent = work
+        .parent()
+        .ok_or("continuous work lacks an owned parent")?;
+    if work.file_name() != Some(std::ffi::OsStr::new("live"))
+        || parent.file_name() != Some(std::ffi::OsStr::new(".run"))
+    {
+        return Err("continuous work must be the owned .run/live child".into());
+    }
+    let metadata = std::fs::symlink_metadata(parent)?;
+    #[cfg(windows)]
+    let alias = {
+        use std::os::windows::fs::MetadataExt;
+        metadata.file_attributes() & 0x400 != 0
+    };
+    #[cfg(not(windows))]
+    let alias = metadata.file_type().is_symlink();
+    if !metadata.is_dir() || alias {
+        return Err("continuous work parent must be a real owned directory".into());
+    }
+    match std::fs::symlink_metadata(work) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+        Err(error) => return Err(error.into()),
+        Ok(_) => return Err("continuous work already exists; preserving it".into()),
+    }
+    let budget = alife_storage::budget_for(parent)?
+        .ok_or("continuous work requires the Native aggregate output budget")?;
+    if alife_storage::budget_for(work)?.as_ref() != Some(&budget) {
+        return Err("continuous work is outside its parent's output budget".into());
+    }
+    // No recursive creation, overwrite, predecessor cleanup or alternate root.
+    std::fs::create_dir(work)?;
+    Ok(work.join("live"))
+}
+
 /// A partial live rollout always keeps its actual last action as bootstrap.
 /// No clock advance or fictitious next state is manufactured at a deadline.
 fn loss_rows(captured: usize, requested: usize) -> usize {
@@ -79,7 +117,7 @@ pub(super) fn run_same_individual_world(
     baseline.validate()?;
     baseline.require_living_continuation()?;
     let started = Instant::now();
-    let life = work.join("live");
+    let life = prepare_live_work_directory(work)?;
     materialize_current_training_life(baseline, &life)?;
     let save_path = life.join("world.json");
     let assets = life.join("world-assets");
@@ -715,6 +753,71 @@ pub(super) fn run_same_individual_world(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct WorkFixture(std::path::PathBuf);
+    impl WorkFixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "alife-continuous-work-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            std::fs::create_dir(&root).unwrap();
+            std::fs::create_dir(root.join(".run")).unwrap();
+            Self(root)
+        }
+        fn run(&self) -> std::path::PathBuf {
+            self.0.join(".run")
+        }
+    }
+    impl Drop for WorkFixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn continuous_new_run_prepares_materialization_parent_under_active_quota() {
+        let fixture = WorkFixture::new();
+        let budget = alife_storage::OutputBudget::register(&fixture.run(), 4).unwrap();
+        let life = prepare_live_work_directory(&fixture.run().join("live")).unwrap();
+        assert!(life.parent().unwrap().is_dir());
+        // Same create-new boundary used by the native materializer. Previously
+        // this failed because the parent .run/live had never been created.
+        std::fs::create_dir(&life).unwrap();
+        alife_storage::write(life.join("fixture"), b"life").unwrap();
+        assert_eq!(budget.usage().unwrap().used, 4);
+        assert!(alife_storage::write(life.join("overflow"), b"x").is_err());
+        assert_eq!(std::fs::metadata(life.join("overflow")).unwrap().len(), 0);
+        assert_eq!(budget.usage().unwrap().used, 4);
+    }
+
+    #[test]
+    fn continuous_work_collision_preserves_existing_data() {
+        let fixture = WorkFixture::new();
+        let work = fixture.run().join("live");
+        std::fs::create_dir(&work).unwrap();
+        std::fs::write(work.join("sentinel"), b"original").unwrap();
+        let budget = alife_storage::OutputBudget::register(&fixture.run(), 4096).unwrap();
+        let before = budget.usage().unwrap();
+        assert!(prepare_live_work_directory(&work).is_err());
+        assert_eq!(std::fs::read(work.join("sentinel")).unwrap(), b"original");
+        assert_eq!(budget.usage().unwrap(), before);
+        assert!(!work.join("live").exists());
+    }
+
+    #[test]
+    fn continuous_work_requires_existing_owned_parent_and_active_quota() {
+        let fixture = WorkFixture::new();
+        let work = fixture.run().join("live");
+        assert!(prepare_live_work_directory(&work).is_err());
+        assert!(!work.exists());
+        assert!(prepare_live_work_directory(&fixture.0.join("missing/.run/live")).is_err());
+        assert!(!fixture.0.join("missing").exists());
+    }
     #[test]
     fn continuous_deadline_uses_only_actual_next_state() {
         assert_eq!(loss_rows(0, 512), 0);
