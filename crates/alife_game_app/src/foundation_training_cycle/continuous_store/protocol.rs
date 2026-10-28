@@ -1,5 +1,24 @@
 //! Strict unpublished-prefix recognition. A complete malformed record is never
 //! downgraded to a torn stage, and a first stage owns no run directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum HeaderOwner {
+    Continuous,
+    Legacy,
+    Shared,
+    Unknown,
+}
+
+pub(super) fn header_owner(bytes: &[u8], continuous: &[u8; 16], legacy: &[u8; 16]) -> HeaderOwner {
+    let new = bytes.starts_with(continuous) || continuous.starts_with(bytes);
+    let old = bytes.starts_with(legacy) || legacy.starts_with(bytes);
+    match (new, old) {
+        (true, false) => HeaderOwner::Continuous,
+        (false, true) => HeaderOwner::Legacy,
+        (true, true) => HeaderOwner::Shared,
+        (false, false) => HeaderOwner::Unknown,
+    }
+}
+
 pub(super) fn incomplete_stage(bytes: &[u8], magic: &[u8; 16], limit: u64) -> bool {
     if bytes.len() < 16 {
         return magic.starts_with(bytes);
@@ -32,6 +51,22 @@ pub(super) fn effective_sampling_temperature(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shared_torn_magic_never_identifies_one_store_kind() {
+        let new = b"ALIFE-CON-RET-1\n";
+        let old = b"ALIFE-RES-RET-1\n";
+        for length in 0..=6 {
+            assert_eq!(header_owner(&new[..length], new, old), HeaderOwner::Shared);
+        }
+        for length in 7..=16 {
+            assert_eq!(
+                header_owner(&new[..length], new, old),
+                HeaderOwner::Continuous
+            );
+            assert_eq!(header_owner(&old[..length], new, old), HeaderOwner::Legacy);
+        }
+        assert_eq!(header_owner(b"foreign", new, old), HeaderOwner::Unknown);
+    }
     #[test]
     fn saved_sampler_temperature_overrides_new_request_without_reset() {
         assert_eq!(

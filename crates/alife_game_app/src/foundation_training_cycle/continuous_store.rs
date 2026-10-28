@@ -191,40 +191,77 @@ fn session_seeds(
     }
     Ok(seeds)
 }
-fn tagged_file(path: &Path, magic: &[u8; 16]) -> Result<bool> {
-    if !entry_present(path)? {
-        return Ok(false);
-    }
-    regular(path, (MAX_METADATA + 56) as u64)?;
-    let bytes = fs::read(path)?;
-    Ok(!bytes.is_empty() && (bytes.starts_with(magic) || magic.starts_with(&bytes)))
-}
-pub(super) fn owns(store: &Path) -> Result<bool> {
-    for (names, magic) in [
-        ([INITIALIZATION, INITIALIZATION_NEXT], INIT),
-        ([RETIREMENT, RETIREMENT_NEXT], RETIRE),
-    ] {
-        let mut present = false;
-        for name in names {
-            present |= entry_present(&store.join(name))?;
-            if tagged_file(&store.join(name), magic)? {
-                return Ok(true);
-            }
-        }
-        // Let the unchanged legacy initializer/retirement own its partial
-        // records before attempting to parse an uncommitted run.json.
-        if present {
-            return Ok(false);
-        }
-    }
+fn run_owner_kind(store: &Path) -> Result<Option<bool>> {
     let path = store.join(".run/run.json");
     if !entry_present(&path)? {
-        return Ok(false);
+        if entry_present(&store.join(".run"))? {
+            return Err("resident run has no intact owner; preserving evidence".into());
+        }
+        return Ok(None);
     }
+    directory(&store.join(".run"))?;
     regular(&path, MAX_METADATA as u64)?;
-    let parsed: std::result::Result<serde_json::Value, _> =
-        serde_json::from_slice(&fs::read(path)?);
-    Ok(parsed.is_ok_and(|owner| owner["kind"] == KIND))
+    let owner: serde_json::Value = serde_json::from_slice(&fs::read(path)?)?;
+    match owner["kind"].as_str() {
+        Some(KIND) => Ok(Some(true)),
+        Some("native-resident-serial-run-v1") => Ok(Some(false)),
+        _ => Err("unknown resident owner kind; preserving evidence".into()),
+    }
+}
+pub(super) fn owns(store: &Path) -> Result<bool> {
+    for (names, magic, legacy_magic, initialization) in [
+        (
+            [INITIALIZATION, INITIALIZATION_NEXT],
+            INIT,
+            b"ALIFE-RES-INI-1\n",
+            true,
+        ),
+        ([RETIREMENT, RETIREMENT_NEXT], RETIRE, RET_MAGIC, false),
+    ] {
+        let mut present = false;
+        let mut identified = None;
+        for name in names {
+            let path = store.join(name);
+            if !entry_present(&path)? {
+                continue;
+            }
+            present = true;
+            regular(&path, (MAX_METADATA + 56) as u64)?;
+            let kind = match protocol::header_owner(&fs::read(path)?, magic, legacy_magic) {
+                protocol::HeaderOwner::Continuous => Some(true),
+                protocol::HeaderOwner::Legacy => Some(false),
+                protocol::HeaderOwner::Shared => None,
+                protocol::HeaderOwner::Unknown => {
+                    return Err("unknown resident metadata header; preserving evidence".into())
+                }
+            };
+            if let Some(kind) = kind {
+                if identified.is_some_and(|old| old != kind) {
+                    return Err("conflicting resident metadata kinds; preserving evidence".into());
+                }
+                identified = Some(kind);
+            }
+        }
+        if present {
+            // An unambiguous authority header also works after run.json was
+            // retired. A shared torn prefix owns no store kind by itself.
+            if let Some(kind) = identified {
+                return Ok(kind);
+            }
+            if let Some(kind) = run_owner_kind(store)? {
+                return Ok(kind);
+            }
+            if initialization {
+                // No run exists: either initializer may abort the unbound
+                // prefix, consuming nothing and leaving Current unchanged.
+                return Ok(true);
+            }
+            return Err(
+                "shared retirement prefix has no intact run owner; preserving evidence".into(),
+            );
+        }
+    }
+    Ok(run_owner_kind(store)?.unwrap_or(false))
 }
 fn owner(store: &Path) -> Result<Owner> {
     let path = store.join(".run/run.json");
@@ -1148,6 +1185,25 @@ mod tests {
         assert_eq!(report["dispatched_sessions"], 0);
         assert_eq!(report["seeds_consumed"], 0);
         assert!(report["temporary_budget"].is_null());
+    }
+    #[test]
+    fn shared_retirement_prefix_with_unknown_owner_preserves_all_inputs() {
+        let f = Fixture::new();
+        let source = b"source must not be opened or changed by unknown-owner dispatch";
+        fs::write(f.0.join("current.alife-checkpoint"), source).unwrap();
+        fs::create_dir(f.0.join(".run")).unwrap();
+        let owner = br#"{"kind":"unknown-future-resident-v1"}"#;
+        fs::write(f.0.join(".run/run.json"), owner).unwrap();
+        fs::write(f.0.join(RETIREMENT_NEXT), b"ALIF").unwrap();
+        assert!(recover_resident_serial_checkpoint(&f.0).is_err());
+        assert!(finish_resident_serial_run(&f.0).is_err());
+        assert_eq!(
+            fs::read(f.0.join("current.alife-checkpoint")).unwrap(),
+            source
+        );
+        assert_eq!(fs::read(f.0.join(".run/run.json")).unwrap(), owner);
+        assert_eq!(fs::read(f.0.join(RETIREMENT_NEXT)).unwrap(), b"ALIF");
+        assert!(!f.0.join(RETIREMENT).exists());
     }
     #[test]
     fn torn_initialization_reports_unchanged_candidate_without_invented_binding() {

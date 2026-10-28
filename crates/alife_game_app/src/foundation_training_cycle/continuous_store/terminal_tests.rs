@@ -99,6 +99,9 @@ fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
         recover_resident_serial_checkpoint(&store).unwrap()["already_published_current"],
         true
     );
+    // Retirement staging happens while the intact continuous owner still
+    // exists. A header shared with the legacy format must use that owner.
+    fs::write(store.join(RETIREMENT_NEXT), b"ALIF").unwrap();
     assert_eq!(
         finish_resident_serial_run(&store).unwrap()["cleanup_completed"],
         true
