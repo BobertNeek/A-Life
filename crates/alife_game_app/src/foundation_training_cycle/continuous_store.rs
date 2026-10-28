@@ -19,6 +19,9 @@ const OUTCOME: &[u8; 16] = b"ALIFE-CON-OUT-1\n";
 const VALIDATION: &str = "alife-current-private-validation-v1";
 #[path = "continuous_store/protocol.rs"]
 mod protocol;
+#[cfg(test)]
+#[path = "continuous_store/terminal_tests.rs"]
+mod terminal_tests;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -148,6 +151,32 @@ fn read_outcome(run: &Path, o: &Owner, name: &str) -> Result<Option<serde_json::
         }
     }
     Ok(Some(out.value))
+}
+
+fn bind_terminal_disposition(
+    checkpoint: CurrentTrainingCheckpointV1,
+    o: &Owner,
+    consumed: bool,
+    terminal_event: Option<&serde_json::Value>,
+    producer_result: Option<&serde_json::Value>,
+) -> Result<CurrentTrainingCheckpointV1> {
+    if let Some(event) = terminal_event {
+        if !consumed {
+            return Err("terminal observation without a dispatched continuous session".into());
+        }
+        return Ok(checkpoint.with_terminal_disposition(
+            &o.baseline_sha256,
+            &o.request_sha256,
+            o.request.seed_range[0],
+            event.clone(),
+        )?);
+    }
+    if producer_result.is_some_and(|result| result["terminal"] == true) {
+        return Err(
+            "terminal producer result lacks its durable observation; preserving run".into(),
+        );
+    }
+    Ok(checkpoint)
 }
 
 fn session_seeds(
@@ -417,6 +446,9 @@ pub fn run_resident_continuous_care(
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let base_bytes = fs::read(&current)?;
+    // A copied/cross-lane terminal Current cannot allocate or consume a new
+    // session. Full native private admission still follows under the budget.
+    CurrentTrainingCheckpointV1::decode(&base_bytes)?.require_living_continuation()?;
     let o = Owner {
         schema: 1,
         kind: KIND.into(),
@@ -618,6 +650,7 @@ fn admitted_run(
         return Err("continuous baseline copy changed".into());
     }
     let base = read_current_training_checkpoint(&base_path)?;
+    base.require_living_continuation()?;
     let wal: SessionWal = read_metadata(&run.join("seed-wal.bin"), WAL)?;
     let frontier: ContinuousFrontier =
         read_metadata(&run.join("continuous-frontier.bin"), FRONTIER)?;
@@ -709,10 +742,17 @@ pub(super) fn recover_locked(store: &Path) -> Result<serde_json::Value> {
         None => base,
     };
     checkpoint.seeds = wal.seeds;
-    let bytes = checkpoint.encode()?;
-    let after = hash(&bytes);
     let terminal_event = read_outcome(&run, &o, "continuous-terminal.bin")?;
     let producer_result = read_outcome(&run, &o, "continuous-result.bin")?;
+    let checkpoint = bind_terminal_disposition(
+        checkpoint,
+        &o,
+        wal.consumed,
+        terminal_event.as_ref(),
+        producer_result.as_ref(),
+    )?;
+    let bytes = checkpoint.encode()?;
+    let after = hash(&bytes);
     if current_hash != o.baseline_sha256 {
         let intent: RecoveryIntent = read_metadata(&run.join("recovery-intent.bin"), INTENT)?;
         if intent.baseline_sha256 != o.baseline_sha256
@@ -745,6 +785,7 @@ pub(super) fn recover_locked(store: &Path) -> Result<serde_json::Value> {
         "retained_session_updates":frontier.snapshot.as_ref().map_or(0,|s|s.state.progress.completed_updates),
         "uncheckpointed_updates_restored":false,"neural_execution":false,"canonical_current_published":false,
         "terminal_event":terminal_event,"producer_result":producer_result,
+        "terminal_disposition":checkpoint.terminal_disposition,
         "temporary_budget":temporary_budget_report(&budget)?}))
 }
 
@@ -854,6 +895,13 @@ pub(super) fn finish_locked(store: &Path) -> Result<serde_json::Value> {
             None => base,
         };
         expected.seeds = wal.seeds;
+        let expected = bind_terminal_disposition(
+            expected,
+            &o,
+            wal.consumed,
+            read_outcome(&run, &o, "continuous-terminal.bin")?.as_ref(),
+            read_outcome(&run, &o, "continuous-result.bin")?.as_ref(),
+        )?;
         if intent.baseline_sha256 != o.baseline_sha256
             || intent.request_sha256 != o.request_sha256
             || intent.after_sha256 != current_hash

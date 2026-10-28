@@ -99,6 +99,7 @@ fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
         handoff,
         life: None,
         same_individual: None,
+        terminal_disposition: None,
     };
     let restored = CurrentTrainingCheckpointV1::decode(&source.encode().unwrap()).unwrap();
     #[derive(serde::Serialize)]
@@ -125,6 +126,10 @@ fn current_checkpoint_exact_full_state_and_seed_union_are_self_contained() {
     assert!(serde_json::to_value(&source)
         .unwrap()
         .get("same_individual")
+        .is_none());
+    assert!(serde_json::to_value(&source)
+        .unwrap()
+        .get("terminal_disposition")
         .is_none());
     assert_eq!(
         restored.handoff.actor.first_moment[1].to_bits(),
@@ -232,6 +237,7 @@ fn current_source_admission_binds_original_noncanonical_bytes_and_rejects_change
         handoff: handoff(),
         life: None,
         same_individual: None,
+        terminal_disposition: None,
     };
     let payload = serde_json::to_vec_pretty(&source).unwrap();
     let mut bytes = b"ALIFE-CURRENT-1\n".to_vec();

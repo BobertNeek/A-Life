@@ -551,6 +551,8 @@ fn run_resident_with_startup_observer(
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let baseline_bytes = fs::read(&current)?;
+    alife_training::CurrentTrainingCheckpointV1::decode(&baseline_bytes)?
+        .require_living_continuation()?;
     let baseline_hash = hash(&baseline_bytes);
     let run = store.join(".run");
     if entry_present(&run)? {

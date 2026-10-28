@@ -262,6 +262,7 @@ impl CurrentTrainingCheckpointV1 {
         seeds: CheckpointSeedsV1,
     ) -> Result<Self> {
         self.validate()?;
+        self.require_living_continuation()?;
         let baseline_current_sha256 = self.admitted_source_sha256(baseline_bytes)?;
         handoff.validate()?;
         let previous_actor = &self.handoff.actor;
@@ -344,6 +345,7 @@ impl CurrentTrainingCheckpointV1 {
             handoff,
             life: Some(life),
             same_individual: Some(tag),
+            terminal_disposition: None,
         };
         next.validate()?;
         Ok(next)
