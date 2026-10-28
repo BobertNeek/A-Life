@@ -1367,6 +1367,7 @@ mod tests {
         let subject = world
             .entity(world.organism_registry().get(id).unwrap().world_entity_id())
             .unwrap();
+        let subject_position = subject.position;
         let target = world.entity(scenario.food).unwrap();
         let distance =
             (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z);
@@ -1398,9 +1399,9 @@ mod tests {
                     && candidate.target.entity == Some(scenario.food)
             ));
         let far = alife_core::Vec3f::new(
-            subject.position.x + 10.0,
-            subject.position.y,
-            subject.position.z,
+            subject_position.x + 10.0,
+            subject_position.y,
+            subject_position.z,
         );
         world.editor_move_object(scenario.food, far).unwrap();
         assert!(care_food_is_far(&world, id, scenario.food));
