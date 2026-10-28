@@ -313,13 +313,25 @@ fn expose_care_cue(
         .entity(care.food)
         .ok_or("care cue food missing")?
         .position;
+    let subject = world
+        .organism_registry()
+        .get(id)
+        .and_then(|record| world.entity(record.world_entity_id()))
+        .ok_or("care cue subject missing")?;
+    let subject_position = subject.position;
+    let separation = subject.radius
+        + world
+            .entity_id("nursery-teacher")
+            .and_then(|teacher| world.entity(teacher))
+            .map_or(0.75, |teacher| teacher.radius);
     let teacher_position = [(0.0_f32, 2.0_f32), (2.0, 0.0), (-2.0, 0.0), (0.0, -2.0)]
         .into_iter()
         .map(|(x, z)| alife_core::Vec3f::new(position.x + x, position.y, position.z + z))
         .find(|candidate| {
-            world
-                .terrain()
-                .is_none_or(|terrain| terrain.walkable(candidate.x, candidate.z))
+            (candidate.x - subject_position.x).hypot(candidate.z - subject_position.z) >= separation
+                && world
+                    .terrain()
+                    .is_none_or(|terrain| terrain.walkable(candidate.x, candidate.z))
         });
     let Some(teacher_position) = teacher_position else {
         return Ok(false);
@@ -1629,6 +1641,48 @@ mod tests {
             *world.organism_registry().get(id).unwrap().biochemistry(),
             before
         );
+    }
+    #[test]
+    fn cue_relocates_teacher_out_of_learner_at_corner() {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
+        let id = world.organism_entity_ids()[0].0;
+        let body = world.organism_registry().get(id).unwrap().world_entity_id();
+        let body_position = alife_core::Vec3f::new(255.24178, 0.0, 255.99092);
+        world.editor_move_object(body, body_position).unwrap();
+        let food = world.entity_id("food-01").unwrap();
+        world
+            .editor_move_object(food, alife_core::Vec3f::new(255.24178, 0.0, 253.99092))
+            .unwrap();
+        let care = ContinuousCareAssistance {
+            food,
+            start_tick: world.tick().raw(),
+        };
+        // Recreate the old cue placing the teacher at the learner's body.
+        alife_school::LanguageNursery::speak_in_world(
+            &mut world,
+            id,
+            body_position,
+            vec![
+                alife_core::LanguageTokenId::new(8).unwrap(),
+                alife_core::LanguageTokenId::new(1).unwrap(),
+            ],
+        )
+        .unwrap();
+        let teacher = world.entity_id("nursery-teacher").unwrap();
+        assert_eq!(world.entity(teacher).unwrap().position, body_position);
+        assert!(expose_care_cue(&mut world, id, &care).unwrap());
+        let actual = world.entity(teacher).unwrap().position;
+        assert!((actual.x - body_position.x).hypot(actual.z - body_position.z) >= 1.5);
+        assert!(care_food_position_in_gaze(&world, id).is_some());
     }
     #[test]
     fn cue_is_deferred_when_no_teacher_position_is_walkable() {
