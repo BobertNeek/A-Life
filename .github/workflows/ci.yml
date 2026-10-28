@@ -102,7 +102,7 @@ jobs:
       - name: Group-50 native admission and replay CPU contracts
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group::'
       - name: Residual critic batching CPU regression
-        run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::critic_residual::
+        run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::critic_residual::'
       - name: Compile opt-in residual critic hardware fixture
         run: cargo check --locked -p alife_training --features gpu-tests --lib --tests
       - name: Compile opt-in training hardware fixtures
