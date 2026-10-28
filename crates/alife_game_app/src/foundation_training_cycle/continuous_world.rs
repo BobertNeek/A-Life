@@ -67,7 +67,7 @@ fn handoff(
 pub(super) fn run_same_individual_world(
     baseline: &CurrentTrainingCheckpointV1,
     session_nonce: u64,
-    request: &super::continuous_store::ResidentContinuousRequest,
+    request: &super::ResidentContinuousRequest,
     work: &Path,
     mut on_snapshot: impl FnMut(
         FoundationTrainingHandoffV1,
@@ -240,8 +240,9 @@ pub(super) fn run_same_individual_world(
         let mut meal_rows = Vec::new();
         for object in runtime.world().object_snapshots() {
             if object.kind == alife_world::WorldObjectKind::Food {
-                food.entry(object.id)
-                    .or_insert_with(|| crate::FoundationFoodOutcome::new(id, object.id));
+                food.entry(object.id.raw()).or_insert_with(|| {
+                    (object.id, crate::FoundationFoodOutcome::new(id, object.id))
+                });
             }
         }
         crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
@@ -262,10 +263,10 @@ pub(super) fn run_same_individual_world(
             }
             let before_tick = runtime.world().tick();
             let before_food = food
-                .keys()
-                .map(|target| {
+                .iter()
+                .map(|(raw, (target, _))| {
                     (
-                        *target,
+                        *raw,
                         crate::foundation_training::food_outcome::ownership(
                             runtime.world(),
                             *target,
@@ -320,14 +321,14 @@ pub(super) fn run_same_individual_world(
                 if consumed(&step) {
                     generic_rows.push(refs.len());
                 }
-                for (target, summary) in &mut food {
+                for (raw, (target, summary)) in &mut food {
                     let observation =
                         crate::foundation_training::food_outcome::FoodOutcomeObservation {
                             organism: id,
                             target: *target,
                             decision_tick: before_tick,
                             outcome_tick: runtime.world().tick(),
-                            before: before_food[target],
+                            before: before_food[raw],
                             after: crate::foundation_training::food_outcome::ownership(
                                 runtime.world(),
                                 *target,
