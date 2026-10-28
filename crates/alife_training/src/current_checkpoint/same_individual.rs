@@ -38,11 +38,48 @@ pub struct SameIndividualCurrentV1 {
     pub actor_sha256: String,
     pub value_sha256: String,
     pub private_life_sha256: String,
+    /// For an admitted individual without a composite birth record, this is
+    /// the foundation identity in its pre-adoption private compiler inputs.
+    /// It is an adoption anchor, not a claim about the organism's birth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adopted_foundation_digest: Option<alife_core::Blake3Digest>,
     pub sampling_state: GpuTrainingSamplingConfig,
 }
 
 fn sha(value: &impl Serialize) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
+}
+
+fn check_foundation_anchor(
+    birth: Option<alife_core::Blake3Digest>,
+    adopted: Option<alife_core::Blake3Digest>,
+    live: alife_core::Blake3Digest,
+) -> Result<()> {
+    let expected = match (birth, adopted) {
+        (Some(value), None) | (None, Some(value)) => value,
+        (Some(_), Some(_)) => return Err("unexpected adoption anchor for composite birth".into()),
+        (None, None) => return Err("private foundation adoption anchor missing".into()),
+    };
+    if live != expected {
+        return Err("same-individual overlay changed private foundation identity".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod foundation_anchor_tests {
+    use super::*;
+    #[test]
+    fn composite_and_adopted_foundations_are_bound_without_inventing_birth() {
+        let a = alife_core::Blake3Digest::from_bytes([1; 32]);
+        let b = alife_core::Blake3Digest::from_bytes([2; 32]);
+        assert!(check_foundation_anchor(Some(a), None, a).is_ok());
+        assert!(check_foundation_anchor(None, Some(a), a).is_ok());
+        assert!(check_foundation_anchor(None, None, a).is_err());
+        assert!(check_foundation_anchor(Some(a), Some(a), a).is_err());
+        assert!(check_foundation_anchor(None, Some(a), b).is_err());
+        assert!(check_foundation_anchor(Some(a), None, b).is_err());
+    }
 }
 
 fn private_asset(
@@ -71,6 +108,7 @@ fn private_binding(
     life: &CurrentLifeCheckpointV1,
     handoff: &FoundationTrainingHandoffV1,
     progress: &SameIndividualProgressV1,
+    adopted_foundation_digest: Option<alife_core::Blake3Digest>,
 ) -> Result<GpuTrainingSamplingConfig> {
     let save = alife_world::PortableSaveFile::from_json_str(&life.world_json)?;
     if save.creatures.len() != 1
@@ -104,23 +142,26 @@ fn private_binding(
     {
         return Err("same-individual private compiler/phenotype differs from global heads".into());
     }
-    let birth = creature
-        .composite_genetics
-        .as_ref()
-        .ok_or("private birth provenance missing")?;
-    let birth_asset = alife_core::FoundationWeightAsset::decode_canonical(&private_asset(
-        life,
-        &save,
-        &birth.foundation_asset_id,
-    )?)?;
-    if inputs
-        .live_policy()
-        .ok_or("same-individual live policy marker missing")?
-        .birth_foundation_digest
-        != birth_asset.digest()
-    {
-        return Err("same-individual overlay changed private birth founder".into());
-    }
+    let birth_foundation = if let Some(birth) = &creature.composite_genetics {
+        Some(
+            alife_core::FoundationWeightAsset::decode_canonical(&private_asset(
+                life,
+                &save,
+                &birth.foundation_asset_id,
+            )?)?
+            .digest(),
+        )
+    } else {
+        None
+    };
+    check_foundation_anchor(
+        birth_foundation,
+        adopted_foundation_digest,
+        inputs
+            .live_policy()
+            .ok_or("same-individual live policy marker missing")?
+            .birth_foundation_digest,
+    )?;
     let sampling =
         private_sampling(life, &save)?.ok_or("exact private training sampler missing")?;
     if sampling.temperature.to_bits() != progress.sampling_temperature.to_bits() {
@@ -227,7 +268,13 @@ impl SameIndividualCurrentV1 {
             .as_ref()
             .ok_or("same-individual private life missing")?;
         if self.private_life_sha256 != sha(life)?
-            || sha(&self.sampling_state)? != sha(&private_binding(life, &current.handoff, p)?)?
+            || sha(&self.sampling_state)?
+                != sha(&private_binding(
+                    life,
+                    &current.handoff,
+                    p,
+                    self.adopted_foundation_digest,
+                )?)?
         {
             return Err("same-individual private closure or exact sampler mismatch".into());
         }
@@ -311,6 +358,50 @@ impl CurrentTrainingCheckpointV1 {
                 "same-individual successor replaced baseline organism, birth or world".into(),
             );
         }
+        let adopted_foundation_digest = if old.creatures[0].composite_genetics.is_none() {
+            let gpu = old.creatures[0]
+                .gpu_brain
+                .as_ref()
+                .ok_or("baseline private GPU state missing")?;
+            let old_inputs: PhenotypeCompilerInputs = serde_json::from_slice(&private_asset(
+                old_life,
+                &old,
+                &gpu.phenotype_compiler_inputs.asset_id,
+            )?)?;
+            if old_inputs.genome() != handoff.compiler_inputs.genome()
+                || old_inputs.development() != handoff.compiler_inputs.development()
+                || old_inputs.sensor_profile() != handoff.compiler_inputs.sensor_profile()
+            {
+                return Err("same-individual adoption changed compiler identity".into());
+            }
+            let old_phenotype =
+                PhenotypeCompiler::compile_validated(&old_inputs, &BrainCapacityClass::n2048())?;
+            let new_phenotype = PhenotypeCompiler::compile_validated(
+                &handoff.compiler_inputs,
+                &BrainCapacityClass::n2048(),
+            )?;
+            alife_core::validate_weight_only_policy_successor(&old_phenotype, &new_phenotype)?;
+            let anchor = old_inputs
+                .live_policy()
+                .map(|p| p.birth_foundation_digest)
+                .or_else(|| {
+                    old_inputs
+                        .n2048_candidate_asset()
+                        .map(|asset| asset.digest())
+                })
+                .ok_or("baseline private foundation identity missing")?;
+            if self
+                .same_individual
+                .as_ref()
+                .and_then(|tag| tag.adopted_foundation_digest)
+                .is_some_and(|previous| previous != anchor)
+            {
+                return Err("baseline adoption anchor changed".into());
+            }
+            Some(anchor)
+        } else {
+            None
+        };
         let (rows, updates) = self.same_individual.as_ref().map_or((0, 0), |tag| {
             (tag.total_trained_rows, tag.total_completed_updates)
         });
@@ -334,7 +425,8 @@ impl CurrentTrainingCheckpointV1 {
             actor_sha256: sha(&handoff.actor)?,
             value_sha256: sha(&handoff.value)?,
             private_life_sha256: sha(&life)?,
-            sampling_state: private_binding(&life, &handoff, &progress)?,
+            adopted_foundation_digest,
+            sampling_state: private_binding(&life, &handoff, &progress, adopted_foundation_digest)?,
             progress,
         };
         let next = Self {
