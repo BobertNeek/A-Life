@@ -2,9 +2,9 @@ name: Training retention host contracts
 on:
   push:
     branches: [main]
-    paths: ['scripts/*care*.py', 'scripts/*checkpoint*.py', 'scripts/foundation_probe_schema.py', 'scripts/compare_foundation_probes.py', 'scripts/grab_food_seed_reservations.py', 'scripts/run_eat_held_food_night.py', 'scripts/summarize_ppo_diagnostics.py', '.github/workflows/training-retention-host.yml']
+    paths: ['scripts/*care*.py', 'scripts/*checkpoint*.py', 'scripts/foundation_probe_schema.py', 'scripts/compare_foundation_probes.py', 'scripts/grab_food_seed_reservations.py', 'scripts/run_*food_night.py', 'scripts/summarize_ppo_diagnostics.py', '.github/workflows/training-retention-host.yml']
   pull_request:
-    paths: ['scripts/*care*.py', 'scripts/*checkpoint*.py', 'scripts/foundation_probe_schema.py', 'scripts/compare_foundation_probes.py', 'scripts/grab_food_seed_reservations.py', 'scripts/run_eat_held_food_night.py', 'scripts/summarize_ppo_diagnostics.py', '.github/workflows/training-retention-host.yml']
+    paths: ['scripts/*care*.py', 'scripts/*checkpoint*.py', 'scripts/foundation_probe_schema.py', 'scripts/compare_foundation_probes.py', 'scripts/grab_food_seed_reservations.py', 'scripts/run_*food_night.py', 'scripts/summarize_ppo_diagnostics.py', '.github/workflows/training-retention-host.yml']
 permissions:
   contents: read
 jobs:
