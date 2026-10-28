@@ -909,6 +909,7 @@ pub(super) fn run_same_individual_world(
             "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime),
             "care_before":care_before,"care_after":care_after,
             "care_training_rows":care_row_summary(&care_rows[..rows]),
+            "food_outcomes_cumulative_including_bootstrap":food.values().map(|(_, summary)| summary).collect::<Vec<_>>(),
             "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
         });
         alife_storage::remove_dir_all(&window_root)?;
