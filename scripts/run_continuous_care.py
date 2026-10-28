@@ -584,6 +584,8 @@ def run(args):
         with cp.Store(store_root, validate) as store:
             before = validate(store.current)
             baseline = cp.digest(store.current)
+            require(before.get('terminal_disposition') is None,
+                    'admitted Current records a terminal life; explicit disposition required before continuation')
             refuse_observed_terminal_resume(lane, baseline, mode)
             resolved = copy(args)
             if getattr(args, 'auto_seed', False):
@@ -615,6 +617,7 @@ def run(args):
             'worker': {'pid': None, 'stopped': True}}
         if mode == 'same_individual':
             state['before']['same_individual'] = before.get('same_individual')
+            state['before']['terminal_disposition'] = before.get('terminal_disposition')
         if night is not None:
             state['nightly_window'] = night.manifest(args.final_reserve_seconds)
         cp.write_json(lane / STATE, state)

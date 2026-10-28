@@ -526,6 +526,57 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertEqual(session.retained_continuous_rows(before, admitted, updates), 1024)
         self.assertIsNone(session.retained_continuous_rows(before, admitted, updates[1:]))
 
+    def test_same_individual_initialization_abort_uses_actual_native_response_contract(self):
+        for bound in (False, True):
+            with self.subTest(bound=bound):
+                self.store = self.root / f'live-init-{bound}'
+                self.lane = self.root / f'live-init-owner-{bound}'
+                self.store.mkdir()
+                self.lane.mkdir()
+                cp.write_json(self.store / cp.CURRENT, self.initial)
+                before = cp.digest(self.store / cp.CURRENT)
+                marker = self.store / (session.NATIVE_INITIALIZATION if bound else session.NATIVE_INITIALIZATION_NEXT)
+
+                def startup(argv, log, deadline, guard, environment, on_started):
+                    self.assertEqual(argv[1], '--resident-continuous')
+                    on_started(Process())
+                    marker.write_bytes(b'bound owner' if bound else b'torn first stage')
+                    raise RuntimeError('before continuous session dispatch')
+
+                def native(binary, *argv):
+                    if argv[0] != '--finish-resident-run':
+                        return self.live_native(binary, *argv)
+                    with cp.writer_lock(self.store):
+                        marker.unlink()
+                    return {'kind':'same-individual-initialization-aborted-v1',
+                        'candidate':str(self.store / cp.CURRENT), 'candidate_sha256':before,
+                        'already_published_current':True, 'cleanup_completed':True,
+                        'initialization_aborted':True, 'initialization_binding_verified':bound,
+                        'dispatched_sessions':0, 'seeds_consumed':0,
+                        'new_request_allocation_committed':False, 'neural_execution':False}
+
+                with patch.object(session.current, 'tool', side_effect=native), \
+                        patch.object(session.host, 'run_child', side_effect=startup), \
+                        patch.object(cp.Store, 'publish', side_effect=AssertionError('no dispatch, no publication')):
+                    receipt = session.run(self.live_args())
+                self.assertEqual(cp.digest(self.store / cp.CURRENT), before)
+                self.assertEqual(receipt['retained_trained_rows'], 0)
+                self.assertEqual(receipt['recovery']['initialization_binding_verified'], bound)
+                self.assertFalse(receipt['one_fresh_world'])
+
+    def test_admitted_terminal_current_refuses_new_lane_before_allocation_or_dispatch(self):
+        current = copy.deepcopy(self.initial)
+        current['terminal_disposition'] = {'kind':'observed-terminal-life-v1', 'observed_world_tick':1200}
+        cp.write_json(self.store / cp.CURRENT, current)
+        before = cp.digest(self.store / cp.CURRENT)
+        with patch.object(session.current, 'tool', side_effect=self.live_native):
+            with self.assertRaisesRegex(ValueError, 'terminal life'):
+                session.run(self.live_args())
+        self.assertEqual(cp.digest(self.store / cp.CURRENT), before)
+        self.assertEqual(self.child.call_count, 0)
+        self.assertNotIn('--check-current-allocation', self.calls)
+        self.assertFalse((self.lane / session.STATE).exists())
+
     def test_auto_seed_uses_admitted_tail_and_does_not_claim_unknown_history_fresh(self):
         args = self.live_args()
         args.auto_seed = True
