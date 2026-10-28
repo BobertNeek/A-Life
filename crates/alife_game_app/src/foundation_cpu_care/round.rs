@@ -22,7 +22,7 @@ const ADMISSION_HELPERS: [&str; 5] = [
     "run_mixed_care_serial.py",
     "grab_food_seed_reservations.py",
     "mixed_care_ledger.py",
-    "run_eat_held_food_night.py",
+    "care_host.py",
     "summarize_ppo_diagnostics.py",
 ];
 const SOURCE_FILES: [&str; 6] = [

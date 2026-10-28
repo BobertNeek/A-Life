@@ -41,7 +41,7 @@ KNOWN = {"policy": "known-exclusions", "historical_freshness": "unknown"}
 UNKNOWN_CLAIM_SCOPE = ("historical freshness unknown; disclosed exclusions only; "
                        "no claim of unseen-seed generalization or synergy")
 ADMISSION_HELPERS = ("run_mixed_care_serial.py", "grab_food_seed_reservations.py",
-                     "mixed_care_ledger.py", "run_eat_held_food_night.py",
+                     "mixed_care_ledger.py", "care_host.py",
                      "summarize_ppo_diagnostics.py")
 SETTINGS = {"window_ticks": 32, "burn_in": 8, "effective_batch_size": 1}
 
