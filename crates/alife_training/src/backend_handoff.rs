@@ -121,6 +121,70 @@ pub struct AdmittedFoundationTrainingHandoff {
     pub actor: FoundationTrainerCheckpoint,
     pub value: PpoValueHeadCheckpoint,
 }
+
+#[cfg(feature = "receipt-lineage")]
+fn exact_json_sha256(value: &impl serde::Serialize) -> Result<[u8; 32], TrainingError> {
+    use sha2::{Digest, Sha256};
+    struct HashWriter(Sha256);
+    impl std::io::Write for HashWriter {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.update(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut writer = HashWriter(Sha256::new());
+    serde_json::to_writer(&mut writer, value)
+        .map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
+    Ok(writer.0.finalize().into())
+}
+
+/// Compile validated inputs, reusing at most eight exact input/capacity pairs.
+/// The receipt codec is used only as an in-process cache key, not as a new
+/// durable identity. It retains signed zero in every serialized float lane.
+pub fn compile_validated_n2048_cached(
+    inputs: &PhenotypeCompilerInputs,
+    capacity: &BrainCapacityClass,
+) -> Result<BrainPhenotype, TrainingError> {
+    inputs.validate_against(capacity)?;
+    #[cfg(not(feature = "receipt-lineage"))]
+    return Ok(PhenotypeCompiler::compile_validated(inputs, capacity)?);
+
+    #[cfg(feature = "receipt-lineage")]
+    {
+        use std::{
+            collections::VecDeque,
+            sync::{Mutex, OnceLock},
+        };
+        type CacheEntry = ([u8; 32], BrainPhenotype);
+        static CACHE: OnceLock<Mutex<VecDeque<CacheEntry>>> = OnceLock::new();
+        let key = exact_json_sha256(&(inputs, capacity))?;
+        let cache = CACHE.get_or_init(|| Mutex::new(VecDeque::with_capacity(8)));
+        if let Ok(mut guard) = cache.lock() {
+            if let Some(pos) = guard.iter().position(|(cached_key, _)| *cached_key == key) {
+                let entry = guard.remove(pos).expect("checked cache index");
+                let phenotype = entry.1.clone();
+                guard.push_front(entry);
+                return Ok(phenotype);
+            }
+        }
+        let phenotype = PhenotypeCompiler::compile_validated(inputs, capacity)?;
+        if let Ok(mut guard) = cache.lock() {
+            // Compilation occurs outside the lock. A concurrent successful
+            // compile of the same key must not consume another cache slot.
+            if !guard.iter().any(|(cached_key, _)| *cached_key == key) {
+                if guard.len() >= 8 {
+                    guard.pop_back();
+                }
+                guard.push_front((key, phenotype.clone()));
+            }
+        }
+        Ok(phenotype)
+    }
+}
+
 impl FoundationTrainingHandoffV1 {
     pub fn new_same_individual(
         origin: FoundationTrainingBackendV1,
@@ -192,7 +256,7 @@ impl FoundationTrainingHandoffV1 {
             .compiler_inputs
             .n2048_candidate_asset()
             .ok_or_else(invalid)?;
-        let phenotype = PhenotypeCompiler::compile_validated(&self.compiler_inputs, &capacity)?;
+        let phenotype = compile_validated_n2048_cached(&self.compiler_inputs, &capacity)?;
         self.actor.validate_for(&phenotype, foundation.digest())?;
         PpoTrainingState::from_checkpoint(self.value.clone())?;
         if self.value.feature_count != phenotype.neuron_count()
@@ -290,5 +354,187 @@ impl FoundationSerialHandoffBindingV1 {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alife_core::{
+        AlphaStoragePolicy, BrainGenome, DevelopmentState, NormalizedScalar, SensorProfile, Tick,
+        TrainingStageManifest,
+    };
+
+    fn fixture(
+        alpha: f32,
+    ) -> (
+        BrainGenome,
+        DevelopmentState,
+        BrainPhenotype,
+        FoundationWeightAsset,
+    ) {
+        let capacity = BrainCapacityClass::n2048();
+        let mut genome = BrainGenome::scaffold(42, capacity.id());
+        genome.alpha_mask.default_alpha = NormalizedScalar::new(alpha).unwrap();
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let base = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap();
+        let asset = FoundationWeightAsset::from_trained_weights(
+            &base,
+            base.synapses().iter().map(|s| s.genetic_weight()).collect(),
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        (genome, development, base, asset)
+    }
+
+    fn exact(phenotype: &BrainPhenotype) -> Vec<u8> {
+        serde_json::to_vec(phenotype).unwrap()
+    }
+
+    #[test]
+    fn cached_n2048_compilation_matches_fresh_and_distinguishes_weight_mutations() {
+        let capacity = BrainCapacityClass::n2048();
+        let (genome, development, base, asset_a) = fixture(0.25);
+        let (expected_a, inputs_a) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome.clone(),
+            development.clone(),
+            asset_a,
+        )
+        .unwrap();
+        for _ in 0..2 {
+            assert_eq!(
+                exact(&compile_validated_n2048_cached(&inputs_a, &capacity).unwrap()),
+                exact(&expected_a)
+            );
+        }
+        let mut weights: Vec<_> = base.synapses().iter().map(|s| s.genetic_weight()).collect();
+        weights[0] *= 0.95;
+        let asset_b = FoundationWeightAsset::from_trained_weights(
+            &base,
+            weights,
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        let (expected_b, inputs_b) =
+            PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset_b)
+                .unwrap();
+        let cached_b = compile_validated_n2048_cached(&inputs_b, &capacity).unwrap();
+        assert_eq!(exact(&cached_b), exact(&expected_b));
+        assert_ne!(
+            cached_b.synapses()[0].genetic_weight().to_bits(),
+            expected_a.synapses()[0].genetic_weight().to_bits()
+        );
+    }
+
+    #[test]
+    fn cached_n2048_compilation_preserves_genome_signed_zero_and_failed_admission() {
+        let capacity = BrainCapacityClass::n2048();
+        let (mut genome, development, _, asset) = fixture(0.0);
+        let positive = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
+            genome.clone(),
+            &capacity,
+            development.clone(),
+            asset.manifest().sensor_profile(),
+            asset.clone(),
+        )
+        .unwrap();
+        let expected = PhenotypeCompiler::compile_validated(&positive, &capacity).unwrap();
+        assert_eq!(
+            exact(&compile_validated_n2048_cached(&positive, &capacity).unwrap()),
+            exact(&expected)
+        );
+        genome.alpha_mask.default_alpha = NormalizedScalar::new(-0.0).unwrap();
+        let negative = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
+            genome.clone(),
+            &capacity,
+            development.clone(),
+            asset.manifest().sensor_profile(),
+            asset.clone(),
+        )
+        .unwrap();
+        // Ordinary equality and canonical digests normalize signed zero. The
+        // cache must nevertheless follow the exact fresh compiler result.
+        assert_eq!(positive, negative);
+        assert_ne!(
+            serde_json::to_vec(&positive).unwrap(),
+            serde_json::to_vec(&negative).unwrap()
+        );
+        match (
+            PhenotypeCompiler::compile_validated(&negative, &capacity),
+            compile_validated_n2048_cached(&negative, &capacity),
+        ) {
+            (Ok(expected_negative), Ok(actual)) => {
+                assert_ne!(exact(&expected_negative), exact(&expected));
+                assert_eq!(exact(&actual), exact(&expected_negative));
+            }
+            (Err(_), Err(_)) => (),
+            _ => panic!("cache changed signed-zero compilation admission"),
+        }
+        assert!(compile_validated_n2048_cached(&positive, &BrainCapacityClass::n512()).is_err());
+        genome.alpha_mask.storage_policy = AlphaStoragePolicy::DenseDebugReference;
+        genome.alpha_mask.dense_reference_opt_in = true;
+        let invalid = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            asset,
+        )
+        .unwrap();
+        for _ in 0..2 {
+            assert!(compile_validated_n2048_cached(&invalid, &capacity).is_err());
+        }
+        assert_eq!(
+            exact(&compile_validated_n2048_cached(&positive, &capacity).unwrap()),
+            exact(&expected)
+        );
+    }
+
+    #[cfg(feature = "receipt-lineage")]
+    #[test]
+    fn compilation_cache_key_streams_exact_codec_and_binds_capacity() {
+        use sha2::{Digest, Sha256};
+        let (genome, development, _, asset) = fixture(0.25);
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            asset,
+        )
+        .unwrap();
+        let wire = serde_json::to_vec(&(&inputs, &capacity)).unwrap();
+        assert_eq!(
+            exact_json_sha256(&(&inputs, &capacity)).unwrap(),
+            <[u8; 32]>::from(Sha256::digest(wire))
+        );
+        assert_ne!(
+            exact_json_sha256(&(&inputs, &capacity)).unwrap(),
+            exact_json_sha256(&(&inputs, &BrainCapacityClass::n512())).unwrap()
+        );
+        assert_ne!(
+            exact_json_sha256(&0.0_f32).unwrap(),
+            exact_json_sha256(&-0.0_f32).unwrap()
+        );
+        struct Fails;
+        impl serde::Serialize for Fails {
+            fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom("injected codec failure"))
+            }
+        }
+        assert!(matches!(
+            exact_json_sha256(&Fails),
+            Err(TrainingError::Contract(
+                ScaffoldContractError::PhenotypeCompile
+            ))
+        ));
     }
 }

@@ -83,6 +83,31 @@ struct PackedLayout {
     training_words: u64,
 }
 
+impl PackedLayout {
+    fn refresh_replay_parameters(&mut self, sequence: &TrainingSequence, microsteps: u8) {
+        self.burn_in_steps = sequence.burn_in_ticks as u32 * u32::from(microsteps);
+        self.memory_gain = sequence.memory_candidate_gain;
+    }
+}
+
+type ReplayShape = (usize, alife_core::DendriticBranchSet);
+
+fn replay_shapes_equal(previous: &ReplayShape, next: &ReplayShape) -> bool {
+    let (previous_branches, next_branches) = (previous.1.branches(), next.1.branches());
+    previous.0 == next.0
+        && previous_branches.len() == next_branches.len()
+        && previous_branches.iter().zip(next_branches).all(|(a, b)| {
+            a.target == b.target
+                && a.threshold.to_bits() == b.threshold.to_bits()
+                && a.output_gain.to_bits() == b.output_gain.to_bits()
+                && a.inputs.len() == b.inputs.len()
+                && a.inputs
+                    .iter()
+                    .zip(&b.inputs)
+                    .all(|(a, b)| a.source == b.source && a.weight.to_bits() == b.weight.to_bits())
+        })
+}
+
 #[derive(Clone)]
 struct TrainerPipelines {
     bind_group_layout: wgpu::BindGroupLayout,
@@ -131,7 +156,7 @@ pub struct FoundationTrainer {
     stage_mask: StageTrainableMask,
     optimizer_step: u32,
     gpu: TrainerGpuState,
-    replay_shape: Option<(usize, usize, alife_core::DendriticBranchSet)>,
+    replay_shape: Option<ReplayShape>,
     accumulated_gradients: wgpu::Buffer,
     accumulation: Option<(u32, u32)>,
     replay_speech_active: bool,
@@ -357,12 +382,15 @@ impl FoundationTrainer {
     pub fn prepare_replay(&mut self, sequence: &TrainingSequence) -> Result<(), TrainingError> {
         sequence.validate_for(&self.phenotype)?;
         self.replay_speech_active = false;
-        let shape = (
-            sequence.ticks.len(),
-            sequence.burn_in_ticks,
-            sequence.initial.dendrites.clone(),
-        );
-        if self.replay_shape.as_ref() == Some(&shape) {
+        let shape = (sequence.ticks.len(), sequence.initial.dendrites.clone());
+        if self
+            .replay_shape
+            .as_ref()
+            .is_some_and(|previous| replay_shapes_equal(previous, &shape))
+        {
+            self.gpu
+                .layout
+                .refresh_replay_parameters(sequence, self.phenotype.microstep_count());
             let words =
                 pack_replay_sequence(sequence, self.gpu.layout, self.phenotype.neuron_count());
             let headers = build_step_headers(
@@ -1955,12 +1983,69 @@ impl TrainerGpuState {
     }
 }
 
-fn pack_metadata_and_layout(
+#[derive(Clone)]
+struct CachedPhenotypeMetadata {
+    prefix_meta: Vec<u32>,
+    target_offsets: u32,
+    incoming_ids: u32,
+    source_offsets: u32,
+    outgoing_ids: u32,
+    synapse_records: u32,
+    dynamics: u32,
+    family_biases: u32,
+    speech_offsets: u32,
+    decoder_offset_counts: [u32; 9],
+    decoder_ids_vec: Vec<u32>,
+}
+
+fn metadata_float_bits_digest(phenotype: &BrainPhenotype) -> [u64; 4] {
+    // Canonical phenotype hashes normalize signed zero, but the GPU metadata
+    // deliberately preserves every raw float bit. Keep those identities apart.
+    let mut digest =
+        alife_core::CanonicalDigestBuilder::new(b"alife.training.metadata-float-bits.v1");
+    digest.write_sequence_len(phenotype.neuron_dynamics().len());
+    for row in phenotype.neuron_dynamics() {
+        for value in [
+            row.bias(),
+            row.leak(),
+            row.homeostatic_gain(),
+            row.metabolic_decay(),
+            row.activity_ema_decay(),
+        ] {
+            digest.write_u32(value.to_bits());
+        }
+    }
+    digest.write_sequence_len(phenotype.candidate_decoder().families().len());
+    for family in phenotype.candidate_decoder().families() {
+        digest.write_u32(family.bias().to_bits());
+    }
+    digest.finish256()
+}
+
+fn cached_phenotype_metadata(
     phenotype: &BrainPhenotype,
-    replay: Option<&TrainingSequence>,
-) -> Result<(Vec<u32>, PackedLayout), TrainingError> {
+) -> Result<CachedPhenotypeMetadata, TrainingError> {
+    use std::collections::VecDeque;
+    use std::sync::{Mutex, OnceLock};
+
+    type Key = (alife_core::PhenotypeHash, [u64; 4], [u64; 4]);
+    static CACHE: OnceLock<Mutex<VecDeque<(Key, CachedPhenotypeMetadata)>>> = OnceLock::new();
+    let key = (
+        phenotype.phenotype_hash(),
+        phenotype.compiler_inputs_digest(),
+        metadata_float_bits_digest(phenotype),
+    );
+    let cache = CACHE.get_or_init(|| Mutex::new(VecDeque::with_capacity(8)));
+    if let Ok(mut guard) = cache.lock() {
+        if let Some(pos) = guard.iter().position(|(k, _)| *k == key) {
+            let entry = guard.remove(pos).expect("checked cache index");
+            let value = entry.1.clone();
+            guard.push_back(entry);
+            return Ok(value);
+        }
+    }
+
     let neuron_count = phenotype.neuron_count() as usize;
-    let synapse_count = phenotype.synapses().len();
     let mut incoming = phenotype
         .synapses()
         .iter()
@@ -1976,22 +2061,22 @@ fn pack_metadata_and_layout(
         .map(|(index, synapse)| (synapse.source(), synapse.target(), index as u32))
         .collect::<Vec<_>>();
     outgoing.sort_unstable();
-    let mut meta = Vec::new();
+    let mut prefix_meta = Vec::new();
     let target_offsets = push_offsets(
-        &mut meta,
+        &mut prefix_meta,
         neuron_count,
         incoming.iter().map(|entry| entry.0),
     )?;
-    let incoming_ids = as_u32(meta.len())?;
-    meta.extend(incoming.iter().map(|entry| entry.2));
+    let incoming_ids = as_u32(prefix_meta.len())?;
+    prefix_meta.extend(incoming.iter().map(|entry| entry.2));
     let source_offsets = push_offsets(
-        &mut meta,
+        &mut prefix_meta,
         neuron_count,
         outgoing.iter().map(|entry| entry.0),
     )?;
-    let outgoing_ids = as_u32(meta.len())?;
-    meta.extend(outgoing.iter().map(|entry| entry.2));
-    let synapse_records = as_u32(meta.len())?;
+    let outgoing_ids = as_u32(prefix_meta.len())?;
+    prefix_meta.extend(outgoing.iter().map(|entry| entry.2));
+    let synapse_records = as_u32(prefix_meta.len())?;
     for synapse in phenotype.synapses() {
         let projection = phenotype
             .projections()
@@ -2016,7 +2101,7 @@ fn pack_metadata_and_layout(
             ) => 2,
             _ => 0,
         };
-        meta.extend_from_slice(&[
+        prefix_meta.extend_from_slice(&[
             synapse.source(),
             synapse.target(),
             kind | (u32::from(synapse.route_index()) << 8),
@@ -2027,9 +2112,9 @@ fn pack_metadata_and_layout(
             sign_policy,
         ]);
     }
-    let dynamics = as_u32(meta.len())?;
+    let dynamics = as_u32(prefix_meta.len())?;
     for row in phenotype.neuron_dynamics() {
-        meta.extend_from_slice(&[
+        prefix_meta.extend_from_slice(&[
             row.bias().to_bits(),
             row.leak().to_bits(),
             u32::from(row.activation().raw()),
@@ -2040,22 +2125,84 @@ fn pack_metadata_and_layout(
             0,
         ]);
     }
-    let family_biases = as_u32(meta.len())?;
+    let family_biases = as_u32(prefix_meta.len())?;
     let mut biases = [0.0_f32; 8];
     for family in phenotype.candidate_decoder().families() {
         biases[usize::from(family.family().raw())] = family.bias();
     }
-    meta.extend(biases.into_iter().map(f32::to_bits));
-    let speech_offsets = as_u32(meta.len())?;
+    prefix_meta.extend(biases.into_iter().map(f32::to_bits));
+    let speech_offsets = as_u32(prefix_meta.len())?;
     let speech_start =
         phenotype.candidate_decoder().motor_start() + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET;
     let mut speech_ids = Vec::new();
     for output in 0..32_u32 {
-        meta.push(as_u32(speech_ids.len())?);
+        prefix_meta.push(as_u32(speech_ids.len())?);
         speech_ids.extend(phenotype.synapses().iter().enumerate().filter(|(_,s)| matches!(s.kind(),CompiledSynapseKind::Decoder(c) if c.head()==alife_core::DecoderHeadKind::SpeechPayload) && s.target()==speech_start+output).map(|(i,_)|i as u32));
     }
-    meta.push(as_u32(speech_ids.len())?);
-    meta.extend(speech_ids);
+    prefix_meta.push(as_u32(speech_ids.len())?);
+    prefix_meta.extend(speech_ids);
+
+    let mut decoder_offset_counts = [0_u32; 9];
+    let mut decoder_ids_vec = Vec::new();
+    for family in 0..8u8 {
+        decoder_offset_counts[usize::from(family)] = as_u32(decoder_ids_vec.len())?;
+        decoder_ids_vec.extend(
+            phenotype
+                .synapses()
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| match s.kind() {
+                    CompiledSynapseKind::Decoder(c)
+                        if c.family().raw() == family && c.head().raw() != 3 =>
+                    {
+                        Some(i as u32)
+                    }
+                    _ => None,
+                }),
+        );
+    }
+    decoder_offset_counts[8] = as_u32(decoder_ids_vec.len())?;
+
+    let value = CachedPhenotypeMetadata {
+        prefix_meta,
+        target_offsets,
+        incoming_ids,
+        source_offsets,
+        outgoing_ids,
+        synapse_records,
+        dynamics,
+        family_biases,
+        speech_offsets,
+        decoder_offset_counts,
+        decoder_ids_vec,
+    };
+    if let Ok(mut guard) = cache.lock() {
+        if !guard.iter().any(|(k, _)| *k == key) {
+            if guard.len() >= 8 {
+                guard.pop_front();
+            }
+            guard.push_back((key, value.clone()));
+        }
+    }
+    Ok(value)
+}
+
+fn pack_metadata_and_layout(
+    phenotype: &BrainPhenotype,
+    replay: Option<&TrainingSequence>,
+) -> Result<(Vec<u32>, PackedLayout), TrainingError> {
+    let neuron_count = phenotype.neuron_count() as usize;
+    let synapse_count = phenotype.synapses().len();
+    let cached = cached_phenotype_metadata(phenotype)?;
+    let mut meta = cached.prefix_meta;
+    let target_offsets = cached.target_offsets;
+    let incoming_ids = cached.incoming_ids;
+    let source_offsets = cached.source_offsets;
+    let outgoing_ids = cached.outgoing_ids;
+    let synapse_records = cached.synapse_records;
+    let dynamics = cached.dynamics;
+    let family_biases = cached.family_biases;
+    let speech_offsets = cached.speech_offsets;
 
     let ticks = replay.map_or(TRAINING_SEQUENCE_TICKS, |r| r.ticks.len()) as u64;
     let candidate_capacity = if replay.is_some() {
@@ -2117,27 +2264,9 @@ fn pack_metadata_and_layout(
         dendritic_source_branches,
     ) = pack_dendrites(&mut meta, phenotype, replay)?;
     let decoder_offsets = as_u32(meta.len())?;
-    let mut decoder_ids_vec = Vec::new();
-    for family in 0..8u8 {
-        meta.push(as_u32(decoder_ids_vec.len())?);
-        decoder_ids_vec.extend(
-            phenotype
-                .synapses()
-                .iter()
-                .enumerate()
-                .filter_map(|(i, s)| match s.kind() {
-                    CompiledSynapseKind::Decoder(c)
-                        if c.family().raw() == family && c.head().raw() != 3 =>
-                    {
-                        Some(i as u32)
-                    }
-                    _ => None,
-                }),
-        );
-    }
-    meta.push(as_u32(decoder_ids_vec.len())?);
+    meta.extend_from_slice(&cached.decoder_offset_counts);
     let decoder_ids = as_u32(meta.len())?;
-    meta.extend(decoder_ids_vec);
+    meta.extend(cached.decoder_ids_vec);
     let speech_target_start =
         phenotype.candidate_decoder().motor_start() + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET;
     Ok((
@@ -2701,6 +2830,165 @@ mod tests {
             "apply_adamw",
         ] {
             assert!(names.contains(&required), "missing {required}");
+        }
+    }
+
+    fn metadata_test_phenotype() -> BrainPhenotype {
+        use alife_core::{
+            BrainCapacityClass, BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler,
+            SensorProfile, Tick,
+        };
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(99, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedTerrainVisionV1,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn cached_metadata_packing_preserves_layout() {
+        let phenotype = metadata_test_phenotype();
+        let (meta_first, layout_first) = pack_metadata_and_layout(&phenotype, None).unwrap();
+        let (meta_second, layout_second) = pack_metadata_and_layout(&phenotype, None).unwrap();
+        assert_eq!(meta_first, meta_second);
+        assert_eq!(layout_first.decoder_offsets, layout_second.decoder_offsets);
+        assert_eq!(layout_first.decoder_ids, layout_second.decoder_ids);
+        assert_eq!(layout_first.speech_offsets, layout_second.speech_offsets);
+    }
+
+    #[test]
+    fn metadata_cache_distinguishes_raw_signed_zero_dynamics() {
+        let phenotype = metadata_test_phenotype();
+        let index = phenotype
+            .neuron_dynamics()
+            .iter()
+            .position(|row| row.bias().to_bits() == 0)
+            .unwrap();
+        let mut wire = serde_json::to_value(&phenotype).unwrap();
+        wire["neuron_dynamics"][index]["bias"] = serde_json::json!(-0.0_f32);
+        let negative: BrainPhenotype = serde_json::from_value(wire).unwrap();
+        assert_eq!(phenotype.phenotype_hash(), negative.phenotype_hash());
+        assert_eq!(
+            phenotype.compiler_inputs_digest(),
+            negative.compiler_inputs_digest()
+        );
+        let (positive_meta, positive_layout) = pack_metadata_and_layout(&phenotype, None).unwrap();
+        let (negative_meta, negative_layout) = pack_metadata_and_layout(&negative, None).unwrap();
+        let positive_bias = positive_layout.dynamics as usize + index * 8;
+        let negative_bias = negative_layout.dynamics as usize + index * 8;
+        assert_eq!(positive_meta[positive_bias], 0.0_f32.to_bits());
+        assert_eq!(negative_meta[negative_bias], (-0.0_f32).to_bits());
+        let (positive_again, _) = pack_metadata_and_layout(&phenotype, None).unwrap();
+        assert_eq!(positive_again, positive_meta);
+    }
+
+    #[test]
+    fn replay_shape_comparison_distinguishes_raw_dendritic_zero_bits() {
+        use alife_core::{DendriticBranch, DendriticBranchSet, DendriticInputRef};
+        let positive =
+            DendriticBranch::new(0, 0.0, 0.0, vec![DendriticInputRef::new(1, 0.0).unwrap()])
+                .unwrap();
+        let shape = (4, DendriticBranchSet::new(vec![positive.clone()]).unwrap());
+        assert!(replay_shapes_equal(&shape, &shape));
+        assert!(!replay_shapes_equal(&shape, &(3, shape.1.clone())));
+        for lane in 0..3 {
+            let mut negative = positive.clone();
+            match lane {
+                0 => negative.threshold = -0.0,
+                1 => negative.output_gain = -0.0,
+                _ => negative.inputs[0].weight = -0.0,
+            }
+            let next = (4, DendriticBranchSet::new(vec![negative]).unwrap());
+            assert_eq!(shape, next, "ordinary PartialEq normalizes signed zero");
+            assert!(!replay_shapes_equal(&shape, &next));
+        }
+    }
+
+    #[test]
+    fn reused_replay_parameters_match_fresh_layout_and_headers_after_burn_in_changes() {
+        use crate::{TrainingInitialState, TrainingReplayCandidate, TrainingReplayTick};
+        let phenotype = metadata_test_phenotype();
+        let neurons = phenotype.neuron_count() as usize;
+        let tick = TrainingReplayTick {
+            encoded_inputs: vec![0.0; neurons],
+            projection_gain: 1.0,
+            local_threshold_shift: 0.0,
+            microstep_count: 0,
+            enabled_routes: vec![false; phenotype.projections().len()],
+            effective_weight_offsets: vec![0.0; phenotype.synapses().len()],
+            structural_synapses: Vec::new(),
+            candidates: vec![TrainingReplayCandidate {
+                family: alife_core::CandidateActionFamily::Approach,
+                decoder_inputs: [0.0; 54],
+                innate_bias: 0.0,
+            }],
+        };
+        let mut replay = TrainingSequence {
+            phenotype_hash: phenotype.phenotype_hash(),
+            initial: TrainingInitialState {
+                activations: vec![0.0; neurons],
+                activity_ema: vec![0.0; neurons],
+                metabolic_load: vec![0.0; neurons],
+                dendrites: Default::default(),
+            },
+            ticks: vec![tick; 4],
+            burn_in_ticks: 0,
+            memory_candidate_gain: phenotype
+                .candidate_decoder()
+                .memory_channel()
+                .map_or(0.0, |p| p.max_candidate_gain()),
+        };
+        replay.validate_for(&phenotype).unwrap();
+        let shape = (replay.ticks.len(), replay.initial.dendrites.clone());
+        let (metadata, mut reused) = pack_metadata_and_layout(&phenotype, Some(&replay)).unwrap();
+        let allocation_shape = (
+            reused.state_words,
+            reused.gradient_words,
+            reused.output_words,
+            reused.training_words,
+        );
+        for burn_in_ticks in [2, 1, 0, 3] {
+            replay.burn_in_ticks = burn_in_ticks;
+            replay.validate_for(&phenotype).unwrap();
+            assert!(replay_shapes_equal(
+                &shape,
+                &(replay.ticks.len(), replay.initial.dendrites.clone())
+            ));
+            reused.refresh_replay_parameters(&replay, phenotype.microstep_count());
+            let (fresh_metadata, fresh) =
+                pack_metadata_and_layout(&phenotype, Some(&replay)).unwrap();
+            assert_eq!(metadata, fresh_metadata);
+            assert_eq!(
+                allocation_shape,
+                (
+                    fresh.state_words,
+                    fresh.gradient_words,
+                    fresh.output_words,
+                    fresh.training_words,
+                )
+            );
+            assert_eq!(
+                reused.burn_in_steps,
+                burn_in_ticks as u32 * u32::from(phenotype.microstep_count())
+            );
+            assert_eq!(
+                reused.memory_gain.to_bits(),
+                replay.memory_candidate_gain.to_bits()
+            );
+            assert_eq!(
+                build_step_headers(&phenotype, reused, AdamWConfig::default(), 17).unwrap(),
+                build_step_headers(&phenotype, fresh, AdamWConfig::default(), 17).unwrap()
+            );
+            assert_eq!(
+                pack_replay_sequence(&replay, reused, phenotype.neuron_count()),
+                pack_replay_sequence(&replay, fresh, phenotype.neuron_count())
+            );
         }
     }
 }

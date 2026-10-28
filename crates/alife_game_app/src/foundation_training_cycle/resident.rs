@@ -476,8 +476,11 @@ fn snapshot_episode(
         episode.join("cycle.json"),
         serde_json::to_vec_pretty(&completed.receipt)?,
     )?;
-    inspect_native_training_frontier(episode, completed.receipt.policy_version)?;
-    let checkpoint = migrate_current_training_checkpoint(episode, wal.seeds.clone())?;
+    let checkpoint = current::migrate_verified_native_frontier(
+        episode,
+        completed.receipt.policy_version,
+        wal.seeds.clone(),
+    )?;
     let bytes = checkpoint.encode()?;
     if logical_bytes(run)?
         .checked_add(bytes.len() as u64)

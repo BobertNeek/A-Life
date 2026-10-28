@@ -224,13 +224,70 @@ pub(super) fn workspace_at(root: &Path) -> Result<Temporary> {
         _lease: lease,
     })
 }
+fn snapshot_digest_and_materialized_bytes(
+    snapshot: &CurrentLifeCheckpointV1,
+) -> ([u8; 32], Option<u64>) {
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(&(snapshot.world_json.len() as u64).to_le_bytes());
+    hasher.update(snapshot.world_json.as_bytes());
+    hasher.update(&(snapshot.sleep_journal_json.len() as u64).to_le_bytes());
+    hasher.update(snapshot.sleep_journal_json.as_bytes());
+    hasher.update(&(snapshot.assets_base64.len() as u64).to_le_bytes());
+    let mut total_bytes =
+        (snapshot.world_json.len() as u64).checked_add(snapshot.sleep_journal_json.len() as u64);
+    for (name, encoded) in &snapshot.assets_base64 {
+        hasher.update(&(name.len() as u64).to_le_bytes());
+        hasher.update(name.as_bytes());
+        hasher.update(&(encoded.len() as u64).to_le_bytes());
+        hasher.update(encoded.as_bytes());
+        total_bytes = total_bytes.and_then(|sum| {
+            let decoded_len = snapshot.asset_bytes(name).ok()?.len() as u64;
+            sum.checked_add(decoded_len)
+        });
+    }
+    (*hasher.finalize().as_bytes(), total_bytes)
+}
+
 pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
+    use std::collections::VecDeque;
+    use std::sync::{Mutex, OnceLock};
+
+    static VALIDATED_SNAPSHOTS: OnceLock<Mutex<VecDeque<[u8; 32]>>> = OnceLock::new();
     let root = VALIDATION_ROOT
         .with(|value| value.borrow().clone())
         .unwrap_or_else(std::env::temp_dir)
         .join("alife-current-private-validation-v1");
     let temporary = workspace_at(&root)?;
-    materialize(snapshot, &temporary.path)
+    let (digest, materialized_bytes) = snapshot_digest_and_materialized_bytes(snapshot);
+    let cache = VALIDATED_SNAPSHOTS.get_or_init(|| Mutex::new(VecDeque::with_capacity(8)));
+    let is_cached = cache
+        .lock()
+        .ok()
+        .is_some_and(|guard| guard.iter().any(|d| *d == digest));
+    if is_cached {
+        if let Some(bytes) = materialized_bytes {
+            match alife_storage::budget_for(&temporary.path)? {
+                None => return Ok(()),
+                Some(budget) => {
+                    let _reservation = budget.reserve(bytes)?;
+                    let usage = budget.usage()?;
+                    if usage.used.saturating_add(bytes) <= usage.high_water {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+    materialize(snapshot, &temporary.path)?;
+    if let Ok(mut guard) = cache.lock() {
+        if !guard.iter().any(|d| *d == digest) {
+            if guard.len() >= 8 {
+                guard.pop_front();
+            }
+            guard.push_back(digest);
+        }
+    }
+    Ok(())
 }
 
 /// Restore a portable private world/organism bundle into a fresh directory.

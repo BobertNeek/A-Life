@@ -111,6 +111,9 @@ pub(super) fn train(
         use sha2::{Digest, Sha256};
         let mut hash = Sha256::new();
         for row in features {
+            #[cfg(target_endian = "little")]
+            hash.update(bytemuck::cast_slice(row));
+            #[cfg(not(target_endian = "little"))]
             for value in row {
                 hash.update(value.to_le_bytes());
             }
@@ -120,18 +123,24 @@ pub(super) fn train(
     // One private GPU head owns the entire fit. A failed update/evaluation drops
     // it without publishing a partially fitted checkpoint to the PPO caller.
     let mut residual: Option<FrozenCriticResidualExperiment> = None;
+    let mut last_batch_range: Option<(usize, usize, usize)> = None;
+    let mut last_after_evaluation: Option<Vec<[f32; 4]>> = None;
     let mut records = Vec::new();
     for update in 0..updates {
         let (range, feature_end, local) = residual_batch(&rows, update);
         let (start, end) = (range.start, range.end);
+        let batch_range = (start, end, feature_end);
+        let same_batch = last_batch_range == Some(batch_range);
         let residual = match &mut residual {
             Some(residual) => {
-                residual.replace_batch(
-                    session,
-                    &features[start..feature_end],
-                    &local,
-                    local.len(),
-                )?;
+                if !same_batch {
+                    residual.replace_batch(
+                        session,
+                        &features[start..feature_end],
+                        &local,
+                        local.len(),
+                    )?;
+                }
                 residual
             }
             slot @ None => slot.insert(FrozenCriticResidualExperiment::new(
@@ -142,16 +151,23 @@ pub(super) fn train(
                 local.len(),
             )?),
         };
-        let before = residual.evaluate(session)?;
+        let before = match (same_batch, last_after_evaluation.take()) {
+            (true, Some(previous_after)) => previous_after,
+            _ => residual.evaluate(session)?,
+        };
         residual.step_with_coefficient(
             session,
             config.value_optimizer,
             config.value_coefficient,
         )?;
         let after = residual.evaluate(session)?;
+        let before_metrics = metrics(&before);
+        let after_metrics = metrics(&after);
+        last_batch_range = Some(batch_range);
+        last_after_evaluation = Some(after);
         records.push(
             serde_json::json!({"update":update+1,"loss_row_start":start,"loss_row_end":end,
-            "before":metrics(&before),"after":metrics(&after),"finite_preflight_passed":true}),
+            "before":before_metrics,"after":after_metrics,"finite_preflight_passed":true}),
         );
     }
     // Retain the logical PPO-window checkpoint boundary and existing restart
@@ -240,6 +256,30 @@ mod tests {
         // A fresh PPO window starts its own rotation, regardless of prior dose.
         assert_eq!(residual_batch(&rows[..3], 0).0, 0..3);
     }
+
+    #[test]
+    fn residual_single_batch_keeps_the_same_rows_and_real_successor() {
+        for count in [1, 7, BATCH_ROWS] {
+            let mut transitions = vec![transition(PpoBoundary::Continuing, 0.05); count];
+            transitions.last_mut().unwrap().boundary = PpoBoundary::Truncated;
+            let rows = residual_rows(&transitions, count + 1, 60.0).unwrap();
+            let (_, _, first) = residual_batch(&rows, 0);
+            for update in 1..5 {
+                let (range, feature_end, local) = residual_batch(&rows, update);
+                assert_eq!(range, 0..count);
+                assert_eq!(feature_end, count + 1);
+                assert_eq!(local.len(), first.len());
+                for (actual, expected) in local.iter().zip(&first) {
+                    assert_eq!(
+                        (actual.current, actual.next),
+                        (expected.current, expected.next)
+                    );
+                    assert_eq!(actual.reward.to_bits(), expected.reward.to_bits());
+                    assert_eq!(actual.discount.to_bits(), expected.discount.to_bits());
+                }
+            }
+        }
+    }
     #[test]
     fn residual_rejects_nonfinite_time_reward_and_missing_current() {
         for time in [0.0, -1.0, f32::NAN, f32::INFINITY] {
@@ -301,8 +341,9 @@ mod tests {
             ..Default::default()
         };
         let bits = |v: &[f32]| v.iter().map(|v| v.to_bits()).collect::<Vec<_>>();
-        for policy in [10, 11] {
-            let count = BATCH_ROWS + 5;
+        // Consecutive small/exact-size batches use the data/evaluation reuse
+        // path. Larger windows rotate, and a later small policy must reupload.
+        for (policy, count) in [(10, 7), (11, BATCH_ROWS), (12, BATCH_ROWS + 5), (13, 11)] {
             let features = (0..=count)
                 .map(|i| vec![i as f32 * 0.001 + policy as f32, (i % 7) as f32 * 0.2])
                 .collect::<Vec<_>>();
@@ -354,6 +395,12 @@ mod tests {
             assert_eq!(actual, checkpoint);
             assert_eq!(bits(&actual.parameters), bits(&checkpoint.parameters));
             assert_eq!(receipt["updates"], serde_json::json!(expected_records));
+            if count <= BATCH_ROWS {
+                assert_eq!(
+                    receipt["updates"][1]["before"],
+                    receipt["updates"][0]["after"]
+                );
+            }
             assert_eq!(actual.optimizer_step, initial_age + 5);
             assert_eq!(receipt["initial_critic_age"], initial_age);
             assert_eq!(receipt["final_critic_age"], actual.optimizer_step);
@@ -383,7 +430,7 @@ mod tests {
             &transitions,
             config,
             2,
-            12
+            14
         )
         .is_err());
         assert_eq!(checkpoint, before);
@@ -411,6 +458,6 @@ mod tests {
             .step_with_coefficient(&session, config.value_optimizer, config.value_coefficient)
             .is_ok());
         assert!(residual.evaluate(&session).is_err());
-        assert!(train(&session, explosive, &features, &transitions, config, 1, 12).is_err());
+        assert!(train(&session, explosive, &features, &transitions, config, 1, 14).is_err());
     }
 }

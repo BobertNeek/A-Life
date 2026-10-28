@@ -683,7 +683,7 @@ pub(super) fn run_same_individual_world(
         // The life directory's parent owns the sealed cohort bundle. Use the
         // same directory for collection and both subsequent replay passes.
         let replay_dir = window_root.join("individual");
-        let phenotype = alife_core::PhenotypeCompiler::compile_validated(
+        let phenotype = alife_training::compile_validated_n2048_cached(
             runtime.live_foundation_compiler_inputs(id)?,
             &alife_core::BrainCapacityClass::n2048(),
         )?;
@@ -1119,12 +1119,19 @@ pub(super) fn run_same_individual_world(
             }
             start = end;
         }
+        // Bound immutable snapshots to this one policy/window. Repeated PPO
+        // passes use admitted RAM, not a second claim about mutable disk state.
+        // Subsequent external replay loads still verify their actual bytes.
+        let mut cached_windows = PpoWindowSnapshotCache::new(spans.len());
         let update = train_recurrent_ppo_cohort(
             &mut trainer,
             &mut value,
             spans.len(),
             8,
             |index| {
+                if let Some(cached) = cached_windows.get(index, budget)? {
+                    return Ok(cached);
+                }
                 let (burn, start, end) = spans[index];
                 let replay = load_foundation_replay_window(
                     &replay_dir,
@@ -1140,12 +1147,14 @@ pub(super) fn run_same_individual_world(
                         ScaffoldContractError::InvalidDecisionEvidence,
                     )
                 })?;
-                Ok(PpoTrainingWindow {
+                let window = PpoTrainingWindow {
                     speech_targets: vec![None; replay.sequence.ticks.len()],
                     sequence: replay.sequence,
                     batch: batch.window(start..end)?,
                     auxiliary: None,
-                })
+                };
+                cached_windows.retain(index, &window, budget);
+                Ok(window)
             },
             PpoConfig {
                 value_coefficient: 0.0,

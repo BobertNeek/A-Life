@@ -129,6 +129,15 @@ jobs:
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::comparison_identity::tests -- --test-threads=1
       - name: Fresh foundation checkpoint metadata inertness CPU regression
         run: cargo test --locked -p alife_game_app --features foundation-training --lib fresh_foundation_checkpoint_metadata_does_not_change_initial_cognition -- --test-threads=1
+      - name: Exact cached replay compiler private-state and RAM admission CPU contracts
+        run: |
+          cargo test --locked -p alife_training --features receipt-lineage --lib backend_handoff::tests -- --test-threads=1
+          cargo test --locked -p alife_training --features receipt-lineage --lib cache_codec_tests -- --test-threads=1
+          cargo test --locked -p alife_training --features receipt-lineage --lib trainer::tests -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --lib replay_io_tests -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --lib throughput_ -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --lib replay_window_cache -- --test-threads=1
+          cargo test --locked -p alife_game_app --features foundation-training --lib critic_residual::tests -- --test-threads=1
       - name: Native sensory serialization matches the shared Python admission fixture
         run: cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::lesson_trace::tests::native_sensory_json_matches_comparison_fixture -- --exact
       - name: Relocated-food physical outcome and backward receipt CPU regressions

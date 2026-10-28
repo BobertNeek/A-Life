@@ -150,6 +150,7 @@ dependencies = [
  "bevy_hanabi",
  "bincode",
  "blake3",
+ "bytemuck",
  "image",
  "serde",
  "serde_json",

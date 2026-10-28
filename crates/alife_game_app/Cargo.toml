@@ -62,6 +62,7 @@ alife_training = { path = "../alife_training", optional = true }
 alife_world = { path = "../alife_world" }
 blake3.workspace = true
 bincode.workspace = true
+bytemuck = { workspace = true, optional = true }
 bevy = { workspace = true, optional = true }
 bevy_hanabi = { version = "=0.18.0", default-features = false, optional = true }
 image = { version = "0.25.10", default-features = false, features = ["png"] }
@@ -109,7 +110,7 @@ bevy-app = [
     "dep:wgpu",
 ]
 gpu-runtime = ["dep:alife_archive", "dep:alife_gpu_backend", "dep:alife_runtime"]
-foundation-training = ["gpu-runtime", "dep:alife_training", "alife_training/receipt-lineage", "alife_runtime/training-rollout", "dep:sha2"]
+foundation-training = ["gpu-runtime", "dep:alife_training", "alife_training/receipt-lineage", "alife_runtime/training-rollout", "dep:sha2", "dep:bytemuck"]
 cpu-training = ["foundation-training", "alife_training/cpu-backend"]
 gpu-tests = [
     "gpu-runtime",

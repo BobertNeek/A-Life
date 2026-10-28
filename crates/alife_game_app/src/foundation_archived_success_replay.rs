@@ -389,6 +389,31 @@ pub(crate) fn compile_source_with_inputs(
     seed: u64,
     founder: u64,
 ) -> Result<(BrainPhenotype, alife_core::PhenotypeCompilerInputs)> {
+    use std::collections::VecDeque;
+    use std::sync::{Mutex, OnceLock};
+
+    type CachedSourceEntry = (
+        u64,
+        u64,
+        alife_core::Blake3Digest,
+        FoundationWeightAsset,
+        BrainPhenotype,
+        alife_core::PhenotypeCompilerInputs,
+    );
+    static CACHE: OnceLock<Mutex<VecDeque<CachedSourceEntry>>> = OnceLock::new();
+    let digest = asset.digest();
+    let cache = CACHE.get_or_init(|| Mutex::new(VecDeque::with_capacity(8)));
+    if let Ok(mut guard) = cache.lock() {
+        if let Some(pos) = guard.iter().position(|(s, f, d, a, _, _)| {
+            *s == seed && *f == founder && *d == digest && *a == asset
+        }) {
+            let entry = guard.remove(pos).expect("checked cache index");
+            let result = (entry.4.clone(), entry.5.clone());
+            guard.push_back(entry);
+            return Ok(result);
+        }
+    }
+
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
     config.founder_seed_base = founder;
@@ -408,13 +433,30 @@ pub(crate) fn compile_source_with_inputs(
             .phenotype()
             .development_state_at(alife_core::Tick::ZERO)?,
     )?;
-    Ok(
-        alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
-            genome,
-            development,
-            asset,
-        )?,
-    )
+    let compiled = alife_core::PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        asset.clone(),
+    )?;
+    if let Ok(mut guard) = cache.lock() {
+        if !guard
+            .iter()
+            .any(|(s, f, d, a, _, _)| *s == seed && *f == founder && *d == digest && *a == asset)
+        {
+            if guard.len() >= 8 {
+                guard.pop_front();
+            }
+            guard.push_back((
+                seed,
+                founder,
+                digest,
+                asset,
+                compiled.0.clone(),
+                compiled.1.clone(),
+            ));
+        }
+    }
+    Ok(compiled)
 }
 
 fn prepare(
