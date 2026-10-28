@@ -550,7 +550,7 @@ pub(super) fn run_same_individual_world(
     // Unassisted mode only observes actual food. Opt-in care assistance records
     // each movement of existing safe loose food; it never feeds the learner.
     let mut food = BTreeMap::new();
-    let mut care_scenario = None;
+    let mut care_scenario: Option<crate::foundation_training::FoundationScenarioSetup> = None;
     let mut care_cue_emissions = 0u64;
     let mut care_food_repositions = 0u64;
     let mut last_care_cue_tick = None;
