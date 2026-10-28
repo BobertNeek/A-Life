@@ -42,8 +42,9 @@ peek or claim that its action had no physical effect.
 The 512-row value reads and 256-row PPO spans are offline slices within an update;
 they do not recreate the live body. Each replay window starts from its captured
 recurrent/homeostatic/dendritic state and per-row acquired-weight offsets. Four
-separate 128-decision sessions instead create four fresh private lives and, when
-all survive, capture 516 decisions rather than the single session's 513. They
+explicit `--fresh-world` 128-decision sessions instead create four fresh private
+lives and, when all survive, capture 516 decisions rather than one fresh
+512-decision session's 513. They
 cannot establish chunk invariance. A future 1x512 versus 4x128 continuity assay
 must keep one world, complete initial state/RNG and lifetime learning, disable
 PPO updates in both arms, match actual ticks, and reuse a boundary successor
