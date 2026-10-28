@@ -58,6 +58,20 @@ fn loss_rows(captured: usize, requested: usize) -> usize {
     captured.saturating_sub(1).min(requested)
 }
 
+// The replay describes the currently installed policy; the PPO round is the
+// next version, matching the serial trainer's monotonic update contract.
+fn continuous_update_version(policy: u64, value_version: Option<u64>) -> Result<u64> {
+    if value_version != Some(policy) {
+        return Err(format!(
+            "continuous value version mismatch: policy {policy}, value {value_version:?}"
+        )
+        .into());
+    }
+    policy
+        .checked_add(1)
+        .ok_or_else(|| "policy version overflow".into())
+}
+
 fn tick_limit(decisions: usize) -> Result<u64> {
     (decisions as u64)
         .checked_mul(8)
@@ -389,7 +403,10 @@ pub(super) fn run_same_individual_world(
             &alife_core::BrainCapacityClass::n2048(),
         )?;
         let actor_before = trainer.optimizer_step();
-        let value_before = value.checkpoint(trainer.session())?.optimizer_step;
+        let value_checkpoint = value.checkpoint(trainer.session())?;
+        let value_before = value_checkpoint.optimizer_step;
+        let update_version =
+            continuous_update_version(policy, value_checkpoint.last_updated_policy_version)?;
         let source = foundation_replay_source(
             &phenotype,
             &asset,
@@ -625,7 +642,11 @@ pub(super) fn run_same_individual_world(
                 .map_err(|error| {
                     format!("continuous value replay {}: {error}", replay_dir.display())
                 })?;
-                values.extend(value.predict_values(&mut trainer, &window.sequence)?);
+                values.extend(
+                    value
+                        .predict_values(&mut trainer, &window.sequence)
+                        .map_err(|error| format!("continuous value prediction: {error}"))?,
+                );
                 for (row, (behavior, patch)) in
                     window.behavior.iter().zip(&window.patches).enumerate()
                 {
@@ -656,7 +677,9 @@ pub(super) fn run_same_individual_world(
                         .with_biochemical_receptors(&receptors)?
                         .modulator();
                     rewards.push((
-                        joint_action(behavior)?,
+                        joint_action(behavior).map_err(|error| {
+                            format!("continuous joint action row {index}: {error}")
+                        })?,
                         training_receptor_profile(&body).project(&modulator.frame())?,
                     ));
                 }
@@ -670,7 +693,7 @@ pub(super) fn run_same_individual_world(
             .into_iter()
             .enumerate()
             .map(|(i, (action, reward))| PpoTransition {
-                policy_version: policy,
+                policy_version: update_version,
                 trajectory_id: session_nonce,
                 step: i as u64,
                 action,
@@ -686,7 +709,8 @@ pub(super) fn run_same_individual_world(
                 },
             })
             .collect();
-        let batch = PpoBatch::from_rollout(policy, transitions, ppo)?;
+        let batch = PpoBatch::from_rollout(update_version, transitions, ppo)
+            .map_err(|error| format!("continuous PPO batch: {error}"))?;
         let mut spans = Vec::new();
         let mut start = 0;
         while start < rows {
@@ -736,8 +760,8 @@ pub(super) fn run_same_individual_world(
                 value_coefficient: 0.0,
                 ..ppo
             },
-            policy,
-        )?;
+            update_version,
+        ).map_err(|error| format!("continuous PPO training: collection policy {policy}, update version {update_version}: {error}"))?;
         let actor_updates = update
             .actor_optimizer_step
             .checked_sub(actor_before)
@@ -750,7 +774,7 @@ pub(super) fn run_same_individual_world(
                     .into(),
             );
         }
-        let next_policy = policy.checked_add(1).ok_or("policy version overflow")?;
+        let next_policy = update_version;
         let (critic, _) = critic_residual::train(
             trainer.session(),
             value.checkpoint(trainer.session())?,
@@ -968,6 +992,16 @@ mod tests {
         assert_eq!(loss_rows(1, 512), 0);
         assert_eq!(loss_rows(11, 512), 10);
         assert_eq!(loss_rows(513, 512), 512);
+    }
+    #[test]
+    fn continuous_update_advances_the_admitted_value_version() {
+        assert_eq!(
+            continuous_update_version(10977, Some(10977)).unwrap(),
+            10978
+        );
+        assert!(continuous_update_version(10977, Some(10976)).is_err());
+        assert!(continuous_update_version(10977, None).is_err());
+        assert!(continuous_update_version(u64::MAX, Some(u64::MAX)).is_err());
     }
     #[test]
     fn continuous_tick_guard_is_relative_to_restored_world() {
