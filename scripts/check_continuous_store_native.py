@@ -8,13 +8,13 @@ from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
 import time
 
 import run_current_care as host
+import current_checkpoint_store as checkpoints
 
 
 def digest(data):
@@ -58,6 +58,7 @@ def abort_gate(report, store, source, bound):
 
 def main():
     trainer, inspector, fixture, terminal_fixture = [Path(p).resolve(strict=True) for p in sys.argv[1:]]
+    validate = host.validator(inspector)
     original, retired = fixture.read_bytes(), terminal_fixture.read_bytes()
     original_hashes = [digest(original), digest(retired)]
     admitted = host.tool(inspector, '--inspect-current', fixture)
@@ -105,7 +106,8 @@ def main():
         assert report['terminal_event'] is None and report['producer_result'] is None
         candidate = Path(report['candidate']).resolve(strict=True)
         assert digest(candidate.read_bytes()) == report['candidate_sha256']
-        shutil.copyfile(candidate, current)
+        with checkpoints.Store(store, validate) as publisher:
+            publisher.publish(candidate, digest(current.read_bytes()))
         after = host.tool(inspector, '--inspect-current', current)
         for key in ('seed', 'policy_version', 'actor_optimizer_step', 'value_optimizer_step', 'asset_sha256'):
             assert after[key] == admitted[key], key

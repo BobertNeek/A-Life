@@ -10,6 +10,7 @@ on:
       - '.github/workflows/resident-output-budget.yml'
       - 'Cargo.*'
       - 'scripts/check_resident_recovery_native.py'
+      - 'scripts/check_continuous_store_native.py'
 jobs:
   quota-primitives:
     strategy:
@@ -58,4 +59,11 @@ jobs:
         run: |
           cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff
           python -B scripts/check_resident_recovery_native.py target/debug/train_n2048_care target/debug/export_native_training_handoff "${{ runner.temp }}/resident-stopped-${{ github.run_id }}" "${{ runner.temp }}/resident-initializing-${{ github.run_id }}"
+      - name: Continuous same-life store and terminal disposition CPU contracts
+        env:
+          ALIFE_CONTINUOUS_TERMINAL_FIXTURE_OUTPUT: ${{ runner.temp }}/continuous-terminal-${{ github.run_id }}.alife-checkpoint
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib resident::continuous_store -- --test-threads=1
+      - name: Actual continuous CLI strict recovery publication cleanup and terminal refusal
+        run: |
+          python -B scripts/check_continuous_store_native.py target/debug/train_n2048_care target/debug/export_native_training_handoff "${{ runner.temp }}/resident-stopped-${{ github.run_id }}/current.alife-checkpoint" "${{ runner.temp }}/continuous-terminal-${{ github.run_id }}.alife-checkpoint"
       - run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
