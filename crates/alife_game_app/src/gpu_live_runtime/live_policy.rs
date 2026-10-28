@@ -541,6 +541,137 @@ mod tests {
         assert!(!runtime.last_learning_receipts.is_empty());
         let before_sequence = before_steps[0].patch.pre_action().sequence_id;
         let organism = plan.organism_id;
+        assert!(runtime
+            .live_foundation_compiler_inputs(organism)
+            .unwrap()
+            .live_policy()
+            .is_none());
+        // Exercise the real legacy sleeping admission, not a fabricated sleep
+        // state: request sleep through the public API, tick to Submitted, then
+        // save/restore the actual pending GPU transaction and private sampler.
+        runtime.request_recovery_sleep(organism).unwrap();
+        let sleep_deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        loop {
+            if matches!(
+                runtime.residents[&organism.raw()]
+                    .sleep_scheduler
+                    .state()
+                    .consolidation,
+                ConsolidationState::Submitted { .. }
+            ) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < sleep_deadline,
+                "fixture failed to reach real Submitted sleep"
+            );
+            runtime.tick_outcome().unwrap();
+            runtime.take_foundation_training_steps();
+        }
+        let deadline = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 120;
+        runtime
+            .quiesce_live_foundation_checkpoint(deadline)
+            .unwrap();
+        assert!(matches!(
+            runtime.residents[&organism.raw()]
+                .sleep_scheduler
+                .state()
+                .consolidation,
+            ConsolidationState::Submitted { .. }
+        ));
+        let sleeping = runtime.capture_portable_checkpoint().unwrap();
+        sleeping.validate_with_asset_root(&asset_root).unwrap();
+        GpuDurableSaveManifest::publish_snapshot(&save_path, &asset_root, &sleeping).unwrap();
+        runtime
+            .rebind_durable_checkpoint_boundary(&save_path, &asset_root, &sleeping)
+            .unwrap();
+        let sleeping_sampling = runtime.foundation_training_sampling_state().unwrap();
+        let sleeping_tick = runtime.world().tick();
+        let sleeping_states = sleeping
+            .creatures
+            .iter()
+            .filter_map(|c| c.gpu_brain.clone())
+            .collect::<Vec<_>>();
+        let mut restored_sleep = GpuLiveBrainRuntime::restore_foundation_rehearsal(
+            runtime.new_staging_like_live().unwrap(),
+            sleeping.restore_headless_world().unwrap(),
+            seed,
+            BrainScaleTier::Standard2048,
+            &GpuCheckpointAssetStore::new(&asset_root).unwrap(),
+            &sleeping.assets,
+            &sleeping_states,
+            alife_gpu_backend::GpuTrainingSamplingConfig {
+                seed: 99,
+                counter: 0,
+                temperature: 1.0,
+                demonstrator: None,
+            },
+        )
+        .unwrap();
+        restored_sleep
+            .rebind_durable_checkpoint_boundary(&save_path, &asset_root, &sleeping)
+            .unwrap();
+        restored_sleep
+            .attach_lineage_archive(
+                LineageLibraryConfig::profile_default(root.join("legacy-sleep-lineage")),
+                ArchiveLearnedCapturePolicy::GeneticOnly,
+            )
+            .unwrap();
+        assert!(restored_sleep.foundation_training_sampling_was_restored(organism));
+        assert_eq!(
+            restored_sleep.foundation_training_sampling_state().unwrap(),
+            sleeping_sampling
+        );
+        assert!(restored_sleep
+            .foundation_training_policy_install_blocked_by_sleep(organism)
+            .unwrap());
+        let mut sleep_events = Vec::new();
+        let sleep_progress = crate::foundation_training_cycle::advance_legacy_policy_sleep(
+            &mut restored_sleep,
+            organism,
+            seed + 1,
+            seed,
+            deadline,
+            &mut |event| {
+                sleep_events.push(event);
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert!(!restored_sleep
+            .foundation_training_policy_install_blocked_by_sleep(organism)
+            .unwrap());
+        assert!(restored_sleep.world().tick().raw() > sleeping_tick.raw());
+        assert_eq!(
+            sleep_progress["unique_world_ticks"].as_u64(),
+            Some(restored_sleep.world().tick().raw() - sleeping_tick.raw())
+        );
+        assert_eq!(sleep_progress["ppo_updates"], 0);
+        assert_eq!(sleep_progress["forced_wake"], false);
+        assert_eq!(sleep_progress["sleep_reset"], false);
+        assert!(sleep_progress["captured_old_policy_rows_not_trained"]
+            .as_u64()
+            .is_some());
+        assert_eq!(sleep_events.last(), Some(&sleep_progress));
+        assert!(restored_sleep.take_foundation_training_steps().is_empty());
+        let after_sleep_sampling = restored_sleep.foundation_training_sampling_state().unwrap();
+        assert_eq!(after_sleep_sampling.seed, sleeping_sampling.seed);
+        assert_eq!(
+            after_sleep_sampling.temperature.to_bits(),
+            sleeping_sampling.temperature.to_bits()
+        );
+        assert!(after_sleep_sampling.counter >= sleeping_sampling.counter);
+        assert!(restored_sleep
+            .live_foundation_compiler_inputs(organism)
+            .unwrap()
+            .live_policy()
+            .is_none());
+        drop(runtime);
+        let mut runtime = restored_sleep;
         let inputs = runtime
             .live_foundation_compiler_inputs(organism)
             .unwrap()
@@ -567,22 +698,29 @@ mod tests {
             .backend
             .build_sleep_replay_batch(old_handle)
             .unwrap();
+        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler.clone();
+        let original_sleep_state = original_sleep.state();
+        let next_cycle = original_sleep_state
+            .last_consolidated_cycle_id
+            .checked_add(1)
+            .unwrap();
         let request = runtime
             .backend
             .prepare_sleep_consolidation(
                 old_handle,
-                alife_core::ConsolidationIntent { cycle_id: 1 },
+                alife_core::ConsolidationIntent {
+                    cycle_id: next_cycle,
+                },
                 &replay,
             )
             .unwrap();
-        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler.clone();
         let state = alife_core::SleepState {
             phase: alife_core::SleepPhase::Consolidating,
             phase_started_tick: runtime.world().tick(),
             entered_sleep_tick: Some(runtime.world().tick()),
-            active_cycle_id: 1,
+            active_cycle_id: next_cycle,
             consolidation: ConsolidationState::Prepared { request },
-            ..alife_core::SleepState::awake_at(runtime.world().tick())
+            ..original_sleep_state
         };
         runtime
             .residents
@@ -613,6 +751,11 @@ mod tests {
         runtime
             .sleep_journal_neural_authorities
             .insert(organism.raw(), authority);
+        let activity_before = runtime.backend.snapshot_activity_state(old_handle).unwrap();
+        assert!(
+            activity_before.throttle.is_some(),
+            "fixture must retain a real dispatch receipt"
+        );
         let installed = runtime
             .install_live_foundation_policy(organism, &transition)
             .unwrap();
@@ -622,14 +765,65 @@ mod tests {
             runtime.foundation_training_sampling_state().unwrap(),
             sampling
         );
+        let activity_after = runtime
+            .backend
+            .snapshot_activity_state(installed.handle)
+            .unwrap();
+        assert_eq!(
+            activity_after.next_sequence_cursor,
+            activity_before.next_sequence_cursor
+        );
+        assert_eq!(activity_after.brain_atp_q16, activity_before.brain_atp_q16);
+        assert_eq!(
+            activity_after.last_world_atp_tick,
+            activity_before.last_world_atp_tick
+        );
+        assert_eq!(
+            activity_after.next_completed_gpu_time_ns,
+            activity_before.next_completed_gpu_time_ns
+        );
+        assert_eq!(activity_after.pressure, activity_before.pressure);
+        assert_eq!(
+            activity_after.work.as_ref().unwrap().counters,
+            activity_before.work.as_ref().unwrap().counters
+        );
+        assert_ne!(
+            activity_after
+                .throttle
+                .as_ref()
+                .unwrap()
+                .route_schedule_digest,
+            activity_before
+                .throttle
+                .as_ref()
+                .unwrap()
+                .route_schedule_digest
+        );
+        // Save immediately at the install boundary, before a later dispatch can
+        // overwrite stale activity authority and hide a broken snapshot seam.
+        let immediately_after_install = runtime.capture_portable_checkpoint().unwrap();
+        immediately_after_install
+            .validate_with_asset_root(&asset_root)
+            .unwrap();
+        assert_eq!(runtime.world().canonical_signature_digest().unwrap(), world);
         validate_sleep_journal_neural_authority(
             &mut runtime.backend,
             installed.handle,
             &runtime.sleep_journal_neural_authorities[&organism.raw()],
         )
         .unwrap();
-        runtime.tick().unwrap();
-        let next = runtime.take_foundation_training_steps();
+        let waking_deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        let next = loop {
+            assert!(
+                std::time::Instant::now() < waking_deadline,
+                "installed individual failed to naturally reach its next waking decision"
+            );
+            runtime.tick_outcome().unwrap();
+            let steps = runtime.take_foundation_training_steps();
+            if !steps.is_empty() {
+                break steps;
+            }
+        };
         assert_eq!(next.len(), 1);
         assert!(next[0].patch.pre_action().sequence_id.raw() > before_sequence.raw());
         assert_eq!(

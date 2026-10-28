@@ -124,3 +124,123 @@ fn legacy_install_preserves_unknown_private_policy_age_without_extra_global_upda
             .is_err()
     );
 }
+
+#[test]
+fn activity_rebind_preserves_recorded_work_pressure_sequence_and_atp() {
+    use alife_core::{
+        BrainActivityPolicyV1, BrainDispatchIdentity, BrainWorkCounters, BrainWorkReceipt,
+        GpuPressureSample, GpuPressureSampleInput, NeuralThrottleDecision, BRAIN_ATP_Q16_MAX,
+    };
+    let (inputs, trained) = fixture();
+    let transition = N2048LivePolicyTransition::prepare(&inputs, 7, trained).unwrap();
+    let capacity = BrainCapacityClass::n2048();
+    let policy = BrainActivityPolicyV1::production_v1();
+    let identity = BrainDispatchIdentity {
+        organism_id_raw: 51,
+        tick: 99,
+        class_id_raw: capacity.id().raw(),
+        handle_slot: 2,
+        handle_generation: 3,
+        sequence_cursor: 17,
+        dispatch_generation: 23,
+        frame_digest: [5; 4],
+    };
+    let pressure = GpuPressureSample::try_new(
+        &policy,
+        GpuPressureSampleInput {
+            identity,
+            source_dispatch_generation: 19,
+            source_frame_digest: [4; 4],
+            completed_gpu_time_ns: 1_000_000,
+            queue_depth: 0,
+            logical_heap_used: 128,
+            logical_heap_capacity: 1024,
+            brain_atp_remaining_q16: BRAIN_ATP_Q16_MAX,
+            brain_atp_capacity_q16: BRAIN_ATP_Q16_MAX,
+        },
+    )
+    .unwrap();
+    let throttle = NeuralThrottleDecision::derive(
+        &policy,
+        transition.previous_phenotype(),
+        capacity.execution(),
+        identity,
+        pressure,
+    )
+    .unwrap();
+    let work = BrainWorkReceipt::try_new(
+        &policy,
+        &throttle,
+        BrainWorkCounters {
+            microsteps: u32::from(throttle.microsteps),
+            neuron_updates: 27,
+            tile_visits: 2,
+            synapse_ops: 31,
+            decoder_candidate_ops: 3,
+            memory_context_ops: 4,
+        },
+        BRAIN_ATP_Q16_MAX,
+    )
+    .unwrap();
+    assert!(
+        throttle
+            .validate_for(transition.next_phenotype(), capacity.execution())
+            .is_err(),
+        "the retained old route digest must fail against the new policy identity"
+    );
+    let (rebound, rebound_work) = throttle
+        .rebind_weight_only_policy_authority(
+            &work,
+            &policy,
+            transition.previous_phenotype(),
+            transition.next_phenotype(),
+            capacity.execution(),
+        )
+        .unwrap();
+    rebound
+        .validate_for(transition.next_phenotype(), capacity.execution())
+        .unwrap();
+    rebound_work.validate_for(&policy, &rebound).unwrap();
+    assert_ne!(
+        rebound.route_schedule_digest,
+        throttle.route_schedule_digest
+    );
+    assert_ne!(rebound.decision_digest, throttle.decision_digest);
+    assert_ne!(rebound_work.receipt_digest, work.receipt_digest);
+    let mut same_history = rebound.clone();
+    same_history.route_schedule_digest = throttle.route_schedule_digest;
+    same_history.decision_digest = throttle.decision_digest;
+    assert_eq!(
+        same_history, throttle,
+        "all recorded decision/pressure fields are retained"
+    );
+    let mut same_work = rebound_work;
+    same_work.route_schedule_digest = work.route_schedule_digest;
+    same_work.receipt_digest = work.receipt_digest;
+    assert_eq!(
+        same_work, work,
+        "all recorded work/ATP/history fields are retained"
+    );
+    let mut corrupt = work.clone();
+    corrupt.atp_after_q16 ^= 1;
+    assert!(throttle
+        .rebind_weight_only_policy_authority(
+            &corrupt,
+            &policy,
+            transition.previous_phenotype(),
+            transition.next_phenotype(),
+            capacity.execution()
+        )
+        .is_err());
+    let mut corrupt = throttle.clone();
+    corrupt.sequence_cursor += 1;
+    assert!(corrupt
+        .rebind_weight_only_policy_authority(
+            &work,
+            &policy,
+            transition.previous_phenotype(),
+            transition.next_phenotype(),
+            capacity.execution()
+        )
+        .is_err());
+}

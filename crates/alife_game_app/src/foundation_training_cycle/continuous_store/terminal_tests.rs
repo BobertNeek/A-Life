@@ -49,6 +49,20 @@ fn one_organism_private_fixture(source: &Path) {
 
 #[test]
 fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
+    terminal_recovery_case(None);
+}
+
+#[test]
+fn terminal_recovery_after_replay_cleanup_failure_cannot_resume_copied_current() {
+    terminal_recovery_case(Some("replay cleanup"));
+}
+
+#[test]
+fn terminal_recovery_after_causal_measure_failure_cannot_resume_copied_current() {
+    terminal_recovery_case(Some("causal measure"));
+}
+
+fn terminal_recovery_case(injected_failure: Option<&str>) {
     let fixture =
         crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
             one_organism_private_fixture,
@@ -125,16 +139,49 @@ fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
         "session_nonce":nonce,"source_world_seed":baseline.seed,
         "organism_id":save.creatures[0].organism_id.raw(),"world_tick":save.world.tick.raw()+7,
         "terminal_death_tick":save.world.tick.raw()+7});
-    persist_outcome(&run, &o, "continuous-terminal.bin", &event).unwrap();
-    persist_outcome(
-        &run,
-        &o,
-        "continuous-result.bin",
-        &serde_json::json!({"terminal":true}),
-    )
-    .unwrap();
+    if let Some(stage) = injected_failure {
+        let window = run.join("live/window-00000000");
+        fs::create_dir_all(&window).unwrap();
+        fs::write(
+            window.join("unretained-replay"),
+            b"preserve after failed cleanup",
+        )
+        .unwrap();
+        let mut record = |value| persist_outcome(&run, &o, "continuous-terminal.bin", &value);
+        let result: Result<()> = super::super::super::continuous_world::record_terminal_then(
+            event.clone(),
+            &mut record,
+            || {
+                assert_eq!(
+                    read_outcome(&run, &o, "continuous-terminal.bin").unwrap(),
+                    Some(event.clone())
+                );
+                Err(std::io::Error::other(format!("injected {stage} failure")).into())
+            },
+        );
+        assert!(result.unwrap_err().to_string().contains(stage));
+        assert_eq!(
+            fs::read(window.join("unretained-replay")).unwrap(),
+            b"preserve after failed cleanup"
+        );
+        // The real producer returns its postprocessing error before the final
+        // result callback; committed terminal authority alone must be enough.
+        assert!(!run.join("continuous-result.bin").exists());
+    } else {
+        persist_outcome(&run, &o, "continuous-terminal.bin", &event).unwrap();
+        persist_outcome(
+            &run,
+            &o,
+            "continuous-result.bin",
+            &serde_json::json!({"terminal":true}),
+        )
+        .unwrap();
+    }
     let report = recover_resident_serial_checkpoint(&store).unwrap();
     assert_eq!(report["terminal_event"], event);
+    if injected_failure.is_some() {
+        assert!(report["producer_result"].is_null());
+    }
     assert_eq!(report["retained_session_updates"], 0);
     assert_eq!(report["retained_session_trained_rows"], 0);
     let candidate = Path::new(report["candidate"].as_str().unwrap());
@@ -209,7 +256,9 @@ fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
     assert!(advance_current_training_checkpoint(&retired, &fixture.target).is_err());
     assert_eq!(fs::read(&copied).unwrap(), copied_before);
     // Optional output is a disposable synthetic CPU fixture for actual CLI gates.
-    if let Some(path) = std::env::var_os("ALIFE_CONTINUOUS_TERMINAL_FIXTURE_OUTPUT") {
-        write_new(Path::new(&path), &copied_before).unwrap();
+    if injected_failure.is_none() {
+        if let Some(path) = std::env::var_os("ALIFE_CONTINUOUS_TERMINAL_FIXTURE_OUTPUT") {
+            write_new(Path::new(&path), &copied_before).unwrap();
+        }
     }
 }

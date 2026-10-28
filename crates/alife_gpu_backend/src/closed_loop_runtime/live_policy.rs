@@ -24,6 +24,9 @@ impl GpuClosedLoopBackend {
         if self.sleep_jobs.values().any(|job| job.handle == handle) {
             return Err(ScaffoldContractError::ConsolidationGenerationMismatch);
         }
+        // Validate the current portable activity authority (including retained
+        // sequence/ATP history) before changing any immutable GPU identity.
+        self.snapshot_activity_state(handle)?;
         let class = handle.class_id.raw();
         let pool = self
             .class_buckets
@@ -43,6 +46,23 @@ impl GpuClosedLoopBackend {
             handle.phenotype_hash,
             transition.next_phenotype().phenotype_hash(),
         )?;
+        let rebound_activity = slot
+            .last_activity
+            .as_ref()
+            .map(|activity| {
+                let capacity = capacity_for_gpu_class(handle.class_id)?;
+                let (throttle, work) = activity.throttle.rebind_weight_only_policy_authority(
+                    &activity.work,
+                    &self.activity_policy,
+                    &slot.phenotype,
+                    transition.next_phenotype(),
+                    capacity.execution(),
+                )?;
+                throttle.validate_runtime_binding(handle.slot, handle.generation)?;
+                work.validate_runtime_binding(handle.slot, handle.generation)?;
+                Ok::<_, ScaffoldContractError>(ResidentActivity { throttle, work })
+            })
+            .transpose()?;
         // Reconstruct the SAME live structural additions on both immutable
         // plans. Target-major insertions can shift baseline weight coordinates.
         let before =
@@ -103,6 +123,7 @@ impl GpuClosedLoopBackend {
         slot.brain_slot = after.brain_slot().clone();
         slot.training_phenotype = None;
         slot.learning_sequence_guard = rebound_guard;
+        slot.last_activity = rebound_activity;
         self.organisms.insert(handle.organism_id.raw(), new_handle);
         self.training_structural_cache.retain(|key, _| {
             !(key.0 == class && key.1 == handle.slot && key.2 == handle.generation)

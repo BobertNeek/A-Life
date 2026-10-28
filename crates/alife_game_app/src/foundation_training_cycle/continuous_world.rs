@@ -73,6 +73,45 @@ fn alive(runtime: &GpuLiveBrainRuntime, id: OrganismId) -> bool {
         .is_some_and(|r| r.lifecycle().is_alive())
 }
 
+/// Record the first observed terminal boundary independently of later replay
+/// metrics or cleanup. The store binds this minimal event exactly once.
+pub(super) fn observed_terminal_event(
+    runtime: &GpuLiveBrainRuntime,
+    id: OrganismId,
+    session_nonce: u64,
+    world_seed: u64,
+) -> Option<serde_json::Value> {
+    if alive(runtime, id) {
+        return None;
+    }
+    let death_tick = runtime
+        .world()
+        .organism_registry()
+        .get(id)
+        .and_then(|record| record.lifecycle().death_tick())
+        .map(|tick| tick.raw())
+        .or_else(|| {
+            runtime
+                .archive_retirement_receipt(id)
+                .map(|receipt| receipt.death_tick.raw())
+        });
+    Some(
+        serde_json::json!({"kind":"continuous-terminal-v1","terminal":true,
+        "session_nonce":session_nonce,"source_world_seed":world_seed,"organism_id":id.raw(),
+        "world_tick":runtime.world().tick().raw(),"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
+        "terminal_death_tick":death_tick}),
+    )
+}
+
+pub(super) fn record_terminal_then<T>(
+    event: serde_json::Value,
+    on_update: &mut impl FnMut(serde_json::Value) -> Result<()>,
+    postprocess: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    on_update(event)?;
+    postprocess()
+}
+
 fn compact_prior(runtime: &GpuLiveBrainRuntime) -> serde_json::Value {
     runtime.semantic_prior_metrics().map_or(serde_json::Value::Null, |m| serde_json::json!({
         "backend":m.backend,"provider_identity":m.provider_identity,
@@ -81,6 +120,81 @@ fn compact_prior(runtime: &GpuLiveBrainRuntime) -> serde_json::Value {
         "delivered_frames":m.delivered_frames,"failures":m.failures,
         "last_error":m.last_error,"teacher_cues_injected":0,
     }))
+}
+
+/// A legacy private life can be captured during an old-policy sleep transaction.
+/// Finish that transaction through ordinary world ticks, never by clearing its
+/// scheduler or installing the newer global heads into a pending request.
+pub(crate) fn advance_legacy_policy_sleep(
+    runtime: &mut GpuLiveBrainRuntime,
+    id: OrganismId,
+    session_nonce: u64,
+    world_seed: u64,
+    deadline: u64,
+    on_update: &mut impl FnMut(serde_json::Value) -> Result<()>,
+) -> Result<serde_json::Value> {
+    let began = Instant::now();
+    let first_tick = runtime.world().tick().raw();
+    let mut captured_rows = 0u64;
+    let mut no_progress_calls = 0u64;
+    let mut last_progress = Instant::now();
+    runtime.quiesce_live_foundation_checkpoint(deadline)?;
+    while runtime.foundation_training_policy_install_blocked_by_sleep(id)? {
+        if now()? >= deadline {
+            return Err("legacy sleep did not reach an install boundary before collection cutoff; old state was not reset".into());
+        }
+        let before = runtime.world().tick();
+        crate::foundation_training::prime_foundation_lesson_prior(runtime, None)?;
+        let tick = runtime.tick_outcome();
+        // Even a later runtime error must not hide an already observed death.
+        if let Some(event) = observed_terminal_event(runtime, id, session_nonce, world_seed) {
+            on_update(event)?;
+            return Err(
+                "legacy individual died while naturally completing old-policy sleep".into(),
+            );
+        }
+        tick?;
+        let steps = runtime.take_foundation_training_steps();
+        let after = runtime.world().tick();
+        if after == before {
+            if !steps.is_empty() {
+                return Err(
+                    "legacy sleep returned training rows without a committed world tick".into(),
+                );
+            }
+            no_progress_calls += 1;
+            if last_progress.elapsed().as_secs() > 300 {
+                return Err("legacy sleep made no world progress for five minutes".into());
+            }
+            continue;
+        }
+        if after.raw() != before.raw().checked_add(1).ok_or("world tick overflow")?
+            || steps.len() > 1
+            || steps
+                .iter()
+                .any(|s| s.frame.organism_id() != id || s.frame.tick() != before)
+            || !runtime.last_memory_preparation_errors().is_empty()
+            || !runtime.last_post_seal_learning_failures().is_empty()
+        {
+            return Err(
+                "legacy sleep progression violated the ordinary sealed-tick contract".into(),
+            );
+        }
+        // Ordinary lifetime learning has already occurred. These old-policy
+        // rows are deliberately not fed to PPO under the newer accepted heads.
+        captured_rows += steps.len() as u64;
+        last_progress = Instant::now();
+    }
+    runtime.quiesce_live_foundation_policy_boundary(id, deadline)?;
+    let event = serde_json::json!({"kind":"continuous-legacy-sleep-progress-v1",
+        "session_nonce":session_nonce,"source_world_seed":world_seed,"organism_id":id.raw(),
+        "first_world_tick":first_tick,"world_tick":runtime.world().tick().raw(),
+        "unique_world_ticks":runtime.world().tick().raw().checked_sub(first_tick),
+        "captured_old_policy_rows_not_trained":captured_rows,"ppo_updates":0,
+        "no_progress_control_calls":no_progress_calls,"wall_seconds":began.elapsed().as_secs_f64(),
+        "sleep_reset":false,"forced_wake":false});
+    on_update(event.clone())?;
+    Ok(event)
 }
 
 fn handoff(
@@ -186,24 +300,41 @@ pub(super) fn run_same_individual_world(
         .clone();
     let mut policy = initial_policy;
     let inputs = runtime.live_foundation_compiler_inputs(id)?.clone();
-    match inputs.live_policy() {
+    let legacy_sleep_progress = match inputs.live_policy() {
         Some(marker)
-            if marker.policy_version == policy && inputs == baseline.handoff.compiler_inputs => {}
+            if marker.policy_version == policy && inputs == baseline.handoff.compiler_inputs =>
+        {
+            serde_json::Value::Null
+        }
         Some(_) => return Err("saved live policy is not the admitted global policy".into()),
         None => {
             // Legacy fresh-cohort Current paired a PRE-PPO individual with newer
             // global heads. Adopt those accepted heads once, preserving all
             // mutable private state; do not pretend the private actor was newer.
-            let transition =
-                N2048LivePolicyTransition::adopt_existing_policy(&inputs, policy, asset.clone())?;
-            runtime.quiesce_live_foundation_policy_boundary(
+            let progress = advance_legacy_policy_sleep(
+                &mut runtime,
                 id,
-                request.finalization_deadline_unix_seconds,
+                session_nonce,
+                world_seed,
+                request
+                    .collection_cutoff_unix_seconds
+                    .min(request.finalization_deadline_unix_seconds),
+                &mut on_update,
+            )?;
+            let transition = N2048LivePolicyTransition::adopt_existing_policy(
+                runtime.live_foundation_compiler_inputs(id)?,
+                policy,
+                asset.clone(),
             )?;
             runtime.install_live_foundation_policy(id, &transition)?;
             trainer.rebind_for_next_cohort(transition.next_phenotype().clone(), asset.clone())?;
+            progress
         }
-    }
+    };
+    let sampling = runtime
+        .foundation_training_sampling_state()
+        .ok_or("training sampler absent after legacy sleep")?;
+    let collection_start_tick = runtime.world().tick().raw();
     runtime.set_performance_measurement_enabled(true);
     let mut trained_rows = 0u64;
     let mut completed_updates = 0u64;
@@ -231,7 +362,8 @@ pub(super) fn run_same_individual_world(
     on_update(
         serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"policy_version":policy,
-            "world_tick":start_tick,"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
+            "session_start_world_tick":start_tick,"world_tick":collection_start_tick,"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
+            "legacy_sleep_progress":legacy_sleep_progress,
             "hardware":hardware,"sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"sampling_seed":sampling.seed,"sampling_counter":sampling.counter,
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint(trainer.session())?.optimizer_step,
@@ -289,6 +421,7 @@ pub(super) fn run_same_individual_world(
         let mut no_progress = 0;
         let mut stalled = Instant::now();
         let mut first_control_call = true;
+        let mut terminal_observed = false;
         loop {
             if now()? >= request.collection_cutoff_unix_seconds {
                 stop = "collection_cutoff";
@@ -315,11 +448,27 @@ pub(super) fn run_same_individual_world(
                 crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
             }
             first_control_call = false;
-            runtime.tick_outcome()?;
+            let tick_result = runtime.tick_outcome();
+            if let Some(event) = observed_terminal_event(&runtime, id, session_nonce, world_seed) {
+                stop = "natural_death";
+                terminal_death_tick = event["terminal_death_tick"].as_u64();
+                terminal_observed = true;
+                // Even a tick error may follow an observed death. Persist it
+                // before propagating that error or processing returned rows.
+                record_terminal_then(event, &mut on_update, || {
+                    tick_result?;
+                    Ok(())
+                })?;
+            } else {
+                tick_result?;
+            }
             let mut steps = runtime.take_foundation_training_steps();
             if runtime.world().tick() == before_tick {
                 if !steps.is_empty() {
                     return Err("uncommitted world tick returned training rows".into());
+                }
+                if terminal_observed {
+                    break;
                 }
                 no_progress += 1;
                 if stalled.elapsed().as_secs() > 300 {
@@ -385,19 +534,7 @@ pub(super) fn run_same_individual_world(
                 )?);
                 refs.push(writer.append_cohort(&step, &mut cohort)?);
             }
-            if !alive(&runtime, id) {
-                stop = "natural_death";
-                terminal_death_tick = runtime
-                    .world()
-                    .organism_registry()
-                    .get(id)
-                    .and_then(|r| r.lifecycle().death_tick())
-                    .map(|t| t.raw())
-                    .or_else(|| {
-                        runtime
-                            .archive_retirement_receipt(id)
-                            .map(|r| r.death_tick.raw())
-                    });
+            if terminal_observed {
                 break;
             }
             if refs.len() > wanted {
@@ -418,19 +555,18 @@ pub(super) fn run_same_individual_world(
         captured_total += refs.len() as u64;
         generic_total += generic_rows.len() as u64;
         nourished_total += meal_rows.len() as u64;
-        // A dead body cannot be installed/saved as a living Current. Keep the
-        // last valid snapshot and report this entire unretained suffix explicitly.
-        if terminal_death_tick.is_some() || !alive(&runtime, id) {
+        if terminal_observed {
+            // The terminal row/food observations above are included in capture
+            // telemetry, while all this suffix remains explicitly untrained.
+            // The immutable terminal event was already committed before metrics.
             drop(writer);
             drop(cohort);
             alife_storage::remove_dir_all(&window_root)?;
-            on_update(
-                serde_json::json!({"kind":"continuous-terminal-v1", "session_nonce":session_nonce,
-                "source_world_seed":world_seed,"organism_id":id.raw(),"world_tick":runtime.world().tick().raw(),
-                "world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
-                "terminal":true,"terminal_death_tick":terminal_death_tick,"causal_collection":causal,
-                "captured_rows":refs.len(),"trained_rows":0,"semantic_prior":compact_prior(&runtime)}),
-            )?;
+            on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
+                "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
+                "stop_reason":stop,"causal_collection":causal,
+                "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
+                "policy_version":policy,"semantic_prior":compact_prior(&runtime)}))?;
             break;
         }
         let rows = loss_rows(refs.len(), wanted);
@@ -720,7 +856,7 @@ pub(super) fn run_same_individual_world(
         stop = "finalization_deadline_unsaved_suffix";
     }
     let causal_collection = FoundationCausalCollectionMetrics::measure(
-        start_tick,
+        collection_start_tick,
         runtime.world().tick().raw(),
         collection_seconds,
         usize::try_from(captured_total)?,
@@ -745,6 +881,7 @@ pub(super) fn run_same_individual_world(
             "semantic_prior":compact_prior(&runtime),"snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
             "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
             "restore_seconds":restore_seconds,"replay_seal_seconds":replay_seal_seconds,"boundary_wait_seconds":boundary_wait_seconds,
+            "legacy_sleep_progress":legacy_sleep_progress,
             "causal_collection":causal_collection,
         }),
     )

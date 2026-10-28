@@ -622,6 +622,34 @@ impl NeuralThrottleDecision {
         Ok(())
     }
 
+    /// Rebind retained activity authority after a checked weight-only policy
+    /// installation. This is not a new dispatch: original pressure, source
+    /// frame, sequence, work counters, timing and ATP debit remain unchanged.
+    /// Historical copies of the old receipts are not modified. Only the active
+    /// route/receipt identity is derived for the graph-compatible successor.
+    pub fn rebind_weight_only_policy_authority(
+        &self,
+        work: &BrainWorkReceipt,
+        policy: &BrainActivityPolicyV1,
+        previous: &BrainPhenotype,
+        next: &BrainPhenotype,
+        execution: &BrainExecutionBudget,
+    ) -> Result<(Self, BrainWorkReceipt), ScaffoldContractError> {
+        crate::validate_weight_only_policy_successor(previous, next)?;
+        self.validate_for(previous, execution)?;
+        work.validate_for(policy, self)?;
+        let mut rebound = self.clone();
+        rebound.route_schedule_digest =
+            route_schedule_digest(next, self.microsteps, &self.enabled_route_ids);
+        rebound.decision_digest = rebound.recompute_digest();
+        rebound.validate_for(next, execution)?;
+        let mut rebound_work = work.clone();
+        rebound_work.route_schedule_digest = rebound.route_schedule_digest;
+        rebound_work.receipt_digest = rebound_work.recompute_digest();
+        rebound_work.validate_for(policy, &rebound)?;
+        Ok((rebound, rebound_work))
+    }
+
     fn recompute_digest(&self) -> [u64; 4] {
         let mut digest = CanonicalDigestBuilder::new(DECISION_DOMAIN);
         digest.write_u16(self.schema_version);
