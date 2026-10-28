@@ -329,13 +329,19 @@ def reconcile(lane, state, validate):
         pending_cleanup = current.tool(native, '--finish-resident-run', store_root)
         if initialization_pending:
             live = state.get('producer_mode') == 'same_individual'
-            require(pending_cleanup.get('kind') == ('same-individual-initialization-aborted-v1'
-                    if live else 'resident-initialization-aborted-v1') and
+            kind = pending_cleanup.get('kind')
+            known = kind in ('same-individual-initialization-aborted-v1', 'resident-initialization-aborted-v1')
+            expected = 'same-individual-initialization-aborted-v1' if live else 'resident-initialization-aborted-v1'
+            # The two envelope magics share early torn prefixes. Such a prefix
+            # owns no run or allocation, so its safe abort may use either ABI.
+            # A committed owner must still match the requested producer kind.
+            require(known and (kind == expected or
+                    pending_cleanup.get('initialization_binding_verified') is False) and
                     pending_cleanup.get('already_published_current') is True and
                     pending_cleanup.get('cleanup_completed') is True and
                     pending_cleanup.get('initialization_aborted') is True and
                     isinstance(pending_cleanup.get('initialization_binding_verified'), bool) and
-                    pending_cleanup.get('dispatched_sessions' if live else 'dispatched_worlds') == 0 and
+                    pending_cleanup.get('dispatched_sessions' if kind.startswith('same-individual-') else 'dispatched_worlds') == 0 and
                     pending_cleanup.get('seeds_consumed') == 0 and
                     pending_cleanup.get('new_request_allocation_committed') is False and
                     pending_cleanup.get('neural_execution') is False and

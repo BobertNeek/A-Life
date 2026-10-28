@@ -837,12 +837,18 @@ class ContinuousCareTests(unittest.TestCase):
                     with cp.writer_lock(self.store):
                         self.assertFalse((self.store / cp.RUN).exists())
                         (self.store / marker_name).unlink()
-                    return {'kind': 'resident-initialization-aborted-v1', 'already_published_current': True,
+                    bound = marker_name == session.NATIVE_INITIALIZATION
+                    response = {'kind': 'resident-initialization-aborted-v1', 'already_published_current': True,
                         'candidate': str(self.store / cp.CURRENT), 'candidate_sha256': before,
                         'cleanup_completed': True, 'initialization_aborted': True,
                         'initialization_binding_verified': marker_name == session.NATIVE_INITIALIZATION,
                         'dispatched_worlds': 0, 'seeds_consumed': 0, 'new_request_allocation_committed': False,
                         'temporary_budget': None, 'neural_execution': False}
+                    if not bound:
+                        # The common torn prefix cannot identify old/new format.
+                        response['kind'] = 'same-individual-initialization-aborted-v1'
+                        response['dispatched_sessions'] = response.pop('dispatched_worlds')
+                    return response
 
                 self.child.side_effect = startup
                 with patch.object(session.current, 'tool', side_effect=native), \
