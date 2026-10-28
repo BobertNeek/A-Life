@@ -20,7 +20,7 @@ import run_mixed_care_serial as mixed
 LEDGER = ".grab-food-seed-reservations.json"
 PLAN = ".cpu-care-plan.json"
 HELPERS = ("run_mixed_care_serial.py", "grab_food_seed_reservations.py",
-           "run_eat_held_food_night.py", "summarize_ppo_diagnostics.py")
+           "care_host.py", "summarize_ppo_diagnostics.py")
 require = mixed.require
 CPU_LESSONS = (*mixed.LESSONS, "obstacle_navigation", "relocated_food")
 

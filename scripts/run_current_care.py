@@ -405,7 +405,7 @@ def start(store, args):
     before = checkpoints.digest(store.current)
     reserved = run / 'reserved.alife-checkpoint'
     helpers = ('run_current_care.py', 'current_checkpoint_store.py', 'run_mixed_care_serial.py',
-               'run_eat_held_food_night.py', 'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py')
+               'care_host.py', 'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py')
     state = {'schema': 1, 'kind': 'single-current-temporary-run', 'mode': 'serial',
              'phase': 'preparing', 'before_reservation': before,
              'tool': str(tool_binary), 'binary': str(args.binary.resolve(strict=True)), 'executables': binaries,

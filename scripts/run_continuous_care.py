@@ -37,7 +37,7 @@ SIDECARS = (REQUEST, LOG + '.stdout.log', LOG + '.stderr.log',
             STATE + '.tmp', REQUEST + '.tmp', STATE)
 MAX_LOG_BYTES = 8 * 1024 * 1024
 HELPERS = ('run_continuous_care.py', 'run_current_care.py', 'current_checkpoint_store.py',
-           'run_mixed_care_serial.py', 'run_eat_held_food_night.py',
+           'run_mixed_care_serial.py', 'care_host.py',
            'grab_food_seed_reservations.py', 'summarize_ppo_diagnostics.py', 'care_night_window.py')
 OWNER_RECOVERY_SECONDS = 60
 WORLD_TICKS_PER_SECOND = 20
