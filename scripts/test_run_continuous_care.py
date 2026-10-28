@@ -449,6 +449,20 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertFalse(result['native_execution'])
         self.assertEqual(self.calls, [])
 
+    def test_care_assistance_is_explicit_in_same_individual_plan(self):
+        result = session.main(['--store', 'absent-store', '--lane', 'absent-owner',
+            '--binary', 'absent-native', '--checkpoint-tool', 'absent-tool', '--auto-seed',
+            '--care-assistance', '--hard-end',
+            (dt.datetime.now(session.host.UTC) + dt.timedelta(hours=1)).isoformat()])
+        self.assertTrue(result['request']['care_assistance'])
+        self.assertFalse(result['native_execution'])
+        self.assertEqual(self.calls, [])
+
+    def test_care_assistance_event_is_retained_by_event_reader(self):
+        event = {'kind': 'continuous-care-assistance-v1', 'mode': 'ordinary_feeding_scene_and_spatial_eat_food_cues'}
+        Path(str(self.lane / session.LOG) + '.stdout.log').write_text(json.dumps(event) + '\n')
+        self.assertEqual(session.read_events(self.lane), [event])
+
     def test_live_default_refuses_older_binary_before_loading_or_changing_current(self):
         with self.assertRaisesRegex(ValueError, 'no fresh-world fallback'):
             session.run(self.live_args())

@@ -112,6 +112,7 @@ struct CareRowEvidence {
     food_eat: bool,
     food_grab: bool,
     bundle_missing: bool,
+    teacher_food_token_heard: bool,
 }
 
 fn care_row_evidence(
@@ -126,6 +127,18 @@ fn care_row_evidence(
                 .is_some_and(|target| food.contains_key(&target.raw()))
         }),
         bundle_missing: step.patch.selected_bundle().is_none(),
+        teacher_food_token_heard: step
+            .frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .any(|heard| {
+                heard.source_kind == alife_core::UtteranceSourceKind::Teacher
+                    && heard.addressee == Some(step.frame.organism_id())
+                    && matches!(heard.token_id, 1 | 8)
+            }),
         ..CareRowEvidence::default()
     };
     if let Some(bundle) = step.patch.selected_bundle() {
@@ -152,7 +165,16 @@ fn care_row_summary(rows: &[CareRowEvidence]) -> serde_json::Value {
         "food_eat_command_rows":rows.iter().filter(|row| row.food_eat).count(),
         "food_grab_command_rows":rows.iter().filter(|row| row.food_grab).count(),
         "missing_bundle_rows":rows.iter().filter(|row| row.bundle_missing).count(),
+        "teacher_food_token_heard_rows":rows.iter().filter(|row| row.teacher_food_token_heard).count(),
         "scope":"candidate presence and selected commands, not visibility, reachability or execution"})
+}
+
+fn care_food_ready(food: &alife_world::WorldObject) -> bool {
+    food.kind == alife_world::WorldObjectKind::Food
+        && !food.consumed
+        && food.carried_by.is_none()
+        && food.nutrition > 0.0
+        && food.hazard_pain == 0.0
 }
 
 fn tick_limit(decisions: usize) -> Result<u64> {
@@ -223,13 +245,14 @@ pub(super) fn record_terminal_then<T>(
     postprocess()
 }
 
-fn compact_prior(runtime: &GpuLiveBrainRuntime) -> serde_json::Value {
+fn compact_prior(runtime: &GpuLiveBrainRuntime, teacher_cues_emitted: u64) -> serde_json::Value {
     runtime.semantic_prior_metrics().map_or(serde_json::Value::Null, |m| serde_json::json!({
         "backend":m.backend,"provider_identity":m.provider_identity,
         "decision_frames":m.decision_frames,"decision_frames_with_prior":m.decision_frames_with_prior,
         "decision_frames_without_prior":m.decision_frames_without_prior,
         "delivered_frames":m.delivered_frames,"failures":m.failures,
-        "last_error":m.last_error,"teacher_cues_injected":0,
+        "last_error":m.last_error,"teacher_cues_injected":teacher_cues_emitted,
+        "teacher_cues_emitted":teacher_cues_emitted,
     }))
 }
 
@@ -469,12 +492,16 @@ pub(super) fn run_same_individual_world(
     // Observe only actual restored/current food entities. No food is spawned,
     // moved, replenished or assigned to the learner by this collector.
     let mut food = BTreeMap::new();
+    let mut care_scenario = None;
+    let mut care_cue_emissions = 0u64;
+    let mut last_care_cue_tick = None;
     let restore_seconds = started.elapsed().as_secs_f64();
     on_update(
         serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"policy_version":policy,
             "session_start_world_tick":start_tick,"world_tick":collection_start_tick,"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
             "legacy_sleep_progress":legacy_sleep_progress,
+            "care_assistance_requested":request.care_assistance,
             "hardware":hardware,"sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"sampling_seed":sampling.seed,"sampling_counter":sampling.counter,
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint(trainer.session())?.optimizer_step,
@@ -549,6 +576,54 @@ pub(super) fn run_same_individual_world(
             if runtime.world().tick().raw().saturating_sub(first_tick) >= tick_limit(wanted)? {
                 stop = "world_tick_guard";
                 break;
+            }
+            if request.care_assistance {
+                if care_scenario.is_none() {
+                    let ready = runtime
+                        .world()
+                        .entity_id("food-01")
+                        .and_then(|target| runtime.world().entity(target))
+                        .is_some_and(care_food_ready);
+                    if ready {
+                        let mut scenario =
+                            crate::foundation_training::configure_foundation_scenario(
+                                runtime.world_mut(),
+                                session_nonce,
+                                Some(crate::FoundationTeacherLesson::Feeding),
+                                None,
+                                false,
+                            )?;
+                        scenario.teacher_cue_tokens = vec![8, 1];
+                        on_update(serde_json::json!({"kind":"continuous-care-assistance-v1",
+                            "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
+                            "mode":"ordinary_feeding_scene_and_spatial_eat_food_cues",
+                            "food_target":scenario.food.raw(),"reward_override":false,
+                            "biology_override":false,"forced_action":false,
+                            "state":care_world_observation(runtime.world(), id)}))?;
+                        care_scenario = Some(scenario);
+                    }
+                }
+                if let Some(scenario) = care_scenario.as_ref() {
+                    let emitted = runtime
+                        .world()
+                        .tick()
+                        .raw()
+                        .saturating_sub(scenario.start_tick)
+                        .is_multiple_of(24)
+                        && runtime
+                            .world()
+                            .entity(scenario.food)
+                            .is_some_and(|food| !food.consumed);
+                    let tick = runtime.world().tick().raw();
+                    if emitted && last_care_cue_tick != Some(tick) {
+                        crate::foundation_training::expose_foundation_teacher_cue(
+                            runtime.world_mut(),
+                            scenario,
+                        )?;
+                        care_cue_emissions += 1;
+                        last_care_cue_tick = Some(tick);
+                    }
+                }
             }
             let before_tick = runtime.world().tick();
             let before_food = food
@@ -687,7 +762,7 @@ pub(super) fn run_same_individual_world(
                 "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
-                "policy_version":policy,"semantic_prior":compact_prior(&runtime)}))?;
+                "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
         let rows = loss_rows(refs.len(), wanted);
@@ -716,7 +791,7 @@ pub(super) fn run_same_individual_world(
                 "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
-                "policy_version":policy,"semantic_prior":compact_prior(&runtime)}))?;
+                "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
         runtime.ensure_live_foundation_policy_boundary(id)?;
@@ -922,7 +997,9 @@ pub(super) fn run_same_individual_world(
             "generic_consumed_events":generic_rows.len(),"trained_generic_consumed_events":generic_rows.iter().filter(|r| **r<rows).count(),
             "exact_nourished_meals":meal_rows.len(),"trained_exact_nourished_meals":meal_rows.iter().filter(|r| **r<rows).count(),
             "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
-            "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime),
+            "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime, care_cue_emissions),
+            "care_assistance_requested":request.care_assistance,
+            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,
             "care_before":care_before,"care_after":care_after,
             "care_training_rows":care_row_summary(&care_rows[..rows]),
             "food_outcomes_cumulative_including_bootstrap":food.values().map(|(_, summary)| summary).collect::<Vec<_>>(),
@@ -1013,7 +1090,10 @@ pub(super) fn run_same_individual_world(
             "stop_reason":stop,"terminal":!alive(&runtime,id),"terminal_death_tick":terminal_death_tick,
             "sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"generic_consumed_events":generic_total,"exact_nourished_meals":nourished_total,
-            "semantic_prior":compact_prior(&runtime),"snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
+            "semantic_prior":compact_prior(&runtime, care_cue_emissions),
+            "care_assistance_requested":request.care_assistance,
+            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,
+            "snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
             "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
             "restore_seconds":restore_seconds,"replay_seal_seconds":replay_seal_seconds,"boundary_wait_seconds":boundary_wait_seconds,
             "legacy_sleep_progress":legacy_sleep_progress,
@@ -1106,6 +1186,26 @@ mod tests {
         assert!(continuous_update_version(10977, Some(10976)).is_err());
         assert!(continuous_update_version(10977, None).is_err());
         assert!(continuous_update_version(u64::MAX, Some(u64::MAX)).is_err());
+    }
+    #[test]
+    fn care_setup_waits_for_a_safe_loose_unconsumed_food() {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .food("food", alife_core::Vec3f::ZERO, 0.45)
+            .build()
+            .unwrap();
+        let mut food = world
+            .entity(world.entity_id("food").unwrap())
+            .unwrap()
+            .clone();
+        assert!(care_food_ready(&food));
+        food.consumed = true;
+        assert!(!care_food_ready(&food));
+        food.consumed = false;
+        food.hazard_pain = 0.1;
+        assert!(!care_food_ready(&food));
+        food.hazard_pain = 0.0;
+        food.carried_by = Some(OrganismId(1));
+        assert!(!care_food_ready(&food));
     }
     #[test]
     fn care_row_summary_counts_only_the_supplied_training_slice() {
