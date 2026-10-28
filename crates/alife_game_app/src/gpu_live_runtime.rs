@@ -5596,6 +5596,17 @@ impl GpuLiveBrainRuntime {
         self.semantic_prior.as_ref().map(|prior| &prior.metrics)
     }
 
+    /// Read final world-owned biology without consuming the retirement evidence.
+    #[cfg(feature = "foundation-training")]
+    pub fn foundation_terminal_biology(
+        &self,
+        organism_id: OrganismId,
+    ) -> Option<BiochemistryState> {
+        self.last_foundation_terminal_biology
+            .get(&organism_id.raw())
+            .copied()
+    }
+
     /// Final world-owned biology captured by the existing retirement transaction.
     #[cfg(feature = "foundation-training")]
     pub fn take_foundation_terminal_biology(

@@ -116,9 +116,11 @@ def request_for(args, now):
                 'continuous total must cover one update and be at most 10000000')
         require(type(cadence) is int and 1 <= cadence <= 10000, 'invalid resident snapshot cadence')
         require(args.food_need_condition is None, 'restored life does not accept food/need preparation')
-        return {**common, 'total_trained_decisions': total, 'decisions_per_update': args.decisions,
+        assistance = {'care_assistance': True} if getattr(args, 'care_assistance', False) else {}
+        return {**common, **assistance, 'total_trained_decisions': total, 'decisions_per_update': args.decisions,
             'snapshot_every_updates': cadence,
             'finalization_deadline_unix_seconds': int(producer_deadline(args).timestamp())}
+    require(not getattr(args, 'care_assistance', False), 'care assistance requires same-individual mode')
     require(args.food_need_condition in ('newborn_v1', 'ordinary_healthy_aging_v1'),
             'unsupported food need initialization')
     return {**common,
@@ -127,7 +129,7 @@ def request_for(args, now):
             'checkpoint_every_episodes': 1}
 
 
-def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
+def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0, care_assistance=False):
     require(report.get('schema') == 1 and report.get('kind') == 'native-resident-serial-v1' and
             report.get('finite_continuous_feeding') is True and
             report.get('max_continuous_feeding_decisions', 0) >= decisions and
@@ -144,6 +146,9 @@ def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
                 report.get('max_decisions_per_update', 0) >= decisions and
                 report.get('world_ticks_per_second') == WORLD_TICKS_PER_SECOND,
                 'native same-individual restore/PPO/sampling/cutoff capabilities required; no fresh-world fallback')
+        if care_assistance:
+            require(report.get('continuous_care_assistance') is True,
+                    'native continuous care assistance capability required')
 
 
 def check_pins(state):
@@ -217,7 +222,8 @@ def read_events(lane):
         if isinstance(event, dict) and event.get('kind') in (
                 'resident-provisional-episode-v1', 'resident-serial-finished-v1',
                 'continuous-started-v1', 'continuous-update-v1',
-                'continuous-untrained-window-v1', 'continuous-terminal-v1',
+                'continuous-untrained-window-v1', 'continuous-terminal-v1', 'continuous-care-assistance-v1',
+                'continuous-care-reposition-v1',
                 'continuous-world-finished-v1'):
             events.append(event)
     return events
@@ -424,7 +430,10 @@ def finish(lane, state, validate):
             if retained_rows is not None and elapsed > 0 else None,
         'actor_optimizer_step_delta': admitted['actor_optimizer_step'] - state['before']['actor_optimizer_step'],
         'value_optimizer_step_delta': admitted['value_optimizer_step'] - state['before']['value_optimizer_step'],
-        'native_exit_error': state.get('native_exit_error'), 'observed_rows': rows,
+        'native_exit_error': state.get('native_exit_error'),
+        'care_assistance': next((e for e in events if e['kind'] == 'continuous-care-assistance-v1'), None),
+        'care_food_reposition_events': sum(e['kind'] == 'continuous-care-reposition-v1' for e in events),
+        'observed_rows': rows,
         'observed_updates': updates[-8:], 'observed_update_count': len(updates), 'producer_mode': mode,
         'native_summary': recovery.get('producer_result') or next((e for e in reversed(events)
             if e['kind'] == 'continuous-world-finished-v1'), None),
@@ -579,7 +588,8 @@ def run(args):
                 'explicit admitted executable hashes required')
         mode = producer_mode(args)
         capabilities(current.tool(native, '--resident-contract'), args.decisions,
-                     mode=mode, total_decisions=request.get('total_trained_decisions', 0))
+                     mode=mode, total_decisions=request.get('total_trained_decisions', 0),
+                     care_assistance=request.get('care_assistance', False))
         checkout = current.checkout_context()
         require(current.prior_environment().get('ALIFE_SLM_PRIOR_BACKEND') == 'deterministic' and
                 current.prior_environment().get('ALIFE_SLM_PRIOR') == 'on',
@@ -668,6 +678,8 @@ def main(argv=None):
     parser.add_argument('--decisions', type=int, default=512)
     parser.add_argument('--total-decisions', type=int, default=1_000_000)
     parser.add_argument('--snapshot-every-updates', type=int, default=32)
+    parser.add_argument('--care-assistance', action='store_true',
+        help='opt in to ordinary Feeding placement and spatial eat-food cues; never changes rewards or biology')
     parser.add_argument('--food-need-condition', choices=('newborn_v1', 'ordinary_healthy_aging_v1'))
     parser.add_argument('--hard-end', type=host.cutoff_time)
     parser.add_argument('--night-date', type=dt.date.fromisoformat,

@@ -32,10 +32,17 @@ pub struct ResidentContinuousRequest {
     pub total_trained_decisions: usize,
     pub decisions_per_update: usize,
     pub snapshot_every_updates: usize,
+    /// Opt-in training-only ordinary food placement and spatial language cues.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub care_assistance: bool,
     pub sampling_temperature: f32,
     pub collection_cutoff_unix_seconds: u64,
     pub finalization_deadline_unix_seconds: u64,
     pub max_temporary_bytes: u64,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 pub fn validate_resident_continuous_request(r: &ResidentContinuousRequest, now: u64) -> Result<()> {
@@ -1052,11 +1059,28 @@ mod tests {
             total_trained_decisions: 100,
             decisions_per_update: 10,
             snapshot_every_updates: 2,
+            care_assistance: false,
             sampling_temperature: 1.,
             collection_cutoff_unix_seconds: 200,
             finalization_deadline_unix_seconds: 300,
             max_temporary_bytes: RECOVERY_HEADROOM + STARTUP_METADATA_HEADROOM + 10_000_000,
         }
+    }
+    #[test]
+    fn care_assistance_is_explicit_and_legacy_request_identity_is_unchanged() {
+        let mut original = request();
+        let old = serde_json::to_value(&original).unwrap();
+        assert!(old.get("care_assistance").is_none());
+        let roundtrip: ResidentContinuousRequest = serde_json::from_value(old).unwrap();
+        assert!(!roundtrip.care_assistance);
+        original.care_assistance = true;
+        let enabled = serde_json::to_value(&original).unwrap();
+        assert_eq!(enabled["care_assistance"], true);
+        assert!(
+            serde_json::from_value::<ResidentContinuousRequest>(enabled)
+                .unwrap()
+                .care_assistance
+        );
     }
     #[test]
     fn session_wal_consumes_one_nonce_and_never_one_per_update() {

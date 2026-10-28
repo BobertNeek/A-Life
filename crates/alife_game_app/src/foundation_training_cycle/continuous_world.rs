@@ -72,6 +72,271 @@ fn continuous_update_version(policy: u64, value_version: Option<u64>) -> Result<
         .ok_or_else(|| "policy version overflow".into())
 }
 
+/// Passive bounded observations. Distance is geometric, not a path-reachability claim.
+fn care_world_observation(world: &alife_world::HeadlessWorld, id: OrganismId) -> serde_json::Value {
+    let Some(record) = world.organism_registry().get(id) else {
+        return serde_json::json!({"organism_present": false});
+    };
+    let biology = record.biochemistry();
+    let position = world
+        .entity(record.world_entity_id())
+        .map(|entity| entity.position);
+    let food: Vec<_> = world
+        .object_snapshots()
+        .into_iter()
+        .filter(|object| object.kind == alife_world::WorldObjectKind::Food)
+        .map(|object| {
+            let distance = position.map(|p| {
+                let dx = p.x - object.position.x;
+                let dy = p.y - object.position.y;
+                let dz = p.z - object.position.z;
+                (dx * dx + dy * dy + dz * dz).sqrt()
+            });
+            serde_json::json!({"id":object.id.raw(), "consumed":object.consumed,
+                "carried_by":object.carried_by.map(|owner| owner.raw()),
+                "nutrition":object.nutrition,"hazard_pain":object.hazard_pain,
+                "geometric_distance":distance})
+        })
+        .collect();
+    serde_json::json!({"organism_present":true,"world_tick":world.tick().raw(),
+        "energy":biology.body.energy,"health":biology.body.health,"injury":biology.body.injury,
+        "sleeping":biology.body.sleeping,"hunger":biology.homeostasis.drives.hunger,
+        "fatigue":biology.homeostasis.drives.fatigue,"pain":biology.homeostasis.drives.pain,
+        "food":food})
+}
+
+#[derive(Default)]
+struct CareRowEvidence {
+    food_candidate: bool,
+    food_approach: bool,
+    food_eat: bool,
+    food_grab: bool,
+    bundle_missing: bool,
+    teacher_food_token_heard: bool,
+}
+
+fn care_row_evidence(
+    step: &crate::FoundationTrainingStep,
+    food: &BTreeMap<u64, (alife_core::WorldEntityId, crate::FoundationFoodOutcome)>,
+) -> CareRowEvidence {
+    let mut evidence = CareRowEvidence {
+        food_candidate: step.frame.candidates().iter().any(|candidate| {
+            candidate
+                .target
+                .entity
+                .is_some_and(|target| food.contains_key(&target.raw()))
+        }),
+        bundle_missing: step.patch.selected_bundle().is_none(),
+        teacher_food_token_heard: step
+            .frame
+            .sensory()
+            .language_context
+            .heard_tokens
+            .iter()
+            .flatten()
+            .any(|heard| {
+                heard.source_kind == alife_core::UtteranceSourceKind::Teacher
+                    && heard.addressee == Some(step.frame.organism_id())
+                    && matches!(heard.token_id, 1 | 8)
+            }),
+        ..CareRowEvidence::default()
+    };
+    if let Some(bundle) = step.patch.selected_bundle() {
+        for command in &bundle.channels {
+            let targets_food = command
+                .target
+                .and_then(|target| target.entity)
+                .is_some_and(|target| food.contains_key(&target.raw()));
+            if targets_food {
+                evidence.food_approach |=
+                    command.primitive == alife_world::HeadlessActionIds::APPROACH;
+                evidence.food_eat |= command.primitive == alife_world::HeadlessActionIds::EAT;
+                evidence.food_grab |= command.primitive == alife_world::HeadlessActionIds::GRAB;
+            }
+        }
+    }
+    evidence
+}
+
+fn care_row_summary(rows: &[CareRowEvidence]) -> serde_json::Value {
+    serde_json::json!({"trained_rows":rows.len(),
+        "food_candidate_rows":rows.iter().filter(|row| row.food_candidate).count(),
+        "food_approach_command_rows":rows.iter().filter(|row| row.food_approach).count(),
+        "food_eat_command_rows":rows.iter().filter(|row| row.food_eat).count(),
+        "food_grab_command_rows":rows.iter().filter(|row| row.food_grab).count(),
+        "missing_bundle_rows":rows.iter().filter(|row| row.bundle_missing).count(),
+        "teacher_food_token_heard_rows":rows.iter().filter(|row| row.teacher_food_token_heard).count(),
+        "scope":"candidate presence and selected commands, not visibility, reachability or execution"})
+}
+
+fn care_food_ready(food: &alife_world::WorldObject) -> bool {
+    food.kind == alife_world::WorldObjectKind::Food
+        && !food.consumed
+        && food.carried_by.is_none()
+        && food.nutrition > 0.0
+        && food.hazard_pain == 0.0
+}
+
+fn care_food_position_in_gaze(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+) -> Option<alife_core::Vec3f> {
+    let record = world.organism_registry().get(id)?;
+    let body = world.entity(record.world_entity_id())?;
+    let gaze = body.body_yaw + body.head_yaw;
+    let food = world.entity_id("food-01")?;
+    if !world.entity(food).is_some_and(care_food_ready) {
+        return None;
+    }
+    // Try real placements in the current gaze before falling back to contact.
+    // Check the actual grounded frame on a disposable world clone: a nominally
+    // visible target can be occluded or displaced from the three action slots.
+    for distance in [1.0_f32, 0.5, 0.1, 0.0] {
+        for offset in [0.0_f32, 0.35, -0.35, 0.7, -0.7] {
+            let yaw = gaze + offset;
+            let wanted = alife_core::Vec3f::new(
+                body.position.x + distance * yaw.cos(),
+                body.position.y,
+                body.position.z + distance * yaw.sin(),
+            );
+            let position = match world.terrain() {
+                Some(terrain) => match terrain.resolve_move(body.position, wanted) {
+                    Some(position) => position,
+                    None => continue,
+                },
+                None => wanted,
+            };
+            let dx = position.x - body.position.x;
+            let dz = position.z - body.position.z;
+            let length_squared = dx * dx + dz * dz;
+            if world.object_snapshots().iter().any(|object| {
+                if object.kind != alife_world::WorldObjectKind::Obstacle || object.consumed {
+                    return false;
+                }
+                let t = if length_squared > 0.0 {
+                    (((object.position.x - body.position.x) * dx
+                        + (object.position.z - body.position.z) * dz)
+                        / length_squared)
+                        .clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let closest_x = body.position.x + dx * t;
+                let closest_z = body.position.z + dz * t;
+                (object.position.x - closest_x).hypot(object.position.z - closest_z)
+                    <= object.radius
+            }) {
+                continue;
+            }
+            let mut trial = world.clone();
+            if !matches!(
+                crate::foundation_training::relocate_unheld_foundation_food(
+                    &mut trial, food, position,
+                ),
+                Ok(true)
+            ) {
+                continue;
+            }
+            let homeostasis = trial
+                .organism_registry()
+                .get(id)?
+                .biochemistry()
+                .homeostasis;
+            let tick = trial.tick();
+            let Ok(frame) = trial.perception_frame(
+                id,
+                tick,
+                alife_core::SensorProfile::GroundedTerrainVisionV1,
+                homeostasis,
+            ) else {
+                continue;
+            };
+            if frame.candidates().iter().any(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(food)
+            }) {
+                return Some(position);
+            }
+        }
+    }
+    None
+}
+
+struct ContinuousCareAssistance {
+    food: alife_core::WorldEntityId,
+    start_tick: u64,
+}
+
+fn prepare_care_assistance(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+) -> Result<ContinuousCareAssistance> {
+    let position =
+        care_food_position_in_gaze(world, id).ok_or("no walkable care placement in gaze")?;
+    let food = world.entity_id("food-01").ok_or("care food missing")?;
+    if !world.entity(food).is_some_and(care_food_ready)
+        || !crate::foundation_training::relocate_unheld_foundation_food(world, food, position)?
+    {
+        return Err("care food is unavailable for placement".into());
+    }
+    Ok(ContinuousCareAssistance {
+        food,
+        start_tick: world.tick().raw(),
+    })
+}
+
+fn expose_care_cue(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+    care: &ContinuousCareAssistance,
+) -> Result<()> {
+    let position = world
+        .entity(care.food)
+        .ok_or("care cue food missing")?
+        .position;
+    let teacher_position = [(0.0_f32, 2.0_f32), (2.0, 0.0), (-2.0, 0.0), (0.0, -2.0)]
+        .into_iter()
+        .map(|(x, z)| alife_core::Vec3f::new(position.x + x, position.y, position.z + z))
+        .find(|candidate| {
+            world
+                .terrain()
+                .is_none_or(|terrain| terrain.walkable(candidate.x, candidate.z))
+        })
+        .ok_or("no walkable nearby teacher position")?;
+    alife_school::LanguageNursery::speak_in_world(
+        world,
+        id,
+        teacher_position,
+        [8, 1]
+            .into_iter()
+            .map(alife_core::LanguageTokenId::new)
+            .collect::<std::result::Result<Vec<_>, _>>()?,
+    )?;
+    Ok(())
+}
+
+fn care_cue_due(tick: u64, start: u64, available: bool, last: Option<u64>) -> bool {
+    available && tick.saturating_sub(start).is_multiple_of(24) && last != Some(tick)
+}
+
+fn care_food_is_far(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> bool {
+    let Some(subject) = world
+        .organism_registry()
+        .get(id)
+        .and_then(|record| world.entity(record.world_entity_id()))
+    else {
+        return false;
+    };
+    let Some(target) = world.entity(food).filter(|food| care_food_ready(food)) else {
+        return false;
+    };
+    (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z) > 4.0
+}
+
 fn tick_limit(decisions: usize) -> Result<u64> {
     (decisions as u64)
         .checked_mul(8)
@@ -109,11 +374,25 @@ pub(super) fn observed_terminal_event(
                 .archive_retirement_receipt(id)
                 .map(|receipt| receipt.death_tick.raw())
         });
+    let final_biology = runtime.foundation_terminal_biology(id).or_else(|| {
+        runtime
+            .world()
+            .organism_registry()
+            .get(id)
+            .map(|record| *record.biochemistry())
+    });
+    let final_biology = final_biology.map(|biology| {
+        serde_json::json!({
+            "tick":biology.tick.raw(), "energy":biology.body.energy, "health":biology.body.health,
+            "injury":biology.body.injury, "hunger":biology.homeostasis.drives.hunger,
+            "fatigue":biology.homeostasis.drives.fatigue, "pain":biology.homeostasis.drives.pain,
+        })
+    });
     Some(
         serde_json::json!({"kind":"continuous-terminal-v1","terminal":true,
         "session_nonce":session_nonce,"source_world_seed":world_seed,"organism_id":id.raw(),
         "world_tick":runtime.world().tick().raw(),"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
-        "terminal_death_tick":death_tick}),
+        "terminal_death_tick":death_tick,"final_biology":final_biology}),
     )
 }
 
@@ -126,13 +405,14 @@ pub(super) fn record_terminal_then<T>(
     postprocess()
 }
 
-fn compact_prior(runtime: &GpuLiveBrainRuntime) -> serde_json::Value {
+fn compact_prior(runtime: &GpuLiveBrainRuntime, teacher_cues_emitted: u64) -> serde_json::Value {
     runtime.semantic_prior_metrics().map_or(serde_json::Value::Null, |m| serde_json::json!({
         "backend":m.backend,"provider_identity":m.provider_identity,
         "decision_frames":m.decision_frames,"decision_frames_with_prior":m.decision_frames_with_prior,
         "decision_frames_without_prior":m.decision_frames_without_prior,
         "delivered_frames":m.delivered_frames,"failures":m.failures,
-        "last_error":m.last_error,"teacher_cues_injected":0,
+        "last_error":m.last_error,"teacher_cues_injected":teacher_cues_emitted,
+        "teacher_cues_emitted":teacher_cues_emitted,
     }))
 }
 
@@ -369,15 +649,20 @@ pub(super) fn run_same_individual_world(
     let mut nourished_total = 0u64;
     let mut stop = "decision_horizon";
     let mut terminal_death_tick = None;
-    // Observe only actual restored/current food entities. No food is spawned,
-    // moved, replenished or assigned to the learner by this collector.
+    // Unassisted mode only observes actual food. Opt-in care assistance records
+    // each movement of existing safe loose food; it never feeds the learner.
     let mut food = BTreeMap::new();
+    let mut care_scenario: Option<ContinuousCareAssistance> = None;
+    let mut care_cue_emissions = 0u64;
+    let mut care_food_repositions = 0u64;
+    let mut last_care_cue_tick = None;
     let restore_seconds = started.elapsed().as_secs_f64();
     on_update(
         serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"policy_version":policy,
             "session_start_world_tick":start_tick,"world_tick":collection_start_tick,"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
             "legacy_sleep_progress":legacy_sleep_progress,
+            "care_assistance_requested":request.care_assistance,
             "hardware":hardware,"sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"sampling_seed":sampling.seed,"sampling_counter":sampling.counter,
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint(trainer.session())?.optimizer_step,
@@ -427,6 +712,44 @@ pub(super) fn run_same_individual_world(
         let mut features = Vec::new();
         let mut generic_rows = Vec::new();
         let mut meal_rows = Vec::new();
+        let mut care_rows = Vec::new();
+        let care_before = care_world_observation(runtime.world(), id);
+        if let Some(scenario) = care_scenario.as_ref() {
+            let observation = care_world_observation(runtime.world(), id);
+            let far = observation["food"].as_array().is_some_and(|foods| {
+                foods.iter().any(|food| {
+                    food["id"].as_u64() == Some(scenario.food.raw())
+                        && food["geometric_distance"]
+                            .as_f64()
+                            .is_some_and(|distance| distance > 4.0)
+                })
+            });
+            let moved = if far
+                && runtime
+                    .world()
+                    .entity(scenario.food)
+                    .is_some_and(care_food_ready)
+            {
+                match care_food_position_in_gaze(runtime.world(), id) {
+                    Some(position) => crate::foundation_training::relocate_unheld_foundation_food(
+                        runtime.world_mut(),
+                        scenario.food,
+                        position,
+                    )?,
+                    None => false,
+                }
+            } else {
+                false
+            };
+            if moved {
+                care_food_repositions += 1;
+                on_update(serde_json::json!({"kind":"continuous-care-reposition-v1",
+                    "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
+                    "food_target":scenario.food.raw(),"mode":"training_assistance_in_gaze",
+                    "before":observation,"after":care_world_observation(runtime.world(), id),
+                    "forced_action":false,"reward_override":false,"biology_override":false}))?;
+            }
+        }
         for object in runtime.world().object_snapshots() {
             if object.kind == alife_world::WorldObjectKind::Food {
                 food.entry(object.id.raw()).or_insert_with(|| {
@@ -451,6 +774,67 @@ pub(super) fn run_same_individual_world(
                 stop = "world_tick_guard";
                 break;
             }
+            if request.care_assistance {
+                if care_scenario.is_none() {
+                    let ready = runtime
+                        .world()
+                        .entity_id("food-01")
+                        .and_then(|target| runtime.world().entity(target))
+                        .is_some_and(care_food_ready)
+                        && care_food_position_in_gaze(runtime.world(), id).is_some();
+                    if ready {
+                        let scenario = prepare_care_assistance(runtime.world_mut(), id)?;
+                        on_update(serde_json::json!({"kind":"continuous-care-assistance-v1",
+                            "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
+                            "mode":"ordinary_feeding_scene_and_spatial_eat_food_cues",
+                            "food_target":scenario.food.raw(),"reward_override":false,
+                            "biology_override":false,"forced_action":false,
+                            "state":care_world_observation(runtime.world(), id)}))?;
+                        care_scenario = Some(scenario);
+                    }
+                }
+                if let Some(scenario) = care_scenario.as_ref() {
+                    let tick = runtime.world().tick().raw();
+                    let available = runtime
+                        .world()
+                        .entity(scenario.food)
+                        .is_some_and(|food| !food.consumed);
+                    if care_cue_due(tick, scenario.start_tick, available, last_care_cue_tick) {
+                        // Ordinary food can regrow after an actual meal while the
+                        // learner walks away within a 512-decision window. Keep
+                        // the assistance explicit and bounded to the cue cadence.
+                        if care_food_is_far(runtime.world(), id, scenario.food) {
+                            let before = care_world_observation(runtime.world(), id);
+                            let moved = match care_food_position_in_gaze(runtime.world(), id) {
+                                Some(position) => {
+                                    crate::foundation_training::relocate_unheld_foundation_food(
+                                        runtime.world_mut(),
+                                        scenario.food,
+                                        position,
+                                    )?
+                                }
+                                None => false,
+                            };
+                            if moved {
+                                care_food_repositions += 1;
+                                on_update(
+                                    serde_json::json!({"kind":"continuous-care-reposition-v1",
+                                    "session_nonce":session_nonce,"world_tick":tick,
+                                    "food_target":scenario.food.raw(),"mode":"training_assistance_in_gaze",
+                                    "trigger":"periodic_cue", "before":before,
+                                    "after":care_world_observation(runtime.world(), id),
+                                    "forced_action":false,"reward_override":false,"biology_override":false}),
+                                )?;
+                            }
+                        }
+                        expose_care_cue(runtime.world_mut(), id, scenario).map_err(|error| {
+                            format!("continuous care cue failed at world tick {tick}: {error}")
+                        })?;
+                        care_cue_emissions += 1;
+                        last_care_cue_tick = Some(tick);
+                    }
+                }
+            }
             let before_tick = runtime.world().tick();
             let before_food = food
                 .iter()
@@ -468,7 +852,12 @@ pub(super) fn run_same_individual_world(
                 crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
             }
             first_control_call = false;
-            let tick_result = runtime.tick_outcome();
+            let tick_result = runtime.tick_outcome().map_err(|error| {
+                format!(
+                    "continuous runtime tick {} failed: {error}",
+                    before_tick.raw()
+                )
+            });
             if let Some(event) = observed_terminal_event(&runtime, id, session_nonce, world_seed) {
                 stop = "natural_death";
                 terminal_death_tick = event["terminal_death_tick"].as_u64();
@@ -527,6 +916,7 @@ pub(super) fn run_same_individual_world(
                 if consumed(&step) {
                     generic_rows.push(refs.len());
                 }
+                care_rows.push(care_row_evidence(&step, &food));
                 for (raw, (target, summary)) in &mut food {
                     let observation =
                         crate::foundation_training::food_outcome::FoodOutcomeObservation {
@@ -561,6 +951,7 @@ pub(super) fn run_same_individual_world(
                 break;
             }
         }
+        let care_after = care_world_observation(runtime.world(), id);
         let causal = FoundationCausalCollectionMetrics::measure(
             first_tick,
             runtime.world().tick().raw(),
@@ -586,7 +977,7 @@ pub(super) fn run_same_individual_world(
                 "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
-                "policy_version":policy,"semantic_prior":compact_prior(&runtime)}))?;
+                "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
         let rows = loss_rows(refs.len(), wanted);
@@ -615,7 +1006,7 @@ pub(super) fn run_same_individual_world(
                 "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
-                "policy_version":policy,"semantic_prior":compact_prior(&runtime)}))?;
+                "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
         runtime.ensure_live_foundation_policy_boundary(id)?;
@@ -821,7 +1212,13 @@ pub(super) fn run_same_individual_world(
             "generic_consumed_events":generic_rows.len(),"trained_generic_consumed_events":generic_rows.iter().filter(|r| **r<rows).count(),
             "exact_nourished_meals":meal_rows.len(),"trained_exact_nourished_meals":meal_rows.iter().filter(|r| **r<rows).count(),
             "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
-            "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime),
+            "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime, care_cue_emissions),
+            "care_assistance_requested":request.care_assistance,
+            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,
+            "care_food_repositions":care_food_repositions,
+            "care_before":care_before,"care_after":care_after,
+            "care_training_rows":care_row_summary(&care_rows[..rows]),
+            "food_outcomes_cumulative_including_bootstrap":food.values().map(|(_, summary)| summary).collect::<Vec<_>>(),
             "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
         });
         alife_storage::remove_dir_all(&window_root)?;
@@ -909,7 +1306,11 @@ pub(super) fn run_same_individual_world(
             "stop_reason":stop,"terminal":!alive(&runtime,id),"terminal_death_tick":terminal_death_tick,
             "sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"generic_consumed_events":generic_total,"exact_nourished_meals":nourished_total,
-            "semantic_prior":compact_prior(&runtime),"snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
+            "semantic_prior":compact_prior(&runtime, care_cue_emissions),
+            "care_assistance_requested":request.care_assistance,
+            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,
+            "care_food_repositions":care_food_repositions,
+            "snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
             "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
             "restore_seconds":restore_seconds,"replay_seal_seconds":replay_seal_seconds,"boundary_wait_seconds":boundary_wait_seconds,
             "legacy_sleep_progress":legacy_sleep_progress,
@@ -1002,6 +1403,242 @@ mod tests {
         assert!(continuous_update_version(10977, Some(10976)).is_err());
         assert!(continuous_update_version(10977, None).is_err());
         assert!(continuous_update_version(u64::MAX, Some(u64::MAX)).is_err());
+    }
+    #[test]
+    fn assisted_feeding_uses_real_scene_and_cue_without_changing_biology() {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
+        for label in ["hazard-01", "obstacle-02"] {
+            let entity = world.entity_id(label).unwrap();
+            world.editor_remove_object(entity).unwrap();
+        }
+        let id = world.organism_entity_ids()[0].0;
+        let before = *world.organism_registry().get(id).unwrap().biochemistry();
+        let tick = world.tick();
+        let scenario = prepare_care_assistance(&mut world, id).unwrap();
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+        assert_eq!(world.tick(), tick);
+        assert!(care_food_ready(world.entity(scenario.food).unwrap()));
+        let subject = world
+            .entity(world.organism_registry().get(id).unwrap().world_entity_id())
+            .unwrap();
+        let subject_position = subject.position;
+        let target = world.entity(scenario.food).unwrap();
+        let target_position = target.position;
+        let distance =
+            (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z);
+        assert!((distance - 1.0).abs() < 0.001);
+        let report = world.sensory_report(id, world.tick()).unwrap();
+        assert!(report
+            .visible_entities
+            .iter()
+            .any(|entity| entity.id == scenario.food));
+        let homeostasis = world
+            .organism_registry()
+            .get(id)
+            .unwrap()
+            .biochemistry()
+            .homeostasis;
+        let frame = world
+            .perception_frame(
+                id,
+                tick,
+                alife_core::SensorProfile::GroundedTerrainVisionV1,
+                homeostasis,
+            )
+            .unwrap();
+        assert!(
+            frame.candidates().iter().any(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(scenario.food)
+            }),
+            "food {:?}; body {:?}; target {:?}; visible {:?}; candidate targets {:?}",
+            scenario.food,
+            subject_position,
+            target_position,
+            report.visible_entities,
+            frame
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.action_id, candidate.target.entity))
+                .collect::<Vec<_>>()
+        );
+        let far = alife_core::Vec3f::new(
+            subject_position.x + 10.0,
+            subject_position.y,
+            subject_position.z,
+        );
+        world.editor_move_object(scenario.food, far).unwrap();
+        assert!(care_food_is_far(&world, id, scenario.food));
+        let nearby = care_food_position_in_gaze(&world, id).unwrap();
+        assert!(crate::foundation_training::relocate_unheld_foundation_food(
+            &mut world,
+            scenario.food,
+            nearby
+        )
+        .unwrap());
+        assert!(!care_food_is_far(&world, id, scenario.food));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+        expose_care_cue(&mut world, id, &scenario).unwrap();
+        assert!(world
+            .audible_utterances()
+            .iter()
+            .any(
+                |utterance| utterance.source_kind == alife_core::UtteranceSourceKind::Teacher
+                    && utterance.addressee == Some(id)
+                    && utterance
+                        .tokens
+                        .iter()
+                        .map(|token| token.raw())
+                        .collect::<Vec<_>>()
+                        == [8, 1]
+            ));
+        assert!(!world.entity(scenario.food).unwrap().consumed);
+        assert!(care_cue_due(tick.raw(), tick.raw(), true, None));
+        assert!(!care_cue_due(
+            tick.raw(),
+            tick.raw(),
+            true,
+            Some(tick.raw())
+        ));
+        assert!(!care_cue_due(tick.raw(), tick.raw(), false, None));
+        let body = world
+            .entity(world.organism_registry().get(id).unwrap().world_entity_id())
+            .unwrap();
+        let yaw = body.body_yaw + body.head_yaw;
+        let blocked = alife_core::Vec3f::new(
+            body.position.x + 0.5 * yaw.cos(),
+            body.position.y,
+            body.position.z + 0.5 * yaw.sin(),
+        );
+        let obstacle = world.entity_id("obstacle-01").unwrap();
+        world.editor_move_object(obstacle, blocked).unwrap();
+        assert!(care_food_position_in_gaze(&world, id).is_none());
+    }
+    #[test]
+    fn care_placement_and_teacher_stay_usable_at_terrain_edge() {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
+        let id = world.organism_entity_ids()[0].0;
+        let body = world.organism_registry().get(id).unwrap().world_entity_id();
+        // The default gaze faces +X. A one-unit placement would leave terrain.
+        world
+            .editor_move_object(body, alife_core::Vec3f::new(255.999, 0.0, 0.0))
+            .unwrap();
+        let before = *world.organism_registry().get(id).unwrap().biochemistry();
+        let care = prepare_care_assistance(&mut world, id).unwrap();
+        let target = world.entity(care.food).unwrap().position;
+        assert!((target.x - 255.999).abs() < 0.01);
+        let tick = world.tick();
+        let homeostasis = world
+            .organism_registry()
+            .get(id)
+            .unwrap()
+            .biochemistry()
+            .homeostasis;
+        let frame = world
+            .perception_frame(
+                id,
+                tick,
+                alife_core::SensorProfile::GroundedTerrainVisionV1,
+                homeostasis,
+            )
+            .unwrap();
+        assert!(frame
+            .candidates()
+            .iter()
+            .any(
+                |candidate| candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(care.food)
+            ));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+
+        // The old teacher position (food.z + 2) lies outside this edge.
+        world
+            .editor_move_object(body, alife_core::Vec3f::new(20.0, 0.0, 255.9))
+            .unwrap();
+        let care = prepare_care_assistance(&mut world, id).unwrap();
+        expose_care_cue(&mut world, id, &care).unwrap();
+        let teacher = world
+            .entity(world.entity_id("nursery-teacher").unwrap())
+            .unwrap();
+        assert!(world
+            .terrain()
+            .unwrap()
+            .walkable(teacher.position.x, teacher.position.z));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+    }
+    #[test]
+    fn care_setup_waits_for_a_safe_loose_unconsumed_food() {
+        let world = alife_world::HeadlessScenarioBuilder::new(7)
+            .food("food", alife_core::Vec3f::ZERO, 0.45)
+            .build()
+            .unwrap();
+        let mut food = world
+            .entity(world.entity_id("food").unwrap())
+            .unwrap()
+            .clone();
+        assert!(care_food_ready(&food));
+        food.consumed = true;
+        assert!(!care_food_ready(&food));
+        food.consumed = false;
+        food.hazard_pain = 0.1;
+        assert!(!care_food_ready(&food));
+        food.hazard_pain = 0.0;
+        food.carried_by = Some(OrganismId(1));
+        assert!(!care_food_ready(&food));
+    }
+    #[test]
+    fn care_row_summary_counts_only_the_supplied_training_slice() {
+        let rows = [
+            CareRowEvidence {
+                food_candidate: true,
+                food_approach: true,
+                ..Default::default()
+            },
+            CareRowEvidence {
+                food_eat: true,
+                ..Default::default()
+            },
+            CareRowEvidence {
+                food_grab: true,
+                ..Default::default()
+            },
+        ];
+        let summary = care_row_summary(&rows[..2]);
+        assert_eq!(summary["trained_rows"], 2);
+        assert_eq!(summary["food_candidate_rows"], 1);
+        assert_eq!(summary["food_approach_command_rows"], 1);
+        assert_eq!(summary["food_eat_command_rows"], 1);
+        assert_eq!(summary["food_grab_command_rows"], 0);
     }
     #[test]
     fn continuous_tick_guard_is_relative_to_restored_world() {
