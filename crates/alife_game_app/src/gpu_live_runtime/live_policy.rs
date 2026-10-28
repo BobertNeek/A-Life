@@ -2,6 +2,7 @@
 //! biological genes, memory, recurrent/lifetime banks or exploration counter.
 use super::*;
 
+#[cfg(any(test, feature = "foundation-training"))]
 fn sleep_allows_policy_install(state: ConsolidationState) -> bool {
     // Pending/Prepared/Submitted/Completed belong to the old neural authority.
     // Completed -> Committed is an ordinary sleep transaction, never a reset
@@ -509,7 +510,7 @@ mod tests {
             BrainScaleTier::Standard2048,
             config.sensor_profile,
             LineageLibraryConfig::profile_default(root.join("lineage")),
-            "live-policy-runtime-fixture".into(),
+            "live-policy-runtime-fixture",
             ArchiveLearnedCapturePolicy::GeneticOnly,
             sampling,
         )
