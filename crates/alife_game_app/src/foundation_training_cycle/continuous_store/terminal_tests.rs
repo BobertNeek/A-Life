@@ -53,6 +53,12 @@ fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
         crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
             one_organism_private_fixture,
         );
+    // The correction fixture clones its file inventory, which cannot represent
+    // this canonical world's declared but empty asset directory.
+    let source_assets = fixture.source.join("world-assets");
+    assert!(source_assets.is_dir());
+    assert!(fs::read_dir(source_assets).unwrap().next().is_none());
+    fs::create_dir(fixture.target.join("world-assets")).unwrap();
     let mut baseline = migrate_current_training_checkpoint(
         &fixture.target,
         CheckpointSeedsV1 {
