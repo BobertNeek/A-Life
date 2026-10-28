@@ -1251,7 +1251,7 @@ mod tests {
     }
     #[test]
     fn care_row_summary_counts_only_the_supplied_training_slice() {
-        let rows = vec![
+        let rows = [
             CareRowEvidence {
                 food_candidate: true,
                 food_approach: true,
