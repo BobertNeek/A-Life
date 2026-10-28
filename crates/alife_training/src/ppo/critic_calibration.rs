@@ -17,10 +17,13 @@ pub struct CriticResidualRow {
 }
 
 pub struct FrozenCriticResidualExperiment {
+    features: wgpu::Buffer,
+    rows: wgpu::Buffer,
     head: wgpu::Buffer,
     header: wgpu::Buffer,
     output: wgpu::Buffer,
     bind: wgpu::BindGroup,
+    layout: wgpu::BindGroupLayout,
     predict: wgpu::ComputePipeline,
     gradient: wgpu::ComputePipeline,
     update: wgpu::ComputePipeline,
@@ -40,26 +43,10 @@ impl FrozenCriticResidualExperiment {
         fit_rows: usize,
     ) -> Result<Self, TrainingError> {
         checkpoint.validate()?;
-        if session.authority().consumer() != GpuSessionConsumerKind::Training
-            || rows.is_empty()
-            || rows.len() > 4096
-            || fit_rows == 0
-            || fit_rows > rows.len()
-            || features.is_empty()
-            || features.len() > 8192
-            || features.iter().any(|r| {
-                r.len() != checkpoint.feature_count as usize || r.iter().any(|v| !v.is_finite())
-            })
-            || rows.iter().any(|r| {
-                r.current as usize >= features.len()
-                    || r.next as usize >= features.len()
-                    || !r.reward.is_finite()
-                    || !r.discount.is_finite()
-                    || !(0.0..=1.0).contains(&r.discount)
-            })
-        {
+        if session.authority().consumer() != GpuSessionConsumerKind::Training {
             return Err(invalid());
         }
+        validate_batch(checkpoint.feature_count, features, rows, fit_rows)?;
         let (device, _) = session.backend().offline_training_device_queue()?;
         let storage = wgpu::BufferUsages::STORAGE;
         let make = |label, bytes: &[u8], usage| {
@@ -72,23 +59,13 @@ impl FrozenCriticResidualExperiment {
         let features = make(
             "critic-fixed-GPU-feature-corpus",
             bytemuck::cast_slice(&features.concat()),
-            storage,
+            storage | wgpu::BufferUsages::COPY_DST,
         );
-        let row_words = rows
-            .iter()
-            .flat_map(|r| {
-                [
-                    r.current * checkpoint.feature_count,
-                    r.next * checkpoint.feature_count,
-                    r.reward.to_bits(),
-                    r.discount.to_bits(),
-                ]
-            })
-            .collect::<Vec<_>>();
+        let row_words = row_words(checkpoint.feature_count, rows);
         let rows_buffer = make(
             "critic-real-transition-rows",
             bytemuck::cast_slice(&row_words),
-            storage,
+            storage | wgpu::BufferUsages::COPY_DST,
         );
         let mut head_words = checkpoint.parameters.clone();
         head_words.resize((checkpoint.feature_count as usize + 1) * 4 + 1, 0.0);
@@ -167,12 +144,90 @@ impl FrozenCriticResidualExperiment {
             header,
             output,
             bind,
+            layout,
+            features,
+            rows: rows_buffer,
             feature_count: checkpoint.feature_count,
             row_count: rows.len() as u32,
             fit_rows: fit_rows as u32,
             step: checkpoint.optimizer_step,
             last_policy: checkpoint.last_updated_policy_version,
         })
+    }
+
+    /// Replace only frozen batch data. The actual learned GPU head, moments,
+    /// integer age and pipelines survive rotations, including partial batches.
+    /// Every call uploads the supplied corpus even when its shape is unchanged.
+    pub fn replace_batch(
+        &mut self,
+        session: &GpuAuthoritativeSession,
+        features: &[Vec<f32>],
+        rows: &[CriticResidualRow],
+        fit_rows: usize,
+    ) -> Result<(), TrainingError> {
+        if session.authority().consumer() != GpuSessionConsumerKind::Training {
+            return Err(invalid());
+        }
+        validate_batch(self.feature_count, features, rows, fit_rows)?;
+        let (device, queue) = session.backend().offline_training_device_queue()?;
+        let feature_words = features.concat();
+        let row_words = row_words(self.feature_count, rows);
+        let mut rebound = false;
+        for (buffer, label, words) in [
+            (
+                &mut self.features,
+                "critic-fixed-GPU-feature-corpus",
+                bytemuck::cast_slice::<f32, u8>(&feature_words),
+            ),
+            (
+                &mut self.rows,
+                "critic-real-transition-rows",
+                bytemuck::cast_slice::<u32, u8>(&row_words),
+            ),
+        ] {
+            if words.len() as u64 > buffer.size() {
+                *buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some(label),
+                    contents: words,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
+                rebound = true;
+            } else {
+                queue.write_buffer(buffer, 0, words);
+            }
+        }
+        if rows.len() as u64 * 16 > self.output.size() {
+            self.output = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("critic-residual-values"),
+                size: rows.len() as u64 * 16,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            rebound = true;
+        }
+        if rebound {
+            self.bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("critic-residual-bind"),
+                layout: &self.layout,
+                entries: &[
+                    &self.header,
+                    &self.features,
+                    &self.rows,
+                    &self.head,
+                    &self.output,
+                ]
+                .iter()
+                .enumerate()
+                .map(|(i, b)| wgpu::BindGroupEntry {
+                    binding: i as u32,
+                    resource: b.as_entire_binding(),
+                })
+                .collect::<Vec<_>>(),
+            });
+        }
+        self.row_count = rows.len() as u32;
+        self.fit_rows = fit_rows as u32;
+        Ok(())
     }
 
     fn upload(
@@ -318,8 +373,108 @@ impl FrozenCriticResidualExperiment {
     }
 }
 
+fn validate_batch(
+    feature_count: u32,
+    features: &[Vec<f32>],
+    rows: &[CriticResidualRow],
+    fit_rows: usize,
+) -> Result<(), TrainingError> {
+    if rows.is_empty()
+        || rows.len() > 4096
+        || fit_rows == 0
+        || fit_rows > rows.len()
+        || features.is_empty()
+        || features.len() > 8192
+        || features
+            .iter()
+            .any(|r| r.len() != feature_count as usize || r.iter().any(|v| !v.is_finite()))
+        || rows.iter().any(|r| {
+            r.current as usize >= features.len()
+                || r.next as usize >= features.len()
+                || !r.reward.is_finite()
+                || !r.discount.is_finite()
+                || !(0.0..=1.0).contains(&r.discount)
+        })
+    {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+fn row_words(feature_count: u32, rows: &[CriticResidualRow]) -> Vec<u32> {
+    rows.iter()
+        .flat_map(|r| {
+            [
+                r.current * feature_count,
+                r.next * feature_count,
+                r.reward.to_bits(),
+                r.discount.to_bits(),
+            ]
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn batch_admission_rejects_bad_replacements_before_upload() {
+        let features = vec![vec![1.0, -0.0], vec![2.0, 3.0]];
+        let rows = vec![CriticResidualRow {
+            current: 0,
+            next: 1,
+            reward: -0.0,
+            discount: 0.5,
+        }];
+        assert!(validate_batch(2, &features, &rows, 1).is_ok());
+        assert_eq!(
+            row_words(2, &rows),
+            [0, 2, (-0.0f32).to_bits(), 0.5f32.to_bits()]
+        );
+        for fit in [0, 2] {
+            assert!(validate_batch(2, &features, &rows, fit).is_err());
+        }
+        for bad in [
+            vec![],
+            vec![vec![1.0]],
+            vec![vec![f32::NAN; 2]; 2],
+            vec![vec![0.0; 2]; 8193],
+        ] {
+            assert!(validate_batch(2, &bad, &rows, 1).is_err());
+        }
+        for bad in [
+            CriticResidualRow {
+                current: 2,
+                ..rows[0].clone()
+            },
+            CriticResidualRow {
+                next: 2,
+                ..rows[0].clone()
+            },
+            CriticResidualRow {
+                reward: f32::INFINITY,
+                ..rows[0].clone()
+            },
+            CriticResidualRow {
+                discount: f32::NAN,
+                ..rows[0].clone()
+            },
+            CriticResidualRow {
+                discount: -0.1,
+                ..rows[0].clone()
+            },
+            CriticResidualRow {
+                discount: 1.1,
+                ..rows[0].clone()
+            },
+        ] {
+            assert!(validate_batch(2, &features, &[bad], 1).is_err());
+        }
+        assert!(validate_batch(2, &features, &[], 1).is_err());
+        assert!(validate_batch(2, &features, &vec![rows[0].clone(); 4097], 1).is_err());
+    }
+
     #[test]
     fn residual_shader_parses_and_validates() {
         let module = naga::front::wgsl::parse_str(super::CRITIC_RESIDUAL_WGSL).unwrap();
@@ -331,3 +486,7 @@ mod tests {
         .unwrap();
     }
 }
+
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "critic_calibration/gpu_tests.rs"]
+mod gpu_tests;
