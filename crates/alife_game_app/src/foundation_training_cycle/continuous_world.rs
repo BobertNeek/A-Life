@@ -333,27 +333,45 @@ fn expose_care_cue(
             .entity_id("nursery-teacher")
             .and_then(|teacher| world.entity(teacher))
             .map_or(0.75, |teacher| teacher.radius);
-    let teacher_position = [(0.0_f32, 2.0_f32), (2.0, 0.0), (-2.0, 0.0), (0.0, -2.0)]
+    let preserve_food = world.entity(care.food).is_some_and(care_food_ready)
+        && care_food_is_offered(world, id, care.food);
+    let tokens = [8, 1]
+        .into_iter()
+        .map(alife_core::LanguageTokenId::new)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    let mut teacher_position = None;
+    for candidate in [(0.0_f32, 2.0_f32), (2.0, 0.0), (-2.0, 0.0), (0.0, -2.0)]
         .into_iter()
         .map(|(x, z)| alife_core::Vec3f::new(position.x + x, position.y, position.z + z))
-        .find(|candidate| {
+        .filter(|candidate| {
             (candidate.x - subject_position.x).hypot(candidate.z - subject_position.z) >= separation
                 && world
                     .terrain()
                     .is_none_or(|terrain| terrain.walkable(candidate.x, candidate.z))
-        });
+        })
+    {
+        if preserve_food {
+            // Moving or spawning the opaque teacher can hide an offered target
+            // or displace it from grounded action slots. Trial the real cue on
+            // a fresh copy so rejected speech, IDs and tracking never go live.
+            let mut trial = world.clone();
+            alife_school::LanguageNursery::speak_in_world(
+                &mut trial,
+                id,
+                candidate,
+                tokens.clone(),
+            )?;
+            if !care_food_is_offered_in_trial(&mut trial, id, care.food) {
+                continue;
+            }
+        }
+        teacher_position = Some(candidate);
+        break;
+    }
     let Some(teacher_position) = teacher_position else {
         return Ok(false);
     };
-    alife_school::LanguageNursery::speak_in_world(
-        world,
-        id,
-        teacher_position,
-        [8, 1]
-            .into_iter()
-            .map(alife_core::LanguageTokenId::new)
-            .collect::<std::result::Result<Vec<_>, _>>()?,
-    )?;
+    alife_school::LanguageNursery::speak_in_world(world, id, teacher_position, tokens)?;
     Ok(true)
 }
 
@@ -1817,6 +1835,175 @@ mod tests {
         assert!((actual.x - body_position.x).hypot(actual.z - body_position.z) >= 1.5);
         assert!(care_food_position_in_gaze(&world, id).is_some());
     }
+    fn cue_obstruction_world(
+        existing_teacher: bool,
+        block_alternatives: bool,
+    ) -> (
+        alife_world::HeadlessWorld,
+        OrganismId,
+        ContinuousCareAssistance,
+    ) {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        let obstacles = if block_alternatives {
+            [(102.0, 100.0), (98.0, 100.0), (100.0, 98.0)]
+                .into_iter()
+                .map(|(x, z)| [x - 0.1, z - 0.1, x + 0.1, z + 0.1, 0.0, 2.0])
+                .collect()
+        } else {
+            Vec::new()
+        };
+        world
+            .enable_terrain_for_new_game(
+                alife_world::WorldTerrain::new(
+                    alife_world::TerrainData {
+                        width: 2,
+                        depth: 2,
+                        origin_x: -256.0,
+                        origin_z: -256.0,
+                        spacing: 512.0,
+                        heights: vec![0.0; 4],
+                        obstacles,
+                        water_level: None,
+                    },
+                    alife_world::LocomotionLimits::default(),
+                )
+                .unwrap(),
+                alife_core::Vec3f::ZERO,
+            )
+            .unwrap();
+        let (id, body) = world.organism_entity_ids()[0];
+        world
+            .editor_move_object(body, alife_core::Vec3f::new(100.0, 0.0, 104.0))
+            .unwrap();
+        let food = world.entity_id("food-01").unwrap();
+        world
+            .editor_move_object(food, alife_core::Vec3f::new(100.0, 0.0, 100.0))
+            .unwrap();
+        if existing_teacher {
+            world
+                .spawn_social_agent(
+                    "nursery-teacher",
+                    OrganismId(2),
+                    alife_core::Vec3f::new(104.0, 0.0, 104.0),
+                    0.75,
+                )
+                .unwrap();
+        }
+        let care = ContinuousCareAssistance {
+            food,
+            start_tick: world.tick().raw(),
+        };
+        (world, id, care)
+    }
+
+    fn assert_cue_preserves_offered_food(existing_teacher: bool) {
+        let (mut world, id, care) = cue_obstruction_world(existing_teacher, false);
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(care_food_is_offered(&world, id, care.food));
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+
+        // The old first offset is walkable and clears the learner's body,
+        // but its opaque teacher lies directly between the eye and the food.
+        let mut obstructed = world.clone();
+        alife_school::LanguageNursery::speak_in_world(
+            &mut obstructed,
+            id,
+            alife_core::Vec3f::new(100.0, 0.0, 102.0),
+            vec![alife_core::LanguageTokenId::new(8).unwrap()],
+        )
+        .unwrap();
+        assert!(!care_food_is_offered(&obstructed, id, care.food));
+
+        // Only the accepted placement and one real utterance may reach live
+        // state: trial speech IDs, tracking and teacher spawning stay private.
+        let mut expected = world.clone();
+        alife_school::LanguageNursery::speak_in_world(
+            &mut expected,
+            id,
+            alife_core::Vec3f::new(102.0, 0.0, 100.0),
+            vec![
+                alife_core::LanguageTokenId::new(8).unwrap(),
+                alife_core::LanguageTokenId::new(1).unwrap(),
+            ],
+        )
+        .unwrap();
+        assert!(expose_care_cue(&mut world, id, &care).unwrap());
+        assert!(care_food_is_offered(&world, id, care.food));
+        assert_eq!(
+            world.canonical_signature_digest().unwrap(),
+            expected.canonical_signature_digest().unwrap()
+        );
+    }
+
+    #[test]
+    fn cue_preserves_offered_food_with_existing_teacher() {
+        assert_cue_preserves_offered_food(true);
+    }
+
+    #[test]
+    fn cue_preserves_offered_food_with_new_teacher() {
+        assert_cue_preserves_offered_food(false);
+    }
+
+    #[test]
+    fn cue_defers_without_mutation_when_only_walkable_offset_hides_food() {
+        for existing_teacher in [false, true] {
+            let (mut world, id, care) = cue_obstruction_world(existing_teacher, true);
+            assert!(care_food_is_offered(&world, id, care.food));
+            let before = world.canonical_signature_digest().unwrap();
+            assert!(!expose_care_cue(&mut world, id, &care).unwrap());
+            assert_eq!(world.canonical_signature_digest().unwrap(), before);
+            assert!(care_food_is_offered(&world, id, care.food));
+        }
+    }
+
+    #[test]
+    fn cue_preserves_offered_food_at_terrain_edge() {
+        let (mut world, id, care) = cue_obstruction_world(false, false);
+        let body = world.organism_registry().get(id).unwrap().world_entity_id();
+        world
+            .editor_move_object(body, alife_core::Vec3f::new(255.9, 0.0, 255.9))
+            .unwrap();
+        world
+            .editor_move_object(care.food, alife_core::Vec3f::new(255.9, 0.0, 251.9))
+            .unwrap();
+        assert!(care_food_is_offered(&world, id, care.food));
+        assert!(expose_care_cue(&mut world, id, &care).unwrap());
+        assert!(care_food_is_offered(&world, id, care.food));
+        assert_eq!(
+            world
+                .entity(world.entity_id("nursery-teacher").unwrap())
+                .unwrap()
+                .position,
+            alife_core::Vec3f::new(253.9, 0.0, 251.9)
+        );
+    }
+
+    #[test]
+    fn cue_trial_spawn_error_does_not_mutate_live_world() {
+        let (mut world, id, care) = cue_obstruction_world(false, false);
+        world
+            .spawn_social_agent(
+                "last-actor",
+                OrganismId(u64::MAX - 1),
+                alife_core::Vec3f::new(200.0, 0.0, 200.0),
+                0.0,
+            )
+            .unwrap();
+        assert!(care_food_is_offered(&world, id, care.food));
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(expose_care_cue(&mut world, id, &care).is_err());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    }
+
     #[test]
     fn cue_is_deferred_when_no_teacher_position_is_walkable() {
         let id = OrganismId(1);
