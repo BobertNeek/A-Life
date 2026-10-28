@@ -555,7 +555,7 @@ fn run_resident_with_startup_observer(
     // cleanup contract for malformed legacy inputs. Full admission below is
     // still mandatory; a failed early decode grants no continuation authority.
     if let Ok(baseline) = alife_training::CurrentTrainingCheckpointV1::decode(&baseline_bytes) {
-        baseline.require_living_continuation()?;
+        baseline.require_fresh_cohort_continuation()?;
     }
     let baseline_hash = hash(&baseline_bytes);
     let run = store.join(".run");

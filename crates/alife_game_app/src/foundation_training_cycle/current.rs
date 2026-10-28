@@ -86,6 +86,7 @@ fn read_native_current(
         life: Some(life::capture(source)?),
         same_individual: None,
         terminal_disposition: None,
+        training_attempt_origin: None,
     };
     checkpoint.validate()?;
     Ok((checkpoint, receipt))
@@ -97,7 +98,7 @@ pub fn advance_current_training_checkpoint(
     source: &Path,
 ) -> Result<CurrentTrainingCheckpointV1> {
     previous.validate()?;
-    previous.require_living_continuation()?;
+    previous.require_fresh_cohort_continuation()?;
     if previous.same_individual.is_some() {
         return Err("same-individual Current cannot enter a fresh-cohort episode".into());
     }
@@ -181,6 +182,9 @@ pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Va
     }
     if let Some(disposition) = &checkpoint.terminal_disposition {
         report["terminal_disposition"] = serde_json::to_value(disposition)?;
+    }
+    if let Some(origin) = &checkpoint.training_attempt_origin {
+        report["training_attempt_origin"] = serde_json::to_value(origin)?;
     }
     Ok(report)
 }
