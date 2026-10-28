@@ -769,7 +769,9 @@ pub(super) fn run_same_individual_world(
                                 )?;
                             }
                         }
-                        expose_care_cue(runtime.world_mut(), id, scenario)?;
+                        expose_care_cue(runtime.world_mut(), id, scenario).map_err(|error| {
+                            format!("continuous care cue failed at world tick {tick}: {error}")
+                        })?;
                         care_cue_emissions += 1;
                         last_care_cue_tick = Some(tick);
                     }
@@ -792,7 +794,12 @@ pub(super) fn run_same_individual_world(
                 crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
             }
             first_control_call = false;
-            let tick_result = runtime.tick_outcome();
+            let tick_result = runtime.tick_outcome().map_err(|error| {
+                format!(
+                    "continuous runtime tick {} failed: {error}",
+                    before_tick.raw()
+                )
+            });
             if let Some(event) = observed_terminal_event(&runtime, id, session_nonce, world_seed) {
                 stop = "natural_death";
                 terminal_death_tick = event["terminal_death_tick"].as_u64();
