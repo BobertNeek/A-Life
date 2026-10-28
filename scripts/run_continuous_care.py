@@ -129,7 +129,7 @@ def request_for(args, now):
             'checkpoint_every_episodes': 1}
 
 
-def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
+def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0, care_assistance=False):
     require(report.get('schema') == 1 and report.get('kind') == 'native-resident-serial-v1' and
             report.get('finite_continuous_feeding') is True and
             report.get('max_continuous_feeding_decisions', 0) >= decisions and
@@ -146,6 +146,9 @@ def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
                 report.get('max_decisions_per_update', 0) >= decisions and
                 report.get('world_ticks_per_second') == WORLD_TICKS_PER_SECOND,
                 'native same-individual restore/PPO/sampling/cutoff capabilities required; no fresh-world fallback')
+        if care_assistance:
+            require(report.get('continuous_care_assistance') is True,
+                    'native continuous care assistance capability required')
 
 
 def check_pins(state):
@@ -583,7 +586,8 @@ def run(args):
                 'explicit admitted executable hashes required')
         mode = producer_mode(args)
         capabilities(current.tool(native, '--resident-contract'), args.decisions,
-                     mode=mode, total_decisions=request.get('total_trained_decisions', 0))
+                     mode=mode, total_decisions=request.get('total_trained_decisions', 0),
+                     care_assistance=request.get('care_assistance', False))
         checkout = current.checkout_context()
         require(current.prior_environment().get('ALIFE_SLM_PRIOR_BACKEND') == 'deterministic' and
                 current.prior_environment().get('ALIFE_SLM_PRIOR') == 'on',

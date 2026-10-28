@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "finite_continuous_feeding":true,"max_continuous_feeding_decisions":36000,
             "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":true,
             "same_individual_ppo":true,"restore_current_private_world":true,
+            "continuous_care_assistance":true,
             "full_sampling_state_checkpoint":true,"in_world_cutoff":true,
             "same_individual_arguments":"--resident-continuous STORE REQUEST_JSON",
             "max_total_trained_decisions":10_000_000,"max_decisions_per_update":36_000,

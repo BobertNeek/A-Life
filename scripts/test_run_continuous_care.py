@@ -458,6 +458,13 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertFalse(result['native_execution'])
         self.assertEqual(self.calls, [])
 
+    def test_care_assistance_requires_matching_native_capability(self):
+        report = self.live_native(self.binary, '--resident-contract')
+        with self.assertRaisesRegex(ValueError, 'continuous care assistance capability'):
+            session.capabilities(report, 512, mode='same_individual', total_decisions=1024, care_assistance=True)
+        report['continuous_care_assistance'] = True
+        session.capabilities(report, 512, mode='same_individual', total_decisions=1024, care_assistance=True)
+
     def test_care_assistance_event_is_retained_by_event_reader(self):
         event = {'kind': 'continuous-care-assistance-v1', 'mode': 'ordinary_feeding_scene_and_spatial_eat_food_cues'}
         Path(str(self.lane / session.LOG) + '.stdout.log').write_text(json.dumps(event) + '\n')
