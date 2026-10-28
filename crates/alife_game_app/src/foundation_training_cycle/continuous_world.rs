@@ -72,6 +72,87 @@ fn continuous_update_version(policy: u64, value_version: Option<u64>) -> Result<
         .ok_or_else(|| "policy version overflow".into())
 }
 
+/// Passive bounded observations. Distance is geometric, not a path-reachability claim.
+fn care_world_observation(world: &alife_world::HeadlessWorld, id: OrganismId) -> serde_json::Value {
+    let Some(record) = world.organism_registry().get(id) else {
+        return serde_json::json!({"organism_present": false});
+    };
+    let biology = record.biochemistry();
+    let position = world
+        .entity(record.world_entity_id())
+        .map(|entity| entity.position);
+    let food: Vec<_> = world
+        .object_snapshots()
+        .into_iter()
+        .filter(|object| object.kind == alife_world::WorldObjectKind::Food)
+        .map(|object| {
+            let distance = position.map(|p| {
+                let dx = p.x - object.position.x;
+                let dy = p.y - object.position.y;
+                let dz = p.z - object.position.z;
+                (dx * dx + dy * dy + dz * dz).sqrt()
+            });
+            serde_json::json!({"id":object.id.raw(), "consumed":object.consumed,
+                "carried_by":object.carried_by.map(|owner| owner.raw()),
+                "nutrition":object.nutrition,"hazard_pain":object.hazard_pain,
+                "geometric_distance":distance})
+        })
+        .collect();
+    serde_json::json!({"organism_present":true,"world_tick":world.tick().raw(),
+        "energy":biology.body.energy,"health":biology.body.health,"injury":biology.body.injury,
+        "sleeping":biology.body.sleeping,"hunger":biology.homeostasis.drives.hunger,
+        "fatigue":biology.homeostasis.drives.fatigue,"pain":biology.homeostasis.drives.pain,
+        "food":food})
+}
+
+#[derive(Default)]
+struct CareRowEvidence {
+    food_candidate: bool,
+    food_approach: bool,
+    food_eat: bool,
+    food_grab: bool,
+    bundle_missing: bool,
+}
+
+fn care_row_evidence(
+    step: &crate::FoundationTrainingStep,
+    food: &BTreeMap<u64, (alife_core::WorldEntityId, crate::FoundationFoodOutcome)>,
+) -> CareRowEvidence {
+    let mut evidence = CareRowEvidence::default();
+    evidence.food_candidate = step.frame.candidates().iter().any(|candidate| {
+        candidate
+            .target
+            .entity
+            .is_some_and(|target| food.contains_key(&target.raw()))
+    });
+    evidence.bundle_missing = step.patch.selected_bundle().is_none();
+    if let Some(bundle) = step.patch.selected_bundle() {
+        for command in &bundle.channels {
+            let targets_food = command
+                .target
+                .and_then(|target| target.entity)
+                .is_some_and(|target| food.contains_key(&target.raw()));
+            if targets_food {
+                evidence.food_approach |=
+                    command.primitive == alife_world::HeadlessActionIds::APPROACH;
+                evidence.food_eat |= command.primitive == alife_world::HeadlessActionIds::EAT;
+                evidence.food_grab |= command.primitive == alife_world::HeadlessActionIds::GRAB;
+            }
+        }
+    }
+    evidence
+}
+
+fn care_row_summary(rows: &[CareRowEvidence]) -> serde_json::Value {
+    serde_json::json!({"trained_rows":rows.len(),
+        "food_candidate_rows":rows.iter().filter(|row| row.food_candidate).count(),
+        "food_approach_command_rows":rows.iter().filter(|row| row.food_approach).count(),
+        "food_eat_command_rows":rows.iter().filter(|row| row.food_eat).count(),
+        "food_grab_command_rows":rows.iter().filter(|row| row.food_grab).count(),
+        "missing_bundle_rows":rows.iter().filter(|row| row.bundle_missing).count(),
+        "scope":"candidate presence and selected commands, not visibility, reachability or execution"})
+}
+
 fn tick_limit(decisions: usize) -> Result<u64> {
     (decisions as u64)
         .checked_mul(8)
@@ -427,6 +508,8 @@ pub(super) fn run_same_individual_world(
         let mut features = Vec::new();
         let mut generic_rows = Vec::new();
         let mut meal_rows = Vec::new();
+        let mut care_rows = Vec::new();
+        let care_before = care_world_observation(runtime.world(), id);
         for object in runtime.world().object_snapshots() {
             if object.kind == alife_world::WorldObjectKind::Food {
                 food.entry(object.id.raw()).or_insert_with(|| {
@@ -527,6 +610,7 @@ pub(super) fn run_same_individual_world(
                 if consumed(&step) {
                     generic_rows.push(refs.len());
                 }
+                care_rows.push(care_row_evidence(&step, &food));
                 for (raw, (target, summary)) in &mut food {
                     let observation =
                         crate::foundation_training::food_outcome::FoodOutcomeObservation {
@@ -561,6 +645,7 @@ pub(super) fn run_same_individual_world(
                 break;
             }
         }
+        let care_after = care_world_observation(runtime.world(), id);
         let causal = FoundationCausalCollectionMetrics::measure(
             first_tick,
             runtime.world().tick().raw(),
@@ -822,6 +907,8 @@ pub(super) fn run_same_individual_world(
             "exact_nourished_meals":meal_rows.len(),"trained_exact_nourished_meals":meal_rows.iter().filter(|r| **r<rows).count(),
             "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
             "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime),
+            "care_before":care_before,"care_after":care_after,
+            "care_training_rows":care_row_summary(&care_rows[..rows]),
             "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
         });
         alife_storage::remove_dir_all(&window_root)?;
@@ -1002,6 +1089,30 @@ mod tests {
         assert!(continuous_update_version(10977, Some(10976)).is_err());
         assert!(continuous_update_version(10977, None).is_err());
         assert!(continuous_update_version(u64::MAX, Some(u64::MAX)).is_err());
+    }
+    #[test]
+    fn care_row_summary_counts_only_the_supplied_training_slice() {
+        let rows = vec![
+            CareRowEvidence {
+                food_candidate: true,
+                food_approach: true,
+                ..Default::default()
+            },
+            CareRowEvidence {
+                food_eat: true,
+                ..Default::default()
+            },
+            CareRowEvidence {
+                food_grab: true,
+                ..Default::default()
+            },
+        ];
+        let summary = care_row_summary(&rows[..2]);
+        assert_eq!(summary["trained_rows"], 2);
+        assert_eq!(summary["food_candidate_rows"], 1);
+        assert_eq!(summary["food_approach_command_rows"], 1);
+        assert_eq!(summary["food_eat_command_rows"], 1);
+        assert_eq!(summary["food_grab_command_rows"], 0);
     }
     #[test]
     fn continuous_tick_guard_is_relative_to_restored_world() {
