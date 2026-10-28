@@ -519,7 +519,7 @@ mod tests {
             alife_world::RuntimeConfig::deterministic_default(seed, BrainScaleTier::Standard2048);
         runtime_config.features.gpu_backend_enabled = true;
         let base = PortableSaveFile::from_headless_world(
-            "live-policy-runtime-fixture".into(),
+            "live-policy-runtime-fixture",
             runtime.world(),
             runtime_config,
             AssetManifest::empty(),
