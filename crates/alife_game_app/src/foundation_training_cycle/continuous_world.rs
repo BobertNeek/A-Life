@@ -41,7 +41,7 @@ fn compact_prior(runtime: &GpuLiveBrainRuntime) -> serde_json::Value {
         "decision_frames":m.decision_frames,"decision_frames_with_prior":m.decision_frames_with_prior,
         "decision_frames_without_prior":m.decision_frames_without_prior,
         "delivered_frames":m.delivered_frames,"failures":m.failures,
-        "last_error":m.last_error,"teacher_cue_frames":0,
+        "last_error":m.last_error,"teacher_cues_injected":0,
     }))
 }
 
@@ -598,6 +598,9 @@ pub(super) fn run_same_individual_world(
             .ok_or("trained-row overflow")?;
         completed_updates += 1;
         let value_age = value.checkpoint(trainer.session())?.optimizer_step;
+        let value_updates = value_age
+            .checked_sub(value_before)
+            .ok_or("value age regressed")?;
         let install_seconds = install_started.elapsed().as_secs_f64();
         install_seconds_total += install_seconds;
         let event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
@@ -605,7 +608,7 @@ pub(super) fn run_same_individual_world(
             "policy_before":policy-1,"policy_after":policy,"trained_rows":rows,
             "session_trained_rows":trained_rows,"captured_replay_rows":refs.len(),"bootstrap_replay_rows":1,
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value_age,
-            "actor_optimizer_updates":actor_updates,"value_optimizer_updates":value_age.checked_sub(value_before),
+            "actor_optimizer_updates":actor_updates,"value_optimizer_updates":value_updates,
             "completed_epochs":update.completed_epochs,"stopped_for_kl":update.stopped_for_kl,
             "causal_collection":causal,"ppo_seconds":ppo_seconds,"install_seconds":install_seconds,
             "mutable_words_written_during_install":install.mutable_words_written,
