@@ -308,7 +308,7 @@ fn expose_care_cue(
     world: &mut alife_world::HeadlessWorld,
     id: OrganismId,
     care: &ContinuousCareAssistance,
-) -> Result<()> {
+) -> Result<bool> {
     let position = world
         .entity(care.food)
         .ok_or("care cue food missing")?
@@ -320,8 +320,10 @@ fn expose_care_cue(
             world
                 .terrain()
                 .is_none_or(|terrain| terrain.walkable(candidate.x, candidate.z))
-        })
-        .ok_or("no walkable nearby teacher position")?;
+        });
+    let Some(teacher_position) = teacher_position else {
+        return Ok(false);
+    };
     alife_school::LanguageNursery::speak_in_world(
         world,
         id,
@@ -331,7 +333,7 @@ fn expose_care_cue(
             .map(alife_core::LanguageTokenId::new)
             .collect::<std::result::Result<Vec<_>, _>>()?,
     )?;
-    Ok(())
+    Ok(true)
 }
 
 fn care_cue_due(tick: u64, start: u64, available: bool, last: Option<u64>) -> bool {
@@ -673,6 +675,7 @@ pub(super) fn run_same_individual_world(
     let mut food = BTreeMap::new();
     let mut care_scenario: Option<ContinuousCareAssistance> = None;
     let mut care_cue_emissions = 0u64;
+    let mut care_cue_deferrals = 0u64;
     let mut care_food_repositions = 0u64;
     let mut last_care_cue_tick = None;
     let restore_seconds = started.elapsed().as_secs_f64();
@@ -852,10 +855,16 @@ pub(super) fn run_same_individual_world(
                                 )?;
                             }
                         }
-                        expose_care_cue(runtime.world_mut(), id, scenario).map_err(|error| {
-                            format!("continuous care cue failed at world tick {tick}: {error}")
-                        })?;
-                        care_cue_emissions += 1;
+                        let emitted = expose_care_cue(runtime.world_mut(), id, scenario).map_err(
+                            |error| {
+                                format!("continuous care cue failed at world tick {tick}: {error}")
+                            },
+                        )?;
+                        if emitted {
+                            care_cue_emissions += 1;
+                        } else {
+                            care_cue_deferrals += 1;
+                        }
                         last_care_cue_tick = Some(tick);
                     }
                 }
@@ -1239,7 +1248,7 @@ pub(super) fn run_same_individual_world(
             "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
             "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime, care_cue_emissions),
             "care_assistance_requested":request.care_assistance,
-            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,
+            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
             "care_food_repositions":care_food_repositions,
             "care_before":care_before,"care_after":care_after,
             "care_training_rows":care_row_summary(&care_rows[..rows]),
@@ -1333,7 +1342,7 @@ pub(super) fn run_same_individual_world(
             "sampling_temperature":sampling.temperature,"generic_consumed_events":generic_total,"exact_nourished_meals":nourished_total,
             "semantic_prior":compact_prior(&runtime, care_cue_emissions),
             "care_assistance_requested":request.care_assistance,
-            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,
+            "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
             "care_food_repositions":care_food_repositions,
             "snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
             "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
@@ -1518,7 +1527,7 @@ mod tests {
             *world.organism_registry().get(id).unwrap().biochemistry(),
             before
         );
-        expose_care_cue(&mut world, id, &scenario).unwrap();
+        assert!(expose_care_cue(&mut world, id, &scenario).unwrap());
         assert!(world
             .audible_utterances()
             .iter()
@@ -1608,7 +1617,7 @@ mod tests {
             .editor_move_object(body, alife_core::Vec3f::new(20.0, 0.0, 255.9))
             .unwrap();
         let care = prepare_care_assistance(&mut world, id).unwrap();
-        expose_care_cue(&mut world, id, &care).unwrap();
+        assert!(expose_care_cue(&mut world, id, &care).unwrap());
         let teacher = world
             .entity(world.entity_id("nursery-teacher").unwrap())
             .unwrap();
@@ -1620,6 +1629,41 @@ mod tests {
             *world.organism_registry().get(id).unwrap().biochemistry(),
             before
         );
+    }
+    #[test]
+    fn cue_is_deferred_when_no_teacher_position_is_walkable() {
+        let id = OrganismId(1);
+        let mut world = alife_world::HeadlessScenarioBuilder::new(7)
+            .agent("learner", id, alife_core::Vec3f::ZERO)
+            .food("food", alife_core::Vec3f::ZERO, 0.45)
+            .build()
+            .unwrap();
+        let terrain = alife_world::WorldTerrain::new(
+            alife_world::TerrainData {
+                width: 2,
+                depth: 2,
+                origin_x: -0.5,
+                origin_z: -0.5,
+                spacing: 1.0,
+                heights: vec![0.0; 4],
+                obstacles: Vec::new(),
+                water_level: None,
+            },
+            alife_world::LocomotionLimits::default(),
+        )
+        .unwrap();
+        world
+            .enable_terrain_for_new_game(terrain, alife_core::Vec3f::ZERO)
+            .unwrap();
+        let care = ContinuousCareAssistance {
+            food: world.entity_id("food").unwrap(),
+            start_tick: world.tick().raw(),
+        };
+        let before_tick = world.tick();
+        assert!(!expose_care_cue(&mut world, id, &care).unwrap());
+        assert_eq!(world.tick(), before_tick);
+        assert!(world.audible_utterances().is_empty());
+        assert!(!world.entity(care.food).unwrap().consumed);
     }
     #[test]
     fn nearby_food_behind_gaze_is_not_treated_as_offered() {
