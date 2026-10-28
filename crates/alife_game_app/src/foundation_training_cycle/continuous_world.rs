@@ -314,9 +314,10 @@ fn expose_care_cue(
         .ok_or("care cue food missing")?
         .position;
     let subject = world
-        .organism_registry()
-        .get(id)
-        .and_then(|record| world.entity(record.world_entity_id()))
+        .organism_entity_ids()
+        .into_iter()
+        .find(|(organism, _)| *organism == id)
+        .and_then(|(_, entity)| world.entity(entity))
         .ok_or("care cue subject missing")?;
     let subject_position = subject.position;
     let separation = subject.radius
