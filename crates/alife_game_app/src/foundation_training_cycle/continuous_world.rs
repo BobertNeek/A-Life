@@ -1,10 +1,12 @@
 //! One restored individual/world with bounded frozen-policy PPO windows.
 //! No world, recurrent state, biology or sampler reset occurs between updates.
 use super::*;
+mod food_provenance;
 use alife_core::{N2048LivePolicyTransition, OrganismId};
 use alife_training::{
     CurrentTrainingCheckpointV1, FoundationTrainingBackendV1, FoundationTrainingHandoffV1,
 };
+use food_provenance::{FoodMealProvenance, MealProvenanceSummary};
 use std::{
     collections::BTreeMap,
     time::{SystemTime, UNIX_EPOCH},
@@ -115,9 +117,15 @@ struct CareRowEvidence {
     teacher_food_token_heard: bool,
 }
 
+struct ContinuousFoodEvidence {
+    target: alife_core::WorldEntityId,
+    outcome: crate::FoundationFoodOutcome,
+    provenance: FoodMealProvenance,
+}
+
 fn care_row_evidence(
     step: &crate::FoundationTrainingStep,
-    food: &BTreeMap<u64, (alife_core::WorldEntityId, crate::FoundationFoodOutcome)>,
+    food: &BTreeMap<u64, ContinuousFoodEvidence>,
 ) -> CareRowEvidence {
     let mut evidence = CareRowEvidence {
         food_candidate: step.frame.candidates().iter().any(|candidate| {
@@ -723,12 +731,16 @@ pub(super) fn run_same_individual_world(
     let mut terminal_death_tick = None;
     // Unassisted mode only observes actual food. Opt-in care assistance records
     // each movement of existing safe loose food; it never feeds the learner.
-    let mut food = BTreeMap::new();
+    let mut food: BTreeMap<u64, ContinuousFoodEvidence> = BTreeMap::new();
     let mut care_scenario: Option<ContinuousCareAssistance> = None;
     let mut care_cue_emissions = 0u64;
     let mut care_cue_deferrals = 0u64;
     let mut care_food_repositions = 0u64;
+    let mut care_initial_food_placements = 0u64;
     let mut last_care_cue_tick = None;
+    let mut last_food_token_heard = None;
+    let mut captured_meal_provenance = MealProvenanceSummary::default();
+    let mut trained_meal_provenance = MealProvenanceSummary::default();
     let restore_seconds = started.elapsed().as_secs_f64();
     on_update(
         serde_json::json!({"kind":"continuous-started-v1","session_nonce":session_nonce,
@@ -736,6 +748,7 @@ pub(super) fn run_same_individual_world(
             "session_start_world_tick":start_tick,"world_tick":collection_start_tick,"world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
             "legacy_sleep_progress":legacy_sleep_progress,
             "care_assistance_requested":request.care_assistance,
+            "food_meal_provenance_scope":food_provenance::SCOPE,
             "hardware":hardware,"sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"sampling_seed":sampling.seed,"sampling_counter":sampling.counter,
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint(trainer.session())?.optimizer_step,
@@ -784,7 +797,7 @@ pub(super) fn run_same_individual_world(
         let mut refs: Vec<crate::FoundationReplayRecordRef> = Vec::new();
         let mut features = Vec::new();
         let mut generic_rows = Vec::new();
-        let mut meal_rows = Vec::new();
+        let mut meal_links = Vec::new();
         let mut care_rows = Vec::new();
         let care_before = care_world_observation(runtime.world(), id);
         if let Some(scenario) = care_scenario.as_ref() {
@@ -816,6 +829,11 @@ pub(super) fn run_same_individual_world(
             };
             if moved {
                 care_food_repositions += 1;
+                if let Some(evidence) = food.get_mut(&scenario.food.raw()) {
+                    evidence
+                        .provenance
+                        .repositioned(runtime.world().tick().raw());
+                }
                 on_update(serde_json::json!({"kind":"continuous-care-reposition-v1",
                     "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
                     "food_target":scenario.food.raw(),"mode":"training_assistance_in_gaze",
@@ -825,9 +843,12 @@ pub(super) fn run_same_individual_world(
         }
         for object in runtime.world().object_snapshots() {
             if object.kind == alife_world::WorldObjectKind::Food {
-                food.entry(object.id.raw()).or_insert_with(|| {
-                    (object.id, crate::FoundationFoodOutcome::new(id, object.id))
-                });
+                food.entry(object.id.raw())
+                    .or_insert_with(|| ContinuousFoodEvidence {
+                        target: object.id,
+                        outcome: crate::FoundationFoodOutcome::new(id, object.id),
+                        provenance: FoodMealProvenance::default(),
+                    });
             }
         }
         crate::foundation_training::prime_foundation_lesson_prior(&mut runtime, None)?;
@@ -858,6 +879,13 @@ pub(super) fn run_same_individual_world(
                     if let Some(emitted) = recovery {
                         if emitted {
                             care_cue_emissions += 1;
+                            if let Some(evidence) = runtime
+                                .world()
+                                .entity_id("food-01")
+                                .and_then(|target| food.get_mut(&target.raw()))
+                            {
+                                evidence.provenance.cue_emitted(tick);
+                            }
                         } else {
                             care_cue_deferrals += 1;
                         }
@@ -877,6 +905,13 @@ pub(super) fn run_same_individual_world(
                         && care_food_position_in_gaze(runtime.world(), id).is_some();
                     if ready {
                         let scenario = prepare_care_assistance(runtime.world_mut(), id)?;
+                        care_initial_food_placements += 1;
+                        // Initial placement is assistance too, even before a
+                        // later periodic reposition or cue has occurred.
+                        food.get_mut(&scenario.food.raw())
+                            .ok_or("care food not observed")?
+                            .provenance
+                            .repositioned(runtime.world().tick().raw());
                         on_update(serde_json::json!({"kind":"continuous-care-assistance-v1",
                             "session_nonce":session_nonce,"world_tick":runtime.world().tick().raw(),
                             "mode":"ordinary_feeding_scene_and_spatial_eat_food_cues",
@@ -916,6 +951,10 @@ pub(super) fn run_same_individual_world(
                             };
                             if moved {
                                 care_food_repositions += 1;
+                                food.get_mut(&scenario.food.raw())
+                                    .ok_or("care food not observed")?
+                                    .provenance
+                                    .repositioned(tick);
                                 on_update(
                                     serde_json::json!({"kind":"continuous-care-reposition-v1",
                                     "session_nonce":session_nonce,"world_tick":tick,
@@ -933,6 +972,10 @@ pub(super) fn run_same_individual_world(
                         )?;
                         if emitted {
                             care_cue_emissions += 1;
+                            food.get_mut(&scenario.food.raw())
+                                .ok_or("care food not observed")?
+                                .provenance
+                                .cue_emitted(tick);
                         } else {
                             care_cue_deferrals += 1;
                         }
@@ -943,12 +986,12 @@ pub(super) fn run_same_individual_world(
             let before_tick = runtime.world().tick();
             let before_food = food
                 .iter()
-                .map(|(raw, (target, _))| {
+                .map(|(raw, evidence)| {
                     (
                         *raw,
                         crate::foundation_training::food_outcome::ownership(
                             runtime.world(),
-                            *target,
+                            evidence.target,
                         ),
                     )
                 })
@@ -1021,27 +1064,35 @@ pub(super) fn run_same_individual_world(
                 if consumed(&step) {
                     generic_rows.push(refs.len());
                 }
-                care_rows.push(care_row_evidence(&step, &food));
-                for (raw, (target, summary)) in &mut food {
+                let care_row = care_row_evidence(&step, &food);
+                if care_row.teacher_food_token_heard {
+                    last_food_token_heard = Some(before_tick.raw());
+                }
+                care_rows.push(care_row);
+                for (raw, evidence) in &mut food {
                     let observation =
                         crate::foundation_training::food_outcome::FoodOutcomeObservation {
                             organism: id,
-                            target: *target,
+                            target: evidence.target,
                             decision_tick: before_tick,
                             outcome_tick: runtime.world().tick(),
                             before: before_food[raw],
                             after: crate::foundation_training::food_outcome::ownership(
                                 runtime.world(),
-                                *target,
+                                evidence.target,
                             ),
                         };
                     if !observation.matches_step(&step) {
                         return Err("continuous food/row identity mismatch".into());
                     }
-                    let old = summary.nourished_meal_events;
-                    summary.observe(observation, &step.patch);
-                    if summary.nourished_meal_events > old {
-                        meal_rows.push(refs.len());
+                    let events = evidence.outcome.observe(observation, &step.patch);
+                    if let Some(meal) =
+                        evidence
+                            .provenance
+                            .observe(observation, events, last_food_token_heard)
+                    {
+                        meal_links.push((refs.len(), meal));
+                        captured_meal_provenance.observe(meal);
                     }
                 }
                 features.push(crate::foundation_training::snapshot_activation(
@@ -1070,7 +1121,7 @@ pub(super) fn run_same_individual_world(
         no_progress_total += no_progress;
         captured_total += refs.len() as u64;
         generic_total += generic_rows.len() as u64;
-        nourished_total += meal_rows.len() as u64;
+        nourished_total += meal_links.len() as u64;
         if terminal_observed {
             // The terminal row/food observations above are included in capture
             // telemetry, while all this suffix remains explicitly untrained.
@@ -1081,7 +1132,9 @@ pub(super) fn run_same_individual_world(
             on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
                 "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
-                "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
+                "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_links.len(),
+                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+                "food_meal_provenance_scope":food_provenance::SCOPE,
                 "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
@@ -1110,7 +1163,9 @@ pub(super) fn run_same_individual_world(
             on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
                 "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
-                "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_rows.len(),
+                "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_links.len(),
+                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+                "food_meal_provenance_scope":food_provenance::SCOPE,
                 "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
@@ -1314,6 +1369,9 @@ pub(super) fn run_same_individual_world(
             .ok_or("value age regressed")?;
         let install_seconds = install_started.elapsed().as_secs_f64();
         install_seconds_total += install_seconds;
+        for (_, meal) in meal_links.iter().filter(|(row, _)| *row < rows) {
+            trained_meal_provenance.observe(*meal);
+        }
         let event = serde_json::json!({"kind":"continuous-update-v1","session_nonce":session_nonce,
             "source_world_seed":world_seed,"organism_id":id.raw(),"update":completed_updates,
             "policy_before":policy-1,"policy_after":policy,"trained_rows":rows,
@@ -1324,15 +1382,19 @@ pub(super) fn run_same_individual_world(
             "causal_collection":causal,"ppo_seconds":ppo_seconds,"install_seconds":install_seconds,
             "mutable_words_written_during_install":install.mutable_words_written,
             "generic_consumed_events":generic_rows.len(),"trained_generic_consumed_events":generic_rows.iter().filter(|r| **r<rows).count(),
-            "exact_nourished_meals":meal_rows.len(),"trained_exact_nourished_meals":meal_rows.iter().filter(|r| **r<rows).count(),
+            "exact_nourished_meals":meal_links.len(),"trained_exact_nourished_meals":meal_links.iter().filter(|(row, _)| *row<rows).count(),
+            "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+            "food_meal_provenance_trained":MealProvenanceSummary::rows(&meal_links, rows),
+            "food_meal_provenance_scope":food_provenance::SCOPE,
             "food_evidence_scope":"exact existing food entities observed at this window start; regrowth of same entity is ordinary ecology",
             "observed_food_entity_count":food.len(),"semantic_prior":compact_prior(&runtime, care_cue_emissions),
             "care_assistance_requested":request.care_assistance,
             "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
             "care_food_repositions":care_food_repositions,
+            "care_initial_food_placements":care_initial_food_placements,
             "care_before":care_before,"care_after":care_after,
             "care_training_rows":care_row_summary(&care_rows[..rows]),
-            "food_outcomes_cumulative_including_bootstrap":food.values().map(|(_, summary)| summary).collect::<Vec<_>>(),
+            "food_outcomes_cumulative_including_bootstrap":food.values().map(|evidence| &evidence.outcome).collect::<Vec<_>>(),
             "replay_bundle_bytes":replay.bundle_bytes,"replay_data_sync_calls":replay.data_sync_calls,
         });
         alife_storage::remove_dir_all(&window_root)?;
@@ -1420,10 +1482,14 @@ pub(super) fn run_same_individual_world(
             "stop_reason":stop,"terminal":!alive(&runtime,id),"terminal_death_tick":terminal_death_tick,
             "sampling_stream":if sampler_restored {"restored_exact_private_stream"} else {"declared_new_legacy_stream"},
             "sampling_temperature":sampling.temperature,"generic_consumed_events":generic_total,"exact_nourished_meals":nourished_total,
+            "food_meal_provenance_captured":captured_meal_provenance,
+            "food_meal_provenance_trained":trained_meal_provenance,
+            "food_meal_provenance_scope":food_provenance::SCOPE,
             "semantic_prior":compact_prior(&runtime, care_cue_emissions),
             "care_assistance_requested":request.care_assistance,
             "care_assistance_active":care_scenario.is_some(),"care_cue_emissions":care_cue_emissions,"care_cue_deferrals":care_cue_deferrals,
             "care_food_repositions":care_food_repositions,
+            "care_initial_food_placements":care_initial_food_placements,
             "snapshot_seconds":snapshot_seconds,"producer_seconds":started.elapsed().as_secs_f64(),
             "collection_seconds":collection_seconds,"ppo_seconds":ppo_seconds_total,"install_seconds":install_seconds_total,
             "restore_seconds":restore_seconds,"replay_seal_seconds":replay_seal_seconds,"boundary_wait_seconds":boundary_wait_seconds,
