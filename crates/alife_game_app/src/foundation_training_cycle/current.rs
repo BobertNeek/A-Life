@@ -4,6 +4,8 @@ pub use alife_training::SameIndividualProgressV1;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
 mod life;
+#[cfg(test)]
+mod throughput_tests;
 pub(super) use life::validation_scope;
 pub use life::{extract_current_training_life, materialize_current_training_life};
 #[cfg(test)]
@@ -65,6 +67,42 @@ pub fn migrate_current_training_checkpoint(
     seeds: CheckpointSeedsV1,
 ) -> Result<CurrentTrainingCheckpointV1> {
     read_native_current(source, seeds).map(|(checkpoint, _)| checkpoint)
+}
+
+pub(super) fn migrate_verified_native_frontier(
+    source: &Path,
+    expected_policy: u64,
+    seeds: CheckpointSeedsV1,
+) -> Result<CurrentTrainingCheckpointV1> {
+    let path = source.join("cycle.json");
+    let metadata = std::fs::symlink_metadata(&path)?;
+    if !metadata.is_file() || metadata.len() > 64 * 1024 * 1024 {
+        return Err("native frontier receipt must be a bounded regular file".into());
+    }
+    let (checkpoint, receipt) = read_native_current(source, seeds)?;
+    if checkpoint.handoff.policy_version != expected_policy {
+        return Err("native frontier policy differs from the expected version".into());
+    }
+    let private = checkpoint
+        .life
+        .as_ref()
+        .ok_or("native frontier lacks private life")?;
+    let world = alife_world::PortableSaveFile::from_json_str(&private.world_json)?;
+    let final_tick = world.restore_headless_world()?.tick().raw();
+    if final_tick != receipt.world_ticks_elapsed {
+        return Err("native frontier private save is not at the final collection boundary".into());
+    }
+    let _ = checkpoint
+        .handoff
+        .compiler_inputs
+        .n2048_candidate_asset()
+        .ok_or("native frontier asset missing")?;
+    for name in private.assets_base64.keys() {
+        private.asset_bytes(name)?;
+    }
+    let source = source.canonicalize()?;
+    let _ = portable_handoff::protected_sources(&source)?;
+    Ok(checkpoint)
 }
 fn read_native_current(
     source: &Path,

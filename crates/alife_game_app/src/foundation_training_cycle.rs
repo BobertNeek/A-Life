@@ -20,6 +20,8 @@ use crate::{
 };
 
 mod ppo_diagnostics;
+mod replay_window_cache;
+use replay_window_cache::PpoWindowSnapshotCache;
 mod stage_timing;
 use stage_timing::CycleStageTiming;
 mod causal_collection;
@@ -4485,12 +4487,19 @@ fn run_foundation_training_cycle_in_owned_output(
         value_coefficient: 0.0,
         ..ppo_config
     };
+    // These are admitted immutable in-memory snapshots, local to this frozen
+    // policy/cohort. Later PPO passes reuse those bytes without disk round trips;
+    // a new external replay load still verifies its actual storage before hits.
+    let mut cached_windows = PpoWindowSnapshotCache::new(spans.len());
     let mut update = train_recurrent_ppo_cohort(
         &mut trainer,
         &mut value,
         spans.len(),
         8,
         |index| {
+            if let Some(cached) = cached_windows.get(index, budget)? {
+                return Ok(cached);
+            }
             let (burn_start, start, end) = spans[index];
             let replay = load_foundation_replay_window(
                 &replay_dir,
@@ -4503,7 +4512,7 @@ fn run_foundation_training_cycle_in_owned_output(
             .map_err(|_| {
                 alife_training::TrainingError::from(ScaffoldContractError::InvalidDecisionEvidence)
             })?;
-            Ok(PpoTrainingWindow {
+            let window = PpoTrainingWindow {
                 speech_targets: speech_targets[burn_start..end]
                     .iter()
                     .enumerate()
@@ -4512,7 +4521,9 @@ fn run_foundation_training_cycle_in_owned_output(
                 sequence: replay.sequence,
                 batch: batch.window(start..end)?,
                 auxiliary: None,
-            })
+            };
+            cached_windows.retain(index, &window, budget);
+            Ok(window)
         },
         actor_only_ppo,
         policy_version,

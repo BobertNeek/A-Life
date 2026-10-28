@@ -48,6 +48,25 @@ batch by its actual row count. Each batch uploads its actual captured features;
 equal shapes never authorize reusing old feature contents. Before/after metrics
 and the per-step GPU finite-success readback remain unchanged.
 
+Replay admission may reuse successful exact compiler/private-content bindings.
+Keys retain raw float bits, including signed zero; failed admission is never
+cached. Decoded records have a process-local 512-entry / 256 MiB conservative
+retention-charge ceiling, separate from the measured host-memory guard. Every
+optional retained-record copy also needs fresh measured allocation admission;
+failure skips the cache without failing already-admitted uncached work. Every
+external replay load still verifies actual stored lengths and BLAKE3 bytes
+before consulting that cache. Least-recent records are evicted to retain ordinary
+burn-in overlap when its charged size fits; oversized records remain uncached.
+These charges are estimates, not a physical-memory bound. At most eight PPO spans,
+within a separate 512 MiB conservative owned-clone charge, are retained as
+immutable session-local windows for repeated passes. Every cloned hit repeats
+measured host-memory admission;
+optional retention is skipped if the extra copy cannot fit. Changing a disk file
+afterward cannot change these already-admitted RAM snapshots, but a later
+external load must reject the changed file. The PPO-window snapshot cache is
+dropped at that policy-window's training boundary; process-wide caches remain
+content-bound.
+
 The existing CPU value-head checkpoint handoff remains at the logical PPO-window
 boundary: one head read from PPO before the fit, one upload into the private
 residual context, one completed-fit readback, then restoration for subsequent

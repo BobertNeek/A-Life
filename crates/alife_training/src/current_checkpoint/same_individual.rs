@@ -46,8 +46,67 @@ pub struct SameIndividualCurrentV1 {
     pub sampling_state: GpuTrainingSamplingConfig,
 }
 
+struct Sha256Writer(Sha256);
+
+impl std::io::Write for Sha256Writer {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.update(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 fn sha(value: &impl Serialize) -> Result<String> {
-    Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(value)?)))
+    let mut writer = Sha256Writer(Sha256::new());
+    serde_json::to_writer(&mut writer, value)?;
+    Ok(format!("{:x}", writer.0.finalize()))
+}
+
+type CachedPrivateBindingKey = ([u8; 32], [u8; 32]);
+type CachedPrivateBindingValue = (PhenotypeCompilerInputs, String, alife_core::PhenotypeHash);
+
+fn cached_private_phenotype_binding(
+    inputs_bytes: &[u8],
+    phenotype_bytes: &[u8],
+) -> Result<CachedPrivateBindingValue> {
+    use std::collections::VecDeque;
+    use std::sync::{Mutex, OnceLock};
+
+    static CACHE: OnceLock<Mutex<VecDeque<(CachedPrivateBindingKey, CachedPrivateBindingValue)>>> =
+        OnceLock::new();
+    let key: CachedPrivateBindingKey = (
+        Sha256::digest(inputs_bytes).into(),
+        Sha256::digest(phenotype_bytes).into(),
+    );
+    let cache = CACHE.get_or_init(|| Mutex::new(VecDeque::with_capacity(8)));
+    if let Ok(mut guard) = cache.lock() {
+        if let Some(pos) = guard.iter().position(|(k, _)| *k == key) {
+            let entry = guard.remove(pos).expect("checked cache index");
+            let value = entry.1.clone();
+            guard.push_back(entry);
+            return Ok(value);
+        }
+    }
+    let inputs: PhenotypeCompilerInputs = serde_json::from_slice(inputs_bytes)?;
+    let phenotype: BrainPhenotype = serde_json::from_slice(phenotype_bytes)?;
+    let compiled = crate::compile_validated_n2048_cached(&inputs, &BrainCapacityClass::n2048())?;
+    let inputs_sha = sha(&inputs)?;
+    if sha(&phenotype)? != sha(&compiled)? {
+        return Err("same-individual private compiler/phenotype differs from global heads".into());
+    }
+    let value = (inputs, inputs_sha, compiled.phenotype_hash());
+    if let Ok(mut guard) = cache.lock() {
+        if !guard.iter().any(|(k, _)| *k == key) {
+            if guard.len() >= 8 {
+                guard.pop_front();
+            }
+            guard.push_back((key, value.clone()));
+        }
+    }
+    Ok(value)
 }
 
 fn check_foundation_anchor(
@@ -125,21 +184,11 @@ fn private_binding(
     if gpu.checkpoint_tick.raw() != progress.world_tick || gpu.organism_id != creature.organism_id {
         return Err("same-individual private GPU checkpoint boundary differs".into());
     }
-    let inputs: PhenotypeCompilerInputs = serde_json::from_slice(&private_asset(
-        life,
-        &save,
-        &gpu.phenotype_compiler_inputs.asset_id,
-    )?)?;
-    let phenotype: BrainPhenotype = serde_json::from_slice(&private_asset(
-        life,
-        &save,
-        &gpu.immutable_phenotype.asset_id,
-    )?)?;
-    let compiled = PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048())?;
-    if sha(&inputs)? != sha(&handoff.compiler_inputs)?
-        || sha(&phenotype)? != sha(&compiled)?
-        || gpu.phenotype_hash != compiled.phenotype_hash()
-    {
+    let inputs_bytes = private_asset(life, &save, &gpu.phenotype_compiler_inputs.asset_id)?;
+    let phenotype_bytes = private_asset(life, &save, &gpu.immutable_phenotype.asset_id)?;
+    let (inputs, inputs_sha, compiled_hash) =
+        cached_private_phenotype_binding(&inputs_bytes, &phenotype_bytes)?;
+    if inputs_sha != sha(&handoff.compiler_inputs)? || gpu.phenotype_hash != compiled_hash {
         return Err("same-individual private compiler/phenotype differs from global heads".into());
     }
     let birth_foundation = if let Some(birth) = &creature.composite_genetics {
@@ -294,7 +343,8 @@ impl CurrentTrainingCheckpointV1 {
     /// Admit the decoded full state while retaining the original file identity.
     /// JSON whitespace/order is not silently substituted for source provenance.
     pub fn admitted_source_sha256(&self, bytes: &[u8]) -> Result<String> {
-        if Self::decode(bytes)?.encode()? != self.encode()? {
+        let encoded = self.encode()?;
+        if bytes != encoded && Self::decode(bytes)?.encode()? != encoded {
             return Err("same-individual baseline bytes differ from admitted source state".into());
         }
         Ok(format!("{:x}", Sha256::digest(bytes)))
@@ -442,5 +492,201 @@ impl CurrentTrainingCheckpointV1 {
         };
         next.validate()?;
         Ok(next)
+    }
+}
+
+#[cfg(test)]
+mod cache_codec_tests {
+    use super::*;
+    use alife_core::{
+        BrainGenome, DevelopmentState, FoundationWeightAsset, NormalizedScalar, PhenotypeCompiler,
+        SensorProfile, Tick, TrainingStageManifest,
+    };
+
+    fn compiler_fixture(weight_scale: f32) -> (PhenotypeCompilerInputs, BrainPhenotype) {
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0x74_00, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let base = PhenotypeCompiler::compile(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let mut weights: Vec<_> = base.synapses().iter().map(|s| s.genetic_weight()).collect();
+        weights[0] *= weight_scale;
+        let asset = FoundationWeightAsset::from_trained_weights(
+            &base,
+            weights,
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        let (phenotype, inputs) =
+            PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset)
+                .unwrap();
+        (inputs, phenotype)
+    }
+
+    #[test]
+    fn streamed_sha_matches_previous_vec_codec_with_exact_float_lanes_and_errors() {
+        #[derive(Serialize)]
+        struct Packet {
+            floats: Vec<f32>,
+            text: String,
+            payload: Vec<u8>,
+        }
+        let packet = Packet {
+            floats: vec![
+                0.0,
+                -0.0,
+                f32::from_bits(1),
+                f32::MIN_POSITIVE,
+                f32::MIN,
+                f32::MAX,
+            ],
+            text: "\"\\\n\t☃".repeat(1024),
+            payload: (0..=255).cycle().take(131_073).collect(),
+        };
+        assert_eq!(
+            sha(&packet).unwrap(),
+            format!("{:x}", Sha256::digest(serde_json::to_vec(&packet).unwrap()))
+        );
+        assert_ne!(sha(&0.0_f32).unwrap(), sha(&-0.0_f32).unwrap());
+        struct Fails;
+        impl Serialize for Fails {
+            fn serialize<S: serde::Serializer>(
+                &self,
+                _: S,
+            ) -> std::result::Result<S::Ok, S::Error> {
+                Err(serde::ser::Error::custom("injected serialization error"))
+            }
+        }
+        assert!(sha(&Fails).is_err());
+    }
+
+    #[test]
+    fn private_binding_cache_rechecks_changed_raw_assets_and_never_remembers_failures() {
+        let (inputs, phenotype) = compiler_fixture(1.0);
+        let inputs_bytes = serde_json::to_vec(&inputs).unwrap();
+        let phenotype_bytes = serde_json::to_vec(&phenotype).unwrap();
+        for _ in 0..2 {
+            let (actual_inputs, actual_sha, actual_hash) =
+                cached_private_phenotype_binding(&inputs_bytes, &phenotype_bytes).unwrap();
+            assert_eq!(serde_json::to_vec(&actual_inputs).unwrap(), inputs_bytes);
+            assert_eq!(actual_sha, sha(&inputs).unwrap());
+            assert_eq!(actual_hash, phenotype.phenotype_hash());
+        }
+        let (other_inputs, other_phenotype) = compiler_fixture(0.95);
+        let other_inputs_bytes = serde_json::to_vec(&other_inputs).unwrap();
+        let other_phenotype_bytes = serde_json::to_vec(&other_phenotype).unwrap();
+        for _ in 0..2 {
+            assert!(
+                cached_private_phenotype_binding(&inputs_bytes, &other_phenotype_bytes).is_err()
+            );
+            assert!(
+                cached_private_phenotype_binding(&other_inputs_bytes, &phenotype_bytes).is_err()
+            );
+            assert!(cached_private_phenotype_binding(
+                &inputs_bytes[..inputs_bytes.len() - 1],
+                &phenotype_bytes
+            )
+            .is_err());
+        }
+        let other =
+            cached_private_phenotype_binding(&other_inputs_bytes, &other_phenotype_bytes).unwrap();
+        assert_eq!(other.1, sha(&other_inputs).unwrap());
+        assert_ne!(other.1, sha(&inputs).unwrap());
+        assert!(cached_private_phenotype_binding(&inputs_bytes, &phenotype_bytes).is_ok());
+    }
+
+    fn current_fixture() -> CurrentTrainingCheckpointV1 {
+        let (inputs, phenotype) = compiler_fixture(1.0);
+        let count = phenotype.synapses().len();
+        let mut actor = crate::FoundationTrainerCheckpoint {
+            schema_version: 2,
+            phenotype_hash: phenotype.phenotype_hash(),
+            source_foundation_digest: inputs.n2048_candidate_asset().unwrap().digest(),
+            optimizer_step: 3,
+            config: crate::AdamWConfig::default(),
+            stage_mask: crate::StageTrainableMask::from_synapse_indices(
+                &phenotype,
+                &(0..count as u32).collect::<Vec<_>>(),
+            )
+            .unwrap(),
+            weights: phenotype
+                .synapses()
+                .iter()
+                .map(|s| s.genetic_weight())
+                .collect(),
+            first_moment: vec![0.01; count],
+            second_moment: vec![0.02; count],
+            update_ages: vec![3; count],
+        };
+        actor.first_moment[0] = -0.0;
+        let value = crate::PpoValueHeadCheckpoint {
+            feature_count: phenotype.neuron_count(),
+            optimizer_step: 3,
+            parameters: vec![0.0; (phenotype.neuron_count() as usize + 1) * 3],
+            last_updated_policy_version: Some(7),
+        };
+        CurrentTrainingCheckpointV1 {
+            schema_version: 1,
+            seed: 7400,
+            founder_seed_base: 7400,
+            seeds: CheckpointSeedsV1 {
+                historical_freshness: "unknown".into(),
+                excluded_ranges: vec![[1, 7400]],
+                pending_range: None,
+            },
+            handoff: FoundationTrainingHandoffV1::new(
+                crate::FoundationTrainingBackendV1::NativeCpu,
+                7,
+                inputs,
+                actor,
+                value,
+            )
+            .unwrap(),
+            life: None,
+            same_individual: None,
+            terminal_disposition: None,
+            training_attempt_origin: None,
+        }
+    }
+
+    #[test]
+    fn source_identity_fast_path_keeps_canonical_and_original_noncanonical_bytes_exact() {
+        let source = current_fixture();
+        let canonical = source.encode().unwrap();
+        assert_eq!(
+            source.admitted_source_sha256(&canonical).unwrap(),
+            format!("{:x}", Sha256::digest(&canonical))
+        );
+        assert_eq!(
+            CurrentTrainingCheckpointV1::decode(&canonical)
+                .unwrap()
+                .encode()
+                .unwrap(),
+            canonical
+        );
+        let payload = serde_json::to_vec_pretty(&source).unwrap();
+        let mut noncanonical = MAGIC.to_vec();
+        noncanonical.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+        noncanonical.extend_from_slice(&Sha256::digest(&payload));
+        noncanonical.extend_from_slice(&payload);
+        assert_ne!(canonical, noncanonical);
+        assert_eq!(
+            source.admitted_source_sha256(&noncanonical).unwrap(),
+            format!("{:x}", Sha256::digest(&noncanonical))
+        );
+        let mut changed = source.clone();
+        changed.handoff.actor.first_moment[0] = 0.0;
+        assert!(source
+            .admitted_source_sha256(&changed.encode().unwrap())
+            .is_err());
+        let last = noncanonical.len() - 1;
+        noncanonical[last] ^= 1;
+        assert!(source.admitted_source_sha256(&noncanonical).is_err());
     }
 }

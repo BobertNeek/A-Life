@@ -335,8 +335,10 @@ fn foundation_replay_sequence_with_upload(
         if index > 0 {
             validate_recurrent_continuity(&steps[index - 1].after_inference, &step.before)?;
         }
-        if step.before.phenotype != *phenotype
-            || step.after_inference.phenotype != *phenotype
+        if (!std::sync::Arc::ptr_eq(&step.before.phenotype, phenotype)
+            && step.before.phenotype != *phenotype)
+            || (!std::sync::Arc::ptr_eq(&step.after_inference.phenotype, phenotype)
+                && step.after_inference.phenotype != *phenotype)
             || step.frame.organism_id() != first.frame.organism_id()
             || Some(step.frame.tick().raw()) != first.frame.tick().raw().checked_add(index as u64)
             || step.before.handle != first.before.handle
@@ -4132,16 +4134,27 @@ pub(crate) fn foundation_replay_source(
     policy_version: u64,
     actor_checkpoint: &[u8],
 ) -> Result<FoundationReplaySource> {
-    // Launch from the qualified checkout; a downloaded binary's build-host path
-    // may not exist on this computer.
-    let revision = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()?;
-    if !revision.status.success() {
-        return Err("could not identify training source revision".into());
-    }
+    static CACHED_SOURCE_REVISION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let source_revision = if let Some(cached) = CACHED_SOURCE_REVISION.get() {
+        cached.clone()
+    } else {
+        // Launch from the qualified checkout; a downloaded binary's build-host path
+        // may not exist on this computer.
+        let revision = std::process::Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .output()?;
+        if !revision.status.success() {
+            return Err("could not identify training source revision".into());
+        }
+        let parsed = String::from_utf8(revision.stdout)?.trim().to_owned();
+        if parsed.is_empty() {
+            return Err("could not identify training source revision".into());
+        }
+        let _ = CACHED_SOURCE_REVISION.set(parsed.clone());
+        parsed
+    };
     Ok(FoundationReplaySource {
-        source_revision: String::from_utf8(revision.stdout)?.trim().to_owned(),
+        source_revision,
         policy_version,
         actor_checkpoint_digest: alife_core::Blake3Digest::from_bytes(
             *blake3::hash(actor_checkpoint).as_bytes(),
@@ -4220,6 +4233,53 @@ struct ReplayContinuity {
     weight_digest: [u8; 32],
     dendrites_digest: [u8; 32],
 }
+fn dendritic_branches_digest(branches: &alife_core::DendriticBranchSet) -> Result<[u8; 32]> {
+    thread_local! {
+        static LAST_DENDRITES: std::cell::RefCell<Option<(alife_core::DendriticBranchSet, [u8; 32])>> =
+            const { std::cell::RefCell::new(None) };
+    }
+    if let Some(cached) = LAST_DENDRITES.with(|slot| {
+        slot.borrow().as_ref().and_then(|(prev, digest)| {
+            dendritic_branches_exact_eq(prev, branches).then_some(*digest)
+        })
+    }) {
+        return Ok(cached);
+    }
+    let mut hasher = blake3::Hasher::new();
+    serde_json::to_writer(&mut hasher, branches)?;
+    let digest = *hasher.finalize().as_bytes();
+    LAST_DENDRITES.with(|slot| {
+        *slot.borrow_mut() = Some((branches.clone(), digest));
+    });
+    Ok(digest)
+}
+
+fn dendritic_branches_exact_eq(
+    a: &alife_core::DendriticBranchSet,
+    b: &alife_core::DendriticBranchSet,
+) -> bool {
+    a.branches().len() == b.branches().len()
+        && a.branches().iter().zip(b.branches()).all(|(a, b)| {
+            a.target == b.target
+                && a.threshold.to_bits() == b.threshold.to_bits()
+                && a.output_gain.to_bits() == b.output_gain.to_bits()
+                && a.inputs.len() == b.inputs.len()
+                && a.inputs
+                    .iter()
+                    .zip(&b.inputs)
+                    .all(|(a, b)| a.source == b.source && a.weight.to_bits() == b.weight.to_bits())
+        })
+}
+
+fn hash_replay_words_le(hasher: &mut blake3::Hasher, words: &[u32]) {
+    #[cfg(target_endian = "little")]
+    hasher.update(bytemuck::cast_slice(words));
+    #[cfg(not(target_endian = "little"))]
+    for word in words {
+        hasher.update(&word.to_le_bytes());
+    }
+}
+
 impl ReplayContinuity {
     fn capture(snapshot: &GpuTrainingStateSnapshot) -> Result<Self> {
         let mut recurrent = blake3::Hasher::new();
@@ -4227,16 +4287,14 @@ impl ReplayContinuity {
             activation_range(snapshot)?,
             snapshot.brain_slot.word_ranges().homeostasis_words.clone(),
         ] {
-            for word in snapshot_words(snapshot, range)? {
-                recurrent.update(&word.to_le_bytes());
-            }
+            let words = snapshot_words(snapshot, range)?;
+            hash_replay_words_le(&mut recurrent, words);
         }
         let mut weights = blake3::Hasher::new();
         let (lifetime, fast) = active_weight_ranges(snapshot)?;
         for range in [lifetime, fast] {
-            for word in snapshot_words(snapshot, range)? {
-                weights.update(&word.to_le_bytes());
-            }
+            let words = snapshot_words(snapshot, range)?;
+            hash_replay_words_le(&mut weights, words);
         }
         Ok(Self {
             organism_id: snapshot.handle.organism_id().raw(),
@@ -4248,8 +4306,7 @@ impl ReplayContinuity {
             weight_bank: snapshot.active_weight_bank,
             recurrent_digest: *recurrent.finalize().as_bytes(),
             weight_digest: *weights.finalize().as_bytes(),
-            dendrites_digest: *blake3::hash(&serde_json::to_vec(&snapshot.v11.dendritic_branches)?)
-                .as_bytes(),
+            dendrites_digest: dendritic_branches_digest(&snapshot.v11.dendritic_branches)?,
         })
     }
     fn validate_next(&self, next: &Self) -> Result<()> {
@@ -4337,6 +4394,7 @@ pub struct FoundationReplayWriter {
     directory: std::path::PathBuf,
     source: FoundationReplaySource,
     phenotype: alife_core::BrainPhenotype,
+    verified_phenotype_arc: Option<std::sync::Arc<alife_core::BrainPhenotype>>,
     upload: alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload,
     budget: FoundationReplayBudget,
     next_index: u64,
@@ -4377,6 +4435,7 @@ impl FoundationReplayWriter {
             directory: directory.to_path_buf(),
             source,
             phenotype,
+            verified_phenotype_arc: None,
             upload,
             budget,
             next_index: 0,
@@ -4416,10 +4475,19 @@ impl FoundationReplayWriter {
         step: &FoundationTrainingStep,
         write: impl FnOnce(&FoundationReplayRecord) -> Result<FoundationReplayRecordRef>,
     ) -> Result<FoundationReplayRecordRef> {
-        if step.before.phenotype.as_ref() != &self.phenotype
-            || step.after_inference.phenotype.as_ref() != &self.phenotype
-        {
+        let before_matches = self
+            .verified_phenotype_arc
+            .as_ref()
+            .is_some_and(|arc| std::sync::Arc::ptr_eq(arc, &step.before.phenotype))
+            || step.before.phenotype.as_ref() == &self.phenotype;
+        let after_matches = (before_matches
+            && std::sync::Arc::ptr_eq(&step.after_inference.phenotype, &step.before.phenotype))
+            || step.after_inference.phenotype.as_ref() == &self.phenotype;
+        if !before_matches || !after_matches {
             return Err("frozen genetic actor changed within a replay life".into());
+        }
+        if self.verified_phenotype_arc.is_none() {
+            self.verified_phenotype_arc = Some(step.before.phenotype.clone());
         }
         // Reserve conversion's temporary float arrays, candidate/patch copies,
         // and serialized evidence before creating another record-sized object.
@@ -4474,8 +4542,157 @@ impl FoundationReplayWriter {
         self.previous = Some((record.tick, after, step.after_inference.brain_slot.clone()));
         self.next_index = self.next_index.checked_add(1).ok_or_else(invalid)?;
         self.written_bytes = next_bytes;
+        cache_verified_replay_record(&reference, &record, self.budget);
         Ok(reference)
     }
+}
+
+type VerifiedReplayCacheKey = ([u8; 32], u64);
+
+// Bound decoded retention, not compressed file size. Eight times the complete
+// uncompressed binary representation conservatively charges owned vectors,
+// nested patch objects and allocator overhead. The existing measured-process
+// host admission remains authoritative; this is not an RSS measurement.
+// Retain the ordinary 128-row burn-in overlap when its charged size fits,
+// rather than charging insertion work while immediately evicting that overlap.
+const VERIFIED_REPLAY_CACHE_CHARGE_LIMIT: u64 = 256 * 1024 * 1024;
+const VERIFIED_REPLAY_CACHE_ENTRIES: usize = 512;
+
+struct ReplayRecordCache<T> {
+    entries: std::collections::VecDeque<(VerifiedReplayCacheKey, T, u64)>,
+    charged_bytes: u64,
+    byte_limit: u64,
+    entry_limit: usize,
+}
+impl<T: Clone> ReplayRecordCache<T> {
+    fn new(byte_limit: u64, entry_limit: usize) -> Self {
+        Self {
+            entries: std::collections::VecDeque::new(),
+            charged_bytes: 0,
+            byte_limit,
+            entry_limit,
+        }
+    }
+    fn insert(&mut self, key: VerifiedReplayCacheKey, value: T, charge: u64) {
+        if charge > self.byte_limit || self.entry_limit == 0 {
+            return;
+        }
+        if let Some(pos) = self.entries.iter().position(|(k, _, _)| *k == key) {
+            let (_, _, old_charge) = self.entries.remove(pos).expect("checked cache index");
+            self.charged_bytes -= old_charge;
+        }
+        while self.entries.len() >= self.entry_limit
+            || self.charged_bytes > self.byte_limit - charge
+        {
+            let Some((_, _, old_charge)) = self.entries.pop_front() else {
+                break;
+            };
+            self.charged_bytes -= old_charge;
+        }
+        self.charged_bytes += charge;
+        self.entries.push_back((key, value, charge));
+    }
+    fn get(&mut self, key: &VerifiedReplayCacheKey) -> Option<T> {
+        let pos = self.entries.iter().position(|(k, _, _)| k == key)?;
+        let entry = self.entries.remove(pos)?;
+        let value = entry.1.clone();
+        self.entries.push_back(entry);
+        Some(value)
+    }
+}
+
+fn verified_replay_record_cache(
+) -> &'static std::sync::Mutex<ReplayRecordCache<FoundationReplayRecord>> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<ReplayRecordCache<FoundationReplayRecord>>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| {
+        std::sync::Mutex::new(ReplayRecordCache::new(
+            VERIFIED_REPLAY_CACHE_CHARGE_LIMIT,
+            VERIFIED_REPLAY_CACHE_ENTRIES,
+        ))
+    })
+}
+
+struct ReplayCacheChargeWriter(u64);
+impl std::io::Write for ReplayCacheChargeWriter {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let next = self
+            .0
+            .checked_add(bytes.len() as u64)
+            .ok_or_else(|| std::io::Error::other("replay cache charge overflow"))?;
+        if next > VERIFIED_REPLAY_CACHE_CHARGE_LIMIT / 8 {
+            return Err(std::io::Error::other(
+                "replay exceeds optional cache budget",
+            ));
+        }
+        self.0 = next;
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn cache_verified_replay_record(
+    reference: &FoundationReplayRecordRef,
+    record: &FoundationReplayRecord,
+    budget: FoundationReplayBudget,
+) {
+    cache_verified_replay_record_with_admission(reference, record, |charge| {
+        budget.check_additional(charge).is_ok()
+    });
+}
+
+fn cache_verified_replay_record_with_admission(
+    reference: &FoundationReplayRecordRef,
+    record: &FoundationReplayRecord,
+    admit: impl FnOnce(u64) -> bool,
+) {
+    let key = (reference.digest, reference.encoded_bytes);
+    let mut charge = ReplayCacheChargeWriter(0);
+    if bincode::serde::encode_into_std_write(record, &mut charge, bincode::config::standard())
+        .is_err()
+    {
+        return;
+    }
+    let charge = charge
+        .0
+        .saturating_mul(8)
+        .saturating_add(std::mem::size_of::<FoundationReplayRecord>() as u64);
+    // Retention is optional. Decide the charge and measured headroom BEFORE
+    // allocating a second owned record, including records too large to retain.
+    if charge > VERIFIED_REPLAY_CACHE_CHARGE_LIMIT || !admit(charge) {
+        return;
+    }
+    if let Ok(mut guard) = verified_replay_record_cache().lock() {
+        guard.insert(key, record.clone(), charge);
+    }
+}
+
+fn get_cached_verified_replay_record(
+    reference: &FoundationReplayRecordRef,
+    expected: &FoundationReplaySource,
+    phenotype: &alife_core::BrainPhenotype,
+) -> Option<FoundationReplayRecord> {
+    let key = (reference.digest, reference.encoded_bytes);
+    let mut guard = verified_replay_record_cache().lock().ok()?;
+    let record = guard.get(&key)?;
+    drop(guard);
+    if record.schema != FOUNDATION_REPLAY_SCHEMA
+        || &record.source != expected
+        || record.source.phenotype_hash != phenotype.phenotype_hash()
+        || record.source.compiler_inputs_digest != phenotype.compiler_inputs_digest()
+        || reference
+            .cohort
+            .as_ref()
+            .is_some_and(|location| location.organism_id != record.organism_id)
+        || record.record_index != reference.record_index
+        || record.segment != reference.segment
+        || record.tick != reference.tick
+    {
+        return None;
+    }
+    Some(record)
 }
 
 impl FoundationReplayRecord {
@@ -4526,8 +4743,8 @@ impl FoundationReplayRecord {
             recurrent.update(&metabolic.to_bits().to_le_bytes());
         }
         if recurrent.finalize().as_bytes() != &self.before.recurrent_digest
-            || blake3::hash(&serde_json::to_vec(&self.sequence.initial.dendrites)?).as_bytes()
-                != &self.before.dendrites_digest
+            || dendritic_branches_digest(&self.sequence.initial.dendrites)?
+                != self.before.dendrites_digest
         {
             return Err("decoded replay initial state differs from the captured boundary".into());
         }
@@ -4711,7 +4928,6 @@ fn load_foundation_replay_record_with_cohort(
     budget: FoundationReplayBudget,
     cohort: Option<&mut cohort_replay::CohortReplayReader>,
 ) -> Result<FoundationReplayRecord> {
-    use std::io::Read;
     if reference.encoded_bytes == 0
         || reference.encoded_bytes > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES
     {
@@ -4726,6 +4942,33 @@ fn load_foundation_replay_record_with_cohort(
             .and_then(|n| n.checked_add(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES))
             .ok_or_else(invalid)?,
     )?;
+    load_foundation_replay_record_from_storage(
+        directory,
+        reference,
+        expected,
+        phenotype,
+        cohort,
+        |charge| budget.check_additional(charge).is_ok(),
+    )
+}
+
+// The production entry point performs measured process-memory admission first.
+// Keeping storage admission separate also allows device-/Windows-free codec
+// regressions without pretending Linux has the Windows memory-query contract.
+fn load_foundation_replay_record_from_storage(
+    directory: &Path,
+    reference: &FoundationReplayRecordRef,
+    expected: &FoundationReplaySource,
+    phenotype: &alife_core::BrainPhenotype,
+    cohort: Option<&mut cohort_replay::CohortReplayReader>,
+    admit_retention: impl FnOnce(u64) -> bool,
+) -> Result<FoundationReplayRecord> {
+    use std::io::Read;
+    if reference.encoded_bytes == 0
+        || reference.encoded_bytes > FOUNDATION_REPLAY_RECORD_LIMIT_BYTES
+    {
+        return Err(invalid().into());
+    }
     let bytes = if reference.cohort.is_some() {
         cohort
             .ok_or("cohort reference requires its sealed index")?
@@ -4737,6 +4980,9 @@ fn load_foundation_replay_record_with_cohort(
         }
         read_verified_replay_bytes(file, reference.encoded_bytes, &reference.digest)?
     };
+    if let Some(cached) = get_cached_verified_replay_record(reference, expected, phenotype) {
+        return Ok(cached);
+    }
     let decoder = zstd::stream::read::Decoder::new(bytes.as_slice())?;
     let record: FoundationReplayRecord = bincode::serde::decode_from_std_read(
         &mut decoder.take(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES + 1),
@@ -4753,6 +4999,7 @@ fn load_foundation_replay_record_with_cohort(
     {
         return Err(invalid().into());
     }
+    cache_verified_replay_record_with_admission(reference, &record, admit_retention);
     Ok(record)
 }
 

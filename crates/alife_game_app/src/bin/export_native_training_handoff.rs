@@ -5,14 +5,13 @@ use std::{fs::OpenOptions, io::Write, path::Path};
 fn write_new(
     path: &str,
     checkpoint: &CurrentTrainingCheckpointV1,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let bytes = checkpoint.encode()?;
     let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
     file.write_all(&bytes)?;
     file.sync_all()?;
     // No replacement here: the run-scoped publisher owns atomic publication.
-    alife_game_app::read_current_training_checkpoint(Path::new(path))?;
-    Ok(())
+    alife_game_app::inspect_current_training_checkpoint(Path::new(path))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -69,10 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let metadata: CheckpointSeedsV1 = serde_json::from_slice(&std::fs::read(seeds)?)?;
             let checkpoint =
                 alife_game_app::migrate_current_training_checkpoint(Path::new(source), metadata)?;
-            write_new(output, &checkpoint)?;
-            Some(alife_game_app::inspect_current_training_checkpoint(
-                Path::new(output),
-            )?)
+            Some(write_new(output, &checkpoint)?)
         }
         ["--check-current-destination", source, output] => {
             let output = alife_game_app::resolve_current_training_destination(
@@ -86,10 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ["--reserve-current", path, first, last, output] => {
             let mut checkpoint = alife_game_app::read_current_training_checkpoint(Path::new(path))?;
             checkpoint.seeds.reserve(first.parse()?, last.parse()?)?;
-            write_new(output, &checkpoint)?;
-            Some(alife_game_app::inspect_current_training_checkpoint(
-                Path::new(output),
-            )?)
+            Some(write_new(output, &checkpoint)?)
         }
         ["--check-current-allocation", path, first, last] => {
             let mut checkpoint = alife_game_app::read_current_training_checkpoint(Path::new(path))?;
@@ -101,10 +94,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ["--consume-current", path, seed, output] => {
             let mut checkpoint = alife_game_app::read_current_training_checkpoint(Path::new(path))?;
             checkpoint.seeds.consume(seed.parse()?)?;
-            write_new(output, &checkpoint)?;
-            Some(alife_game_app::inspect_current_training_checkpoint(
-                Path::new(output),
-            )?)
+            Some(write_new(output, &checkpoint)?)
         }
         ["--extract-current-life", path, output] => {
             alife_game_app::extract_current_training_life(Path::new(path), Path::new(output))?;
@@ -114,10 +104,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let previous = alife_game_app::read_current_training_checkpoint(Path::new(path))?;
             let checkpoint =
                 alife_game_app::advance_current_training_checkpoint(&previous, Path::new(source))?;
-            write_new(output, &checkpoint)?;
-            Some(alife_game_app::inspect_current_training_checkpoint(
-                Path::new(output),
-            )?)
+            Some(write_new(output, &checkpoint)?)
         }
         [source, output] if !source.starts_with('-') => {
             let binding = alife_game_app::export_native_training_handoff(
