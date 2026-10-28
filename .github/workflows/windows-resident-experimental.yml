@@ -1,6 +1,16 @@
 name: Experimental Windows resident learner
 on:
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Native artifact build profile (PR checks remain dev)
+        type: choice
+        options: [dev, release]
+        default: release
+      source_revision:
+        description: Exact 40-character source commit; empty uses this workflow ref
+        type: string
+        default: ''
   pull_request:
     paths:
       - '.github/workflows/windows-resident-experimental.yml'
@@ -11,12 +21,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: resident-experimental-${{ github.ref }}
+  group: resident-experimental-${{ github.ref }}-${{ inputs.profile || 'dev' }}-${{ inputs.source_revision || github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 jobs:
   focused-native:
     runs-on: windows-latest
-    timeout-minutes: 35
+    timeout-minutes: ${{ inputs.profile == 'release' && 75 || 35 }}
     env:
       CARGO_BUILD_JOBS: '2'
       CARGO_INCREMENTAL: '0'
@@ -24,14 +34,19 @@ jobs:
       CARGO_PROFILE_TEST_DEBUG: '0'
       RUST_MIN_STACK: '33554432'
       RUST_TEST_THREADS: '1'
-      EXPECTED_SOURCE: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_SOURCE: ${{ inputs.source_revision || github.event.pull_request.head.sha || github.sha }}
+      BUILD_PROFILE: ${{ inputs.profile || 'dev' }}
     defaults:
       run:
         shell: pwsh
     steps:
+      - name: Validate exact build request
+        run: |
+          if ($env:EXPECTED_SOURCE -notmatch '^[0-9a-f]{40}$') { throw 'Exact lowercase source commit required' }
+          if ($env:BUILD_PROFILE -notin @('dev','release')) { throw 'Unknown native build profile' }
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.EXPECTED_SOURCE }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -48,9 +63,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Continuous-session host contracts failed' }
       - name: Compile experimental CLI and full-state inspector
         run: |
-          cargo build --locked -p alife_game_app --features foundation-training --bin train_n2048_care --bin export_native_training_handoff --bin inspect_archived_success
+          $residentBuildArgs = @('build','--locked','-p','alife_game_app','--features','foundation-training','--bin','train_n2048_care','--bin','export_native_training_handoff','--bin','inspect_archived_success')
+          if ($env:BUILD_PROFILE -eq 'release') { $residentBuildArgs += '--release' }
+          cargo @residentBuildArgs
           if ($LASTEXITCODE -ne 0) { throw 'Native compile failed' }
-          target/debug/train_n2048_care.exe --resident-contract
+          $residentBinaryRoot = if ($env:BUILD_PROFILE -eq 'release') { 'target/release' } else { 'target/debug' }
+          & (Join-Path $residentBinaryRoot 'train_n2048_care.exe') --resident-contract
           if ($LASTEXITCODE -ne 0) { throw 'Native capability query failed' }
       - name: Bind artifact to exact source and executable bytes
         id: bind
@@ -62,12 +80,13 @@ jobs:
           $residentOutputName = 'resident-experimental-{0}-{1}' -f $env:GITHUB_RUN_ID, $env:GITHUB_RUN_ATTEMPT
           $residentOutput = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP $residentOutputName)
           $residentHashes = [ordered]@{}
+          $residentBinaryRoot = if ($env:BUILD_PROFILE -eq 'release') { 'target/release' } else { 'target/debug' }
           foreach ($residentName in @('train_n2048_care.exe','export_native_training_handoff.exe','inspect_archived_success.exe')) {
-            $residentFile = Join-Path target/debug $residentName
+            $residentFile = Join-Path $residentBinaryRoot $residentName
             $residentHashes[$residentName] = (Get-FileHash -LiteralPath $residentFile -Algorithm SHA256).Hash.ToLowerInvariant()
             Copy-Item -LiteralPath $residentFile -Destination $residentOutput.FullName
           }
-          $residentContractJson = & target/debug/train_n2048_care.exe --resident-contract
+          $residentContractJson = & (Join-Path $residentBinaryRoot 'train_n2048_care.exe') --resident-contract
           if ($LASTEXITCODE -ne 0) { throw 'Built producer capability query failed' }
           $residentContract = $residentContractJson | ConvertFrom-Json
           if ($residentContract.finite_continuous_feeding -ne $true -or $residentContract.temporary_budget_enforced_during_writes -ne $true -or $residentContract.bound_run_cleanup -ne $true) {
@@ -76,7 +95,7 @@ jobs:
           $residentReceipt = [ordered]@{
             schema=1; kind='experimental-resident-build-v1'; source_revision=$residentRevision; source_tree=$residentTree
             executables=$residentHashes; rustc=(rustc --version); target='x86_64-pc-windows-msvc'
-            features=@('foundation-training'); build_profile='dev'; gpu_training_executed=$false
+            features=@('foundation-training'); build_profile=$env:BUILD_PROFILE; gpu_training_executed=$false
             experimental=$true; production_qualified=$false
             resident_producer_contract=$residentContract
             workflow_run="https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
@@ -87,7 +106,7 @@ jobs:
           "artifact_path=$($residentOutput.FullName)" | Out-File -LiteralPath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-resident-experimental-${{ env.EXPECTED_SOURCE }}
+          name: windows-resident-${{ env.BUILD_PROFILE }}-${{ env.EXPECTED_SOURCE }}
           path: ${{ steps.bind.outputs.artifact_path }}
           if-no-files-found: error
           retention-days: 2
