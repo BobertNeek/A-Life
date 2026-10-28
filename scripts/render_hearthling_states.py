@@ -3,6 +3,7 @@ import bpy
 import os
 from pathlib import Path
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(os.environ.get('HEARTHLING_REVIEW_OUT', ROOT / 'target/artifacts/graphics'))
 OUT.mkdir(parents=True, exist_ok=True)
@@ -50,6 +51,30 @@ for v in merged.data.vertices:
         if matches:
             indices[part].append(v.index)
 assert all(indices.values()), 'Missing expected skin regions'
+
+# Ground-height checks alone cannot detect a hand disappearing into a folded
+# knee. Test the two separated skin regions, not adjacent wrist/forearm faces.
+merged.data.calc_loop_triangles()
+weights = [{groups[g.group]: g.weight for g in v.groups} for v in merged.data.vertices]
+triangles = [tuple(t.vertices) for t in merged.data.loop_triangles]
+sleep_surfaces = {}
+for side in ['L', 'R']:
+    hand_name = 'hand.' + side
+    hand_faces = [t for t in triangles if any(weights[i].get(hand_name, 0) > .85 for i in t)]
+    leg_faces = [t for t in triangles
+                 if any(sum(weights[i].get(n + '.' + side, 0) for n in ['thigh', 'shin']) > .25
+                        for i in t)
+                 and all(weights[i].get(hand_name, 0) < .1 for i in t)]
+    assert hand_faces and leg_faces, ('Missing sleep clearance regions', side)
+    sleep_surfaces[side] = (hand_faces, leg_faces)
+
+def surface_tree(points, faces):
+    vertices = sorted({i for face in faces for i in face})
+    remap = {i: j for j, i in enumerate(vertices)}
+    return BVHTree.FromPolygons([points[i] for i in vertices],
+                               [tuple(remap[i] for i in face) for face in faces],
+                               all_triangles=True)
+
 for profile, hand_scale in [('compact', (.95, .94, .98)),
                             ('neutral', (1, 1, 1)),
                             ('broad', (1.07, 1.02, 1.06))]:
@@ -69,6 +94,9 @@ for profile, hand_scale in [('compact', (.95, .94, .98)),
             support = min(points[i].z for i in indices['feet'])
             if 'Sleep' in name:
                 support = min(support, min(points[i].z for i in indices['hindquarters']))
+                for side, (hand_faces, leg_faces) in sleep_surfaces.items():
+                    assert not surface_tree(points, hand_faces).overlap(surface_tree(points, leg_faces)), (
+                        profile, name, frame, side, 'Hand intersects folded knee/thigh')
             hand = min(points[i].z for i in indices['hands'])
             ear = min(points[i].z for i in indices['ears'])
             assert abs(low) < .03 and support <= low + .01, (profile, name, frame, low, support)

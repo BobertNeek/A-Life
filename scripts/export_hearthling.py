@@ -108,6 +108,9 @@ for kind in ['Walk', 'Sleep']:
     rig.animation_data.action.name = 'Hearthling_' + kind
     rig.animation_data.action.use_fake_user = True
 
+from refine_hearthling_sleep_pose import refine_sleep_hand_clearance
+refine_sleep_hand_clearance()
+
 # Explicit NLA tracks give stable, named glTF clips across Blender versions.
 rig.animation_data.action = None
 for name in ['Hearthling_CuriousIdle', 'Hearthling_Walk', 'Hearthling_Sleep']:

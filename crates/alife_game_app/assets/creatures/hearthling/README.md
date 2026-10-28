@@ -67,3 +67,18 @@ occlusion; CPU Cycles previews are not a native gameplay/FPS benchmark.
 
 The increase is 24 triangles, 925 exported vertices and 55,644 bytes, without new
 material, texture, joint or clip cost. Native frame-time impact remains unmeasured.
+
+### Sleep hand clearance
+
+An animated audit found the existing left hand crossing the folded knee/thigh
+in the seated sleep pose, including before the raccoon-shaped extremity pass.
+The sleep clip now lifts the existing left upper-arm joint by 0.18 radians;
+the approved hand/foot geometry, rig, materials and all idle/walk channel values
+are unchanged. The shipping GLB is 3,122,928 bytes with the same geometry cost.
+
+`refine_hearthling_sleep_pose.py --source /path/to/pre-clearance/hearthling.blend
+--output-dir /path/to/review` applies this once to the accepted native checkpoint;
+the full exporter includes the same correction. The re-import review now also
+rejects hand-versus-thigh/shin surface intersections on both sides through all
+73 sleep frames at compact, neutral and broad paw scales. This is asset-level
+pose validation, not native locomotion, contact physics or FPS qualification.
