@@ -31,6 +31,56 @@ def _relax(ob, weights, factor, iterations):
     ob.data.update()
 
 
+def soften_cream_transitions():
+    """Soften the cream clumps without extra geometry or shared materials.
+
+    The selected 16/19 references have soft, tapered fur locks. The fused
+    upper bib and ear locks retain broad, hard ridges after decimation; move
+    their projecting surfaces and their attachments together, leaving joints,
+    hands, lower belly, head and tail alone. Colours and weights are retained.
+    Run once on the retained export source.
+    """
+    for name in ['Hearthling_Body', 'Hearthling_Ear_L', 'Hearthling_Ear_R']:
+        ob = bpy.data.objects[name]
+        weights = []
+        for v in ob.data.vertices:
+            if name == 'Hearthling_Body':
+                band = _smooth((v.co.z - .88) / .13)
+                band *= _smooth((1.30 - v.co.z) / .12)
+                front = _smooth((-v.co.y - .08) / .12)
+                middle = _smooth((.34 - abs(v.co.x)) / .12)
+                weights.append(band * front * middle)
+            else:
+                # A spatial falloff moves the lock and its attachment together;
+                # a paint-mask discontinuity can fold the small joining faces.
+                weights.append(1.0)
+        if name == 'Hearthling_Body':
+            # Break the horizontal collar bands into a hanging central bib.
+            # A smooth envelope keeps its neck, belly and shoulder attachments.
+            for v, weight in zip(ob.data.vertices, weights):
+                center = 1.0 - min(1.0, abs(v.co.x) / .30) ** 2
+                tip = _smooth((1.20 - v.co.z) / .10)
+                v.co.z -= .035 * center * weight * tip
+                v.co.y += .045 * weight
+        else:
+            # Keep the five authored ear locks, but stagger their projecting
+            # tips instead of retaining mechanically even, parallel strips.
+            bone = bpy.data.objects['Hearthling_Rig'].data.bones['ear.' + name[-1]]
+            axis = (bone.tail_local - bone.head_local).normalized()
+            across = Vector((axis.z, 0, -axis.x))
+            if name.endswith('L'):
+                across = -across
+            for v, weight in zip(ob.data.vertices, weights):
+                along = (v.co - bone.head_local).dot(axis)
+                band = _smooth((along - .10) / .08)
+                band *= _smooth((.34 - along) / .10)
+                tip = _smooth((.012 - v.co.y) / .065) * band * weight
+                v.co += axis * (.022 * math.sin(along * 19.0) * tip)
+                v.co += across * (.014 * math.sin(along * 27.0) * tip)
+                v.co.y += .006 * tip
+        ob.data.update()
+
+
 def refine_selected_references():
     rig = bpy.data.objects['Hearthling_Rig']
     assert rig.get('closeup_reference_revision') == 9
@@ -107,7 +157,10 @@ def refine_selected_references():
              _smooth((0.40 - abs(v.co.x)) / 0.10) for v in head.data.vertices]
     _relax(head, crown, 0.15, 2)
 
+    soften_cream_transitions()
+
     rig['selected_reference_revision'] = 10
+    rig['cream_transition_revision'] = 1
     rig['selected_reference_inputs'] = '09-rounded-hand-paws;16-closest-current-polish;19-soft-woodland-realism'
     rig.data.pose_position = previous
     bpy.context.view_layer.update()

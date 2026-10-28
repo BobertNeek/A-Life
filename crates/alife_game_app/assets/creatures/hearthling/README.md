@@ -14,6 +14,11 @@ inspection. Validate registered assets through the game app's
 
 The selected 09/16/19 pass rounds the existing digits and palm transition,
 softens the crown, and bakes finer fur relief into the existing shared atlas.
+The cream upper-bib projects less like stacked collars and its lower tips taper
+centrally; ear-lock tips are staggered toward the selected 16/19 references.
+Topology, vertex colours, skin weights and the shared-material budget are retained.
+`refine_hearthling_coat.py` can apply this follow-up once to a pre-pass editable
+checkpoint; the full source exporter includes the same pass.
 `refine_hearthling_selected.py` applies it reproducibly before the fur bake;
 the original source, rig and three clips remain the starting point. Runtime
 compact/neutral/broad paw proportions read the saved arm-family choice and reuse
