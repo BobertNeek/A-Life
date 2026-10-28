@@ -348,6 +348,44 @@ fn expose_care_cue(
     Ok(true)
 }
 
+// A restored session can begin with the old teacher covering the learner's
+// eyes. Move it through the ordinary cue mechanism before testing whether a
+// food placement is visible; otherwise care initialization can never start.
+fn repair_overlapping_care_teacher(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+) -> Result<Option<bool>> {
+    let Some(subject) = world
+        .organism_registry()
+        .get(id)
+        .and_then(|record| world.entity(record.world_entity_id()))
+    else {
+        return Ok(None);
+    };
+    let Some(teacher) = world
+        .entity_id("nursery-teacher")
+        .and_then(|teacher| world.entity(teacher))
+    else {
+        return Ok(None);
+    };
+    if (teacher.position.x - subject.position.x).hypot(teacher.position.z - subject.position.z)
+        >= teacher.radius + subject.radius
+    {
+        return Ok(None);
+    }
+    let Some(food) = world.entity_id("food-01") else {
+        return Ok(None);
+    };
+    if !world.entity(food).is_some_and(care_food_ready) {
+        return Ok(None);
+    }
+    let care = ContinuousCareAssistance {
+        food,
+        start_tick: world.tick().raw(),
+    };
+    Ok(Some(expose_care_cue(world, id, &care)?))
+}
+
 fn care_cue_due(tick: u64, start: u64, available: bool, last: Option<u64>) -> bool {
     available && tick.saturating_sub(start).is_multiple_of(24) && last != Some(tick)
 }
@@ -810,6 +848,26 @@ pub(super) fn run_same_individual_world(
             }
             if request.care_assistance {
                 if care_scenario.is_none() {
+                    let tick = runtime.world().tick().raw();
+                    let recovery = if care_cue_due(tick, 0, true, last_care_cue_tick) {
+                        repair_overlapping_care_teacher(runtime.world_mut(), id)?
+                    } else {
+                        None
+                    };
+                    if let Some(emitted) = recovery {
+                        if emitted {
+                            care_cue_emissions += 1;
+                        } else {
+                            care_cue_deferrals += 1;
+                        }
+                        last_care_cue_tick = Some(tick);
+                        on_update(
+                            serde_json::json!({"kind":"continuous-care-teacher-recovery-v1",
+                            "session_nonce":session_nonce,"world_tick":tick,"cue_emitted":emitted,
+                            "reason":"teacher_overlaps_learner","forced_action":false,
+                            "reward_override":false,"biology_override":false}),
+                        )?;
+                    }
                     let ready = runtime
                         .world()
                         .entity_id("food-01")
@@ -1662,10 +1720,6 @@ mod tests {
         world
             .editor_move_object(food, alife_core::Vec3f::new(255.24178, 0.0, 253.99092))
             .unwrap();
-        let care = ContinuousCareAssistance {
-            food,
-            start_tick: world.tick().raw(),
-        };
         // Recreate the old cue placing the teacher at the learner's body.
         alife_school::LanguageNursery::speak_in_world(
             &mut world,
@@ -1679,7 +1733,10 @@ mod tests {
         .unwrap();
         let teacher = world.entity_id("nursery-teacher").unwrap();
         assert_eq!(world.entity(teacher).unwrap().position, body_position);
-        assert!(expose_care_cue(&mut world, id, &care).unwrap());
+        assert_eq!(
+            repair_overlapping_care_teacher(&mut world, id).unwrap(),
+            Some(true)
+        );
         let actual = world.entity(teacher).unwrap().position;
         assert!((actual.x - body_position.x).hypot(actual.z - body_position.z) >= 1.5);
         assert!(care_food_position_in_gaze(&world, id).is_some());
