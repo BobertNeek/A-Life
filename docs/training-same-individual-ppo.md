@@ -40,6 +40,25 @@ the actual private sleep state, reporting the captured window as untrained. It
 does not force a wake or reset consolidation. A previously tagged saved sleeping
 life restores its matching policy directly without an unnecessary install.
 
+Within each PPO window, the residual critic keeps one private GPU head with its
+weights, Adam moments and integer age, three pipelines, and reusable feature/row
+scratch across accepted actor updates. Batch rotation still starts at row zero
+for each window, uses at most 2048 loss rows, and normalizes the partial final
+batch by its actual row count. Each batch uploads its actual captured features;
+equal shapes never authorize reusing old feature contents. Before/after metrics
+and the per-step GPU finite-success readback remain unchanged.
+
+The existing CPU value-head checkpoint handoff remains at the logical PPO-window
+boundary: one head read from PPO before the fit, one upload into the private
+residual context, one completed-fit readback, then restoration for subsequent
+PPO replay. There is no head checkpoint or pipeline reconstruction between
+residual updates. A failed fit drops its private GPU state without publishing a
+partial checkpoint. Keeping this boundary avoids aliasing the different PPO and
+residual scratch layouts and preserves the existing exact checkpoint/recovery
+path. Pipelines and scratch are recreated for the next window; per-update metric
+readbacks remain. This is an allocation/transfer optimization, without a measured
+hardware speed or learning-quality claim.
+
 Legacy fresh-cohort Current paired pre-PPO private state with post-PPO global
 heads. On its first same-individual session, the producer explicitly adopts
 those accepted global heads, preserving private mutable state; it does not

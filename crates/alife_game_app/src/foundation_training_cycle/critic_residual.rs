@@ -59,6 +59,31 @@ fn metrics(values: &[[f32; 4]]) -> serde_json::Value {
     serde_json::json!({"initial16":slice(&values[..k]),"whole":slice(values),"last16":slice(&values[n-k..])})
 }
 
+fn residual_batch(
+    rows: &[CriticResidualRow],
+    update: u32,
+) -> (std::ops::Range<usize>, usize, Vec<CriticResidualRow>) {
+    let batches = rows.len().div_ceil(BATCH_ROWS);
+    let start = update as usize % batches * BATCH_ROWS;
+    let end = (start + BATCH_ROWS).min(rows.len());
+    let feature_end = rows[start..end]
+        .iter()
+        .map(|r| r.next as usize + 1)
+        .max()
+        .unwrap()
+        .max(end);
+    let local = rows[start..end]
+        .iter()
+        .map(|r| CriticResidualRow {
+            current: r.current - start as u32,
+            next: r.next - start as u32,
+            reward: r.reward,
+            discount: r.discount,
+        })
+        .collect();
+    (start..end, feature_end, local)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn train(
     session: &GpuAuthoritativeSession,
@@ -92,33 +117,31 @@ pub(super) fn train(
         }
         format!("{:x}", hash.finalize())
     };
-    let batches = rows.len().div_ceil(BATCH_ROWS);
+    // One private GPU head owns the entire fit. A failed update/evaluation drops
+    // it without publishing a partially fitted checkpoint to the PPO caller.
+    let mut residual: Option<FrozenCriticResidualExperiment> = None;
     let mut records = Vec::new();
     for update in 0..updates {
-        let start = update as usize % batches * BATCH_ROWS;
-        let end = (start + BATCH_ROWS).min(rows.len());
-        let feature_end = rows[start..end]
-            .iter()
-            .map(|r| r.next as usize + 1)
-            .max()
-            .unwrap()
-            .max(end);
-        let local = rows[start..end]
-            .iter()
-            .map(|r| CriticResidualRow {
-                current: r.current - start as u32,
-                next: r.next - start as u32,
-                reward: r.reward,
-                discount: r.discount,
-            })
-            .collect::<Vec<_>>();
-        let mut residual = FrozenCriticResidualExperiment::new(
-            session,
-            &checkpoint,
-            &features[start..feature_end],
-            &local,
-            local.len(),
-        )?;
+        let (range, feature_end, local) = residual_batch(&rows, update);
+        let (start, end) = (range.start, range.end);
+        let residual = match &mut residual {
+            Some(residual) => {
+                residual.replace_batch(
+                    session,
+                    &features[start..feature_end],
+                    &local,
+                    local.len(),
+                )?;
+                residual
+            }
+            slot @ None => slot.insert(FrozenCriticResidualExperiment::new(
+                session,
+                &checkpoint,
+                &features[start..feature_end],
+                &local,
+                local.len(),
+            )?),
+        };
         let before = residual.evaluate(session)?;
         residual.step_with_coefficient(
             session,
@@ -126,12 +149,16 @@ pub(super) fn train(
             config.value_coefficient,
         )?;
         let after = residual.evaluate(session)?;
-        checkpoint = residual.checkpoint(session)?;
         records.push(
             serde_json::json!({"update":update+1,"loss_row_start":start,"loss_row_end":end,
             "before":metrics(&before),"after":metrics(&after),"finite_preflight_passed":true}),
         );
     }
+    // Retain the logical PPO-window checkpoint boundary and existing restart
+    // codec. Only per-residual-update head transfers/reconstruction are removed.
+    checkpoint = residual
+        .ok_or("missing residual fit")?
+        .checkpoint(session)?;
     checkpoint.last_updated_policy_version = Some(policy);
     let receipt = serde_json::json!({"objective_version":OBJECTIVE_VERSION,
         "objective":"full_sampled_one_step_bellman_residual","feature_authority":"captured_production_GPU_after_inference",
@@ -187,6 +214,33 @@ mod tests {
         assert_eq!((rows[0].next, rows[0].discount), (0, 0.0));
     }
     #[test]
+    fn residual_rotation_keeps_partial_batch_and_local_real_successor() {
+        let mut transitions = vec![transition(PpoBoundary::Continuing, 60.0); BATCH_ROWS + 5];
+        transitions.last_mut().unwrap().boundary = PpoBoundary::Truncated;
+        let rows = residual_rows(&transitions, transitions.len() + 1, 60.0).unwrap();
+        for update in 0..6 {
+            let (range, feature_end, local) = residual_batch(&rows, update);
+            let partial = update % 2 == 1;
+            assert_eq!(range.start, if partial { BATCH_ROWS } else { 0 });
+            assert_eq!(local.len(), if partial { 5 } else { BATCH_ROWS });
+            assert_eq!(feature_end, range.end + 1);
+            for (i, row) in local.iter().enumerate() {
+                assert_eq!(
+                    (row.current, row.next, row.discount),
+                    (i as u32, i as u32 + 1, 0.5)
+                );
+            }
+        }
+        transitions.last_mut().unwrap().boundary = PpoBoundary::Terminated;
+        let rows = residual_rows(&transitions, transitions.len(), 60.0).unwrap();
+        let (range, feature_end, local) = residual_batch(&rows, 1);
+        assert_eq!(feature_end, range.end);
+        let last = local.last().unwrap();
+        assert_eq!((last.current, last.next, last.discount), (4, 4, 0.0));
+        // A fresh PPO window starts its own rotation, regardless of prior dose.
+        assert_eq!(residual_batch(&rows[..3], 0).0, 0..3);
+    }
+    #[test]
     fn residual_rejects_nonfinite_time_reward_and_missing_current() {
         for time in [0.0, -1.0, f32::NAN, f32::INFINITY] {
             assert!(residual_rows(&[transition(PpoBoundary::Truncated, time)], 2, 60.0).is_err());
@@ -218,5 +272,120 @@ mod tests {
         assert_eq!(m["initial16"]["residual_mse"], 100.0);
         assert_eq!(m["whole"]["residual_mse"], 12.5);
         assert_eq!(m["last16"]["residual_mse"], 0.0);
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    #[ignore = "requires an admitted hardware GPU; synthetic residual windows only"]
+    fn persistent_fit_matches_per_update_restore_across_changed_ppo_windows() {
+        use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
+        use alife_runtime::GpuSessionConsumerKind;
+        let session = GpuAuthoritativeSession::new(
+            GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap(),
+            GpuSessionConsumerKind::Training,
+        );
+        let mut checkpoint = PpoValueHeadCheckpoint {
+            feature_count: 2,
+            optimizer_step: 17,
+            last_updated_policy_version: Some(9),
+            parameters: vec![0.2, -0.3, 0.4, 0.01, -0.02, 0.03, 0.04, 0.05, 0.06],
+        };
+        let config = PpoConfig {
+            value_coefficient: 0.37,
+            value_optimizer: alife_training::AdamWConfig {
+                learning_rate: 0.007,
+                gradient_clip: 0.04,
+                weight_decay: 0.02,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let bits = |v: &[f32]| v.iter().map(|v| v.to_bits()).collect::<Vec<_>>();
+        for policy in [10, 11] {
+            let count = BATCH_ROWS + 5;
+            let features = (0..=count)
+                .map(|i| vec![i as f32 * 0.001 + policy as f32, (i % 7) as f32 * 0.2])
+                .collect::<Vec<_>>();
+            let mut transitions = vec![transition(PpoBoundary::Continuing, 0.05); count];
+            transitions.last_mut().unwrap().boundary = PpoBoundary::Truncated;
+            let (actual, receipt) = train(
+                &session,
+                checkpoint.clone(),
+                &features,
+                &transitions,
+                config,
+                5,
+                policy,
+            )
+            .unwrap();
+            // Reference is the former checkpoint/reconstruct-per-update path.
+            let rows = residual_rows(
+                &transitions,
+                features.len(),
+                config.discount_half_life_seconds,
+            )
+            .unwrap();
+            let initial_age = checkpoint.optimizer_step;
+            let mut expected_records = Vec::new();
+            for update in 0..5 {
+                let (range, feature_end, local) = residual_batch(&rows, update);
+                let mut residual = FrozenCriticResidualExperiment::new(
+                    &session,
+                    &checkpoint,
+                    &features[range.start..feature_end],
+                    &local,
+                    local.len(),
+                )
+                .unwrap();
+                let before = residual.evaluate(&session).unwrap();
+                residual
+                    .step_with_coefficient(
+                        &session,
+                        config.value_optimizer,
+                        config.value_coefficient,
+                    )
+                    .unwrap();
+                let after = residual.evaluate(&session).unwrap();
+                checkpoint = residual.checkpoint(&session).unwrap();
+                expected_records.push(serde_json::json!({"update":update+1,"loss_row_start":range.start,"loss_row_end":range.end,
+                    "before":metrics(&before),"after":metrics(&after),"finite_preflight_passed":true}));
+            }
+            checkpoint.last_updated_policy_version = Some(policy);
+            assert_eq!(actual, checkpoint);
+            assert_eq!(bits(&actual.parameters), bits(&checkpoint.parameters));
+            assert_eq!(receipt["updates"], serde_json::json!(expected_records));
+            assert_eq!(actual.optimizer_step, initial_age + 5);
+            assert_eq!(receipt["initial_critic_age"], initial_age);
+            assert_eq!(receipt["final_critic_age"], actual.optimizer_step);
+            // Exercise the existing exact PPO boundary/restart representation
+            // with nonzero first/second moments and a nonzero integer age.
+            let wire = serde_json::to_vec(&actual).unwrap();
+            let restored = serde_json::from_slice(&wire).unwrap();
+            checkpoint = alife_training::PpoTrainingState::from_checkpoint(restored)
+                .unwrap()
+                .checkpoint(&session)
+                .unwrap();
+            assert_eq!(checkpoint, actual);
+            assert!(checkpoint.parameters[3..6].iter().any(|v| *v != 0.0));
+            assert!(checkpoint.parameters[6..].iter().any(|v| *v > 0.0));
+        }
+        // Fail after the first accepted residual step: no partial fit is
+        // published, and the caller retains its exact pre-window checkpoint.
+        let before = checkpoint.clone();
+        let count = BATCH_ROWS + 1;
+        let features = vec![vec![10.0; 2]; count + 1];
+        let mut transitions = vec![transition(PpoBoundary::Continuing, 60.0); count];
+        transitions.last_mut().unwrap().reward = f32::MAX;
+        assert!(train(
+            &session,
+            checkpoint.clone(),
+            &features,
+            &transitions,
+            config,
+            2,
+            12
+        )
+        .is_err());
+        assert_eq!(checkpoint, before);
     }
 }
