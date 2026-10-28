@@ -131,13 +131,14 @@ def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0):
     require(report.get('schema') == 1 and report.get('kind') == 'native-resident-serial-v1' and
             report.get('finite_continuous_feeding') is True and
             report.get('max_continuous_feeding_decisions', 0) >= decisions and
-            report.get('mid_world_offline_policy_install') is False and
+            type(report.get('mid_world_offline_policy_install')) is bool and
             report.get('bound_run_cleanup') is True and
             report.get('recoverable_predispatch_initialization') is True and
             report.get('temporary_budget_enforced_during_writes') is True,
             'native finite-session, bound-cleanup, recoverable initialization and active-writer-budget capabilities required')
     if mode == 'same_individual':
-        require(all(report.get(field) is True for field in ('same_individual_ppo',
+        require(report.get('mid_world_offline_policy_install') is True and
+                all(report.get(field) is True for field in ('same_individual_ppo',
                 'restore_current_private_world', 'full_sampling_state_checkpoint', 'in_world_cutoff')) and
                 report.get('max_total_trained_decisions', 0) >= total_decisions and
                 report.get('max_decisions_per_update', 0) >= decisions and
@@ -215,7 +216,9 @@ def read_events(lane):
             continue  # Device warnings are not fabricated telemetry.
         if isinstance(event, dict) and event.get('kind') in (
                 'resident-provisional-episode-v1', 'resident-serial-finished-v1',
-                'resident-continuous-update-v1', 'resident-continuous-finished-v1'):
+                'continuous-started-v1', 'continuous-update-v1',
+                'continuous-untrained-window-v1', 'continuous-terminal-v1',
+                'continuous-world-finished-v1'):
             events.append(event)
     return events
 
@@ -325,12 +328,14 @@ def reconcile(lane, state, validate):
         # Native owns its validation/retry; do this before any Python store lease.
         pending_cleanup = current.tool(native, '--finish-resident-run', store_root)
         if initialization_pending:
-            require(pending_cleanup.get('kind') == 'resident-initialization-aborted-v1' and
+            live = state.get('producer_mode') == 'same_individual'
+            require(pending_cleanup.get('kind') == ('same-individual-initialization-aborted-v1'
+                    if live else 'resident-initialization-aborted-v1') and
                     pending_cleanup.get('already_published_current') is True and
                     pending_cleanup.get('cleanup_completed') is True and
                     pending_cleanup.get('initialization_aborted') is True and
                     isinstance(pending_cleanup.get('initialization_binding_verified'), bool) and
-                    pending_cleanup.get('dispatched_worlds') == 0 and
+                    pending_cleanup.get('dispatched_sessions' if live else 'dispatched_worlds') == 0 and
                     pending_cleanup.get('seeds_consumed') == 0 and
                     pending_cleanup.get('new_request_allocation_committed') is False and
                     pending_cleanup.get('neural_execution') is False and
@@ -344,7 +349,8 @@ def reconcile(lane, state, validate):
         # Possible crash after native cleanup but before sidecar retirement.
         require(actual == state.get('published_sha256', state['baseline_sha256']),
                 'no native WAL and unexpected canonical state; preserve owner record')
-        recovery = {'already_published_current': actual != state['baseline_sha256']}
+        recovery = deepcopy(state.get('native_recovery',
+            {'already_published_current': actual != state['baseline_sha256']}))
         cleanup = pending_cleanup or {'already_clean': True}
         if initialization_pending:
             require(actual == state['baseline_sha256'] == pending_cleanup['candidate_sha256'] and
@@ -366,6 +372,9 @@ def reconcile(lane, state, validate):
                         'canonical current changed outside this session')
                 store.publish(candidate, cp.digest(store.current))
         state['published_sha256'] = after
+        # Preserve bound terminal/results evidence before Native retires .run.
+        # A crash during cleanup must not turn a known death into an unknown life.
+        state['native_recovery'] = deepcopy(recovery)
         cp.write_json(lane / STATE, state)
         # Native validates the recovery intent + full current + WAL before removal.
         cleanup = current.tool(native, '--finish-resident-run', store_root)
@@ -383,7 +392,7 @@ def finish(lane, state, validate):
     admitted, digest, recovery, cleanup = reconcile(lane, state, validate)
     events = read_events(lane)
     rows = [e for e in events if e['kind'] == 'resident-provisional-episode-v1']
-    updates = [e for e in events if e['kind'] == 'resident-continuous-update-v1']
+    updates = [e for e in events if e['kind'] == 'continuous-update-v1']
     mode = state.get('producer_mode', 'fresh_world')
     elapsed = (dt.datetime.now(host.UTC) - dt.datetime.fromisoformat(state['started_utc'])).total_seconds()
     retained_rows = None
@@ -411,8 +420,10 @@ def finish(lane, state, validate):
         'value_optimizer_step_delta': admitted['value_optimizer_step'] - state['before']['value_optimizer_step'],
         'native_exit_error': state.get('native_exit_error'), 'observed_rows': rows,
         'observed_updates': updates[-8:], 'observed_update_count': len(updates), 'producer_mode': mode,
-        'native_summary': next((e for e in reversed(events)
-            if e['kind'] == 'resident-continuous-finished-v1'), None),
+        'native_summary': recovery.get('producer_result') or next((e for e in reversed(events)
+            if e['kind'] == 'continuous-world-finished-v1'), None),
+        'terminal_event': recovery.get('terminal_event') or next((e for e in reversed(events)
+            if e['kind'] == 'continuous-terminal-v1'), None),
         'seed_admission': state.get('seed_admission'),
         'native_exit_code': state.get('native_exit_code'),
         'recovery': recovery, 'cleanup': cleanup,
@@ -435,6 +446,20 @@ def finish(lane, state, validate):
         'owner': deepcopy(state), 'sidecars': {name: sidecar_identity(lane / name) for name in SIDECARS}}
     cp.write_json(lane / RECEIPT, receipt)
     return retire_sidecars(lane, receipt, validate)
+
+
+def refuse_observed_terminal_resume(lane, current_sha256, mode):
+    """A last living snapshot is not evidence that a later observed death vanished."""
+    if mode != 'same_individual' or not (lane / RECEIPT).exists():
+        return
+    previous = committed_retirement(lane)
+    if previous is None or previous.get('current_sha256') != current_sha256:
+        return
+    terminal = previous.get('terminal_event')
+    summary = previous.get('native_summary')
+    require(not (isinstance(terminal, dict) and terminal.get('terminal') is True) and
+            not (isinstance(summary, dict) and summary.get('terminal') is True),
+            'observed terminal life requires explicit disposition; refusing silent snapshot resurrection')
 
 
 def bound_continuous_progress(before, admitted, baseline_sha256, session_nonce):
@@ -493,12 +518,12 @@ def retained_continuous_rows(before, admitted, updates, *, baseline_sha256=None,
     count = admitted['policy_version'] - before['policy_version']
     if count == 0:
         return 0
-    retained = [u for u in updates if type(u.get('policy_version')) is int and
-                before['policy_version'] < u['policy_version'] <= admitted['policy_version']]
+    retained = [u for u in updates if type(u.get('policy_after', u.get('policy_version'))) is int and
+                before['policy_version'] < u.get('policy_after', u.get('policy_version')) <= admitted['policy_version']]
     if count < 0 or len(retained) != count:
         return None
     for expected, update in zip(range(before['policy_version'] + 1, admitted['policy_version'] + 1), retained):
-        if update['policy_version'] != expected or type(update.get('trained_rows')) is not int or not 1 <= update['trained_rows'] <= 36000:
+        if update.get('policy_after', update.get('policy_version')) != expected or type(update.get('trained_rows')) is not int or not 1 <= update['trained_rows'] <= 36000:
             return None
     last = retained[-1]
     if any(type(last.get(key)) is not int or last[key] != admitted[key]
@@ -559,6 +584,7 @@ def run(args):
         with cp.Store(store_root, validate) as store:
             before = validate(store.current)
             baseline = cp.digest(store.current)
+            refuse_observed_terminal_resume(lane, baseline, mode)
             resolved = copy(args)
             if getattr(args, 'auto_seed', False):
                 resolved.seed, resolved.last_seed = admitted_seed_range(before)

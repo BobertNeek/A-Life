@@ -392,6 +392,7 @@ class ContinuousCareTests(unittest.TestCase):
         report = self.native(binary, *argv)
         if argv[0] == '--resident-contract':
             report.update(same_individual_ppo=True, restore_current_private_world=True,
+                mid_world_offline_policy_install=True,
                 full_sampling_state_checkpoint=True, in_world_cutoff=True,
                 max_total_trained_decisions=10_000_000, max_decisions_per_update=36000,
                 world_ticks_per_second=20)
@@ -428,7 +429,7 @@ class ContinuousCareTests(unittest.TestCase):
                     'world_tick':1126, 'trained_rows':1024, 'completed_updates':2, 'sampling_temperature':1.0}}
             cp.write_json(run / 'recovered-current.alife-checkpoint', candidate)
             # A later provisional event is deliberately absent from the admitted snapshot.
-            events = [{'kind': 'resident-continuous-update-v1', 'policy_version': 41+i,
+            events = [{'kind': 'continuous-update-v1', 'policy_before': 40+i, 'policy_after': 41+i,
                 'actor_optimizer_step': 102+i*2, 'value_optimizer_step': 203+i*3,
                 'trained_rows': 512} for i in range(3)]
             Path(str(log) + '.stdout.log').write_text(''.join(json.dumps(e)+'\n' for e in events))
@@ -470,6 +471,60 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertEqual(receipt['retained_simulation_seconds'], 51.3)
         self.assertIsNone(receipt['causal_speed'])
         self.assertFalse((self.store / cp.RUN).exists())
+
+    def test_actual_native_event_contract_keeps_summary_and_terminal_evidence(self):
+        path = self.lane / (session.LOG + '.stdout.log')
+        kinds = ('continuous-started-v1', 'continuous-update-v1',
+                 'continuous-untrained-window-v1', 'continuous-terminal-v1',
+                 'continuous-world-finished-v1')
+        path.write_text('device warning\n' + ''.join(json.dumps({'kind': k})+'\n' for k in kinds))
+        self.assertEqual([e['kind'] for e in session.read_events(self.lane)], list(kinds))
+
+    def test_terminal_recovery_evidence_survives_crash_after_native_cleanup(self):
+        terminal = {'kind': 'continuous-terminal-v1', 'terminal': True,
+                    'terminal_death_tick': 1200}
+        summary = {'kind': 'continuous-world-finished-v1', 'terminal': True,
+                   'trained_rows': 1536, 'saved_trained_rows': 1024}
+        interrupted = False
+
+        def native(binary, *argv):
+            nonlocal interrupted
+            result = self.live_native(binary, *argv)
+            if argv[0] == '--recover-resident':
+                result.update(terminal_event=terminal, producer_result=summary)
+            if argv[0] == '--finish-resident-run' and not interrupted:
+                interrupted = True
+                raise RuntimeError('after native cleanup, before host receipt')
+            return result
+
+        with patch.object(session.current, 'tool', side_effect=native), \
+                patch.object(session.host, 'run_child', side_effect=self.continuous_producer):
+            with self.assertRaisesRegex(RuntimeError, 'before host receipt'):
+                session.run(self.live_args())
+            self.assertFalse((self.store / cp.RUN).exists())
+            self.assertEqual(cp.read_json(self.lane / session.STATE)['native_recovery']['terminal_event'], terminal)
+            # Even lost stdout cannot erase Native's bound durable outcome.
+            (self.lane / (session.LOG + '.stdout.log')).write_text('')
+            args = self.live_args()
+            args.reconcile = True
+            receipt = session.run(args)
+        self.assertEqual(receipt['terminal_event'], terminal)
+        self.assertEqual(receipt['native_summary'], summary)
+        self.assertEqual(receipt['retained_trained_rows'], 1024)
+        with self.assertRaisesRegex(ValueError, 'silent snapshot resurrection'):
+            session.refuse_observed_terminal_resume(self.lane, receipt['current_sha256'], 'same_individual')
+        # A different admitted Current and an explicitly different fresh-world
+        # diagnostic do not inherit this life-specific refusal.
+        session.refuse_observed_terminal_resume(self.lane, 'different-current', 'same_individual')
+        session.refuse_observed_terminal_resume(self.lane, receipt['current_sha256'], 'fresh_world')
+
+    def test_actual_update_policy_after_contract_counts_only_admitted_prefix(self):
+        before = {'policy_version': 40}
+        admitted = {'policy_version': 42, 'actor_optimizer_step': 104, 'value_optimizer_step': 206}
+        updates = [{'policy_before':40+i, 'policy_after':41+i, 'trained_rows':512,
+                    'actor_optimizer_step':102+i*2, 'value_optimizer_step':203+i*3} for i in range(3)]
+        self.assertEqual(session.retained_continuous_rows(before, admitted, updates), 1024)
+        self.assertIsNone(session.retained_continuous_rows(before, admitted, updates[1:]))
 
     def test_auto_seed_uses_admitted_tail_and_does_not_claim_unknown_history_fresh(self):
         args = self.live_args()
