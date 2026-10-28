@@ -172,9 +172,7 @@ impl CurrentTrainingCheckpointV1 {
             Some(tag) => tag.validate(self)?,
             None if self.handoff.continuation
                 == crate::FoundationContinuationKindV1::FreshCohort =>
-            {
-                ()
-            }
+            {}
             None => {
                 return Err(
                     "same-individual handoff requires its exact private/progress tag".into(),

@@ -144,7 +144,7 @@ fn private_sampling(
         return Ok(None);
     };
     let packet: serde_json::Value =
-        serde_json::from_slice(&private_asset(life, &save, &exact.asset_id)?)?;
+        serde_json::from_slice(&private_asset(life, save, &exact.asset_id)?)?;
     // The runtime owns this optional private byte packet. Reading the explicit
     // field here also allows this admission code to preserve older codecs.
     let Some(value) = packet

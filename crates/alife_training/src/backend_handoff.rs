@@ -184,9 +184,7 @@ impl FoundationTrainingHandoffV1 {
             (FoundationContinuationKindV1::FreshCohort, None) => (),
             (FoundationContinuationKindV1::SameIndividual, Some(marker))
                 if marker.policy_version == self.policy_version =>
-            {
-                ()
-            }
+            {}
             _ => return Err(invalid()),
         }
         let capacity = BrainCapacityClass::n2048();
