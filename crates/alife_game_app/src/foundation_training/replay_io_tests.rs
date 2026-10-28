@@ -482,6 +482,7 @@ fn warm_replay_cache_still_checks_external_bytes_source_and_reference() {
                 source,
                 &phenotype,
                 reader.as_mut(),
+                |_| true,
             )
         };
         let original = bincode::serde::encode_to_vec(&record, bincode::config::standard()).unwrap();
@@ -538,6 +539,7 @@ fn benchmark_replay_cache_cpu_only() {
             &record.source,
             &phenotype,
             None,
+            |_| true,
         )
         .unwrap()
     };
@@ -587,7 +589,7 @@ fn benchmark_replay_cache_cpu_only() {
                     2 => {
                         std::hint::black_box(record.sequence.clone());
                     }
-                    _ => cache_verified_replay_record(&reference, record.clone()),
+                    _ => cache_verified_replay_record_with_admission(&reference, &record, |_| true),
                 }
             }
             timings[variant].push(started.elapsed().as_secs_f64());
@@ -652,4 +654,32 @@ fn replay_cache_can_retain_production_sized_synthetic_burn_in_overlap() {
     );
     assert_eq!(cache.charged_bytes, charge * 128);
     assert!(cache.charged_bytes <= VERIFIED_REPLAY_CACHE_CHARGE_LIMIT);
+}
+
+#[test]
+fn optional_record_retention_admits_before_allocating_its_copy() {
+    let (record, phenotype) = record_fixture();
+    let reference = FoundationReplayRecordRef {
+        cohort: None,
+        record_index: record.record_index,
+        segment: record.segment,
+        tick: record.tick,
+        encoded_bytes: 1,
+        digest: *blake3::hash(record.source.source_revision.as_bytes()).as_bytes(),
+    };
+    let mut attempted = false;
+    cache_verified_replay_record_with_admission(&reference, &record, |charge| {
+        attempted = true;
+        assert!(charge > std::mem::size_of::<FoundationReplayRecord>() as u64);
+        assert!(charge <= VERIFIED_REPLAY_CACHE_CHARGE_LIMIT);
+        false
+    });
+    assert!(attempted);
+    assert!(get_cached_verified_replay_record(&reference, &record.source, &phenotype).is_none());
+    cache_verified_replay_record_with_admission(&reference, &record, |_| true);
+    let cached = get_cached_verified_replay_record(&reference, &record.source, &phenotype).unwrap();
+    assert_eq!(
+        bincode::serde::encode_to_vec(&cached, bincode::config::standard()).unwrap(),
+        bincode::serde::encode_to_vec(&record, bincode::config::standard()).unwrap(),
+    );
 }

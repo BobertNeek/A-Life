@@ -4542,7 +4542,7 @@ impl FoundationReplayWriter {
         self.previous = Some((record.tick, after, step.after_inference.brain_slot.clone()));
         self.next_index = self.next_index.checked_add(1).ok_or_else(invalid)?;
         self.written_bytes = next_bytes;
-        cache_verified_replay_record(&reference, record);
+        cache_verified_replay_record(&reference, &record, self.budget);
         Ok(reference)
     }
 }
@@ -4635,11 +4635,22 @@ impl std::io::Write for ReplayCacheChargeWriter {
 
 fn cache_verified_replay_record(
     reference: &FoundationReplayRecordRef,
-    record: FoundationReplayRecord,
+    record: &FoundationReplayRecord,
+    budget: FoundationReplayBudget,
+) {
+    cache_verified_replay_record_with_admission(reference, record, |charge| {
+        budget.check_additional(charge).is_ok()
+    });
+}
+
+fn cache_verified_replay_record_with_admission(
+    reference: &FoundationReplayRecordRef,
+    record: &FoundationReplayRecord,
+    admit: impl FnOnce(u64) -> bool,
 ) {
     let key = (reference.digest, reference.encoded_bytes);
     let mut charge = ReplayCacheChargeWriter(0);
-    if bincode::serde::encode_into_std_write(&record, &mut charge, bincode::config::standard())
+    if bincode::serde::encode_into_std_write(record, &mut charge, bincode::config::standard())
         .is_err()
     {
         return;
@@ -4648,8 +4659,13 @@ fn cache_verified_replay_record(
         .0
         .saturating_mul(8)
         .saturating_add(std::mem::size_of::<FoundationReplayRecord>() as u64);
+    // Retention is optional. Decide the charge and measured headroom BEFORE
+    // allocating a second owned record, including records too large to retain.
+    if charge > VERIFIED_REPLAY_CACHE_CHARGE_LIMIT || !admit(charge) {
+        return;
+    }
     if let Ok(mut guard) = verified_replay_record_cache().lock() {
-        guard.insert(key, record, charge);
+        guard.insert(key, record.clone(), charge);
     }
 }
 
@@ -4926,7 +4942,14 @@ fn load_foundation_replay_record_with_cohort(
             .and_then(|n| n.checked_add(FOUNDATION_REPLAY_RECORD_LIMIT_BYTES))
             .ok_or_else(invalid)?,
     )?;
-    load_foundation_replay_record_from_storage(directory, reference, expected, phenotype, cohort)
+    load_foundation_replay_record_from_storage(
+        directory,
+        reference,
+        expected,
+        phenotype,
+        cohort,
+        |charge| budget.check_additional(charge).is_ok(),
+    )
 }
 
 // The production entry point performs measured process-memory admission first.
@@ -4938,6 +4961,7 @@ fn load_foundation_replay_record_from_storage(
     expected: &FoundationReplaySource,
     phenotype: &alife_core::BrainPhenotype,
     cohort: Option<&mut cohort_replay::CohortReplayReader>,
+    admit_retention: impl FnOnce(u64) -> bool,
 ) -> Result<FoundationReplayRecord> {
     use std::io::Read;
     if reference.encoded_bytes == 0
@@ -4975,7 +4999,7 @@ fn load_foundation_replay_record_from_storage(
     {
         return Err(invalid().into());
     }
-    cache_verified_replay_record(reference, record.clone());
+    cache_verified_replay_record_with_admission(reference, &record, admit_retention);
     Ok(record)
 }
 
