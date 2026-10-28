@@ -298,6 +298,22 @@ fn explicit_training_branch_case(
         retired.terminal_disposition.as_ref()
     );
     assert!(origin.previous.is_empty());
+    // Exact published v1 leaf representation and digest, not a semantic JSON
+    // rewrite: previous was null before the flat-ancestry repair.
+    let origin_json = serde_json::to_string(origin).unwrap();
+    assert!(origin_json.contains("\"previous\":null"));
+    assert_eq!(
+        origin.record_sha256,
+        hash(origin_json.replace(&origin.record_sha256, "").as_bytes())
+    );
+    let leaf_bytes = branch.encode().unwrap();
+    assert_eq!(
+        CurrentTrainingCheckpointV1::decode(&leaf_bytes)
+            .unwrap()
+            .encode()
+            .unwrap(),
+        leaf_bytes
+    );
     assert!(branch.require_training_session_nonce(nonce).is_ok());
     assert!(branch.require_training_session_nonce(nonce + 1).is_err());
     assert!(branch.require_fresh_cohort_continuation().is_err());
@@ -377,6 +393,9 @@ fn explicit_training_branch_case(
     );
     assert_eq!(successor.handoff, branch.handoff);
     assert_eq!(successor.life, branch.life);
+    // Same origin remains valid once its nonce is actually consumed by WAL.
+    assert!(successor.validate().is_ok());
+    assert_eq!(successor.training_attempt_origin.as_ref().unwrap(), origin);
     assert_eq!(successor.seeds.pending_range, Some([nonce + 1, nonce + 1]));
     assert!(successor.require_training_session_nonce(nonce + 1).is_ok());
     assert_eq!(report["seeds_consumed"], 1);

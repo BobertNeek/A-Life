@@ -28,6 +28,8 @@ existing checkpoint byte cap bounds total ancestry storage. No prior
 brain or private-state archive is embedded. The usual native WAL consumes the
 nonce only at real dispatch; a different first nonce is rejected before native
 initialization. Later same-individual checkpoints and recovery retain the origin.
+The original first-attempt `previous: null` representation and origin digest
+remain unchanged, including after its nonce is consumed.
 
 The external owner validates and atomically publishes `NEW_FILE` through the
 existing single-current publisher. No new request or gameplay flag is needed;

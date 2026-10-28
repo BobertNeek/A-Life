@@ -19,6 +19,11 @@ pub struct TrainingAttemptOriginV1 {
     pub handoff_sha256: String,
     pub private_life_sha256: String,
     /// Oldest first, constant-depth evidence. Never prior brains/private assets.
+    #[serde(
+        default,
+        deserialize_with = "read_previous",
+        serialize_with = "write_previous"
+    )]
     pub previous: Vec<TrainingAttemptEvidenceV1>,
     pub record_sha256: String,
 }
@@ -50,12 +55,24 @@ fn sha(value: &impl Serialize) -> Result<String> {
 fn is_hash(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
-impl TrainingAttemptEvidenceV1 {
-    fn digest(&self) -> Result<String> {
-        let mut value = self.clone();
-        value.record_sha256.clear();
-        sha(&value)
+// The first already-published origin used `previous: null`. Preserve both its
+// exact encoded fields and its original digest; only later ancestry is an array.
+fn read_previous<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Vec<TrainingAttemptEvidenceV1>, D::Error> {
+    Ok(Option::<Vec<TrainingAttemptEvidenceV1>>::deserialize(d)?.unwrap_or_default())
+}
+fn write_previous<S: serde::Serializer>(
+    records: &[TrainingAttemptEvidenceV1],
+    s: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    if records.is_empty() {
+        s.serialize_none()
+    } else {
+        records.serialize(s)
     }
+}
+impl TrainingAttemptEvidenceV1 {
     fn validate(&self) -> Result<()> {
         let t = &self.source_terminal;
         let e = &t.terminal_event;
@@ -87,13 +104,32 @@ impl TrainingAttemptEvidenceV1 {
             || e["organism_id"].as_u64() != Some(t.organism_id)
             || e["world_tick"].as_u64() != Some(t.observed_world_tick)
             || e["terminal_death_tick"] != serde_json::to_value(t.terminal_death_tick)?
-            || self.record_sha256 != self.digest()?
+            || !is_hash(&self.record_sha256)
         {
             return Err(
                 "training attempt origin differs from its bound terminal observation".into(),
             );
         }
         Ok(())
+    }
+    fn origin(&self, previous: Vec<Self>) -> TrainingAttemptOriginV1 {
+        TrainingAttemptOriginV1 {
+            schema: self.schema,
+            kind: self.kind.clone(),
+            attempt_nonce: self.attempt_nonce,
+            source_current_sha256: self.source_current_sha256.clone(),
+            source_terminal: self.source_terminal.clone(),
+            retained_world_seed: self.retained_world_seed,
+            retained_world_tick: self.retained_world_tick,
+            organism_id: self.organism_id,
+            policy_version: self.policy_version,
+            actor_optimizer_step: self.actor_optimizer_step,
+            value_optimizer_step: self.value_optimizer_step,
+            handoff_sha256: self.handoff_sha256.clone(),
+            private_life_sha256: self.private_life_sha256.clone(),
+            previous,
+            record_sha256: self.record_sha256.clone(),
+        }
     }
 }
 
@@ -118,16 +154,27 @@ impl TrainingAttemptOriginV1 {
         }
     }
     fn digest(&self) -> Result<String> {
-        self.evidence().digest()
+        // Retains the original leaf origin's exact serialization/digest. A flat
+        // predecessor is validated against the same algorithm and its prefix.
+        let mut value = self.clone();
+        value.record_sha256.clear();
+        sha(&value)
     }
     fn validate_record(&self) -> Result<()> {
         let current = self.evidence();
         let mut previous: Option<&TrainingAttemptEvidenceV1> = None;
         let mut nonces = std::collections::BTreeSet::new();
-        for record in self.previous.iter().chain(std::iter::once(&current)) {
+        for (index, record) in self
+            .previous
+            .iter()
+            .chain(std::iter::once(&current))
+            .enumerate()
+        {
             record.validate()?;
             if record.previous_record_sha256.as_deref()
                 != previous.map(|p| p.record_sha256.as_str())
+                || record.record_sha256
+                    != record.origin(self.previous[..index].to_vec()).digest()?
                 || !nonces.insert(record.attempt_nonce)
                 || previous.is_some_and(|p| {
                     p.retained_world_seed != record.retained_world_seed
