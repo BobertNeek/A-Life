@@ -1,10 +1,57 @@
 use super::*;
 
+fn one_organism_private_fixture(source: &Path) {
+    // Use the ordinary canonical birth path and its actual creature save
+    // summaries. The older portable fixture deliberately saves no creatures.
+    let receipt: FoundationCycleReceipt =
+        serde_json::from_slice(&fs::read(source.join("cycle.json")).unwrap()).unwrap();
+    let asset = alife_core::FoundationWeightAsset::decode_canonical(
+        &fs::read(source.join("trained.alife-foundation")).unwrap(),
+    )
+    .unwrap();
+    let mut config = alife_world::CanonicalNewGameConfig::phase3(receipt.seed, 1).unwrap();
+    config.brain_class = alife_core::BrainScaleTier::Standard2048;
+    config.founder_seed_base = if receipt.founder_seed_base == 0 {
+        receipt.seed
+    } else {
+        receipt.founder_seed_base
+    };
+    config.sensor_profile = asset.manifest().sensor_profile();
+    let game =
+        alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+    assert_eq!(game.creatures.len(), 1);
+    assert_eq!(game.world.organism_registry().len(), 1);
+    let save = alife_world::PortableSaveFile::from_headless_world(
+        "continuous-terminal-canonical-cpu-fixture",
+        &game.world,
+        alife_world::RuntimeConfig::deterministic_default(receipt.seed, config.brain_class),
+        alife_world::AssetManifest::empty(),
+        game.creatures,
+    )
+    .unwrap();
+    let assets = source.join("world-assets");
+    fs::create_dir(&assets).unwrap();
+    save.validate_with_asset_root(&assets).unwrap();
+    let restored = save.restore_headless_world().unwrap();
+    let organism = restored.organism_registry().iter().next().unwrap();
+    assert_eq!(save.creatures[0].organism_id, organism.organism_id());
+    assert_eq!(save.creatures[0].genome_id, organism.genome().id);
+    assert_eq!(
+        save.creatures[0].development_tick,
+        organism.biochemistry().development.last_update_tick
+    );
+    assert_eq!(
+        save.creatures[0].mind.homeostasis,
+        organism.biochemistry().homeostasis
+    );
+    GpuDurableSaveManifest::publish_snapshot(source.join("world.json"), &assets, &save).unwrap();
+}
+
 #[test]
 fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
     let fixture =
         crate::foundation_critic_correction::tests::full_residual_correction_fixture_with_source(
-            crate::foundation_training_cycle::portable_handoff::tests::private_fixture,
+            one_organism_private_fixture,
         );
     let mut baseline = migrate_current_training_checkpoint(
         &fixture.target,
@@ -61,6 +108,13 @@ fn terminal_recovery_retains_exact_brain_and_cannot_resume_a_copied_current() {
     let save =
         alife_world::PortableSaveFile::from_json_str(&baseline.life.as_ref().unwrap().world_json)
             .unwrap();
+    assert_eq!(save.creatures.len(), 1);
+    let restored = save.restore_headless_world().unwrap();
+    let organism = restored.organism_registry().iter().next().unwrap();
+    assert_eq!(
+        &organism.phenotype().brain_genome,
+        baseline.handoff.compiler_inputs.genome()
+    );
     let event = serde_json::json!({"kind":"continuous-terminal-v1","terminal":true,
         "session_nonce":nonce,"source_world_seed":baseline.seed,
         "organism_id":save.creatures[0].organism_id.raw(),"world_tick":save.world.tick.raw()+7,
