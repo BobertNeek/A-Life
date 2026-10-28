@@ -14,6 +14,7 @@ import tempfile
 import time
 
 import run_current_care as host
+import run_continuous_care as continuous
 import current_checkpoint_store as checkpoints
 
 
@@ -62,6 +63,16 @@ def main():
     original, retired = fixture.read_bytes(), terminal_fixture.read_bytes()
     original_hashes = [digest(original), digest(retired)]
     admitted = host.tool(inspector, '--inspect-current', fixture)
+    # Exercise the real auto-seed boundary with actual compiled-inspector JSON.
+    # Planning a next nonce must not reserve/consume it or enrich the report
+    # from the raw checkpoint payload (which hid the missing-field regression).
+    admitted_before = deepcopy(admitted)
+    assert admitted['seeds']['pending_range'] is None
+    known_ranges = admitted['seeds']['excluded_ranges']
+    assert admitted['seeds']['excluded_range_count'] == len(known_ranges)
+    first_unknown = max((last for _, last in known_ranges), default=0) + 1
+    assert continuous.admitted_seed_range(admitted) == [first_unknown, first_unknown]
+    assert admitted == admitted_before
     terminal = host.tool(inspector, '--inspect-current', terminal_fixture)
     assert terminal['terminal_disposition']['kind'] == 'observed-terminal-retained-brain-v1'
     seed = admitted['seed'] + 1000
@@ -109,6 +120,9 @@ def main():
         with checkpoints.Store(store, validate) as publisher:
             publisher.publish(candidate, digest(current.read_bytes()))
         after = host.tool(inspector, '--inspect-current', current)
+        assert after['seeds']['excluded_range_count'] == len(after['seeds']['excluded_ranges'])
+        assert after['seeds']['pending_range'] == [seed + 1, seed + 2]
+        assert continuous.admitted_seed_range(after) == [seed + 1, seed + 2]
         for key in ('seed', 'policy_version', 'actor_optimizer_step', 'value_optimizer_step', 'asset_sha256'):
             assert after[key] == admitted[key], key
         assert host.tool(trainer, '--recover-resident', store)['already_published_current'] is True
@@ -129,6 +143,7 @@ def main():
     assert [digest(fixture.read_bytes()), digest(terminal_fixture.read_bytes())] == original_hashes
     print(json.dumps(dict(kind='continuous-native-cpu-contracts-v1', neural_execution=False,
                          initialization_bound_and_unbound=True, one_session_recovery_cleanup=True,
+                         native_inspector_auto_seed_next_allocation=True, native_inspector_owned_tail=True,
                          copied_terminal_current_refused=True, source_bytes_unchanged=True)))
 
 

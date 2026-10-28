@@ -171,7 +171,8 @@ pub fn inspect_current_training_checkpoint(path: &Path) -> Result<serde_json::Va
         "asset_sha256":format!("{:x}", Sha256::digest(asset.encode_canonical()?)),
         "seeds":{"historical_freshness":checkpoint.seeds.historical_freshness,
             "pending_range":checkpoint.seeds.pending_range,
-            "excluded_range_count":checkpoint.seeds.excluded_ranges.len()},
+            "excluded_range_count":checkpoint.seeds.excluded_ranges.len(),
+            "excluded_ranges":checkpoint.seeds.excluded_ranges},
         "neural_execution":false, "weights_modified":false,
         "external_dependencies":[]
     });
