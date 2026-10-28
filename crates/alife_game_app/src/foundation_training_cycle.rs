@@ -354,6 +354,7 @@ fn load_cycle_continuation(
             return Err("current checkpoint requires no objective transition".into());
         }
         let checkpoint = read_current_training_checkpoint(previous)?;
+        checkpoint.require_living_continuation()?;
         if checkpoint.same_individual.is_some() {
             return Err("same-individual Current requires resident-continuous; a fresh cohort would reset its private world".into());
         }

@@ -76,6 +76,8 @@ pub(super) fn run_same_individual_world(
     ) -> Result<()>,
     mut on_update: impl FnMut(serde_json::Value) -> Result<()>,
 ) -> Result<serde_json::Value> {
+    baseline.validate()?;
+    baseline.require_living_continuation()?;
     let started = Instant::now();
     let life = work.join("live");
     materialize_current_training_life(baseline, &life)?;
@@ -389,6 +391,8 @@ pub(super) fn run_same_individual_world(
             alife_storage::remove_dir_all(&window_root)?;
             on_update(
                 serde_json::json!({"kind":"continuous-terminal-v1", "session_nonce":session_nonce,
+                "source_world_seed":world_seed,"organism_id":id.raw(),"world_tick":runtime.world().tick().raw(),
+                "world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
                 "terminal":true,"terminal_death_tick":terminal_death_tick,"causal_collection":causal,
                 "captured_rows":refs.len(),"trained_rows":0,"semantic_prior":compact_prior(&runtime)}),
             )?;
