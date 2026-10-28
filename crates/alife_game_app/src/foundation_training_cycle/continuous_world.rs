@@ -362,7 +362,7 @@ pub(super) fn run_same_individual_world(
                     });
                 break;
             }
-            if refs.len() >= wanted + 1 {
+            if refs.len() > wanted {
                 break;
             }
         }
@@ -621,7 +621,7 @@ pub(super) fn run_same_individual_world(
         });
         alife_storage::remove_dir_all(&window_root)?;
         on_update(event)?;
-        if completed_updates % request.snapshot_every_updates as u64 == 0 {
+        if completed_updates.is_multiple_of(request.snapshot_every_updates as u64) {
             if now()? >= request.finalization_deadline_unix_seconds {
                 return Err("deadline before periodic snapshot".into());
             }

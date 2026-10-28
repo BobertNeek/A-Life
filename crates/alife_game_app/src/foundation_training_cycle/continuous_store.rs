@@ -164,12 +164,12 @@ fn bind_terminal_disposition(
         if !consumed {
             return Err("terminal observation without a dispatched continuous session".into());
         }
-        return Ok(checkpoint.with_terminal_disposition(
+        return checkpoint.with_terminal_disposition(
             &o.baseline_sha256,
             &o.request_sha256,
             o.request.seed_range[0],
             event.clone(),
-        )?);
+        );
     }
     if producer_result.is_some_and(|result| result["terminal"] == true) {
         return Err(

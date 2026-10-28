@@ -18,6 +18,17 @@ pub(super) fn incomplete_stage(bytes: &[u8], magic: &[u8; 16], limit: u64) -> bo
             .is_some_and(|total| (bytes.len() as u64) < total)
 }
 
+pub(super) fn effective_sampling_temperature(
+    request: f32,
+    saved: Option<f32>,
+) -> Result<f32, &'static str> {
+    let actual = saved.unwrap_or(request);
+    if !actual.is_finite() || !(0.0001..=128.).contains(&actual) {
+        return Err("retained sampling temperature exceeds continuous admission bounds");
+    }
+    Ok(actual)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -56,14 +67,4 @@ mod tests {
         assert!(!incomplete_stage(&bytes, MAGIC, 100));
         assert!(!incomplete_stage(b"ALIFE-RES-INI-1\n", MAGIC, 100));
     }
-}
-pub(super) fn effective_sampling_temperature(
-    request: f32,
-    saved: Option<f32>,
-) -> Result<f32, &'static str> {
-    let actual = saved.unwrap_or(request);
-    if !actual.is_finite() || !(0.0001..=128.).contains(&actual) {
-        return Err("retained sampling temperature exceeds continuous admission bounds");
-    }
-    Ok(actual)
 }
