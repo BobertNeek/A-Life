@@ -118,14 +118,16 @@ fn care_row_evidence(
     step: &crate::FoundationTrainingStep,
     food: &BTreeMap<u64, (alife_core::WorldEntityId, crate::FoundationFoodOutcome)>,
 ) -> CareRowEvidence {
-    let mut evidence = CareRowEvidence::default();
-    evidence.food_candidate = step.frame.candidates().iter().any(|candidate| {
-        candidate
-            .target
-            .entity
-            .is_some_and(|target| food.contains_key(&target.raw()))
-    });
-    evidence.bundle_missing = step.patch.selected_bundle().is_none();
+    let mut evidence = CareRowEvidence {
+        food_candidate: step.frame.candidates().iter().any(|candidate| {
+            candidate
+                .target
+                .entity
+                .is_some_and(|target| food.contains_key(&target.raw()))
+        }),
+        bundle_missing: step.patch.selected_bundle().is_none(),
+        ..CareRowEvidence::default()
+    };
     if let Some(bundle) = step.patch.selected_bundle() {
         for command in &bundle.channels {
             let targets_food = command
