@@ -184,33 +184,82 @@ fn care_food_position_in_gaze(
     let record = world.organism_registry().get(id)?;
     let body = world.entity(record.world_entity_id())?;
     let gaze = body.body_yaw + body.head_yaw;
-    let position = alife_core::Vec3f::new(
-        body.position.x + gaze.cos(),
-        body.position.y,
-        body.position.z + gaze.sin(),
-    );
-    let position = match world.terrain() {
-        Some(terrain) => terrain.resolve_move(body.position, position)?,
-        None => position,
-    };
-    let dx = position.x - body.position.x;
-    let dz = position.z - body.position.z;
-    let length_squared = dx * dx + dz * dz;
-    if world.object_snapshots().iter().any(|object| {
-        if object.kind != alife_world::WorldObjectKind::Obstacle || object.consumed {
-            return false;
-        }
-        let t = (((object.position.x - body.position.x) * dx
-            + (object.position.z - body.position.z) * dz)
-            / length_squared)
-            .clamp(0.0, 1.0);
-        let closest_x = body.position.x + dx * t;
-        let closest_z = body.position.z + dz * t;
-        (object.position.x - closest_x).hypot(object.position.z - closest_z) <= object.radius
-    }) {
+    let food = world.entity_id("food-01")?;
+    if !world.entity(food).is_some_and(care_food_ready) {
         return None;
     }
-    Some(position)
+    // Try real placements in the current gaze before falling back to contact.
+    // Check the actual grounded frame on a disposable world clone: a nominally
+    // visible target can be occluded or displaced from the three action slots.
+    for distance in [1.0_f32, 0.5, 0.1, 0.0] {
+        for offset in [0.0_f32, 0.35, -0.35, 0.7, -0.7] {
+            let yaw = gaze + offset;
+            let wanted = alife_core::Vec3f::new(
+                body.position.x + distance * yaw.cos(),
+                body.position.y,
+                body.position.z + distance * yaw.sin(),
+            );
+            let position = match world.terrain() {
+                Some(terrain) => match terrain.resolve_move(body.position, wanted) {
+                    Some(position) => position,
+                    None => continue,
+                },
+                None => wanted,
+            };
+            let dx = position.x - body.position.x;
+            let dz = position.z - body.position.z;
+            let length_squared = dx * dx + dz * dz;
+            if world.object_snapshots().iter().any(|object| {
+                if object.kind != alife_world::WorldObjectKind::Obstacle || object.consumed {
+                    return false;
+                }
+                let t = if length_squared > 0.0 {
+                    (((object.position.x - body.position.x) * dx
+                        + (object.position.z - body.position.z) * dz)
+                        / length_squared)
+                        .clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                let closest_x = body.position.x + dx * t;
+                let closest_z = body.position.z + dz * t;
+                (object.position.x - closest_x).hypot(object.position.z - closest_z)
+                    <= object.radius
+            }) {
+                continue;
+            }
+            let mut trial = world.clone();
+            if !matches!(
+                crate::foundation_training::relocate_unheld_foundation_food(
+                    &mut trial, food, position,
+                ),
+                Ok(true)
+            ) {
+                continue;
+            }
+            let homeostasis = trial
+                .organism_registry()
+                .get(id)?
+                .biochemistry()
+                .homeostasis;
+            let tick = trial.tick();
+            let Ok(frame) = trial.perception_frame(
+                id,
+                tick,
+                alife_core::SensorProfile::GroundedTerrainVisionV1,
+                homeostasis,
+            ) else {
+                continue;
+            };
+            if frame.candidates().iter().any(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(food)
+            }) {
+                return Some(position);
+            }
+        }
+    }
+    None
 }
 
 struct ContinuousCareAssistance {
@@ -245,10 +294,19 @@ fn expose_care_cue(
         .entity(care.food)
         .ok_or("care cue food missing")?
         .position;
+    let teacher_position = [(0.0_f32, 2.0_f32), (2.0, 0.0), (-2.0, 0.0), (0.0, -2.0)]
+        .into_iter()
+        .map(|(x, z)| alife_core::Vec3f::new(position.x + x, position.y, position.z + z))
+        .find(|candidate| {
+            world
+                .terrain()
+                .is_none_or(|terrain| terrain.walkable(candidate.x, candidate.z))
+        })
+        .ok_or("no walkable nearby teacher position")?;
     alife_school::LanguageNursery::speak_in_world(
         world,
         id,
-        alife_core::Vec3f::new(position.x, position.y, position.z + 2.0),
+        teacher_position,
         [8, 1]
             .into_iter()
             .map(alife_core::LanguageTokenId::new)
@@ -1357,6 +1415,7 @@ mod tests {
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
                 .unwrap()
                 .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
         for label in ["hazard-01", "obstacle-02"] {
             let entity = world.entity_id(label).unwrap();
             world.editor_remove_object(entity).unwrap();
@@ -1376,6 +1435,7 @@ mod tests {
             .unwrap();
         let subject_position = subject.position;
         let target = world.entity(scenario.food).unwrap();
+        let target_position = target.position;
         let distance =
             (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z);
         assert!((distance - 1.0).abs() < 0.001);
@@ -1398,13 +1458,22 @@ mod tests {
                 homeostasis,
             )
             .unwrap();
-        assert!(frame
-            .candidates()
-            .iter()
-            .any(
-                |candidate| candidate.action_id == alife_world::HeadlessActionIds::EAT
+        assert!(
+            frame.candidates().iter().any(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
                     && candidate.target.entity == Some(scenario.food)
-            ));
+            }),
+            "food {:?}; body {:?}; target {:?}; visible {:?}; candidate targets {:?}",
+            scenario.food,
+            subject_position,
+            target_position,
+            report.visible_entities,
+            frame
+                .candidates()
+                .iter()
+                .map(|candidate| (candidate.action_id, candidate.target.entity))
+                .collect::<Vec<_>>()
+        );
         let far = alife_core::Vec3f::new(
             subject_position.x + 10.0,
             subject_position.y,
@@ -1459,6 +1528,73 @@ mod tests {
         let obstacle = world.entity_id("obstacle-01").unwrap();
         world.editor_move_object(obstacle, blocked).unwrap();
         assert!(care_food_position_in_gaze(&world, id).is_none());
+    }
+    #[test]
+    fn care_placement_and_teacher_stay_usable_at_terrain_edge() {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
+        let id = world.organism_entity_ids()[0].0;
+        let body = world.organism_registry().get(id).unwrap().world_entity_id();
+        // The default gaze faces +X. A one-unit placement would leave terrain.
+        world
+            .editor_move_object(body, alife_core::Vec3f::new(255.999, 0.0, 0.0))
+            .unwrap();
+        let before = *world.organism_registry().get(id).unwrap().biochemistry();
+        let care = prepare_care_assistance(&mut world, id).unwrap();
+        let target = world.entity(care.food).unwrap().position;
+        assert!((target.x - 255.999).abs() < 0.01);
+        let tick = world.tick();
+        let homeostasis = world
+            .organism_registry()
+            .get(id)
+            .unwrap()
+            .biochemistry()
+            .homeostasis;
+        let frame = world
+            .perception_frame(
+                id,
+                tick,
+                alife_core::SensorProfile::GroundedTerrainVisionV1,
+                homeostasis,
+            )
+            .unwrap();
+        assert!(frame
+            .candidates()
+            .iter()
+            .any(
+                |candidate| candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(care.food)
+            ));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+
+        // The old teacher position (food.z + 2) lies outside this edge.
+        world
+            .editor_move_object(body, alife_core::Vec3f::new(20.0, 0.0, 255.9))
+            .unwrap();
+        let care = prepare_care_assistance(&mut world, id).unwrap();
+        expose_care_cue(&mut world, id, &care).unwrap();
+        let teacher = world
+            .entity(world.entity_id("nursery-teacher").unwrap())
+            .unwrap();
+        assert!(world
+            .terrain()
+            .unwrap()
+            .walkable(teacher.position.x, teacher.position.z));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
     }
     #[test]
     fn care_setup_waits_for_a_safe_loose_unconsumed_food() {
