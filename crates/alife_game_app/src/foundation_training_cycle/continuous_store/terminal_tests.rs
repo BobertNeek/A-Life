@@ -348,6 +348,7 @@ fn explicit_training_branch_case(
         total_trained_decisions: 100,
         decisions_per_update: 10,
         snapshot_every_updates: 1,
+        care_assistance: false,
         sampling_temperature: 1.,
         collection_cutoff_unix_seconds: now + 3600,
         finalization_deadline_unix_seconds: now + 7200,

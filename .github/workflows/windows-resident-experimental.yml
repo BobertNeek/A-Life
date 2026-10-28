@@ -11,6 +11,10 @@ on:
         description: Exact 40-character source commit; empty uses this workflow ref
         type: string
         default: ''
+      build_only:
+        description: Build a release artifact while the independent PR checks run
+        type: boolean
+        default: false
   pull_request:
     paths:
       - '.github/workflows/windows-resident-experimental.yml'
@@ -52,12 +56,14 @@ jobs:
         with:
           shared-key: windows-foundation-native
       - name: Device-free resident loss recovery and ownership contracts
+        if: ${{ !inputs.build_only }}
         run: |
           cargo test --locked -p alife_game_app --features foundation-training --lib resident -- --nocapture --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Resident contracts failed' }
           cargo test --locked -p alife_game_app --features foundation-training --lib deterministic_nonrich_priming -- --nocapture --test-threads=1
           if ($LASTEXITCODE -ne 0) { throw 'Deterministic non-rich prior contract failed' }
       - name: Finite continuous-session host lifecycle contracts
+        if: ${{ !inputs.build_only }}
         run: |
           python -B -m unittest discover -s scripts -p test_run_continuous_care.py -v
           if ($LASTEXITCODE -ne 0) { throw 'Continuous-session host contracts failed' }
