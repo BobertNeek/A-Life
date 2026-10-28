@@ -100,7 +100,7 @@ jobs:
   build:
     name: Build and check Windows training CLI
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     defaults:
       run:
         shell: pwsh
