@@ -782,7 +782,7 @@ mod tests {
     #[test]
     fn continuous_new_run_prepares_materialization_parent_under_active_quota() {
         let fixture = WorkFixture::new();
-        let budget = alife_storage::OutputBudget::register(&fixture.run(), 4).unwrap();
+        let budget = alife_storage::OutputBudget::register(fixture.run(), 4).unwrap();
         let life = prepare_live_work_directory(&fixture.run().join("live")).unwrap();
         assert!(life.parent().unwrap().is_dir());
         // Same create-new boundary used by the native materializer. Previously
@@ -801,7 +801,7 @@ mod tests {
         let work = fixture.run().join("live");
         std::fs::create_dir(&work).unwrap();
         std::fs::write(work.join("sentinel"), b"original").unwrap();
-        let budget = alife_storage::OutputBudget::register(&fixture.run(), 4096).unwrap();
+        let budget = alife_storage::OutputBudget::register(fixture.run(), 4096).unwrap();
         let before = budget.usage().unwrap();
         assert!(prepare_live_work_directory(&work).is_err());
         assert_eq!(std::fs::read(work.join("sentinel")).unwrap(), b"original");
