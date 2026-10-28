@@ -30,8 +30,13 @@ post-PPO global heads. Only that mode accepts `--food-need-condition`, with
 when a binary lacks the live-policy continuation contract.
 
 The living collection limit is an artificial truncation, not death. The final
-successor value is retained; only confirmed death zeroes it. Obtaining that
-successor record currently executes one more **ordinary waking decision**, plus
+successor value is retained. The ordinary fresh-world cycle zeroes it on confirmed
+death; the new same-individual MVP instead discards the pending terminal window
+before PPO and retains the last valid snapshot. It does not yet learn a terminal
+PPO target. Retaining such an update requires a typed terminal-head handoff,
+separate from the last exact living-private snapshot; it cannot install learned
+heads into a dead body or pair them with stale living private state. Obtaining a
+living successor record currently executes one more **ordinary waking decision**, plus
 any intervening normal non-capture ticks. Its cognition, recurrent/lifetime
 learning, motor action and biology are real. It is excluded from PPO loss but
 included in the subsequent final private-life capture. The later frozen value

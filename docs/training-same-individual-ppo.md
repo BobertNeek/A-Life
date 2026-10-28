@@ -53,8 +53,13 @@ with this exact **post-install** live private closure and explicit retained
 session row/update counters. Provisional updates since the latest snapshot can
 be lost on interruption. A natural death is terminal, not truncation: the
 producer retains the last valid snapshot and reports the terminal tick and
-unretained suffix. It never resurrects an earlier living snapshot or silently
-relabels a fresh creature as the same individual.
+unretained suffix. The pending terminal window is currently discarded before
+PPO; this path does not yet train a zero-bootstrap terminal target. Retaining
+that learning needs an explicit terminal-head handoff, separate from the last
+exact living-private snapshot. The observed terminal disposition remains inside
+Current after temporary cleanup and blocks continuation even from a copied file.
+It never resurrects an earlier living snapshot or silently relabels a fresh
+creature as the same individual.
 
 `continuous-started-v1`, `continuous-update-v1`, untrained-window/terminal events
 and the finished summary distinguish actual captures, loss rows, bootstrap,
