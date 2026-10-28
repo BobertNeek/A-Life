@@ -96,6 +96,20 @@ pub struct FoodOwnershipSnapshot {
     pub consumed: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FoodAcquisitionKind {
+    Eat,
+    Grab,
+}
+
+/// Derived from the same exact-target predicates as the public counters.
+/// This is passive telemetry, not a new success or learning signal.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct FoodOutcomeEvents {
+    pub acquisition: Option<FoodAcquisitionKind>,
+    pub nourished: bool,
+}
+
 pub(crate) fn ownership(
     world: &alife_world::HeadlessWorld,
     target: WorldEntityId,
@@ -191,14 +205,18 @@ impl FoundationFoodOutcome {
 
     // The collector additionally checks the captured GPU row identity. CPU
     // regressions call this with honestly sealed CPU patches, never fake GPU steps.
-    pub(crate) fn observe(&mut self, observation: FoodOutcomeObservation, patch: &ExperiencePatch) {
+    pub(crate) fn observe(
+        &mut self,
+        observation: FoodOutcomeObservation,
+        patch: &ExperiencePatch,
+    ) -> FoodOutcomeEvents {
         if self.organism != observation.organism
             || self.target != observation.target
             || !observation.matches_patch(patch)
         {
-            return;
+            return FoodOutcomeEvents::default();
         }
-        self.observe_selected(observation, patch.decision(), patch.outcome());
+        self.observe_selected(observation, patch.decision(), patch.outcome())
     }
 
     fn observe_selected(
@@ -206,31 +224,38 @@ impl FoundationFoodOutcome {
         observation: FoodOutcomeObservation,
         decision: &alife_core::DecisionSnapshot,
         outcome: &alife_core::PostActionOutcome,
-    ) {
+    ) -> FoodOutcomeEvents {
+        let mut events = FoodOutcomeEvents::default();
         let touch = |physical: &alife_core::PhysicalActionOutcome| {
             physical.target_entity == Some(self.target)
                 && physical.contact == PhysicalContactKind::Touch
         };
         let selected_acquisition = if let Some(bundle) = decision.selected_bundle.as_ref() {
-            bundle.channels.iter().any(|command| {
-                command.channel == MotorChannel::Manipulation
-                    && matches!(
-                        command.primitive,
-                        alife_world::HeadlessActionIds::EAT | alife_world::HeadlessActionIds::GRAB
-                    )
-                    && command.target.and_then(|target| target.entity) == Some(self.target)
-                    && outcome.joint.as_ref().is_some_and(|joint| {
-                        joint.channel_outcomes.iter().any(|channel| {
-                            channel.channel == command.channel && touch(&channel.physical)
+            bundle
+                .channels
+                .iter()
+                .find(|command| {
+                    command.channel == MotorChannel::Manipulation
+                        && matches!(
+                            command.primitive,
+                            alife_world::HeadlessActionIds::EAT
+                                | alife_world::HeadlessActionIds::GRAB
+                        )
+                        && command.target.and_then(|target| target.entity) == Some(self.target)
+                        && outcome.joint.as_ref().is_some_and(|joint| {
+                            joint.channel_outcomes.iter().any(|channel| {
+                                channel.channel == command.channel && touch(&channel.physical)
+                            })
                         })
-                    })
-            })
+                })
+                .map(|command| command.primitive)
         } else {
-            matches!(
+            (matches!(
                 decision.selected_action.action_id,
                 alife_world::HeadlessActionIds::EAT | alife_world::HeadlessActionIds::GRAB
             ) && decision.selected_action.target_entity == Some(self.target)
-                && touch(&outcome.physical)
+                && touch(&outcome.physical))
+            .then_some(decision.selected_action.action_id)
         };
         if observation.before
             == Some(FoodOwnershipSnapshot {
@@ -242,9 +267,16 @@ impl FoundationFoodOutcome {
                     owner: Some(self.organism),
                     consumed: false,
                 })
-            && selected_acquisition
+            && selected_acquisition.is_some()
         {
             self.ordinary_acquisition_events += 1;
+            events.acquisition = Some(
+                if selected_acquisition == Some(alife_world::HeadlessActionIds::EAT) {
+                    FoodAcquisitionKind::Eat
+                } else {
+                    FoodAcquisitionKind::Grab
+                },
+            );
         }
         if observation.after.is_some_and(|food| food.consumed)
             && super::selected_eat_consumed(
@@ -263,8 +295,10 @@ impl FoundationFoodOutcome {
                 observation.held_before() == Some(true),
             ) {
                 self.nourished_meal_events += 1;
+                events.nourished = true;
             }
         }
+        events
     }
 }
 
@@ -635,7 +669,12 @@ mod tests {
             assert!(
                 crate::foundation_grab_food::selected_grab_command(&selected, target).is_none()
             );
-            summary.observe(observation, &patch);
+            let events = summary.observe(observation, &patch);
+            assert_eq!(
+                events.acquisition,
+                (row == 0).then_some(FoodAcquisitionKind::Eat)
+            );
+            assert_eq!(events.nourished, row == 1);
             assert_eq!(summary.explicit_grab_acquisition_events, 0);
             assert_eq!(summary.ordinary_acquisition_events, 1);
             assert_eq!(summary.consumption_events, row);
@@ -685,7 +724,9 @@ mod tests {
             crate::foundation_grab_food::selected_grab_command(&bundle(&patch), target).is_some()
         );
         let mut summary = FoundationFoodOutcome::new(LEARNER, target);
-        summary.observe(acquisition, &patch);
+        let events = summary.observe(acquisition, &patch);
+        assert_eq!(events.acquisition, Some(FoodAcquisitionKind::Grab));
+        assert!(!events.nourished);
         // Production copies this count only from its unchanged strict GPU observer.
         summary.explicit_grab_acquisition_events = 1;
         assert_eq!(summary.ordinary_acquisition_events, 1);
@@ -768,7 +809,9 @@ mod tests {
             },
         ] {
             let mut summary = FoundationFoodOutcome::new(LEARNER, target);
-            summary.observe(bad, &patch);
+            let events = summary.observe(bad, &patch);
+            assert!(events.acquisition.is_none());
+            assert!(!events.nourished);
             assert_eq!(summary, FoundationFoodOutcome::new(LEARNER, target));
         }
         let missing = FoodOutcomeObservation {
@@ -837,7 +880,9 @@ mod tests {
                 .unwrap(),
         );
         let mut summary = FoundationFoodOutcome::new(LEARNER, target);
-        summary.observe_selected(observation, &decision, &outcome);
+        let events = summary.observe_selected(observation, &decision, &outcome);
+        assert_eq!(events.acquisition, Some(FoodAcquisitionKind::Eat));
+        assert!(!events.nourished);
         assert_eq!(summary.ordinary_acquisition_events, 1);
         for variant in 0..4 {
             let mut wrong_decision = decision.clone();
@@ -939,7 +984,9 @@ mod tests {
                 .unwrap(),
         );
         let mut summary = FoundationFoodOutcome::new(learner, target);
-        summary.observe_selected(observation, &decision, &outcome);
+        let events = summary.observe_selected(observation, &decision, &outcome);
+        assert!(events.acquisition.is_none());
+        assert!(events.nourished);
         assert_eq!(summary.consumption_events, 1);
         assert_eq!(summary.nourished_meal_events, 1);
         #[cfg(feature = "cpu-training")]
@@ -1049,7 +1096,10 @@ mod tests {
                     .clear(),
             }
             let mut summary = FoundationFoodOutcome::new(learner, target);
-            summary.observe_selected(wrong_observation, &wrong_decision, &wrong_outcome);
+            assert!(super::super::outcome_consumed(&wrong_outcome));
+            let events =
+                summary.observe_selected(wrong_observation, &wrong_decision, &wrong_outcome);
+            assert!(!events.nourished, "variant {variant}");
             assert_eq!(summary.nourished_meal_events, 0, "variant {variant}");
         }
     }

@@ -112,6 +112,35 @@ meals, and archived receipts are not rewritten. Compact host validation checks
 count/row consistency; it cannot independently reconstruct native physiology
 or target ownership from those counts.
 
+### Continuous-world meal acquisition and assistance associations
+
+Continuous update and final receipts add `food_meal_provenance_captured` and
+`food_meal_provenance_trained`. These are fixed-size aggregate categories for
+exact-target nourishing meals linked to an observed `Eat` pickup, an observed
+`Grab` pickup, or an unobserved acquisition. `Eat` can acquire loose food before
+a later `Eat` consumes it; zero explicit `Grab` is not zero pickup. A link is
+cleared by a release, missing ownership or a gap in captured observations.
+The trained aggregate filters **meal rows**, not acquisition rows, and excludes
+bootstrap. Generic consumed events remain separate and cannot create meal links.
+
+Each category reports overlapping prior-session cue-emission, addressed teacher
+food/eat-token hearing and same-target food-placement associations, plus tick
+ranges to the meal outcome. Emission history covers this collector's care cues,
+not all possible teacher speech. Emission is not hearing; heard tokens are not
+target-grounded. Initial placement is included in association history and counted
+separately as `care_initial_food_placements`; later moves retain the existing
+`care_food_repositions` counter. Histories survive PPO windows and same-entity
+regrowth, so a window without a **new** cue or move can still follow assistance.
+
+These are temporal associations, not causal attribution or a mastery test.
+History before collector start/restart is **unknown**, including previously
+assisted food and carried food restored from a checkpoint. Consequently
+`with_no_observed_session_assistance` does not mean independent feeding.
+Telemetry retains only latest per-food provenance, fixed aggregate counters and
+meal links within the already bounded replay window; no per-meal archive or
+checkpoint-format change is introduced. Rewards, biology and learner behavior
+are unchanged.
+
 From the repository root, derive a fresh summary from an existing ledger and
 its exact saved run directory without dispatching a trainer or writing files:
 
