@@ -65,6 +65,8 @@ jobs:
         run: |
           cargo test --locked -p alife_game_app --features foundation-training --lib resident::continuous_store -- --test-threads=1
           cargo test --locked -p alife_game_app --features foundation-training --lib continuous_world:: -- --test-threads=1
+      - name: Live-policy biological restore and legacy identity CPU contracts
+        run: cargo test --locked -p alife_game_app --features foundation-training --lib gpu_live_runtime::live_policy::tests -- --test-threads=1
       - name: Actual continuous CLI strict recovery publication cleanup and terminal refusal
         run: |
           python -B scripts/check_continuous_store_native.py target/debug/train_n2048_care target/debug/export_native_training_handoff "${{ runner.temp }}/resident-stopped-${{ github.run_id }}/current.alife-checkpoint" "${{ runner.temp }}/continuous-terminal-${{ github.run_id }}.alife-checkpoint"

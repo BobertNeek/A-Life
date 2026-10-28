@@ -350,10 +350,46 @@ mod tests {
             SensorProfile::GroundedObjectSlotsV1,
         )
         .unwrap();
-        let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&original).unwrap();
+        let provisional =
+            FoundationWeightAsset::from_phenotype_for_genetic_birth(&original).unwrap();
         let mut config = alife_world::CanonicalNewGameConfig::phase3(0x2048_0F03, 1).unwrap();
         config.brain_class = BrainScaleTier::Standard2048;
         config.sensor_profile = SensorProfile::GroundedObjectSlotsV1;
+        // New Game expresses the canonical founder's biological genes. The
+        // raw scaffold asset is only its provisional construction token; its
+        // decoder digest is not valid for that expressed runtime genotype.
+        // Keep this device-free fixture available under DEFAULT app features.
+        let expressed_game =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &provisional)
+                .unwrap();
+        let expressed_record = expressed_game
+            .world
+            .organism_registry()
+            .iter()
+            .next()
+            .unwrap();
+        let expressed_genome = expressed_record.phenotype().brain_genome.clone();
+        let expressed_development = foundation_construction_development(
+            &expressed_genome,
+            &capacity,
+            &expressed_record
+                .phenotype()
+                .development_state_at(
+                    expressed_record
+                        .age_at(expressed_game.world.tick())
+                        .unwrap(),
+                )
+                .unwrap(),
+        )
+        .unwrap();
+        let expressed = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &expressed_genome,
+            &capacity,
+            &expressed_development,
+            config.sensor_profile,
+        )
+        .unwrap();
+        let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&expressed).unwrap();
         let game =
             alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
         let record = game.world.organism_registry().iter().next().unwrap();
@@ -366,6 +402,9 @@ mod tests {
             config.sensor_profile,
         )
         .unwrap();
+        assert_eq!(plan.compiler_inputs.genome(), &expressed_genome);
+        assert_eq!(plan.compiler_inputs.development(), &expressed_development);
+        asset.validate_against(&plan.phenotype).unwrap();
         let mut weights = plan
             .phenotype
             .synapses()
