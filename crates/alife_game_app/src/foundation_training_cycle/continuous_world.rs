@@ -177,6 +177,42 @@ fn care_food_ready(food: &alife_world::WorldObject) -> bool {
         && food.hazard_pain == 0.0
 }
 
+/// Inspect a disposable copy so checking assistance never advances tracking in
+/// the live world or invents a target that the learner cannot perceive.
+fn care_food_is_offered(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> bool {
+    let mut trial = world.clone();
+    care_food_is_offered_in_trial(&mut trial, id, food)
+}
+
+fn care_food_is_offered_in_trial(
+    trial: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> bool {
+    let Some(record) = trial.organism_registry().get(id) else {
+        return false;
+    };
+    let homeostasis = record.biochemistry().homeostasis;
+    let tick = trial.tick();
+    trial
+        .perception_frame(
+            id,
+            tick,
+            alife_core::SensorProfile::GroundedTerrainVisionV1,
+            homeostasis,
+        )
+        .is_ok_and(|frame| {
+            frame.candidates().iter().any(|candidate| {
+                candidate.action_id == alife_world::HeadlessActionIds::EAT
+                    && candidate.target.entity == Some(food)
+            })
+        })
+}
+
 fn care_food_position_in_gaze(
     world: &alife_world::HeadlessWorld,
     id: OrganismId,
@@ -237,24 +273,7 @@ fn care_food_position_in_gaze(
             ) {
                 continue;
             }
-            let homeostasis = trial
-                .organism_registry()
-                .get(id)?
-                .biochemistry()
-                .homeostasis;
-            let tick = trial.tick();
-            let Ok(frame) = trial.perception_frame(
-                id,
-                tick,
-                alife_core::SensorProfile::GroundedTerrainVisionV1,
-                homeostasis,
-            ) else {
-                continue;
-            };
-            if frame.candidates().iter().any(|candidate| {
-                candidate.action_id == alife_world::HeadlessActionIds::EAT
-                    && candidate.target.entity == Some(food)
-            }) {
+            if care_food_is_offered_in_trial(&mut trial, id, food) {
                 return Some(position);
             }
         }
@@ -803,7 +822,13 @@ pub(super) fn run_same_individual_world(
                         // Ordinary food can regrow after an actual meal while the
                         // learner walks away within a 512-decision window. Keep
                         // the assistance explicit and bounded to the cue cadence.
-                        if care_food_is_far(runtime.world(), id, scenario.food) {
+                        let far = care_food_is_far(runtime.world(), id, scenario.food);
+                        let not_offered = runtime
+                            .world()
+                            .entity(scenario.food)
+                            .is_some_and(care_food_ready)
+                            && !care_food_is_offered(runtime.world(), id, scenario.food);
+                        if far || not_offered {
                             let before = care_world_observation(runtime.world(), id);
                             let moved = match care_food_position_in_gaze(runtime.world(), id) {
                                 Some(position) => {
@@ -821,7 +846,7 @@ pub(super) fn run_same_individual_world(
                                     serde_json::json!({"kind":"continuous-care-reposition-v1",
                                     "session_nonce":session_nonce,"world_tick":tick,
                                     "food_target":scenario.food.raw(),"mode":"training_assistance_in_gaze",
-                                    "trigger":"periodic_cue", "before":before,
+                                    "trigger":"periodic_cue", "reason":if far { "outside_range" } else { "not_offered" }, "before":before,
                                     "after":care_world_observation(runtime.world(), id),
                                     "forced_action":false,"reward_override":false,"biology_override":false}),
                                 )?;
@@ -1595,6 +1620,34 @@ mod tests {
             *world.organism_registry().get(id).unwrap().biochemistry(),
             before
         );
+    }
+    #[test]
+    fn nearby_food_behind_gaze_is_not_treated_as_offered() {
+        let seed = 42;
+        let asset = crate::foundation_training::initial_n2048_care_asset(seed).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
+        config.brain_class = BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let mut world =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset)
+                .unwrap()
+                .world;
+        crate::foundation_training::ground_foundation_training_world(&mut world).unwrap();
+        let id = world.organism_entity_ids()[0].0;
+        let food = world.entity_id("food-01").unwrap();
+        world
+            .editor_move_object(food, alife_core::Vec3f::new(1.0, 0.0, 0.0))
+            .unwrap();
+        let before = *world.organism_registry().get(id).unwrap().biochemistry();
+        assert!(!care_food_is_far(&world, id, food));
+        assert!(!care_food_is_offered(&world, id, food));
+        prepare_care_assistance(&mut world, id).unwrap();
+        assert!(care_food_is_offered(&world, id, food));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
+        assert!(!world.entity(food).unwrap().consumed);
     }
     #[test]
     fn care_setup_waits_for_a_safe_loose_unconsumed_food() {
