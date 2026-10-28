@@ -237,6 +237,27 @@ fn initial_frontier(o: &Owner) -> ContinuousFrontier {
     }
 }
 
+fn initialization_report(store: &Path, digest: &str, bound: bool) -> serde_json::Value {
+    serde_json::json!({"kind":"same-individual-initialization-aborted-v1",
+        "initialization_aborted":true,"cleanup_completed":true,
+        "already_published_current":true,"candidate":store.join("current.alife-checkpoint"),
+        "candidate_sha256":digest,"canonical_current_modified":false,
+        "initialization_binding_verified":bound,"dispatched_sessions":0,
+        "seeds_consumed":0,"new_request_allocation_committed":false,
+        "temporary_budget":null,"neural_execution":false})
+}
+
+fn sampling_temperature(
+    base: &CurrentTrainingCheckpointV1,
+    request: &ResidentContinuousRequest,
+) -> Result<f32> {
+    Ok(protocol::effective_sampling_temperature(
+        request.sampling_temperature,
+        base.saved_training_sampling()?
+            .map(|saved| saved.temperature),
+    )?)
+}
+
 /// Caller owns the existing resident store lease. No nested lock is acquired.
 fn abort_initialization(store: &Path) -> Result<serde_json::Value> {
     let marker = store.join(INITIALIZATION);
@@ -251,12 +272,15 @@ fn abort_initialization(store: &Path) -> Result<serde_json::Value> {
         if !bytes.is_empty() && !(bytes.starts_with(INIT) || INIT.starts_with(&bytes)) {
             return Err("unknown continuous initialization prefix".into());
         }
+        let current = store.join("current.alife-checkpoint");
+        regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
+        let digest = hash(&fs::read(&current)?);
         alife_storage::remove_file(&pending)?;
         sync_directory(store)?;
-        return Ok(
-            serde_json::json!({"kind":"same-individual-initialization-aborted-v1","dispatched_sessions":0,
-            "seeds_consumed":0,"canonical_current_modified":false,"neural_execution":false}),
-        );
+        if hash(&fs::read(&current)?) != digest {
+            return Err("Current changed during unbound continuous startup cleanup".into());
+        }
+        return Ok(initialization_report(store, &digest, false));
     }
     let o: Owner = read_metadata(path, INIT)?;
     validate_owner(&o, store)?;
@@ -347,10 +371,7 @@ fn abort_initialization(store: &Path) -> Result<serde_json::Value> {
         alife_storage::remove_file(marker)?;
     }
     sync_directory(store)?;
-    Ok(
-        serde_json::json!({"kind":"same-individual-initialization-aborted-v1","dispatched_sessions":0,
-        "seeds_consumed":0,"canonical_current_modified":false,"neural_execution":false}),
-    )
+    Ok(initialization_report(store, &o.baseline_sha256, true))
 }
 fn validate_startup(
     root: &Path,
@@ -423,6 +444,9 @@ pub fn run_resident_continuous_care(
     write_new(&run.join("run.json"), &serde_json::to_vec(&o)?)?;
     write_new(&run.join("baseline.alife-checkpoint"), &base_bytes)?;
     let baseline = read_current_training_checkpoint(&current)?;
+    // Restoring a private sampler preserves its temperature, seed and counter.
+    // Validate the effective temperature before consuming the session nonce.
+    let actual_temperature = sampling_temperature(&baseline, &request)?;
     let _recovery_capacity = budget.reserve(RECOVERY_HEADROOM)?;
     let mut wal = initial_wal(&o, &baseline)?;
     let mut frontier = initial_frontier(&o);
@@ -475,6 +499,7 @@ pub fn run_resident_continuous_care(
     Ok(
         serde_json::json!({"kind":"resident-continuous-finished-v1","session_nonce":request.seed_range[0],
         "retained_world_seed":baseline.seed,"dispatched_sessions":1,"seeds_consumed":1,
+        "sampling_temperature":actual_temperature,"requested_sampling_temperature":request.sampling_temperature,
         "last_validated_snapshot":frontier.snapshot,"producer":result,
         "terminal_event":read_outcome(&run,&o,"continuous-terminal.bin")?,
         "canonical_current_published":false,"temporary_budget":temporary_budget_report(&budget)?}),
@@ -495,7 +520,8 @@ fn commit_snapshot(
     if !wal.consumed
         || progress.session_nonce != o.request.seed_range[0]
         || progress.trained_rows > o.request.total_trained_decisions as u64
-        || progress.sampling_temperature.to_bits() != o.request.sampling_temperature.to_bits()
+        || progress.sampling_temperature.to_bits()
+            != sampling_temperature(base, &o.request)?.to_bits()
         || now_seconds()? > o.request.finalization_deadline_unix_seconds
     {
         return Err("continuous snapshot exceeds request/session/finalization boundary".into());
@@ -618,7 +644,7 @@ fn restored_snapshot(
     if !wal.consumed
         || p.session_nonce != o.request.seed_range[0]
         || p.trained_rows > o.request.total_trained_decisions as u64
-        || p.sampling_temperature.to_bits() != o.request.sampling_temperature.to_bits()
+        || p.sampling_temperature.to_bits() != sampling_temperature(base, &o.request)?.to_bits()
         || s.state.baseline_current_sha256 != o.baseline_sha256
         || s.state.baseline_policy_version != base.handoff.policy_version
         || s.state.baseline_actor_optimizer_step != base.handoff.actor.optimizer_step
@@ -1036,12 +1062,61 @@ mod tests {
         fs::write(f.0.join(".run/run.json"), &owner_bytes[..20]).unwrap();
         fs::write(f.0.join(".run/baseline.alife-checkpoint"), &before[..10]).unwrap();
         let _lease = store_lease(&f.0).unwrap();
-        abort_initialization(&f.0).unwrap();
+        let report = abort_initialization(&f.0).unwrap();
+        assert_initialization_report(&f.0, &report, &before, true);
         assert!(!f.0.join(".run").exists());
         assert_eq!(
             fs::read(f.0.join("current.alife-checkpoint")).unwrap(),
             before
         );
+    }
+    fn assert_initialization_report(
+        store: &Path,
+        report: &serde_json::Value,
+        source: &[u8],
+        bound: bool,
+    ) {
+        assert_eq!(report["kind"], "same-individual-initialization-aborted-v1");
+        for key in [
+            "initialization_aborted",
+            "cleanup_completed",
+            "already_published_current",
+        ] {
+            assert_eq!(report[key], true, "{key}");
+        }
+        assert_eq!(
+            report["candidate"],
+            serde_json::to_value(store.join("current.alife-checkpoint")).unwrap()
+        );
+        assert_eq!(report["candidate_sha256"], hash(source));
+        assert_eq!(report["initialization_binding_verified"], bound);
+        for key in [
+            "canonical_current_modified",
+            "new_request_allocation_committed",
+            "neural_execution",
+        ] {
+            assert_eq!(report[key], false, "{key}");
+        }
+        assert_eq!(report["dispatched_sessions"], 0);
+        assert_eq!(report["seeds_consumed"], 0);
+        assert!(report["temporary_budget"].is_null());
+    }
+    #[test]
+    fn torn_initialization_reports_unchanged_candidate_without_invented_binding() {
+        let f = Fixture::new();
+        let source = b"unchanged source, not certified by initializer abort";
+        fs::write(f.0.join("current.alife-checkpoint"), source).unwrap();
+        fs::write(f.0.join(INITIALIZATION_NEXT), &INIT[..4]).unwrap();
+        let _lease = store_lease(&f.0).unwrap();
+        assert!(owns(&f.0).unwrap());
+        let report = recover_locked(&f.0).unwrap();
+        assert_initialization_report(&f.0, &report, source, false);
+        assert_eq!(
+            fs::read(f.0.join("current.alife-checkpoint")).unwrap(),
+            source
+        );
+        assert!(!f.0.join(INITIALIZATION_NEXT).exists());
+        assert!(!f.0.join(".run").exists());
     }
     #[test]
     fn initialization_cleanup_retries_after_owned_run_was_already_removed() {

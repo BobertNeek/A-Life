@@ -121,31 +121,48 @@ fn private_binding(
     {
         return Err("same-individual overlay changed private birth founder".into());
     }
-    let exact = gpu
-        .exact_cognitive_state
+    let sampling =
+        private_sampling(life, &save)?.ok_or("exact private training sampler missing")?;
+    if sampling.temperature.to_bits() != progress.sampling_temperature.to_bits() {
+        return Err("same-individual sampling configuration differs from private state".into());
+    }
+    Ok(sampling)
+}
+
+fn private_sampling(
+    life: &CurrentLifeCheckpointV1,
+    save: &alife_world::PortableSaveFile,
+) -> Result<Option<GpuTrainingSamplingConfig>> {
+    if save.creatures.len() != 1 {
+        return Err("same-individual sampler requires exactly one retained organism".into());
+    }
+    let Some(exact) = save.creatures[0]
+        .gpu_brain
         .as_ref()
-        .ok_or("exact cognitive state missing")?;
+        .and_then(|gpu| gpu.exact_cognitive_state.as_ref())
+    else {
+        return Ok(None);
+    };
     let packet: serde_json::Value =
         serde_json::from_slice(&private_asset(life, &save, &exact.asset_id)?)?;
     // The runtime owns this optional private byte packet. Reading the explicit
     // field here also allows this admission code to preserve older codecs.
-    let sampling_bytes: Vec<u8> = serde_json::from_value(
-        packet
-            .get("private_training_sampling")
-            .cloned()
-            .ok_or("exact private training sampler missing")?,
-    )?;
+    let Some(value) = packet
+        .get("private_training_sampling")
+        .filter(|v| !v.is_null())
+    else {
+        return Ok(None);
+    };
+    let sampling_bytes: Vec<u8> = serde_json::from_value(value.clone())?;
     if sampling_bytes.len() > 4096 {
         return Err("private training sampler exceeds its bound".into());
     }
     let sampling: GpuTrainingSamplingConfig = serde_json::from_slice(&sampling_bytes)?;
     sampling.validate()?;
-    if sampling.demonstrator.is_some()
-        || sampling.temperature.to_bits() != progress.sampling_temperature.to_bits()
-    {
-        return Err("same-individual sampling configuration differs from private state".into());
+    if sampling.demonstrator.is_some() {
+        return Err("same-individual saved sampler contains a demonstrator".into());
     }
-    Ok(sampling)
+    Ok(Some(sampling))
 }
 
 impl SameIndividualCurrentV1 {
@@ -157,6 +174,11 @@ impl SameIndividualCurrentV1 {
             p.trained_rows,
             p.completed_updates,
             10_000_000,
+        )?;
+        progress::validate_actor_updates(
+            self.baseline_actor_optimizer_step,
+            current.handoff.actor.optimizer_step,
+            p.completed_updates,
         )?;
         if self.counting_scope != "retained-same-individual-ppo-since-first-tag"
             || self.schema != 1
@@ -214,6 +236,14 @@ impl SameIndividualCurrentV1 {
 }
 
 impl CurrentTrainingCheckpointV1 {
+    /// A retained private stream overrides a new request's sampling defaults.
+    /// Missing legacy packets may be initialized by the producer, never reset.
+    pub fn saved_training_sampling(&self) -> Result<Option<GpuTrainingSamplingConfig>> {
+        let life = self.life.as_ref().ok_or("baseline private life missing")?;
+        let save = alife_world::PortableSaveFile::from_json_str(&life.world_json)?;
+        private_sampling(life, &save)
+    }
+
     /// Admit the decoded full state while retaining the original file identity.
     /// JSON whitespace/order is not silently substituted for source provenance.
     pub fn admitted_source_sha256(&self, bytes: &[u8]) -> Result<String> {

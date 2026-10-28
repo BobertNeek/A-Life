@@ -1,4 +1,20 @@
 //! Device-free invariants shared by typed Current admission and recovery.
+pub(super) fn validate_actor_updates(
+    baseline: u32,
+    current: u32,
+    completed_updates: u64,
+) -> Result<(), &'static str> {
+    // The producer rejects a zero-actor-step PPO call before incrementing policy.
+    // Critic steps are deliberately not inferred from actor update counts.
+    if current
+        .checked_sub(baseline)
+        .is_none_or(|delta| u64::from(delta) < completed_updates)
+    {
+        return Err("same-individual completed updates exceed retained actor Adam steps");
+    }
+    Ok(())
+}
+
 pub(super) fn validate_session_counts(
     start: u64,
     tick: u64,
@@ -21,6 +37,14 @@ pub(super) fn validate_session_counts(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn completed_updates_require_real_actor_steps_without_inventing_critic_steps() {
+        assert!(validate_actor_updates(100, 100, 1).is_err());
+        assert!(validate_actor_updates(100, 101, 2).is_err());
+        assert!(validate_actor_updates(100, 99, 0).is_err());
+        assert!(validate_actor_updates(100, 102, 2).is_ok());
+        assert!(validate_actor_updates(100, 100, 0).is_ok());
+    }
     #[test]
     fn retained_rows_cannot_outnumber_actual_ticks() {
         assert!(validate_session_counts(100, 102, 3, 1, 10).is_err());

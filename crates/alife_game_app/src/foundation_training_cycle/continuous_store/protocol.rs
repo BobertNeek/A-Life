@@ -21,6 +21,21 @@ pub(super) fn incomplete_stage(bytes: &[u8], magic: &[u8; 16], limit: u64) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn saved_sampler_temperature_overrides_new_request_without_reset() {
+        assert_eq!(
+            effective_sampling_temperature(1., Some(0.75))
+                .unwrap()
+                .to_bits(),
+            0.75f32.to_bits()
+        );
+        assert_eq!(
+            effective_sampling_temperature(1., None).unwrap().to_bits(),
+            1f32.to_bits()
+        );
+        assert!(effective_sampling_temperature(1., Some(f32::NAN)).is_err());
+        assert!(effective_sampling_temperature(1., Some(0.)).is_err());
+    }
     const MAGIC: &[u8; 16] = b"ALIFE-CON-INI-1\n";
     #[test]
     fn every_actual_torn_prefix_is_recognized_but_complete_record_is_not() {
@@ -41,4 +56,14 @@ mod tests {
         assert!(!incomplete_stage(&bytes, MAGIC, 100));
         assert!(!incomplete_stage(b"ALIFE-RES-INI-1\n", MAGIC, 100));
     }
+}
+pub(super) fn effective_sampling_temperature(
+    request: f32,
+    saved: Option<f32>,
+) -> Result<f32, &'static str> {
+    let actual = saved.unwrap_or(request);
+    if !actual.is_finite() || !(0.0001..=128.).contains(&actual) {
+        return Err("retained sampling temperature exceeds continuous admission bounds");
+    }
+    Ok(actual)
 }
