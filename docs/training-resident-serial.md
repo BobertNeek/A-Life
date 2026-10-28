@@ -1,9 +1,13 @@
 # Experimental finite resident serial care
 
-The opt-in [finite continuous-world host](training-continuous-world.md) runs one
-longer Feeding world through the same producer, atomic publisher and bound Native
-cleanup. It does not install a new PPO policy into a living world or concatenate
-separate private lives. Its initial 512-decision horizon remains hardware-unqualified.
+For continued learning in the same living individual, use the
+[continuous-world host](training-continuous-world.md) and its
+[same-individual PPO contract](training-same-individual-ppo.md). Its default mode
+restores the saved world and installs updated policies without replacing the life.
+Its explicit `--fresh-world` option retains the finite Feeding diagnostic.
+The `--resident-serial` producer documented below instead creates a fresh world
+for each curriculum episode; it does not preserve one individual's private life
+across episodes. These modes are not interchangeable.
 
 This opt-in producer does not replace the qualified training launcher. No GPU
 qualification or throughput result is implied by this source change.
