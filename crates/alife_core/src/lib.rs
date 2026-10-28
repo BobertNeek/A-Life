@@ -293,10 +293,11 @@ pub use perception::{
     CANDIDATE_FEATURE_COUNT, MAX_ACTION_CANDIDATES,
 };
 pub use phenotype::{
-    AuxiliaryDecoderPlan, BrainCapacityClass, BrainExecutionBudget, BrainPhenotype,
-    CandidateDecoderFamilyPlan, CandidateDecoderPlan, CompiledBudgets, CompiledProjection,
-    CompiledSynapse, CompiledSynapseKind, DecoderHeadKind, DecoderSynapseCoordinate,
-    FoundationWeightApplication, GlobalPhenotypeBudgetReceipt, MemoryChannelPlan,
+    validate_weight_only_policy_successor, AuxiliaryDecoderPlan, BrainCapacityClass,
+    BrainExecutionBudget, BrainPhenotype, CandidateDecoderFamilyPlan, CandidateDecoderPlan,
+    CompiledBudgets, CompiledProjection, CompiledSynapse, CompiledSynapseKind, DecoderHeadKind,
+    DecoderSynapseCoordinate, FoundationWeightApplication, GlobalPhenotypeBudgetReceipt,
+    MemoryChannelPlan, N2048LivePolicyProvenanceV1, N2048LivePolicyTransition,
     N4096ResearchLayoutV1, N512FounderFoundationProjection, N512FounderProjectionReceipt,
     N512FrozenAbiRecipe, NeuronDynamics, PersistentAddressMap, PersistentDecoderAddress,
     PersistentDecoderAddressEntry, PersistentNeuronAddress, PersistentNeuronAddressEntry,

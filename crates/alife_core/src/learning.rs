@@ -457,6 +457,31 @@ impl LearningSequenceGuard {
         self.last_committed
     }
 
+    /// Rebind the current-policy replay cursor without forgetting any committed
+    /// sequence. Historical patches keep their original identities; this cursor
+    /// is explicitly retargeted, not a fabricated new learning application.
+    /// Prepare on a clone before an irreversible policy installation.
+    pub fn rebind_phenotype(
+        &mut self,
+        expected: PhenotypeHash,
+        next: PhenotypeHash,
+    ) -> Result<(), ScaffoldContractError> {
+        self.organism_id.validate()?;
+        if self.phenotype_hash != expected
+            || next == PhenotypeHash([0; 4])
+            || self.last_committed.is_some_and(|last| {
+                last.organism_id != self.organism_id || last.phenotype_hash != expected
+            })
+        {
+            return Err(ScaffoldContractError::LearningEvidenceMismatch);
+        }
+        if let Some(last) = &mut self.last_committed {
+            last.phenotype_hash = next;
+        }
+        self.phenotype_hash = next;
+        Ok(())
+    }
+
     pub fn validate_next(
         &self,
         next: OutcomeCreditReplayKey,

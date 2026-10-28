@@ -235,10 +235,27 @@ pub(super) fn validate(snapshot: &CurrentLifeCheckpointV1) -> Result<()> {
 
 /// Restore a portable private world/organism bundle into a fresh directory.
 /// It is distinct from the fresh-cohort founder/Adam continuation boundary.
+pub fn materialize_current_training_life(
+    checkpoint: &alife_training::CurrentTrainingCheckpointV1,
+    output: &Path,
+) -> Result<()> {
+    checkpoint.validate()?;
+    checkpoint.require_living_continuation()?;
+    let output =
+        alife_training::resolve_isolated_training_output(output, std::iter::empty::<&Path>())?;
+    let snapshot = checkpoint
+        .life
+        .as_ref()
+        .ok_or("current checkpoint has no private life snapshot")?;
+    fs::create_dir(&output)?;
+    materialize(snapshot, &output)
+}
+
 pub fn extract_current_training_life(checkpoint: &Path, output: &Path) -> Result<()> {
     let checkpoint = checkpoint.canonicalize()?;
     let output = alife_training::resolve_isolated_training_output(output, [checkpoint.as_path()])?;
     let current = read_current_training_checkpoint(&checkpoint)?;
+    current.require_living_continuation()?;
     let snapshot = current
         .life
         .ok_or("current checkpoint has no private life snapshot")?;

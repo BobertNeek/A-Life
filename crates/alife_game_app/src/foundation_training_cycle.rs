@@ -44,6 +44,9 @@ mod current;
 pub use current::*;
 mod resident;
 pub use resident::*;
+mod continuous_world;
+#[cfg(all(test, feature = "gpu-tests"))]
+pub(crate) use continuous_world::advance_legacy_policy_sleep;
 
 fn cycle_ppo_config(temperature: f32) -> Result<PpoConfig> {
     if !temperature.is_finite() || !(0.0001..=128.0).contains(&temperature) {
@@ -353,6 +356,10 @@ fn load_cycle_continuation(
             return Err("current checkpoint requires no objective transition".into());
         }
         let checkpoint = read_current_training_checkpoint(previous)?;
+        checkpoint.require_living_continuation()?;
+        if checkpoint.same_individual.is_some() {
+            return Err("same-individual Current requires resident-continuous; a fresh cohort would reset its private world".into());
+        }
         let admitted = checkpoint.handoff.admit()?;
         return Ok(SealedCycleContinuation {
             asset: admitted.foundation,

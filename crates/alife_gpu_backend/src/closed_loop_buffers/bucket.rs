@@ -2883,6 +2883,41 @@ pub(crate) struct GpuFixedSlotUpload {
 }
 
 impl GpuFixedSlotUpload {
+    #[cfg(any(test, feature = "training-rollout"))]
+    fn validate_weight_only_successor(
+        &self,
+        next: &Self,
+    ) -> Result<Range<usize>, GpuClosedLoopError> {
+        if self.ranges != next.ranges
+            || self.record() != next.record()
+            || self.immutable_plan_words != next.immutable_plan_words
+            || self.mutable_state_words.len() != next.mutable_state_words.len()
+            || self.immutable_weight_words.len() != next.immutable_weight_words.len()
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        let start = self
+            .ranges
+            .layout
+            .genetic_weight_words
+            .start
+            .checked_sub(self.ranges.immutable_weight_words.start)
+            .ok_or(GpuClosedLoopError::MalformedUpload)? as usize;
+        let end = start
+            .checked_add(self.record().synapse_count as usize)
+            .ok_or(GpuClosedLoopError::ArithmeticOverflow)?;
+        if end > self.immutable_weight_words.len()
+            || self.immutable_weight_words[..start] != next.immutable_weight_words[..start]
+            || self.immutable_weight_words[end..] != next.immutable_weight_words[end..]
+            || next.immutable_weight_words[start..end]
+                .iter()
+                .any(|v| !f32::from_bits(*v).is_finite())
+        {
+            return Err(GpuClosedLoopError::MalformedUpload);
+        }
+        Ok(start..end)
+    }
+
     pub(crate) fn from_existing_slot(
         brain_slot: GpuBrainSlot,
         ranges: GpuFixedSlotRanges,
@@ -4003,6 +4038,50 @@ impl GpuFixedClassArenaBuffers {
         Ok(())
     }
 
+    /// One queue transaction updates only the immutable learned base and its
+    /// compiled identity. No mutable buffer is referenced by these copies.
+    #[cfg(feature = "training-rollout")]
+    pub(crate) fn record_weight_only_policy_upload(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        previous: &GpuFixedSlotUpload,
+        next: &GpuFixedSlotUpload,
+        staging: &mut Vec<wgpu::Buffer>,
+    ) -> Result<(), GpuClosedLoopError> {
+        use wgpu::util::DeviceExt;
+        self.validate_ranges(previous.ranges())?;
+        let weights = previous.validate_weight_only_successor(next)?;
+        let identity = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("live-policy-compiled-identity"),
+            contents: bytemuck::bytes_of(next.identity()),
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+        encoder.copy_buffer_to_buffer(
+            &identity,
+            0,
+            &self.phenotype_identities,
+            next.ranges.identity_bytes.start,
+            std::mem::size_of::<GpuPhenotypeIdentityRecord>() as u64,
+        );
+        staging.push(identity);
+        let contents = bytemuck::cast_slice(&next.immutable_weight_words[weights]);
+        let source = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("live-policy-learned-base-weights"),
+            contents,
+            usage: wgpu::BufferUsages::COPY_SRC,
+        });
+        encoder.copy_buffer_to_buffer(
+            &source,
+            0,
+            &self.immutable_weight_words,
+            u64::from(next.ranges.layout.genetic_weight_words.start) * 4,
+            contents.len() as u64,
+        );
+        staging.push(source);
+        Ok(())
+    }
+
     pub(crate) fn record_slot_upload(
         &self,
         device: &wgpu::Device,
@@ -4501,6 +4580,77 @@ mod fixed_arena_tests {
         BrainGenome, DevelopmentState, NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
         MAX_REPLAY_CAPTURE_SYNAPSES,
     };
+
+    fn policy_uploads() -> (GpuFixedSlotUpload, GpuFixedSlotUpload) {
+        use alife_core::{FoundationWeightAsset, N2048LivePolicyTransition, TrainingStageManifest};
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0x2048_0F01, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(1.0).unwrap());
+        let original = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let asset = FoundationWeightAsset::from_phenotype_for_genetic_birth(&original).unwrap();
+        let (original, inputs) =
+            PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset)
+                .unwrap();
+        let mut weights = original
+            .synapses()
+            .iter()
+            .map(|s| s.genetic_weight())
+            .collect::<Vec<_>>();
+        weights[0] += 0.001;
+        let trained = FoundationWeightAsset::from_trained_weights(
+            &original,
+            weights,
+            TrainingStageManifest::new(1, 1, 1),
+        )
+        .unwrap();
+        let transition = N2048LivePolicyTransition::prepare(&inputs, 5, trained).unwrap();
+        let plan = GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024).unwrap();
+        let before = plan.prepare_slot_upload(0, 1, &original).unwrap();
+        let after = plan
+            .prepare_slot_upload(0, 1, transition.next_phenotype())
+            .unwrap();
+        (before, after)
+    }
+
+    #[test]
+    fn policy_upload_selects_only_genetic_words_and_leaves_mutable_payload_unreferenced() {
+        let (before, mut after) = policy_uploads();
+        let range = before.validate_weight_only_successor(&after).unwrap();
+        assert_eq!(range.len(), before.record().synapse_count as usize);
+        assert_ne!(
+            before.immutable_weight_words[range.clone()],
+            after.immutable_weight_words[range.clone()]
+        );
+        // Neither this generated initial state nor actual live mutable data is
+        // an input to the two immutable GPU copies.
+        after.mutable_state_words.fill(0x3e80_0000);
+        assert_eq!(
+            before.validate_weight_only_successor(&after).unwrap(),
+            range
+        );
+    }
+
+    #[test]
+    fn policy_upload_rejects_alpha_layout_and_mutable_size_changes_before_submission() {
+        let (before, mut after) = policy_uploads();
+        let alpha = (after.ranges.layout.alpha_words.start
+            - after.ranges.immutable_weight_words.start) as usize;
+        after.immutable_weight_words[alpha] ^= 1;
+        assert!(before.validate_weight_only_successor(&after).is_err());
+        let (before, mut after) = policy_uploads();
+        after.mutable_state_words.pop();
+        assert!(before.validate_weight_only_successor(&after).is_err());
+        let (before, mut after) = policy_uploads();
+        after.immutable_plan_words[0] ^= 1;
+        assert!(before.validate_weight_only_successor(&after).is_err());
+    }
 
     #[test]
     fn fixed_slot_ranges_are_disjoint_and_ceiling_derived_for_every_promoted_class() {

@@ -4,8 +4,12 @@
 //! owns the one authoritative device, fixed class arenas, generation-checked
 //! capabilities, bounded selection readback, and fail-stop transaction state.
 
+#[cfg(feature = "training-rollout")]
+mod live_policy;
 mod selector_exploration;
 mod tick;
+#[cfg(feature = "training-rollout")]
+pub use live_policy::GpuLivePolicyInstallReceipt;
 #[cfg(feature = "training-rollout")]
 mod training_capture;
 #[cfg(feature = "training-rollout")]

@@ -36,12 +36,41 @@ pub struct PhenotypeCompilerInputs {
     /// Explicit opt-in exact genetic weights; absent in existing builtin inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     n2048_candidate_asset: Option<crate::FoundationWeightAsset>,
+    /// Explicit same-individual learned policy, separate from biological genes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    live_policy: Option<super::N2048LivePolicyProvenanceV1>,
     capacity_class_id: BrainClassId,
     capacity_digest: [u64; 4],
     canonical_digest: [u64; 4],
 }
 
 impl PhenotypeCompilerInputs {
+    pub fn try_new_with_live_n2048_policy(
+        genome: BrainGenome,
+        capacity: &BrainCapacityClass,
+        development: DevelopmentState,
+        sensor_profile: SensorProfile,
+        asset: crate::FoundationWeightAsset,
+        provenance: super::N2048LivePolicyProvenanceV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        provenance.validate()?;
+        let mut value = Self::try_new_with_n2048_candidate(
+            genome,
+            capacity,
+            development,
+            sensor_profile,
+            asset,
+        )?;
+        value.live_policy = Some(provenance);
+        value.canonical_digest = value.recompute_digest()?;
+        value.validate_against(capacity)?;
+        Ok(value)
+    }
+
+    pub const fn live_policy(&self) -> Option<super::N2048LivePolicyProvenanceV1> {
+        self.live_policy
+    }
+
     pub fn try_new_with_n2048_candidate(
         genome: BrainGenome,
         capacity: &BrainCapacityClass,
@@ -185,6 +214,7 @@ impl PhenotypeCompilerInputs {
             foundation_weight_application,
             capacity_class_id: capacity.id(),
             n2048_candidate_asset: None,
+            live_policy: None,
             capacity_digest: capacity.canonical_digest(),
             canonical_digest: [0; 4],
         };
@@ -309,6 +339,13 @@ impl PhenotypeCompilerInputs {
             &self.foundation_abi_selection,
             self.foundation_weight_application,
         )?;
+        if let Some(provenance) = self.live_policy {
+            provenance.validate()?;
+            if capacity.id() != BrainCapacityClass::N2048_ID || self.n2048_candidate_asset.is_none()
+            {
+                return Err(ScaffoldContractError::PhenotypeCompile);
+            }
+        }
         if let Some(asset) = &self.n2048_candidate_asset {
             asset.encode_canonical()?;
             let abi = self
@@ -361,6 +398,13 @@ impl PhenotypeCompilerInputs {
             d.write_bytes(b"n2048-exact-candidate-v1");
             d.write_bytes(asset.digest().bytes());
         }
+        if let Some(provenance) = self.live_policy {
+            // None writes nothing: every existing canonical input stays exact.
+            d.write_bytes(b"n2048-live-learned-policy-v1");
+            d.write_u16(provenance.schema);
+            d.write_bytes(provenance.birth_foundation_digest.bytes());
+            d.write_u64(provenance.policy_version);
+        }
         d.write_u32(language_codebook.id().0);
         for byte in language_codebook.canonical_digest().bytes() {
             d.write_u8(*byte);
@@ -391,6 +435,8 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             foundation_weight_application: Option<FoundationWeightApplication>,
             #[serde(default)]
             n2048_candidate_asset: Option<crate::FoundationWeightAsset>,
+            #[serde(default)]
+            live_policy: Option<super::N2048LivePolicyProvenanceV1>,
             capacity_class_id: BrainClassId,
             capacity_digest: [u64; 4],
             canonical_digest: [u64; 4],
@@ -411,6 +457,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             cognitive_channel_extension: w.cognitive_channel_extension,
             foundation_weight_application: w.foundation_weight_application,
             n2048_candidate_asset: w.n2048_candidate_asset,
+            live_policy: w.live_policy,
             capacity_class_id: w.capacity_class_id,
             capacity_digest: w.capacity_digest,
             canonical_digest: w.canonical_digest,

@@ -63,6 +63,7 @@ class ContinuousCareTests(unittest.TestCase):
             checkpoint_tool_sha256=session.host.sha256(self.binary), seed=80, last_seed=87,
             decisions=512, food_need_condition='newborn_v1', hard_end=dt.datetime.now(session.host.UTC) + dt.timedelta(hours=1),
             final_reserve_seconds=180, max_temporary_bytes=2 * 2**30, reconcile=False,
+            fresh_world=True, auto_seed=False,
             idle_seconds=300, min_disk_gib=20, min_memory_gib=8, gpu_index=0,
             max_gpu_c=75, min_gpu_free_mib=2048)
 
@@ -289,6 +290,7 @@ class ContinuousCareTests(unittest.TestCase):
     def test_plan_has_no_native_or_store_access(self):
         result = session.main(['--store', 'does-not-exist', '--lane', 'also-absent',
             '--binary', 'absent', '--checkpoint-tool', 'absent', '--seed', '80', '--last-seed', '87',
+            '--fresh-world',
             '--hard-end', (dt.datetime.now(session.host.UTC) + dt.timedelta(hours=1)).isoformat()])
         self.assertEqual(result['request']['rows'][0]['decisions'], 512)
         self.assertFalse(result['mutation'])
@@ -305,6 +307,7 @@ class ContinuousCareTests(unittest.TestCase):
         with self.clock_at(dt.datetime(2026, 11, 2, 6, tzinfo=session.host.UTC)):
             result = session.main(['--store', 'does-not-exist', '--lane', 'also-absent',
                 '--binary', 'absent', '--checkpoint-tool', 'absent', '--seed', '80', '--last-seed', '87',
+                '--fresh-world',
                 '--night-date', '2026-11-02'])
         manifest = result['nightly_window']
         self.assertEqual(manifest['start_utc'], '2026-11-02T07:00:00+00:00')
@@ -376,6 +379,277 @@ class ContinuousCareTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'before sidecar'):
                 session.run(args)
         return cp.read_json(self.lane / session.RECEIPT)
+
+    def live_args(self):
+        args = self.args()
+        args.fresh_world = False
+        args.food_need_condition = None
+        args.total_decisions = 1024
+        args.snapshot_every_updates = 2
+        return args
+
+    def live_native(self, binary, *argv):
+        report = self.native(binary, *argv)
+        if argv[0] == '--resident-contract':
+            report.update(same_individual_ppo=True, restore_current_private_world=True,
+                mid_world_offline_policy_install=True,
+                full_sampling_state_checkpoint=True, in_world_cutoff=True,
+                max_total_trained_decisions=10_000_000, max_decisions_per_update=36000,
+                world_ticks_per_second=20)
+        return report
+
+    def continuous_producer(self, argv, log, deadline, guard, environment, on_started):
+        self.assertEqual(argv[1], '--resident-continuous')
+        guard()
+        on_started(Process())
+        request = cp.read_json(Path(argv[3]))
+        self.assertNotIn('rows', request)
+        self.assertNotIn('food_need_condition', request)
+        self.assertNotIn('allocation_admission_required', request)
+        self.assertEqual(request['total_trained_decisions'], 1024)
+        self.assertEqual(request['decisions_per_update'], 512)
+        self.assertEqual(request['snapshot_every_updates'], 2)
+        self.assertEqual(int(deadline.timestamp()), request['finalization_deadline_unix_seconds'])
+        self.assertEqual(request['finalization_deadline_unix_seconds'] -
+            request['collection_cutoff_unix_seconds'], 120)
+        with cp.writer_lock(self.store):
+            self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+            run = self.store / cp.RUN
+            run.mkdir()
+            candidate = copy.deepcopy(self.initial)
+            first, last = request['seed_range']
+            candidate['seeds']['pending_range'] = [first + 1, last] if first < last else None
+            candidate.update(policy_version=42, actor_optimizer_step=104, value_optimizer_step=206)
+            candidate['private_lifetime'] = [7, 8]
+            candidate['same_individual'] = {'baseline_current_sha256': cp.digest(self.store / cp.CURRENT),
+                'baseline_policy_version':40, 'baseline_actor_optimizer_step':100,
+                'baseline_value_optimizer_step':200, 'baseline_trained_rows':0, 'baseline_completed_updates':0,
+                'total_trained_rows':1024, 'total_completed_updates':2,
+                'progress':{'session_nonce':first, 'organism_id':1, 'session_start_world_tick':100,
+                    'world_tick':1126, 'trained_rows':1024, 'completed_updates':2, 'sampling_temperature':1.0}}
+            cp.write_json(run / 'recovered-current.alife-checkpoint', candidate)
+            # A later provisional event is deliberately absent from the admitted snapshot.
+            events = [{'kind': 'continuous-update-v1', 'policy_before': 40+i, 'policy_after': 41+i,
+                'actor_optimizer_step': 102+i*2, 'value_optimizer_step': 203+i*3,
+                'trained_rows': 512} for i in range(3)]
+            Path(str(log) + '.stdout.log').write_text(''.join(json.dumps(e)+'\n' for e in events))
+            Path(str(log) + '.stderr.log').write_text('')
+
+    def test_default_plan_is_same_individual_without_store_access_or_seed_allocation(self):
+        result = session.main(['--store', 'absent-store', '--lane', 'absent-owner',
+            '--binary', 'absent-native', '--checkpoint-tool', 'absent-tool', '--auto-seed',
+            '--hard-end', (dt.datetime.now(session.host.UTC) + dt.timedelta(hours=1)).isoformat()])
+        request = result['request']
+        self.assertEqual(request['total_trained_decisions'], 1_000_000)
+        self.assertEqual(request['decisions_per_update'], 512)
+        self.assertEqual(request['snapshot_every_updates'], 32)
+        self.assertIsNone(request['seed_range'])
+        self.assertTrue(request['allocation_admission_required'])
+        self.assertNotIn('rows', request)
+        self.assertFalse(result['native_execution'])
+        self.assertEqual(self.calls, [])
+
+    def test_live_default_refuses_older_binary_before_loading_or_changing_current(self):
+        with self.assertRaisesRegex(ValueError, 'no fresh-world fallback'):
+            session.run(self.live_args())
+        self.assertEqual(self.calls, ['--resident-contract'])
+        self.assertEqual(self.child.call_count, 0)
+        self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+
+    def test_continuous_mode_retains_only_saved_updates_and_leaves_native_finalization_time(self):
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.continuous_producer):
+            receipt = session.run(self.live_args())
+        self.assertEqual(receipt['retained_trained_rows'], 1024)
+        self.assertEqual(len(receipt['observed_updates']), 3)
+        self.assertEqual(receipt['after']['policy_version'], 42)
+        self.assertEqual(receipt['after']['actor_optimizer_step'], 104)
+        self.assertEqual(receipt['after']['value_optimizer_step'], 206)
+        self.assertFalse(receipt['one_fresh_world'])
+        self.assertTrue(receipt['same_individual_across_sessions'])
+        self.assertEqual(receipt['retained_continuous_progress']['unique_world_ticks'], 1026)
+        self.assertEqual(receipt['retained_simulation_seconds'], 51.3)
+        self.assertIsNone(receipt['causal_speed'])
+        self.assertFalse((self.store / cp.RUN).exists())
+
+    def test_actual_native_event_contract_keeps_summary_and_terminal_evidence(self):
+        path = self.lane / (session.LOG + '.stdout.log')
+        kinds = ('continuous-started-v1', 'continuous-update-v1',
+                 'continuous-untrained-window-v1', 'continuous-terminal-v1',
+                 'continuous-world-finished-v1')
+        path.write_text('device warning\n' + ''.join(json.dumps({'kind': k})+'\n' for k in kinds))
+        self.assertEqual([e['kind'] for e in session.read_events(self.lane)], list(kinds))
+
+    def test_terminal_recovery_evidence_survives_crash_after_native_cleanup(self):
+        terminal = {'kind': 'continuous-terminal-v1', 'terminal': True,
+                    'terminal_death_tick': 1200}
+        summary = {'kind': 'continuous-world-finished-v1', 'terminal': True,
+                   'trained_rows': 1536, 'saved_trained_rows': 1024}
+        interrupted = False
+
+        def native(binary, *argv):
+            nonlocal interrupted
+            result = self.live_native(binary, *argv)
+            if argv[0] == '--recover-resident':
+                result.update(terminal_event=terminal, producer_result=summary)
+            if argv[0] == '--finish-resident-run' and not interrupted:
+                interrupted = True
+                raise RuntimeError('after native cleanup, before host receipt')
+            return result
+
+        with patch.object(session.current, 'tool', side_effect=native), \
+                patch.object(session.host, 'run_child', side_effect=self.continuous_producer):
+            with self.assertRaisesRegex(RuntimeError, 'before host receipt'):
+                session.run(self.live_args())
+            self.assertFalse((self.store / cp.RUN).exists())
+            self.assertEqual(cp.read_json(self.lane / session.STATE)['native_recovery']['terminal_event'], terminal)
+            # Even lost stdout cannot erase Native's bound durable outcome.
+            (self.lane / (session.LOG + '.stdout.log')).write_text('')
+            args = self.live_args()
+            args.reconcile = True
+            receipt = session.run(args)
+        self.assertEqual(receipt['terminal_event'], terminal)
+        self.assertEqual(receipt['native_summary'], summary)
+        self.assertEqual(receipt['retained_trained_rows'], 1024)
+        with self.assertRaisesRegex(ValueError, 'silent snapshot resurrection'):
+            session.refuse_observed_terminal_resume(self.lane, receipt['current_sha256'], 'same_individual')
+        # A different admitted Current and an explicitly different fresh-world
+        # diagnostic do not inherit this life-specific refusal.
+        session.refuse_observed_terminal_resume(self.lane, 'different-current', 'same_individual')
+        session.refuse_observed_terminal_resume(self.lane, receipt['current_sha256'], 'fresh_world')
+
+    def test_actual_update_policy_after_contract_counts_only_admitted_prefix(self):
+        before = {'policy_version': 40}
+        admitted = {'policy_version': 42, 'actor_optimizer_step': 104, 'value_optimizer_step': 206}
+        updates = [{'policy_before':40+i, 'policy_after':41+i, 'trained_rows':512,
+                    'actor_optimizer_step':102+i*2, 'value_optimizer_step':203+i*3} for i in range(3)]
+        self.assertEqual(session.retained_continuous_rows(before, admitted, updates), 1024)
+        self.assertIsNone(session.retained_continuous_rows(before, admitted, updates[1:]))
+
+    def test_same_individual_initialization_abort_uses_actual_native_response_contract(self):
+        for bound in (False, True):
+            with self.subTest(bound=bound):
+                self.store = self.root / f'live-init-{bound}'
+                self.lane = self.root / f'live-init-owner-{bound}'
+                self.store.mkdir()
+                self.lane.mkdir()
+                cp.write_json(self.store / cp.CURRENT, self.initial)
+                before = cp.digest(self.store / cp.CURRENT)
+                marker = self.store / (session.NATIVE_INITIALIZATION if bound else session.NATIVE_INITIALIZATION_NEXT)
+
+                def startup(argv, log, deadline, guard, environment, on_started):
+                    self.assertEqual(argv[1], '--resident-continuous')
+                    on_started(Process())
+                    marker.write_bytes(b'bound owner' if bound else b'torn first stage')
+                    raise RuntimeError('before continuous session dispatch')
+
+                def native(binary, *argv):
+                    if argv[0] != '--finish-resident-run':
+                        return self.live_native(binary, *argv)
+                    with cp.writer_lock(self.store):
+                        marker.unlink()
+                    return {'kind':'same-individual-initialization-aborted-v1',
+                        'candidate':str(self.store / cp.CURRENT), 'candidate_sha256':before,
+                        'already_published_current':True, 'cleanup_completed':True,
+                        'initialization_aborted':True, 'initialization_binding_verified':bound,
+                        'dispatched_sessions':0, 'seeds_consumed':0,
+                        'new_request_allocation_committed':False, 'neural_execution':False}
+
+                with patch.object(session.current, 'tool', side_effect=native), \
+                        patch.object(session.host, 'run_child', side_effect=startup), \
+                        patch.object(cp.Store, 'publish', side_effect=AssertionError('no dispatch, no publication')):
+                    receipt = session.run(self.live_args())
+                self.assertEqual(cp.digest(self.store / cp.CURRENT), before)
+                self.assertEqual(receipt['retained_trained_rows'], 0)
+                self.assertEqual(receipt['recovery']['initialization_binding_verified'], bound)
+                self.assertFalse(receipt['one_fresh_world'])
+
+    def test_admitted_terminal_current_refuses_new_lane_before_allocation_or_dispatch(self):
+        current = copy.deepcopy(self.initial)
+        current['terminal_disposition'] = {'kind':'observed-terminal-life-v1', 'observed_world_tick':1200}
+        cp.write_json(self.store / cp.CURRENT, current)
+        before = cp.digest(self.store / cp.CURRENT)
+        with patch.object(session.current, 'tool', side_effect=self.live_native):
+            with self.assertRaisesRegex(ValueError, 'terminal life'):
+                session.run(self.live_args())
+        self.assertEqual(cp.digest(self.store / cp.CURRENT), before)
+        self.assertEqual(self.child.call_count, 0)
+        self.assertNotIn('--check-current-allocation', self.calls)
+        self.assertFalse((self.lane / session.STATE).exists())
+
+    def test_auto_seed_uses_admitted_tail_and_does_not_claim_unknown_history_fresh(self):
+        args = self.live_args()
+        args.auto_seed = True
+        args.seed = args.last_seed = None
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=self.continuous_producer):
+            receipt = session.run(args)
+        self.assertEqual(receipt['request']['seed_range'], [80, 87])
+        self.assertEqual(receipt['seed_admission']['historical_freshness'], 'unknown')
+        self.assertEqual(cp.read_json(self.store / cp.CURRENT)['seeds']['pending_range'], [81, 87])
+
+    def test_next_seed_follows_known_exclusions_without_releasing_an_owned_tail(self):
+        report = copy.deepcopy(self.initial)
+        self.assertEqual(session.admitted_seed_range(report), [80, 87])
+        report['seeds']['pending_range'] = None
+        self.assertEqual(session.admitted_seed_range(report), [88, 88])
+        report['seeds']['excluded_ranges'] = [[1, 2**64-1]]
+        with self.assertRaisesRegex(ValueError, 'namespace exhausted'):
+            session.admitted_seed_range(report)
+
+    def test_missing_update_or_optimizer_mismatch_never_fabricates_retained_rows(self):
+        before = {'policy_version': 40}
+        admitted = {'policy_version': 42, 'actor_optimizer_step': 104, 'value_optimizer_step': 206}
+        updates = [{'policy_version':41, 'trained_rows':512, 'actor_optimizer_step':102, 'value_optimizer_step':203},
+            {'policy_version':42, 'trained_rows':512, 'actor_optimizer_step':104, 'value_optimizer_step':206}]
+        self.assertEqual(session.retained_continuous_rows(before, admitted, updates), 1024)
+        self.assertIsNone(session.retained_continuous_rows(before, admitted, updates[1:]))
+        updates[-1]['actor_optimizer_step'] = 999
+        self.assertIsNone(session.retained_continuous_rows(before, admitted, updates))
+
+    def test_admitted_counters_count_without_logs_but_reject_wrong_session_or_baseline(self):
+        before={'policy_version':40,'actor_optimizer_step':100,'value_optimizer_step':200,'same_individual':None}
+        admitted={'policy_version':42,'actor_optimizer_step':104,'value_optimizer_step':206,
+            'same_individual':{'baseline_current_sha256':'baseline', 'baseline_policy_version':40,
+                'baseline_actor_optimizer_step':100,'baseline_value_optimizer_step':200,
+                'baseline_trained_rows':0,'baseline_completed_updates':0,'total_trained_rows':1024,
+                'total_completed_updates':2,'progress':{'session_nonce':80,'organism_id':1,
+                    'session_start_world_tick':100,'world_tick':1126,'trained_rows':1024,'completed_updates':2}}}
+        self.assertEqual(session.retained_continuous_rows(before,admitted,[],
+            baseline_sha256='baseline',session_nonce=80),1024)
+        self.assertIsNone(session.retained_continuous_rows(before,admitted,[],
+            baseline_sha256='changed',session_nonce=80))
+        self.assertIsNone(session.retained_continuous_rows(before,admitted,[],
+            baseline_sha256='baseline',session_nonce=81))
+        admitted['same_individual']['total_trained_rows']=1025
+        self.assertIsNone(session.bound_continuous_progress(before,admitted,'baseline',80))
+
+    def test_restore_mode_refuses_need_repreparation_and_invalid_horizon(self):
+        args = self.live_args()
+        args.food_need_condition = 'ordinary_healthy_aging_v1'
+        with self.assertRaisesRegex(ValueError, 'does not accept food/need preparation'):
+            session.request_for(args, dt.datetime.now(session.host.UTC))
+        args.food_need_condition = None
+        args.total_decisions = 10_000_001
+        with self.assertRaisesRegex(ValueError, 'continuous total'):
+            session.request_for(args, dt.datetime.now(session.host.UTC))
+
+    def test_live_finalization_guard_has_time_to_save_but_cannot_admit_new_collection(self):
+        args = self.live_args()
+        args.night_date = dt.date(2026, 11, 2)
+        args.hard_end = dt.datetime(2026, 11, 2, 15, tzinfo=session.host.UTC)
+        self.mock(session.host, 'resource_snapshot', return_value={
+            'disk_free_bytes': 100 * 2**30, 'available_memory_bytes': 16 * 2**30, 'idle_seconds': 1000})
+        self.mock(session, 'gpu_snapshot', return_value={
+            'adapter': 'synthetic', 'temperature_c': 40, 'free_memory_mib': 4096, 'utilization_percent': 0})
+        guard = GUARD_FACTORY(args, self.lane, self.store, allow_finalization=True)
+        with self.clock_at(dt.datetime(2026, 11, 2, 14, 58, tzinfo=session.host.UTC)):
+            guard()  # Existing Native writer may finalize after soft collection cutoff.
+            with self.assertRaisesRegex(ValueError, 'dated Alberta'):
+                session.run(args)  # Another session may not start in that save reserve.
+        with self.clock_at(dt.datetime(2026, 11, 2, 14, 59, tzinfo=session.host.UTC)):
+            with self.assertRaisesRegex(ValueError, 'finalization window'):
+                guard()
 
     def stage_committed_retirement(self):
         with patch.object(session, 'retire_sidecars', side_effect=RuntimeError('before sidecar retirement')):
@@ -563,12 +837,18 @@ class ContinuousCareTests(unittest.TestCase):
                     with cp.writer_lock(self.store):
                         self.assertFalse((self.store / cp.RUN).exists())
                         (self.store / marker_name).unlink()
-                    return {'kind': 'resident-initialization-aborted-v1', 'already_published_current': True,
+                    bound = marker_name == session.NATIVE_INITIALIZATION
+                    response = {'kind': 'resident-initialization-aborted-v1', 'already_published_current': True,
                         'candidate': str(self.store / cp.CURRENT), 'candidate_sha256': before,
                         'cleanup_completed': True, 'initialization_aborted': True,
                         'initialization_binding_verified': marker_name == session.NATIVE_INITIALIZATION,
                         'dispatched_worlds': 0, 'seeds_consumed': 0, 'new_request_allocation_committed': False,
                         'temporary_budget': None, 'neural_execution': False}
+                    if not bound:
+                        # The common torn prefix cannot identify old/new format.
+                        response['kind'] = 'same-individual-initialization-aborted-v1'
+                        response['dispatched_sessions'] = response.pop('dispatched_worlds')
+                    return response
 
                 self.child.side_effect = startup
                 with patch.object(session.current, 'tool', side_effect=native), \

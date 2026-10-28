@@ -8,6 +8,10 @@ const MAGIC: &[u8; 16] = b"ALIFE-CURRENT-1\n";
 const HEADER: usize = 16 + 8 + 32;
 pub const MAX_CURRENT_CHECKPOINT_BYTES: u64 = 256 * 1024 * 1024;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+mod same_individual;
+pub use same_individual::*;
+mod terminal;
+pub use terminal::*;
 
 /// Exact union of consumed, reserved, interrupted and assessment seeds. Ranges
 /// are coalesced, not a receipt log. Unknown historical freshness stays unknown.
@@ -136,6 +140,10 @@ pub struct CurrentTrainingCheckpointV1 {
     pub seeds: CheckpointSeedsV1,
     pub handoff: FoundationTrainingHandoffV1,
     pub life: Option<CurrentLifeCheckpointV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub same_individual: Option<SameIndividualCurrentV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_disposition: Option<CurrentTerminalDispositionV1>,
 }
 impl CurrentTrainingCheckpointV1 {
     pub fn validate(&self) -> Result<()> {
@@ -160,6 +168,19 @@ impl CurrentTrainingCheckpointV1 {
             }
         }
         self.handoff.validate()?;
+        match &self.same_individual {
+            Some(tag) => tag.validate(self)?,
+            None if self.handoff.continuation
+                == crate::FoundationContinuationKindV1::FreshCohort => {}
+            None => {
+                return Err(
+                    "same-individual handoff requires its exact private/progress tag".into(),
+                )
+            }
+        }
+        if let Some(disposition) = &self.terminal_disposition {
+            disposition.validate(self)?;
+        }
         self.handoff
             .policy_version
             .checked_add(1)

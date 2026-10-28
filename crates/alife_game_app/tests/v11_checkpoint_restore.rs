@@ -276,6 +276,7 @@ fn exact_checkpoint_manifest_restore_preserves_control_path() {
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
         private_semantic_prior: None,
+        private_training_sampling: None,
     };
     checkpoint.validate().expect("valid exact checkpoint");
     save_state.sleep = checkpoint.sleep_state;

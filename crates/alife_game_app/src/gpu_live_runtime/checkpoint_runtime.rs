@@ -306,6 +306,18 @@ impl GpuLiveBrainRuntime {
         let durable_reference = candidate.durable_reference()?;
         self.backend.note_durable_checkpoint(durable_reference)?;
         self.canonical_save_id = Some(candidate.published.save.save_id.clone());
+        if expected.world.tick == self.world.tick()
+            && self.handles.iter().all(|(raw, handle)| {
+                expected
+                    .creatures
+                    .iter()
+                    .find(|c| c.organism_id.raw() == *raw)
+                    .and_then(|c| c.gpu_brain.as_ref())
+                    .is_some_and(|brain| brain.phenotype_hash == handle.phenotype_hash())
+            })
+        {
+            self.live_policy_exact_base_required = false;
+        }
         self.checkpoint_durability = Some(candidate);
         Ok(())
     }

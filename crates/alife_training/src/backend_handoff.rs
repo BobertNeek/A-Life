@@ -95,6 +95,7 @@ pub enum FoundationTrainingBackendV1 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum FoundationContinuationKindV1 {
     FreshCohort,
+    SameIndividual,
 }
 /// Founder and optimizer continuation package, separate from organism state.
 /// Gameplay reads only the foundation asset through its normal codec.
@@ -121,6 +122,28 @@ pub struct AdmittedFoundationTrainingHandoff {
     pub value: PpoValueHeadCheckpoint,
 }
 impl FoundationTrainingHandoffV1 {
+    pub fn new_same_individual(
+        origin: FoundationTrainingBackendV1,
+        policy_version: u64,
+        compiler_inputs: PhenotypeCompilerInputs,
+        actor: FoundationTrainerCheckpoint,
+        value: PpoValueHeadCheckpoint,
+    ) -> Result<Self, TrainingError> {
+        let handoff = Self {
+            schema_version: 1,
+            origin,
+            continuation: FoundationContinuationKindV1::SameIndividual,
+            policy_version,
+            biological_objective_version: 2,
+            critic_objective_version: 1,
+            objective_state_reset: false,
+            compiler_inputs,
+            actor,
+            value,
+        };
+        handoff.validate()?;
+        Ok(handoff)
+    }
     pub fn new(
         origin: FoundationTrainingBackendV1,
         policy_version: u64,
@@ -156,6 +179,12 @@ impl FoundationTrainingHandoffV1 {
             || self.objective_state_reset
         {
             return Err(invalid());
+        }
+        match (self.continuation, self.compiler_inputs.live_policy()) {
+            (FoundationContinuationKindV1::FreshCohort, None) => (),
+            (FoundationContinuationKindV1::SameIndividual, Some(marker))
+                if marker.policy_version == self.policy_version => {}
+            _ => return Err(invalid()),
         }
         let capacity = BrainCapacityClass::n2048();
         self.compiler_inputs.validate_against(&capacity)?;

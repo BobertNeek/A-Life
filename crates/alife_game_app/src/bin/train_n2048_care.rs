@@ -19,7 +19,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "actor_Adam_resident":true,"critic_RAM_continuity":true,"fresh_private_cohorts":true,
             "provisional_until_snapshot":true,"canonical_publication_by_owner":true,
             "finite_continuous_feeding":true,"max_continuous_feeding_decisions":36000,
-            "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":false,
+            "causal_collection_metrics_schema":1,"mid_world_offline_policy_install":true,
+            "same_individual_ppo":true,"restore_current_private_world":true,
+            "full_sampling_state_checkpoint":true,"in_world_cutoff":true,
+            "same_individual_arguments":"--resident-continuous STORE REQUEST_JSON",
+            "max_total_trained_decisions":10_000_000,"max_decisions_per_update":36_000,
+            "world_ticks_per_second":alife_world::WORLD_TICKS_PER_SECOND,
             "temporary_budget_enforced_during_writes":true,
             "recoverable_predispatch_initialization":true,
             "temporary_budget_scope":"STORE/.run logical file bytes including staging and native validation scratch",
@@ -66,6 +71,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             })?
             .join()
             .map_err(|_| "resident serial worker panicked")??;
+        println!("{report}");
+        return Ok(());
+    }
+    if mode == "--resident-continuous" {
+        let store = std::path::PathBuf::from(args.next().ok_or("missing continuous store")?);
+        let request =
+            std::path::PathBuf::from(args.next().ok_or("missing continuous request JSON")?);
+        if args.next().is_some() {
+            return Err("unexpected continuous resident argument".into());
+        }
+        let metadata = std::fs::symlink_metadata(&request)?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 1024 * 1024
+        {
+            return Err("continuous request must be a bounded regular JSON file".into());
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            if metadata.file_attributes() & 0x400 != 0 {
+                return Err("continuous request reparse points are refused".into());
+            }
+        }
+        let request: alife_game_app::ResidentContinuousRequest =
+            serde_json::from_slice(&std::fs::read(request)?)?;
+        let report = std::thread::Builder::new()
+            .name("resident-continuous-care".into())
+            .stack_size(32 * 1024 * 1024)
+            .spawn(move || {
+                alife_game_app::run_resident_continuous_care(&store, request)
+                    .map_err(|e| e.to_string())
+            })?
+            .join()
+            .map_err(|_| "continuous resident worker panicked")??;
         println!("{report}");
         return Ok(());
     }

@@ -14,6 +14,7 @@ mod inputs;
 mod io_compile;
 mod layout_compile;
 mod learning;
+mod live_policy;
 mod memory_channel;
 mod migration;
 mod n512_founder_projection;
@@ -34,6 +35,9 @@ pub use encoder::{SensorEncoderAssignment, SensorEncoderPlan, SensorEncoderSourc
 pub use inputs::{FoundationWeightApplication, PhenotypeCompilerInputs};
 pub use learning::{
     PlasticityReceptorPlan, ReplayCapturePlan, SleepConsolidationPlan, MAX_REPLAY_CAPTURE_SYNAPSES,
+};
+pub use live_policy::{
+    validate_weight_only_policy_successor, N2048LivePolicyProvenanceV1, N2048LivePolicyTransition,
 };
 pub use memory_channel::MemoryChannelPlan;
 pub use migration::{N4096ResearchLayoutV1, PhenotypeGrowthMigration, PhenotypeGrowthReceipt};

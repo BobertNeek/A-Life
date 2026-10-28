@@ -105,8 +105,21 @@ fn r06_exact_cognitive_checkpoint_preserves_acquired_predictor_and_rejects_legac
         structural_edit_receipts: Vec::new(),
         last_sleep_report: None,
         private_semantic_prior: None,
+        private_training_sampling: None,
     };
     let encoded = checkpoint.encode().unwrap();
+    assert!(!std::str::from_utf8(&encoded)
+        .unwrap()
+        .contains("private_training_sampling"));
+    let mut sampled = checkpoint.clone();
+    sampled.private_training_sampling =
+        Some(br#"{"seed":17,"counter":23456,"temperature":0.75,"demonstrator":null}"#.to_vec());
+    assert_eq!(
+        ExactCognitiveCheckpointState::decode(&sampled.encode().unwrap()).unwrap(),
+        sampled
+    );
+    sampled.private_training_sampling = Some(vec![0; 4097]);
+    assert!(sampled.encode().is_err());
     let restored = ExactCognitiveCheckpointState::decode(&encoded).unwrap();
     assert_eq!(restored, checkpoint);
     assert_eq!(

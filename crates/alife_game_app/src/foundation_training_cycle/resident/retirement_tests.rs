@@ -54,6 +54,36 @@ fn published_store(test: impl FnOnce(&Path)) {
 }
 
 #[test]
+fn output_budget_retirement_shared_header_dispatch_uses_intact_legacy_owner() {
+    for length in [0, 4, 6] {
+        published_store(|store| {
+            let store = store.canonicalize().unwrap();
+            let current = store.join("current.alife-checkpoint");
+            let original = fs::read(&current).unwrap();
+            let (record, budget) = prepare_retirement(&store, &hash(&original)).unwrap();
+            drop(budget);
+            let bytes = envelope(RET_MAGIC, &record).unwrap();
+            fs::write(store.join(RETIREMENT_NEXT), &bytes[..length]).unwrap();
+            if length == 4 {
+                assert_eq!(
+                    recover_resident_serial_checkpoint(&store).unwrap()["cleanup_completed"],
+                    true
+                );
+            } else {
+                assert_eq!(
+                    finish_resident_serial_run(&store).unwrap()["retirement_completed"],
+                    true
+                );
+            }
+            assert!(!store.join(".run").exists());
+            assert!(!store.join(RETIREMENT_NEXT).exists());
+            assert!(!store.join(RETIREMENT).exists());
+            assert_eq!(fs::read(&current).unwrap(), original);
+        });
+    }
+}
+
+#[test]
 fn output_budget_retirement_retry_after_binding_removal_preserves_conflicts_and_current() {
     let bindings = [
         "run.json",

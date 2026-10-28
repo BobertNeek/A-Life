@@ -453,6 +453,24 @@ fn current_checkpoint_migration_relocates_without_any_legacy_dependencies() {
         compiler_bytes
     );
     assert_eq!(restored, current);
+    let report = inspect_current_training_checkpoint(&copy).unwrap();
+    assert_eq!(
+        report["seeds"]["excluded_ranges"],
+        serde_json::to_value(&current.seeds.excluded_ranges).unwrap()
+    );
+    assert_eq!(
+        report["seeds"]["excluded_range_count"],
+        current.seeds.excluded_ranges.len()
+    );
+    assert_eq!(
+        report["seeds"]["pending_range"],
+        serde_json::to_value(current.seeds.pending_range).unwrap()
+    );
+    assert_eq!(
+        report["seeds"]["historical_freshness"],
+        current.seeds.historical_freshness
+    );
+    assert_eq!(std::fs::read(&copy).unwrap(), bytes);
     let admitted = load_cycle_continuation(&copy, None).unwrap();
     assert_eq!(admitted.actor, legacy.actor);
     assert_eq!(admitted.value, legacy.value);

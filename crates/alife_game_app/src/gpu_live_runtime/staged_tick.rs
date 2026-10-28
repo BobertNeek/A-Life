@@ -1078,9 +1078,20 @@ impl GpuLiveBrainRuntime {
             .performance_metrics
             .population_reconcile_wall_ns
             .saturating_add(elapsed_ns(population_reconcile_started));
+        // Offline PPO changed only base weights/identity since the last exact
+        // save. A compact sleep journal cannot bind a new-policy request to the
+        // old exact packet. Lazily start the existing exact epoch on the first
+        // actual sleep edge, rather than saving at every offline update.
+        persist_exact_sleep_boundary |=
+            self.live_policy_exact_base_required && !sleep_journal_entries.is_empty();
         if persist_exact_sleep_boundary {
             let sleep_persistence_started = Instant::now();
             self.request_exact_population_checkpoint()?;
+            // Installation is forbidden while an old exact worker is active.
+            // Any capture now active therefore includes the installed heads.
+            if self.exact_checkpoint_coordinator.is_active() {
+                self.live_policy_exact_base_required = false;
+            }
             if self.exact_checkpoint_accepts_journal_entries() && !sleep_journal_entries.is_empty()
             {
                 self.queue_exact_checkpoint_journal_entries(sleep_journal_entries)?;
