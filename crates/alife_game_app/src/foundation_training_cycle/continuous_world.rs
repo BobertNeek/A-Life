@@ -150,8 +150,7 @@ pub(super) fn run_same_individual_world(
     let inputs = runtime.live_foundation_compiler_inputs(id)?.clone();
     match inputs.live_policy() {
         Some(marker)
-            if marker.policy_version == policy && inputs == baseline.handoff.compiler_inputs =>
-        {}
+            if marker.policy_version == policy && inputs == baseline.handoff.compiler_inputs => {}
         Some(_) => return Err("saved live policy is not the admitted global policy".into()),
         None => {
             // Legacy fresh-cohort Current paired a PRE-PPO individual with newer
