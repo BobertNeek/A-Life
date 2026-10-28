@@ -261,6 +261,24 @@ fn care_cue_due(tick: u64, start: u64, available: bool, last: Option<u64>) -> bo
     available && tick.saturating_sub(start).is_multiple_of(24) && last != Some(tick)
 }
 
+fn care_food_is_far(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> bool {
+    let Some(subject) = world
+        .organism_registry()
+        .get(id)
+        .and_then(|record| world.entity(record.world_entity_id()))
+    else {
+        return false;
+    };
+    let Some(target) = world.entity(food).filter(|food| care_food_ready(food)) else {
+        return false;
+    };
+    (subject.position.x - target.position.x).hypot(subject.position.z - target.position.z) > 4.0
+}
+
 fn tick_limit(decisions: usize) -> Result<u64> {
     (decisions as u64)
         .checked_mul(8)
@@ -724,6 +742,33 @@ pub(super) fn run_same_individual_world(
                         .entity(scenario.food)
                         .is_some_and(|food| !food.consumed);
                     if care_cue_due(tick, scenario.start_tick, available, last_care_cue_tick) {
+                        // Ordinary food can regrow after an actual meal while the
+                        // learner walks away within a 512-decision window. Keep
+                        // the assistance explicit and bounded to the cue cadence.
+                        if care_food_is_far(runtime.world(), id, scenario.food) {
+                            let before = care_world_observation(runtime.world(), id);
+                            let moved = match care_food_position_in_gaze(runtime.world(), id) {
+                                Some(position) => {
+                                    crate::foundation_training::relocate_unheld_foundation_food(
+                                        runtime.world_mut(),
+                                        scenario.food,
+                                        position,
+                                    )?
+                                }
+                                None => false,
+                            };
+                            if moved {
+                                care_food_repositions += 1;
+                                on_update(
+                                    serde_json::json!({"kind":"continuous-care-reposition-v1",
+                                    "session_nonce":session_nonce,"world_tick":tick,
+                                    "food_target":scenario.food.raw(),"mode":"training_assistance_in_gaze",
+                                    "trigger":"periodic_cue", "before":before,
+                                    "after":care_world_observation(runtime.world(), id),
+                                    "forced_action":false,"reward_override":false,"biology_override":false}),
+                                )?;
+                            }
+                        }
                         expose_care_cue(runtime.world_mut(), id, scenario)?;
                         care_cue_emissions += 1;
                         last_care_cue_tick = Some(tick);
@@ -1352,6 +1397,25 @@ mod tests {
                 |candidate| candidate.action_id == alife_world::HeadlessActionIds::EAT
                     && candidate.target.entity == Some(scenario.food)
             ));
+        let far = alife_core::Vec3f::new(
+            subject.position.x + 10.0,
+            subject.position.y,
+            subject.position.z,
+        );
+        world.editor_move_object(scenario.food, far).unwrap();
+        assert!(care_food_is_far(&world, id, scenario.food));
+        let nearby = care_food_position_in_gaze(&world, id).unwrap();
+        assert!(crate::foundation_training::relocate_unheld_foundation_food(
+            &mut world,
+            scenario.food,
+            nearby
+        )
+        .unwrap());
+        assert!(!care_food_is_far(&world, id, scenario.food));
+        assert_eq!(
+            *world.organism_registry().get(id).unwrap().biochemistry(),
+            before
+        );
         expose_care_cue(&mut world, id, &scenario).unwrap();
         assert!(world
             .audible_utterances()
