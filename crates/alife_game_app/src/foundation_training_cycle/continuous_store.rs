@@ -485,7 +485,8 @@ pub fn run_resident_continuous_care(
     let base_bytes = fs::read(&current)?;
     // A copied/cross-lane terminal Current cannot allocate or consume a new
     // session. Full native private admission still follows under the budget.
-    CurrentTrainingCheckpointV1::decode(&base_bytes)?.require_living_continuation()?;
+    CurrentTrainingCheckpointV1::decode(&base_bytes)?
+        .require_training_session_nonce(request.seed_range[0])?;
     let o = Owner {
         schema: 1,
         kind: KIND.into(),

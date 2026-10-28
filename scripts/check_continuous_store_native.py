@@ -140,10 +140,53 @@ def main():
         assert result.returncode != 0 and 'terminal' in result.stderr.lower(), result
         assert current.read_bytes() == retired and not (store / '.run').exists()
         assert not (store / 'resident-initialization.bin').exists()
+
+        # Explicit counterfactual attempt: preserve the exact retained heads,
+        # private world and seed cursor; dispatch consumes its nonce later.
+        branch_nonce = continuous.admitted_seed_range(terminal)[0]
+        branch_file = root / 'explicit-training-attempt.alife-checkpoint'
+        branch_report = host.tool(inspector, '--begin-training-attempt', terminal_fixture,
+                                  branch_nonce, branch_file)
+        assert branch_report['kind'] == 'explicit-preterminal-training-branch-created-v1'
+        assert branch_report['source_unchanged'] is True
+        assert branch_report['seeds_modified'] is branch_report['private_state_modified'] is False
+        old_payload = json.loads(retired[56:])
+        branch_bytes = branch_file.read_bytes()
+        branch_payload = json.loads(branch_bytes[56:])
+        assert 'terminal_disposition' not in branch_payload
+        origin = branch_payload.pop('training_attempt_origin')
+        assert origin['attempt_nonce'] == branch_nonce
+        assert origin['source_current_sha256'] == digest(retired)
+        assert origin['source_terminal'] == old_payload.pop('terminal_disposition')
+        assert branch_payload == old_payload  # Exact entire retained state, not just ages.
+        assert branch_report['training_attempt_origin'] == origin
+        duplicate = subprocess.run([str(inspector), '--begin-training-attempt',
+                                    str(terminal_fixture), str(branch_nonce), str(branch_file)],
+                                   capture_output=True, text=True, timeout=90)
+        assert duplicate.returncode != 0 and branch_file.read_bytes() == branch_bytes
+        consumed_nonce = terminal['terminal_disposition']['session_nonce']
+        rejected = root / 'must-not-be-created.alife-checkpoint'
+        invalid = subprocess.run([str(inspector), '--begin-training-attempt',
+                                  str(terminal_fixture), str(consumed_nonce), str(rejected)],
+                                 capture_output=True, text=True, timeout=90)
+        assert invalid.returncode != 0 and not rejected.exists()
+        branch_store = root / 'explicit-attempt-wrong-nonce'
+        branch_store.mkdir()
+        (branch_store / 'current.alife-checkpoint').write_bytes(branch_bytes)
+        request_path.write_bytes(packed(request(branch_nonce + 1)))
+        wrong = subprocess.run([str(trainer), '--resident-continuous', str(branch_store), str(request_path)],
+                               capture_output=True, text=True, timeout=90)
+        assert wrong.returncode != 0 and 'attempt nonce' in wrong.stderr.lower(), wrong
+        assert not (branch_store / '.run').exists()
+        assert not (branch_store / 'resident-initialization.bin').exists()
+        assert (branch_store / 'current.alife-checkpoint').read_bytes() == branch_bytes
     assert [digest(fixture.read_bytes()), digest(terminal_fixture.read_bytes())] == original_hashes
     print(json.dumps(dict(kind='continuous-native-cpu-contracts-v1', neural_execution=False,
                          initialization_bound_and_unbound=True, one_session_recovery_cleanup=True,
                          native_inspector_auto_seed_next_allocation=True, native_inspector_owned_tail=True,
+                         explicit_training_branch_preserves_full_state=True,
+                         branch_create_new_and_consumed_nonce_gates=True,
+                         branch_wrong_nonce_refused_before_dispatch=True,
                          copied_terminal_current_refused=True, source_bytes_unchanged=True)))
 
 

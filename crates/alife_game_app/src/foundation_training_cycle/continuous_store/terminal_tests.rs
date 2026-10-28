@@ -257,8 +257,253 @@ fn terminal_recovery_case(injected_failure: Option<&str>) {
     assert_eq!(fs::read(&copied).unwrap(), copied_before);
     // Optional output is a disposable synthetic CPU fixture for actual CLI gates.
     if injected_failure.is_none() {
+        explicit_training_branch_case(&fixture.root, &copied, &retired, nonce, &baseline);
         if let Some(path) = std::env::var_os("ALIFE_CONTINUOUS_TERMINAL_FIXTURE_OUTPUT") {
             write_new(Path::new(&path), &copied_before).unwrap();
         }
     }
+}
+
+fn explicit_training_branch_case(
+    root: &Path,
+    source: &Path,
+    retired: &CurrentTrainingCheckpointV1,
+    old_nonce: u64,
+    original_baseline: &CurrentTrainingCheckpointV1,
+) {
+    let original = fs::read(source).unwrap();
+    let nonce = old_nonce + 1; // The actual first reserved-unused tail.
+    assert!(original_baseline
+        .begin_training_attempt_from_terminal(&original_baseline.encode().unwrap(), nonce)
+        .is_err());
+    for invalid in [0, retired.seed, old_nonce, nonce + 1] {
+        assert!(retired
+            .begin_training_attempt_from_terminal(&original, invalid)
+            .is_err());
+    }
+    let branch = retired
+        .begin_training_attempt_from_terminal(&original, nonce)
+        .unwrap();
+    assert_eq!(fs::read(source).unwrap(), original);
+    assert_eq!(branch.handoff, retired.handoff);
+    assert_eq!(branch.life, retired.life);
+    assert_eq!(branch.seeds, retired.seeds); // No reserve or consume at reset.
+    assert_eq!(branch.same_individual, retired.same_individual);
+    assert!(branch.terminal_disposition.is_none());
+    let origin = branch.training_attempt_origin.as_ref().unwrap();
+    assert_eq!(origin.attempt_nonce, nonce);
+    assert_eq!(origin.source_current_sha256, hash(&original));
+    assert_eq!(
+        Some(&origin.source_terminal),
+        retired.terminal_disposition.as_ref()
+    );
+    assert!(origin.previous.is_empty());
+    // Exact published v1 leaf representation and digest, not a semantic JSON
+    // rewrite: previous was null before the flat-ancestry repair.
+    let origin_json = serde_json::to_string(origin).unwrap();
+    assert!(origin_json.contains("\"previous\":null"));
+    assert_eq!(
+        origin.record_sha256,
+        hash(origin_json.replace(&origin.record_sha256, "").as_bytes())
+    );
+    let leaf_bytes = branch.encode().unwrap();
+    assert_eq!(
+        CurrentTrainingCheckpointV1::decode(&leaf_bytes)
+            .unwrap()
+            .encode()
+            .unwrap(),
+        leaf_bytes
+    );
+    assert!(branch.require_training_session_nonce(nonce).is_ok());
+    assert!(branch.require_training_session_nonce(nonce + 1).is_err());
+    assert!(branch.require_fresh_cohort_continuation().is_err());
+    assert_eq!(
+        CurrentTrainingCheckpointV1::decode(&branch.encode().unwrap()).unwrap(),
+        branch
+    );
+    let mut changed_heads = branch.clone();
+    changed_heads.handoff.actor.first_moment[0] += 0.001;
+    assert!(changed_heads.encode().is_err());
+    let mut changed = branch.clone();
+    changed
+        .training_attempt_origin
+        .as_mut()
+        .unwrap()
+        .source_terminal
+        .terminal_event["world_tick"] = 0.into();
+    assert!(changed.encode().is_err());
+
+    let store = root.join("explicit-training-branch");
+    fs::create_dir(&store).unwrap();
+    let store = store.canonicalize().unwrap();
+    let current = store.join("current.alife-checkpoint");
+    let bytes = branch.encode().unwrap();
+    fs::write(&current, &bytes).unwrap();
+    assert_eq!(read_current_training_checkpoint(&current).unwrap(), branch);
+    let now = now_seconds().unwrap();
+    let mut request = ResidentContinuousRequest {
+        schema: 1,
+        seed_range: [nonce + 1, nonce + 2],
+        total_trained_decisions: 100,
+        decisions_per_update: 10,
+        snapshot_every_updates: 1,
+        sampling_temperature: 1.,
+        collection_cutoff_unix_seconds: now + 3600,
+        finalization_deadline_unix_seconds: now + 7200,
+        max_temporary_bytes: 2 * 1024 * 1024 * 1024,
+    };
+    assert!(run_resident_continuous_care(&store, request.clone())
+        .unwrap_err()
+        .to_string()
+        .contains("attempt nonce"));
+    assert!(!store.join(".run").exists());
+    assert!(!store.join(INITIALIZATION).exists());
+    // Simulate the real dispatch WAL boundary, without a world/GPU execution.
+    // Recovery must retain all acquired state and origin, and consume only nonce.
+    request.seed_range = [nonce, nonce + 1];
+    let owner = Owner {
+        schema: 1,
+        kind: KIND.into(),
+        store: store.clone(),
+        pid: std::process::id(),
+        baseline_sha256: hash(&bytes),
+        request_sha256: hash(&serde_json::to_vec(&request).unwrap()),
+        request: request.clone(),
+    };
+    let run = store.join(".run");
+    fs::create_dir(&run).unwrap();
+    write_new(&run.join("run.json"), &serde_json::to_vec(&owner).unwrap()).unwrap();
+    write_new(&run.join("baseline.alife-checkpoint"), &bytes).unwrap();
+    let mut wal = initial_wal(&owner, &branch).unwrap();
+    wal.consumed = true;
+    wal.seeds = session_seeds(&branch.seeds, &request, true).unwrap();
+    write_metadata(&run.join("seed-wal.bin"), WAL, &wal).unwrap();
+    write_metadata(
+        &run.join("continuous-frontier.bin"),
+        FRONTIER,
+        &initial_frontier(&owner),
+    )
+    .unwrap();
+    let report = recover_resident_serial_checkpoint(&store).unwrap();
+    let successor =
+        read_current_training_checkpoint(Path::new(report["candidate"].as_str().unwrap())).unwrap();
+    assert_eq!(
+        successor.training_attempt_origin,
+        branch.training_attempt_origin
+    );
+    assert_eq!(successor.handoff, branch.handoff);
+    assert_eq!(successor.life, branch.life);
+    // Same origin remains valid once its nonce is actually consumed by WAL.
+    assert!(successor.validate().is_ok());
+    assert_eq!(successor.training_attempt_origin.as_ref().unwrap(), origin);
+    assert_eq!(successor.seeds.pending_range, Some([nonce + 1, nonce + 1]));
+    assert!(successor.require_training_session_nonce(nonce + 1).is_ok());
+    assert_eq!(report["seeds_consumed"], 1);
+    // A later observed terminal retains this origin rather than erasing it.
+    let mut event = origin.source_terminal.terminal_event.clone();
+    event["session_nonce"] = nonce.into();
+    let terminal = successor
+        .with_terminal_disposition(&hash(&bytes), &owner.request_sha256, nonce, event)
+        .unwrap();
+    let second = terminal
+        .begin_training_attempt_from_terminal(&terminal.encode().unwrap(), nonce + 1)
+        .unwrap();
+    let previous = &second.training_attempt_origin.as_ref().unwrap().previous;
+    assert_eq!(previous.len(), 1);
+    assert_eq!(previous[0].record_sha256, origin.record_sha256);
+    assert_eq!(previous[0].source_terminal, origin.source_terminal);
+    assert_eq!(second.seeds, terminal.seeds);
+    let mut altered_ancestry = second.clone();
+    altered_ancestry
+        .training_attempt_origin
+        .as_mut()
+        .unwrap()
+        .previous[0]
+        .source_terminal
+        .terminal_event["world_tick"] = 0.into();
+    assert!(altered_ancestry.encode().is_err());
+    flat_origin_roundtrips_with_current_endpoint(second);
+    assert_eq!(fs::read(source).unwrap(), original);
+}
+
+fn flat_origin_roundtrips_with_current_endpoint(mut current: CurrentTrainingCheckpointV1) {
+    // Stress the typed lineage codec beyond serde_json's depth limit, without
+    // re-encoding the 38 MB learned/private payload for each synthetic origin.
+    // The real terminal->branch and WAL transitions are exercised above. Source
+    // hashes below identify synthetic record inputs, not executed trajectories.
+    let handoff = current.handoff.clone();
+    let life = current.life.clone();
+    let mut origin = current.training_attempt_origin.take().unwrap();
+    let first = origin.previous[0].clone();
+    for _ in 0..140 {
+        let nonce = origin.attempt_nonce;
+        if current.seeds.pending_range.is_none() {
+            current.seeds.reserve(nonce, nonce).unwrap();
+        }
+        current.seeds.consume(nonce).unwrap();
+        let source = serde_json::to_vec(&origin).unwrap();
+        let mut record = serde_json::to_value(&origin).unwrap();
+        record.as_object_mut().unwrap().remove("previous");
+        record["previous_record_sha256"] =
+            serde_json::to_value(origin.previous.last().map(|p| p.record_sha256.as_str())).unwrap();
+        let record: alife_training::TrainingAttemptEvidenceV1 =
+            serde_json::from_value(record).unwrap();
+        origin.previous.push(record);
+        origin.attempt_nonce = current.seeds.pending_range.map_or_else(
+            || {
+                current
+                    .seeds
+                    .excluded_ranges
+                    .iter()
+                    .map(|r| r[1])
+                    .max()
+                    .unwrap()
+                    + 1
+            },
+            |r| r[0],
+        );
+        origin.source_current_sha256 = hash(&source);
+        origin.source_terminal.session_nonce = nonce;
+        origin.source_terminal.terminal_event["session_nonce"] = nonce.into();
+        origin.record_sha256.clear();
+        origin.record_sha256 = hash(&serde_json::to_vec(&origin).unwrap());
+        let encoded = serde_json::to_vec(&origin).unwrap();
+        let decoded: alife_training::TrainingAttemptOriginV1 =
+            serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded, origin);
+        assert_eq!(decoded.previous[0], first);
+        origin = decoded;
+    }
+    assert_eq!(origin.previous.len(), 141);
+    current.training_attempt_origin = Some(origin);
+    let encoded = current.encode().unwrap(); // Real full-state admission at end.
+    let decoded = CurrentTrainingCheckpointV1::decode(&encoded).unwrap();
+    assert_eq!(decoded, current);
+    assert_eq!(decoded.handoff, handoff);
+    assert_eq!(decoded.life, life);
+    assert!(decoded
+        .require_training_session_nonce(
+            decoded
+                .training_attempt_origin
+                .as_ref()
+                .unwrap()
+                .attempt_nonce,
+        )
+        .is_ok());
+    let mut broken_link = current.clone();
+    broken_link
+        .training_attempt_origin
+        .as_mut()
+        .unwrap()
+        .previous[1]
+        .previous_record_sha256 = Some("0".repeat(64));
+    assert!(broken_link.encode().is_err());
+    let mut reordered = current.clone();
+    reordered
+        .training_attempt_origin
+        .as_mut()
+        .unwrap()
+        .previous
+        .swap(0, 1);
+    assert!(reordered.encode().is_err());
 }

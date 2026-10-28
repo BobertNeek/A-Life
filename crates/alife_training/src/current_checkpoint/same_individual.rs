@@ -262,7 +262,7 @@ impl CurrentTrainingCheckpointV1 {
         seeds: CheckpointSeedsV1,
     ) -> Result<Self> {
         self.validate()?;
-        self.require_living_continuation()?;
+        self.require_training_session_nonce(progress.session_nonce)?;
         let baseline_current_sha256 = self.admitted_source_sha256(baseline_bytes)?;
         handoff.validate()?;
         let previous_actor = &self.handoff.actor;
@@ -346,6 +346,7 @@ impl CurrentTrainingCheckpointV1 {
             life: Some(life),
             same_individual: Some(tag),
             terminal_disposition: None,
+            training_attempt_origin: self.training_attempt_origin.clone(),
         };
         next.validate()?;
         Ok(next)
