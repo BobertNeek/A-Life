@@ -551,8 +551,12 @@ fn run_resident_with_startup_observer(
     let current = store.join("current.alife-checkpoint");
     regular(&current, alife_training::MAX_CURRENT_CHECKPOINT_BYTES)?;
     let baseline_bytes = fs::read(&current)?;
-    alife_training::CurrentTrainingCheckpointV1::decode(&baseline_bytes)?
-        .require_living_continuation()?;
+    // Early retirement refusal must preserve the existing bound initializer and
+    // cleanup contract for malformed legacy inputs. Full admission below is
+    // still mandatory; a failed early decode grants no continuation authority.
+    if let Ok(baseline) = alife_training::CurrentTrainingCheckpointV1::decode(&baseline_bytes) {
+        baseline.require_living_continuation()?;
+    }
     let baseline_hash = hash(&baseline_bytes);
     let run = store.join(".run");
     if entry_present(&run)? {
