@@ -1526,8 +1526,11 @@ impl GpuDeviceFactory for WgpuDeviceFactory {
         adapter: &wgpu::Adapter,
         descriptor: &wgpu::DeviceDescriptor<'_>,
     ) -> Result<(wgpu::Device, wgpu::Queue), ScaffoldContractError> {
-        pollster::block_on(adapter.request_device(descriptor))
-            .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)
+        crate::startup_diagnostics::request_device_result(
+            pollster::block_on(adapter.request_device(descriptor)),
+            &adapter.get_info(),
+            crate::startup_diagnostics::emit,
+        )
     }
 }
 
@@ -6214,53 +6217,69 @@ fn acquire_required_gpu(
     let required_features = required_device_features();
     let required_limits = required_device_limits();
     let mut found_base_compatible_without_timestamps = false;
-    for candidate in factory.request_adapters()? {
-        let adapter = match candidate {
-            GpuAdapterCandidate::Hardware(adapter) => adapter,
-            #[cfg(test)]
-            GpuAdapterCandidate::Software => continue,
-        };
-        let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu
-            || info.backend == wgpu::Backend::Noop
-            || backend_slug(info.backend).is_err()
-            || !required_limits.check_limits(&adapter.limits())
-        {
-            continue;
-        }
-        if validate_required_device_features(adapter.features()).is_err() {
-            found_base_compatible_without_timestamps = true;
-            continue;
-        }
-        let descriptor = wgpu::DeviceDescriptor {
-            label: Some("alife-required-closed-loop-device"),
-            required_features,
-            required_limits: required_limits.clone(),
-            experimental_features: wgpu::ExperimentalFeatures::disabled(),
-            memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Off,
-        };
-        let Ok((device, queue)) = factory.request_device(&adapter, &descriptor) else {
-            continue;
-        };
-        let lost = Arc::new(AtomicBool::new(false));
-        let callback_lost = Arc::clone(&lost);
-        device.set_device_lost_callback(move |_reason, _message| {
-            callback_lost.store(true, Ordering::Release);
-        });
-        let hardware = build_hardware_receipt(
-            &info,
-            required_features,
-            device.features(),
-            &device.limits(),
-        )?;
-        return Ok(RequiredGpuDevice {
-            adapter,
-            device,
-            queue,
-            hardware,
-            lost,
-        });
+    use crate::startup_diagnostics::{emit, select_adapter, AdapterAttempt};
+    let candidates = factory.request_adapters().inspect_err(|error| {
+        emit(&format!(
+            "gpu_startup outcome=unavailable stage=adapter_enumeration cause={error:?}"
+        ));
+    })?;
+    let selected = select_adapter(
+        candidates,
+        |candidate| {
+            let adapter = match candidate {
+                GpuAdapterCandidate::Hardware(adapter) => adapter,
+                #[cfg(test)]
+                GpuAdapterCandidate::Software => return Ok(AdapterAttempt::Skipped),
+            };
+            let info = adapter.get_info();
+            if info.device_type == wgpu::DeviceType::Cpu
+                || info.backend == wgpu::Backend::Noop
+                || backend_slug(info.backend).is_err()
+                || !required_limits.check_limits(&adapter.limits())
+            {
+                return Ok(AdapterAttempt::Skipped);
+            }
+            if validate_required_device_features(adapter.features()).is_err() {
+                found_base_compatible_without_timestamps = true;
+                return Ok(AdapterAttempt::Skipped);
+            }
+            let descriptor = wgpu::DeviceDescriptor {
+                label: Some("alife-required-closed-loop-device"),
+                required_features,
+                required_limits: required_limits.clone(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                trace: wgpu::Trace::Off,
+            };
+            let Ok((device, queue)) = factory.request_device(&adapter, &descriptor) else {
+                return Ok(AdapterAttempt::RequestFailed);
+            };
+            let lost = Arc::new(AtomicBool::new(false));
+            let callback_lost = Arc::clone(&lost);
+            device.set_device_lost_callback(move |_reason, _message| {
+                callback_lost.store(true, Ordering::Release);
+            });
+            let hardware = build_hardware_receipt(
+                &info,
+                required_features,
+                device.features(),
+                &device.limits(),
+            )?;
+            Ok(AdapterAttempt::Ready(
+                RequiredGpuDevice {
+                    adapter,
+                    device,
+                    queue,
+                    hardware,
+                    lost,
+                },
+                info,
+            ))
+        },
+        emit,
+    )?;
+    if let Some(required) = selected {
+        return Ok(required);
     }
     Err(if found_base_compatible_without_timestamps {
         ScaffoldContractError::GpuTimestampQueryUnavailable

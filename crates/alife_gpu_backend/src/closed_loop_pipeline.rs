@@ -1574,62 +1574,71 @@ impl GpuClosedLoopKernelSet {
         ] {
             validate_production_shader_contract(&runtime_shader_source(source), entries)?;
         }
-        let layout = create_neural_bind_group_layout(device);
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("closed-loop-neural-pipeline-layout"),
-            bind_group_layouts: &[Some(&layout)],
-            immediate_size: 0,
-        });
-        let encode_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-encode-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_ENCODE_WGSL)),
-        });
-        let recurrent_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-recurrent-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_RECURRENT_WGSL)),
-        });
-        let clear_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-clear-diagnostics-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(
-                CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
-            )),
-        });
-        let decode_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-decode-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_DECODE_WGSL)),
-        });
-        let memory_context_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-memory-context-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(
-                CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
-            )),
-        });
-        let eligibility_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-eligibility-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_ELIGIBILITY_WGSL)),
-        });
-        let plasticity_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-plasticity-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_PLASTICITY_WGSL)),
-        });
-        let consolidate_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-consolidate-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(CLOSED_LOOP_CONSOLIDATE_WGSL)),
-        });
-        let replay_sleep_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("closed-loop-replay-learning-wgsl"),
-            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(
-                CLOSED_LOOP_REPLAY_LEARNING_WGSL,
-            )),
-        });
+        let layout = crate::startup_diagnostics::scoped(
+            device,
+            "bind_group_layout",
+            "closed-loop-neural-bind-group-layout",
+            || create_neural_bind_group_layout(device),
+        )?;
+        let pipeline_layout = crate::startup_diagnostics::scoped(
+            device,
+            "pipeline_layout",
+            "closed-loop-neural-pipeline-layout",
+            || {
+                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("closed-loop-neural-pipeline-layout"),
+                    bind_group_layouts: &[Some(&layout)],
+                    immediate_size: 0,
+                })
+            },
+        )?;
+        let encode_shader =
+            create_shader_module(device, "closed-loop-encode-wgsl", CLOSED_LOOP_ENCODE_WGSL)?;
+        let recurrent_shader = create_shader_module(
+            device,
+            "closed-loop-recurrent-wgsl",
+            CLOSED_LOOP_RECURRENT_WGSL,
+        )?;
+        let clear_shader = create_shader_module(
+            device,
+            "closed-loop-clear-diagnostics-wgsl",
+            CLOSED_LOOP_CLEAR_DIAGNOSTICS_WGSL,
+        )?;
+        let decode_shader =
+            create_shader_module(device, "closed-loop-decode-wgsl", CLOSED_LOOP_DECODE_WGSL)?;
+        let memory_context_shader = create_shader_module(
+            device,
+            "closed-loop-memory-context-wgsl",
+            CLOSED_LOOP_MEMORY_CONTEXT_WGSL,
+        )?;
+        let eligibility_shader = create_shader_module(
+            device,
+            "closed-loop-eligibility-wgsl",
+            CLOSED_LOOP_ELIGIBILITY_WGSL,
+        )?;
+        let plasticity_shader = create_shader_module(
+            device,
+            "closed-loop-plasticity-wgsl",
+            CLOSED_LOOP_PLASTICITY_WGSL,
+        )?;
+        let consolidate_shader = create_shader_module(
+            device,
+            "closed-loop-consolidate-wgsl",
+            CLOSED_LOOP_CONSOLIDATE_WGSL,
+        )?;
+        let replay_sleep_shader = create_shader_module(
+            device,
+            "closed-loop-replay-learning-wgsl",
+            CLOSED_LOOP_REPLAY_LEARNING_WGSL,
+        )?;
         let encode_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &encode_shader,
             "encode_perception",
             &[],
-        );
-        let recurrent_pipelines = [0_u32, 1, 2, 3].map(|step| {
+        )?;
+        let recurrent_pipeline = |step: u32| {
             create_compute_pipeline(
                 device,
                 &pipeline_layout,
@@ -1637,168 +1646,174 @@ impl GpuClosedLoopKernelSet {
                 "recurrent_microstep",
                 &[("microstep_index", step as f64)],
             )
-        });
+        };
+        let recurrent_pipelines = [
+            recurrent_pipeline(0)?,
+            recurrent_pipeline(1)?,
+            recurrent_pipeline(2)?,
+            recurrent_pipeline(3)?,
+        ];
         let clear_v11_work_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &recurrent_shader,
             "clear_v11_work",
             &[],
-        );
+        )?;
         let clear_diagnostics_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &clear_shader,
             "clear_diagnostics",
             &[],
-        );
+        )?;
         let decode_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &decode_shader,
             "decode_candidates",
             &[],
-        );
+        )?;
         let memory_context_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &memory_context_shader,
             "add_candidate_memory_context",
             &[],
-        );
+        )?;
         let select_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &decode_shader,
             "select_candidate",
             &[],
-        );
+        )?;
         let speech_decode_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &decode_shader,
             "decode_speech_payload",
             &[],
-        );
+        )?;
         let prevalidate_eligibility_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &eligibility_shader,
             "prevalidate_eligibility",
             &[],
-        );
+        )?;
         let recurrent_eligibility_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &eligibility_shader,
             "accumulate_recurrent_eligibility",
             &[],
-        );
+        )?;
         let decoder_eligibility_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &eligibility_shader,
             "accumulate_decoder_eligibility",
             &[],
-        );
+        )?;
         let finalize_pending_eligibility_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &eligibility_shader,
             "finalize_pending_eligibility",
             &[],
-        );
+        )?;
         let discard_pending_eligibility_arrays_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &eligibility_shader,
             "discard_pending_eligibility_arrays",
             &[],
-        );
+        )?;
         let finalize_discard_pending_eligibility_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &eligibility_shader,
             "finalize_discard_pending_eligibility",
             &[],
-        );
+        )?;
         let initialize_fast_plasticity_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &plasticity_shader,
             "initialize_fast_plasticity",
             &[],
-        );
+        )?;
         let apply_fast_plasticity_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &plasticity_shader,
             "apply_fast_plasticity",
             &[],
-        );
+        )?;
         let capture_fast_plasticity_replay_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &plasticity_shader,
             "capture_fast_plasticity_replay",
             &[],
-        );
+        )?;
         let finalize_fast_plasticity_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &plasticity_shader,
             "finalize_fast_plasticity",
             &[],
-        );
+        )?;
         let initialize_sleep_transaction_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &consolidate_shader,
             "initialize_sleep_transaction",
             &[],
-        );
+        )?;
         let copy_sleep_weight_banks_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &consolidate_shader,
             "copy_sleep_weight_banks",
             &[],
-        );
+        )?;
         let replay_sleep_learning_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &replay_sleep_shader,
             "replay_sleep_learning",
             &[],
-        );
+        )?;
         let consolidate_fast_weights_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &consolidate_shader,
             "consolidate_fast_weights",
             &[],
-        );
+        )?;
         let finalize_sleep_staging_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &consolidate_shader,
             "finalize_sleep_staging",
             &[],
-        );
+        )?;
         let reset_sleep_mutable_state_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &consolidate_shader,
             "reset_sleep_mutable_state",
             &[],
-        );
+        )?;
         let finalize_sleep_commit_pipeline = create_compute_pipeline(
             device,
             &pipeline_layout,
             &consolidate_shader,
             "finalize_sleep_commit",
             &[],
-        );
+        )?;
         Ok(Arc::new(Self {
             bind_group_layout: layout,
             encode_pipeline,
@@ -4788,23 +4803,38 @@ fn validate_production_shader_contract(
     Ok(())
 }
 
+fn create_shader_module(
+    device: &wgpu::Device,
+    label: &'static str,
+    source: &str,
+) -> Result<wgpu::ShaderModule, GpuClosedLoopError> {
+    crate::startup_diagnostics::scoped(device, "shader_module", label, || {
+        device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some(label),
+            source: wgpu::ShaderSource::Wgsl(runtime_shader_source(source)),
+        })
+    })
+}
+
 fn create_compute_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     shader: &wgpu::ShaderModule,
     entry_point: &'static str,
     constants: &[(&str, f64)],
-) -> wgpu::ComputePipeline {
-    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some(entry_point),
-        layout: Some(layout),
-        module: shader,
-        entry_point: Some(entry_point),
-        compilation_options: wgpu::PipelineCompilationOptions {
-            constants,
-            zero_initialize_workgroup_memory: true,
-        },
-        cache: None,
+) -> Result<wgpu::ComputePipeline, GpuClosedLoopError> {
+    crate::startup_diagnostics::scoped(device, "compute_pipeline", entry_point, || {
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some(entry_point),
+            layout: Some(layout),
+            module: shader,
+            entry_point: Some(entry_point),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants,
+                zero_initialize_workgroup_memory: true,
+            },
+            cache: None,
+        })
     })
 }
 

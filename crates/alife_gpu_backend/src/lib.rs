@@ -14,6 +14,7 @@ pub mod closed_loop_runtime;
 pub mod closed_loop_sleep;
 pub mod closed_loop_v11;
 pub mod runtime;
+mod startup_diagnostics;
 #[cfg(feature = "training-rollout")]
 pub mod training_rollout;
 #[cfg(feature = "training-rollout")]
