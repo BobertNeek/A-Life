@@ -296,3 +296,51 @@ fn diagnostics_bound_utf8_escape_controls_and_omit_paths_and_shader_dumps() {
     assert!(record.contains("[redacted]"));
     assert!(record.contains("0x8007000E"));
 }
+
+#[test]
+fn device_loss_marks_failure_before_reporting_and_normal_destruction_is_quiet() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let lost = AtomicBool::new(false);
+    let mut records = Vec::new();
+    device_lost(
+        &lost,
+        &info(wgpu::Backend::Dx12, "Fixture GPU"),
+        wgpu::DeviceLostReason::Unknown,
+        "native device loss 0x8007000E\nprivate raw shader excerpt",
+        |record| {
+            assert!(
+                lost.load(Ordering::Acquire),
+                "failure flag precedes emission"
+            );
+            records.push(record.to_owned());
+        },
+    );
+    assert_eq!(records.len(), 1);
+    for value in [
+        "backend=Dx12",
+        "Fixture GPU",
+        "stage=\"device_lost\"",
+        "label=\"device_lost_callback\"",
+        "reason=Unknown",
+        "0x8007000E",
+    ] {
+        assert!(
+            records[0].contains(value),
+            "missing {value}: {}",
+            records[0]
+        );
+    }
+    assert!(!records[0].contains("raw shader"));
+    assert!(!records[0].contains("compute_pipeline"));
+
+    let destroyed = AtomicBool::new(false);
+    device_lost(
+        &destroyed,
+        &info(wgpu::Backend::Dx12, "Fixture GPU"),
+        wgpu::DeviceLostReason::Destroyed,
+        "normal destruction",
+        |_| panic!("normal device destruction must remain quiet"),
+    );
+    assert!(destroyed.load(Ordering::Acquire));
+}

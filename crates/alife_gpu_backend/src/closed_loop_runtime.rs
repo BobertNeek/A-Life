@@ -6256,8 +6256,15 @@ fn acquire_required_gpu(
             };
             let lost = Arc::new(AtomicBool::new(false));
             let callback_lost = Arc::clone(&lost);
-            device.set_device_lost_callback(move |_reason, _message| {
-                callback_lost.store(true, Ordering::Release);
+            let callback_info = info.clone();
+            device.set_device_lost_callback(move |reason, message| {
+                crate::startup_diagnostics::device_lost(
+                    &callback_lost,
+                    &callback_info,
+                    reason,
+                    &message,
+                    emit,
+                );
             });
             let hardware = build_hardware_receipt(
                 &info,

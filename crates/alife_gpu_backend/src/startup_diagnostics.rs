@@ -106,6 +106,38 @@ pub(crate) fn request_device_result<T>(
     })
 }
 
+#[derive(Debug)]
+struct DeviceLostMessage<'a>(wgpu::DeviceLostReason, &'a str);
+
+impl fmt::Display for DeviceLostMessage<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "reason={:?}: {}", self.0, self.1)
+    }
+}
+
+impl Error for DeviceLostMessage<'_> {}
+
+pub(crate) fn device_lost(
+    lost: &std::sync::atomic::AtomicBool,
+    info: &wgpu::AdapterInfo,
+    reason: wgpu::DeviceLostReason,
+    message: &str,
+    mut report: impl FnMut(&str),
+) {
+    // Preserve the existing fail-stop signal before potentially blocking stderr.
+    lost.store(true, std::sync::atomic::Ordering::Release);
+    if reason != wgpu::DeviceLostReason::Destroyed {
+        // wgpu bypasses error scopes for device loss. The callback is asynchronous:
+        // its message cannot be attributed to whichever pipeline is being created.
+        report(&failure_record(
+            info,
+            "device_lost",
+            "device_lost_callback",
+            &DeviceLostMessage(reason, message),
+        ));
+    }
+}
+
 pub(crate) enum AdapterAttempt<T> {
     Skipped,
     RequestFailed,
