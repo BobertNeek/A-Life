@@ -768,10 +768,17 @@ impl PpoGpuObjective {
         &self,
         encoder: &mut wgpu::CommandEncoder,
     ) -> Result<(), TrainingError> {
-        if !self.objective_ready {
-            return Err(invalid());
+        self.encode_value_update_if_enabled(encoder, true)
+    }
+
+    fn encode_value_update_if_enabled(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        enabled: bool,
+    ) -> Result<(), TrainingError> {
+        if value_update_dispatch_enabled(self.objective_ready, enabled)? {
+            self.dispatch(encoder, &self.value_update, 1);
         }
-        self.dispatch(encoder, &self.value_update, 1);
         Ok(())
     }
 
@@ -1227,7 +1234,8 @@ pub fn train_recurrent_ppo(
 
 /// Stream a pinned-actor cohort from immutable recorded windows. Validate all
 /// old probabilities before ANY updates, then run global epochs. Every batch
-/// takes one actor and one value Adam step, sample-weighted across its windows.
+/// takes one actor Adam step and, when enabled, one value Adam step,
+/// sample-weighted across its windows.
 /// The final partial batch deliberately uses its actual sample count.
 ///
 /// The caller binds the genetic policy version to the exact frozen checkpoint
@@ -1345,28 +1353,44 @@ where
                 {
                     return Err(TrainingError::MalformedReadback);
                 }
-                let backup = {
-                    let (device, _) = trainer
-                        .session()
-                        .backend()
-                        .offline_training_device_queue()?;
-                    device.create_buffer(&wgpu::BufferDescriptor {
-                        label: Some("ppo-value-rollback"),
-                        size: objective.value_head.size(),
-                        usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-                        mapped_at_creation: false,
-                    })
-                };
-                let mut encoder = new_encoder(trainer.session(), "ppo-effective-batch-update")?;
-                encoder.copy_buffer_to_buffer(&objective.value_head, 0, &backup, 0, backup.size());
-                submit(trainer.session(), encoder)?;
-                // Backup is submitted independently so even a host-side actor
-                // precondition error cannot restore an uninitialized buffer.
-                let mut encoder = new_encoder(trainer.session(), "ppo-effective-batch-apply")?;
-                objective.encode_value_update(&mut encoder)?;
-                match trainer.apply_accumulated_gradients(encoder) {
-                    Ok(step) => receipt.actor_optimizer_step = step,
-                    Err(error) => {
+                receipt.actor_optimizer_step = apply_ppo_batch_update(
+                    trainer,
+                    config.value_coefficient > 0.0,
+                    |trainer| {
+                        let backup = {
+                            let (device, _) = trainer
+                                .session()
+                                .backend()
+                                .offline_training_device_queue()?;
+                            device.create_buffer(&wgpu::BufferDescriptor {
+                                label: Some("ppo-value-rollback"),
+                                size: objective.value_head.size(),
+                                usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+                                mapped_at_creation: false,
+                            })
+                        };
+                        let mut encoder =
+                            new_encoder(trainer.session(), "ppo-effective-batch-update")?;
+                        encoder.copy_buffer_to_buffer(
+                            &objective.value_head,
+                            0,
+                            &backup,
+                            0,
+                            backup.size(),
+                        );
+                        submit(trainer.session(), encoder)?;
+                        Ok(backup)
+                    },
+                    |trainer, enabled| {
+                        // Backup is submitted independently so even a host-side actor
+                        // precondition error cannot restore an uninitialized buffer.
+                        let mut encoder =
+                            new_encoder(trainer.session(), "ppo-effective-batch-apply")?;
+                        objective.encode_value_update_if_enabled(&mut encoder, enabled)?;
+                        Ok(encoder)
+                    },
+                    |trainer, encoder| trainer.apply_accumulated_gradients(encoder),
+                    |trainer, backup| {
                         let mut rollback = new_encoder(trainer.session(), "ppo-value-rollback")?;
                         rollback.copy_buffer_to_buffer(
                             &backup,
@@ -1386,9 +1410,9 @@ where
                                 timeout: None,
                             })
                             .map_err(|_| TrainingError::GpuSubmission)?;
-                        return Err(error);
-                    }
-                }
+                        Ok(())
+                    },
+                )?;
                 if config.value_coefficient > 0.0 {
                     state.value_optimizer_step += 1;
                 }
@@ -1411,6 +1435,40 @@ where
         receipt.completed_epochs += 1;
     }
     Ok(receipt)
+}
+
+// The preparation phase may fail before actor submission; that error must not
+// trigger value rollback. Only actor-apply failures restore a submitted backup.
+fn apply_ppo_batch_update<C, B, E>(
+    context: &mut C,
+    enabled: bool,
+    backup_value: impl FnOnce(&C) -> Result<B, TrainingError>,
+    prepare_encoder: impl FnOnce(&C, bool) -> Result<E, TrainingError>,
+    apply_actor: impl FnOnce(&mut C, E) -> Result<u32, TrainingError>,
+    restore_value: impl FnOnce(&C, B) -> Result<(), TrainingError>,
+) -> Result<u32, TrainingError> {
+    let backup = if enabled {
+        Some(backup_value(context)?)
+    } else {
+        None
+    };
+    let encoder = prepare_encoder(context, enabled)?;
+    match apply_actor(context, encoder) {
+        Ok(step) => Ok(step),
+        Err(error) => {
+            if let Some(backup) = backup {
+                restore_value(context, backup)?;
+            }
+            Err(error)
+        }
+    }
+}
+
+fn value_update_dispatch_enabled(ready: bool, enabled: bool) -> Result<bool, TrainingError> {
+    if !ready {
+        return Err(invalid());
+    }
+    Ok(enabled)
 }
 
 fn evaluate_ppo_window(
@@ -1926,3 +1984,7 @@ mod tests {
         assert!(PpoBatch::from_rollout(7, invalid_rollout, config).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "ppo/batch_update_tests.rs"]
+mod batch_update_tests;
