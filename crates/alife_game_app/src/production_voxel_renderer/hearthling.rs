@@ -14,6 +14,53 @@ const WALK_CLIP_START: f32 = 1.0 / 24.0;
 const WALK_CLIP_SECONDS: f32 = 3.0;
 const INGESTION_FEEDBACK_SECONDS: f32 = 0.60;
 const SPEECH_FEEDBACK_SECONDS: f32 = 0.45;
+const HUNGRY_EAR_ANGLE: f32 = 0.15;
+const HUNGRY_EAR_BLEND_SECONDS: f32 = 0.25;
+
+#[derive(Default)]
+// Presentation-only weight. Each post-animation application starts from a fresh
+// sampled rotation; this never stores an organism pose or changes live markers.
+struct HungryEars {
+    blend: f32,
+}
+
+impl HungryEars {
+    fn eligible(
+        expression: CreatureExpressionState,
+        animation: CreatureAnimationState,
+        held: bool,
+        moved: bool,
+    ) -> bool {
+        // Neutral permits the outgoing fade; every other expression wins immediately.
+        animation == CreatureAnimationState::Idle
+            && matches!(
+                expression,
+                CreatureExpressionState::Hungry | CreatureExpressionState::Neutral
+            )
+            && !held
+            && !moved
+    }
+
+    fn advance(&mut self, seconds: f32, paused: bool, hungry_idle: bool) {
+        if paused || !seconds.is_finite() || seconds <= 0.0 {
+            return;
+        }
+        let step = seconds.min(0.1) / HUNGRY_EAR_BLEND_SECONDS;
+        self.blend = if hungry_idle {
+            (self.blend + step).min(1.0)
+        } else {
+            (self.blend - step).max(0.0)
+        };
+    }
+
+    fn rotation(&self, sampled: Quat, part: ExpressionBone, eligible: bool) -> Quat {
+        if eligible && matches!(part, ExpressionBone::Ear(_)) {
+            sampled * Quat::from_rotation_x(HUNGRY_EAR_ANGLE * self.blend)
+        } else {
+            sampled
+        }
+    }
+}
 const COAT_TINTS: [[f32; 3]; 6] = [
     [1.0, 1.0, 1.0],
     [0.76, 1.06, 1.28],
@@ -144,6 +191,8 @@ pub(super) struct HearthlingVisual {
     walk_seconds: f32,
     moved: bool,
     feedback: OutcomeFeedback,
+    hungry_ears: HungryEars,
+    hungry_ears_eligible: bool,
 }
 
 impl HearthlingVisual {
@@ -184,6 +233,8 @@ pub(super) fn spawn(world: &mut World, root: Entity, appearance: CreatureAppeara
             walk_seconds: 0.0,
             moved: false,
             feedback: OutcomeFeedback::default(),
+            hungry_ears: HungryEars::default(),
+            hungry_ears_eligible: false,
         },
         HearthlingSource(gltf),
     ));
@@ -330,6 +381,10 @@ pub(super) fn apply_head_direction(
                 marker.expression,
                 marker.animation,
             );
+            let expression =
+                visual
+                    .hungry_ears
+                    .rotation(expression, bone.part, visual.hungry_ears_eligible);
             transform.rotation =
                 outcome_rotation(expression, bone.part, &visual.feedback, marker.animation);
         }
@@ -578,6 +633,18 @@ pub(super) fn animate(
             && !hand
                 .as_ref()
                 .is_some_and(|h| h.held == Some(marker.stable_id));
+        visual.hungry_ears_eligible = HungryEars::eligible(
+            marker.expression,
+            marker.animation,
+            hand.as_ref()
+                .is_some_and(|h| h.held == Some(marker.stable_id)),
+            visual.moved,
+        );
+        let hungry_idle =
+            visual.hungry_ears_eligible && marker.expression == CreatureExpressionState::Hungry;
+        visual
+            .hungry_ears
+            .advance(time.delta_secs(), ux.settings.paused, hungry_idle);
         if visual.moved {
             visual.walk_seconds = advance_walk(
                 distance,
@@ -590,7 +657,7 @@ pub(super) fn animate(
         transform.rotation = body_rotation(marker.body_yaw);
     }
     for (mut player, mut model) in &mut players {
-        let Ok((_, visual, marker)) = transforms.get(model.root) else {
+        let Ok((_, mut visual, marker)) = transforms.get_mut(model.root) else {
             continue;
         };
         // Actual displacement can outlast a selected Move action (or be blocked
@@ -611,6 +678,9 @@ pub(super) fn animate(
         } else {
             clip(marker.animation)
         };
+        // Pause can retain a walking clip after the marker has returned to Idle.
+        // Only the ordinary idle clip may display this ear cue.
+        visual.hungry_ears_eligible &= next == 0;
         if next != model.state {
             player.stop_all();
             player
@@ -1102,3 +1172,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "hungry_ear_tests.rs"]
+mod hungry_ear_tests;
