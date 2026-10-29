@@ -689,4 +689,137 @@ mod cache_codec_tests {
         noncanonical[last] ^= 1;
         assert!(source.admitted_source_sha256(&noncanonical).is_err());
     }
+
+    // Reference the previous encoder so the envelope and canonical JSON stay exact.
+    fn previous_current_encoding(checkpoint: &CurrentTrainingCheckpointV1) -> Result<Vec<u8>> {
+        checkpoint.validate()?;
+        let payload = serde_json::to_vec(checkpoint)?;
+        if payload.len() as u64 + HEADER as u64 > MAX_CURRENT_CHECKPOINT_BYTES {
+            return Err("current checkpoint byte limit exceeded".into());
+        }
+        let mut bytes = Vec::with_capacity(HEADER + payload.len());
+        bytes.extend_from_slice(MAGIC);
+        bytes.extend_from_slice(&(payload.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&Sha256::digest(&payload));
+        bytes.extend_from_slice(&payload);
+        Ok(bytes)
+    }
+
+    fn codec_private_life(seed: u64) -> CurrentLifeCheckpointV1 {
+        let world = alife_world::HeadlessWorld::new(seed);
+        let save = alife_world::PortableSaveFile::from_headless_world(
+            "codec \"\\\n☃",
+            &world,
+            alife_world::RuntimeConfig::deterministic_default(
+                seed,
+                alife_core::BrainScaleTier::Nano512,
+            ),
+            alife_world::AssetManifest::empty(),
+            Vec::new(),
+        )
+        .unwrap();
+        CurrentLifeCheckpointV1 {
+            world_json: save.to_json_string_pretty().unwrap(),
+            sleep_journal_json: "[]".into(),
+            assets_base64: std::collections::BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn current_encoding_preserves_exact_bytes_private_fields_and_integer_ages() {
+        let mut checkpoint = current_fixture();
+        let large_policy = (1_u64 << 53) + 17;
+        checkpoint.handoff.policy_version = large_policy;
+        checkpoint.handoff.value.last_updated_policy_version = Some(large_policy);
+        checkpoint.handoff.actor.optimizer_step = u32::MAX - 1;
+        checkpoint.handoff.actor.update_ages.fill(u32::MAX - 1);
+        checkpoint.handoff.value.optimizer_step = u32::MAX - 1;
+        checkpoint.handoff.value.parameters[0] = -0.0;
+        for with_life in [false, true] {
+            if with_life {
+                let mut life = codec_private_life(checkpoint.seed);
+                life.insert_asset("z-last.bin".into(), &vec![0; 1024 * 1024]);
+                life.insert_asset("a-first.bin".into(), "quoted \"\\\n☃".as_bytes());
+                checkpoint.life = Some(life);
+            }
+            let bytes = checkpoint.encode().unwrap();
+            assert_eq!(bytes, previous_current_encoding(&checkpoint).unwrap());
+            assert_eq!(bytes.capacity(), bytes.len());
+            let decoded = CurrentTrainingCheckpointV1::decode(&bytes).unwrap();
+            assert_eq!(decoded, checkpoint);
+            assert_eq!(decoded.handoff.policy_version, large_policy);
+            assert_eq!(decoded.handoff.actor.optimizer_step, u32::MAX - 1);
+            assert!(decoded
+                .handoff
+                .actor
+                .update_ages
+                .iter()
+                .all(|age| *age == u32::MAX - 1));
+            assert_eq!(
+                decoded.handoff.actor.first_moment[0].to_bits(),
+                (-0.0_f32).to_bits()
+            );
+            assert_eq!(
+                decoded.handoff.value.parameters[0].to_bits(),
+                (-0.0_f32).to_bits()
+            );
+            assert_eq!(
+                checkpoint.admitted_source_sha256(&bytes).unwrap(),
+                format!("{:x}", Sha256::digest(&bytes))
+            );
+            if with_life {
+                let json = std::str::from_utf8(&bytes[HEADER..]).unwrap();
+                assert!(json.find("a-first.bin").unwrap() < json.find("z-last.bin").unwrap());
+                assert!(
+                    json.contains("\\n"),
+                    "private JSON must keep escaped characters"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn current_encoding_keeps_decoder_corruption_and_truncation_rejections() {
+        let bytes = current_fixture().encode().unwrap();
+        for end in [0, HEADER - 1, HEADER, bytes.len() - 1] {
+            assert!(CurrentTrainingCheckpointV1::decode(&bytes[..end]).is_err());
+        }
+        for offset in [0, 16, 24, HEADER, bytes.len() - 1] {
+            let mut bad = bytes.clone();
+            bad[offset] ^= 1;
+            assert!(CurrentTrainingCheckpointV1::decode(&bad).is_err());
+        }
+        let mut trailing = bytes.clone();
+        trailing.push(b'\n');
+        assert!(CurrentTrainingCheckpointV1::decode(&trailing).is_err());
+        let mut bad_json = bytes;
+        bad_json[HEADER] = b'!';
+        let digest = Sha256::digest(&bad_json[HEADER..]);
+        bad_json[24..HEADER].copy_from_slice(&digest);
+        assert!(CurrentTrainingCheckpointV1::decode(&bad_json).is_err());
+    }
+
+    #[test]
+    fn current_encoding_validates_before_serialization_and_keeps_actual_size_limit() {
+        // One large fixture distinguishes validation-first failure from a size error.
+        // This is codec admission only, not a native private-life asset closure.
+        let mut checkpoint = current_fixture();
+        let mut life = codec_private_life(checkpoint.seed);
+        life.assets_base64.insert(
+            "oversized.bin".into(),
+            "A".repeat(MAX_CURRENT_CHECKPOINT_BYTES as usize),
+        );
+        checkpoint.life = Some(life);
+        checkpoint.schema_version = 0;
+        assert_eq!(
+            checkpoint.encode().unwrap_err().to_string(),
+            "invalid current checkpoint identity"
+        );
+        checkpoint.schema_version = 1;
+        checkpoint.validate().unwrap();
+        assert_eq!(
+            checkpoint.encode().unwrap_err().to_string(),
+            "current checkpoint byte limit exceeded"
+        );
+    }
 }
