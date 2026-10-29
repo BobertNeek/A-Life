@@ -223,6 +223,153 @@ enum StagedSealedPatchesRollback {
     FullSnapshot(Vec<ExperiencePatch>),
 }
 
+fn materialize_staged_sealed_patches_rollback(
+    rollback: &mut StagedSealedPatchesRollback,
+    patches: &[ExperiencePatch],
+) {
+    match std::mem::take(rollback) {
+        StagedSealedPatchesRollback::Inactive => {}
+        StagedSealedPatchesRollback::Clean { original_len } => {
+            let end = original_len.min(patches.len());
+            *rollback = StagedSealedPatchesRollback::FullSnapshot(patches[..end].to_vec());
+        }
+        StagedSealedPatchesRollback::EvictedFrontOne {
+            original_len,
+            evicted_patch,
+        } => {
+            let retained_original = original_len.saturating_sub(1).min(patches.len());
+            let mut snapshot = Vec::with_capacity(retained_original.saturating_add(1));
+            snapshot.push(*evicted_patch);
+            snapshot.extend(patches[..retained_original].iter().cloned());
+            *rollback = StagedSealedPatchesRollback::FullSnapshot(snapshot);
+        }
+        StagedSealedPatchesRollback::FullSnapshot(snapshot) => {
+            *rollback = StagedSealedPatchesRollback::FullSnapshot(snapshot);
+        }
+    }
+}
+
+/// Retains the host replay patch window. Production keeps only patches
+/// that can still correspond to the backend's bounded replay ring, while
+/// diagnostic profiles retain the full sealed history.
+fn retain_bounded_replay_patches(
+    residents: &BTreeMap<u64, ResidentCognition>,
+    patches: &mut Vec<ExperiencePatch>,
+    rollback: &mut StagedSealedPatchesRollback,
+    additions: &[ExperiencePatch],
+) {
+    if patches.is_empty() && additions.is_empty() {
+        return;
+    }
+    if residents.len() == 1 {
+        if let Some((&only_raw, resident)) = residents.iter().next() {
+            let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
+            if capacity > 0
+                && patches
+                    .iter()
+                    .all(|patch| patch.header().organism_id.raw() == only_raw)
+                && additions
+                    .iter()
+                    .all(|patch| patch.header().organism_id.raw() == only_raw)
+            {
+                if additions.is_empty() && patches.len() <= capacity {
+                    return;
+                }
+                if additions.len() == 1 && patches.len() < capacity {
+                    patches.push(additions[0].clone());
+                    return;
+                }
+                if additions.len() == 1
+                    && patches.len() == capacity
+                    && matches!(
+                        *rollback,
+                        StagedSealedPatchesRollback::Inactive
+                            | StagedSealedPatchesRollback::Clean { .. }
+                    )
+                {
+                    let evicted = patches.remove(0);
+                    if let StagedSealedPatchesRollback::Clean { original_len } = *rollback {
+                        if original_len == capacity {
+                            *rollback = StagedSealedPatchesRollback::EvictedFrontOne {
+                                original_len,
+                                evicted_patch: Box::new(evicted),
+                            };
+                        } else {
+                            let retained_original =
+                                original_len.saturating_sub(1).min(patches.len());
+                            let mut snapshot = Vec::with_capacity(original_len);
+                            if original_len > 0 {
+                                snapshot.push(evicted);
+                            }
+                            snapshot.extend(patches[..retained_original].iter().cloned());
+                            *rollback = StagedSealedPatchesRollback::FullSnapshot(snapshot);
+                        }
+                    }
+                    patches.push(additions[0].clone());
+                    return;
+                }
+            }
+        }
+    }
+    if additions.is_empty() {
+        let mut counts_by_organism = BTreeMap::<u64, usize>::new();
+        let already_bounded = patches.iter().all(|patch| {
+            let raw = patch.header().organism_id.raw();
+            let Some(resident) = residents.get(&raw) else {
+                return false;
+            };
+            let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
+            let count = counts_by_organism.entry(raw).or_default();
+            *count += 1;
+            *count <= capacity
+        });
+        if already_bounded {
+            return;
+        }
+    }
+    materialize_staged_sealed_patches_rollback(rollback, patches);
+    let mut candidates = std::mem::take(patches);
+    candidates.extend(additions.iter().cloned());
+    let mut retained_count_by_organism = BTreeMap::<u64, usize>::new();
+    let mut retained = Vec::with_capacity(candidates.len());
+    for patch in candidates.into_iter().rev() {
+        let raw = patch.header().organism_id.raw();
+        let Some(resident) = residents.get(&raw) else {
+            continue;
+        };
+        let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
+        let count = retained_count_by_organism.entry(raw).or_default();
+        if *count < capacity {
+            *count += 1;
+            retained.push(patch);
+        }
+    }
+    retained.reverse();
+    *patches = retained;
+}
+
+fn restore_staged_sealed_patches(
+    rollback: &mut StagedSealedPatchesRollback,
+    patches: &mut Vec<ExperiencePatch>,
+    original_len: usize,
+) {
+    match std::mem::take(rollback) {
+        StagedSealedPatchesRollback::Inactive | StagedSealedPatchesRollback::Clean { .. } => {
+            patches.truncate(original_len);
+        }
+        StagedSealedPatchesRollback::EvictedFrontOne {
+            original_len,
+            evicted_patch,
+        } => {
+            patches.truncate(original_len.saturating_sub(1));
+            patches.insert(0, *evicted_patch);
+        }
+        StagedSealedPatchesRollback::FullSnapshot(sealed_patches) => {
+            *patches = sealed_patches;
+        }
+    }
+}
+
 // Cognitive sidecars share the enclosing world/resident transaction. Persistence
 // workers cannot be rolled back: after acceptance their queues retain ownership.
 struct StagedSleepAuthority {
@@ -274,24 +421,11 @@ impl StagedSleepAuthority {
         runtime.memories = self.memories;
         runtime.topologies = self.topologies;
         runtime.restored_replay_patches = self.restored_replay_patches;
-        match std::mem::take(&mut runtime.staged_sealed_patches_rollback) {
-            StagedSealedPatchesRollback::Inactive
-            | StagedSealedPatchesRollback::Clean { .. } => {
-                runtime.sealed_patches.truncate(self.sealed_patches_len);
-            }
-            StagedSealedPatchesRollback::EvictedFrontOne {
-                original_len,
-                evicted_patch,
-            } => {
-                runtime
-                    .sealed_patches
-                    .truncate(original_len.saturating_sub(1));
-                runtime.sealed_patches.insert(0, *evicted_patch);
-            }
-            StagedSealedPatchesRollback::FullSnapshot(sealed_patches) => {
-                runtime.sealed_patches = sealed_patches;
-            }
-        }
+        restore_staged_sealed_patches(
+            &mut runtime.staged_sealed_patches_rollback,
+            &mut runtime.sealed_patches,
+            self.sealed_patches_len,
+        );
         runtime.last_sealed_patches = self.last_sealed_patches;
         runtime.sealed_patch_count = self.sealed_patch_count;
         runtime.retained_learning = self.retained_learning;
@@ -7722,133 +7856,13 @@ impl GpuLiveBrainRuntime {
         &self.sealed_patches
     }
 
-    fn materialize_staged_sealed_patches_rollback(&mut self) {
-        match std::mem::take(&mut self.staged_sealed_patches_rollback) {
-            StagedSealedPatchesRollback::Inactive => {}
-            StagedSealedPatchesRollback::Clean { original_len } => {
-                let end = original_len.min(self.sealed_patches.len());
-                self.staged_sealed_patches_rollback =
-                    StagedSealedPatchesRollback::FullSnapshot(self.sealed_patches[..end].to_vec());
-            }
-            StagedSealedPatchesRollback::EvictedFrontOne {
-                original_len,
-                evicted_patch,
-            } => {
-                let retained_original = original_len
-                    .saturating_sub(1)
-                    .min(self.sealed_patches.len());
-                let mut snapshot = Vec::with_capacity(retained_original.saturating_add(1));
-                snapshot.push(*evicted_patch);
-                snapshot.extend(self.sealed_patches[..retained_original].iter().cloned());
-                self.staged_sealed_patches_rollback =
-                    StagedSealedPatchesRollback::FullSnapshot(snapshot);
-            }
-            StagedSealedPatchesRollback::FullSnapshot(snapshot) => {
-                self.staged_sealed_patches_rollback =
-                    StagedSealedPatchesRollback::FullSnapshot(snapshot);
-            }
-        }
-    }
-
-    /// Retains the host replay patch window. Production keeps only patches
-    /// that can still correspond to the backend's bounded replay ring, while
-    /// diagnostic profiles retain the full sealed history.
     fn retain_bounded_replay_patches(&mut self, additions: &[ExperiencePatch]) {
-        if self.sealed_patches.is_empty() && additions.is_empty() {
-            return;
-        }
-        if self.residents.len() == 1 {
-            if let Some((&only_raw, resident)) = self.residents.iter().next() {
-                let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
-                if capacity > 0
-                    && self
-                        .sealed_patches
-                        .iter()
-                        .all(|patch| patch.header().organism_id.raw() == only_raw)
-                    && additions
-                        .iter()
-                        .all(|patch| patch.header().organism_id.raw() == only_raw)
-                {
-                    if additions.is_empty() && self.sealed_patches.len() <= capacity {
-                        return;
-                    }
-                    if additions.len() == 1 && self.sealed_patches.len() < capacity {
-                        self.sealed_patches.push(additions[0].clone());
-                        return;
-                    }
-                    if additions.len() == 1
-                        && self.sealed_patches.len() == capacity
-                        && matches!(
-                            self.staged_sealed_patches_rollback,
-                            StagedSealedPatchesRollback::Inactive
-                                | StagedSealedPatchesRollback::Clean { .. }
-                        )
-                    {
-                        let evicted = self.sealed_patches.remove(0);
-                        if let StagedSealedPatchesRollback::Clean { original_len } =
-                            self.staged_sealed_patches_rollback
-                        {
-                            if original_len == capacity {
-                                self.staged_sealed_patches_rollback =
-                                    StagedSealedPatchesRollback::EvictedFrontOne {
-                                        original_len,
-                                        evicted_patch: Box::new(evicted),
-                                    };
-                            } else {
-                                let retained_original = original_len
-                                    .saturating_sub(1)
-                                    .min(self.sealed_patches.len());
-                                let mut snapshot =
-                                    Vec::with_capacity(retained_original.saturating_add(1));
-                                snapshot.push(evicted);
-                                snapshot.extend(
-                                    self.sealed_patches[..retained_original].iter().cloned(),
-                                );
-                                self.staged_sealed_patches_rollback =
-                                    StagedSealedPatchesRollback::FullSnapshot(snapshot);
-                            }
-                        }
-                        self.sealed_patches.push(additions[0].clone());
-                        return;
-                    }
-                }
-            }
-        }
-        if additions.is_empty() {
-            let mut counts_by_organism = BTreeMap::<u64, usize>::new();
-            let already_bounded = self.sealed_patches.iter().all(|patch| {
-                let raw = patch.header().organism_id.raw();
-                let Some(resident) = self.residents.get(&raw) else {
-                    return false;
-                };
-                let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
-                let count = counts_by_organism.entry(raw).or_default();
-                *count += 1;
-                *count <= capacity
-            });
-            if already_bounded {
-                return;
-            }
-        }
-        self.materialize_staged_sealed_patches_rollback();
-        let mut candidates = std::mem::take(&mut self.sealed_patches);
-        candidates.extend(additions.iter().cloned());
-        let mut retained_count_by_organism = BTreeMap::<u64, usize>::new();
-        let mut retained = Vec::with_capacity(candidates.len());
-        for patch in candidates.into_iter().rev() {
-            let raw = patch.header().organism_id.raw();
-            let Some(resident) = self.residents.get(&raw) else {
-                continue;
-            };
-            let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
-            let count = retained_count_by_organism.entry(raw).or_default();
-            if *count < capacity {
-                *count += 1;
-                retained.push(patch);
-            }
-        }
-        retained.reverse();
-        self.sealed_patches = retained;
+        retain_bounded_replay_patches(
+            &self.residents,
+            &mut self.sealed_patches,
+            &mut self.staged_sealed_patches_rollback,
+            additions,
+        );
     }
 
     /// Returns the canonical latest sealed patch for one live organism.
@@ -14346,3 +14360,6 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 }
+
+#[cfg(test)]
+mod replay_rollback_tests;

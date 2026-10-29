@@ -833,7 +833,7 @@ mod collect_only_tests {
             .chain(&actor.second_moment)
             .all(|m| *m == 0.));
         assert!(value.parameters.iter().all(|parameter| *parameter == 0.));
-        let checkpoint: CpuCanonicalCheckpoint = read_cpu_private_checkpoint(&root).unwrap();
+        let checkpoint: CpuCanonicalCheckpoint = read_cpu_private_checkpoint(root).unwrap();
         assert!(checkpoint.sampling_counter > 0);
         assert!(checkpoint.residents.iter().any(|resident| resident
             .neural

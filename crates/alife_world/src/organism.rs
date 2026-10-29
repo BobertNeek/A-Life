@@ -1699,6 +1699,204 @@ mod tests {
         );
     }
 
+    fn validation_cache_registry() -> (WorldOrganismRegistry, OrganismId) {
+        let genome = CreatureGenome::early_mammal_founder(
+            0xE10_3205,
+            FoundationGeneticIdentity::new(10, 1, 7, BrainCapacityClass::N512_ID).unwrap(),
+        )
+        .unwrap();
+        let mut record = WorldOrganismRecord::newborn(
+            OrganismId(1),
+            WorldEntityId(101),
+            genome.clone(),
+            genome.express().unwrap(),
+            Tick::ZERO,
+        )
+        .unwrap();
+        record
+            .advance_biology(Tick(1), BodyEventDelta::zero())
+            .unwrap();
+        let mut registry = WorldOrganismRegistry::default();
+        registry.insert(record).unwrap();
+        (registry, OrganismId(1))
+    }
+
+    #[test]
+    fn mutable_validation_cache_preserves_signed_zero_public_mutations_and_wire_guards() {
+        type Lane = fn(&mut BiochemistryState) -> &mut f32;
+        let lanes: [(&str, bool, Lane); 4] = [
+            ("body injury projection", false, |state| {
+                &mut state.body.injury
+            }),
+            ("body temperature projection", false, |state| {
+                &mut state.body.temperature_stress
+            }),
+            ("drive extension", true, |state| {
+                &mut state.homeostasis.drives.extension[0]
+            }),
+            ("mating opportunity", true, |state| {
+                &mut state.reproduction.mating_opportunity
+            }),
+        ];
+        for (label, allowed, lane) in lanes {
+            let (mut registry, id) = validation_cache_registry();
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            let original = serde_json::to_vec(record).unwrap();
+            let mut biology = *record.biochemistry();
+            assert_eq!(lane(&mut biology).to_bits(), 0.0_f32.to_bits(), "{label}");
+            let result = registry.with_biology_mut(id, |state| {
+                *lane(state) = -0.0;
+                Ok(())
+            });
+            if !allowed {
+                // Body compatibility projections must match their organ
+                // projections bit-for-bit, including zero signs.
+                assert!(result.is_err(), "{label}");
+                let record = registry.get(id).unwrap();
+                record.validate_contract().unwrap();
+                assert_eq!(serde_json::to_vec(record).unwrap(), original);
+                continue;
+            }
+            result.unwrap_or_else(|error| panic!("{label}: {error:?}"));
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            let mut biology = *record.biochemistry();
+            assert_eq!(lane(&mut biology).to_bits(), (-0.0_f32).to_bits());
+            let wire = serde_json::to_vec(record).unwrap();
+            let restored: WorldOrganismRecord = serde_json::from_slice(&wire).unwrap();
+            restored.validate_contract().unwrap();
+            assert_eq!(serde_json::to_vec(&restored).unwrap(), wire);
+            let mut forged = serde_json::to_value(record).unwrap();
+            assert!(forged.get("genetic_validation").is_none());
+            forged["biochemistry"]["body"]["energy"] = serde_json::json!(0.123);
+            let forged: WorldOrganismRecord = serde_json::from_value(forged).unwrap();
+            assert!(forged.validate_contract().is_err());
+            record.validate_contract().unwrap();
+        }
+    }
+
+    #[test]
+    fn mutable_validation_cache_rejects_invalid_biology_and_restores_failed_transactions() {
+        let (mut registry, id) = validation_cache_registry();
+        let original = serde_json::to_vec(registry.get(id).unwrap()).unwrap();
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 2.0] {
+            assert!(registry
+                .with_biology_mut(id, |state| {
+                    state.body.energy = value;
+                    Ok(())
+                })
+                .is_err());
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            assert_eq!(serde_json::to_vec(record).unwrap(), original);
+        }
+        let invalid_projections: [fn(&mut BiochemistryState); 3] = [
+            |state| state.homeostasis.tick = Tick::ZERO,
+            |state| state.development.age_ticks = Tick(2),
+            |state| state.development.maturation = f32::NAN,
+        ];
+        for mutate in invalid_projections {
+            assert!(registry
+                .with_biology_mut(id, |state| {
+                    mutate(state);
+                    Ok(())
+                })
+                .is_err());
+            let record = registry.get(id).unwrap();
+            record.validate_contract().unwrap();
+            assert_eq!(serde_json::to_vec(record).unwrap(), original);
+        }
+        assert!(registry
+            .with_biology_mut(id, |state| {
+                state.body.set_energy(0.25)?;
+                Err::<(), _>(ScaffoldContractError::InvalidId.into())
+            })
+            .is_err());
+        assert!(registry
+            .with_biology_mut(id, |state| {
+                state.tick = Tick::ZERO;
+                Ok(())
+            })
+            .is_err());
+        let record = registry.get(id).unwrap();
+        record.validate_contract().unwrap();
+        assert_eq!(serde_json::to_vec(record).unwrap(), original);
+        registry
+            .with_biology_mut(id, |state| Ok(state.body.set_energy(0.25)?))
+            .unwrap();
+        registry.get(id).unwrap().validate_contract().unwrap();
+        assert_eq!(registry.get(id).unwrap().biochemistry().body.energy, 0.25);
+    }
+
+    #[test]
+    fn mutable_validation_cache_embodiment_replacement_and_deserialization_preserve_binding() {
+        let (mut registry, id) = validation_cache_registry();
+        let record = registry.records_by_organism.get_mut(&id.raw()).unwrap();
+        record.validate_contract().unwrap();
+        let mut candidate = record.embodiment().clone();
+        let mut calibration = candidate.sensor_calibration().to_vec();
+        calibration[0] = -0.0;
+        candidate
+            .replace_calibration(
+                record.biochemistry().tick,
+                calibration,
+                candidate.effector_controllability().to_vec(),
+                candidate.body_schema().to_vec(),
+            )
+            .unwrap();
+        record.replace_embodiment_state(candidate).unwrap();
+        record.validate_contract().unwrap();
+        assert_eq!(
+            record.embodiment().sensor_calibration()[0].to_bits(),
+            (-0.0_f32).to_bits()
+        );
+        let wire = serde_json::to_vec(record).unwrap();
+        let restored: WorldOrganismRecord = serde_json::from_slice(&wire).unwrap();
+        restored.validate_contract().unwrap();
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), wire);
+        let mut forged = serde_json::to_value(&restored).unwrap();
+        forged["embodiment"]["sensor_calibration"][0] = serde_json::json!(0.0);
+        let forged: WorldOrganismRecord = serde_json::from_value(forged).unwrap();
+        assert!(forged.validate_contract().is_err());
+        let mut invalid = record.embodiment().clone();
+        let mut calibration = invalid.sensor_calibration().to_vec();
+        calibration[0] = f32::NAN;
+        assert!(invalid
+            .replace_calibration(
+                record.biochemistry().tick,
+                calibration,
+                invalid.effector_controllability().to_vec(),
+                invalid.body_schema().to_vec()
+            )
+            .is_err());
+        assert_eq!(serde_json::to_vec(record).unwrap(), wire);
+        record.validate_contract().unwrap();
+
+        // A valid loaded graph can exhaust its revision counter. Replacement
+        // then fails after staging the new embodiment/cache and must restore
+        // both the original value and its digest binding.
+        let mut exhausted = serde_json::to_value(record).unwrap();
+        exhausted["state_graph"]["transaction_revision"] = serde_json::json!(u64::MAX);
+        let mut exhausted: WorldOrganismRecord = serde_json::from_value(exhausted).unwrap();
+        exhausted.validate_contract().unwrap();
+        let before = serde_json::to_vec(&exhausted).unwrap();
+        let mut candidate = exhausted.embodiment().clone();
+        let mut calibration = candidate.sensor_calibration().to_vec();
+        calibration[0] = 0.75;
+        candidate
+            .replace_calibration(
+                exhausted.biochemistry().tick,
+                calibration,
+                candidate.effector_controllability().to_vec(),
+                candidate.body_schema().to_vec(),
+            )
+            .unwrap();
+        assert!(exhausted.replace_embodiment_state(candidate).is_err());
+        exhausted.validate_contract().unwrap();
+        assert_eq!(serde_json::to_vec(&exhausted).unwrap(), before);
+    }
+
     fn malformed_registry() -> (WorldOrganismRegistry, OrganismId) {
         let genome = CreatureGenome::early_mammal_founder(
             0xE10_31FF,

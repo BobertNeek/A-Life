@@ -205,13 +205,6 @@ fn max_non_speech_decoder_lane(phenotype: &alife_core::BrainPhenotype) -> Option
         .max()
 }
 
-fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()> {
-    validate_snapshot_topology_with_recurrent(
-        snapshot,
-        recurrent_synapse_count(&snapshot.phenotype),
-    )
-}
-
 fn validate_snapshot_topology_with_recurrent(
     snapshot: &GpuTrainingStateSnapshot,
     recurrent: usize,
@@ -439,9 +432,12 @@ fn foundation_replay_sequence_with_invariants(
         {
             return Err("weights changed inside the captured forward dispatch".into());
         }
-        if lifetime_words.len() != phenotype.synapses().len() + step.before.structural_synapses.len()
+        if lifetime_words.len()
+            != phenotype.synapses().len() + step.before.structural_synapses.len()
             || fast_words.len() != lifetime_words.len()
-            || lifetime_words.iter().any(|w| !f32::from_bits(*w).is_finite())
+            || lifetime_words
+                .iter()
+                .any(|w| !f32::from_bits(*w).is_finite())
             || fast_words.iter().any(|w| !f32::from_bits(*w).is_finite())
         {
             return Err(invalid().into());
@@ -4891,7 +4887,8 @@ impl FoundationReplayRecord {
             .iter()
             .zip(&self.sequence.initial.metabolic_load)
         {
-            homeo_chunk[chunk_len..chunk_len + 4].copy_from_slice(&activity.to_bits().to_le_bytes());
+            homeo_chunk[chunk_len..chunk_len + 4]
+                .copy_from_slice(&activity.to_bits().to_le_bytes());
             homeo_chunk[chunk_len + 4..chunk_len + 8]
                 .copy_from_slice(&metabolic.to_bits().to_le_bytes());
             chunk_len += 8;
