@@ -161,15 +161,31 @@ use crate::{
 #[cfg(test)]
 use alife_core::channel_command_for_action;
 
+mod resident_arc_serde {
+    use std::sync::Arc;
+
+    use serde::{Serialize, Serializer};
+
+    pub fn serialize<S, T>(value: &Arc<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        value.as_ref().serialize(serializer)
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 struct ResidentCognition {
     #[serde(skip)]
     approximate_cache: std::sync::Arc<approximate_cognition::ApproximateCognitionCache>,
-    phenotype: alife_core::BrainPhenotype,
+    #[serde(serialize_with = "resident_arc_serde::serialize")]
+    phenotype: std::sync::Arc<alife_core::BrainPhenotype>,
     // Derived from this immutable phenotype at admission/restore, never saved.
     #[serde(skip)]
     neural_receptors: ResidentNeuralReceptors,
-    compiler_inputs: PhenotypeCompilerInputs,
+    #[serde(serialize_with = "resident_arc_serde::serialize")]
+    compiler_inputs: std::sync::Arc<PhenotypeCompilerInputs>,
     legacy_nano512_compatibility_receipt: Option<LegacyNano512CompatibilityReceipt>,
     genome: BrainGenome,
     development: DevelopmentState,
@@ -193,13 +209,26 @@ struct StagedLiveAuthority {
     residents: BTreeMap<u64, ResidentCognition>,
 }
 
+#[derive(Debug, Default)]
+enum StagedSealedPatchesRollback {
+    #[default]
+    Inactive,
+    Clean {
+        original_len: usize,
+    },
+    EvictedFrontOne {
+        original_len: usize,
+        evicted_patch: Box<ExperiencePatch>,
+    },
+    FullSnapshot(Vec<ExperiencePatch>),
+}
+
 // Cognitive sidecars share the enclosing world/resident transaction. Persistence
 // workers cannot be rolled back: after acceptance their queues retain ownership.
 struct StagedSleepAuthority {
     memories: BTreeMap<u64, MemorySidecarState>,
     topologies: BTreeMap<u64, TopologySidecar>,
     restored_replay_patches: Vec<ExperiencePatch>,
-    sealed_patches: Option<Vec<ExperiencePatch>>,
     sealed_patches_len: usize,
     last_sealed_patches: Vec<ExperiencePatch>,
     sealed_patch_count: usize,
@@ -216,17 +245,16 @@ struct StagedSleepAuthority {
 }
 
 impl StagedSleepAuthority {
-    fn capture(runtime: &GpuLiveBrainRuntime) -> Self {
+    fn capture(runtime: &mut GpuLiveBrainRuntime) -> Self {
+        let sealed_patches_len = runtime.sealed_patches.len();
+        runtime.staged_sealed_patches_rollback = StagedSealedPatchesRollback::Clean {
+            original_len: sealed_patches_len,
+        };
         Self {
             memories: runtime.memories.clone(),
             topologies: runtime.topologies.clone(),
             restored_replay_patches: runtime.restored_replay_patches.clone(),
-            // Diagnostic full history is append-only. Production retains a
-            // bounded replay window that can evict entries during a tick, so
-            // snapshot its contents for exact rollback.
-            sealed_patches: (!runtime.retain_sealed_patch_history)
-                .then(|| runtime.sealed_patches.clone()),
-            sealed_patches_len: runtime.sealed_patches.len(),
+            sealed_patches_len,
             last_sealed_patches: runtime.last_sealed_patches.clone(),
             sealed_patch_count: runtime.sealed_patch_count,
             retained_learning: runtime.retained_learning.clone(),
@@ -246,10 +274,23 @@ impl StagedSleepAuthority {
         runtime.memories = self.memories;
         runtime.topologies = self.topologies;
         runtime.restored_replay_patches = self.restored_replay_patches;
-        if let Some(sealed_patches) = self.sealed_patches {
-            runtime.sealed_patches = sealed_patches;
-        } else {
-            runtime.sealed_patches.truncate(self.sealed_patches_len);
+        match std::mem::take(&mut runtime.staged_sealed_patches_rollback) {
+            StagedSealedPatchesRollback::Inactive
+            | StagedSealedPatchesRollback::Clean { .. } => {
+                runtime.sealed_patches.truncate(self.sealed_patches_len);
+            }
+            StagedSealedPatchesRollback::EvictedFrontOne {
+                original_len,
+                evicted_patch,
+            } => {
+                runtime
+                    .sealed_patches
+                    .truncate(original_len.saturating_sub(1));
+                runtime.sealed_patches.insert(0, *evicted_patch);
+            }
+            StagedSealedPatchesRollback::FullSnapshot(sealed_patches) => {
+                runtime.sealed_patches = sealed_patches;
+            }
         }
         runtime.last_sealed_patches = self.last_sealed_patches;
         runtime.sealed_patch_count = self.sealed_patch_count;
@@ -789,8 +830,8 @@ impl ResidentAuthorityPlan {
         let neural_receptors = ResidentNeuralReceptors::compile(&self.phenotype)?;
         Ok(ResidentCognition {
             neural_receptors,
-            phenotype: self.phenotype,
-            compiler_inputs: self.compiler_inputs,
+            phenotype: std::sync::Arc::new(self.phenotype),
+            compiler_inputs: std::sync::Arc::new(self.compiler_inputs),
             legacy_nano512_compatibility_receipt: self.legacy_nano512_compatibility_receipt,
             genome: self.genome,
             development: self.development,
@@ -3549,6 +3590,7 @@ pub struct GpuLiveBrainRuntime {
     cognitive_work_cost_policy: CognitiveWorkCostPolicy,
     schedule_sleep: bool,
     sealed_patches: Vec<ExperiencePatch>,
+    staged_sealed_patches_rollback: StagedSealedPatchesRollback,
     sealed_patch_count: usize,
     restored_replay_patches: Vec<ExperiencePatch>,
     last_sealed_patches: Vec<ExperiencePatch>,
@@ -5084,10 +5126,10 @@ impl GpuLiveBrainRuntime {
                 neural_receptors: ResidentNeuralReceptors::compile(&phenotype).map_err(
                     |error| CuratedFounderResetRuntimeError::GpuResidencyPreSubmit { error },
                 )?,
-                phenotype: phenotype.clone(),
+                phenotype: std::sync::Arc::new(phenotype.clone()),
                 genome: entry.projection.source_brain_genome().clone(),
                 development: entry.projection.runtime_development_state().clone(),
-                compiler_inputs,
+                compiler_inputs: std::sync::Arc::new(compiler_inputs),
                 legacy_nano512_compatibility_receipt: None,
                 homeostasis: HomeostaticSnapshot::baseline(plan.world_tick),
                 sleep_scheduler: GpuSleepScheduler::new(
@@ -5832,6 +5874,7 @@ impl GpuLiveBrainRuntime {
             cognitive_work_cost_policy: options.cognitive_work_cost_policy,
             schedule_sleep: options.schedule_sleep,
             sealed_patches: Vec::new(),
+            staged_sealed_patches_rollback: StagedSealedPatchesRollback::Inactive,
             sealed_patch_count: 0,
             restored_replay_patches: Vec::new(),
             last_sealed_patches: Vec::new(),
@@ -6167,10 +6210,10 @@ impl GpuLiveBrainRuntime {
                     let resident = ResidentCognition {
                         neural_receptors: ResidentNeuralReceptors::compile(&authority.phenotype)?,
                         approximate_cache: Default::default(),
-                        phenotype: authority.phenotype.clone(),
+                        phenotype: std::sync::Arc::new(authority.phenotype.clone()),
                         genome: authority.genome.clone(),
                         development: authority.development.clone(),
-                        compiler_inputs: authority.compiler_inputs.clone(),
+                        compiler_inputs: std::sync::Arc::new(authority.compiler_inputs.clone()),
                         legacy_nano512_compatibility_receipt: authority
                             .legacy_nano512_compatibility_receipt
                             .clone(),
@@ -6247,7 +6290,7 @@ impl GpuLiveBrainRuntime {
                 )?;
                 let handle = runtime
                     .backend
-                    .insert_brain(organism_id, resident.phenotype.clone())?;
+                    .insert_brain(organism_id, (*resident.phenotype).clone())?;
                 runtime.handles.insert(raw, handle);
                 runtime.residents.insert(raw, resident);
                 runtime.memories.insert(raw, memory);
@@ -7509,6 +7552,8 @@ impl GpuLiveBrainRuntime {
             #[cfg(feature = "foundation-training")]
             self.last_foundation_terminal_biology.clear();
             staged_sleep.restore(self);
+        } else {
+            self.staged_sealed_patches_rollback = StagedSealedPatchesRollback::Inactive;
         }
         self.performance_metrics.rollback_clone_calls = self
             .performance_metrics
@@ -7677,10 +7722,115 @@ impl GpuLiveBrainRuntime {
         &self.sealed_patches
     }
 
+    fn materialize_staged_sealed_patches_rollback(&mut self) {
+        match std::mem::take(&mut self.staged_sealed_patches_rollback) {
+            StagedSealedPatchesRollback::Inactive => {}
+            StagedSealedPatchesRollback::Clean { original_len } => {
+                let end = original_len.min(self.sealed_patches.len());
+                self.staged_sealed_patches_rollback =
+                    StagedSealedPatchesRollback::FullSnapshot(self.sealed_patches[..end].to_vec());
+            }
+            StagedSealedPatchesRollback::EvictedFrontOne {
+                original_len,
+                evicted_patch,
+            } => {
+                let retained_original = original_len
+                    .saturating_sub(1)
+                    .min(self.sealed_patches.len());
+                let mut snapshot = Vec::with_capacity(retained_original.saturating_add(1));
+                snapshot.push(*evicted_patch);
+                snapshot.extend(self.sealed_patches[..retained_original].iter().cloned());
+                self.staged_sealed_patches_rollback =
+                    StagedSealedPatchesRollback::FullSnapshot(snapshot);
+            }
+            StagedSealedPatchesRollback::FullSnapshot(snapshot) => {
+                self.staged_sealed_patches_rollback =
+                    StagedSealedPatchesRollback::FullSnapshot(snapshot);
+            }
+        }
+    }
+
     /// Retains the host replay patch window. Production keeps only patches
     /// that can still correspond to the backend's bounded replay ring, while
     /// diagnostic profiles retain the full sealed history.
     fn retain_bounded_replay_patches(&mut self, additions: &[ExperiencePatch]) {
+        if self.sealed_patches.is_empty() && additions.is_empty() {
+            return;
+        }
+        if self.residents.len() == 1 {
+            if let Some((&only_raw, resident)) = self.residents.iter().next() {
+                let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
+                if capacity > 0
+                    && self
+                        .sealed_patches
+                        .iter()
+                        .all(|patch| patch.header().organism_id.raw() == only_raw)
+                    && additions
+                        .iter()
+                        .all(|patch| patch.header().organism_id.raw() == only_raw)
+                {
+                    if additions.is_empty() && self.sealed_patches.len() <= capacity {
+                        return;
+                    }
+                    if additions.len() == 1 && self.sealed_patches.len() < capacity {
+                        self.sealed_patches.push(additions[0].clone());
+                        return;
+                    }
+                    if additions.len() == 1
+                        && self.sealed_patches.len() == capacity
+                        && matches!(
+                            self.staged_sealed_patches_rollback,
+                            StagedSealedPatchesRollback::Inactive
+                                | StagedSealedPatchesRollback::Clean { .. }
+                        )
+                    {
+                        let evicted = self.sealed_patches.remove(0);
+                        if let StagedSealedPatchesRollback::Clean { original_len } =
+                            self.staged_sealed_patches_rollback
+                        {
+                            if original_len == capacity {
+                                self.staged_sealed_patches_rollback =
+                                    StagedSealedPatchesRollback::EvictedFrontOne {
+                                        original_len,
+                                        evicted_patch: Box::new(evicted),
+                                    };
+                            } else {
+                                let retained_original = original_len
+                                    .saturating_sub(1)
+                                    .min(self.sealed_patches.len());
+                                let mut snapshot =
+                                    Vec::with_capacity(retained_original.saturating_add(1));
+                                snapshot.push(evicted);
+                                snapshot.extend(
+                                    self.sealed_patches[..retained_original].iter().cloned(),
+                                );
+                                self.staged_sealed_patches_rollback =
+                                    StagedSealedPatchesRollback::FullSnapshot(snapshot);
+                            }
+                        }
+                        self.sealed_patches.push(additions[0].clone());
+                        return;
+                    }
+                }
+            }
+        }
+        if additions.is_empty() {
+            let mut counts_by_organism = BTreeMap::<u64, usize>::new();
+            let already_bounded = self.sealed_patches.iter().all(|patch| {
+                let raw = patch.header().organism_id.raw();
+                let Some(resident) = self.residents.get(&raw) else {
+                    return false;
+                };
+                let capacity = resident.phenotype.replay_capture_plan().event_capacity() as usize;
+                let count = counts_by_organism.entry(raw).or_default();
+                *count += 1;
+                *count <= capacity
+            });
+            if already_bounded {
+                return;
+            }
+        }
+        self.materialize_staged_sealed_patches_rollback();
         let mut candidates = std::mem::take(&mut self.sealed_patches);
         candidates.extend(additions.iter().cloned());
         let mut retained_count_by_organism = BTreeMap::<u64, usize>::new();
@@ -11013,7 +11163,7 @@ mod tests {
                 &BrainCapacityClass::n512(),
             )
             .unwrap(),
-            birth_resident.phenotype
+            *birth_resident.phenotype
         );
         assert_eq!(
             birth_resident.homeostasis,
@@ -11592,8 +11742,8 @@ mod tests {
                     raw,
                     ResidentCognition {
                         neural_receptors: ResidentNeuralReceptors::compile(&phenotype).unwrap(),
-                        phenotype,
-                        compiler_inputs,
+                        phenotype: std::sync::Arc::new(phenotype),
+                        compiler_inputs: std::sync::Arc::new(compiler_inputs),
                         legacy_nano512_compatibility_receipt: Some(receipt),
                         genome,
                         development,
@@ -13253,8 +13403,8 @@ mod tests {
             organism_id.raw(),
             ResidentCognition {
                 neural_receptors: ResidentNeuralReceptors::compile(&phenotype).unwrap(),
-                phenotype: phenotype.clone(),
-                compiler_inputs,
+                phenotype: std::sync::Arc::new(phenotype.clone()),
+                compiler_inputs: std::sync::Arc::new(compiler_inputs),
                 legacy_nano512_compatibility_receipt: None,
                 genome: genome.clone(),
                 development: development.clone(),

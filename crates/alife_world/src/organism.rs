@@ -285,10 +285,15 @@ impl Validate for OrganismSubsystemStateGraph {
 }
 
 // Genome and expressed phenotype are private, immutable after construction.
-// Cache their validation only; mutable body/state refs still validate every time.
+// Cache their validation and the latest validated biochemistry/embodiment digests;
+// any direct state mutation invalidates the cached digest comparison.
 // Deserialization never imports this process-local proof.
 #[derive(Debug, Clone, Default)]
-struct GeneticValidationCache(OnceLock<[u64; 4]>);
+struct GeneticValidationCache {
+    genetics: OnceLock<[u64; 4]>,
+    biochemistry: OnceLock<(BiochemistryState, [u64; 4])>,
+    embodiment: OnceLock<(EmbodimentState, [u64; 4])>,
+}
 
 impl PartialEq for GeneticValidationCache {
     fn eq(&self, _other: &Self) -> bool {
@@ -297,12 +302,42 @@ impl PartialEq for GeneticValidationCache {
     }
 }
 
+fn biochemistry_exact_eq(a: &BiochemistryState, b: &BiochemistryState) -> bool {
+    *a == *b
+        && a.reproduction.mating_opportunity.to_bits()
+            == b.reproduction.mating_opportunity.to_bits()
+        && a.body.energy.to_bits() == b.body.energy.to_bits()
+}
+
+mod arc_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::sync::Arc;
+
+    pub fn serialize<S, T>(value: &Arc<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: Serialize,
+    {
+        value.as_ref().serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Arc<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        T::deserialize(deserializer).map(Arc::new)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorldOrganismRecord {
     organism_id: OrganismId,
     world_entity_id: WorldEntityId,
-    genome: CreatureGenome,
-    phenotype: CreaturePhenotype,
+    #[serde(with = "arc_serde")]
+    genome: std::sync::Arc<CreatureGenome>,
+    #[serde(with = "arc_serde")]
+    phenotype: std::sync::Arc<CreaturePhenotype>,
     #[serde(skip)]
     genetic_validation: GeneticValidationCache,
     biochemistry: BiochemistryState,
@@ -433,8 +468,8 @@ impl WorldOrganismRecord {
         Ok(WorldOrganismAdmissionSnapshot {
             organism_id: self.organism_id,
             world_entity_id: self.world_entity_id,
-            genome: self.genome.clone(),
-            phenotype: self.phenotype.clone(),
+            genome: (*self.genome).clone(),
+            phenotype: (*self.phenotype).clone(),
             biochemistry: self.biochemistry,
             age: self.age_at(world_tick)?,
         })
@@ -454,6 +489,8 @@ impl WorldOrganismRecord {
         let brain_schema_version = phenotype.brain_genome.schema_version;
         let genetics_development_digest = genetics_development_digest(&genome, &phenotype)?;
         let brain_birth_digest = initial_brain_digest(organism_id, &phenotype)?;
+        let biochemistry_digest = body_biochemistry_digest(&biochemistry)?;
+        let initial_embodiment_digest = embodiment_digest(&embodiment)?;
         let initial_ref = |tag: u64, schema_version: u16| SubsystemStateRef {
             organism_id,
             schema_version,
@@ -464,9 +501,13 @@ impl WorldOrganismRecord {
         let record = Self {
             organism_id,
             world_entity_id,
-            genome,
-            phenotype,
-            genetic_validation: GeneticValidationCache::default(),
+            genome: std::sync::Arc::new(genome),
+            phenotype: std::sync::Arc::new(phenotype),
+            genetic_validation: GeneticValidationCache {
+                genetics: OnceLock::new(),
+                biochemistry: OnceLock::from((biochemistry, biochemistry_digest)),
+                embodiment: OnceLock::from((embodiment.clone(), initial_embodiment_digest)),
+            },
             biochemistry,
             state_graph: OrganismSubsystemStateGraph {
                 organism_id,
@@ -476,7 +517,7 @@ impl WorldOrganismRecord {
                     ..initial_ref(10, SchemaVersions::CURRENT.genome.raw())
                 },
                 body_biochemistry: SubsystemStateRef {
-                    content_digest: body_biochemistry_digest(&biochemistry)?,
+                    content_digest: biochemistry_digest,
                     ..initial_ref(1, SchemaVersions::CURRENT.chemistry.raw())
                 },
                 brain: SubsystemStateRef {
@@ -488,7 +529,7 @@ impl WorldOrganismRecord {
                     ..initial_ref(3, 1)
                 },
                 embodiment: SubsystemStateRef {
-                    content_digest: embodiment_digest(&embodiment)?,
+                    content_digest: initial_embodiment_digest,
                     ..initial_ref(4, embodiment.schema_version())
                 },
                 lifecycle_persistence: SubsystemStateRef {
@@ -540,9 +581,21 @@ impl WorldOrganismRecord {
     }
 
     pub fn validate_contract(&self) -> Result<(), ScaffoldContractError> {
-        let genetics_digest = match self.genetic_validation.0.get() {
+        let genetics_digest = match self.genetic_validation.genetics.get() {
             Some(digest) => *digest,
             None => genetics_development_digest(&self.genome, &self.phenotype)?,
+        };
+        let biochemistry_digest = match self.genetic_validation.biochemistry.get() {
+            Some((cached_state, digest))
+                if biochemistry_exact_eq(cached_state, &self.biochemistry) =>
+            {
+                *digest
+            }
+            _ => body_biochemistry_digest(&self.biochemistry)?,
+        };
+        let current_embodiment_digest = match self.genetic_validation.embodiment.get() {
+            Some((cached_state, digest)) if cached_state == &self.embodiment => *digest,
+            _ => embodiment_digest(&self.embodiment)?,
         };
         self.organism_id.validate()?;
         self.world_entity_id.validate()?;
@@ -553,9 +606,8 @@ impl WorldOrganismRecord {
             || self.state_graph.body_biochemistry.causal_tick != self.biochemistry.tick
             || self.state_graph.embodiment.revision != self.embodiment.revision()
             || self.state_graph.embodiment.causal_tick != self.embodiment.source_tick()
-            || self.state_graph.body_biochemistry.content_digest
-                != body_biochemistry_digest(&self.biochemistry)?
-            || self.state_graph.embodiment.content_digest != embodiment_digest(&self.embodiment)?
+            || self.state_graph.body_biochemistry.content_digest != biochemistry_digest
+            || self.state_graph.embodiment.content_digest != current_embodiment_digest
             || self.state_graph.genetics_development.content_digest != genetics_digest
             || self.state_graph.lifecycle_persistence.content_digest
                 != lifecycle_persistence_digest(
@@ -572,13 +624,13 @@ impl WorldOrganismRecord {
         {
             return Err(ScaffoldContractError::BrainOwnershipMismatch);
         }
-        if self.genetic_validation.0.get().is_none() {
+        if self.genetic_validation.genetics.get().is_none() {
             self.genome.validate_contract()?;
-            if self.phenotype != self.genome.express()? {
+            if *self.phenotype != self.genome.express()? {
                 return Err(ScaffoldContractError::InvalidId);
             }
             // Concurrent readers may race to install the same immutable proof.
-            let _ = self.genetic_validation.0.set(genetics_digest);
+            let _ = self.genetic_validation.genetics.set(genetics_digest);
         }
         if self.phenotype.source_genome_id != self.genome.id
             || self.phenotype.lineage_id != self.genome.lineage_id
@@ -588,6 +640,18 @@ impl WorldOrganismRecord {
         }
 
         self.biochemistry.validate_against(&self.phenotype)?;
+        if self.genetic_validation.biochemistry.get().is_none() {
+            let _ = self
+                .genetic_validation
+                .biochemistry
+                .set((self.biochemistry, biochemistry_digest));
+        }
+        if self.genetic_validation.embodiment.get().is_none() {
+            let _ = self
+                .genetic_validation
+                .embodiment
+                .set((self.embodiment.clone(), current_embodiment_digest));
+        }
         self.cognitive_work.validate_contract()?;
         if !self.cognitive_energy_debit.is_finite() || self.cognitive_energy_debit < 0.0 {
             return Err(ScaffoldContractError::ScalarOutOfRange);
@@ -675,6 +739,7 @@ impl WorldOrganismRecord {
             Ok(applied_debit) => Ok(applied_debit),
             Err(error) => {
                 self.biochemistry = original_biochemistry;
+                self.genetic_validation.biochemistry = OnceLock::new();
                 self.state_graph = original_state_graph;
                 self.cognitive_work = original_work;
                 self.cognitive_energy_debit = original_debit;
@@ -704,6 +769,7 @@ impl WorldOrganismRecord {
         })();
         if let Err(error) = result {
             self.biochemistry = original_biochemistry;
+            self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
             return Err(error.into());
         }
@@ -737,6 +803,7 @@ impl WorldOrganismRecord {
         })();
         if let Err(error) = result {
             self.biochemistry = original_biochemistry;
+            self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
             return Err(error.into());
         }
@@ -769,6 +836,7 @@ impl WorldOrganismRecord {
         })();
         if let Err(error) = result {
             self.biochemistry = original_biochemistry;
+            self.genetic_validation.biochemistry = OnceLock::new();
             self.state_graph = original_state_graph;
             return Err(error.into());
         }
@@ -777,6 +845,7 @@ impl WorldOrganismRecord {
 
     fn advance_body_state_ref(&mut self) -> Result<(), ScaffoldContractError> {
         let content_digest = body_biochemistry_digest(&self.biochemistry)?;
+        self.genetic_validation.biochemistry = OnceLock::from((self.biochemistry, content_digest));
         self.state_graph.transaction_revision = self
             .state_graph
             .transaction_revision
@@ -841,6 +910,9 @@ impl WorldOrganismRecord {
         let original_graph = self.state_graph.clone();
         let result = (|| {
             self.embodiment = candidate;
+            let content_digest = embodiment_digest(&self.embodiment)?;
+            self.genetic_validation.embodiment =
+                OnceLock::from((self.embodiment.clone(), content_digest));
             self.state_graph.transaction_revision = self
                 .state_graph
                 .transaction_revision
@@ -848,11 +920,12 @@ impl WorldOrganismRecord {
                 .ok_or(ScaffoldContractError::InvalidId)?;
             self.state_graph.embodiment.revision = self.embodiment.revision();
             self.state_graph.embodiment.causal_tick = self.embodiment.source_tick();
-            self.state_graph.embodiment.content_digest = embodiment_digest(&self.embodiment)?;
+            self.state_graph.embodiment.content_digest = content_digest;
             self.validate_contract()
         })();
         if let Err(error) = result {
             self.embodiment = original_embodiment;
+            self.genetic_validation.embodiment = OnceLock::new();
             self.state_graph = original_graph;
             return Err(error);
         }
@@ -1194,6 +1267,7 @@ impl WorldOrganismRegistry {
         match result {
             Err(error) => {
                 record.biochemistry = original_biochemistry;
+                record.genetic_validation.biochemistry = OnceLock::new();
                 record.state_graph = original_state_graph;
                 Err(error)
             }
@@ -1201,6 +1275,7 @@ impl WorldOrganismRegistry {
                 let valid_tick = record.biochemistry.tick.raw() >= original_biochemistry.tick.raw();
                 if !valid_tick {
                     record.biochemistry = original_biochemistry;
+                    record.genetic_validation.biochemistry = OnceLock::new();
                     record.state_graph = original_state_graph;
                     return Err(OrganismRegistryError::InvalidRecord(
                         ScaffoldContractError::NonMonotonicTick,
@@ -1211,6 +1286,7 @@ impl WorldOrganismRegistry {
                     .and_then(|_| record.validate_contract())
                 {
                     record.biochemistry = original_biochemistry;
+                    record.genetic_validation.biochemistry = OnceLock::new();
                     record.state_graph = original_state_graph;
                     Err(error.into())
                 } else {
@@ -1594,9 +1670,23 @@ mod tests {
         assert_eq!(restored, record);
 
         let mut forged = record.clone();
+        assert!(std::sync::Arc::ptr_eq(&forged.genome, &record.genome));
+        assert!(std::sync::Arc::ptr_eq(&forged.phenotype, &record.phenotype));
         forged.state_graph.genetics_development.content_digest[0] ^= 1;
         assert_eq!(
             forged.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut forged_bio = record.clone();
+        forged_bio.biochemistry.reproduction.mating_opportunity = -0.0;
+        assert_eq!(
+            forged_bio.validate_contract(),
+            Err(ScaffoldContractError::BrainOwnershipMismatch)
+        );
+        let mut forged_embodiment = record.clone();
+        forged_embodiment.state_graph.embodiment.content_digest[0] ^= 1;
+        assert_eq!(
+            forged_embodiment.validate_contract(),
             Err(ScaffoldContractError::BrainOwnershipMismatch)
         );
         let mut forged = wire;

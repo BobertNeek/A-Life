@@ -683,3 +683,40 @@ fn optional_record_retention_admits_before_allocating_its_copy() {
         bincode::serde::encode_to_vec(&record, bincode::config::standard()).unwrap(),
     );
 }
+
+#[test]
+fn encode_replay_record_caches_exact_uncompressed_charge_and_prevalidated_options_guard_boundary() {
+    let (record, phenotype) = record_fixture();
+    let mut manual_writer = ReplayCacheChargeWriter(0);
+    bincode::serde::encode_into_std_write(&record, &mut manual_writer, bincode::config::standard())
+        .unwrap();
+    let expected_charge =
+        manual_writer.0 * 8 + std::mem::size_of::<FoundationReplayRecord>() as u64;
+
+    let mut compressed = Vec::new();
+    let (encoded_bytes, digest) = encode_replay_record(&mut compressed, &record).unwrap();
+    let reference = FoundationReplayRecordRef {
+        cohort: None,
+        record_index: record.record_index,
+        segment: record.segment,
+        tick: record.tick,
+        encoded_bytes,
+        digest,
+    };
+    let mut observed_charge = None;
+    cache_verified_replay_record_with_admission(&reference, &record, |charge| {
+        observed_charge = Some(charge);
+        false
+    });
+    assert_eq!(observed_charge, Some(expected_charge));
+    assert!(LAST_REPLAY_UNCOMPRESSED_BYTES.with(|cell| cell.get().is_none()));
+
+    record
+        .validate_with_options(&record.source, &phenotype, true)
+        .unwrap();
+    let mut forged = record.clone();
+    forged.sequence.initial.activity_ema[0] = 0.5;
+    assert!(forged
+        .validate_with_options(&record.source, &phenotype, true)
+        .is_err());
+}
