@@ -184,7 +184,31 @@ fn active_weight_ranges(snapshot: &GpuTrainingStateSnapshot) -> Result<(Range<u3
     ))
 }
 
-fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()> {
+fn recurrent_synapse_count(phenotype: &alife_core::BrainPhenotype) -> usize {
+    phenotype
+        .synapses()
+        .iter()
+        .filter(|s| s.kind() == CompiledSynapseKind::Recurrent)
+        .count()
+}
+
+fn max_non_speech_decoder_lane(phenotype: &alife_core::BrainPhenotype) -> Option<usize> {
+    phenotype
+        .synapses()
+        .iter()
+        .filter_map(|s| match s.kind() {
+            CompiledSynapseKind::Decoder(c) if c.head() != DecoderHeadKind::SpeechPayload => {
+                Some(usize::from(c.input_lane()))
+            }
+            _ => None,
+        })
+        .max()
+}
+
+fn validate_snapshot_topology_with_recurrent(
+    snapshot: &GpuTrainingStateSnapshot,
+    recurrent: usize,
+) -> Result<()> {
     let phenotype = &snapshot.phenotype;
     if snapshot.v11.pending_lifetime_synapse.is_some() {
         return Err("replay cannot capture an uncommitted structural synapse".into());
@@ -192,11 +216,6 @@ fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()>
     let record = snapshot.brain_slot.record();
     let counts = snapshot.brain_slot.typed_counts();
     let neurons = phenotype.neuron_count();
-    let recurrent = phenotype
-        .synapses()
-        .iter()
-        .filter(|s| s.kind() == CompiledSynapseKind::Recurrent)
-        .count();
     let added = snapshot.structural_synapses.len();
     if added > alife_core::MAX_STRUCTURAL_EDGES
         || record.synapse_count as usize != phenotype.synapses().len() + added
@@ -241,12 +260,19 @@ fn validate_snapshot_topology(snapshot: &GpuTrainingStateSnapshot) -> Result<()>
         .dendritic_branches
         .validate_for_neuron_count(neurons)?;
     let ranges = snapshot.brain_slot.word_ranges();
-    if snapshot_activation(snapshot)?.len() != neurons as usize {
+    let activation_words = snapshot_words(snapshot, activation_range(snapshot)?)?;
+    if activation_words.len() != neurons as usize
+        || activation_words
+            .iter()
+            .any(|w| !f32::from_bits(*w).is_finite())
+    {
         return Err(invalid().into());
     }
-    let homeostasis = snapshot_values(snapshot, ranges.homeostasis_words.clone())?;
-    if homeostasis.len() != neurons as usize * 2
-        || homeostasis.iter().any(|v| !(0.0..=1.0).contains(v))
+    let homeostasis_words = snapshot_words(snapshot, ranges.homeostasis_words.clone())?;
+    if homeostasis_words.len() != neurons as usize * 2
+        || homeostasis_words
+            .iter()
+            .any(|w| !(0.0..=1.0).contains(&f32::from_bits(*w)))
     {
         return Err(invalid().into());
     }
@@ -311,6 +337,24 @@ fn foundation_replay_sequence_with_upload(
 ) -> Result<TrainingSequence> {
     let first = steps.first().ok_or_else(invalid)?;
     let phenotype = &first.before.phenotype;
+    foundation_replay_sequence_with_invariants(
+        steps,
+        burn_in_ticks,
+        upload,
+        recurrent_synapse_count(phenotype),
+        max_non_speech_decoder_lane(phenotype),
+    )
+}
+
+fn foundation_replay_sequence_with_invariants(
+    steps: &[FoundationTrainingStep],
+    burn_in_ticks: usize,
+    upload: &alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload,
+    recurrent: usize,
+    max_non_speech_lane: Option<usize>,
+) -> Result<TrainingSequence> {
+    let first = steps.first().ok_or_else(invalid)?;
+    let phenotype = &first.before.phenotype;
     let homeostasis = snapshot_values(
         &first.before,
         first
@@ -330,8 +374,8 @@ fn foundation_replay_sequence_with_upload(
     let mut ticks = Vec::with_capacity(steps.len());
     for (index, step) in steps.iter().enumerate() {
         step.patch.validate_contract()?;
-        validate_snapshot_topology(&step.before)?;
-        validate_snapshot_topology(&step.after_inference)?;
+        validate_snapshot_topology_with_recurrent(&step.before, recurrent)?;
+        validate_snapshot_topology_with_recurrent(&step.after_inference, recurrent)?;
         if index > 0 {
             validate_recurrent_continuity(&steps[index - 1].after_inference, &step.before)?;
         }
@@ -381,35 +425,43 @@ fn foundation_replay_sequence_with_upload(
         }
         let (lifetime, fast) = active_weight_ranges(&step.before)?;
         let (after_lifetime, after_fast) = active_weight_ranges(&step.after_inference)?;
-        if snapshot_words(&step.before, lifetime.clone())?
-            != snapshot_words(&step.after_inference, after_lifetime)?
-            || snapshot_words(&step.before, fast.clone())?
-                != snapshot_words(&step.after_inference, after_fast)?
+        let lifetime_words = snapshot_words(&step.before, lifetime)?;
+        let fast_words = snapshot_words(&step.before, fast)?;
+        if lifetime_words != snapshot_words(&step.after_inference, after_lifetime)?
+            || fast_words != snapshot_words(&step.after_inference, after_fast)?
         {
             return Err("weights changed inside the captured forward dispatch".into());
         }
-        let lifetime = snapshot_values(&step.before, lifetime)?;
-        let fast = snapshot_values(&step.before, fast)?;
-        if lifetime.len() != phenotype.synapses().len() + step.before.structural_synapses.len()
-            || fast.len() != lifetime.len()
+        if lifetime_words.len()
+            != phenotype.synapses().len() + step.before.structural_synapses.len()
+            || fast_words.len() != lifetime_words.len()
+            || lifetime_words
+                .iter()
+                .any(|w| !f32::from_bits(*w).is_finite())
+            || fast_words.iter().any(|w| !f32::from_bits(*w).is_finite())
         {
             return Err(invalid().into());
         }
-        let mut genetic_slot_indices = Vec::with_capacity(phenotype.synapses().len());
-        let mut added = step.before.structural_synapses.iter().peekable();
-        for slot in 0..lifetime.len() {
-            if added
-                .peek()
-                .is_some_and(|edge| edge.slot_index as usize == slot)
-            {
-                added.next();
-            } else {
-                genetic_slot_indices.push(slot);
+        let genetic_slot_indices = if step.before.structural_synapses.is_empty() {
+            None
+        } else {
+            let mut indices = Vec::with_capacity(phenotype.synapses().len());
+            let mut added = step.before.structural_synapses.iter().peekable();
+            for slot in 0..lifetime_words.len() {
+                if added
+                    .peek()
+                    .is_some_and(|edge| edge.slot_index as usize == slot)
+                {
+                    added.next();
+                } else {
+                    indices.push(slot);
+                }
             }
-        }
-        if genetic_slot_indices.len() != phenotype.synapses().len() || added.next().is_some() {
-            return Err("live structural slot mapping is incomplete".into());
-        }
+            if indices.len() != phenotype.synapses().len() || added.next().is_some() {
+                return Err("live structural slot mapping is incomplete".into());
+            }
+            Some(indices)
+        };
         let effects = step
             .memory_upload
             .neural_receptor_effects()
@@ -428,8 +480,7 @@ fn foundation_replay_sequence_with_upload(
             }
             *enabled = true;
         }
-        if phenotype.synapses().iter().any(|s| matches!(s.kind(), CompiledSynapseKind::Decoder(c)
-            if c.head() != DecoderHeadKind::SpeechPayload && usize::from(c.input_lane()) >= step.behavior.decoder_input_stride)) {
+        if max_non_speech_lane.is_some_and(|lane| lane >= step.behavior.decoder_input_stride) {
             return Err("captured decoder lanes omit a compiled head".into());
         }
         let mut candidates = Vec::with_capacity(step.frame.candidates().len());
@@ -454,6 +505,29 @@ fn foundation_replay_sequence_with_upload(
                     .innate_contribution(step.frame.homeostasis().drives, candidate.features),
             });
         }
+        let effective_weight_offsets = match &genetic_slot_indices {
+            None => phenotype
+                .synapses()
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let slot = upload.canonical_to_local_synapse[i] as usize;
+                    f32::from_bits(lifetime_words[slot])
+                        + s.alpha() * f32::from_bits(fast_words[slot])
+                })
+                .collect(),
+            Some(indices) => phenotype
+                .synapses()
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let local = upload.canonical_to_local_synapse[i] as usize;
+                    let slot = indices[local];
+                    f32::from_bits(lifetime_words[slot])
+                        + s.alpha() * f32::from_bits(fast_words[slot])
+                })
+                .collect(),
+        };
         ticks.push(TrainingReplayTick {
             encoded_inputs: snapshot_values(
                 &step.after_inference,
@@ -467,16 +541,7 @@ fn foundation_replay_sequence_with_upload(
             local_threshold_shift: effects.local_threshold_shift,
             microstep_count: u32::from(step.throttle.microsteps),
             enabled_routes,
-            effective_weight_offsets: phenotype
-                .synapses()
-                .iter()
-                .enumerate()
-                .map(|(i, s)| {
-                    let local = upload.canonical_to_local_synapse[i] as usize;
-                    let slot = genetic_slot_indices[local];
-                    lifetime[slot] + s.alpha() * fast[slot]
-                })
-                .collect(),
+            effective_weight_offsets,
             structural_synapses: step
                 .before
                 .structural_synapses
@@ -490,8 +555,8 @@ fn foundation_replay_sequence_with_upload(
                         route: edge.route,
                         cadence: u32::from(projection.update_cadence().raw()),
                         effective_weight: edge.genetic_weight
-                            + lifetime[slot]
-                            + edge.alpha * fast[slot],
+                            + f32::from_bits(lifetime_words[slot])
+                            + edge.alpha * f32::from_bits(fast_words[slot]),
                     }
                 })
                 .collect(),
@@ -4281,7 +4346,7 @@ fn hash_replay_words_le(hasher: &mut blake3::Hasher, words: &[u32]) {
 }
 
 impl ReplayContinuity {
-    fn capture(snapshot: &GpuTrainingStateSnapshot) -> Result<Self> {
+    fn capture_recurrent_digest(snapshot: &GpuTrainingStateSnapshot) -> Result<[u8; 32]> {
         let mut recurrent = blake3::Hasher::new();
         for range in [
             activation_range(snapshot)?,
@@ -4290,6 +4355,11 @@ impl ReplayContinuity {
             let words = snapshot_words(snapshot, range)?;
             hash_replay_words_le(&mut recurrent, words);
         }
+        Ok(*recurrent.finalize().as_bytes())
+    }
+
+    fn capture(snapshot: &GpuTrainingStateSnapshot) -> Result<Self> {
+        let recurrent_digest = Self::capture_recurrent_digest(snapshot)?;
         let mut weights = blake3::Hasher::new();
         let (lifetime, fast) = active_weight_ranges(snapshot)?;
         for range in [lifetime, fast] {
@@ -4304,10 +4374,44 @@ impl ReplayContinuity {
             activation_side: snapshot.active_activation_side,
             weight_generation: snapshot.active_weight_generation,
             weight_bank: snapshot.active_weight_bank,
-            recurrent_digest: *recurrent.finalize().as_bytes(),
+            recurrent_digest,
             weight_digest: *weights.finalize().as_bytes(),
             dendrites_digest: dendritic_branches_digest(&snapshot.v11.dendritic_branches)?,
         })
+    }
+
+    fn capture_step_pair(
+        before_snapshot: &GpuTrainingStateSnapshot,
+        after_snapshot: &GpuTrainingStateSnapshot,
+    ) -> Result<(Self, Self)> {
+        let before = Self::capture(before_snapshot)?;
+        let (bl, bf) = active_weight_ranges(before_snapshot)?;
+        let (al, af) = active_weight_ranges(after_snapshot)?;
+        let same_weights = snapshot_words(before_snapshot, bl)?
+            == snapshot_words(after_snapshot, al)?
+            && snapshot_words(before_snapshot, bf)? == snapshot_words(after_snapshot, af)?;
+        if same_weights
+            && dendritic_branches_exact_eq(
+                &before_snapshot.v11.dendritic_branches,
+                &after_snapshot.v11.dendritic_branches,
+            )
+        {
+            let after = Self {
+                organism_id: after_snapshot.handle.organism_id().raw(),
+                slot: after_snapshot.handle.slot(),
+                slot_generation: after_snapshot.handle.generation(),
+                dispatch_generation: after_snapshot.logical_dispatch_generation,
+                activation_side: after_snapshot.active_activation_side,
+                weight_generation: after_snapshot.active_weight_generation,
+                weight_bank: after_snapshot.active_weight_bank,
+                recurrent_digest: Self::capture_recurrent_digest(after_snapshot)?,
+                weight_digest: before.weight_digest,
+                dendrites_digest: before.dendrites_digest,
+            };
+            Ok((before, after))
+        } else {
+            Ok((before, Self::capture(after_snapshot)?))
+        }
     }
     fn validate_next(&self, next: &Self) -> Result<()> {
         if self.organism_id != next.organism_id
@@ -4396,6 +4500,8 @@ pub struct FoundationReplayWriter {
     phenotype: alife_core::BrainPhenotype,
     verified_phenotype_arc: Option<std::sync::Arc<alife_core::BrainPhenotype>>,
     upload: alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload,
+    recurrent_synapse_count: usize,
+    max_non_speech_decoder_lane: Option<usize>,
     budget: FoundationReplayBudget,
     next_index: u64,
     written_bytes: u64,
@@ -4431,12 +4537,16 @@ impl FoundationReplayWriter {
         }
         let upload =
             alife_gpu_backend::closed_loop_buffers::GpuPhenotypeUpload::try_from(&phenotype)?;
+        let recurrent_synapse_count = recurrent_synapse_count(&phenotype);
+        let max_non_speech_decoder_lane = max_non_speech_decoder_lane(&phenotype);
         Ok(Self {
             directory: directory.to_path_buf(),
             source,
             phenotype,
             verified_phenotype_arc: None,
             upload,
+            recurrent_synapse_count,
+            max_non_speech_decoder_lane,
             budget,
             next_index: 0,
             written_bytes: 0,
@@ -4496,13 +4606,18 @@ impl FoundationReplayWriter {
             .and_then(|n| n.checked_mul(16))
             .ok_or_else(invalid)?;
         self.budget.check_additional(scratch)?;
-        let sequence =
-            foundation_replay_sequence_with_upload(std::slice::from_ref(step), 0, &self.upload)?;
+        let sequence = foundation_replay_sequence_with_invariants(
+            std::slice::from_ref(step),
+            0,
+            &self.upload,
+            self.recurrent_synapse_count,
+            self.max_non_speech_decoder_lane,
+        )?;
         if alife_core::OutcomeCreditPacket::from_sealed_patch(&step.patch)? != step.outcome_credit {
             return Err("capture outcome credit differs from its sealed world patch".into());
         }
-        let before = ReplayContinuity::capture(&step.before)?;
-        let after = ReplayContinuity::capture(&step.after_inference)?;
+        let (before, after) =
+            ReplayContinuity::capture_step_pair(&step.before, &step.after_inference)?;
         if let Some((tick, previous, slot)) = &self.previous {
             if tick.checked_add(1) != Some(step.frame.tick().raw())
                 || *slot != step.before.brain_slot
@@ -4524,7 +4639,7 @@ impl FoundationReplayWriter {
             before,
             after: after.clone(),
         };
-        record.validate(&self.source, &self.phenotype)?;
+        record.validate_with_options(&self.source, &self.phenotype, true)?;
         if self.written_bytes >= FOUNDATION_REPLAY_DISK_LIMIT_BYTES {
             return Err("compact replay reached its 4 GiB disk ceiling".into());
         }
@@ -4633,6 +4748,11 @@ impl std::io::Write for ReplayCacheChargeWriter {
     }
 }
 
+thread_local! {
+    static LAST_REPLAY_UNCOMPRESSED_BYTES: std::cell::Cell<Option<(VerifiedReplayCacheKey, u64)>> =
+        const { std::cell::Cell::new(None) };
+}
+
 fn cache_verified_replay_record(
     reference: &FoundationReplayRecordRef,
     record: &FoundationReplayRecord,
@@ -4649,14 +4769,26 @@ fn cache_verified_replay_record_with_admission(
     admit: impl FnOnce(u64) -> bool,
 ) {
     let key = (reference.digest, reference.encoded_bytes);
-    let mut charge = ReplayCacheChargeWriter(0);
-    if bincode::serde::encode_into_std_write(record, &mut charge, bincode::config::standard())
-        .is_err()
-    {
-        return;
-    }
-    let charge = charge
-        .0
+    let cached_uncompressed = LAST_REPLAY_UNCOMPRESSED_BYTES
+        .with(|cell| cell.take().filter(|(k, _)| *k == key).map(|(_, n)| n));
+    let raw_bytes = match cached_uncompressed {
+        Some(bytes) if bytes <= VERIFIED_REPLAY_CACHE_CHARGE_LIMIT / 8 => bytes,
+        Some(_) => return,
+        None => {
+            let mut charge = ReplayCacheChargeWriter(0);
+            if bincode::serde::encode_into_std_write(
+                record,
+                &mut charge,
+                bincode::config::standard(),
+            )
+            .is_err()
+            {
+                return;
+            }
+            charge.0
+        }
+    };
+    let charge = raw_bytes
         .saturating_mul(8)
         .saturating_add(std::mem::size_of::<FoundationReplayRecord>() as u64);
     // Retention is optional. Decide the charge and measured headroom BEFORE
@@ -4701,6 +4833,15 @@ impl FoundationReplayRecord {
         expected: &FoundationReplaySource,
         phenotype: &alife_core::BrainPhenotype,
     ) -> Result<()> {
+        self.validate_with_options(expected, phenotype, false)
+    }
+
+    fn validate_with_options(
+        &self,
+        expected: &FoundationReplaySource,
+        phenotype: &alife_core::BrainPhenotype,
+        prevalidated_sequence_and_patch: bool,
+    ) -> Result<()> {
         if self.schema != FOUNDATION_REPLAY_SCHEMA
             || &self.source != expected
             || self.source.phenotype_hash != phenotype.phenotype_hash()
@@ -4725,13 +4866,20 @@ impl FoundationReplayRecord {
         {
             return Err("replay record identity/continuity contract mismatch".into());
         }
-        self.sequence.validate_for(phenotype)?;
+        if !prevalidated_sequence_and_patch {
+            self.sequence.validate_for(phenotype)?;
+        }
         // Check float bits after decoding too. A codec/parser change must fail
         // rather than silently alter the recurrent boundary used by replay.
         let mut recurrent = blake3::Hasher::new();
+        #[cfg(target_endian = "little")]
+        recurrent.update(bytemuck::cast_slice(&self.sequence.initial.activations));
+        #[cfg(not(target_endian = "little"))]
         for value in &self.sequence.initial.activations {
             recurrent.update(&value.to_bits().to_le_bytes());
         }
+        let mut homeo_chunk = [0u8; 512];
+        let mut chunk_len = 0usize;
         for (activity, metabolic) in self
             .sequence
             .initial
@@ -4739,8 +4887,18 @@ impl FoundationReplayRecord {
             .iter()
             .zip(&self.sequence.initial.metabolic_load)
         {
-            recurrent.update(&activity.to_bits().to_le_bytes());
-            recurrent.update(&metabolic.to_bits().to_le_bytes());
+            homeo_chunk[chunk_len..chunk_len + 4]
+                .copy_from_slice(&activity.to_bits().to_le_bytes());
+            homeo_chunk[chunk_len + 4..chunk_len + 8]
+                .copy_from_slice(&metabolic.to_bits().to_le_bytes());
+            chunk_len += 8;
+            if chunk_len == homeo_chunk.len() {
+                recurrent.update(&homeo_chunk);
+                chunk_len = 0;
+            }
+        }
+        if chunk_len > 0 {
+            recurrent.update(&homeo_chunk[..chunk_len]);
         }
         if recurrent.finalize().as_bytes() != &self.before.recurrent_digest
             || dendritic_branches_digest(&self.sequence.initial.dendrites)?
@@ -4748,11 +4906,15 @@ impl FoundationReplayRecord {
         {
             return Err("decoded replay initial state differs from the captured boundary".into());
         }
-        self.patch.validate_contract()?;
+        if !prevalidated_sequence_and_patch {
+            self.patch.validate_contract()?;
+        }
         self.behavior.sampling.validate()?;
-        // The sealed patch retains actual body/homeostasis and measured outcome,
-        // rather than constructing reward or physiology from the proposed action.
-        alife_core::OutcomeCreditPacket::from_sealed_patch(&self.patch)?;
+        if !prevalidated_sequence_and_patch {
+            // The sealed patch retains actual body/homeostasis and measured outcome,
+            // rather than constructing reward or physiology from the proposed action.
+            alife_core::OutcomeCreditPacket::from_sealed_patch(&self.patch)?;
+        }
         let tick = &self.sequence.ticks[0];
         let count = tick.candidates.len();
         if count == 0
@@ -4825,9 +4987,15 @@ fn encode_replay_record<W: std::io::Write>(
         bytes: 0,
     };
     let mut encoder = zstd::stream::write::Encoder::new(&mut writer, 3)?;
-    bincode::serde::encode_into_std_write(record, &mut encoder, bincode::config::standard())?;
+    let uncompressed_bytes =
+        bincode::serde::encode_into_std_write(record, &mut encoder, bincode::config::standard())?
+            as u64;
     encoder.finish()?;
-    Ok((writer.bytes, *writer.hasher.finalize().as_bytes()))
+    let digest = *writer.hasher.finalize().as_bytes();
+    LAST_REPLAY_UNCOMPRESSED_BYTES.with(|cell| {
+        cell.set(Some(((digest, writer.bytes), uncompressed_bytes)));
+    });
+    Ok((writer.bytes, digest))
 }
 
 fn write_replay_record(

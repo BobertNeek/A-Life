@@ -477,8 +477,8 @@ impl GpuLiveBrainRuntime {
                 gpu_sleep_state_label(resident.sleep_scheduler.state());
             brains.push(ExactBrainHostSnapshotV1 {
                 handle,
-                phenotype: resident.phenotype.clone(),
-                compiler_inputs: resident.compiler_inputs.clone(),
+                phenotype: (*resident.phenotype).clone(),
+                compiler_inputs: (*resident.compiler_inputs).clone(),
                 sleep: resident.sleep_scheduler.state(),
                 memory: self
                     .memories
@@ -1185,7 +1185,7 @@ impl GpuLiveBrainRuntime {
                 worker_promotions.push(ExactPopulationCheckpointJournalPromotionV1 {
                     entry,
                     authority: authority.clone(),
-                    phenotype: resident.phenotype.clone(),
+                    phenotype: (*resident.phenotype).clone(),
                 });
                 authorities.insert(organism_id.raw(), authority);
             }

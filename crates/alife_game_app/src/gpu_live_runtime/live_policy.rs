@@ -146,7 +146,7 @@ impl GpuLiveBrainRuntime {
     ) -> Result<&PhenotypeCompilerInputs, ScaffoldContractError> {
         self.residents
             .get(&organism_id.raw())
-            .map(|resident| &resident.compiler_inputs)
+            .map(|resident| resident.compiler_inputs.as_ref())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)
     }
 
@@ -255,7 +255,7 @@ impl GpuLiveBrainRuntime {
             .residents
             .get(&organism_id.raw())
             .ok_or(ScaffoldContractError::BrainOwnershipMismatch)?;
-        if resident.phenotype != *transition.previous_phenotype()
+        if *resident.phenotype != *transition.previous_phenotype()
             || resident.compiler_inputs.genome() != transition.next_inputs().genome()
             || resident.compiler_inputs.development() != transition.next_inputs().development()
         {
@@ -274,8 +274,8 @@ impl GpuLiveBrainRuntime {
             .residents
             .get_mut(&organism_id.raw())
             .expect("prevalidated resident");
-        resident.phenotype = transition.next_phenotype().clone();
-        resident.compiler_inputs = transition.next_inputs().clone();
+        resident.phenotype = std::sync::Arc::new(transition.next_phenotype().clone());
+        resident.compiler_inputs = std::sync::Arc::new(transition.next_inputs().clone());
         self.live_policy_exact_base_required = true;
         resident.neural_receptors = receptors;
         self.handles.insert(organism_id.raw(), receipt.handle);
