@@ -1,4 +1,4 @@
-//! CPU lowering evidence and one original pipeline at a time; no shader variant.
+//! Original probes plus one behavior-removing NON-PRODUCTION compile-only reduction.
 use super::*;
 use serde_json::{json, Value};
 use std::{
@@ -10,6 +10,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Target {
     Sleep,
+    SleepNoInitializerBarrier,
     Eligibility,
     Encode,
     Speech,
@@ -17,7 +18,7 @@ pub(crate) enum Target {
 impl Target {
     pub(crate) fn entry(self) -> &'static str {
         match self {
-            Self::Sleep => "initialize_sleep_transaction",
+            Self::Sleep | Self::SleepNoInitializerBarrier => "initialize_sleep_transaction",
             Self::Eligibility => "finalize_pending_eligibility",
             Self::Encode => "encode_perception",
             Self::Speech => "decode_speech_payload",
@@ -26,17 +27,69 @@ impl Target {
     fn original(self) -> (&'static str, &'static str) {
         match self {
             Self::Sleep => (CLOSED_LOOP_CONSOLIDATE_WGSL, "closed-loop-consolidate-wgsl"),
+            Self::SleepNoInitializerBarrier => (
+                CLOSED_LOOP_CONSOLIDATE_WGSL,
+                "NON_PRODUCTION_REDUCTION_REMOVE_INITIALIZER_BARRIER-wgsl",
+            ),
             Self::Eligibility => (CLOSED_LOOP_ELIGIBILITY_WGSL, "closed-loop-eligibility-wgsl"),
             Self::Encode => (CLOSED_LOOP_ENCODE_WGSL, "closed-loop-encode-wgsl"),
             Self::Speech => (CLOSED_LOOP_DECODE_WGSL, "closed-loop-decode-wgsl"),
         }
     }
+    pub(crate) fn source_variant(self) -> &'static str {
+        if self == Self::SleepNoInitializerBarrier {
+            "NON_PRODUCTION_REDUCTION_REMOVE_INITIALIZER_BARRIER"
+        } else {
+            "original"
+        }
+    }
+    fn selected_source(self) -> Result<std::borrow::Cow<'static, str>> {
+        if self == Self::SleepNoInitializerBarrier {
+            Ok(remove_initializer_barrier(self.original().0)?.into())
+        } else {
+            Ok(self.original().0.into())
+        }
+    }
     fn assembled(self) -> std::borrow::Cow<'static, str> {
-        runtime_shader_source(self.original().0)
+        match self
+            .selected_source()
+            .expect("checked compile-only reduction")
+        {
+            std::borrow::Cow::Borrowed(source) => runtime_shader_source(source),
+            std::borrow::Cow::Owned(source) => runtime_shader_source(&source).into_owned().into(),
+        }
     }
 }
+// NON-PRODUCTION compile-only reduction: deliberately removes memory ordering.
+// Never use the resulting source for dispatch or call this a semantic no-op.
+fn initializer_barrier_range(source: &str) -> Result<std::ops::Range<usize>> {
+    const START: &str = "@compute @workgroup_size(1)\nfn initialize_sleep_transaction(";
+    const CONTEXT:&str="  store_state_u32(completion+13u,header.job_id_hi);\n  storageBarrier();\n  store_state_u32(completion+3u,SLEEP_STATUS_PREPARED);";
+    const LINE: &str = "  storageBarrier();\n";
+    if source.matches(START).count() != 1 || source.matches("storageBarrier();").count() != 3 {
+        return Err("unexpected initializer or module barrier inventory".into());
+    }
+    let start = source.find(START).ok_or("missing initializer")?;
+    let end = start
+        + source[start..]
+            .find("\n}\n")
+            .ok_or("missing initializer end")?;
+    let function = &source[start..end];
+    if function.matches(LINE).count() != 1 || function.matches(CONTEXT).count() != 1 {
+        return Err("unexpected initializer barrier context".into());
+    }
+    let line = start + function.find(LINE).ok_or("missing initializer barrier")?;
+    Ok(line..line + LINE.len())
+}
+fn remove_initializer_barrier(source: &str) -> Result<String> {
+    let range = initializer_barrier_range(source)?;
+    let mut reduced = String::with_capacity(source.len() - (range.end - range.start));
+    reduced.push_str(&source[..range.start]);
+    reduced.push_str(&source[range.end..]);
+    Ok(reduced)
+}
 #[cfg(feature = "gpu-tests")]
-pub(crate) fn compile_original(
+pub(crate) fn compile_selected(
     device: &wgpu::Device,
     target: Target,
 ) -> std::result::Result<wgpu::ComputePipeline, GpuClosedLoopError> {
@@ -67,13 +120,22 @@ pub(crate) fn compile_original(
         },
     )?;
     eprintln!(
-        "gpu_single_pipeline entry={} stage=original_shader_module event=begin",
+        "gpu_single_pipeline entry={} stage=selected_shader_module event=begin",
         target.entry()
     );
-    let (source, label) = target.original();
-    let shader = create_shader_module(device, label, source)?;
+    let (_, label) = target.original();
+    let source = target.selected_source().map_err(|error| {
+        eprintln!("gpu_single_pipeline reduction_refused={error}");
+        GpuClosedLoopError::LayoutMismatch
+    })?;
     eprintln!(
-        "gpu_single_pipeline entry={} stage=original_shader_module event=ok",
+        "gpu_single_pipeline source_variant={} no_dispatch=true raw_source_bytes={}",
+        target.source_variant(),
+        source.len()
+    );
+    let shader = create_shader_module(device, label, &source)?;
+    eprintln!(
+        "gpu_single_pipeline entry={} stage=selected_shader_module event=ok",
         target.entry()
     );
     eprintln!("gpu_single_pipeline entry={} stage=compute_pipeline event=begin empty_constants=true zero_initialize_workgroup_memory=true cache=none",target.entry());
@@ -372,5 +434,93 @@ fn original_selected_entry_naga_lowering_cpu_only() -> Result<()> {
         )?;
     }
     eprintln!("CPU-only Naga lowering retained at {}", dir.display());
+    Ok(())
+}
+
+#[test]
+fn nonproduction_barrier_reduction_is_exact_single_deletion() -> Result<()> {
+    let original = CLOSED_LOOP_CONSOLIDATE_WGSL;
+    let range = initializer_barrier_range(original)?;
+    assert_eq!(&original[range.clone()], "  storageBarrier();\n");
+    let reduced = remove_initializer_barrier(original)?;
+    assert_eq!(original.len() - reduced.len(), 20);
+    assert_eq!(&reduced[..range.start], &original[..range.start]);
+    assert_eq!(&reduced[range.start..], &original[range.end..]);
+    assert_eq!(reduced.matches("storageBarrier();").count(), 2);
+    assert!(remove_initializer_barrier(&format!("{original}\n{original}")).is_err());
+    assert!(
+        remove_initializer_barrier(&original.replacen("  storageBarrier();\n", "", 1)).is_err()
+    );
+    assert!(remove_initializer_barrier(&original.replacen(
+        "  storageBarrier();\n",
+        "  storageBarrier();\n  storageBarrier();\n",
+        1
+    ))
+    .is_err());
+    assert!(remove_initializer_barrier(&original.replacen(
+        "store_state_u32(completion+13u,header.job_id_hi);",
+        "store_state_u32(completion+13u,header.job_id_lo);",
+        1
+    ))
+    .is_err());
+    Ok(())
+}
+#[test]
+#[cfg(feature = "training-rollout")]
+fn nonproduction_barrier_original_and_reduced_cpu_lowering() -> Result<()> {
+    let base = std::env::var_os("ALIFE_SINGLE_PIPELINE_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::temp_dir().join(format!("alife-barrier-reduction-{}", std::process::id()))
+        });
+    let dir = base.join("NON_PRODUCTION-barrier-reduction");
+    fs::create_dir_all(&dir)?;
+    let mut rows = Vec::new();
+    for (target, phase) in [
+        (Target::Sleep, "original"),
+        (
+            Target::SleepNoInitializerBarrier,
+            "NON_PRODUCTION_REDUCTION_REMOVE_INITIALIZER_BARRIER",
+        ),
+    ] {
+        let source = target.assembled();
+        fs::write(dir.join(format!("{phase}.wgsl")), source.as_bytes())?;
+        validate_production_shader_contract(&source, &[target.entry()])?;
+        let module = naga::front::wgsl::parse_str(&source)?;
+        let info = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)?;
+        let (processed, pi) = naga::back::pipeline_constants::process_overrides(
+            &module,
+            &info,
+            Some((naga::ShaderStage::Compute, target.entry())),
+            &Default::default(),
+        )?;
+        rows.push(json!({"variant":phase,"nonproduction_compile_only":true,"dispatch_permitted":false,"source_bytes":source.len(),"assembled_ir":ir_stats(&module,target.entry())?,"processed_ir":ir_stats(&processed,target.entry())?,"emission":emit(&processed,&pi,target.entry(),&dir,phase)?}));
+    }
+    let a = &rows[0]["processed_ir"];
+    let b = &rows[1]["processed_ir"];
+    assert_eq!(a["module_functions"], 14);
+    assert_eq!(a["global_variables"], b["global_variables"]);
+    assert_eq!(a["reachable_functions"], b["reachable_functions"]);
+    assert_eq!(a["entry"]["arguments"], b["entry"]["arguments"]);
+    assert_eq!(a["entry"]["expressions"], b["entry"]["expressions"]);
+    assert_eq!(a["entry"]["control"]["barriers"], 1);
+    assert_eq!(b["entry"]["control"]["barriers"], 0);
+    let entry = Target::Sleep.entry();
+    let equal = |extension: &str| -> Result<bool> {
+        Ok(fs::read(dir.join(format!("{entry}-original.{extension}")))?
+            == fs::read(dir.join(format!(
+                "{entry}-NON_PRODUCTION_REDUCTION_REMOVE_INITIALIZER_BARRIER.{extension}"
+            )))?)
+    };
+    fs::write(
+        dir.join("comparison.json"),
+        serde_json::to_vec_pretty(
+            &json!({"rows":rows,"nonproduction_compile_only":true,"dispatch_permitted":false,"processed_spirv_bytes_equal":equal("spv")?,"processed_hlsl_bytes_equal":equal("hlsl")?,"interpretation":"Native pass implicates barrier/context as a compiler trigger only; native fail shows barrier not necessary. Neither permits production use or a repair claim."}),
+        )?,
+    )?;
     Ok(())
 }
