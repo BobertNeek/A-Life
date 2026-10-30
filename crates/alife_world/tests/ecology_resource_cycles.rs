@@ -7,7 +7,7 @@ use alife_world::{
         AssetManifest, CreatureMindSaveSummary, CreatureSaveState, LearningTraceSaveSummary,
         PortableSaveFile, RuntimeConfig, WeightLayerSaveSummary,
     },
-    EcologyConfig, EcologyZoneId, HeadlessScenarioBuilder, HeadlessWorldCommand,
+    EcologyConfig, EcologyMetrics, EcologyZoneId, HeadlessScenarioBuilder, HeadlessWorldCommand,
     ResourceSpawnPolicy, TerrainZoneKind,
 };
 
@@ -60,6 +60,8 @@ fn ecology_world() -> alife_world::HeadlessWorld {
         .agent("creature", organism(), pos(0.0, 0.0))
         .food("berry", pos(0.8, 0.0), 0.7)
         .hazard("bramble", pos(4.0, 0.0), 0.25)
+        .toy("ball", pos(2.0, 1.0), true)
+        .token("word", pos(2.0, -1.0), 99)
         .terrain_zone(
             1,
             "meadow",
@@ -268,12 +270,25 @@ fn spawn_policy_and_world_caps_are_deterministic_and_bounded() {
 #[test]
 fn save_load_preserves_ecology_state_and_resource_lifecycle() {
     let mut world = ecology_world();
+    let initial_metrics = EcologyMetrics {
+        active_resources: 1,
+        active_hazards: 1,
+        zones: 2,
+        ..EcologyMetrics::default()
+    };
+    assert_eq!(world.ecology_metrics(), initial_metrics);
     let berry = world.entity_id("berry").unwrap();
     grab_resource(&mut world, berry);
     world
         .apply_command(&HeadlessWorldCommand::eat(organism(), berry).unwrap())
         .unwrap();
     world.advance_tick();
+    let consumed_metrics = EcologyMetrics {
+        active_resources: 0,
+        consumed_resources: 1,
+        ..initial_metrics.clone()
+    };
+    assert_eq!(world.ecology_metrics(), consumed_metrics);
 
     let save = PortableSaveFile::from_headless_world(
         "g07-ecology-save",
@@ -288,14 +303,32 @@ fn save_load_preserves_ecology_state_and_resource_lifecycle() {
     assert!(json.contains("\"ecology\""));
 
     let loaded = PortableSaveFile::from_json_str(&json).unwrap();
-    let restored = loaded.restore_headless_world().unwrap();
+    let mut restored = loaded.restore_headless_world().unwrap();
     assert_eq!(restored.stable_signature(), world.stable_signature());
+    assert_eq!(restored.ecology_metrics(), consumed_metrics);
     assert_eq!(restored.ecology().resources.len(), 1);
     assert_eq!(
         restored.ecology().resources[0].consumed_at_tick,
         Some(Tick::ZERO)
     );
     assert!(restored.entity(berry).unwrap().is_consumed());
+
+    world.try_advance_tick().unwrap();
+    restored.try_advance_tick().unwrap();
+    let regrown_metrics = EcologyMetrics {
+        resources_regrown: 1,
+        ..initial_metrics
+    };
+    assert_eq!(world.ecology_metrics(), regrown_metrics);
+    assert_eq!(restored.ecology_metrics(), regrown_metrics);
+    assert_eq!(restored.stable_signature(), world.stable_signature());
+    assert_eq!(
+        restored
+            .sensory_report(organism(), restored.tick())
+            .unwrap(),
+        world.sensory_report(organism(), world.tick()).unwrap()
+    );
+    assert_eq!(restored.advance_ecology().metrics, regrown_metrics);
 }
 
 #[test]

@@ -6390,14 +6390,8 @@ impl HeadlessWorld {
             .objects
             .values()
             .filter(|object| matches!(object.kind, WorldObjectKind::Food | WorldObjectKind::Hazard))
-            .map(|object| {
-                (
-                    object.id.raw(),
-                    (object.kind == WorldObjectKind::Food, object.consumed),
-                )
-            })
-            .collect::<BTreeMap<_, _>>();
-        self.ecology.rebuild_metrics(&object_kinds);
+            .map(|object| (object.kind == WorldObjectKind::Food, object.consumed));
+        self.ecology.rebuild_metrics(object_kinds);
     }
 
     fn ambient_light_for_tick(&self) -> f32 {
