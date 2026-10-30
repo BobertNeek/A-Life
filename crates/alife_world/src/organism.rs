@@ -13,6 +13,12 @@ use thiserror::Error;
 
 const ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION: u16 = 1;
 
+mod registered_record;
+use registered_record::RegisteredRecord;
+
+#[cfg(test)]
+mod registered_record_tests;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FoundationComparisonProjection {
     PolicyWeights,
@@ -1173,7 +1179,10 @@ impl Validate for WorldOrganismRecord {
 
 #[derive(Debug, Clone, Default)]
 pub struct WorldOrganismRegistry {
-    records_by_organism: HashMap<u64, WorldOrganismRecord>,
+    // Only the per-record proof is reusable. Both registry indices and every
+    // world-object binding are still checked on each full population scan.
+    // The opaque child type invalidates its proof before yielding any &mut.
+    records_by_organism: HashMap<u64, RegisteredRecord>,
     organism_by_world_entity: HashMap<u64, OrganismId>,
 }
 
@@ -1203,7 +1212,8 @@ impl WorldOrganismRegistry {
         {
             return Err(OrganismRegistryError::DuplicateWorldEntity(world_entity_id));
         }
-        self.records_by_organism.insert(organism_id.raw(), record);
+        self.records_by_organism
+            .insert(organism_id.raw(), RegisteredRecord::new(record));
         self.organism_by_world_entity
             .insert(world_entity_id.raw(), organism_id);
         Ok(())
@@ -1227,12 +1237,14 @@ impl WorldOrganismRegistry {
         }
 
         self.records_by_organism
-            .insert(organism_id.raw(), replacement);
+            .insert(organism_id.raw(), RegisteredRecord::new(replacement));
         Ok(())
     }
 
     pub fn get(&self, organism_id: OrganismId) -> Option<&WorldOrganismRecord> {
-        self.records_by_organism.get(&organism_id.raw())
+        self.records_by_organism
+            .get(&organism_id.raw())
+            .map(|record| &**record)
     }
 
     pub fn get_by_world_entity_id(
@@ -1245,7 +1257,7 @@ impl WorldOrganismRegistry {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &WorldOrganismRecord> {
-        self.records_by_organism.values()
+        self.records_by_organism.values().map(|record| &**record)
     }
 
     pub fn with_biology_mut<R>(
@@ -1302,6 +1314,21 @@ impl WorldOrganismRegistry {
 
     pub fn is_empty(&self) -> bool {
         self.records_by_organism.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn edit_biology_unchecked_for_test(
+        &mut self,
+        organism_id: OrganismId,
+        mutate: impl FnOnce(&mut BiochemistryState),
+    ) {
+        mutate(
+            &mut self
+                .records_by_organism
+                .get_mut(&organism_id.raw())
+                .unwrap()
+                .biochemistry,
+        );
     }
 
     pub fn advance_biology(
@@ -1417,7 +1444,7 @@ impl WorldOrganismRegistry {
                 .insert(record.world_entity_id().raw(), removed_index);
             return Err(error);
         }
-        Ok(removed_record)
+        Ok(removed_record.into_inner())
     }
 
     pub(crate) fn write_canonical_signature(
@@ -1480,7 +1507,7 @@ impl WorldOrganismRegistry {
         // The registry map is deliberately excluded from the payload. The
         // record graph is composed of serde structs, enums, arrays, and
         // sequences with no map fields, so serde_json preserves field order.
-        let mut records: Vec<_> = self.records_by_organism.values().collect();
+        let mut records: Vec<_> = self.iter().collect();
         records.sort_unstable_by_key(|record| record.organism_id().raw());
         digest.write_u16(ORGANISM_REGISTRY_SIGNATURE_ENCODING_VERSION);
         digest.write_sequence_len(records.len());
@@ -1920,7 +1947,7 @@ mod tests {
         let mut registry = WorldOrganismRegistry::default();
         registry
             .records_by_organism
-            .insert(organism_id.raw(), malformed);
+            .insert(organism_id.raw(), RegisteredRecord::new(malformed));
         registry
             .organism_by_world_entity
             .insert(world_entity_id.raw(), organism_id);

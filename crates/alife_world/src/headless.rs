@@ -8219,6 +8219,9 @@ mod biochemical_outcome_tests {
 mod contact_chemistry_tests;
 
 #[cfg(test)]
+mod population_validation_tests;
+
+#[cfg(test)]
 mod task_6_factorized_motor_tests {
     use super::*;
 
