@@ -1301,7 +1301,7 @@ pub(super) fn run_same_individual_world(
         // passes use admitted RAM, not a second claim about mutable disk state.
         // Subsequent external replay loads still verify their actual bytes.
         let mut cached_windows = PpoWindowSnapshotCache::new(spans.len());
-        let update = train_recurrent_ppo_cohort(
+        let update = train_recurrent_ppo_cohort_with_windows(
             &mut trainer,
             &mut value,
             spans.len(),
@@ -1332,7 +1332,7 @@ pub(super) fn run_same_individual_world(
                     auxiliary: None,
                 };
                 cached_windows.retain(index, &window, budget);
-                Ok(window)
+                Ok(PpoWindowHandle::Owned(window))
             },
             PpoConfig {
                 value_coefficient: 0.0,
