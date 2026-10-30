@@ -137,7 +137,7 @@ impl FoodOutcomeObservation {
             .map(|food| food.owner == Some(self.organism) && !food.consumed)
     }
 
-    fn matches_patch(self, patch: &ExperiencePatch) -> bool {
+    pub(super) fn matches_patch(self, patch: &ExperiencePatch) -> bool {
         let frame = patch.pre_action().perception();
         let decision = patch.decision();
         let outcome = patch.outcome();

@@ -249,3 +249,60 @@ encounters, setup frequency and update cadence; it is not a controlled claim of
 better learning. Equal decision exposure does not imply equal PPO updates.
 Follow with retained care competence and repeated need-driven cycles before
 claiming benefit. No simulation multiplier is established by this documentation.
+
+## Isolated care evaluation component
+
+`prepare_care_evaluation_forks` is an in-memory Rust preparation/control and
+observation slice under `foundation-training`. It is not an accepted-Current
+evaluation CLI or a qualified GPU runtime-cloning path. The continuous producer,
+its assistance boolean, PPO, snapshots and accepted-state publication are unchanged.
+
+The caller must first qualify an exact private-policy-and-sampler boundary and
+known unassisted, never-carried history for all retained food. These are explicit
+caller qualifications; this component cannot establish them from opaque bytes
+or session-local missing provenance. Legacy starts requiring sleep or policy
+adoption, unknown/assisted food history, pending speech, the nursery teacher,
+player holding and carried food are refused without clearing individual state.
+An ordinary previously assisted Current generally cannot satisfy that food-history
+qualification merely because a new observer has no intervention records.
+
+The no-assistance, cue-only and cue-plus-reposition forks initially receive the
+same unmodified source world and owned private and authoritative sampler bytes;
+no new seed or stream is generated. The caller must restore against that saved
+boundary before calling `begin_scene`. That method checks the unchanged canonical
+world identity, then applies the same common held-out placement once per arm.
+This ordering avoids using an already rearranged world as an exact restore input.
+It proves input-copy isolation and checks world continuity, not successful restore
+of opaque private GPU state. Each further held-out placement requires the same
+admission and fresh source copies, rather than chaining trials or learning between arms.
+
+The control API gates initial and 24-world-tick interventions through one path.
+No-assistance emits no recovery speech; cue-only performs no food placements.
+Only cue-plus-reposition can use the ordinary gaze placement helper. Common test
+setup is distinct from arm-specific intervention counts. There is no PPO-window
+placement path, offline optimizer, seed ledger, promotion or publication callback.
+
+A future runtime adapter must restore the supplied bytes exactly, reject legacy
+alignment and missing sampler state before collection, call normal `tick_outcome`
+with biology, sleep and within-trial lifetime learning active, and check canonical
+memory/sealed-learning failures and prevent outside teacher/prior delivery.
+`NoProgress` does not consume world-tick budget. Cue emissions do not prove hearing
+or causal attribution.
+After each committed tick the observer records authoritative body displacement
+and path length, biology/death, and matching sealed exact-target acquisition and
+nourished-meal latencies. Missing event latencies remain unobserved/censored;
+uncaptured ticks are counted explicitly. These observations do not set a mastery
+threshold or claim independent competence. `finish` only returns observations.
+
+CPU fixtures exercise world interventions, actual registered biology and sealed
+synthetic-selection outcomes with:
+
+```sh
+cargo test --locked -p alife_game_app --features foundation-training --lib care_evaluation::
+```
+
+They do not execute a GPU, restore an accepted learner, or qualify neural dynamics,
+within-trial neural learning, real private-state isolation or held-out competence.
+The accepted-checkpoint admission/materialization, runtime adapter and executable
+evaluation-only dispatch remain unimplemented; do not use the continuous trainer
+as a substitute.

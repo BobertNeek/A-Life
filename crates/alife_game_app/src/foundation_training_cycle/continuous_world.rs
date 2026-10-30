@@ -225,10 +225,17 @@ fn care_food_position_in_gaze(
     world: &alife_world::HeadlessWorld,
     id: OrganismId,
 ) -> Option<alife_core::Vec3f> {
+    care_food_position_in_gaze_for_target(world, id, world.entity_id("food-01")?)
+}
+
+fn care_food_position_in_gaze_for_target(
+    world: &alife_world::HeadlessWorld,
+    id: OrganismId,
+    food: alife_core::WorldEntityId,
+) -> Option<alife_core::Vec3f> {
     let record = world.organism_registry().get(id)?;
     let body = world.entity(record.world_entity_id())?;
     let gaze = body.body_yaw + body.head_yaw;
-    let food = world.entity_id("food-01")?;
     if !world.entity(food).is_some_and(care_food_ready) {
         return None;
     }
@@ -415,6 +422,41 @@ fn repair_overlapping_care_teacher(
 
 fn care_cue_due(tick: u64, start: u64, available: bool, last: Option<u64>) -> bool {
     available && tick.saturating_sub(start).is_multiple_of(24) && last != Some(tick)
+}
+
+/// Ordinary world interventions shared with the isolated evaluation component.
+/// This does not collect replay, advance a tick, align a legacy policy, or update heads.
+pub(crate) fn evaluation_care_interventions(
+    world: &mut alife_world::HeadlessWorld,
+    id: OrganismId,
+    target: alife_core::WorldEntityId,
+    allow_reposition: bool,
+) -> Result<(bool, bool)> {
+    let moved = if allow_reposition {
+        match care_food_position_in_gaze_for_target(world, id, target) {
+            Some(position)
+                if world
+                    .entity(target)
+                    .is_some_and(|food| food.position != position) =>
+            {
+                crate::foundation_training::relocate_unheld_foundation_food(
+                    world, target, position,
+                )?
+            }
+            _ => false,
+        }
+    } else {
+        false
+    };
+    let emitted = expose_care_cue(
+        world,
+        id,
+        &ContinuousCareAssistance {
+            food: target,
+            start_tick: world.tick().raw(),
+        },
+    )?;
+    Ok((moved, emitted))
 }
 
 fn care_food_is_far(

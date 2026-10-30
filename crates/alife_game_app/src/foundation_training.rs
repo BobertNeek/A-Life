@@ -30,7 +30,9 @@ pub(crate) mod diagnostics;
 pub use comparison_identity::{
     FoundationCheckpointAssessmentIdentityV1, FoundationProbeComparisonIdentityV1,
 };
+mod care_evaluation;
 mod evaluation_observation;
+pub use care_evaluation::*;
 pub(crate) mod food_outcome;
 pub use evaluation_observation::{
     FoundationEvaluationObservation, FoundationEvaluationOutcome, FoundationEvaluationStopReason,
