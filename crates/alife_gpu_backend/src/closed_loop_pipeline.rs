@@ -5140,3 +5140,6 @@ mod lifecycle_tests {
         assert_eq!(authority.active_sides.get(&(8, 11)), Some(&1));
     }
 }
+
+#[cfg(test)]
+pub(crate) mod single_pipeline_probe;

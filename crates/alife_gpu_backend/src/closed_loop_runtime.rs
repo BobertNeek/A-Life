@@ -6908,3 +6908,6 @@ mod curated_founder_gpu_cutover_tests {
         }
     }
 }
+
+#[cfg(all(test, feature = "gpu-tests"))]
+mod single_pipeline_probe;

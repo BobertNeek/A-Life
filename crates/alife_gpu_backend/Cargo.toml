@@ -14,6 +14,8 @@ serde.workspace = true
 wgpu.workspace = true
 
 [dev-dependencies]
+# CPU-only diagnostic lowering; production Naga features remain unchanged.
+naga = { version = "=29.0.3", features = ["spv-out", "hlsl-out"] }
 serde_json.workspace = true
 
 [features]
