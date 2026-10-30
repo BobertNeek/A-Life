@@ -28,6 +28,12 @@ pub struct FoundationCausalCaptureMetrics {
     pub captured_rows: u64,
     pub readback_submissions: u64,
     pub bytes_copied: u64,
+    #[serde(default)]
+    pub fused_tick_packets: u64,
+    #[serde(default)]
+    pub structural_fallback_packets: u64,
+    #[serde(default)]
+    pub staging_fallback_packets: u64,
 }
 
 impl FoundationCausalCollectionMetrics {
@@ -73,6 +79,15 @@ impl FoundationCausalCollectionMetrics {
                     before.readback_submissions,
                 )?,
                 bytes_copied: delta(after.bytes_copied, before.bytes_copied)?,
+                fused_tick_packets: delta(after.fused_tick_packets, before.fused_tick_packets)?,
+                structural_fallback_packets: delta(
+                    after.structural_fallback_packets,
+                    before.structural_fallback_packets,
+                )?,
+                staging_fallback_packets: delta(
+                    after.staging_fallback_packets,
+                    before.staging_fallback_packets,
+                )?,
             },
         })
     }
@@ -108,12 +123,18 @@ mod tests {
             captured_rows: 20,
             readback_submissions: 40,
             bytes_copied: 1000,
+            fused_tick_packets: 3,
+            structural_fallback_packets: 1,
+            staging_fallback_packets: 2,
         };
         let after = GpuTrainingCaptureMetrics {
             batch_captures: 28,
             captured_rows: 28,
             readback_submissions: 56,
             bytes_copied: 1400,
+            fused_tick_packets: 5,
+            structural_fallback_packets: 2,
+            staging_fallback_packets: 3,
         };
         // The first 4,000 ordinary setup ticks are excluded. Only four waking
         // records were captured during 200 committed control ticks; sleep and
@@ -130,6 +151,16 @@ mod tests {
         assert_eq!(metrics.capture.captured_rows, 8);
         assert_eq!(metrics.capture.readback_submissions, 16);
         assert_eq!(metrics.capture.bytes_copied, 400);
+        assert_eq!(metrics.capture.fused_tick_packets, 2);
+        assert_eq!(metrics.capture.structural_fallback_packets, 1);
+        assert_eq!(metrics.capture.staging_fallback_packets, 1);
+        let legacy: FoundationCausalCaptureMetrics = serde_json::from_value(serde_json::json!({
+            "batch_captures": 2, "captured_rows": 1, "readback_submissions": 2, "bytes_copied": 4
+        }))
+        .unwrap();
+        assert_eq!(legacy.fused_tick_packets, 0);
+        assert_eq!(legacy.structural_fallback_packets, 0);
+        assert_eq!(legacy.staging_fallback_packets, 0);
         let encoded = serde_json::to_vec(&metrics).unwrap();
         assert_eq!(
             serde_json::from_slice::<FoundationCausalCollectionMetrics>(&encoded).unwrap(),

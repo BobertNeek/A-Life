@@ -9,6 +9,9 @@ impl GpuClosedLoopBackend {
         selector_diagnostic_candidate_indices: Option<&[u16]>,
         mut selector_diagnostic_error_capture: Option<&mut SelectorDiagnosticErrorCapture>,
         #[cfg(feature = "training-rollout")] sampling: Option<&[crate::GpuTrainingSamplingConfig]>,
+        #[cfg(feature = "training-rollout")] mut training_capture: Option<
+            &mut super::training_capture::TrainingTickCapture,
+        >,
     ) -> Result<Vec<GpuClosedLoopTick>, ScaffoldContractError> {
         let capture_selector_diagnostics = selector_diagnostic_candidate_indices.is_some();
         #[cfg(feature = "training-rollout")]
@@ -404,6 +407,10 @@ impl GpuClosedLoopBackend {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("closed-loop-runtime-mixed-class-tick"),
             });
+        #[cfg(feature = "training-rollout")]
+        if let Some(capture) = training_capture.as_deref() {
+            capture.record(self, &mut encoder, false);
+        }
         {
             let _timestamp_start = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("closed-loop-runtime-timestamp-start"),
@@ -454,6 +461,10 @@ impl GpuClosedLoopBackend {
                     end_of_pass_write_index: Some(1),
                 }),
             });
+        }
+        #[cfg(feature = "training-rollout")]
+        if let Some(capture) = training_capture.as_deref() {
+            capture.record(self, &mut encoder, true);
         }
         encoder.resolve_query_set(
             &self.timestamp_resources.query_set,
@@ -518,6 +529,10 @@ impl GpuClosedLoopBackend {
                 let _ = timestamp_sender.send(result);
             },
         );
+        #[cfg(feature = "training-rollout")]
+        if let Some(capture) = training_capture.as_deref_mut() {
+            capture.register(&command_buffer);
+        }
         let submission = self.queue.submit(Some(command_buffer));
         let forced_loss = std::mem::take(&mut self.force_device_lost_after_submit);
         if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {
@@ -544,11 +559,27 @@ impl GpuClosedLoopBackend {
                     .is_some_and(GpuCompactMapTicket::mapping_succeeded)
         });
         let timestamp_mapping_succeeded = timestamp_mapping_completed(&timestamp_receiver);
+        #[cfg(feature = "training-rollout")]
+        let training_mapping_succeeded = !forced_loss
+            && !poll_failed
+            && training_capture
+                .as_deref_mut()
+                .is_none_or(|capture| capture.mapping_succeeded());
+        #[cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
+        let capture_fault = if training_capture.is_some() {
+            self.forced_training_capture_failure.take()
+        } else {
+            None
+        };
+        #[cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
+        let training_mapping_succeeded = training_mapping_succeeded && capture_fault != Some(true);
+        #[cfg(not(feature = "training-rollout"))]
+        let training_mapping_succeeded = true;
         let post_submit_failure_stage = if forced_loss {
             Some(GpuRuntimeSelectorDiagnosticStage::DeviceLostAfterSubmit)
         } else if poll_failed {
             Some(GpuRuntimeSelectorDiagnosticStage::DevicePoll)
-        } else if !mappings_succeeded {
+        } else if !training_mapping_succeeded || !mappings_succeeded {
             Some(GpuRuntimeSelectorDiagnosticStage::CompactMappingCompletion)
         } else if !selector_mappings_succeeded {
             Some(GpuRuntimeSelectorDiagnosticStage::SelectorMappingCompletion)
@@ -1162,6 +1193,18 @@ impl GpuClosedLoopBackend {
                 return Err(ScaffoldContractError::NeuralBackendUnavailable);
             }
         };
+        #[cfg(feature = "training-rollout")]
+        if let Some(capture) = training_capture {
+            #[cfg(feature = "gpu-tests")]
+            if capture_fault == Some(false) {
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+            if capture.decode(&prepared_ticks).is_err() {
+                self.poison_submitted_dispatches(&dispatches);
+                return Err(ScaffoldContractError::NeuralBackendUnavailable);
+            }
+        }
         let mut commit_mismatch = false;
         for dispatch in &mut dispatches {
             if let Some(capture) = selector_diagnostic_error_capture.as_deref_mut() {

@@ -835,16 +835,20 @@ impl GpuLiveBrainRuntime {
             }
             let inference_rows = u64::try_from(batch.len()).unwrap_or(u64::MAX);
             #[cfg(feature = "foundation-training")]
-            let before_training = if self.training_sampling.is_some() {
-                self.backend.capture_training_states(
-                    &batch
-                        .iter()
-                        .map(|prepared| (prepared.handle, prepared.frame.tick()))
-                        .collect::<Vec<_>>(),
-                )?
+            let training_boundary = if self.training_sampling.is_some() {
+                Some(
+                    self.backend.prepare_training_tick_capture(
+                        &batch
+                            .iter()
+                            .map(|prepared| (prepared.handle, prepared.frame.tick()))
+                            .collect::<Vec<_>>(),
+                    )?,
+                )
             } else {
-                Vec::new()
+                None
             };
+            // Fused packets include both boundary copies in this transaction;
+            // standalone fallback pre-capture remains outside this interval.
             let inference_started = Instant::now();
             #[cfg(all(test, feature = "gpu-tests", not(feature = "foundation-training")))]
             let gpu_ticks = super::action_credit_food_tests::tick_with_selector_capture(
@@ -863,49 +867,47 @@ impl GpuLiveBrainRuntime {
                     message: format!("neural execution failed: {error}"),
                 })?;
             #[cfg(feature = "foundation-training")]
-            let gpu_ticks = if let Some(sampling) = self.training_sampling {
-                let count = u32::try_from(batch.len())
-                    .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
-                let next_counter = sampling
-                    .counter
-                    .checked_add(count)
-                    .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
-                let mut configs = Vec::with_capacity(batch.len());
-                for (index, prepared) in batch.iter().enumerate() {
-                    let demonstrator = match self.training_demonstrator.as_mut() {
-                        Some(teacher) => Some(teacher(
-                            &prepared.frame,
-                            self.backend
-                                .training_enabled_motor_channels(prepared.handle)?,
-                        )?),
-                        None => sampling.demonstrator,
-                    };
-                    configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
-                        counter: sampling.counter + index as u32,
-                        demonstrator,
-                        ..sampling
-                    });
-                }
-                self.training_sampling
-                    .as_mut()
-                    .expect("training enabled")
-                    .counter = next_counter;
-                self.backend
-                    .tick_memory_batch_training(&memory_batch, &configs)?
-            } else {
-                self.backend.tick_memory_batch(&memory_batch)?
-            };
-            #[cfg(feature = "foundation-training")]
-            let after_training = if self.training_sampling.is_some() {
-                self.backend.capture_training_states(
-                    &batch
-                        .iter()
-                        .map(|prepared| (prepared.handle, prepared.frame.tick()))
-                        .collect::<Vec<_>>(),
-                )?
-            } else {
-                Vec::new()
-            };
+            let (gpu_ticks, before_training, after_training) =
+                if let Some(sampling) = self.training_sampling {
+                    let count = u32::try_from(batch.len())
+                        .map_err(|_| ScaffoldContractError::InvalidDecisionEvidence)?;
+                    let next_counter = sampling
+                        .counter
+                        .checked_add(count)
+                        .ok_or(ScaffoldContractError::InvalidDecisionEvidence)?;
+                    let mut configs = Vec::with_capacity(batch.len());
+                    for (index, prepared) in batch.iter().enumerate() {
+                        let demonstrator = match self.training_demonstrator.as_mut() {
+                            Some(teacher) => Some(teacher(
+                                &prepared.frame,
+                                self.backend
+                                    .training_enabled_motor_channels(prepared.handle)?,
+                            )?),
+                            None => sampling.demonstrator,
+                        };
+                        configs.push(alife_gpu_backend::GpuTrainingSamplingConfig {
+                            counter: sampling.counter + index as u32,
+                            demonstrator,
+                            ..sampling
+                        });
+                    }
+                    self.training_sampling
+                        .as_mut()
+                        .expect("training enabled")
+                        .counter = next_counter;
+                    let captured = self.backend.tick_memory_batch_training_captured(
+                        &memory_batch,
+                        &configs,
+                        training_boundary.expect("training capture prepared"),
+                    )?;
+                    (captured.ticks, captured.before, captured.after)
+                } else {
+                    (
+                        self.backend.tick_memory_batch(&memory_batch)?,
+                        Vec::new(),
+                        Vec::new(),
+                    )
+                };
             #[cfg(feature = "foundation-training")]
             if self.training_sampling.is_some()
                 && (before_training.len() != batch.len()

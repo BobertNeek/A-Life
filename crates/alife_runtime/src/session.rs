@@ -186,6 +186,40 @@ impl GpuAuthoritativeSession {
         result
     }
 
+    #[cfg(feature = "training-rollout")]
+    pub fn prepare_training_tick_capture(
+        &mut self,
+        requests: &[(alife_gpu_backend::GpuBrainHandle, alife_core::Tick)],
+    ) -> Result<alife_gpu_backend::GpuTrainingCaptureBoundary, ScaffoldContractError> {
+        self.ensure_neural_actions_available()?;
+        if self.authority.consumer() != GpuSessionConsumerKind::Training {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        // This is the original pre-inference readback boundary. Preserve its
+        // error semantics; preparation alone does not commit neural work.
+        self.backend.prepare_training_tick_capture(requests)
+    }
+
+    #[cfg(feature = "training-rollout")]
+    pub fn tick_memory_batch_training_captured(
+        &mut self,
+        batch: &alife_gpu_backend::GpuClosedLoopMemoryBatchInput<'_>,
+        sampling: &[alife_gpu_backend::GpuTrainingSamplingConfig],
+        boundary: alife_gpu_backend::GpuTrainingCaptureBoundary,
+    ) -> Result<alife_gpu_backend::GpuTrainingTickCapture, ScaffoldContractError> {
+        self.ensure_neural_actions_available()?;
+        if self.authority.consumer() != GpuSessionConsumerKind::Training {
+            return Err(ScaffoldContractError::InvalidDecisionEvidence);
+        }
+        let result = self
+            .backend
+            .tick_memory_batch_training_captured(batch, sampling, boundary);
+        if let Err(error) = &result {
+            self.record_contract_failure(error);
+        }
+        result
+    }
+
     pub fn ensure_neural_actions_available(&self) -> Result<(), ScaffoldContractError> {
         self.authority.ensure_neural_actions_available()
     }

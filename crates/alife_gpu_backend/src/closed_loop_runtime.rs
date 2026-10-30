@@ -13,7 +13,9 @@ pub use live_policy::GpuLivePolicyInstallReceipt;
 #[cfg(feature = "training-rollout")]
 mod training_capture;
 #[cfg(feature = "training-rollout")]
-pub use training_capture::GpuTrainingCaptureMetrics;
+pub use training_capture::{
+    GpuTrainingCaptureBoundary, GpuTrainingCaptureMetrics, GpuTrainingTickCapture,
+};
 
 pub use selector_exploration::{
     GpuSelectorAdaptiveExplorationDiagnostic, GpuSelectorExplorationCandidateIdentity,
@@ -2614,6 +2616,8 @@ pub struct GpuClosedLoopBackend {
     curated_residency_generation_fingerprint: [u64; 4],
     pub(crate) next_dispatch_generation: u64,
     force_device_lost_after_submit: bool,
+    #[cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
+    forced_training_capture_failure: Option<bool>,
     #[cfg(feature = "gpu-tests")]
     forced_learning_rejections_remaining: u8,
     #[cfg(feature = "gpu-tests")]
@@ -2765,6 +2769,8 @@ impl GpuClosedLoopBackend {
             curated_residency_generation_fingerprint: [0; 4],
             next_dispatch_generation: 1,
             force_device_lost_after_submit: false,
+            #[cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
+            forced_training_capture_failure: None,
             #[cfg(feature = "gpu-tests")]
             forced_learning_rejections_remaining: 0,
             #[cfg(feature = "gpu-tests")]
@@ -2826,6 +2832,8 @@ impl GpuClosedLoopBackend {
             curated_residency_generation_fingerprint: [0; 4],
             next_dispatch_generation: plan.next_dispatch_generation,
             force_device_lost_after_submit: false,
+            #[cfg(all(feature = "training-rollout", feature = "gpu-tests"))]
+            forced_training_capture_failure: None,
             #[cfg(feature = "gpu-tests")]
             forced_learning_rejections_remaining: 0,
             #[cfg(feature = "gpu-tests")]
@@ -4689,7 +4697,7 @@ impl GpuClosedLoopBackend {
                 memory_upload: Some(member.memory_upload),
             })
             .collect::<Vec<_>>();
-        self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling))
+        self.tick_inputs_with_selector_diagnostic_capture(&inputs, None, None, Some(sampling), None)
     }
 
     pub fn tick_memory_batch_with_selector_diagnostics(
@@ -4711,6 +4719,8 @@ impl GpuClosedLoopBackend {
             &inputs,
             Some(requested_candidate_indices),
             Some(&mut capture),
+            #[cfg(feature = "training-rollout")]
+            None,
             #[cfg(feature = "training-rollout")]
             None,
         ) {
@@ -4749,6 +4759,8 @@ impl GpuClosedLoopBackend {
         self.tick_inputs_with_selector_diagnostic_capture(
             batch,
             selector_diagnostic_candidate_indices,
+            None,
+            #[cfg(feature = "training-rollout")]
             None,
             #[cfg(feature = "training-rollout")]
             None,

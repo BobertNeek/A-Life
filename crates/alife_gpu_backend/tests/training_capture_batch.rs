@@ -46,7 +46,13 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
     let mut backend =
         GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
     let tick = Tick::new(42);
-    let phenotypes = (1..=50).map(support::n512_phenotype).collect::<Vec<_>>();
+    let phenotypes = (1..=50)
+        .map(|seed| {
+            support::n512_phenotype_at_maturation(seed, if seed % 2 == 0 { 1.0 } else { 0.35 })
+        })
+        .collect::<Vec<_>>();
+    assert!(phenotypes.iter().any(|p| p.microstep_count() % 2 == 0));
+    assert!(phenotypes.iter().any(|p| p.microstep_count() % 2 == 1));
     let handles = phenotypes
         .iter()
         .enumerate()
@@ -89,6 +95,7 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
     ] {
         let maps = backend.mutable_slot_readback_metrics().calls;
         assert!(backend.capture_training_states(&invalid).is_err());
+        assert!(backend.prepare_training_tick_capture(&invalid).is_err());
         assert_eq!(backend.mutable_slot_readback_metrics().calls, maps);
     }
     for round in 0..2 {
@@ -136,10 +143,39 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
             .collect::<Vec<_>>();
         let completed_before = backend.completed_dispatch_count();
         assert_eq!(completed_before, round);
-        let outcomes = backend
-            .tick_memory_batch_training(&batch, &sampling)
+        let requests = handles
+            .iter()
+            .map(|handle| (*handle, tick))
+            .collect::<Vec<_>>();
+        if round == 1 {
+            let stale = backend.prepare_training_tick_capture(&requests).unwrap();
+            backend
+                .force_activity_sequence_cursor_for_test(handles[0], 99)
+                .unwrap();
+            assert!(backend
+                .tick_memory_batch_training_captured(&batch, &sampling, stale)
+                .is_err());
+            assert_eq!(backend.completed_dispatch_count(), completed_before);
+            backend
+                .force_activity_sequence_cursor_for_test(handles[0], round + 1)
+                .unwrap();
+        }
+        let boundary = if round == 0 {
+            // Force ONLY the combined arena below budget. Standalone captures
+            // retain their real ceiling and old commit-before-post ordering.
+            backend
+                .prepare_training_tick_capture_with_limit_for_test(&requests, 4)
+                .unwrap()
+        } else {
+            backend.prepare_training_tick_capture(&requests).unwrap()
+        };
+        let captured = backend
+            .tick_memory_batch_training_captured(&batch, &sampling, boundary)
             .unwrap();
+        assert_eq!(captured.before, before);
+        let outcomes = captured.ticks;
         let (after, after_activity) = capture_boundary(&mut backend, &handles, tick);
+        assert_eq!(captured.after, after);
         let completed_after = backend.completed_dispatch_count();
         assert_eq!(completed_after, completed_before + 1);
         assert_eq!(outcomes.len(), 50);
@@ -325,6 +361,199 @@ fn fifty_row_pre_post_capture_matches_single_and_preserves_private_order() {
             .zip(&after)
             .any(|(a, b)| a.mutable_words != b.mutable_words));
     }
-    assert_eq!(backend.training_capture_metrics().batch_captures, 6);
-    assert_eq!(backend.training_capture_metrics().captured_rows, 300);
+    assert_eq!(backend.training_capture_metrics().batch_captures, 10);
+    assert_eq!(backend.training_capture_metrics().fused_tick_packets, 1);
+    assert_eq!(
+        backend.training_capture_metrics().staging_fallback_packets,
+        1
+    );
+    assert_eq!(backend.training_capture_metrics().captured_rows, 500);
+}
+
+#[test]
+#[ignore = "requires GPU hardware"]
+fn fused_capture_failures_preserve_host_activity_and_refuse_selection() {
+    for fault in 0..5 {
+        let mut backend =
+            GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
+        let phenotype = support::n512_phenotype(17);
+        let handle = backend
+            .insert_brain(OrganismId(1), phenotype.clone())
+            .unwrap();
+        let source = support::perception_frame_for_profile_at_tick(
+            1,
+            42,
+            SensorProfile::PrivilegedAffordanceV1,
+            true,
+            2,
+        );
+        let (frame, recall) = support::try_empty_recall(&source).unwrap();
+        let upload = backend
+            .prepare_memory_context_upload(handle, &frame, &recall)
+            .unwrap();
+        let physiology = support::test_physiology(1, &phenotype).unwrap();
+        let upload = support::bind_chemistry_receptor_effects(
+            upload,
+            &phenotype,
+            &physiology,
+            Tick::new(42),
+        )
+        .unwrap();
+        let batch =
+            GpuClosedLoopMemoryBatchInput::try_new(vec![GpuClosedLoopMemoryTickInput::try_new(
+                handle, &frame, &upload,
+            )
+            .unwrap()])
+            .unwrap();
+        let boundary = backend
+            .prepare_training_tick_capture(&[(handle, Tick::new(42))])
+            .unwrap();
+        let before_activity = backend.snapshot_activity_state(handle).unwrap();
+        let before_v11 = backend.checkpoint_v11(handle).unwrap();
+        match fault {
+            0 => backend.force_training_capture_failure_for_test(true),
+            1 => backend.force_training_capture_failure_for_test(false),
+            2 => backend.force_all_invalid_after_next_decode_for_test(handle),
+            3 => backend.force_pending_identity_mismatch_after_next_decode_for_test(handle),
+            _ => backend.force_device_lost_after_next_submit_for_test(),
+        }
+        let sampling = [GpuTrainingSamplingConfig {
+            seed: 19,
+            counter: 0,
+            temperature: 1.0,
+            demonstrator: None,
+        }];
+        let result = backend.tick_memory_batch_training_captured(&batch, &sampling, boundary);
+        assert!(result.is_err(), "fault {fault}");
+        if fault < 2 {
+            assert_eq!(
+                result.err(),
+                Some(alife_core::ScaffoldContractError::NeuralBackendUnavailable)
+            );
+        }
+        assert!(matches!(
+            backend.state(),
+            alife_gpu_backend::GpuBackendState::DeviceLost { .. }
+        ));
+        assert_eq!(backend.completed_dispatch_count(), 0);
+        assert_eq!(
+            backend.snapshot_activity_state(handle).unwrap(),
+            before_activity
+        );
+        assert_eq!(backend.checkpoint_v11(handle).unwrap(), before_v11);
+        // The public selection/eligibility accessor must refuse a poisoned
+        // backend; it cannot inspect private host pending state after failure.
+        assert_eq!(
+            backend.pending_eligibility(handle),
+            Err(alife_core::ScaffoldContractError::NeuralBackendUnavailable)
+        );
+        assert_eq!(backend.training_capture_metrics().fused_tick_packets, 0);
+    }
+}
+
+#[test]
+#[ignore = "requires GPU hardware"]
+fn structural_growth_admits_synchronously_then_exact_cache_hits_fuse() {
+    use alife_core::{CoactivationEvidence, StructuralPlasticityConfig, StructuralPlasticityState};
+    let mut backend =
+        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()).unwrap();
+    let phenotype = support::controlled_sensory_n512_phenotype();
+    let handle = backend
+        .insert_brain(OrganismId(1), phenotype.clone())
+        .unwrap();
+    let route = phenotype
+        .projections()
+        .iter()
+        .map(|p| p.route_index())
+        .find(|route| *route > 0 && *route < 16)
+        .unwrap();
+    let target = phenotype.candidate_decoder().motor_start();
+    let mut checkpoint = backend.checkpoint_v11(handle).unwrap();
+    checkpoint.structural = StructuralPlasticityState::new(
+        phenotype.neuron_count(),
+        StructuralPlasticityConfig {
+            max_candidates_per_region: 8,
+            max_regions: route + 1,
+            max_accepted_per_phase: 1,
+            max_structural_edges: 2,
+            min_candidate_score: 2,
+            prune_score_below: 0,
+        },
+    )
+    .unwrap();
+    backend.restore_v11(handle, checkpoint).unwrap();
+    for round in 0..3 {
+        if round != 1 {
+            let work = backend
+                .apply_v11_structural_phase(
+                    handle,
+                    &[CoactivationEvidence {
+                        region: route,
+                        source: target + if round == 0 { 1 } else { 2 },
+                        target,
+                        coactivation: 100,
+                        eligibility: 0,
+                        concept_gap_support: 0,
+                    }],
+                )
+                .unwrap();
+            assert_eq!(work.structural.accepted_edges, 1);
+        }
+        let tick = Tick::new(42 + round);
+        let source = support::perception_frame_for_profile_at_tick(
+            1,
+            tick.raw(),
+            SensorProfile::PrivilegedAffordanceV1,
+            true,
+            2,
+        );
+        let (frame, recall) = support::try_empty_recall(&source).unwrap();
+        let upload = backend
+            .prepare_memory_context_upload(handle, &frame, &recall)
+            .unwrap();
+        let physiology = support::test_physiology(1, &phenotype).unwrap();
+        let upload =
+            support::bind_chemistry_receptor_effects(upload, &phenotype, &physiology, tick)
+                .unwrap();
+        let batch =
+            GpuClosedLoopMemoryBatchInput::try_new(vec![GpuClosedLoopMemoryTickInput::try_new(
+                handle, &frame, &upload,
+            )
+            .unwrap()])
+            .unwrap();
+        let before_modes = backend.training_capture_metrics();
+        let boundary = backend
+            .prepare_training_tick_capture(&[(handle, tick)])
+            .unwrap();
+        let sampling = [GpuTrainingSamplingConfig {
+            seed: 19,
+            counter: round as u32,
+            temperature: 1.0,
+            demonstrator: None,
+        }];
+        let captured = backend
+            .tick_memory_batch_training_captured(&batch, &sampling, boundary)
+            .unwrap();
+        let modes = backend.training_capture_metrics();
+        assert_eq!(
+            modes.fused_tick_packets - before_modes.fused_tick_packets,
+            u64::from(round == 1)
+        );
+        assert_eq!(
+            modes.structural_fallback_packets - before_modes.structural_fallback_packets,
+            u64::from(round != 1)
+        );
+        assert_eq!(
+            captured.before[0].structural_synapses.len(),
+            if round == 2 { 2 } else { 1 }
+        );
+        assert_eq!(
+            captured.after,
+            backend.capture_training_states(&[(handle, tick)]).unwrap()
+        );
+        let outcome = &captured.ticks[0];
+        backend
+            .discard_pending_eligibility(handle, outcome.pending_eligibility.identity())
+            .unwrap();
+    }
 }
