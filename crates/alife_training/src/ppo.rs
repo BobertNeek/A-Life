@@ -3,6 +3,7 @@
 
 use alife_core::ScaffoldContractError;
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
+use std::borrow::Borrow;
 
 use crate::{AdamWConfig, TrainingError};
 
@@ -1249,12 +1250,40 @@ pub fn train_recurrent_ppo_cohort<F>(
     state: &mut PpoTrainingState,
     window_count: usize,
     effective_batch_size: usize,
-    mut load_window: F,
+    load_window: F,
     config: PpoConfig,
     collection_policy_version: u64,
 ) -> Result<PpoUpdateReceipt, TrainingError>
 where
     F: FnMut(usize) -> Result<PpoTrainingWindow, TrainingError>,
+{
+    train_recurrent_ppo_cohort_with_windows(
+        trainer,
+        state,
+        window_count,
+        effective_batch_size,
+        load_window,
+        config,
+        collection_policy_version,
+    )
+}
+
+/// Same cohort transaction with immutable owned or shared window handles.
+/// The handle must expose identical replay data on repeated loads. Only window
+/// ownership differs; replay validation, packing, gradients and error ordering
+/// are the same as the owned-loader entry point.
+pub fn train_recurrent_ppo_cohort_with_windows<F, W>(
+    trainer: &mut crate::FoundationTrainer,
+    state: &mut PpoTrainingState,
+    window_count: usize,
+    effective_batch_size: usize,
+    mut load_window: F,
+    config: PpoConfig,
+    collection_policy_version: u64,
+) -> Result<PpoUpdateReceipt, TrainingError>
+where
+    F: FnMut(usize) -> Result<W, TrainingError>,
+    W: Borrow<PpoTrainingWindow>,
 {
     config.validate()?;
     if window_count == 0
@@ -1270,9 +1299,10 @@ where
     // This separate frozen pass is necessary: checking ratio==1 after the first
     // minibatch would reject valid later windows from this same on-policy cohort.
     for index in 0..window_count {
-        let window = load_window(index)?;
+        let loaded_window = load_window(index)?;
+        let window = loaded_window.borrow();
         let metrics =
-            evaluate_ppo_window(trainer, state, &window, config, collection_policy_version)?;
+            evaluate_ppo_window(trainer, state, window, config, collection_policy_version)?;
         if metrics
             .as_chunks::<PPO_METRIC_WORDS>()
             .0
@@ -1300,14 +1330,15 @@ where
             let result = (|| -> Result<bool, TrainingError> {
                 let mut mean_kl = 0.0f64;
                 for (index, &sample_count) in counts.iter().enumerate().take(end).skip(start) {
-                    let window = load_window(index)?;
+                    let loaded_window = load_window(index)?;
+                    let window = loaded_window.borrow();
                     if window.batch.len() != sample_count {
                         return Err(invalid());
                     }
                     let metrics = evaluate_ppo_window(
                         trainer,
                         state,
-                        &window,
+                        window,
                         config,
                         collection_policy_version,
                     )?;
