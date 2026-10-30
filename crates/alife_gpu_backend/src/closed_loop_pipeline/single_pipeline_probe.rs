@@ -1,4 +1,4 @@
-//! CPU lowering evidence and one original pipeline at a time; no shader variant.
+//! Isolated CPU lowering and native single-pipeline probes; production sources unchanged.
 use super::*;
 use serde_json::{json, Value};
 use std::{
@@ -10,6 +10,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Target {
     Sleep,
+    SleepOrderedGuards,
     Eligibility,
     Encode,
     Speech,
@@ -17,7 +18,7 @@ pub(crate) enum Target {
 impl Target {
     pub(crate) fn entry(self) -> &'static str {
         match self {
-            Self::Sleep => "initialize_sleep_transaction",
+            Self::Sleep | Self::SleepOrderedGuards => "initialize_sleep_transaction",
             Self::Eligibility => "finalize_pending_eligibility",
             Self::Encode => "encode_perception",
             Self::Speech => "decode_speech_payload",
@@ -26,17 +27,129 @@ impl Target {
     fn original(self) -> (&'static str, &'static str) {
         match self {
             Self::Sleep => (CLOSED_LOOP_CONSOLIDATE_WGSL, "closed-loop-consolidate-wgsl"),
+            Self::SleepOrderedGuards => (
+                CLOSED_LOOP_CONSOLIDATE_WGSL,
+                "probe-only-ordered-sleep-guards-wgsl",
+            ),
             Self::Eligibility => (CLOSED_LOOP_ELIGIBILITY_WGSL, "closed-loop-eligibility-wgsl"),
             Self::Encode => (CLOSED_LOOP_ENCODE_WGSL, "closed-loop-encode-wgsl"),
             Self::Speech => (CLOSED_LOOP_DECODE_WGSL, "closed-loop-decode-wgsl"),
         }
     }
+    pub(crate) fn source_variant(self) -> &'static str {
+        if self == Self::SleepOrderedGuards {
+            "test_only_ordered_final_and_guards"
+        } else {
+            "original"
+        }
+    }
+    fn selected_source(self) -> Result<std::borrow::Cow<'static, str>> {
+        if self == Self::SleepOrderedGuards {
+            Ok(ordered_sleep_guards(self.original().0)?.into())
+        } else {
+            Ok(self.original().0.into())
+        }
+    }
     fn assembled(self) -> std::borrow::Cow<'static, str> {
-        runtime_shader_source(self.original().0)
+        match self
+            .selected_source()
+            .expect("checked probe transformation")
+        {
+            std::borrow::Cow::Borrowed(source) => runtime_shader_source(source),
+            std::borrow::Cow::Owned(source) => runtime_shader_source(&source).into_owned().into(),
+        }
     }
 }
+// Deliberately narrow lexical transform, not a general WGSL rewriter. Refuse
+// unexpected boolean nesting/comments rather than changing their precedence.
+fn sleep_final_chain(source: &str) -> Result<(std::ops::Range<usize>, Vec<&str>)> {
+    const NAME: &str = "fn sleep_transaction_valid(";
+    if source.matches(NAME).count() != 1 {
+        return Err("expected one sleep validation function".into());
+    }
+    let function_start = source.find(NAME).ok_or("missing function")?;
+    let function_end = function_start
+        + source[function_start..]
+            .find("\n}\n")
+            .ok_or("missing function end")?;
+    let function = &source[function_start..function_end];
+    let start = function_start + function.rfind("  return ").ok_or("missing final return")?;
+    let end = start
+        + source[start..function_end]
+            .find(';')
+            .ok_or("missing return terminator")?
+        + 1;
+    if !source[end..function_end].trim().is_empty() {
+        return Err("return is not final".into());
+    }
+    let expression = source[start + 9..end - 1].trim();
+    if expression.contains(['|', ';', '{', '}'])
+        || expression.contains("//")
+        || expression.contains("/*")
+    {
+        return Err("unsupported final-chain syntax".into());
+    }
+    let clauses = expression.split("&&").map(str::trim).collect::<Vec<_>>();
+    if clauses.len()!=57 || clauses.first()!=Some(&"header.schema_version == GPU_SLEEP_SCHEMA_VERSION") || clauses.last()!=Some(&"consolidate_frame_span_within(header.replay_sample_offset,header.replay_sample_count)") {return Err("unexpected final predicate inventory".into());}
+    for clause in &clauses {
+        if clause.is_empty() {
+            return Err("empty clause".into());
+        }
+        let mut delimiters = Vec::new();
+        for c in clause.chars() {
+            match c {
+                '(' | '[' => delimiters.push(c),
+                ')' if delimiters.pop() != Some('(') => {
+                    return Err("nested AND or unbalanced clause".into());
+                }
+                ']' if delimiters.pop() != Some('[') => {
+                    return Err("unbalanced clause".into());
+                }
+                _ => {}
+            }
+        }
+        if !delimiters.is_empty() {
+            return Err("nested AND or unbalanced clause".into());
+        }
+    }
+    Ok((start..end, clauses))
+}
+fn ordered_sleep_guards(source: &str) -> Result<String> {
+    let (range, clauses) = sleep_final_chain(source)?;
+    let mut out = String::with_capacity(source.len() + clauses.len() * 40);
+    out.push_str(&source[..range.start]);
+    for clause in clauses {
+        out.push_str("  if (!( ");
+        out.push_str(clause);
+        out.push_str(" )) { return false; }\n");
+    }
+    out.push_str("  return true;");
+    out.push_str(&source[range.end..]);
+    Ok(out)
+}
+fn max_block_depth(block: &naga::Block) -> usize {
+    1 + block
+        .iter()
+        .map(|s| match s {
+            naga::Statement::Block(b) => max_block_depth(b),
+            naga::Statement::If { accept, reject, .. } => {
+                max_block_depth(accept).max(max_block_depth(reject))
+            }
+            naga::Statement::Switch { cases, .. } => cases
+                .iter()
+                .map(|c| max_block_depth(&c.body))
+                .max()
+                .unwrap_or(0),
+            naga::Statement::Loop {
+                body, continuing, ..
+            } => max_block_depth(body).max(max_block_depth(continuing)),
+            _ => 0,
+        })
+        .max()
+        .unwrap_or(0)
+}
 #[cfg(feature = "gpu-tests")]
-pub(crate) fn compile_original(
+pub(crate) fn compile_selected(
     device: &wgpu::Device,
     target: Target,
 ) -> std::result::Result<wgpu::ComputePipeline, GpuClosedLoopError> {
@@ -67,13 +180,22 @@ pub(crate) fn compile_original(
         },
     )?;
     eprintln!(
-        "gpu_single_pipeline entry={} stage=original_shader_module event=begin",
+        "gpu_single_pipeline entry={} stage=selected_shader_module event=begin",
         target.entry()
     );
-    let (source, label) = target.original();
-    let shader = create_shader_module(device, label, source)?;
+    let (_, label) = target.original();
+    let source = target.selected_source().map_err(|error| {
+        eprintln!("gpu_single_pipeline transform_refused={error}");
+        GpuClosedLoopError::LayoutMismatch
+    })?;
     eprintln!(
-        "gpu_single_pipeline entry={} stage=original_shader_module event=ok",
+        "gpu_single_pipeline source_variant={} raw_source_bytes={}",
+        target.source_variant(),
+        source.len()
+    );
+    let shader = create_shader_module(device, label, &source)?;
+    eprintln!(
+        "gpu_single_pipeline entry={} stage=selected_shader_module event=ok",
         target.entry()
     );
     eprintln!("gpu_single_pipeline entry={} stage=compute_pipeline event=begin empty_constants=true zero_initialize_workgroup_memory=true cache=none",target.entry());
@@ -181,7 +303,7 @@ fn function_stats(
             )
         })
         .count();
-    json!({"name":f.name,"expressions":f.expressions.len(),"control":c,"local_variables":locals,"arguments":arguments,"aggregate_expression_composes":aggregate_composes,"struct_arguments_by_value":struct_args,"divmod_expressions":divmod,"logical_and_expressions":ands})
+    json!({"name":f.name,"max_block_nesting_depth":max_block_depth(&f.body),"expressions":f.expressions.len(),"control":c,"local_variables":locals,"arguments":arguments,"aggregate_expression_composes":aggregate_composes,"struct_arguments_by_value":struct_args,"divmod_expressions":divmod,"logical_and_expressions":ands})
 }
 fn ir_stats(module: &naga::Module, entry: &str) -> Result<Value> {
     let ep = module
@@ -372,5 +494,111 @@ fn original_selected_entry_naga_lowering_cpu_only() -> Result<()> {
         )?;
     }
     eprintln!("CPU-only Naga lowering retained at {}", dir.display());
+    Ok(())
+}
+
+#[test]
+fn ordered_guards_preserve_source_predicates_and_short_circuit_trace() -> Result<()> {
+    let original = CLOSED_LOOP_CONSOLIDATE_WGSL;
+    let (range, clauses) = sleep_final_chain(original)?;
+    let variant = ordered_sleep_guards(original)?;
+    let changed_len = variant.len() - (original.len() - (range.end - range.start));
+    assert_eq!(&variant[..range.start], &original[..range.start]);
+    assert_eq!(
+        &variant[range.start + changed_len..],
+        &original[range.end..]
+    );
+    let changed = &variant[range.start..range.start + changed_len];
+    let recovered = changed
+        .lines()
+        .take(57)
+        .map(|line| {
+            line.strip_prefix("  if (!( ")
+                .and_then(|s| s.strip_suffix(" )) { return false; }"))
+                .expect("exact guard shape")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(recovered, clauses);
+    assert_eq!(changed.lines().last(), Some("  return true;"));
+    // Actual extracted predicate strings are trace labels, not invented numeric
+    // implementations. Enumerate every first-false position plus all true.
+    for first_false in 0..=clauses.len() {
+        let mut original_trace = Vec::new();
+        let original_result = clauses.iter().enumerate().all(|(i, c)| {
+            original_trace.push(*c);
+            i != first_false
+        });
+        let mut variant_trace = Vec::new();
+        let mut variant_result = true;
+        for (i, c) in recovered.iter().enumerate() {
+            variant_trace.push(*c);
+            if i == first_false {
+                variant_result = false;
+                break;
+            }
+        }
+        assert_eq!(variant_result, original_result);
+        assert_eq!(variant_trace, original_trace);
+        assert_eq!(
+            original_trace,
+            clauses[..(first_false + 1).min(clauses.len())]
+        );
+    }
+    assert!(ordered_sleep_guards(&format!("{original}\n{original}")).is_err());
+    assert!(ordered_sleep_guards(&original.replace(
+        "header.flags == 0u && header.reserved == 0u",
+        "header.flags == 0u || header.reserved == 0u"
+    ))
+    .is_err());
+    assert!(ordered_sleep_guards(&original.replace(
+        "header.flags == 0u && header.reserved == 0u",
+        "(header.flags == 0u && header.reserved == 0u)"
+    ))
+    .is_err());
+    Ok(())
+}
+#[test]
+#[cfg(feature = "training-rollout")]
+fn ordered_guards_original_and_variant_cpu_lowering() -> Result<()> {
+    let base = std::env::var_os("ALIFE_SINGLE_PIPELINE_OUTPUT_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::env::temp_dir().join(format!("alife-ordered-sleep-{}", std::process::id()))
+        });
+    let dir = base.join("ordered-guards");
+    fs::create_dir_all(&dir)?;
+    let mut rows = Vec::new();
+    for (target, phase) in [
+        (Target::Sleep, "original"),
+        (Target::SleepOrderedGuards, "variant"),
+    ] {
+        let source = target.assembled();
+        fs::write(dir.join(format!("{phase}.wgsl")), source.as_bytes())?;
+        validate_production_shader_contract(&source, &[target.entry()])?;
+        let module = naga::front::wgsl::parse_str(&source)?;
+        let info = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .validate(&module)?;
+        let (processed, pi) = naga::back::pipeline_constants::process_overrides(
+            &module,
+            &info,
+            Some((naga::ShaderStage::Compute, target.entry())),
+            &Default::default(),
+        )?;
+        rows.push(json!({"variant":phase,"source_bytes":source.len(),"assembled_ir":ir_stats(&module,target.entry())?,"processed_ir":ir_stats(&processed,target.entry())?,"emission":emit(&processed,&pi,target.entry(),&dir,phase)?}));
+    }
+    let entry = Target::Sleep.entry();
+    let equal = |extension: &str| -> Result<bool> {
+        Ok(fs::read(dir.join(format!("{entry}-original.{extension}")))?
+            == fs::read(dir.join(format!("{entry}-variant.{extension}")))?)
+    };
+    fs::write(
+        dir.join("comparison.json"),
+        serde_json::to_vec_pretty(
+            &json!({"rows":rows,"processed_spirv_bytes_equal":equal("spv")?,"processed_hlsl_bytes_equal":equal("hlsl")?,"scope":"CPU Naga options, not native driver evidence; no numeric or code-size pass threshold"}),
+        )?,
+    )?;
     Ok(())
 }

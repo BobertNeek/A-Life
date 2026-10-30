@@ -1,15 +1,19 @@
-//! Raw required-device acquisition and exactly one ORIGINAL pipeline per process.
+//! Raw required-device acquisition; one explicitly selected test pipeline per process.
 use super::*;
-use crate::closed_loop_pipeline::single_pipeline_probe::{compile_original, Target};
+use crate::closed_loop_pipeline::single_pipeline_probe::{compile_selected, Target};
 fn one(target: Target) -> Result<(), Box<dyn std::error::Error>> {
     if !cfg!(feature = "training-rollout") {
         return Err("explicit training-rollout variant required".into());
     }
+    eprintln!(
+        "gpu_single_pipeline source_variant={} selected_target={target:?}",
+        target.source_variant()
+    );
     eprintln!("gpu_single_pipeline entry={} stage=raw_acquire event=begin training_rollout=true default_instance_flags=true selection=unchanged_PRIMARY_SECONDARY no_kernel_set=true",target.entry());
     let raw = acquire_required_gpu(&WgpuDeviceFactory)?;
     eprintln!("gpu_single_pipeline entry={} stage=raw_acquire event=ok hardware={} adapter={:?} features={:?} limits={:?}",target.entry(),serde_json::to_string(&raw.hardware)?,raw.adapter.get_info(),raw.device.features(),raw.device.limits());
     // No GpuClosedLoopKernelSet/new_required, timestamps, arena, brain or dispatch.
-    let _pipeline = compile_original(&raw.device, target)?;
+    let _pipeline = compile_selected(&raw.device, target)?;
     eprintln!(
         "gpu_single_pipeline entry={} stage=event_poll event=begin async_loss_not_attributed=true",
         target.entry()
@@ -60,4 +64,10 @@ fn original_eligibility_finalize_only() -> Result<(), Box<dyn std::error::Error>
 #[ignore = "exclusive real GPU; original encode control only; fresh process"]
 fn original_encode_control_only() -> Result<(), Box<dyn std::error::Error>> {
     one(Target::Encode)
+}
+
+#[test]
+#[ignore = "exclusive real GPU; TEST-ONLY ordered final guards; fresh process; no dispatch"]
+fn ordered_guards_sleep_initialize_only() -> Result<(), Box<dyn std::error::Error>> {
+    one(Target::SleepOrderedGuards)
 }
