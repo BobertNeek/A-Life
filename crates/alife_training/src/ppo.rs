@@ -1336,6 +1336,7 @@ impl FrozenGradientCache {
 /// No cache survives the first update, KL stop, or error. Numeric gradient
 /// failures remain deferred until original ordered accumulation.
 #[cfg(feature = "gpu-tests")]
+#[allow(clippy::too_many_arguments)]
 pub fn train_recurrent_ppo_cohort_with_frozen_gradients_for_test<F, W>(
     trainer: &mut crate::FoundationTrainer,
     state: &mut PpoTrainingState,
@@ -1393,6 +1394,7 @@ where
     )
 }
 
+#[cfg_attr(feature = "gpu-tests", allow(clippy::too_many_arguments))]
 fn train_recurrent_ppo_cohort_inner<F, W>(
     trainer: &mut crate::FoundationTrainer,
     state: &mut PpoTrainingState,
