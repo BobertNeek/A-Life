@@ -14,6 +14,7 @@ mod terrain_hint_tests;
 mod copy_contract_tests;
 
 struct OwnerFixture {
+    world: HeadlessWorld,
     input: CapturedCpuPreparation,
     memory: MemorySidecarState,
     topology: TopologySidecar,
@@ -221,6 +222,7 @@ impl OwnerFixture {
             memory,
             topology,
             predictor,
+            world,
         }
     }
 
@@ -1401,6 +1403,92 @@ fn production_runner_cpu_timing_evidence() {
             "device_created": false })
         );
     }
+}
+
+#[test]
+#[ignore = "Bounded device-free timing of the GPU runtime's actual host preparation"]
+fn single_resident_gpu_host_preparation_timing() {
+    let mut fixture = OwnerFixture::terrain(811, true);
+    let slot = terrain_slots(1).remove(0);
+    let before = fixture.snapshot();
+    let world_before = fixture.world.canonical_signature_digest().unwrap();
+    let expected = prepare_cpu_row(&fixture.job(&slot), false);
+    assert!(expected.result.is_ok());
+    let organism = fixture.input.draft.organism_id();
+    let tick = fixture.world.tick();
+    let expected_draft = fixture
+        .world
+        .perception_frame_draft(
+            organism,
+            tick,
+            SensorProfile::GroundedTerrainVisionV1,
+            HomeostaticSnapshot::baseline(tick),
+        )
+        .unwrap();
+    let mut trials = Vec::new();
+    for trial in 0..32 {
+        let started = Instant::now();
+        let index = fixture.world.build_perception_batch_index().unwrap();
+        let index_ns = elapsed_ns(started);
+        let started = Instant::now();
+        let draft = fixture
+            .world
+            .perception_frame_draft_indexed(
+                organism,
+                tick,
+                SensorProfile::GroundedTerrainVisionV1,
+                HomeostaticSnapshot::baseline(tick),
+                &index,
+            )
+            .unwrap();
+        let perception_ns = elapsed_ns(started);
+        assert_eq!(draft, expected_draft);
+        for measure in if trial % 2 == 0 {
+            [false, true]
+        } else {
+            [true, false]
+        } {
+            let started = Instant::now();
+            let actual = prepare_cpu_row(&fixture.job(&slot), measure);
+            let preparation_ns = elapsed_ns(started);
+            assert_same_trace(&actual, &expected);
+            let t = &actual.timing;
+            trials.push(serde_json::json!({
+                "trial":trial,"warmup":trial == 0,"measure":measure,
+                "index_ns":index_ns,"perception_ns":perception_ns,
+                "preparation_ns":preparation_ns,
+                "episodic_ns":t.episodic_retrieval_wall_ns,
+                "attention_ns":t.attention_context_wall_ns,
+                "topology_ns":t.topology_concept_wall_ns,
+                "packing_ns":t.gpu_upload_wall_ns,
+                "baseline_recall_ns":t.baseline_recall_wall_ns,
+                "baseline_context_ns":t.baseline_context_wall_ns,
+                "attention_evidence_ns":t.baseline_attention_evidence_wall_ns,
+                "routed_recall_ns":t.routed_recall_wall_ns,
+                "routed_context_ns":t.routed_context_wall_ns,
+                "projection_ns":t.cognitive_projection_wall_ns,
+                "finalize_ns":t.routed_finalize_wall_ns,
+                "validate_ns":t.routed_validate_wall_ns,
+            }));
+        }
+    }
+    assert_eq!(fixture.snapshot(), before);
+    assert_eq!(
+        fixture.world.canonical_signature_digest().unwrap(),
+        world_before
+    );
+    println!(
+        "{}",
+        serde_json::json!({
+            "assay":"single_resident_gpu_runtime_host_preparation",
+            "owners":1,"records":fixture.memory.export_active_bank().unwrap().records.len(),
+            "candidates":fixture.input.draft.candidates().len(),
+            "sensor_profile":"GroundedTerrainVisionV1","brain_class":"Standard2048",
+            "world_tick":tick.raw(),"preparation_tick":fixture.input.draft.tick().raw(),
+            "device_created":false,"approximate_cache":false,"full_trace_equal":true,
+            "private_fixture_unchanged":true,"samples":trials,
+        })
+    );
 }
 
 fn move_fixture_tick(fixture: &mut OwnerFixture, tick: Tick) {

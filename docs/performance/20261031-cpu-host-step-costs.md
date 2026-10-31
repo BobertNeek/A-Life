@@ -49,6 +49,9 @@ attention routing, cognitive context/projection, finalization and frame
 validation. It then packs/validates `GpuPerceptionUpload` and
 `GpuMemoryContextUpload`. One resident uses one preparation worker; the two-worker
 threshold is eight rows. Its optional approximate path is a separate branch.
+Continuous training takes the audited path: `uses_audited_cognition()` is true
+when training sampling is enabled
+([source](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_game_app/src/gpu_live_runtime.rs#L4708)).
 
 The CPU host also calls shared `prepare_canonical_frame`, but wraps its tick in
 full founder/private binding validation, `self.clone()` and commit/drop. The GPU
@@ -98,6 +101,86 @@ exclusive host encoding versus the per-window metric/status waits and accepted
 batch preflight/Adam waits on an actual production invocation. A device-free host
 assay cannot answer that latency question; live inference-tick batching does not
 remove these offline PPO fences.
+
+### Device-free assay of the GPU runtime's host routines
+
+The separate ignored test `single_resident_gpu_host_preparation_timing` calls
+the actual `prepare_cpu_row` audited path, using the existing
+`OwnerFixture::terrain(811, true)` and a real host-side N2048 slot layout. It
+creates no device or runtime and performs no neural dispatch. The scenario has
+one organism, two visible foods, GroundedTerrainVisionV1 and 25 native candidates.
+Its predictor has the fixture's test learning example; episodic memory is
+**empty**, and its fixed receptor gains/one-focus attention policy are controlled
+test inputs. This is not an acquired or representative long-lived memory bank.
+
+One process alternated enabled/disabled timer order for 32 repetitions of the
+same frozen preparation input: one explicit discarded warm-up and 31 retained
+trials per mode. A reference preparation also runs before the loop. Full typed
+output equality (including candidate order, context, bindings and upload words)
+is checked on every call; fixture/private snapshots and the world signature are
+unchanged afterward. This is typed equality, not a checkpoint byte comparison or
+a simulation/learning outcome test. The world does not advance.
+
+| Exclusive preparation interval | Enabled mean µs / call | Share of outer preparation |
+| --- | ---: | ---: |
+| Baseline recall/context/attention evidence | 230.359 | 19.20% |
+| Attention selection and focal routing | 45.654 | 3.81% |
+| Routed recall/context/projection/finalization/validation | 783.940 | 65.35% |
+| GPU upload packing and validation on host | 135.835 | 11.32% |
+| Untimed outer work and observer remainder | 3.780 | 0.32% |
+| Total preparation call | 1199.568 | 100% |
+
+These are arithmetic means from the same 31 enabled calls, so the exclusive
+rows are additive up to rounding. Within those groups, baseline recall averaged
+157.303 µs, routed recall 163.231 µs, finalization 348.315 µs and final-frame
+validation 117.780 µs. These are **nested** scopes, not extra additive costs.
+The `packing` interval includes both perception and memory upload construction,
+their binding/contract validation and receptor-effect binding. No GPU upload or
+copy occurs in this test.
+
+With timers disabled, preparation median was 1084.008 µs
+(966.741–1511.164); enabled median was 1078.480 µs
+(973.301–3846.984). The enabled mean is higher and its final trial contains a
+large finalization spike. Opposite median/mean directions and overlapping ranges
+leave observer overhead unresolved; no correction or speedup is inferred.
+No formal confidence interval is reported for these dependent, short VM samples.
+
+In a **separate** span at the fixture world's tick 0, one perception index build
+averaged 1.216 µs and indexed native perception/candidate construction averaged
+29.718 µs over 31 retained trials. The frozen memory/context input was retimed by
+the established fixture to tick 1000. Do not add these into a claimed end-to-end
+tick. Each perception result equals the unindexed reference. Raw index/draft
+values are repeated in the two mode records for each trial; there were 32 index
+and draft calls, not 64. The runtime normally builds one index per world tick,
+then one draft/preparation per waking resident. This assay measures calls rather
+than frequencies observed in a deployed run.
+
+Both recalls have a reason: baseline recall supplies evidence for attention;
+focal routing changes candidates, so routed recall/finalization must bind the
+chosen candidate frame and current cognitive context. They cannot simply be
+deleted or reused across changed frames. Empty-memory recall still costs about
+0.16 ms here; this points to fixed frame/binding work as a hypothesis, not a
+measurement of record-search cost. Finalization/validation and host packing are
+the next bounded shared-routine targets. A future change should identify a
+specific repeated immutable computation, preserve the complete prepared frame
+and rejection behavior, and improve an enclosing `prepare_cpu_row` measurement
+across empty and retained banks. Reject it if any binding, candidate order,
+private state, corruption rejection or enclosing benefit changes adversely.
+
+The assay used the same EPYC VM and unpinned 0–4 affinity described below,
+Rust 1.98.1 and the ordinary test profile (`alife_game_app`, core, world, GPU
+backend and runtime opt-level 2; debug assertions enabled). No concurrent local
+build ran during timed calls. The first command omitted `gpu-runtime` and ran
+zero tests; a later attempt rejected an object-slot-only history seeder on the
+terrain fixture. Neither yielded timing evidence. The passing assay uses native
+terrain input with an explicitly empty bank and selected one test.
+
+All individual samples, disabled-scope flags, source hashes and conditions are
+in [the raw host-preparation data](20261031-gpu-host-preparation-trials.json).
+Run the named test with `cargo test --locked -p alife_game_app --features
+gpu-runtime --lib single_resident_gpu_host_preparation_timing -- --ignored
+--nocapture`. This result does not establish GPU collection throughput, PPO cost,
+long-lived memory scaling or a comparison against the CPU transaction wrapper.
 
 ## Workload and boundaries
 
