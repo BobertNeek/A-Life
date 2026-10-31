@@ -82,6 +82,30 @@ shape change adds one submit copying retained weights and full Adam arrays into
 new scratch buffers. Checkpoint/value prediction work outside this cohort adds
 other reads and is excluded. Error rollback can add a submission and wait.
 
+Host encoding also scales with recurrent microsteps, separately from queue
+submissions. [`record_forward` / `record_backward`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L1697)
+encode `microsteps × ticks` neural forward dispatches and
+`2 × microsteps × (ticks - burn_in_ticks)` backward dispatches per attempted
+window, plus the other head/reduction dispatches. A four-microstep 256-loss-row
+window therefore has 1,024 forward and 2,048 backward neural dispatches without
+burn-in; 128 burn-in ticks add 512 forward dispatches. These are static source
+counts, not a measured encoding cost or evidence that required recurrence can
+be skipped.
+
+The continuous source slices loss at 256 rows, adds up to 128 burn-in rows and
+uses an effective batch of eight windows. For an uninterrupted 512-row segment,
+that yields 256- and 384-tick replay windows. `prepare_replay` retains only the
+last exact `(tick count, dendritic branch shape)` allocation; alternating those
+two windows changes its shape each time, causing scratch allocation and the
+weight/full-Adam device copy described above
+([shape predicate](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L95),
+[preparation](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L382)).
+Actual segment lengths and initial branch changes must be counted in the run;
+no allocation latency was measured here. A capacity/pool proposal would still
+need current weights, both moments and exact optimizer ages on every switch,
+fresh activations after updates and bounded memory. Measure allocation/copy
+frequency and enclosing cost before selecting it over a readback change.
+
 Source boundaries are [`ppo.rs:1299–1451`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/ppo.rs#L1299),
 [`trainer.rs:930–1090`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L930)
 and the readback helpers at
