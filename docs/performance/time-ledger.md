@@ -39,22 +39,20 @@ does not define a new numerical staleness or loss budget. See the
 
 | ID | Date, code and hardware/workload | Source and limits |
 | --- | --- | --- |
-| H1: final b817 session | 2026-10-28, Windows RTX 3050, continuing assisted care of one N2048 individual; 139,264 new retained rows, 272 updates and 139,536 progressed world ticks (6,976.8 simulated seconds). All H1 phase totals belong to this final b817 session, not a mixed-build aggregate. CPU/RAM, exact driver/API and build profile are not established here. | Recovered final-session receipt validated by the PC owner and reported 2026-10-31; identity and path below. Host elapsed is 8,836.258 s; producer elapsed 8,766.645 s. These are recovered historical observations, not a newly reproduced benchmark. They supersede the earlier mixed-build interpretation and inferred denominator. |
-| H2: early H1 slice | First eight 512-row windows (4,096 rows) of the b817 session, reported 2026-10-28 12:39 UTC, Windows RTX 3050, combined PR202/203 build [`b817c1513a6023a5395e89b9e5fc7374b0c028c2`](https://github.com/BobertNeek/A-Life/commit/b817c1513a6023a5395e89b9e5fc7374b0c028c2); PR204 was test-only. | Operational report and task handoff: mean collection 20.94 s/window, mean PPO 8.63 s/update. Earlier PR203-only sample: 24.43 and 16.13 s respectively. Different sequential trajectories and assistance; not paired or controlled. No whole-host or snapshot denominator for this slice. |
+| H1: final b817 session | 2026-10-28, Windows RTX 3050, continuing assisted care of one N2048 individual; 139,264 new retained rows, 272 updates and 139,536 progressed world ticks (6,976.8 simulated seconds). All H1 phase totals belong to this final b817 session. CPU/RAM, exact driver/API and build profile are not established here. | Read-only inspection on 2026-10-31 at 04:48 UTC of the project receipt, adjacent native owner logs and training handoff; identity and path below. Host elapsed is 8,836.258 s; producer elapsed 8,766.645 s. These are historical run measurements; no benchmark was rerun for this ledger. |
+| H2: early H1 slice | First eight 512-row windows (4,096 rows) of the b817 session, recorded 2026-10-28 12:39 UTC, Windows RTX 3050, combined PR202/203 build [`b817c1513a6023a5395e89b9e5fc7374b0c028c2`](https://github.com/BobertNeek/A-Life/commit/b817c1513a6023a5395e89b9e5fc7374b0c028c2); PR204 was test-only. | Recorded early-session progress: mean collection 20.94 s/window, mean PPO 8.63 s/update. Earlier PR203-only sample: 24.43 and 16.13 s respectively. Different sequential trajectories and assistance; not paired or controlled. No whole-host or snapshot denominator for this slice. |
 | H3: isolated cache copy | [PR214](https://github.com/BobertNeek/A-Life/pull/214), head `a63010a1`, 2026-10-30; Linux, rustc 1.98.1, opt3 source-extracted types/cache, synthetic finite N2048 payload, 25 candidates/tick, seven alternating paired trials. CPU model/RAM not established in the cited report. | Old cache-hit deep-copy median 5.20 ms [4.47–6.10] for 256 ticks/no burn-in; 7.98 ms [7.80–9.15] for 384 ticks/128 burn-in. Shared hits remove payload copies. First retain still compacts/copies. Windows memory guard stubbed in this assay. No admitted trajectory, GPU, whole-PPO or learning/hour measurement. |
 | S1: current source | 2026-10-31 audit of main `eaf9e120`; no timing workload run. | Code boundaries below establish what timers include, not how expensive current work is. [PR210](https://github.com/BobertNeek/A-Life/pull/210) changed host authority/replay costs; [PR211](https://github.com/BobertNeek/A-Life/pull/211) removed disabled PPO value-head work; [PR213](https://github.com/BobertNeek/A-Life/pull/213) changed checkpoint serialization; PR214 changed cache-hit ownership. Historical proportions cannot certify today's proportions or device speedup. |
 
-H1 recovery provenance: the PC-owner validation result identifies source
-`b817c1513a6023a5395e89b9e5fc7374b0c028c2`, tree
+H1 provenance: read-only inspection on **2026-10-31 at 04:48 UTC** of
+`C:\Users\PC\Documents\Codex\2026-10-07\task-2\care-continuous-night-20261028\lane\last-continuous-session.json`,
+together with the adjacent native owner logs and training handoff. Recorded
+source commit is `b817c1513a6023a5395e89b9e5fc7374b0c028c2`, tree
 `1d4e6846882094286118a77a0688994cce65b11b`, and binary SHA-256
 `b625b5c9b70420131fa64794ba34569ce828a6bd14086645b4c95de3d6511512`.
-The source receipt is
-`C:\Users\PC\Documents\Codex\2026-10-07\task-2\care-continuous-night-20261028\lane\last-continuous-session.json`.
-Values here are transcribed from that owner's validation result, turn
-`01a19049-cfda-7241-96b7-537737685074`, not a fresh training run.
 
-Earlier that night, **8,704 unsaved rows were lost** in a separate attempt
-(reported in the handoff). Keep that loss separate from H1's final b817 session;
+Earlier-session records identify **8,704 unsaved rows lost** in a separate
+attempt. Keep that loss separate from H1's final b817 session;
 do not add it to retained rows or silently mix other attempts into this session's
 timers. A whole-night accounting would need those other attempt intervals too.
 H1 also records substantial teaching/food repositioning; nourishing outcomes do
@@ -417,7 +415,8 @@ recomputation; the `594955d8` residual test compares two updates with 3-row and
 5-row windows in one effective batch, nonzero critic moments and complete final
 checkpoints/KL receipts. Fresh replay after optimizer changes remains essential.
 
-The independent source review separately reported 36 affected tests passing.
+The [CPU validation report](https://github.com/BobertNeek/A-Life/blob/dc71292f0b1077ea3ccb46afded60408fe15e4c5/docs/performance/20261031-cpu-ppo-costs.md#validity-and-falsification)
+records 15 backend and 21 collector tests passing (36 affected tests).
 
 ### C2: independent Xeon ABBA replication
 
@@ -479,10 +478,10 @@ KL-stop sequences: two accepted paired updates for object slots and three for
 terrain. Decision and private-host hashes also match by profile. The index
 reports four retained complete checkpoint files of 4,688,876 bytes with the same
 SHA-256 `948831e152fe9d679404200661574d714d724d579bb28f85c01860ac29981709`.
-Those full checkpoint bytes remain in the review environment and are not in
-this 48 KB export, so their hashes cannot be recomputed from this package.
-Receipt equality was checked here; complete-checkpoint hash equality is the
-reviewer's indexed result. Neither establishes every intermediate update,
+Those full checkpoint bytes are not included in this 48 KB export, so their
+hashes cannot be recomputed from this package. Exported receipt objects were
+checked for equality; complete-checkpoint hash equality is index-level evidence.
+Neither establishes every intermediate update,
 every timed trial's checkpoint, arbitrary inputs or acquired-state behavior.
 
 Confidence is high that the immediate repeated forward is redundant under the
