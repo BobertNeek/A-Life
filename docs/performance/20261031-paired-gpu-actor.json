@@ -1,0 +1,272 @@
+{
+  "schema": 1,
+  "baseline_source_sha": "8873770c5b1a7eea511c7b8cd2fe5eefe482a4ff",
+  "candidate_source_sha": "0903ede8899bd9f0b2ebbd24232d4d2e375dbb7b",
+  "branch": "codex/experimental-ppo-window-batch",
+  "source_files_sha256": {
+    "crates/alife_training/src/trainer.rs": "060de2a7ec09874d368b019d88c5f9c133a1616f057740a7a742df86ba5f355c",
+    "crates/alife_training/src/trainer/dynamic_dispatch_tests.rs": "e0caef67642716728efe4457e46e61d34090f8c8a75a87c79bf537f7279c1069",
+    "crates/alife_training/src/trainer/pair_window_tests.rs": "118b8fc9435a1b6d089989b5f8dd49f3b4bb93e23649ebbd9a5aae6eb2324a0a",
+    "crates/alife_training/shaders/foundation_train_pair.wgsl": "a68507d2880e081658fd516b0af8b3ee0a3d8f2aa8a75313d6f1cea78f9b80db"
+  },
+  "profile": "actual cargo --release across all dependencies; not test-profile package-only opt3",
+  "build_command": "cargo test --release --locked -p alife_training --features gpu-tests --lib --no-run",
+  "binary": "target/pair-release/release/deps/alife_training-b408c1ab66e7c384",
+  "binary_sha256": "ebfe7d12eb94679c3361b38e08c6dcf51fb2a59f4978fcc2901875a8684822b3",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "host": {
+    "os": "Linux 6.18.57",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "cpu_max": "400000 100000",
+    "memory_max": "17179869184",
+    "physical_gpu": false,
+    "adapter": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "driver": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+    "backend": "Vulkan",
+    "software_driver_threads": 2
+  },
+  "fixture": {
+    "neurons": 2048,
+    "synapses": 32768,
+    "microsteps_per_tick": 4,
+    "windows": [
+      {
+        "ticks": 256,
+        "burn_in": 0,
+        "loss_rows": 256
+      },
+      {
+        "ticks": 384,
+        "burn_in": 128,
+        "loss_rows": 256
+      }
+    ],
+    "total_loss_rows": 512,
+    "gradient_scales": [
+      0.5,
+      0.5
+    ],
+    "speech_targets": "None; no speech forward, adjoint or weight-gradient dispatch",
+    "adjoints": "fixed synthetic candidate adjoints, not the real PPO objective",
+    "structural_edges": true,
+    "dendrites": true,
+    "trainable_mask": "every third synapse",
+    "optimizer_ages": "heterogeneous integer ages including above 2^24; frozen signed-zero moments"
+  },
+  "scope": {
+    "included": "host command encoding/finish, submission, compact readback allocation/copy/map/wait, actual WGSL forward/BPTT, original ordered gradient accumulation, one original Adam update and final receipt",
+    "excluded": "resource/pipeline setup, all setup uploads (explicit empty submission + exact submission wait before timers), full-buffer oracle readbacks outside timing",
+    "forward_wait": "copies two actual neural logits per window as a forward-availability boundary; it does not calculate or read real PPO metrics",
+    "not_integrated": [
+      "PPO objective and actual behavior likelihood validation",
+      "global frozen-validation pass across all cohort windows",
+      "sample-weighted host KL gate and receipt/controller bookkeeping",
+      "value-gradient scratch/ordered value accumulation",
+      "value preflight/rollback and actor-value transaction"
+    ]
+  },
+  "trial_protocol": {
+    "count": 3,
+    "order": [
+      "serial,pair",
+      "pair,serial",
+      "serial,pair"
+    ],
+    "first_trial_retained": true,
+    "root_compiler_work_quiet": true,
+    "gpu_timestamps": false,
+    "shader_cache": "software shader cache had earlier correctness runs; cold-device qualification not established",
+    "confidence_interval": null
+  },
+  "trials": [
+    {
+      "active_microsteps_per_tick": 4,
+      "exact_bits": true,
+      "pair_seconds": 1.6625835,
+      "pair_submissions": 6,
+      "pair_waits": 3,
+      "ratio": 0.9953701892265863,
+      "scope": "fixed-adjoint actor encode+submit+map/wait+ordered accumulation+Adam; setup/uploads/full oracle reads excluded; full PPO objective/KL/value/rollback absent",
+      "serial_seconds": 1.654886053,
+      "serial_submissions": 11,
+      "serial_waits": 5,
+      "shapes": [
+        [
+          256,
+          0
+        ],
+        [
+          384,
+          128
+        ]
+      ],
+      "speech": false,
+      "trial": 0
+    },
+    {
+      "active_microsteps_per_tick": 4,
+      "exact_bits": true,
+      "pair_seconds": 1.684964556,
+      "pair_submissions": 6,
+      "pair_waits": 3,
+      "ratio": 1.0374862769516915,
+      "scope": "fixed-adjoint actor encode+submit+map/wait+ordered accumulation+Adam; setup/uploads/full oracle reads excluded; full PPO objective/KL/value/rollback absent",
+      "serial_seconds": 1.748127604,
+      "serial_submissions": 11,
+      "serial_waits": 5,
+      "shapes": [
+        [
+          256,
+          0
+        ],
+        [
+          384,
+          128
+        ]
+      ],
+      "speech": false,
+      "trial": 1
+    },
+    {
+      "active_microsteps_per_tick": 4,
+      "exact_bits": true,
+      "pair_seconds": 1.710318531,
+      "pair_submissions": 6,
+      "pair_waits": 3,
+      "ratio": 0.9861162575452445,
+      "scope": "fixed-adjoint actor encode+submit+map/wait+ordered accumulation+Adam; setup/uploads/full oracle reads excluded; full PPO objective/KL/value/rollback absent",
+      "serial_seconds": 1.6865729090000001,
+      "serial_submissions": 11,
+      "serial_waits": 5,
+      "shapes": [
+        [
+          256,
+          0
+        ],
+        [
+          384,
+          128
+        ]
+      ],
+      "speech": false,
+      "trial": 2
+    }
+  ],
+  "summary": {
+    "serial_median_seconds": 1.6865729090000001,
+    "pair_median_seconds": 1.684964556,
+    "ratio_of_medians": 1.0009545322447722,
+    "paired_ratios": [
+      0.9953701892265863,
+      1.0374862769516915,
+      0.9861162575452445
+    ],
+    "median_paired_ratio": 0.9953701892265863,
+    "serial_min_max_seconds": [
+      1.654886053,
+      1.748127604
+    ],
+    "pair_min_max_seconds": [
+      1.6625835,
+      1.710318531
+    ],
+    "paired_ratio_min_max": [
+      0.9861162575452445,
+      1.0374862769516915
+    ],
+    "conclusion": "No meaningful speedup on this software workload; no physical-GPU, whole-PPO or retained-training gain established"
+  },
+  "boundaries": {
+    "serial_submissions": 11,
+    "pair_submissions": 6,
+    "serial_waits": 5,
+    "pair_waits": 3,
+    "both_include_one_final_actor_Adam": true,
+    "counter_scope": "Source-counted harness queue.submit calls and explicit host readback waits; not native driver submissions or measured GPU counters."
+  },
+  "whole_process_resource": {
+    "wall_seconds": 13.004941440000039,
+    "user_seconds": 16.647665,
+    "system_seconds": 1.9853939999999999,
+    "max_rss_kib": 838800,
+    "exit_code": 0,
+    "max_rss_scope": "entire software test process incl both baseline/candidate buffers, setup, driver and oracle reads; NOT VRAM or incremental production memory"
+  },
+  "checks": {
+    "exactness": "all u32 words in state, outputs, gradients, ordered accumulated gradients, weights and optimizer; nonzero moments, integer ages and frozen signed zeros",
+    "small_cases": [
+      {
+        "windows": [
+          [
+            3,
+            0
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "speech": false
+      },
+      {
+        "windows": [
+          [
+            3,
+            1
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "speech": false,
+        "scales": [
+          0.4,
+          0.6
+        ]
+      },
+      {
+        "windows": [
+          [
+            3,
+            0
+          ],
+          [
+            5,
+            2
+          ]
+        ],
+        "speech": true
+      }
+    ],
+    "representative_full_buffer_oracle": "passed after each timed pair",
+    "fault": "NaN adjoints in second window reject before Adam; weights, moments and ages remain unchanged",
+    "clippy": "cargo clippy --release --locked -p alife_training --features gpu-tests --lib --tests -- -D warnings passed"
+  },
+  "promotion": "experimental branch only; no production enable, PR or merge justified by these results",
+  "raw_logs": {
+    "representative": {
+      "sha256": "f75356b2006d37552ff0b4242167ab191898c7dbb59ac7f4d7e3967722522223",
+      "text": "\nrunning 1 test\ntest trainer::pair_window_tests::paired_ragged_windows_complete_actor_assay ... dispatch assay adapter: AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nPAIR_ACTOR_TRIAL {\"active_microsteps_per_tick\":4,\"exact_bits\":true,\"pair_seconds\":1.6625835,\"pair_submissions\":6,\"pair_waits\":3,\"ratio\":0.9953701892265863,\"scope\":\"fixed-adjoint actor encode+submit+map/wait+ordered accumulation+Adam; setup/uploads/full oracle reads excluded; full PPO objective/KL/value/rollback absent\",\"serial_seconds\":1.654886053,\"serial_submissions\":11,\"serial_waits\":5,\"shapes\":[[256,0],[384,128]],\"speech\":false,\"trial\":0}\nPAIR_ACTOR_TRIAL {\"active_microsteps_per_tick\":4,\"exact_bits\":true,\"pair_seconds\":1.684964556,\"pair_submissions\":6,\"pair_waits\":3,\"ratio\":1.0374862769516915,\"scope\":\"fixed-adjoint actor encode+submit+map/wait+ordered accumulation+Adam; setup/uploads/full oracle reads excluded; full PPO objective/KL/value/rollback absent\",\"serial_seconds\":1.748127604,\"serial_submissions\":11,\"serial_waits\":5,\"shapes\":[[256,0],[384,128]],\"speech\":false,\"trial\":1}\nPAIR_ACTOR_TRIAL {\"active_microsteps_per_tick\":4,\"exact_bits\":true,\"pair_seconds\":1.710318531,\"pair_submissions\":6,\"pair_waits\":3,\"ratio\":0.9861162575452445,\"scope\":\"fixed-adjoint actor encode+submit+map/wait+ordered accumulation+Adam; setup/uploads/full oracle reads excluded; full PPO objective/KL/value/rollback absent\",\"serial_seconds\":1.6865729090000001,\"serial_submissions\":11,\"serial_waits\":5,\"shapes\":[[256,0],[384,128]],\"speech\":false,\"trial\":2}\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 12.99s\n\nPAIR_PROCESS_RESOURCE {\"wall_seconds\": 13.004941440000039, \"user_seconds\": 16.647665, \"system_seconds\": 1.9853939999999999, \"max_rss_kib\": 838800, \"exit_code\": 0}\n"
+    },
+    "correctness": {
+      "sha256": "6bff6c5707b18647272d6b4587db9b5ffd4dfe722ad0224f117aabe7bd1917ad",
+      "text": "\nrunning 1 test\ndispatch assay adapter: AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\npair exactness passed: shapes=[(3, 0), (5, 2)], speech=false\npair exactness passed: shapes=[(3, 1), (5, 2)], speech=false\npair exactness passed: shapes=[(3, 0), (5, 2)], speech=true\ntest trainer::pair_window_tests::paired_ragged_windows_match_serial_ordered_gradients_and_adam ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 3.33s\n\n"
+    },
+    "fault": {
+      "sha256": "cc76a1ffca2c9054d470ee250037ad4f616e7a6b6e611018deda8f9aa551ca18",
+      "text": "\nrunning 1 test\ndispatch assay adapter: AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\n\nthread 'trainer::pair_window_tests::paired_invalid_second_gradient_cannot_apply_adam' (16708) panicked at crates/alife_training/src/trainer/pair_window_tests.rs:862:9:\nassertion `left == right` failed\n  left: 0.0\n right: 1.0\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\ntest trainer::pair_window_tests::paired_invalid_second_gradient_cannot_apply_adam ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 51 filtered out; finished in 1.75s\n\n"
+    },
+    "clippy": {
+      "sha256": "1ea39fdfd11a09636d15bb8f8f7410e63e4b2910ffe3153c597486da5559071e",
+      "text": "    Checking alife_training v0.1.0 (/workspace/A-Life-window-batch/crates/alife_training)\n    Finished `release` profile [optimized] target(s) in 1.25s\n"
+    }
+  },
+  "binary_hash_scope": "Measured representative three-trial release assay, built from candidate source0903ede8. Small release correctness/fault logs precede lint-only cleanup (redundant u64 conversion, allow attribute, constant chunk iterator); their earlier binary hash was not retained. Shader and arithmetic unchanged; representative whole-buffer checks ran on the hashed final binary.",
+  "independent_source_review": {
+    "result": "No blocking source or report/provenance findings",
+    "scope": "Shader arithmetic normalized against43retainedoriginalfunctionbodies; driver offsets/raggedorder/orderedaccumulation/Adamguards/timerboundaries; source,binary,rawloghashes and reportedratios/RSS",
+    "formal_pr_approval": false,
+    "new_assays_executed_by_reviewer": false
+  }
+}
