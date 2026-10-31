@@ -1048,5 +1048,36 @@
       "log_sha256": "e7fb2b3086f2dcc6818f0378d42cdd0b07b96b63e261cab9b21dec78e5a031eb",
       "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::continuous_world"
     }
-  ]
+  ],
+  "software_vulkan_setup": {
+    "initial_state": "system Vulkan loader installed; no ICD",
+    "download_host": "deb.debian.org",
+    "system_packages_installed": false,
+    "extracted_root": "/workspace/vulkan-assay/root",
+    "icd_selector": "VK_ICD_FILENAMES=/workspace/vulkan-assay/lvp_icd.json",
+    "driver_library": "/workspace/vulkan-assay/root/usr/lib/x86_64-linux-gnu/libvulkan_lvp.so",
+    "device_type": "Cpu",
+    "driver_api_version": "1.4.305",
+    "packages": [
+      {
+        "name": "mesa-vulkan-drivers",
+        "version": "25.0.7-2+deb13u1",
+        "architecture": "amd64",
+        "sha256": "caf2f7d296b7522efe74e40a74bce762a3ce84c33b53b5e54e1248ac2e0a13a5"
+      },
+      {
+        "name": "libvulkan1",
+        "version": "1.4.309.0-1",
+        "architecture": "amd64",
+        "sha256": "f47da79cd140264fe21cceb08bc87a71bc7fec05819e4a421f3f518d21101a37"
+      }
+    ]
+  },
+  "qualification_compile": {
+    "command": "cargo check --locked -p alife_game_app --features foundation-training,gpu-tests --lib --tests",
+    "result": "passed",
+    "scope": "Linux compiles ignored captured-step oracle body; Windows hardware execution pending",
+    "strict_clippy_command": "cargo clippy --locked -p alife_game_app --features foundation-training,gpu-tests --lib --tests -- -D warnings",
+    "strict_clippy_result": "passed after removing a needless Into<String> argument borrow and Copy clone; no lint allowances"
+  }
 }

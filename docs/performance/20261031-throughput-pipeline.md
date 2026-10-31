@@ -60,6 +60,21 @@ llvmpipe/LLVM 19.1.7 with two software-driver threads. This is software-device
 evidence. The full release assay ran after local compiler work stopped; VM
 contention, CPU frequency and allocator history remain uncontrolled.
 
+This environment initially had `libvulkan.so.1` but no installed ICD. Debian
+trixie packages `mesa-vulkan-drivers 25.0.7-2+deb13u1` and
+`libvulkan1 1.4.309.0-1` were downloaded from the allowed `deb.debian.org` mirror
+using workspace-local apt lists/cache, then extracted with `dpkg-deb -x` under
+`/workspace/vulkan-assay/root`. No system packages were installed. A local ICD
+JSON points to that tree's `libvulkan_lvp.so`, using the existing system LLVM
+19.1.7 library. `VK_ICD_FILENAMES=/workspace/vulkan-assay/lvp_icd.json`, a writable
+`XDG_RUNTIME_DIR`, and `LP_NUM_THREADS=2` select this test-only software setup;
+`/workspace/vulkan-assay/env.sh` records the selectors. wgpu reports device type
+`Cpu`, name `llvmpipe (LLVM 19.1.7, 256 bits)`, backend `Vulkan`, and driver
+`Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)`. An environment without these extracted
+driver files still has no software Vulkan adapter merely because the loader is
+present. Production continues to reject CPU adapters, and the direct-device
+fixture's `ALIFE_DISPATCH_REQUIRE_HARDWARE=1` guard rejects this adapter too.
+
 ## Correctness and remaining qualification
 
 The direct-device oracle compares every u32 in state, outputs, gradients,
@@ -81,6 +96,12 @@ The training crate's 75 receipt-lineage library tests and strict GPU-test-target
 Clippy also passed. Full-release software equivalence passed independently of
 the earlier test-profile run. No real trained checkpoint was used, and
 `semantic_prior.rs` is unchanged.
+
+The ignored captured-step hardware oracle also type-checks in Linux GPU-test
+builds so its common API body cannot silently escape the compile gate. Its
+execution still requires Windows process-memory admission and a hardware GPU.
+The library/test check with `foundation-training,gpu-tests` and strict Clippy
+passes; this compile result does not establish hardware execution.
 
 Run these through the sole PC owner on the exact branch head, with a disposable
 procedural fixture. Record actual adapter/driver/source and keep real checkpoints

@@ -254,7 +254,7 @@ fn worker_panic_is_reported_and_cannot_produce_a_successful_finish() {
 /// The CPU oracle above begins at typed records. This separate gate exercises
 /// the complete capture conversion, cross-row continuity and cache/TLS path.
 /// It creates only a disposable procedural individual, never a real checkpoint.
-#[cfg(all(windows, feature = "gpu-tests"))]
+#[cfg(feature = "gpu-tests")]
 #[test]
 #[ignore = "requires admitted hardware GPU and Windows process-memory admission"]
 fn captured_steps_match_serial_full_writer_including_explicit_segments() {
