@@ -254,6 +254,8 @@ fn windows_with_shapes(
         .collect()
 }
 
+#[path = "software_ppo_controller/context_qualification.rs"]
+mod context_qualification;
 #[path = "software_ppo_controller/continuing_qualification.rs"]
 mod continuing_qualification;
 #[path = "software_ppo_controller/fallback_qualification.rs"]
