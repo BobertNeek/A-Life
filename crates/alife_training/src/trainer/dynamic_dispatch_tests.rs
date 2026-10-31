@@ -568,3 +568,6 @@ fn dynamic_dispatch_host_encoding_assay() {
         std::fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
     }
 }
+
+#[path = "replay_scratch_tests.rs"]
+mod replay_scratch_tests;

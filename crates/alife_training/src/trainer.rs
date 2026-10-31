@@ -252,7 +252,16 @@ impl FoundationTrainer {
         &self.session
     }
 
-    /// Packed replay buffer bound, also covering the initial trainer allocation.
+    /// Extra dendritic metadata that can coexist with retained tick capacity.
+    /// Add this once to twice the largest admitted fresh allocation when
+    /// bounding overlapping buffer sets. This is a logical byte bound, not VRAM.
+    pub const REPLAY_METADATA_RETENTION_RESERVE_BYTES: u64 = 4
+        * (5 * alife_core::MAX_DENDRITIC_BRANCHES as u64
+            + 4 * alife_core::MAX_DENDRITIC_BRANCHES as u64
+                * alife_core::MAX_DENDRITIC_INPUTS as u64);
+
+    /// Fresh packed replay buffer bound, also covering initial allocation.
+    /// Reused backing capacity may be larger than the current logical request.
     /// The caller can reject a window before allocating its device scratch.
     /// Persistent objectives/accumulation and overlapping old/new allocations
     /// must be budgeted separately by the orchestration layer.
@@ -383,79 +392,28 @@ impl FoundationTrainer {
         Ok(())
     }
 
-    /// Replaces only replay scratch storage; genetic weights and both AdamW
-    /// moments remain on GPU. Existing objective bindings must be recreated.
+    /// Prepares one logical replay using the current bounded scratch buffers
+    /// when they fit. Larger shapes replace scratch while preserving actor Adam.
+    /// Existing objective bindings must be rebound to the current logical view.
     pub fn prepare_replay(&mut self, sequence: &TrainingSequence) -> Result<(), TrainingError> {
-        sequence.validate_for(&self.phenotype)?;
-        self.replay_speech_active = false;
-        let shape = (sequence.ticks.len(), sequence.initial.dendrites.clone());
-        if self
-            .replay_shape
-            .as_ref()
-            .is_some_and(|previous| replay_shapes_equal(previous, &shape))
-        {
-            self.gpu
-                .layout
-                .refresh_replay_parameters(sequence, self.phenotype.microstep_count());
-            let words =
-                pack_replay_sequence(sequence, self.gpu.layout, self.phenotype.neuron_count());
-            let headers = build_step_headers(
-                &self.phenotype,
-                self.gpu.layout,
-                self.config,
-                self.optimizer_step
-                    .checked_add(1)
-                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
-            )?;
-            let (_, queue) = self.session.backend().offline_training_device_queue()?;
-            queue.write_buffer(&self.gpu.training, 0, bytemuck::cast_slice(&words));
-            queue.write_buffer(&self.gpu.step_headers, 0, bytemuck::cast_slice(&headers));
-            return Ok(());
-        }
         let (device, queue) = self.session.backend().offline_training_device_queue()?;
-        let zeros = vec![0.0; self.phenotype.synapses().len()];
-        let next = TrainerGpuState::new_for_replay(
+        let shape = self.gpu.prepare_replay(
             device,
+            queue,
             &self.phenotype,
-            &zeros,
             &self.stage_mask,
-            Some(sequence),
-            Some(&self.gpu.pipelines),
-        )?;
-        let words = pack_replay_sequence(sequence, next.layout, self.phenotype.neuron_count());
-        let headers = build_step_headers(
-            &self.phenotype,
-            next.layout,
+            sequence,
+            self.replay_shape.as_ref(),
             self.config,
-            self.optimizer_step
-                .checked_add(1)
-                .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+            self.optimizer_step,
         )?;
-        queue.write_buffer(&next.training, 0, bytemuck::cast_slice(&words));
-        queue.write_buffer(&next.step_headers, 0, bytemuck::cast_slice(&headers));
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("foundation-replay-reallocate"),
-        });
-        encoder.copy_buffer_to_buffer(
-            &self.gpu.weights,
-            0,
-            &next.weights,
-            0,
-            zeros.len() as u64 * 4,
-        );
-        encoder.copy_buffer_to_buffer(
-            &self.gpu._optimizer,
-            0,
-            &next._optimizer,
-            0,
-            zeros.len() as u64 * 12,
-        );
-        queue.submit(Some(encoder.finish()));
-        self.gpu = next;
         self.replay_shape = Some(shape);
+        self.replay_speech_active = false;
         Ok(())
     }
 
+    /// Raw backing storage, which can retain capacity beyond the current replay.
+    /// Use current replay rows and logical bounds when admitting external views.
     pub fn replay_output_buffer(&self) -> &wgpu::Buffer {
         &self.gpu.outputs
     }
@@ -498,6 +456,7 @@ impl FoundationTrainer {
         self.replay_speech_active = targets.iter().any(Option::is_some);
         Ok(())
     }
+    /// Raw backing storage; spare capacity is not an additional replay state.
     pub fn replay_state_buffer(&self) -> &wgpu::Buffer {
         &self.gpu.state
     }
@@ -1771,6 +1730,127 @@ impl TrainerGpuState {
 }
 
 impl TrainerGpuState {
+    // This device-level path is shared by normal preparation and the direct-
+    // device equivalence fixture. Validate and pack everything before changing
+    // the prepared layout or issuing writes to reusable resources.
+    #[allow(clippy::too_many_arguments)]
+    fn prepare_replay(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        phenotype: &BrainPhenotype,
+        mask: &StageTrainableMask,
+        sequence: &TrainingSequence,
+        previous_shape: Option<&ReplayShape>,
+        config: AdamWConfig,
+        optimizer_step: u32,
+    ) -> Result<ReplayShape, TrainingError> {
+        sequence.validate_for(phenotype)?;
+        let next_step = optimizer_step
+            .checked_add(1)
+            .ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        let shape = (sequence.ticks.len(), sequence.initial.dendrites.clone());
+        let exact = previous_shape.is_some_and(|previous| replay_shapes_equal(previous, &shape));
+        let (meta, layout) = if exact {
+            let mut layout = self.layout;
+            layout.refresh_replay_parameters(sequence, phenotype.microstep_count());
+            (None, layout)
+        } else {
+            let (meta, layout) = pack_metadata_and_layout(phenotype, Some(sequence))?;
+            (Some(meta), layout)
+        };
+        let meta_words = meta
+            .as_ref()
+            .map_or(self._meta.size() / 4, |v| v.len() as u64);
+        validate_replay_buffer_limits(&device.limits(), phenotype, layout, meta_words)?;
+        let headers = build_step_headers(phenotype, layout, config, next_step)?;
+        let words = pack_replay_sequence(sequence, layout, phenotype.neuron_count());
+        let fits = [
+            (&self.training, layout.training_words * 4),
+            (&self.state, layout.state_words * 4),
+            (&self.gradients, layout.gradient_words * 4),
+            (&self.outputs, layout.output_words * 4),
+            (&self.step_headers, headers.len() as u64 * 4),
+        ]
+        .into_iter()
+        .all(|(buffer, bytes)| bytes <= buffer.size());
+        if fits {
+            if let Some(meta) = meta {
+                // Metadata can grow independently of tick scratch. Do not shrink
+                // the larger tick allocation merely because dendrites changed.
+                if meta.len() as u64 * 4 > self._meta.size() {
+                    let next_meta = buffer_init(
+                        device,
+                        "foundation-trainer-meta",
+                        &meta,
+                        wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    );
+                    let bind_group = self.bind_group_with_meta(device, &next_meta);
+                    self._meta = next_meta;
+                    self.bind_group = bind_group;
+                } else {
+                    queue.write_buffer(&self._meta, 0, bytemuck::cast_slice(&meta));
+                }
+            }
+            queue.write_buffer(&self.training, 0, bytemuck::cast_slice(&words));
+            queue.write_buffer(&self.step_headers, 0, bytemuck::cast_slice(&headers));
+            self.layout = layout;
+            return Ok(shape);
+        }
+        let meta = meta.ok_or(ScaffoldContractError::PhenotypeCompile)?;
+        let zeros = vec![0.0; phenotype.synapses().len()];
+        let next = Self::new_from_packed(
+            device,
+            phenotype,
+            &zeros,
+            mask,
+            meta,
+            layout,
+            Some(&self.pipelines),
+        )?;
+        queue.write_buffer(&next.training, 0, bytemuck::cast_slice(&words));
+        queue.write_buffer(&next.step_headers, 0, bytemuck::cast_slice(&headers));
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("foundation-replay-reallocate"),
+        });
+        encoder.copy_buffer_to_buffer(&self.weights, 0, &next.weights, 0, zeros.len() as u64 * 4);
+        encoder.copy_buffer_to_buffer(
+            &self._optimizer,
+            0,
+            &next._optimizer,
+            0,
+            zeros.len() as u64 * 12,
+        );
+        queue.submit(Some(encoder.finish()));
+        *self = next;
+        Ok(shape)
+    }
+
+    fn bind_group_with_meta(&self, device: &wgpu::Device, meta: &wgpu::Buffer) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("foundation-trainer-bind-group"),
+            layout: &self.pipelines.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.step_headers,
+                        offset: 0,
+                        size: NonZeroU64::new(HEADER_BYTES),
+                    }),
+                },
+                entry(1, meta),
+                entry(2, &self.weights),
+                entry(3, &self._optimizer),
+                entry(4, &self.training),
+                entry(5, &self.state),
+                entry(6, &self.gradients),
+                entry(7, &self.outputs),
+                entry(8, &self.mask),
+            ],
+        })
+    }
+
     fn new(
         device: &wgpu::Device,
         phenotype: &BrainPhenotype,
@@ -1789,29 +1869,29 @@ impl TrainerGpuState {
         cached_pipelines: Option<&TrainerPipelines>,
     ) -> Result<Self, TrainingError> {
         let (meta, layout) = pack_metadata_and_layout(phenotype, replay)?;
-        let limits = device.limits();
-        for words in [
-            layout.state_words,
-            layout.gradient_words,
-            layout.output_words,
-            layout.training_words,
-            meta.len() as u64,
-        ] {
-            if words * 4 > limits.max_storage_buffer_binding_size
-                || words * 4 > limits.max_buffer_size
-            {
-                return Err(ScaffoldContractError::PhenotypeCompile.into());
-            }
-        }
+        Self::new_from_packed(
+            device,
+            phenotype,
+            initial_weights,
+            mask,
+            meta,
+            layout,
+            cached_pipelines,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn new_from_packed(
+        device: &wgpu::Device,
+        phenotype: &BrainPhenotype,
+        initial_weights: &[f32],
+        mask: &StageTrainableMask,
+        meta: Vec<u32>,
+        layout: PackedLayout,
+        cached_pipelines: Option<&TrainerPipelines>,
+    ) -> Result<Self, TrainingError> {
+        validate_replay_buffer_limits(&device.limits(), phenotype, layout, meta.len() as u64)?;
         let total_steps = u32::from(phenotype.microstep_count()) * layout.ticks;
-        // Uniform offsets are u32 even when buffer sizes are u64. Every header
-        // is also one complete, independently aligned uniform binding.
-        if !HEADER_BYTES.is_multiple_of(u64::from(limits.min_uniform_buffer_offset_alignment))
-            || u64::from(total_steps.saturating_sub(1)) * HEADER_BYTES > u64::from(u32::MAX)
-            || u64::from(total_steps) * HEADER_BYTES > limits.max_buffer_size
-        {
-            return Err(ScaffoldContractError::PhenotypeCompile.into());
-        }
         let header_capacity_words = usize::try_from(total_steps)
             .ok()
             .and_then(|steps| steps.checked_mul(HEADER_WORDS))
@@ -1827,7 +1907,7 @@ impl TrainerGpuState {
             device,
             "foundation-trainer-meta",
             &meta,
-            wgpu::BufferUsages::STORAGE,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         );
         let weights = buffer_init(
             device,
@@ -2015,6 +2095,34 @@ impl TrainerGpuState {
             layout,
         })
     }
+}
+
+fn validate_replay_buffer_limits(
+    limits: &wgpu::Limits,
+    phenotype: &BrainPhenotype,
+    layout: PackedLayout,
+    meta_words: u64,
+) -> Result<(), TrainingError> {
+    for words in [
+        layout.state_words,
+        layout.gradient_words,
+        layout.output_words,
+        layout.training_words,
+        meta_words,
+    ] {
+        if words * 4 > limits.max_storage_buffer_binding_size || words * 4 > limits.max_buffer_size
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+    }
+    let total_steps = u32::from(phenotype.microstep_count()) * layout.ticks;
+    if !HEADER_BYTES.is_multiple_of(u64::from(limits.min_uniform_buffer_offset_alignment))
+        || u64::from(total_steps.saturating_sub(1)) * HEADER_BYTES > u64::from(u32::MAX)
+        || u64::from(total_steps) * HEADER_BYTES > limits.max_buffer_size
+    {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
+    }
+    Ok(())
 }
 
 #[derive(Clone)]
@@ -2753,6 +2861,102 @@ fn as_u32(value: impl TryInto<u32>) -> Result<u32, TrainingError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retained_metadata_reserve_covers_mixed_tick_and_dendrite_capacity_history() {
+        use alife_core::{
+            BrainCapacityClass, BrainGenome, CandidateActionFamily, DendriticBranch,
+            DendriticBranchSet, DendriticInputRef, DevelopmentState, NormalizedScalar,
+            PhenotypeCompiler, SensorProfile, Tick,
+        };
+        let capacity = BrainCapacityClass::n2048();
+        let genome = BrainGenome::scaffold(0xCA9A, capacity.id());
+        let development =
+            DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+        let phenotype = PhenotypeCompiler::compile_testing_procedural_baseline(
+            &genome,
+            &capacity,
+            &development,
+            SensorProfile::GroundedObjectSlotsV1,
+        )
+        .unwrap();
+        let neurons = phenotype.neuron_count() as usize;
+        let max_dendrites = DendriticBranchSet::new(
+            (0..alife_core::MAX_DENDRITIC_BRANCHES)
+                .map(|branch| {
+                    DendriticBranch::new(
+                        (branch / 4) as u32,
+                        0.0,
+                        0.125,
+                        (0..alife_core::MAX_DENDRITIC_INPUTS)
+                            .map(|source| DendriticInputRef::new(source as u32, 0.125).unwrap())
+                            .collect(),
+                    )
+                    .unwrap()
+                })
+                .collect(),
+        )
+        .unwrap();
+        let make = |ticks, dendrites| crate::TrainingSequence {
+            phenotype_hash: phenotype.phenotype_hash(),
+            initial: crate::TrainingInitialState {
+                activations: vec![0.0; neurons],
+                activity_ema: vec![0.0; neurons],
+                metabolic_load: vec![0.0; neurons],
+                dendrites,
+            },
+            ticks: vec![
+                crate::TrainingReplayTick {
+                    encoded_inputs: vec![0.0; neurons],
+                    projection_gain: 1.0,
+                    local_threshold_shift: 0.0,
+                    microstep_count: u32::from(phenotype.microstep_count()),
+                    enabled_routes: vec![true; phenotype.projections().len()],
+                    effective_weight_offsets: vec![0.0; phenotype.synapses().len()],
+                    structural_synapses: Vec::new(),
+                    candidates: vec![crate::TrainingReplayCandidate {
+                        family: CandidateActionFamily::Rest,
+                        decoder_inputs: [0.0; 54],
+                        innate_bias: 0.0
+                    }]
+                };
+                ticks
+            ],
+            burn_in_ticks: 0,
+            memory_candidate_gain: phenotype
+                .candidate_decoder()
+                .memory_channel()
+                .map_or(0.0, |p| p.max_candidate_gain()),
+        };
+        let long = make(64, DendriticBranchSet::default());
+        let short_with_metadata = make(1, max_dendrites);
+        let larger = make(65, DendriticBranchSet::default());
+        let (long_meta, _) = pack_metadata_and_layout(&phenotype, Some(&long)).unwrap();
+        let (large_meta, _) =
+            pack_metadata_and_layout(&phenotype, Some(&short_with_metadata)).unwrap();
+        let extra_metadata = (large_meta.len() - long_meta.len()) as u64 * 4;
+        assert_eq!(
+            extra_metadata,
+            FoundationTrainer::REPLAY_METADATA_RETENTION_RESERVE_BYTES
+        );
+        let fresh_long = FoundationTrainer::replay_allocation_bytes(&phenotype, &long).unwrap();
+        let fresh_larger = FoundationTrainer::replay_allocation_bytes(&phenotype, &larger).unwrap();
+        let fresh_short =
+            FoundationTrainer::replay_allocation_bytes(&phenotype, &short_with_metadata).unwrap();
+        let retained = fresh_long + extra_metadata;
+        let overlapping_buffers = retained + fresh_larger;
+        // This compares replay buffer sets only. The caller's separate phase
+        // auxiliary reserve is neither assigned nor subtracted in this proof.
+        let old_buffer_allowance = 2 * fresh_larger;
+        assert!(overlapping_buffers > old_buffer_allowance);
+        let new_buffer_allowance =
+            old_buffer_allowance + FoundationTrainer::REPLAY_METADATA_RETENTION_RESERVE_BYTES;
+        assert!(new_buffer_allowance >= overlapping_buffers);
+        assert!(2 * fresh_long <= old_buffer_allowance && 2 * fresh_short <= old_buffer_allowance);
+        // A ceiling that admitted every old fresh request must now refuse this
+        // history unless it includes the explicit extra metadata allowance.
+        assert!(new_buffer_allowance > old_buffer_allowance);
+    }
 
     #[test]
     fn adam_metadata_constrains_recurrent_routes_but_preserves_signed_decoder_readouts() {
