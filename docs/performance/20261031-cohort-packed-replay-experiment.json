@@ -1,0 +1,5345 @@
+{
+  "assay": "test_only_cohort_packed_replay_experiment",
+  "recorded_utc": "2026-10-31T08:43:22.633077+00:00",
+  "base_commit": "1d58e143b1b35128bedd7f15724147b325e4421c",
+  "runtime_integration": false,
+  "normal_trainer_source_identical_after_removing_test_registration": true,
+  "real_checkpoint_imported": false,
+  "device_requested": false,
+  "windows_admission_executed": false,
+  "timing": {
+    "all_calls_validate_fresh": true,
+    "assay": "cohort_packed_replay_host_benchmark",
+    "cache_dropped_inside_timing": true,
+    "call_shapes": [
+      512,
+      1,
+      256,
+      384,
+      256,
+      384,
+      256,
+      384
+    ],
+    "device_requested": false,
+    "epochs": 2,
+    "fixture_payload_bytes": [
+      85395456,
+      191316,
+      42710016,
+      64052736
+    ],
+    "full_packet_equality_checked_before_timing": true,
+    "runtime_integration": false,
+    "trials": [
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 229092895,
+        "sample_checksum": 18072149,
+        "trial": 0
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 138563604,
+        "sample_checksum": 18072149,
+        "trial": 0
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 138186635,
+        "sample_checksum": 18072149,
+        "trial": 1
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 228368120,
+        "sample_checksum": 18072149,
+        "trial": 1
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 233274387,
+        "sample_checksum": 18072149,
+        "trial": 2
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 140892808,
+        "sample_checksum": 18072149,
+        "trial": 2
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 136573539,
+        "sample_checksum": 18072149,
+        "trial": 3
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 237171559,
+        "sample_checksum": 18072149,
+        "trial": 3
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 227268691,
+        "sample_checksum": 18072149,
+        "trial": 4
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 137234687,
+        "sample_checksum": 18072149,
+        "trial": 4
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 138188457,
+        "sample_checksum": 18072149,
+        "trial": 5
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 231114327,
+        "sample_checksum": 18072149,
+        "trial": 5
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 230283451,
+        "sample_checksum": 18072149,
+        "trial": 6
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 136776495,
+        "sample_checksum": 18072149,
+        "trial": 6
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 140445354,
+        "sample_checksum": 18072149,
+        "trial": 7
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 230587565,
+        "sample_checksum": 18072149,
+        "trial": 7
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 227978133,
+        "sample_checksum": 18072149,
+        "trial": 8
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 139694610,
+        "sample_checksum": 18072149,
+        "trial": 8
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 139426891,
+        "sample_checksum": 18072149,
+        "trial": 9
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 235733357,
+        "sample_checksum": 18072149,
+        "trial": 9
+      },
+      {
+        "cache_enabled": false,
+        "elapsed_ns": 244323123,
+        "sample_checksum": 18072149,
+        "trial": 10
+      },
+      {
+        "cache_enabled": true,
+        "elapsed_ns": 144973598,
+        "sample_checksum": 18072149,
+        "trial": 10
+      }
+    ],
+    "trials_per_mode": 11,
+    "warmups_per_mode": 2
+  },
+  "timing_summary": {
+    "baseline": {
+      "raw_ms": [
+        229.092895,
+        228.36812,
+        233.274387,
+        237.171559,
+        227.268691,
+        231.114327,
+        230.283451,
+        230.587565,
+        227.978133,
+        235.733357,
+        244.323123
+      ],
+      "median_ms": 230.587565,
+      "min_ms": 227.268691,
+      "max_ms": 244.323123
+    },
+    "cache": {
+      "raw_ms": [
+        138.563604,
+        138.186635,
+        140.892808,
+        136.573539,
+        137.234687,
+        138.188457,
+        136.776495,
+        140.445354,
+        139.69461,
+        139.426891,
+        144.973598
+      ],
+      "median_ms": 138.563604,
+      "min_ms": 136.573539,
+      "max_ms": 144.973598
+    },
+    "ratio_of_medians_reduction_percent": 39.90846644310591
+  },
+  "memory": {
+    "assay": "cohort_packed_replay_memory",
+    "children": [
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "baseline",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106717184,
+              "rss_bytes": 105553920,
+              "smaps_private_dirty_bytes": 102313984,
+              "smaps_pss_bytes": 103703552,
+              "smaps_rss_bytes": 105553920
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 71,
+              "dealloc_calls": 9,
+              "live_bytes": 3584,
+              "peak_live_bytes": 42975744,
+              "realloc_calls": 25,
+              "released_bytes": 47303094,
+              "requested_bytes": 47306678,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 145313792,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 142,
+              "dealloc_calls": 83,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 50,
+              "released_bytes": 116083564,
+              "requested_bytes": 116087148,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164425728,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 213,
+              "dealloc_calls": 157,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 75,
+              "released_bytes": 163390242,
+              "requested_bytes": 163393826,
+              "zeroed_calls": 9
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164425728,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 284,
+              "dealloc_calls": 231,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 100,
+              "released_bytes": 232170712,
+              "requested_bytes": 232174296,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164425728,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 355,
+              "dealloc_calls": 305,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 125,
+              "released_bytes": 279477390,
+              "requested_bytes": 279480974,
+              "zeroed_calls": 15
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164425728,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 379,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348257860,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164425728,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 444,
+              "live_bytes": 0,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348261444,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "os": {
+              "high_water_rss_bytes": 164425728,
+              "rss_bytes": 107429888,
+              "smaps_private_dirty_bytes": 104165376,
+              "smaps_pss_bytes": 105567232,
+              "smaps_rss_bytes": 107429888
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40903,
+        "runtime_integration": false,
+        "trial": 0
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "cache",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106864640,
+              "rss_bytes": 105750528,
+              "smaps_private_dirty_bytes": 102334464,
+              "smaps_pss_bytes": 103812096,
+              "smaps_rss_bytes": 105750528
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 72,
+              "dealloc_calls": 8,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 42975888,
+              "realloc_calls": 25,
+              "released_bytes": 4593078,
+              "requested_bytes": 47306822,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 145756160,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 142012416,
+              "smaps_pss_bytes": 143653888,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 143,
+              "dealloc_calls": 81,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 50,
+              "released_bytes": 9320812,
+              "requested_bytes": 116087292,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202932224,
+              "rss_bytes": 202932224,
+              "smaps_private_dirty_bytes": 199188480,
+              "smaps_pss_bytes": 200829952,
+              "smaps_rss_bytes": 202932224
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 214,
+              "dealloc_calls": 154,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 75,
+              "released_bytes": 13917474,
+              "requested_bytes": 120683954,
+              "zeroed_calls": 8
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202932224,
+              "rss_bytes": 202932224,
+              "smaps_private_dirty_bytes": 199188480,
+              "smaps_pss_bytes": 200829952,
+              "smaps_rss_bytes": 202932224
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 285,
+              "dealloc_calls": 227,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 100,
+              "released_bytes": 18645208,
+              "requested_bytes": 125411688,
+              "zeroed_calls": 10
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202932224,
+              "rss_bytes": 202932224,
+              "smaps_private_dirty_bytes": 199188480,
+              "smaps_pss_bytes": 200829952,
+              "smaps_rss_bytes": 202932224
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 356,
+              "dealloc_calls": 300,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 125,
+              "released_bytes": 23241870,
+              "requested_bytes": 130008350,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202932224,
+              "rss_bytes": 202932224,
+              "smaps_private_dirty_bytes": 199188480,
+              "smaps_pss_bytes": 200829952,
+              "smaps_rss_bytes": 202932224
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 373,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 27969604,
+              "requested_bytes": 134736084,
+              "zeroed_calls": 14
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202932224,
+              "rss_bytes": 202932224,
+              "smaps_private_dirty_bytes": 199188480,
+              "smaps_pss_bytes": 200829952,
+              "smaps_rss_bytes": 202932224
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 441,
+              "live_bytes": 0,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 134736084,
+              "requested_bytes": 134736084,
+              "zeroed_calls": 14
+            },
+            "os": {
+              "high_water_rss_bytes": 202608640,
+              "rss_bytes": 107626496,
+              "smaps_private_dirty_bytes": 103882752,
+              "smaps_pss_bytes": 105524224,
+              "smaps_rss_bytes": 107626496
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40905,
+        "runtime_integration": false,
+        "trial": 0
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "refusal",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106995712,
+              "rss_bytes": 105746432,
+              "smaps_private_dirty_bytes": 102309888,
+              "smaps_pss_bytes": 103797760,
+              "smaps_rss_bytes": 105746432
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 71,
+              "dealloc_calls": 9,
+              "live_bytes": 3584,
+              "peak_live_bytes": 42975744,
+              "realloc_calls": 25,
+              "released_bytes": 47303094,
+              "requested_bytes": 47306678,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 145461248,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 142,
+              "dealloc_calls": 83,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 50,
+              "released_bytes": 116083564,
+              "requested_bytes": 116087148,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164573184,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 213,
+              "dealloc_calls": 157,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 75,
+              "released_bytes": 163390242,
+              "requested_bytes": 163393826,
+              "zeroed_calls": 9
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164573184,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 284,
+              "dealloc_calls": 231,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 100,
+              "released_bytes": 232170712,
+              "requested_bytes": 232174296,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164573184,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 355,
+              "dealloc_calls": 305,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 125,
+              "released_bytes": 279477390,
+              "requested_bytes": 279480974,
+              "zeroed_calls": 15
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164573184,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 379,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348257860,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164573184,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 444,
+              "live_bytes": 0,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348261444,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "os": {
+              "high_water_rss_bytes": 164573184,
+              "rss_bytes": 107556864,
+              "smaps_private_dirty_bytes": 103841792,
+              "smaps_pss_bytes": 105468928,
+              "smaps_rss_bytes": 107556864
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40907,
+        "runtime_integration": false,
+        "trial": 0
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "eviction",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106790912,
+              "rss_bytes": 105684992,
+              "smaps_private_dirty_bytes": 102187008,
+              "smaps_pss_bytes": 103705600,
+              "smaps_rss_bytes": 105684992
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 72,
+              "dealloc_calls": 8,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 42975888,
+              "realloc_calls": 25,
+              "released_bytes": 4593078,
+              "requested_bytes": 47306822,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 145821696,
+              "rss_bytes": 145821696,
+              "smaps_private_dirty_bytes": 142024704,
+              "smaps_pss_bytes": 143692800,
+              "smaps_rss_bytes": 145821696
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 143,
+              "dealloc_calls": 81,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 50,
+              "released_bytes": 9320812,
+              "requested_bytes": 116087292,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202997760,
+              "rss_bytes": 202997760,
+              "smaps_private_dirty_bytes": 199200768,
+              "smaps_pss_bytes": 200868864,
+              "smaps_rss_bytes": 202997760
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 214,
+              "dealloc_calls": 157,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 75,
+              "released_bytes": 163390242,
+              "requested_bytes": 163393970,
+              "zeroed_calls": 9
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 107692032,
+              "smaps_private_dirty_bytes": 103895040,
+              "smaps_pss_bytes": 105563136,
+              "smaps_rss_bytes": 107692032
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 285,
+              "dealloc_calls": 231,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 100,
+              "released_bytes": 232170712,
+              "requested_bytes": 232174440,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 107692032,
+              "smaps_private_dirty_bytes": 103895040,
+              "smaps_pss_bytes": 105563136,
+              "smaps_rss_bytes": 107692032
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 356,
+              "dealloc_calls": 305,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 125,
+              "released_bytes": 279477390,
+              "requested_bytes": 279481118,
+              "zeroed_calls": 15
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 107692032,
+              "smaps_private_dirty_bytes": 103895040,
+              "smaps_pss_bytes": 105563136,
+              "smaps_rss_bytes": 107692032
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 379,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 348257860,
+              "requested_bytes": 348261588,
+              "zeroed_calls": 18
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 107692032,
+              "smaps_private_dirty_bytes": 103895040,
+              "smaps_pss_bytes": 105563136,
+              "smaps_rss_bytes": 107692032
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 445,
+              "live_bytes": 0,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 348261588,
+              "requested_bytes": 348261588,
+              "zeroed_calls": 18
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 107692032,
+              "smaps_private_dirty_bytes": 103895040,
+              "smaps_pss_bytes": 105563136,
+              "smaps_rss_bytes": 107692032
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40909,
+        "runtime_integration": false,
+        "trial": 0
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "cap",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106995712,
+              "rss_bytes": 105750528,
+              "smaps_private_dirty_bytes": 102289408,
+              "smaps_pss_bytes": 103789568,
+              "smaps_rss_bytes": 105750528
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 72,
+              "dealloc_calls": 8,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 42975888,
+              "realloc_calls": 25,
+              "released_bytes": 4593078,
+              "requested_bytes": 47306822,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 145756160,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 141967360,
+              "smaps_pss_bytes": 143631360,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 143,
+              "dealloc_calls": 82,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 50,
+              "released_bytes": 73373548,
+              "requested_bytes": 116087292,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202739712,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 141967360,
+              "smaps_pss_bytes": 143631360,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 214,
+              "dealloc_calls": 155,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 75,
+              "released_bytes": 77970210,
+              "requested_bytes": 120683954,
+              "zeroed_calls": 8
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202739712,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 141967360,
+              "smaps_pss_bytes": 143631360,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 285,
+              "dealloc_calls": 229,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 100,
+              "released_bytes": 146750680,
+              "requested_bytes": 189464424,
+              "zeroed_calls": 11
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202833920,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 141967360,
+              "smaps_pss_bytes": 143631360,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 356,
+              "dealloc_calls": 302,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 125,
+              "released_bytes": 151347342,
+              "requested_bytes": 194061086,
+              "zeroed_calls": 13
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202833920,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 141967360,
+              "smaps_pss_bytes": 143631360,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 376,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 150,
+              "released_bytes": 220127812,
+              "requested_bytes": 262841556,
+              "zeroed_calls": 16
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202833920,
+              "rss_bytes": 145756160,
+              "smaps_private_dirty_bytes": 141967360,
+              "smaps_pss_bytes": 143631360,
+              "smaps_rss_bytes": 145756160
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 443,
+              "live_bytes": 0,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 150,
+              "released_bytes": 262841556,
+              "requested_bytes": 262841556,
+              "zeroed_calls": 16
+            },
+            "os": {
+              "high_water_rss_bytes": 202833920,
+              "rss_bytes": 107626496,
+              "smaps_private_dirty_bytes": 103837696,
+              "smaps_pss_bytes": 105501696,
+              "smaps_rss_bytes": 107626496
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40911,
+        "runtime_integration": false,
+        "trial": 0
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "baseline",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106864640,
+              "rss_bytes": 105680896,
+              "smaps_private_dirty_bytes": 102211584,
+              "smaps_pss_bytes": 103715840,
+              "smaps_rss_bytes": 105680896
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 71,
+              "dealloc_calls": 9,
+              "live_bytes": 3584,
+              "peak_live_bytes": 42975744,
+              "realloc_calls": 25,
+              "released_bytes": 47303094,
+              "requested_bytes": 47306678,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 145592320,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 142,
+              "dealloc_calls": 83,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 50,
+              "released_bytes": 116083564,
+              "requested_bytes": 116087148,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164704256,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 213,
+              "dealloc_calls": 157,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 75,
+              "released_bytes": 163390242,
+              "requested_bytes": 163393826,
+              "zeroed_calls": 9
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164704256,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 284,
+              "dealloc_calls": 231,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 100,
+              "released_bytes": 232170712,
+              "requested_bytes": 232174296,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164704256,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 355,
+              "dealloc_calls": 305,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 125,
+              "released_bytes": 279477390,
+              "requested_bytes": 279480974,
+              "zeroed_calls": 15
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164704256,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 379,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348257860,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164704256,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 444,
+              "live_bytes": 0,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348261444,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "os": {
+              "high_water_rss_bytes": 164704256,
+              "rss_bytes": 107622400,
+              "smaps_private_dirty_bytes": 103825408,
+              "smaps_pss_bytes": 105493504,
+              "smaps_rss_bytes": 107622400
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40913,
+        "runtime_integration": false,
+        "trial": 1
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "cache",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106729472,
+              "rss_bytes": 105553920,
+              "smaps_private_dirty_bytes": 102092800,
+              "smaps_pss_bytes": 103592960,
+              "smaps_rss_bytes": 105553920
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 72,
+              "dealloc_calls": 8,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 42975888,
+              "realloc_calls": 25,
+              "released_bytes": 4593078,
+              "requested_bytes": 47306822,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 145625088,
+              "rss_bytes": 145625088,
+              "smaps_private_dirty_bytes": 141942784,
+              "smaps_pss_bytes": 143553536,
+              "smaps_rss_bytes": 145625088
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 143,
+              "dealloc_calls": 81,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 50,
+              "released_bytes": 9320812,
+              "requested_bytes": 116087292,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202801152,
+              "rss_bytes": 202801152,
+              "smaps_private_dirty_bytes": 199118848,
+              "smaps_pss_bytes": 200729600,
+              "smaps_rss_bytes": 202801152
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 214,
+              "dealloc_calls": 154,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 75,
+              "released_bytes": 13917474,
+              "requested_bytes": 120683954,
+              "zeroed_calls": 8
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202801152,
+              "rss_bytes": 202801152,
+              "smaps_private_dirty_bytes": 199118848,
+              "smaps_pss_bytes": 200729600,
+              "smaps_rss_bytes": 202801152
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 285,
+              "dealloc_calls": 227,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 100,
+              "released_bytes": 18645208,
+              "requested_bytes": 125411688,
+              "zeroed_calls": 10
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202801152,
+              "rss_bytes": 202801152,
+              "smaps_private_dirty_bytes": 199118848,
+              "smaps_pss_bytes": 200729600,
+              "smaps_rss_bytes": 202801152
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 356,
+              "dealloc_calls": 300,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 125,
+              "released_bytes": 23241870,
+              "requested_bytes": 130008350,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202801152,
+              "rss_bytes": 202801152,
+              "smaps_private_dirty_bytes": 199118848,
+              "smaps_pss_bytes": 200729600,
+              "smaps_rss_bytes": 202801152
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 373,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 27969604,
+              "requested_bytes": 134736084,
+              "zeroed_calls": 14
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202801152,
+              "rss_bytes": 202801152,
+              "smaps_private_dirty_bytes": 199118848,
+              "smaps_pss_bytes": 200729600,
+              "smaps_rss_bytes": 202801152
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 441,
+              "live_bytes": 0,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 134736084,
+              "requested_bytes": 134736084,
+              "zeroed_calls": 14
+            },
+            "os": {
+              "high_water_rss_bytes": 202461184,
+              "rss_bytes": 107495424,
+              "smaps_private_dirty_bytes": 103813120,
+              "smaps_pss_bytes": 105423872,
+              "smaps_rss_bytes": 107495424
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40915,
+        "runtime_integration": false,
+        "trial": 1
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "refusal",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 107085824,
+              "rss_bytes": 105840640,
+              "smaps_private_dirty_bytes": 102449152,
+              "smaps_pss_bytes": 103914496,
+              "smaps_rss_bytes": 105840640
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 71,
+              "dealloc_calls": 9,
+              "live_bytes": 3584,
+              "peak_live_bytes": 42975744,
+              "realloc_calls": 25,
+              "released_bytes": 47303094,
+              "requested_bytes": 47306678,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 145551360,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 142,
+              "dealloc_calls": 83,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 50,
+              "released_bytes": 116083564,
+              "requested_bytes": 116087148,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164663296,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 213,
+              "dealloc_calls": 157,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 75,
+              "released_bytes": 163390242,
+              "requested_bytes": 163393826,
+              "zeroed_calls": 9
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164663296,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 284,
+              "dealloc_calls": 231,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 100,
+              "released_bytes": 232170712,
+              "requested_bytes": 232174296,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164663296,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 355,
+              "dealloc_calls": 305,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 125,
+              "released_bytes": 279477390,
+              "requested_bytes": 279480974,
+              "zeroed_calls": 15
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164663296,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 379,
+              "live_bytes": 3584,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348257860,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": true,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 164663296,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 426,
+              "dealloc_calls": 444,
+              "live_bytes": 0,
+              "peak_live_bytes": 64453120,
+              "realloc_calls": 150,
+              "released_bytes": 348261444,
+              "requested_bytes": 348261444,
+              "zeroed_calls": 18
+            },
+            "os": {
+              "high_water_rss_bytes": 164663296,
+              "rss_bytes": 107585536,
+              "smaps_private_dirty_bytes": 103952384,
+              "smaps_pss_bytes": 105538560,
+              "smaps_rss_bytes": 107585536
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40917,
+        "runtime_integration": false,
+        "trial": 1
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "eviction",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106864640,
+              "rss_bytes": 105680896,
+              "smaps_private_dirty_bytes": 102211584,
+              "smaps_pss_bytes": 103715840,
+              "smaps_rss_bytes": 105680896
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 72,
+              "dealloc_calls": 8,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 42975888,
+              "realloc_calls": 25,
+              "released_bytes": 4593078,
+              "requested_bytes": 47306822,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 145817600,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 143,
+              "dealloc_calls": 81,
+              "live_bytes": 106766480,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 50,
+              "released_bytes": 9320812,
+              "requested_bytes": 116087292,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 213531680,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 106762752,
+              "packet_length_bytes": 106762752,
+              "packets": 2
+            },
+            "os": {
+              "high_water_rss_bytes": 202993664,
+              "rss_bytes": 202993664,
+              "smaps_private_dirty_bytes": 199196672,
+              "smaps_pss_bytes": 200864768,
+              "smaps_rss_bytes": 202993664
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 214,
+              "dealloc_calls": 157,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 75,
+              "released_bytes": 163390242,
+              "requested_bytes": 163393970,
+              "zeroed_calls": 9
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202788864,
+              "rss_bytes": 107687936,
+              "smaps_private_dirty_bytes": 103890944,
+              "smaps_pss_bytes": 105559040,
+              "smaps_rss_bytes": 107687936
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 285,
+              "dealloc_calls": 231,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 100,
+              "released_bytes": 232170712,
+              "requested_bytes": 232174440,
+              "zeroed_calls": 12
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202788864,
+              "rss_bytes": 107687936,
+              "smaps_private_dirty_bytes": 103890944,
+              "smaps_pss_bytes": 105559040,
+              "smaps_rss_bytes": 107687936
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 356,
+              "dealloc_calls": 305,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 125,
+              "released_bytes": 279477390,
+              "requested_bytes": 279481118,
+              "zeroed_calls": 15
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202788864,
+              "rss_bytes": 107687936,
+              "smaps_private_dirty_bytes": 103890944,
+              "smaps_pss_bytes": 105559040,
+              "smaps_rss_bytes": 107687936
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 379,
+              "live_bytes": 3728,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 348257860,
+              "requested_bytes": 348261588,
+              "zeroed_calls": 18
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 4384,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 202788864,
+              "rss_bytes": 107687936,
+              "smaps_private_dirty_bytes": 103890944,
+              "smaps_pss_bytes": 105559040,
+              "smaps_rss_bytes": 107687936
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 445,
+              "live_bytes": 0,
+              "peak_live_bytes": 109536748,
+              "realloc_calls": 150,
+              "released_bytes": 348261588,
+              "requested_bytes": 348261588,
+              "zeroed_calls": 18
+            },
+            "os": {
+              "high_water_rss_bytes": 202788864,
+              "rss_bytes": 107687936,
+              "smaps_private_dirty_bytes": 103890944,
+              "smaps_pss_bytes": 105559040,
+              "smaps_rss_bytes": 107687936
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40919,
+        "runtime_integration": false,
+        "trial": 1
+      },
+      {
+        "admission": "deterministic test callback; not production Windows admission",
+        "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+        "device_requested": false,
+        "fixture_shapes": [
+          256,
+          384
+        ],
+        "fixture_sources_alive_through_final_sample": true,
+        "mode": "cap",
+        "os_high_water_scope": "whole fresh process, including fixture construction",
+        "os_sampling_limit": "status and smaps are separate boundary reads; VmRSS/VmHWM accounting can disagree; no strict continuous peak bound is inferred",
+        "points": [
+          {
+            "allocations": {
+              "alloc_calls": 0,
+              "dealloc_calls": 0,
+              "live_bytes": 0,
+              "peak_live_bytes": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0,
+              "zeroed_calls": 0
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 0,
+              "disabled": false,
+              "metadata_capacity_bytes": 0,
+              "packet_capacity_bytes": 0,
+              "packet_length_bytes": 0,
+              "packets": 0
+            },
+            "os": {
+              "high_water_rss_bytes": 106790912,
+              "rss_bytes": 105680896,
+              "smaps_private_dirty_bytes": 102182912,
+              "smaps_pss_bytes": 103701504,
+              "smaps_rss_bytes": 105680896
+            },
+            "phase": "fixture_ready"
+          },
+          {
+            "allocations": {
+              "alloc_calls": 72,
+              "dealloc_calls": 8,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 42975888,
+              "realloc_calls": 25,
+              "released_bytes": 4593078,
+              "requested_bytes": 47306822,
+              "zeroed_calls": 3
+            },
+            "cache": {
+              "byte_limit": 268435456,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 145817600,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_0",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 143,
+              "dealloc_calls": 82,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 50,
+              "released_bytes": 73373548,
+              "requested_bytes": 116087292,
+              "zeroed_calls": 6
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_1",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 214,
+              "dealloc_calls": 155,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 75,
+              "released_bytes": 77970210,
+              "requested_bytes": 120683954,
+              "zeroed_calls": 8
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202665984,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_2",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 285,
+              "dealloc_calls": 229,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 100,
+              "released_bytes": 146750680,
+              "requested_bytes": 189464424,
+              "zeroed_calls": 11
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202760192,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_3",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 356,
+              "dealloc_calls": 302,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 125,
+              "released_bytes": 151347342,
+              "requested_bytes": 194061086,
+              "zeroed_calls": 13
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202760192,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_4",
+            "ticks": 256
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 376,
+              "live_bytes": 42713744,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 150,
+              "released_bytes": 220127812,
+              "requested_bytes": 262841556,
+              "zeroed_calls": 16
+            },
+            "cache": {
+              "byte_limit": 85425312,
+              "conservative_charge_bytes": 85425312,
+              "disabled": false,
+              "metadata_capacity_bytes": 144,
+              "packet_capacity_bytes": 42710016,
+              "packet_length_bytes": 42710016,
+              "packets": 1
+            },
+            "os": {
+              "high_water_rss_bytes": 202760192,
+              "rss_bytes": 145817600,
+              "smaps_private_dirty_bytes": 142020608,
+              "smaps_pss_bytes": 143688704,
+              "smaps_rss_bytes": 145817600
+            },
+            "phase": "after_operation_5",
+            "ticks": 384
+          },
+          {
+            "allocations": {
+              "alloc_calls": 427,
+              "dealloc_calls": 443,
+              "live_bytes": 0,
+              "peak_live_bytes": 107163280,
+              "realloc_calls": 150,
+              "released_bytes": 262841556,
+              "requested_bytes": 262841556,
+              "zeroed_calls": 16
+            },
+            "os": {
+              "high_water_rss_bytes": 202760192,
+              "rss_bytes": 107687936,
+              "smaps_private_dirty_bytes": 103890944,
+              "smaps_pss_bytes": 105559040,
+              "smaps_rss_bytes": 107687936
+            },
+            "phase": "after_cohort_drop"
+          }
+        ],
+        "process_id": 40921,
+        "runtime_integration": false,
+        "trial": 1
+      }
+    ],
+    "fresh_process_trials_per_mode": 2
+  },
+  "memory_summary": [
+    {
+      "mode": "baseline",
+      "trial": 0,
+      "fixture_smaps_rss_bytes": 105553920,
+      "retained_packet_capacity_bytes": 0,
+      "live_operation_allocations_before_drop_bytes": 3584,
+      "peak_live_operation_allocations_bytes": 64453120,
+      "gross_requested_operation_bytes": 348261444,
+      "process_smaps_rss_before_drop_bytes": 107429888,
+      "maximum_boundary_smaps_rss_bytes": 107429888,
+      "reported_whole_process_high_water_rss_bytes": 164425728,
+      "process_smaps_rss_after_drop_bytes": 107429888,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 0
+    },
+    {
+      "mode": "cache",
+      "trial": 0,
+      "fixture_smaps_rss_bytes": 105750528,
+      "retained_packet_capacity_bytes": 106762752,
+      "live_operation_allocations_before_drop_bytes": 106766480,
+      "peak_live_operation_allocations_bytes": 109536748,
+      "gross_requested_operation_bytes": 134736084,
+      "process_smaps_rss_before_drop_bytes": 202932224,
+      "maximum_boundary_smaps_rss_bytes": 202932224,
+      "reported_whole_process_high_water_rss_bytes": 202932224,
+      "process_smaps_rss_after_drop_bytes": 107626496,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 213531680
+    },
+    {
+      "mode": "refusal",
+      "trial": 0,
+      "fixture_smaps_rss_bytes": 105746432,
+      "retained_packet_capacity_bytes": 0,
+      "live_operation_allocations_before_drop_bytes": 3584,
+      "peak_live_operation_allocations_bytes": 64453120,
+      "gross_requested_operation_bytes": 348261444,
+      "process_smaps_rss_before_drop_bytes": 107556864,
+      "maximum_boundary_smaps_rss_bytes": 107556864,
+      "reported_whole_process_high_water_rss_bytes": 164573184,
+      "process_smaps_rss_after_drop_bytes": 107556864,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 0
+    },
+    {
+      "mode": "eviction",
+      "trial": 0,
+      "fixture_smaps_rss_bytes": 105684992,
+      "retained_packet_capacity_bytes": 0,
+      "live_operation_allocations_before_drop_bytes": 3728,
+      "peak_live_operation_allocations_bytes": 109536748,
+      "gross_requested_operation_bytes": 348261588,
+      "process_smaps_rss_before_drop_bytes": 107692032,
+      "maximum_boundary_smaps_rss_bytes": 202997760,
+      "reported_whole_process_high_water_rss_bytes": 202997760,
+      "process_smaps_rss_after_drop_bytes": 107692032,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 4384
+    },
+    {
+      "mode": "cap",
+      "trial": 0,
+      "fixture_smaps_rss_bytes": 105750528,
+      "retained_packet_capacity_bytes": 42710016,
+      "live_operation_allocations_before_drop_bytes": 42713744,
+      "peak_live_operation_allocations_bytes": 107163280,
+      "gross_requested_operation_bytes": 262841556,
+      "process_smaps_rss_before_drop_bytes": 145756160,
+      "maximum_boundary_smaps_rss_bytes": 145756160,
+      "reported_whole_process_high_water_rss_bytes": 202833920,
+      "process_smaps_rss_after_drop_bytes": 107626496,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 85425312
+    },
+    {
+      "mode": "baseline",
+      "trial": 1,
+      "fixture_smaps_rss_bytes": 105680896,
+      "retained_packet_capacity_bytes": 0,
+      "live_operation_allocations_before_drop_bytes": 3584,
+      "peak_live_operation_allocations_bytes": 64453120,
+      "gross_requested_operation_bytes": 348261444,
+      "process_smaps_rss_before_drop_bytes": 107622400,
+      "maximum_boundary_smaps_rss_bytes": 107622400,
+      "reported_whole_process_high_water_rss_bytes": 164704256,
+      "process_smaps_rss_after_drop_bytes": 107622400,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 0
+    },
+    {
+      "mode": "cache",
+      "trial": 1,
+      "fixture_smaps_rss_bytes": 105553920,
+      "retained_packet_capacity_bytes": 106762752,
+      "live_operation_allocations_before_drop_bytes": 106766480,
+      "peak_live_operation_allocations_bytes": 109536748,
+      "gross_requested_operation_bytes": 134736084,
+      "process_smaps_rss_before_drop_bytes": 202801152,
+      "maximum_boundary_smaps_rss_bytes": 202801152,
+      "reported_whole_process_high_water_rss_bytes": 202801152,
+      "process_smaps_rss_after_drop_bytes": 107495424,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 213531680
+    },
+    {
+      "mode": "refusal",
+      "trial": 1,
+      "fixture_smaps_rss_bytes": 105840640,
+      "retained_packet_capacity_bytes": 0,
+      "live_operation_allocations_before_drop_bytes": 3584,
+      "peak_live_operation_allocations_bytes": 64453120,
+      "gross_requested_operation_bytes": 348261444,
+      "process_smaps_rss_before_drop_bytes": 107585536,
+      "maximum_boundary_smaps_rss_bytes": 107585536,
+      "reported_whole_process_high_water_rss_bytes": 164663296,
+      "process_smaps_rss_after_drop_bytes": 107585536,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 0
+    },
+    {
+      "mode": "eviction",
+      "trial": 1,
+      "fixture_smaps_rss_bytes": 105680896,
+      "retained_packet_capacity_bytes": 0,
+      "live_operation_allocations_before_drop_bytes": 3728,
+      "peak_live_operation_allocations_bytes": 109536748,
+      "gross_requested_operation_bytes": 348261588,
+      "process_smaps_rss_before_drop_bytes": 107687936,
+      "maximum_boundary_smaps_rss_bytes": 202993664,
+      "reported_whole_process_high_water_rss_bytes": 202993664,
+      "process_smaps_rss_after_drop_bytes": 107687936,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 4384
+    },
+    {
+      "mode": "cap",
+      "trial": 1,
+      "fixture_smaps_rss_bytes": 105680896,
+      "retained_packet_capacity_bytes": 42710016,
+      "live_operation_allocations_before_drop_bytes": 42713744,
+      "peak_live_operation_allocations_bytes": 107163280,
+      "gross_requested_operation_bytes": 262841556,
+      "process_smaps_rss_before_drop_bytes": 145817600,
+      "maximum_boundary_smaps_rss_bytes": 145817600,
+      "reported_whole_process_high_water_rss_bytes": 202760192,
+      "process_smaps_rss_after_drop_bytes": 107687936,
+      "live_operation_allocations_after_drop_bytes": 0,
+      "conservative_charge_before_drop_bytes": 85425312
+    }
+  ],
+  "earlier_exploratory_run": {
+    "timing": {
+      "all_calls_validate_fresh": true,
+      "assay": "cohort_packed_replay_host_benchmark",
+      "cache_dropped_inside_timing": true,
+      "call_shapes": [
+        512,
+        1,
+        256,
+        384,
+        256,
+        384,
+        256,
+        384
+      ],
+      "device_requested": false,
+      "epochs": 2,
+      "fixture_payload_bytes": [
+        85395456,
+        191316,
+        42710016,
+        64052736
+      ],
+      "full_packet_equality_checked_before_timing": true,
+      "runtime_integration": false,
+      "trials": [
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 210078529,
+          "sample_checksum": 18072149,
+          "trial": 0
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 117149243,
+          "sample_checksum": 18072149,
+          "trial": 0
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 121810382,
+          "sample_checksum": 18072149,
+          "trial": 1
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 214514037,
+          "sample_checksum": 18072149,
+          "trial": 1
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 211571874,
+          "sample_checksum": 18072149,
+          "trial": 2
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 116619173,
+          "sample_checksum": 18072149,
+          "trial": 2
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 120695229,
+          "sample_checksum": 18072149,
+          "trial": 3
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 212037597,
+          "sample_checksum": 18072149,
+          "trial": 3
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 213828041,
+          "sample_checksum": 18072149,
+          "trial": 4
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 117799014,
+          "sample_checksum": 18072149,
+          "trial": 4
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 117609468,
+          "sample_checksum": 18072149,
+          "trial": 5
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 213676692,
+          "sample_checksum": 18072149,
+          "trial": 5
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 215759798,
+          "sample_checksum": 18072149,
+          "trial": 6
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 119747858,
+          "sample_checksum": 18072149,
+          "trial": 6
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 121535497,
+          "sample_checksum": 18072149,
+          "trial": 7
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 210554878,
+          "sample_checksum": 18072149,
+          "trial": 7
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 210130717,
+          "sample_checksum": 18072149,
+          "trial": 8
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 117739905,
+          "sample_checksum": 18072149,
+          "trial": 8
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 123565012,
+          "sample_checksum": 18072149,
+          "trial": 9
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 212415227,
+          "sample_checksum": 18072149,
+          "trial": 9
+        },
+        {
+          "cache_enabled": false,
+          "elapsed_ns": 213700708,
+          "sample_checksum": 18072149,
+          "trial": 10
+        },
+        {
+          "cache_enabled": true,
+          "elapsed_ns": 114993037,
+          "sample_checksum": 18072149,
+          "trial": 10
+        }
+      ],
+      "trials_per_mode": 11,
+      "warmups_per_mode": 2
+    },
+    "timing_summary": {
+      "baseline": {
+        "raw_ms": [
+          210.078529,
+          214.514037,
+          211.571874,
+          212.037597,
+          213.828041,
+          213.676692,
+          215.759798,
+          210.554878,
+          210.130717,
+          212.415227,
+          213.700708
+        ],
+        "median_ms": 212.415227,
+        "min_ms": 210.078529,
+        "max_ms": 215.759798
+      },
+      "cache": {
+        "raw_ms": [
+          117.149243,
+          121.810382,
+          116.619173,
+          120.695229,
+          117.799014,
+          117.609468,
+          119.747858,
+          121.535497,
+          117.739905,
+          123.565012,
+          114.993037
+        ],
+        "median_ms": 117.799014,
+        "min_ms": 114.993037,
+        "max_ms": 123.565012
+      },
+      "ratio_of_medians_reduction_percent": 44.54304634196492
+    },
+    "memory": {
+      "assay": "cohort_packed_replay_memory",
+      "children": [
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "baseline",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 106962944,
+                "rss_bytes": 105779200
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 71,
+                "dealloc_calls": 9,
+                "live_bytes": 3584,
+                "peak_live_bytes": 42975744,
+                "realloc_calls": 25,
+                "released_bytes": 47303094,
+                "requested_bytes": 47306678,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 145575936,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 142,
+                "dealloc_calls": 83,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 50,
+                "released_bytes": 116083564,
+                "requested_bytes": 116087148,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164687872,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 213,
+                "dealloc_calls": 157,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 75,
+                "released_bytes": 163390242,
+                "requested_bytes": 163393826,
+                "zeroed_calls": 9
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164687872,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 284,
+                "dealloc_calls": 231,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 100,
+                "released_bytes": 232170712,
+                "requested_bytes": 232174296,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164687872,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 355,
+                "dealloc_calls": 305,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 125,
+                "released_bytes": 279477390,
+                "requested_bytes": 279480974,
+                "zeroed_calls": 15
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164687872,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 379,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348257860,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164687872,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 444,
+                "live_bytes": 0,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348261444,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "os": {
+                "high_water_rss_bytes": 164687872,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40290,
+          "runtime_integration": false,
+          "trial": 0
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "cache",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 106901504,
+                "rss_bytes": 105721856
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 72,
+                "dealloc_calls": 8,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 42975888,
+                "realloc_calls": 25,
+                "released_bytes": 4593078,
+                "requested_bytes": 47306822,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 145809408,
+                "rss_bytes": 145809408
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 143,
+                "dealloc_calls": 81,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 50,
+                "released_bytes": 9320812,
+                "requested_bytes": 116087292,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202985472,
+                "rss_bytes": 202985472
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 214,
+                "dealloc_calls": 154,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 75,
+                "released_bytes": 13917474,
+                "requested_bytes": 120683954,
+                "zeroed_calls": 8
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202985472,
+                "rss_bytes": 202985472
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 285,
+                "dealloc_calls": 227,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 100,
+                "released_bytes": 18645208,
+                "requested_bytes": 125411688,
+                "zeroed_calls": 10
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202985472,
+                "rss_bytes": 202985472
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 356,
+                "dealloc_calls": 300,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 125,
+                "released_bytes": 23241870,
+                "requested_bytes": 130008350,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202985472,
+                "rss_bytes": 202985472
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 373,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 27969604,
+                "requested_bytes": 134736084,
+                "zeroed_calls": 14
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202985472,
+                "rss_bytes": 202985472
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 441,
+                "live_bytes": 0,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 134736084,
+                "requested_bytes": 134736084,
+                "zeroed_calls": 14
+              },
+              "os": {
+                "high_water_rss_bytes": 202792960,
+                "rss_bytes": 107679744
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40292,
+          "runtime_integration": false,
+          "trial": 0
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "refusal",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 106856448,
+                "rss_bytes": 105742336
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 71,
+                "dealloc_calls": 9,
+                "live_bytes": 3584,
+                "peak_live_bytes": 42975744,
+                "realloc_calls": 25,
+                "released_bytes": 47303094,
+                "requested_bytes": 47306678,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 145338368,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 142,
+                "dealloc_calls": 83,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 50,
+                "released_bytes": 116083564,
+                "requested_bytes": 116087148,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164450304,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 213,
+                "dealloc_calls": 157,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 75,
+                "released_bytes": 163390242,
+                "requested_bytes": 163393826,
+                "zeroed_calls": 9
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164450304,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 284,
+                "dealloc_calls": 231,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 100,
+                "released_bytes": 232170712,
+                "requested_bytes": 232174296,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164450304,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 355,
+                "dealloc_calls": 305,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 125,
+                "released_bytes": 279477390,
+                "requested_bytes": 279480974,
+                "zeroed_calls": 15
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164450304,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 379,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348257860,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164450304,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 444,
+                "live_bytes": 0,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348261444,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "os": {
+                "high_water_rss_bytes": 164450304,
+                "rss_bytes": 107565056
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40294,
+          "runtime_integration": false,
+          "trial": 0
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "eviction",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 107040768,
+                "rss_bytes": 105795584
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 72,
+                "dealloc_calls": 8,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 42975888,
+                "realloc_calls": 25,
+                "released_bytes": 4593078,
+                "requested_bytes": 47306822,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 145801216,
+                "rss_bytes": 145801216
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 143,
+                "dealloc_calls": 81,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 50,
+                "released_bytes": 9320812,
+                "requested_bytes": 116087292,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202977280,
+                "rss_bytes": 202977280
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 214,
+                "dealloc_calls": 157,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 75,
+                "released_bytes": 163390242,
+                "requested_bytes": 163393970,
+                "zeroed_calls": 9
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 285,
+                "dealloc_calls": 231,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 100,
+                "released_bytes": 232170712,
+                "requested_bytes": 232174440,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 356,
+                "dealloc_calls": 305,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 125,
+                "released_bytes": 279477390,
+                "requested_bytes": 279481118,
+                "zeroed_calls": 15
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 379,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 348257860,
+                "requested_bytes": 348261588,
+                "zeroed_calls": 18
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 445,
+                "live_bytes": 0,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 348261588,
+                "requested_bytes": 348261588,
+                "zeroed_calls": 18
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40296,
+          "runtime_integration": false,
+          "trial": 0
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "cap",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 106991616,
+                "rss_bytes": 105742336
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 72,
+                "dealloc_calls": 8,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 42975888,
+                "realloc_calls": 25,
+                "released_bytes": 4593078,
+                "requested_bytes": 47306822,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 145813504,
+                "rss_bytes": 145813504
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 143,
+                "dealloc_calls": 82,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 50,
+                "released_bytes": 73373548,
+                "requested_bytes": 116087292,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202735616,
+                "rss_bytes": 145813504
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 214,
+                "dealloc_calls": 155,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 75,
+                "released_bytes": 77970210,
+                "requested_bytes": 120683954,
+                "zeroed_calls": 8
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202735616,
+                "rss_bytes": 145813504
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 285,
+                "dealloc_calls": 229,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 100,
+                "released_bytes": 146750680,
+                "requested_bytes": 189464424,
+                "zeroed_calls": 11
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202829824,
+                "rss_bytes": 145813504
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 356,
+                "dealloc_calls": 302,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 125,
+                "released_bytes": 151347342,
+                "requested_bytes": 194061086,
+                "zeroed_calls": 13
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202829824,
+                "rss_bytes": 145813504
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 376,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 150,
+                "released_bytes": 220127812,
+                "requested_bytes": 262841556,
+                "zeroed_calls": 16
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202829824,
+                "rss_bytes": 145813504
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 443,
+                "live_bytes": 0,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 150,
+                "released_bytes": 262841556,
+                "requested_bytes": 262841556,
+                "zeroed_calls": 16
+              },
+              "os": {
+                "high_water_rss_bytes": 202829824,
+                "rss_bytes": 107683840
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40298,
+          "runtime_integration": false,
+          "trial": 0
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "baseline",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 106991616,
+                "rss_bytes": 105746432
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 71,
+                "dealloc_calls": 9,
+                "live_bytes": 3584,
+                "peak_live_bytes": 42975744,
+                "realloc_calls": 25,
+                "released_bytes": 47303094,
+                "requested_bytes": 47306678,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 145588224,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 142,
+                "dealloc_calls": 83,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 50,
+                "released_bytes": 116083564,
+                "requested_bytes": 116087148,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164700160,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 213,
+                "dealloc_calls": 157,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 75,
+                "released_bytes": 163390242,
+                "requested_bytes": 163393826,
+                "zeroed_calls": 9
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164700160,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 284,
+                "dealloc_calls": 231,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 100,
+                "released_bytes": 232170712,
+                "requested_bytes": 232174296,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164700160,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 355,
+                "dealloc_calls": 305,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 125,
+                "released_bytes": 279477390,
+                "requested_bytes": 279480974,
+                "zeroed_calls": 15
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164700160,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 379,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348257860,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164700160,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 444,
+                "live_bytes": 0,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348261444,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "os": {
+                "high_water_rss_bytes": 164700160,
+                "rss_bytes": 107622400
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40300,
+          "runtime_integration": false,
+          "trial": 1
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "cache",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 106897408,
+                "rss_bytes": 105811968
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 72,
+                "dealloc_calls": 8,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 42975888,
+                "realloc_calls": 25,
+                "released_bytes": 4593078,
+                "requested_bytes": 47306822,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 145833984,
+                "rss_bytes": 145833984
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 143,
+                "dealloc_calls": 81,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 50,
+                "released_bytes": 9320812,
+                "requested_bytes": 116087292,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 203010048,
+                "rss_bytes": 203010048
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 214,
+                "dealloc_calls": 154,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 75,
+                "released_bytes": 13917474,
+                "requested_bytes": 120683954,
+                "zeroed_calls": 8
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 203010048,
+                "rss_bytes": 203010048
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 285,
+                "dealloc_calls": 227,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 100,
+                "released_bytes": 18645208,
+                "requested_bytes": 125411688,
+                "zeroed_calls": 10
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 203010048,
+                "rss_bytes": 203010048
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 356,
+                "dealloc_calls": 300,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 125,
+                "released_bytes": 23241870,
+                "requested_bytes": 130008350,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 203010048,
+                "rss_bytes": 203010048
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 373,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 27969604,
+                "requested_bytes": 134736084,
+                "zeroed_calls": 14
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 203010048,
+                "rss_bytes": 203010048
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 441,
+                "live_bytes": 0,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 134736084,
+                "requested_bytes": 134736084,
+                "zeroed_calls": 14
+              },
+              "os": {
+                "high_water_rss_bytes": 202657792,
+                "rss_bytes": 107704320
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40302,
+          "runtime_integration": false,
+          "trial": 1
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "refusal",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 107012096,
+                "rss_bytes": 105828352
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 71,
+                "dealloc_calls": 9,
+                "live_bytes": 3584,
+                "peak_live_bytes": 42975744,
+                "realloc_calls": 25,
+                "released_bytes": 47303094,
+                "requested_bytes": 47306678,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 145555456,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 142,
+                "dealloc_calls": 83,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 50,
+                "released_bytes": 116083564,
+                "requested_bytes": 116087148,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164667392,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 213,
+                "dealloc_calls": 157,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 75,
+                "released_bytes": 163390242,
+                "requested_bytes": 163393826,
+                "zeroed_calls": 9
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164667392,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 284,
+                "dealloc_calls": 231,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 100,
+                "released_bytes": 232170712,
+                "requested_bytes": 232174296,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164667392,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 355,
+                "dealloc_calls": 305,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 125,
+                "released_bytes": 279477390,
+                "requested_bytes": 279480974,
+                "zeroed_calls": 15
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164667392,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 379,
+                "live_bytes": 3584,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348257860,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": true,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 164667392,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 426,
+                "dealloc_calls": 444,
+                "live_bytes": 0,
+                "peak_live_bytes": 64453120,
+                "realloc_calls": 150,
+                "released_bytes": 348261444,
+                "requested_bytes": 348261444,
+                "zeroed_calls": 18
+              },
+              "os": {
+                "high_water_rss_bytes": 164667392,
+                "rss_bytes": 107651072
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40304,
+          "runtime_integration": false,
+          "trial": 1
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "eviction",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 107040768,
+                "rss_bytes": 105795584
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 72,
+                "dealloc_calls": 8,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 42975888,
+                "realloc_calls": 25,
+                "released_bytes": 4593078,
+                "requested_bytes": 47306822,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 145801216,
+                "rss_bytes": 145801216
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 143,
+                "dealloc_calls": 81,
+                "live_bytes": 106766480,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 50,
+                "released_bytes": 9320812,
+                "requested_bytes": 116087292,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 213531680,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 106762752,
+                "packet_length_bytes": 106762752,
+                "packets": 2
+              },
+              "os": {
+                "high_water_rss_bytes": 202977280,
+                "rss_bytes": 202977280
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 214,
+                "dealloc_calls": 157,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 75,
+                "released_bytes": 163390242,
+                "requested_bytes": 163393970,
+                "zeroed_calls": 9
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 285,
+                "dealloc_calls": 231,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 100,
+                "released_bytes": 232170712,
+                "requested_bytes": 232174440,
+                "zeroed_calls": 12
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 356,
+                "dealloc_calls": 305,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 125,
+                "released_bytes": 279477390,
+                "requested_bytes": 279481118,
+                "zeroed_calls": 15
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 379,
+                "live_bytes": 3728,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 348257860,
+                "requested_bytes": 348261588,
+                "zeroed_calls": 18
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 4384,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 445,
+                "live_bytes": 0,
+                "peak_live_bytes": 109536748,
+                "realloc_calls": 150,
+                "released_bytes": 348261588,
+                "requested_bytes": 348261588,
+                "zeroed_calls": 18
+              },
+              "os": {
+                "high_water_rss_bytes": 202784768,
+                "rss_bytes": 107671552
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40306,
+          "runtime_integration": false,
+          "trial": 1
+        },
+        {
+          "admission": "deterministic test callback; not production Windows admission",
+          "allocator_scope": "operation allocations only; fixture and /proc sampling excluded",
+          "device_requested": false,
+          "fixture_shapes": [
+            256,
+            384
+          ],
+          "fixture_sources_alive_through_final_sample": true,
+          "mode": "cap",
+          "os_high_water_scope": "whole fresh process, including fixture construction",
+          "points": [
+            {
+              "allocations": {
+                "alloc_calls": 0,
+                "dealloc_calls": 0,
+                "live_bytes": 0,
+                "peak_live_bytes": 0,
+                "realloc_calls": 0,
+                "released_bytes": 0,
+                "requested_bytes": 0,
+                "zeroed_calls": 0
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 0,
+                "disabled": false,
+                "metadata_capacity_bytes": 0,
+                "packet_capacity_bytes": 0,
+                "packet_length_bytes": 0,
+                "packets": 0
+              },
+              "os": {
+                "high_water_rss_bytes": 107044864,
+                "rss_bytes": 105865216
+              },
+              "phase": "fixture_ready"
+            },
+            {
+              "allocations": {
+                "alloc_calls": 72,
+                "dealloc_calls": 8,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 42975888,
+                "realloc_calls": 25,
+                "released_bytes": 4593078,
+                "requested_bytes": 47306822,
+                "zeroed_calls": 3
+              },
+              "cache": {
+                "byte_limit": 268435456,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 145821696,
+                "rss_bytes": 145821696
+              },
+              "phase": "after_operation_0",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 143,
+                "dealloc_calls": 82,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 50,
+                "released_bytes": 73373548,
+                "requested_bytes": 116087292,
+                "zeroed_calls": 6
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202674176,
+                "rss_bytes": 145821696
+              },
+              "phase": "after_operation_1",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 214,
+                "dealloc_calls": 155,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 75,
+                "released_bytes": 77970210,
+                "requested_bytes": 120683954,
+                "zeroed_calls": 8
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202674176,
+                "rss_bytes": 145821696
+              },
+              "phase": "after_operation_2",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 285,
+                "dealloc_calls": 229,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 100,
+                "released_bytes": 146750680,
+                "requested_bytes": 189464424,
+                "zeroed_calls": 11
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202768384,
+                "rss_bytes": 145821696
+              },
+              "phase": "after_operation_3",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 356,
+                "dealloc_calls": 302,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 125,
+                "released_bytes": 151347342,
+                "requested_bytes": 194061086,
+                "zeroed_calls": 13
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202768384,
+                "rss_bytes": 145821696
+              },
+              "phase": "after_operation_4",
+              "ticks": 256
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 376,
+                "live_bytes": 42713744,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 150,
+                "released_bytes": 220127812,
+                "requested_bytes": 262841556,
+                "zeroed_calls": 16
+              },
+              "cache": {
+                "byte_limit": 85425312,
+                "conservative_charge_bytes": 85425312,
+                "disabled": false,
+                "metadata_capacity_bytes": 144,
+                "packet_capacity_bytes": 42710016,
+                "packet_length_bytes": 42710016,
+                "packets": 1
+              },
+              "os": {
+                "high_water_rss_bytes": 202768384,
+                "rss_bytes": 145821696
+              },
+              "phase": "after_operation_5",
+              "ticks": 384
+            },
+            {
+              "allocations": {
+                "alloc_calls": 427,
+                "dealloc_calls": 443,
+                "live_bytes": 0,
+                "peak_live_bytes": 107163280,
+                "realloc_calls": 150,
+                "released_bytes": 262841556,
+                "requested_bytes": 262841556,
+                "zeroed_calls": 16
+              },
+              "os": {
+                "high_water_rss_bytes": 202768384,
+                "rss_bytes": 107692032
+              },
+              "phase": "after_cohort_drop"
+            }
+          ],
+          "process_id": 40308,
+          "runtime_integration": false,
+          "trial": 1
+        }
+      ],
+      "fresh_process_trials_per_mode": 2
+    },
+    "qualification": "Status-only RSS reader variant before adding smaps_rollup. All raw earlier trials retained; not pooled with canonical run. Exact initial compiled binary/source-file hashes were not captured. Cache core, fixture, timing body and property tests were unchanged; final source manifest applies to canonical run only."
+  },
+  "conditions": {
+    "fixture_origin": "sequence fixture copied from eligible published packing assay 893e6395d1cdadf69f1567483e2423492aba5426; no held code used",
+    "fixture": "N2048 compiled terrain phenotype seed99, 2048 neurons, 32768 synapses,17 routes,four microsteps,25 candidates/tick,64 canonical dendritic branches/128 inputs,zero structural edges; nonzero periodic inputs/offsets; synthetic PpoBatch identity holders, no neural trajectory",
+    "timing_scope": "Eight calls 512,1,256,384,256,384,256,384. Fresh validate_for, shape clone/comparison, warm metadata/layout packing, base packet materialization or reuse, fresh headers, per-call temporaries and final cache drop. Source fixture construction outside clock. First two calls uncached. Header ages are synthetic 19801..19803 stress values, not an optimizer-step model; no optimizer executes.",
+    "excluded": "Production loader/disk/RAM guard, device resources, queue writes/staging/full upload, speech target upload, objective/value preparation, encoding/submission/waits, forward/backward/Adam, checkpoints and canonical state persistence",
+    "timing_order": "Two warmup cohorts/mode;11 timed trials/mode alternating baseline-cache then cache-baseline; one process; allocator counters disabled; wrapper TLS check remains",
+    "timing_verification": "54 small varied cases and one untimed full-word equality pass for cached 256/384 shapes; timed results are sampled checksums, equal across modes/trials, not full per-trial hashes",
+    "memory_scope": "Two fresh processes/mode, six cohort-only 256/384 calls. Sources held through final sample; not a deployed loader/queue lifetime model. Warm metadata before counters; no timing results derived from memory runs.",
+    "memory_quantities": "Packet Vec capacity is retained requested payload. Thread-local GlobalAlloc live/peak counts operation requests; excludes fixture and sampling allocations, allocator rounding and other threads. Linux whole-process status VmRSS/VmHWM plus smaps_rollup RSS/PSS/private-dirty sampled after operations and drop; includes fixture/executable/harness. Boundary samples miss transient packets; VmHWM includes all process history and approximate Linux accounting, not a strict peak bound. Neither is Windows working-set/pagefile admission.",
+    "memory_modes": "baseline no cache; cache always-admit; refusal rejects metadata before allocation; eviction allows preflight then refuses all retention from first epoch; cap fixes limit to first packet charge, retaining256 while packing384 temporarily",
+    "memory_release": "All tracked operation live bytes reach zero after cohort drop; OS RSS may retain allocator pages. No inference from fewer allocation bytes to lower peak residency.",
+    "admission": "Deterministic callback only. Maximum eight entries;256MiB conservative charge cap. Doubled packet capacity plus metadata/Weak-root allowance; charge is a policy estimate, not RSS.",
+    "profile": "test; alife_training opt-level3 override;core/world/gpu_backend/runtime opt-level2; debug assertions enabled; not release",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "hardware": "AMD EPYC 9V74 VM;five visible vCPUs,four-CPU quota,16GiB memory",
+    "cpu_affinity": "0-4",
+    "cpu_max": "400000 100000",
+    "memory_max": "17179869184",
+    "kernel": "Linux 6.18.57 #1 SMP Tue Oct 20 21:56:04 UTC 2026",
+    "uncertainty": "Sequential VM trials; uncontrolled CPU frequency/contention/page and allocator history; no formal confidence interval. Memory has only two processes/mode. No GPU or end-to-end speedup claim."
+  },
+  "provenance": {
+    "source_sha256": {
+      "crates/alife_training/src/trainer.rs": "e159510474bd6c636477538da1cb4e0b689a2dfc79b41329c6f327fdf2e9f0be",
+      "crates/alife_training/src/trainer/cohort_packing.rs": "0f44a0e0f78fdd77e8295138231921e70b089a96523aa3ba815d589c2a25970e",
+      "crates/alife_training/src/trainer/cohort_packing_tests.rs": "7e5cdfb45fa49b034db33580c74fe481ec9a0c6aefab1d2146473a2235b663df",
+      "crates/alife_training/src/trainer/cohort_packing_bench.rs": "711122072bf8d62eb9fb8bf2911ce85a1e1717c8e3210439fd07791d9d5d942e",
+      "crates/alife_training/src/types.rs": "c9c721ec41857180907fecd73a777e0d2b772f7ca705bbd6a3828ff27d3baf15",
+      "crates/alife_training/src/ppo.rs": "c6c6ff34ecc25a2d40641b96dce4656852a9cf20bc21eecb458e5aeaf243a5f8",
+      "crates/alife_game_app/src/foundation_training_cycle/replay_window_cache.rs": "22e6341e18057bac3239e38acc2b2412592f585dd733d05d7e0685619b1a5b96",
+      "crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs": "17ba61b1fbcd8d190af75709d307c07ca183e941d4cf1e35ab2988bff5d8fcb2",
+      "crates/alife_game_app/src/foundation_training.rs": "b90cc759701dde3c00090d304f3f541498ba25a1f5ccda1992b61e7ca06882bf",
+      "Cargo.toml": "1f389513e0040d75fa669ddd98cb257dba99b94cdf5043c251d1b59cdccc6555",
+      "Cargo.lock": "2444e04142202ffab7d0ace60ef20db7b56ca496883ae007030573835231546c"
+    },
+    "source_git_blobs": {
+      "crates/alife_training/src/trainer.rs": "0cb669aa4dbdc74763454d05bdcbbe972d849fd1",
+      "crates/alife_training/src/trainer/cohort_packing.rs": "428a0a3c0338fd7e926fab2210d4b64e9201306d",
+      "crates/alife_training/src/trainer/cohort_packing_tests.rs": "27eb6bd3546fa864fdfb6e54b6fc76c7588467b4",
+      "crates/alife_training/src/trainer/cohort_packing_bench.rs": "73be455ac4b71bdca402fcac8bddd3bc3dca1620",
+      "crates/alife_training/src/types.rs": "320afc17691eed48cd3f0e7178b2b4ce607ef22d",
+      "crates/alife_training/src/ppo.rs": "197d0747db6939c8a85950b9b4fba2fac73bbad6",
+      "crates/alife_game_app/src/foundation_training_cycle/replay_window_cache.rs": "9cb4c62faa07343479e45d52f915e75fe8ad4256",
+      "crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs": "8911c28d77403bb8bab45a82fda819588e427197",
+      "crates/alife_game_app/src/foundation_training.rs": "ee9a4dc23c2995af7688f781c59520a9d500df19",
+      "Cargo.toml": "366cb43b6591e35d4b9f20926541ed2ccdb37eff",
+      "Cargo.lock": "1f2595adce3de62ec82aa60bf2c59c306839f714"
+    },
+    "base_trainer_sha256": "a7e8740f592d7d84b37a617ac2f45df5d79e1003342861c35e4b5420c77b4df6",
+    "libtest_binary_sha256": "4f47cb5bcefb03ddb5579ecce8b10e277dbdaae34941d4d3be5977f15e342d63",
+    "libtest_binary_bytes": 282508400,
+    "log_sha256": {
+      "cohort-packed-replay-unit-tests-final.log": "e877ce1bb559ef2c15520776279449224931922029c120e61848bf75a942d8a7",
+      "cohort-packed-replay-all-lib-tests.log": "4d7378198ecc2b6c075a2369b4525bb4bc7c153ae2a84ae4b6ecd2ea93d65a4b",
+      "cohort-packed-replay-timing-final.log": "5a988e503442f64e1bd3cbb25e3e2bb9c3818e69bc5074cfb1936cfefac6a72b",
+      "cohort-packed-replay-memory-final.log": "e2f6ee4807be94a89424202c731d765ebd6599fc67e55ebc13724c83664781c5",
+      "cohort-packed-replay-timing.log": "df7945701b4d41cf919804b49c2f9c4a34d6864b56322a40504447bce6106504",
+      "cohort-packed-replay-memory.log": "436d6ffbf4618f032222b60f32a0c541bb83eee0f70aa9b573c60645ba07cbe6",
+      "cohort-packed-replay-normal-check.log": "aaca16c0a6220f176943257d4343c88f02955a77756084e1d2c6d295ec77217a",
+      "cohort-packed-replay-clippy.log": "528c98006a57571bc57fa7bc3447b0eafe3854b93affbe0a7820e4d24bfa5bc9",
+      "cohort-packed-replay-format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "validation": {
+    "focused": "five passed, two manual assays ignored;54 deterministic valid matrix cases,12 invalid fields;identity/layout/COW/expiry,cap/refusal/eviction,header/base sink checks",
+    "full_cpu_libtests": "115 passed,0 failed,3 ignored",
+    "manual_timing": "1 passed; canonical final raw trials above",
+    "manual_memory": "1 parent passed,10 fresh child processes passed",
+    "clippy": "cargo clippy --locked -p alife_training --features cpu-backend --lib --tests -- -D warnings passed",
+    "normal_library": "cargo check --locked -p alife_training --features cpu-backend --lib passed; experiment and allocator excluded",
+    "format": "cargo fmt --all -- --check passed"
+  },
+  "commands": {
+    "test_prefix": "cargo test --locked -p alife_training --features cpu-backend --lib --config profile.test.package.alife_training.opt-level=3",
+    "focused_suffix": "cohort_packing -- --test-threads=1",
+    "timing_suffix": "cohort_packed_replay_host_benchmark -- --ignored --nocapture --test-threads=1",
+    "memory_suffix": "cohort_packed_replay_memory -- --ignored --nocapture --test-threads=1"
+  }
+}
