@@ -113,7 +113,7 @@ fn run_mode(
     cached: bool,
 ) -> Run {
     // Restore persistent history and precreate the largest replay/objective.
-    // Both modes retain normal per-window preparation inside the controller.
+    // The shared controller retains each mode's intended per-window preparation.
     trainer.restore_checkpoint(boundary_actor).unwrap();
     *state = PpoTrainingState::from_checkpoint(boundary_value.clone()).unwrap();
     trainer.prepare_replay(&windows[1].sequence).unwrap();
@@ -220,7 +220,9 @@ fn save_report(report: &serde_json::Value) {
 
 #[test]
 #[ignore = "one bounded actual-PPO release assay on explicit software Vulkan; not physical GPU evidence"]
+#[allow(clippy::assertions_on_constants)]
 fn representative_actual_ppo_frozen_gradient_release_assay() {
+    // Keep ordinary debug correctness targets compilable; enforce release at execution.
     assert!(
         !cfg!(debug_assertions),
         "run this bounded assay with all-dependency --release"
