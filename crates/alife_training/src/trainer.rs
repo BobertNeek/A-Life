@@ -2,6 +2,9 @@
 
 mod checkpoint_readback;
 
+#[cfg(all(test, feature = "cpu-backend"))]
+mod replay_packing_assay;
+
 #[cfg(all(test, feature = "gpu-tests"))]
 #[path = "trainer/packed_checkpoint_gpu_tests.rs"]
 mod packed_checkpoint_gpu_tests;
@@ -2435,10 +2438,10 @@ fn pack_replay_sequence(
         for (index, enabled) in tick.enabled_routes.iter().enumerate() {
             words[base + 4 + index] = u32::from(*enabled);
         }
-        for (index, value) in tick.effective_weight_offsets.iter().enumerate() {
-            words[base + 4 + tick.enabled_routes.len() + index] = value.to_bits();
-        }
-        let edge_base = base + 4 + tick.enabled_routes.len() + tick.effective_weight_offsets.len();
+        let weight_start = base + 4 + tick.enabled_routes.len();
+        let edge_base = weight_start + tick.effective_weight_offsets.len();
+        words[weight_start..edge_base]
+            .copy_from_slice(bytemuck::cast_slice(&tick.effective_weight_offsets));
         for (index, edge) in tick.structural_synapses.iter().enumerate() {
             let at = edge_base + index * 5;
             words[at..at + 5].copy_from_slice(&[
