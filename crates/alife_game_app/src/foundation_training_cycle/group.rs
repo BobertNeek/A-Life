@@ -366,6 +366,7 @@ fn replay_peak_bytes(
 ) -> Result<u64> {
     Ok(
         FoundationTrainer::replay_allocation_bytes(phenotype, sequence)? * 2
+            + FoundationTrainer::REPLAY_METADATA_RETENTION_RESERVE_BYTES
             + replay_auxiliary_bound_bytes(
                 u64::from(phenotype.neuron_count()),
                 phenotype.synapses().len() as u64,

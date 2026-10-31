@@ -418,6 +418,36 @@ pub struct PpoReplayRow {
     pub features_word_offset: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ReplayBufferBounds {
+    logits_words: u64,
+    feature_words: u64,
+}
+
+impl ReplayBufferBounds {
+    fn restrict(self, logical: (u64, u64)) -> Result<Self, TrainingError> {
+        if logical.0 == 0
+            || logical.1 == 0
+            || logical.0 > self.logits_words
+            || logical.1 > self.feature_words
+        {
+            return Err(invalid());
+        }
+        Ok(Self {
+            logits_words: logical.0,
+            feature_words: logical.1,
+        })
+    }
+
+    fn allows_logits(self, offset: u32, count: u32) -> bool {
+        u64::from(offset) + u64::from(count) <= self.logits_words
+    }
+
+    fn allows_features(self, offset: u32, count: u32) -> bool {
+        u64::from(offset) + u64::from(count) <= self.feature_words
+    }
+}
+
 /// Existing-session GPU kernels. The trainer owns recurrent replay and applies
 /// the returned logit adjoints through its existing sparse BPTT/optimizer passes.
 pub struct PpoGpuObjective {
@@ -442,8 +472,7 @@ pub struct PpoGpuObjective {
     feature_count: u32,
     sample_count: u32,
     objective_ready: bool,
-    logits_words: u64,
-    feature_words: u64,
+    replay_bounds: ReplayBufferBounds,
 }
 
 impl PpoGpuObjective {
@@ -575,8 +604,10 @@ impl PpoGpuObjective {
             feature_count,
             sample_count: 0,
             objective_ready: false,
-            logits_words: logits.size() / 4,
-            feature_words: features.size() / 4,
+            replay_bounds: ReplayBufferBounds {
+                logits_words: logits.size() / 4,
+                feature_words: features.size() / 4,
+            },
         })
     }
 
@@ -616,8 +647,10 @@ impl PpoGpuObjective {
             layout: &self.bind_group_layout,
             entries: &entries,
         });
-        self.logits_words = logits.size() / 4;
-        self.feature_words = features.size() / 4;
+        self.replay_bounds = ReplayBufferBounds {
+            logits_words: logits.size() / 4,
+            feature_words: features.size() / 4,
+        };
         self.sample_count = 0;
         self.objective_ready = false;
         self.imitation_ready = false;
@@ -646,10 +679,12 @@ impl PpoGpuObjective {
         for (index, (transition, replay)) in batch.transitions.iter().zip(replay).enumerate() {
             let action = &transition.action;
             action.validate(config.temperature)?;
-            if u64::from(replay.logits_word_offset) + u64::from(action.candidate_count)
-                > self.logits_words
-                || u64::from(replay.features_word_offset) + u64::from(self.feature_count)
-                    > self.feature_words
+            if !self
+                .replay_bounds
+                .allows_logits(replay.logits_word_offset, u32::from(action.candidate_count))
+                || !self
+                    .replay_bounds
+                    .allows_features(replay.features_word_offset, self.feature_count)
             {
                 return Err(invalid());
             }
@@ -713,7 +748,9 @@ impl PpoGpuObjective {
             || feature_word_offsets.is_empty()
             || feature_word_offsets.len() > self.capacity as usize
             || feature_word_offsets.iter().any(|offset| {
-                u64::from(*offset) + u64::from(self.feature_count) > self.feature_words
+                !self
+                    .replay_bounds
+                    .allows_features(*offset, self.feature_count)
             })
         {
             return Err(invalid());
@@ -805,9 +842,10 @@ impl PpoGpuObjective {
         let mut rows = vec![0u32; examples.len() * PPO_ROW_WORDS];
         for (index, (example, replay)) in examples.iter().zip(replay).enumerate() {
             example.validate()?;
-            if u64::from(replay.logits_word_offset) + u64::from(example.candidate_count)
-                > self.logits_words
-            {
+            if !self.replay_bounds.allows_logits(
+                replay.logits_word_offset,
+                u32::from(example.candidate_count),
+            ) {
                 return Err(invalid());
             }
             let row = &mut rows[index * PPO_ROW_WORDS..(index + 1) * PPO_ROW_WORDS];
@@ -1111,6 +1149,13 @@ impl PpoTrainingState {
                 crate::MAX_TRAINING_SEQUENCE_TICKS as u32,
             )?);
         }
+        // Backing capacity can outlive a larger replay window. Preserve the
+        // original admission boundary of this sequence's actual packed buffers.
+        // Public generic objective constructors still use their supplied buffers.
+        let objective = self.objective.as_mut().ok_or_else(invalid)?;
+        objective.replay_bounds = objective
+            .replay_bounds
+            .restrict(trainer.replay_buffer_word_lengths()?)?;
         if let Some(checkpoint) = self.pending_restore.take() {
             let (_, queue) = trainer
                 .session()
@@ -1833,6 +1878,34 @@ fn read_gpu_f32(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn smaller_replay_rejects_ppo_value_and_imitation_rows_in_spare_capacity() {
+        let physical = ReplayBufferBounds {
+            logits_words: 1024,
+            feature_words: 4096,
+        };
+        let logical = physical.restrict((300, 1536)).unwrap();
+        // PPO and imitation share the logit predicate; PPO and frozen-value
+        // prediction share the feature predicate. These rows fit the backing
+        // resources but must be refused for the current smaller sequence.
+        assert!(physical.allows_logits(300, 2));
+        assert!(physical.allows_features(1536, 256));
+        assert!(!logical.allows_logits(300, 2));
+        assert!(!logical.allows_features(1536, 256));
+        assert!(logical.allows_logits(298, 2));
+        assert!(logical.allows_features(1280, 256));
+        assert!(!logical.allows_logits(u32::MAX, u32::MAX));
+        assert!(!logical.allows_features(u32::MAX, u32::MAX));
+        for invalid_lengths in [(0, 1536), (300, 0), (1025, 1536), (300, 4097)] {
+            assert!(physical.restrict(invalid_lengths).is_err());
+        }
+        // Each rebind begins from physical capacity, so a later valid larger
+        // logical view is admitted instead of inheriting the prior small bound.
+        let larger = physical.restrict((1024, 4096)).unwrap();
+        assert!(larger.allows_logits(1022, 2));
+        assert!(larger.allows_features(3840, 256));
+    }
 
     #[test]
     fn imitation_loss_uses_only_the_action_metric_and_rejects_invalid_status() {
