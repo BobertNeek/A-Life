@@ -131,7 +131,7 @@ fn read_any(device: &wgpu::Device, queue: &wgpu::Queue, buffer: &wgpu::Buffer) -
     }
     let uniform = buffer.usage().contains(wgpu::BufferUsages::UNIFORM);
     let (declaration, expression) = if uniform {
-        assert!(buffer.size() <= u64::from(device.limits().max_uniform_buffer_binding_size));
+        assert!(buffer.size() <= device.limits().max_uniform_buffer_binding_size);
         (format!("struct Source {{ words:array<vec4<u32>,{}>, }} @group(0) @binding(0) var<uniform> source:Source;", buffer.size()/16),
          "source.words[i/4u][i%4u]")
     } else {
@@ -473,6 +473,7 @@ fn wait_submission(
 
 #[test]
 #[ignore = "bounded explicit release preparation/forward/BPTT/Adam assay; software device is not training throughput"]
+#[allow(clippy::assertions_on_constants)] // Keep this timing fixture compiled, but refuse debug execution.
 fn replay_scratch_capacity_assay() {
     assert!(
         !cfg!(debug_assertions),
