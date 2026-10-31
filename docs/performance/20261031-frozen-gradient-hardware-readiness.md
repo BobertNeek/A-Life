@@ -25,8 +25,8 @@ device type, backend, name, vendor/device and driver fields; the inherited
 Cloud readiness checks passed at `53c56c62`: two pure parser tests, the one focused
 active-cache software oracle (epochs 1/2 and value coefficients 0/.5), and strict
 Clippy for this test target and its dependencies. Required-hardware mode on the
-CPU-only cloud exited 101 with `NeuralBackendUnavailable` before session/fixture
-execution; this expected refusal is not physical GPU qualification. The
+CPU-only cloud exited 101 with `NeuralBackendUnavailable` before session/trainer construction or PPO
+execution; host procedural setup can precede admission. This expected refusal is not physical GPU qualification. The
 [prepared-hardware receipt](20261031-frozen-gradient-hardware-readiness.json)
 records the dedicated build, binary/log hashes, truthful CPU metadata and the
 unchanged normal backend/historical raw-data identities. No performance assay or
