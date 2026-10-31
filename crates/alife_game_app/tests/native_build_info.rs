@@ -18,6 +18,8 @@ fn build_info_is_compile_time_read_only_and_separate_from_resident_contract() {
             .args(args)
             .current_dir(&directory)
             .env("VK_ICD_FILENAMES", directory.join("absent-driver.json"))
+            .env("VK_DRIVER_FILES", directory.join("absent-driver.json"))
+            .env_remove("VK_ADD_DRIVER_FILES")
             .env("PROFILE", "runtime-decoy-profile")
             .env("OPT_LEVEL", "runtime-decoy-opt-level")
             .env("TARGET", "runtime-decoy-target")

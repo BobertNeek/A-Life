@@ -90,7 +90,8 @@ and target values, the executable's actual `debug_assertions` cfg and selected
 package feature flags. It requires no GPU, checkpoint or training startup and
 does not change `--resident-contract`. Cargo-reported values describe this
 package; they do not certify every dependency's optimization, effective custom
-compiler flags, source revision or hardware qualification. Runtime environment
+compiler flags, source revision or hardware qualification. Cargo `PROFILE` is
+the debug/release inheritance bucket, not the name of a custom profile. Runtime environment
 variables cannot change the embedded values. This diagnostic does not change
 launcher defaults or establish the profile of older binaries lacking the flag.
 
