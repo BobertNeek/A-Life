@@ -4,6 +4,9 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+#[path = "burst_assay.rs"]
+mod burst_assay;
+
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 struct Fixture(PathBuf);
