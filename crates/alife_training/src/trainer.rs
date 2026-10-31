@@ -395,6 +395,8 @@ impl FoundationTrainer {
     /// Prepares one logical replay using the current bounded scratch buffers
     /// when they fit. Larger shapes replace scratch while preserving actor Adam.
     /// Existing objective bindings must be rebound to the current logical view.
+    /// Submit previously encoded replay work before preparing another window:
+    /// queued uploads to reusable buffers precede the next queue submission.
     pub fn prepare_replay(&mut self, sequence: &TrainingSequence) -> Result<(), TrainingError> {
         let (device, queue) = self.session.backend().offline_training_device_queue()?;
         let shape = self.gpu.prepare_replay(
