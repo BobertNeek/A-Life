@@ -224,9 +224,20 @@ def read_events(lane):
                 'continuous-started-v1', 'continuous-update-v1',
                 'continuous-untrained-window-v1', 'continuous-terminal-v1', 'continuous-care-assistance-v1',
                 'continuous-care-reposition-v1',
-                'continuous-world-finished-v1'):
+                'continuous-world-finished-v1', 'continuous-runtime-performance-error-v1'):
             events.append(event)
     return events
+
+
+def runtime_performance_boundaries(events):
+    """Bounded diagnostic passthrough; absence stays unknown, never admission evidence."""
+    def latest(kind):
+        return next((event.get('runtime_performance') for event in reversed(events)
+                     if event.get('kind') == kind), None)
+
+    return {'initial': latest('continuous-started-v1'),
+            'last_untrained_window': latest('continuous-untrained-window-v1'),
+            'error': latest('continuous-runtime-performance-error-v1')}
 
 
 def sidecar_identity(path):
@@ -435,6 +446,7 @@ def finish(lane, state, validate):
         'care_food_reposition_events': sum(e['kind'] == 'continuous-care-reposition-v1' for e in events),
         'observed_rows': rows,
         'observed_updates': updates[-8:], 'observed_update_count': len(updates), 'producer_mode': mode,
+        'runtime_performance_boundaries': runtime_performance_boundaries(events),
         'native_summary': recovery.get('producer_result') or next((e for e in reversed(events)
             if e['kind'] == 'continuous-world-finished-v1'), None),
         'terminal_event': recovery.get('terminal_event') or next((e for e in reversed(events)

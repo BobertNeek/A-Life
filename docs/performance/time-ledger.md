@@ -35,6 +35,7 @@ does not define a new numerical staleness or loss budget. See the
 | H2: later segment | First eight 512-row windows (4,096 rows), reported 2026-10-28 12:39 UTC, Windows RTX 3050, combined PR202/203 build [`b817c1513a6023a5395e89b9e5fc7374b0c028c2`](https://github.com/BobertNeek/A-Life/commit/b817c1513a6023a5395e89b9e5fc7374b0c028c2); PR204 was test-only. | Operational report and task handoff: mean collection 20.94 s/window, mean PPO 8.63 s/update. Earlier PR203-only sample: 24.43 and 16.13 s respectively. Different sequential trajectories and assistance; not paired or controlled. No whole-host or snapshot denominator for this slice. |
 | H3: isolated cache copy | [PR214](https://github.com/BobertNeek/A-Life/pull/214), head `a63010a1`, 2026-10-30; Linux, rustc 1.98.1, opt3 source-extracted types/cache, synthetic finite N2048 payload, 25 candidates/tick, seven alternating paired trials. CPU model/RAM not established in the cited report. | Old cache-hit deep-copy median 5.20 ms [4.47–6.10] for 256 ticks/no burn-in; 7.98 ms [7.80–9.15] for 384 ticks/128 burn-in. Shared hits remove payload copies. First retain still compacts/copies. Windows memory guard stubbed in this assay. No admitted trajectory, GPU, whole-PPO or learning/hour measurement. |
 | S1: current source | 2026-10-31 audit of main `eaf9e120`; no timing workload run. | Code boundaries below establish what timers include, not how expensive current work is. [PR210](https://github.com/BobertNeek/A-Life/pull/210) changed host authority/replay costs; [PR211](https://github.com/BobertNeek/A-Life/pull/211) removed disabled PPO value-head work; [PR213](https://github.com/BobertNeek/A-Life/pull/213) changed checkpoint serialization; PR214 changed cache-hit ownership. Historical proportions cannot certify today's proportions or device speedup. |
+| C1: boundary-export observer | 2026-10-31, Linux x86_64 AMD EPYC 9V74, rustc 1.98.1 release; actual candidate observer with the source-extracted 116-u64 runtime metrics type, synthetic compact zero-counter and 512-row window receipts. Seven alternating paired trials, 5,000 events/arm/trial after 500 warmups/arm. | [Export-cost record](continuous-runtime-metrics.md#isolated-export-cost-linux-cpu-2026-10-31): added paired median 73.09 us/event [71.78–85.03] for zero counters, 69.48 us [63.92–73.00] populated. Includes JSON construction/encoding and allocation-request instrumentation; excludes initial snapshot, output delivery and all runtime/GPU/training work. Added 561 allocation/reallocation requests and 94,095 requested bytes/event, not peak RSS. This measures diagnostic cost, not any current training stage. |
 
 Earlier that night, **8,704 unsaved rows were lost** (reported in the handoff).
 They are not an extra retained gain. Raw receipts must establish whether their
@@ -183,8 +184,14 @@ Use existing accounting before adding new instrumentation:
 
 - Continuous same-individual training exposes collection/PPO/install/restore,
   replay-seal/boundary-wait, snapshot and producer counters; the host receipt adds
-  inclusive wall and admitted retained progress. Per-stage current values remain
-  unknown until actual receipts exist.
+  inclusive wall and admitted retained progress. Boundary-only
+  [`runtime_performance`](continuous-runtime-metrics.md) additionally exports the
+  existing runtime-instance cumulative snapshot and checked deltas since the
+  previous observation, with tick/active-row counts, unknown reset/saturated
+  deltas and explicit nonadditive peak treatment. The compact host receipt keeps
+  the initial/untrained/error evidence. No new per-tick timer or output is added.
+  Per-stage current values remain unknown until actual runtime receipts exist;
+  C1 measures only the observer's synthetic CPU cost.
 - Serial cycle/resident-episode profiling through `ALIFE_FOUNDATION_PROFILE`
   writes `stage-timing.json`. It is **not** a full continuous-session profiler.
   [The recorder](../../crates/alife_game_app/src/foundation_training_cycle/stage_timing.rs)

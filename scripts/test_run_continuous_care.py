@@ -497,9 +497,52 @@ class ContinuousCareTests(unittest.TestCase):
         path = self.lane / (session.LOG + '.stdout.log')
         kinds = ('continuous-started-v1', 'continuous-update-v1',
                  'continuous-untrained-window-v1', 'continuous-terminal-v1',
-                 'continuous-world-finished-v1')
+                 'continuous-world-finished-v1', 'continuous-runtime-performance-error-v1')
         path.write_text('device warning\n' + ''.join(json.dumps({'kind': k})+'\n' for k in kinds))
         self.assertEqual([e['kind'] for e in session.read_events(self.lane)], list(kinds))
+
+    def test_runtime_performance_boundaries_keep_unknown_zero_and_partial_errors(self):
+        legacy = [{'kind': 'continuous-started-v1'}]
+        self.assertEqual(session.runtime_performance_boundaries(legacy),
+                         {'initial': None, 'last_untrained_window': None, 'error': None})
+        initial = {'delta': None, 'cumulative': {'tick_calls': 0}}
+        untrained = {'delta_status': 'complete', 'delta': {'tick_calls': 2},
+                     'committed_world_ticks': 0, 'cumulative': {'tick_calls': 2}}
+        failed = {'delta_status': 'partial', 'delta': {'tick_calls': None},
+                  'cumulative': {'tick_calls': 0},
+                  'delta_unavailable_fields': {'tick_calls': 'counter_decreased_reset_or_wrap'}}
+        events = [{'kind': kind, 'runtime_performance': value} for kind, value in (
+            ('continuous-started-v1', initial),
+            ('continuous-untrained-window-v1', untrained),
+            ('continuous-runtime-performance-error-v1', failed))]
+        path = self.lane / (session.LOG + '.stdout.log')
+        path.write_text('device warning\n' + ''.join(json.dumps(e)+'\n' for e in events))
+        observed = session.runtime_performance_boundaries(session.read_events(self.lane))
+        self.assertEqual(observed, {'initial': initial, 'last_untrained_window': untrained, 'error': failed})
+        self.assertEqual(json.loads(json.dumps(observed)), observed)
+
+    def test_runtime_error_metrics_survive_compact_retirement_without_changing_admission(self):
+        initial = {'delta': None, 'cumulative': {'tick_calls': 0}}
+        failed = {'delta_status': 'complete', 'committed_world_ticks': 0,
+                  'delta': {'tick_calls': 1, 'inference_rows': 0},
+                  'cumulative': {'tick_calls': 600, 'inference_rows': 513}}
+
+        def producer(*args, **kwargs):
+            self.continuous_producer(*args, **kwargs)
+            path = self.lane / (session.LOG + '.stdout.log')
+            start = {'kind': 'continuous-started-v1', 'runtime_performance': initial}
+            error = {'kind': 'continuous-runtime-performance-error-v1', 'runtime_performance': failed}
+            path.write_text(json.dumps(start)+'\n'+path.read_text()+json.dumps(error)+'\n')
+            raise RuntimeError('synthetic original tick failure')
+
+        with patch.object(session.current, 'tool', side_effect=self.live_native), \
+                patch.object(session.host, 'run_child', side_effect=producer):
+            receipt = session.run(self.live_args())
+        self.assertEqual(receipt['runtime_performance_boundaries'],
+                         {'initial': initial, 'last_untrained_window': None, 'error': failed})
+        self.assertIn('synthetic original tick failure', receipt['native_exit_error'])
+        self.assertEqual(receipt['retained_trained_rows'], 1024)
+        self.assertEqual(receipt['after']['policy_version'], 42)
 
     def test_terminal_recovery_evidence_survives_crash_after_native_cleanup(self):
         terminal = {'kind': 'continuous-terminal-v1', 'terminal': True,

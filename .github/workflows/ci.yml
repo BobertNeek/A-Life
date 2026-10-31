@@ -101,6 +101,10 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::'
       - name: Bounded headless observation CPU tests
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib gpu_live_runtime::headless_trace::tests'
+      - name: Continuous runtime timing receipt CPU contracts
+        run: |
+          cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::continuous_world:: -- --test-threads=1
+          python -B -m unittest discover -s scripts -p test_run_continuous_care.py -v
       - name: Group-50 native admission and replay CPU contracts
         run: 'cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::group::'
       - name: Residual critic batching CPU regression
