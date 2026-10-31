@@ -673,7 +673,7 @@ fn run_owned(
 ) {
     let mut stats = FrozenGradientCacheStats::default();
     let mut loads = Vec::new();
-    let load = |index| {
+    let load = |index: usize| {
         loads.push(index);
         Ok(windows[index].clone())
     };
@@ -971,7 +971,7 @@ fn frozen_gradients_defer_numeric_faults_and_preserve_loader_failures() {
         let mut calls = [0; 2];
         let mut loads = Vec::new();
         let mut stats = FrozenGradientCacheStats::default();
-        let load = |index| {
+        let load = |index: usize| {
             loads.push(index);
             calls[index] += 1;
             if index == 1 && calls[index] == 2 {
