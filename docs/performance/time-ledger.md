@@ -196,10 +196,11 @@ numerical tolerance and exact identity/mask/integer-age checks before timing;
 do not silently accept a different objective or optimizer history as equivalent
 work. Measure a small range around the actual target cohort/window sizes, since
 the crossover may change with workload size. Use host wall time for the decision;
-GPU timestamps are nested attribution and are not added to it. Real acquired
-checkpoint transfer remains separately unauthorized. Any real-state continuation
-assay or later backend change needs its own authorization and qualification;
-this documentation update performs neither a benchmark nor a switch.
+GPU timestamps are nested attribution and are not added to it. Real checkpoint
+transfer remains separately unauthorized. A real-state continuation assay or
+subsequent backend change is outside this recorded comparison and needs separate
+qualification; this documentation update performs neither a benchmark nor a
+switch.
 
 ## Small next measurements and promotion rules
 
