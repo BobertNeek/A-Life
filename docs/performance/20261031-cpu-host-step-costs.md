@@ -4,6 +4,101 @@ Base source is `17c7a33a69b63b9dbac100655df1530c54696c34` (PR #219).
 This experiment is on a separate branch and does not change PR #219's head. It measures the actual `CpuCanonicalHost::step_with_preparation` method
 with test-only clocks; no learning/simulation operation is removed or bypassed.
 
+## Applicability to continuous same-individual training
+
+PR #219 accelerates the opt-in CPU PPO cohort learners only. It does not speed
+the GPU PPO phase of the continuous same-individual trainer. At source
+`17c7a33a`, the Python runner records its native invocation as
+`train_n2048_care --resident-continuous STORE REQUEST_JSON` for its default
+`same_individual` mode ([command selection](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/scripts/run_continuous_care.py#L46),
+[native argv](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/scripts/run_continuous_care.py#L630)).
+The [CLI dispatch](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_game_app/src/bin/train_n2048_care.rs#L78)
+enters `run_resident_continuous_care`. That path requests a
+[required GPU backend and GPU training session](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L656),
+then invokes
+[`train_recurrent_ppo_cohort_with_windows`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L1304).
+There is no CPU PPO selection in this path.
+
+The GPU learner already calls
+[`evaluate_ppo_window`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/ppo.rs#L1338)
+to encode forward/objective work and then `accumulate_replay_gradients` against
+the retained device state. Its
+[`encode_replay_gradients`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L669)
+does not repeat the neural forward. GPU PPO still has replay preparation,
+command encoding/submissions, metric and validation readbacks, BPTT, gradient
+accumulation and paired actor/critic Adam work. Those training operations are
+distinct from the batched live inference tick. Neither their exclusive times
+nor their share of the historical continuous run was measured by these CPU
+fixtures. No CPU gain or host-stage percentage here should be assigned to that
+historical GPU PPO phase or collection phase.
+
+This is source-level backend identification. The deployed invocation manifest,
+binary hash and hardware receipt were not available in this cloud fixture; no
+desktop process or acquired checkpoint was inspected to reverify the historical
+run. Reconcile its `native_argv`, binary revision and native hardware receipt
+before attaching any new measurements to that run.
+
+### Shared and divergent host work
+
+The GPU runtime's [staged tick](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs#L181)
+builds one world perception index per tick, then captures receptors and an indexed
+grounded perception draft per waking resident. It calls
+[`prepare_cpu_rows`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_game_app/src/gpu_live_runtime/cpu_preparation.rs#L76),
+whose audited path uses shared `prepare_canonical_frame` for memory recall,
+attention routing, cognitive context/projection, finalization and frame
+validation. It then packs/validates `GpuPerceptionUpload` and
+`GpuMemoryContextUpload`. One resident uses one preparation worker; the two-worker
+threshold is eight rows. Its optional approximate path is a separate branch.
+
+The CPU host also calls shared `prepare_canonical_frame`, but wraps its tick in
+full founder/private binding validation, `self.clone()` and commit/drop. The GPU
+staged tick does not call this CPU wrapper. Thus the four exclusive CPU intervals
+below do not identify the GPU runtime's collection bottleneck. Shared routines
+are useful device-free assay targets; separate call counts, world/memory sizes,
+packing and retained learning still prevent transferring CPU tick percentages.
+
+### GPU PPO host/submission audit (source counts, no timings)
+
+For the unchanged GPU cohort learner, let `W` be all cohort windows and `B` the
+windows in one attempted effective batch. The following are direct source-call
+counts on a successful stable-shape path; queue writes, implicit driver work,
+initial allocation and shape-change copies are additional. An accepted batch
+assumes nonzero critic loss. These are not measured device executions or times.
+
+| Boundary | Direct queue submissions | Blocking readback calls | Why it exists |
+| --- | ---: | ---: | --- |
+| Frozen all-window preflight | `2W` | `W` | Forward/objective plus metric copy verifies collection-policy probabilities before any update. |
+| Begin effective batch | 1 | 0 | Clears accumulated actor gradients. |
+| Each attempted window | 4 | 2 | Forward/objective and metric read; backward/accumulate and two-float status read. |
+| Accepted batch tail | 5 | 2 | Critic gradient preflight/read, value rollback backup, paired actor/critic Adam apply, actor status read. |
+| KL-stopped batch tail | 0 | 0 | Cancels accumulation without optimizer mutation. |
+
+Including begin, an accepted critic-enabled batch has `4B + 6` direct submits and
+`2B + 2` blocking readbacks; a KL-stopped attempt has `4B + 1` and `2B`. Each replay
+shape change adds one submit copying retained weights and full Adam arrays into
+new scratch buffers. Checkpoint/value prediction work outside this cohort adds
+other reads and is excluded. Error rollback can add a submission and wait.
+
+Source boundaries are [`ppo.rs:1299–1451`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/ppo.rs#L1299),
+[`trainer.rs:930–1090`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L930)
+and the readback helpers at
+[`ppo.rs:1785`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/ppo.rs#L1785)
+and [`trainer.rs:1646`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L1646).
+Each helper creates a staging buffer, encodes/submits its copy, maps it and waits
+for that submission. Even an eight-byte status read can synchronize pending GPU
+work; its elapsed time cannot be inferred from transfer size. GPU PPO encode,
+submit, wait/readback, BPTT and Adam times all remain **unknown** here.
+
+The frozen preflight and current-weight replay remain necessary correctness
+boundaries. A possible future change is batching accumulation-status reads before
+the optimizer, but it must retain sticky failure evidence across windows, reject
+the same invalid data before any Adam mutation, preserve paired rollback, and
+demonstrate an enclosing GPU PPO gain. The highest-value next GPU measurement is
+exclusive host encoding versus the per-window metric/status waits and accepted
+batch preflight/Adam waits on an actual production invocation. A device-free host
+assay cannot answer that latency question; live inference-tick batching does not
+remove these offline PPO fences.
+
 ## Workload and boundaries
 
 One fresh, untrained Standard2048 CPU host uses GroundedTerrainVisionV1, world
