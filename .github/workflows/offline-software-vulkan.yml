@@ -1,0 +1,94 @@
+name: Offline software-Vulkan correctness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'rust-toolchain*'
+      - '.github/workflows/offline-software-vulkan.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.cargo/**'
+      - 'rust-toolchain*'
+      - '.github/workflows/offline-software-vulkan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-software-vulkan:
+    name: Offline correctness on the actual CPU Vulkan adapter
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      LP_NUM_THREADS: '2'
+      EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install only the CPU Vulkan loader and Mesa driver
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libvulkan1 mesa-vulkan-drivers
+      - name: Bind the llvmpipe ICD and record source and driver identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_REVISION"
+          git rev-parse HEAD
+          rustc -vV
+          dpkg-query -W libvulkan1 mesa-vulkan-drivers
+          icds=(/usr/share/vulkan/icd.d/lvp_icd*.json)
+          test "${#icds[@]}" -eq 1
+          test -f "${icds[0]}"
+          cat "${icds[0]}"
+          runtime_dir="$RUNNER_TEMP/alife-offline-software-vulkan"
+          install -d -m 700 "$runtime_dir"
+          {
+            echo "VK_DRIVER_FILES=${icds[0]}"
+            echo "VK_ICD_FILENAMES=${icds[0]}"
+            echo "XDG_RUNTIME_DIR=$runtime_dir"
+          } >> "$GITHUB_ENV"
+      - name: Run only offline admission, session and nine-window PPO correctness
+        run: |
+          set -euo pipefail
+          # Synthetic Cpu/Vulkan execution, never hardware acceptance or timing.
+          # Ordinary hardware admission and both optimization defaults stay unchanged.
+          run_fixture() {
+            local package="$1" fixture="$2"
+            shift 2
+            local log="$RUNNER_TEMP/offline-software-vulkan-$package.log"
+            cargo test --locked -p "$package" --features gpu-tests "$@" "$fixture" \
+              -- --ignored --exact --nocapture --test-threads=1 2>&1 | tee "$log"
+            # Cargo otherwise succeeds when a renamed exact filter runs zero tests.
+            grep -Eq '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$log"
+          }
+          run_fixture alife_gpu_backend \
+            closed_loop_runtime::software_training_test::tests::software_training_device_is_truthful_and_normal_factory_still_rejects_it \
+            --lib
+          run_fixture alife_runtime \
+            software_session_exposes_offline_queue_without_live_authority \
+            --test software_training_test
+          run_fixture alife_training \
+            actual_controller_batches_restores_and_rejects_before_updates \
+            --test software_ppo_controller
