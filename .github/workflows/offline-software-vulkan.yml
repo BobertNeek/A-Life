@@ -27,7 +27,7 @@ permissions:
 jobs:
   offline-software-vulkan:
     name: Offline correctness on the actual CPU Vulkan adapter
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -49,8 +49,30 @@ jobs:
       - name: Install only the CPU Vulkan loader and Mesa driver
         timeout-minutes: 5
         run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libvulkan1 mesa-vulkan-drivers
+          set -euo pipefail
+          . /etc/os-release
+          test "$ID" = ubuntu
+          [[ "$VERSION_CODENAME" =~ ^[a-z]+$ ]]
+          archive_keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg
+          test -r "$archive_keyring"
+          sources_file="$RUNNER_TEMP/alife-offline-ubuntu.list"
+          # Avoid the runner's Azure mirror list and unrelated third-party repos.
+          printf '%s\n' \
+            "deb [signed-by=$archive_keyring] https://archive.ubuntu.com/ubuntu $VERSION_CODENAME main universe" \
+            "deb [signed-by=$archive_keyring] https://archive.ubuntu.com/ubuntu $VERSION_CODENAME-updates main universe" \
+            "deb [signed-by=$archive_keyring] https://security.ubuntu.com/ubuntu $VERSION_CODENAME-security main universe" \
+            > "$sources_file"
+          cat "$sources_file"
+          apt_options=(
+            -o "Dir::Etc::sourcelist=$sources_file"
+            -o 'Dir::Etc::sourceparts=-'
+            -o 'Acquire::https::Timeout=20'
+            -o 'Acquire::http::Timeout=20'
+            -o 'Acquire::Retries=2'
+            -o 'APT::Update::Error-Mode=any'
+          )
+          sudo apt-get "${apt_options[@]}" update
+          sudo apt-get "${apt_options[@]}" install --no-install-recommends -y libvulkan1 mesa-vulkan-drivers
       - name: Bind the llvmpipe ICD and record source and driver identity
         run: |
           set -euo pipefail
