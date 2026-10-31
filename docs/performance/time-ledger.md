@@ -109,6 +109,29 @@ use its measured share of the whole interval, not its parent's entire share.
 Do not multiply these separate scenarios or count residual-critic savings again
 on top of the PPO parent.
 
+### Cadence and useful-learning break-even
+
+Illustratively, if a genuinely exclusive training phase occupies 26% of wall
+time and its entire cost can be halved, the new wall budget is
+`0.74 + 0.26 / 2 = 0.87`. Collected exposures/hour would rise by
+`1 / 0.87 ≈ 1.15×`; useful learning per newly collected exposure must retain at
+least **87%** of baseline to break even in useful learning/hour. This assumes
+unchanged collection cost, retained exposure count, assistance, failure/loss
+rates and other stages, with useful learning measured on comparable outcomes.
+
+This is a qualified learning-efficiency scenario, not a promised raw speedup,
+a PR219 GPU benefit, or proof that halving PPO epochs halves the training phase.
+The historical 26% share is provisional; preparation, frozen validation and
+critic work need not scale with epochs. If less of the phase shrinks, throughput
+gains are smaller and required learning retention is closer to 100%. Keep the
+cadence/epoch alternatives below as deliberate behavior/learning tradeoffs to
+measure, separate from removing redundant implementation work.
+
+Decompose actual GPU PPO preparation, forward/backward, host encoding/submission,
+blocking metrics/status readbacks, critic work and Adam validation/application
+before prioritizing per-weight Adam arithmetic. The already-batched production
+inference tick is a different boundary and does not supply that decomposition.
+
 ## Timer boundaries on current main
 
 Paths here are inspected at S1; Git history preserves this audit if they move.
