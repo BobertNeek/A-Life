@@ -265,7 +265,7 @@
   "binary_hash_scope": "Measured representative three-trial release assay, built from candidate source0903ede8. Small release correctness/fault logs precede lint-only cleanup (redundant u64 conversion, allow attribute, constant chunk iterator); their earlier binary hash was not retained. Shader and arithmetic unchanged; representative whole-buffer checks ran on the hashed final binary.",
   "independent_source_review": {
     "result": "No blocking source or report/provenance findings",
-    "scope": "Shader arithmetic normalized against43retainedoriginalfunctionbodies; driver offsets/raggedorder/orderedaccumulation/Adamguards/timerboundaries; source,binary,rawloghashes and reportedratios/RSS",
+    "scope": "Shader arithmetic normalized against 43 retained original function bodies; driver offsets, ragged order, ordered accumulation, Adam guards and timer boundaries; source, binary and raw-log hashes, reported ratios and RSS.",
     "formal_pr_approval": false,
     "new_assays_executed_by_reviewer": false
   }
