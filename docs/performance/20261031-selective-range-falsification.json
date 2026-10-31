@@ -1,0 +1,348 @@
+{
+  "accepted_poison_cases": 96,
+  "assay": "selective_capture_projection_falsification",
+  "banks_and_indices_have_distinct_values": true,
+  "cases": [
+    {
+      "activation_side": 0,
+      "microsteps": 2,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 0
+    },
+    {
+      "activation_side": 0,
+      "microsteps": 3,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 0
+    },
+    {
+      "activation_side": 0,
+      "microsteps": 4,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 0
+    },
+    {
+      "activation_side": 0,
+      "microsteps": 2,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 1
+    },
+    {
+      "activation_side": 0,
+      "microsteps": 3,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 1
+    },
+    {
+      "activation_side": 0,
+      "microsteps": 4,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 1
+    },
+    {
+      "activation_side": 1,
+      "microsteps": 2,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 0
+    },
+    {
+      "activation_side": 1,
+      "microsteps": 3,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 0
+    },
+    {
+      "activation_side": 1,
+      "microsteps": 4,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 0
+    },
+    {
+      "activation_side": 1,
+      "microsteps": 2,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 1
+    },
+    {
+      "activation_side": 1,
+      "microsteps": 3,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 1
+    },
+    {
+      "activation_side": 1,
+      "microsteps": 4,
+      "selected_pair_bytes": 581632,
+      "selector_independent_pair_bytes": 1124352,
+      "weight_bank": 1
+    }
+  ],
+  "cohort_writer_encoding_tested": true,
+  "continuity_cases": 96,
+  "device_created": false,
+  "full_pair_bytes": 1772032,
+  "gpu_copy_or_mapper_tested": false,
+  "gpu_fail_stop_executed": false,
+  "late_storage_corruption_rejected": true,
+  "memory_guard_stubbed": false,
+  "metadata_rejections": 96,
+  "native_writer_platform_rejection_tested": true,
+  "omitted_pre_post_poisons_differ": true,
+  "packet_plans": [
+    {
+      "bytes": 886016,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "full",
+      "post": false,
+      "regions": 1,
+      "residents": 1
+    },
+    {
+      "bytes": 286720,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "selected",
+      "post": false,
+      "regions": 4,
+      "residents": 1
+    },
+    {
+      "bytes": 558080,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "both_banks",
+      "post": false,
+      "regions": 7,
+      "residents": 1
+    },
+    {
+      "bytes": 886016,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "full",
+      "post": true,
+      "regions": 1,
+      "residents": 1
+    },
+    {
+      "bytes": 294912,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "selected",
+      "post": true,
+      "regions": 5,
+      "residents": 1
+    },
+    {
+      "bytes": 566272,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "both_banks",
+      "post": true,
+      "regions": 8,
+      "residents": 1
+    },
+    {
+      "bytes": 7088128,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "full",
+      "post": false,
+      "regions": 8,
+      "residents": 8
+    },
+    {
+      "bytes": 2293760,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "selected",
+      "post": false,
+      "regions": 32,
+      "residents": 8
+    },
+    {
+      "bytes": 4464640,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "both_banks",
+      "post": false,
+      "regions": 56,
+      "residents": 8
+    },
+    {
+      "bytes": 7088128,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "full",
+      "post": true,
+      "regions": 8,
+      "residents": 8
+    },
+    {
+      "bytes": 2359296,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "selected",
+      "post": true,
+      "regions": 40,
+      "residents": 8
+    },
+    {
+      "bytes": 4530176,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "both_banks",
+      "post": true,
+      "regions": 64,
+      "residents": 8
+    },
+    {
+      "bytes": 44300800,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "full",
+      "post": false,
+      "regions": 50,
+      "residents": 50
+    },
+    {
+      "bytes": 14336000,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "selected",
+      "post": false,
+      "regions": 200,
+      "residents": 50
+    },
+    {
+      "bytes": 27904000,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "both_banks",
+      "post": false,
+      "regions": 350,
+      "residents": 50
+    },
+    {
+      "bytes": 44300800,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "full",
+      "post": true,
+      "regions": 50,
+      "residents": 50
+    },
+    {
+      "bytes": 14745600,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "selected",
+      "post": true,
+      "regions": 250,
+      "residents": 50
+    },
+    {
+      "bytes": 28313600,
+      "packet_count": 1,
+      "packet_limit_bytes": 67108864,
+      "plan": "both_banks",
+      "post": true,
+      "regions": 400,
+      "residents": 50
+    }
+  ],
+  "production_storage_decoder_tested": true,
+  "retained_corruption_rejections": 240,
+  "synthetic_snapshots": true,
+  "valid_structural_growth_tested": false,
+  "windows_ram_admission_tested": false,
+  "provenance": {
+    "base_commit": "5b244a66d183be0330e9585390312ac7124103af",
+    "command": "cargo test --locked -p alife_game_app --features cpu-training,gpu-tests --lib --config profile.test.package.alife_game_app.opt-level=0 selective_capture_projection_falsification -- --ignored --nocapture",
+    "profile": "test; app opt-level 0; core/world/gpu_backend/runtime opt-level 2; debug assertions enabled; training default test opt-level 0",
+    "hardware": "AMD EPYC 9V74 cloud VM; 5 visible CPUs, 4 CPU quota, 16 GiB",
+    "cpu_affinity": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "samples": 1,
+    "kind": "Deterministic falsification cases, not a performance benchmark",
+    "source_sha256": {
+      "crates/alife_game_app/src/foundation_training/selective_capture_tests.rs": "242b257cb512afcd832bbca805a692c782ce08a936da81243d466c26ce263e0b",
+      "crates/alife_game_app/src/foundation_training.rs": "2c8e093155f706a08c4b091f43c4595eb107d92145436f3ab1f0cf9993ecfc04",
+      "crates/alife_game_app/src/foundation_training/cohort_replay.rs": "746c54ea428193233260f88f73109047273f08266512d3809f1cd1d13ff48a21",
+      "crates/alife_gpu_backend/src/closed_loop_runtime/training_capture.rs": "451c4c539700084611fac70d85f1dfa220fa1ef1d83be8c78dfd1703e2421a6e",
+      "crates/alife_gpu_backend/src/closed_loop_pipeline.rs": "d6c8bd833b98aa262ecab23e0097dc62f3752a46ae64a83026846a42dec140d8",
+      "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs": "9bb989881376a01793ff654760c28738f79a7f10d9199a565ee58ffc60616481",
+      "crates/alife_training/src/cpu/objective.rs": "efb4dc0c8fa8827fca186dca9a46880146fe26f03ed8d45e733ecb3f2f71aef7",
+      "Cargo.toml": "1f389513e0040d75fa669ddd98cb257dba99b94cdf5043c251d1b59cdccc6555",
+      "Cargo.lock": "2444e04142202ffab7d0ace60ef20db7b56ca496883ae007030573835231546c"
+    },
+    "default_runtime_change": false,
+    "device_created": false,
+    "real_checkpoint_imported": false,
+    "held_fusion_used": false
+  },
+  "coverage_detail": {
+    "accepted": "12 activation/weight-bank/microstep variants x4 asymmetric poison pairs x2 plans =96 full-byte observable comparisons",
+    "poison_pairs_hex": [
+      [
+        "7fc00001",
+        "7fc00002"
+      ],
+      [
+        "7f800000",
+        "ff800000"
+      ],
+      [
+        "ff800000",
+        "7f800000"
+      ],
+      [
+        "ffffffff",
+        "7fc12345"
+      ]
+    ],
+    "observable": "Replay sequence/record, before/after continuity digests, critic features/value/checkpoint and encoded cohort bundle; production storage decode and late-byte corruption rejection",
+    "retained_errors": "Selected plan: first/last NaN in each retained range; finite one-bit and signed-zero post-weight differences; exact original error strings compared",
+    "metadata_errors": "Selected plan: ticks, dispatch/weight generation, bank/side mismatch, invalid selectors and structural-count mismatch; exact original error strings compared. Invalid selectors use both-bank fallback to preserve original contextual rejection.",
+    "continuity": "96 distinct transitions, full versus selected: valid same state, activation/homeostasis reset, unrecorded weight change, bank flip, dispatch change, generation rollback, allowed recorded generation/bank/weight change",
+    "both_bank_error_scope": "Both-bank acceptance/poisoned-omission/current-record digest comparisons run; its next-boundary error matrix is not separately repeated",
+    "one_slot_only": true,
+    "packet_matrix": "Production packets helper, repeated region sizes for 1/8/50 residents at64MiB; no multi-resident authority/chunk/nonzero-offset execution",
+    "untested": [
+      "GPU memory copy/mapping/ordering and actual device fail-stop",
+      "valid structural growth or cold structural-cache misses",
+      "other brain/sensor classes, real acquired histories, arbitrary malformed source sizes",
+      "successful Windows RAM admission and full native-writer append",
+      "whole-state persistence and actor/critic optimizer updates",
+      "performance or allocation-count improvement"
+    ]
+  },
+  "validation": {
+    "explicit_fixture": "1 passed",
+    "replay_io_tests": "19 passed;1 existing CPU benchmark ignored",
+    "pipeline_contract_lifecycle": "28 passed",
+    "capture_packet_planner": "1 passed",
+    "clippy_app_cpu_training_gpu_tests": "passed with -D warnings",
+    "clippy_backend_training_rollout_test_support": "passed with -D warnings",
+    "normal_cpu_training_library_check": "passed",
+    "format": "passed",
+    "additional_changes": "Two pre-existing test-only Clippy warnings fixed: needless borrow in v11_player_loop and clone of Copy sleep scheduler in a GPU test"
+  }
+}

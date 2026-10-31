@@ -204,7 +204,7 @@ fn focused_player_action_runtime(
         BrainScaleTier::Standard2048,
         sensor_profile,
         LineageLibraryConfig::profile_default(&archive_root),
-        &format!("task-13-v11-{label}"),
+        format!("task-13-v11-{label}"),
         ArchiveLearnedCapturePolicy::GeneticOnly,
     )
     .expect("supported profiled Standard2048 production runtime");

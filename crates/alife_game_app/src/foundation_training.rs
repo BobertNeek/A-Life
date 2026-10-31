@@ -37,6 +37,8 @@ pub use evaluation_observation::{
 };
 mod food_need;
 mod initial_asset;
+#[cfg(all(test, feature = "gpu-tests", feature = "cpu-training"))]
+mod selective_capture_tests;
 pub use food_need::{FoodNeedState, FoundationFoodNeedCondition, FoundationFoodNeedInitialization};
 mod lesson_trace;
 mod play_assessment;

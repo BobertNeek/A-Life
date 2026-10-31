@@ -312,6 +312,105 @@ then time host packing/conversion in an enclosing fixture. This cannot establish
 device copy or wait savings: those still require a real-device comparison that
 preserves exact pre/post evidence, outcomes, private continuation and full Adam.
 
+### Experimental selective-range consumer falsification
+
+The ignored Rust fixture `selective_capture_projection_falsification` now tests
+the proposed read set against unchanged production consumers. It creates no
+adapter/device and does not install a capture implementation. A test-support-only
+factory constructs synthetic snapshot identity/layout from the real fixed-slot
+plan. Native CPU world perception, memory finalization and a measured physical
+outcome supply the frame/patch; neural snapshots, selection evidence and pressure
+inputs are synthetic. N2048 has 2,048 neurons and 32,768 live synapses. Private
+lifetime/fast values and activation banks are nonzero and distinct by bank/index.
+This is not a GPU episode or acquired-state qualification.
+
+Two test-only u32 packet projections are materialized with poisoned holes solely
+to call existing full-snapshot consumers. The public snapshot API and default
+runtime are unchanged. Both retain post active lifetime/fast weights and their
+original exact word comparison. Pre/post omitted poisons differ, including
+different NaN payloads and opposite infinities, so equal garbage cannot hide a
+cross-boundary equality check.
+
+| Plan | Pre bytes / resident | Post bytes / resident | Copy regions pre/post |
+| --- | ---: | ---: | ---: |
+| Existing full mutable arena | 886,016 | 886,016 | 1 / 1 |
+| Selected active banks/prefixes | 286,720 | 294,912 | 4 / 5 |
+| Selector-independent: both activation and plastic-weight banks, full bank capacities | 558,080 | 566,272 | 7 / 8 |
+
+The production `packets` helper puts each boundary into one packet at a
+hypothetical 64 MiB limit for 1, 8 and 50 residents in all three plans. Thus these
+plans establish **no readback/submission-count reduction** in those conditions.
+The 1/8/50 matrix repeats source-range byte sizes through the real planner;
+consumer falsification itself uses one fixed slot with a zero mutable base. It
+does not exercise multi-resident authority, chunk binding or nonzero slot offsets.
+They trade fewer copied words for more copy regions; device encoding, mapping,
+allocation and elapsed benefits remain unknown. Metadata/alignment costs of an
+actual new transport are not measured. No gather shader, CPU neural shadow or
+held wait-fusion implementation is incorporated.
+
+The existing serial path already has selectors before scheduling each capture:
+`training_snapshot_metadata` reads host slot authority and the resident weight
+bank. [`slot_active_side`](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_gpu_backend/src/closed_loop_pipeline.rs#L2232)
+refuses a pending batch; validated inference commits its returned side before
+the ordinary post-capture call. The
+[weight bank switches on validated outcome-learning commit](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_gpu_backend/src/closed_loop_runtime.rs#L4419).
+Therefore selected ranges do not need a new header readback in the current
+serial ordering. This does not authorize planning a post-inference bank from an
+unvalidated in-flight result. The both-bank plan avoids that selector dependency
+without adding a header boundary, at a larger payload. Actual queue integration
+is unimplemented and must preserve the existing commit/failure ordering.
+
+Coverage is deliberately scoped:
+
+- Twelve activation-side/weight-bank/microstep variants use both sides and banks
+  and production-derived 2/3/4-microstep throttle receipts.
+- Ninety-six accepted poison cases (48 selected, 48 both-bank) compare complete
+  replay records, continuity digests, critic features/prediction/checkpoint and
+  encoded cohort bundles byte-for-byte. The CPU critic has nonzero coefficients
+  and moments; prediction leaves its checkpoint unchanged.
+- The selected view preserves exact error strings for 240 retained-data
+  corruptions and 96 metadata corruptions. Tests cover each retained range's
+  first/last word, finite one-bit post-weight change and signed-zero difference,
+  wrong ticks/generations/banks/sides, invalid selectors and structural-count
+  mismatch. Invalid selectors initially exposed an error-order change in the
+  prototype; it now copies both possible banks for that invalid metadata and
+  lets the original consumer produce its contextual rejection.
+- Ninety-six distinct next-boundary cases compare full versus selected-view
+  continuity, including recurrent/homeostasis resets, unrecorded weight/bank
+  changes, dispatch/generation discontinuities and allowed recorded plastic
+  generation changes. Both-bank next-boundary error cases are not separately
+  repeated; accepted records include identical current-boundary digests.
+- Production replay conversion, record validation, cohort writer and bounded
+  digest-checked storage decoder execute. Optional decoded-cache retention is
+  declined. Late compressed-record corruption is rejected. The public native
+  writer's Linux preflight still rejects its Windows-only memory query before
+  output creation; no memory guard is stubbed or replaced. Successful Windows
+  RAM admission and full native-writer append are not tested here.
+
+The post-weight equality check is kept even though correct inference kernels
+are intended to leave plastic weights unchanged until outcome learning. The
+check observes actual captured bytes and can reject misbound ranges, corruption
+or an unrecorded write; host generation labels alone do not replace that
+evidence. It detects signed-zero and single-bit changes that a numeric-equality
+shortcut could miss. Existing CPU pipeline lifecycle/contract tests also run;
+this does not execute GPU fault injection or establish device fail-stop behavior.
+
+Valid structural growth, other brain/sensor classes, arbitrary malformed source
+sizes, real acquired histories, GPU mapping/copy order, whole-state persistence,
+actor/critic optimizer updates and performance remain outside this fixture.
+The projection is not a production packet type or API replacement. No canonical
+state is removed, reset or written. A device comparison and transport-specific
+integrity tests would still be required before deploying a selective copy path.
+
+Run with `cargo test --locked -p alife_game_app --features cpu-training,gpu-tests
+--lib --config profile.test.package.alife_game_app.opt-level=0
+selective_capture_projection_falsification -- --ignored --nocapture`.
+`gpu-tests` enables test-support types; the named test never constructs a device.
+This is one deterministic falsification run, not a timing benchmark. The test
+profile overrides the app to opt-level 0; core/world/backend/runtime are opt-level
+2, debug assertions remain enabled. See the raw result and source manifest in
+[the selective-range evidence](20261031-selective-range-falsification.json).
+
 ## Workload and boundaries
 
 One fresh, untrained Standard2048 CPU host uses GroundedTerrainVisionV1, world

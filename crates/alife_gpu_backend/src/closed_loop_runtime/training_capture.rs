@@ -44,6 +44,57 @@ fn packets(sizes: &[u64], limit: u64) -> Result<Vec<Range<usize>>, ScaffoldContr
 }
 
 impl GpuClosedLoopBackend {
+    #[cfg(feature = "test-support")]
+    pub fn training_capture_packet_plan_for_cpu_test(
+        sizes: &[u64],
+        limit: u64,
+    ) -> Result<Vec<Range<usize>>, ScaffoldContractError> {
+        packets(sizes, limit)
+    }
+
+    /// Synthetic CPU-only replay fixture. This is not device authority or a
+    /// captured execution; it exists only under the explicit test-support flag.
+    #[cfg(feature = "test-support")]
+    pub fn synthetic_training_snapshot_for_cpu_test(
+        phenotype: std::sync::Arc<alife_core::BrainPhenotype>,
+        organism_id: alife_core::OrganismId,
+        tick: Tick,
+    ) -> Result<Snapshot, ScaffoldContractError> {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        let plan =
+            crate::closed_loop_buffers::GpuFixedClassArenaPlan::new(capacity, 1, 512 * 1024 * 1024)
+                .map_err(map_gpu_contract_error)?;
+        let upload = plan
+            .prepare_slot_upload(0, 1, &phenotype)
+            .map_err(map_gpu_contract_error)?;
+        let ranges = upload.ranges();
+        Ok(Snapshot {
+            handle: GpuBrainHandle {
+                backend_instance_id: NonZeroU64::new(u64::MAX).expect("synthetic nonzero id"),
+                class_id: phenotype.brain_class_id(),
+                slot: 0,
+                generation: 1,
+                organism_id,
+                phenotype_hash: phenotype.phenotype_hash(),
+            },
+            tick: tick.raw(),
+            logical_dispatch_generation: 1,
+            active_activation_side: 0,
+            active_weight_generation: 13,
+            active_weight_bank: 0,
+            v11: crate::GpuV11Checkpoint::canonical_for_phenotype(&phenotype)?,
+            brain_slot: upload.brain_slot().clone(),
+            mutable_word_base: ranges.mutable_state_words.start,
+            mutable_words: vec![
+                0;
+                (ranges.mutable_state_words.end - ranges.mutable_state_words.start)
+                    as usize
+            ],
+            structural_synapses: Vec::new(),
+            phenotype,
+        })
+    }
+
     pub fn training_capture_metrics(&self) -> GpuTrainingCaptureMetrics {
         self.training_capture_metrics
     }
