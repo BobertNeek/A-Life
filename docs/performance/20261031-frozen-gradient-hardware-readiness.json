@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "kind": "prepared-hardware-qualification-no-PC-execution",
+  "source_commit": "53c56c6258527719927ab541f2c51d6ded95419f",
+  "source_tree": "ded9030c83e0eae8f7e62d34eafd01384f4086a2",
+  "base_experiment": "d1cc1707cd22426b38c319244187b13667c8e3c2",
+  "experimental_default_disabled": true,
+  "math_controller_shader_config_changes": false,
+  "normal_backend_source_git_blob": "2556c41fb495ef4634b7ceea4947bd8fca7551a3",
+  "normal_backend_source_byte_identical_to_base": true,
+  "historical_release_raw_json_unchanged": true,
+  "historical_release_raw_json_sha256": "bafda7c58be3612e3dd46da621d9ff32aace46edb1fdb4dfddf1d53124a0bb2b",
+  "selector": {
+    "variable": "ALIFE_DISPATCH_REQUIRE_HARDWARE",
+    "unset_or_0": "explicit Cpu/Vulkan software",
+    "1": "normal required hardware without software fallback",
+    "other": "fail before device work",
+    "pure_parser_tests_passed": 2,
+    "environment_mutation_in_parser_tests": false
+  },
+  "hardware_required_cloud_negative": {
+    "expected_exit": 101,
+    "actual_exit": 101,
+    "typed_error": "NeuralBackendUnavailable",
+    "before_fixture_or_training_execution": true,
+    "software_fallback": false
+  },
+  "default_software_active_oracle": {
+    "passed": true,
+    "test": "frozen_gradients_match_actual_controller_epochs_and_shared_restore",
+    "runs": 1,
+    "epochs_cases": [
+      1,
+      2
+    ],
+    "value_coefficients": [
+      0.0,
+      0.5
+    ],
+    "contexts": 4,
+    "actual_execution_metadata": {
+      "adapter_info": {
+        "backend": "Vulkan",
+        "device": 0,
+        "device_type": "Cpu",
+        "driver": "llvmpipe",
+        "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+        "name": "llvmpipe (LLVM 19.1.7, 256 bits)",
+        "vendor": 65541
+      },
+      "execution_mode": "software_vulkan_test",
+      "selector_variable": "ALIFE_DISPATCH_REQUIRE_HARDWARE"
+    },
+    "checks": "original/cache and owned/shared checkpoint restore words exact; cache2 reused2; later epochs fresh"
+  },
+  "strict_clippy": {
+    "command": "cargo clippy --locked -p alife_training --features gpu-tests --test software_ppo_controller -- -D warnings",
+    "passed": true
+  },
+  "build": {
+    "target_directory": "/workspace/A-Life-frozen-gradient-hardware/target/fixture-tests",
+    "third_party_artifacts_seeded": true,
+    "all_local_workspace_artifacts_and_fingerprints_removed_before_build": true,
+    "current_workspace_crates_recompiled": true,
+    "profile": "test, workspace package overrides retained",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "test_binary_sha256": "71488119b0335d0407403e079525992dad8df925b5efda7f136d492ed0b4d979"
+  },
+  "physical_gpu_execution": false,
+  "windows_execution": false,
+  "new_performance_assays": 0,
+  "raw_evidence_directory": "/workspace/frozen-gradient-hardware-readiness",
+  "log_sha256": {
+    "parser-build.log": "a6c89015baa2d405d06996003a21c8eaa060cb5d8a1f9c0beb3c805ba763b492",
+    "hardware-required-negative.log": "5e100f49ced04d5f3264792339ef07a5bac1a87329806a2f6b51ca4493b364a3",
+    "software-active-oracle.log": "da7602f62ab6ce318fbacb2f298fe312c19e70cf1d832067e2dbac6ef9ec15e4",
+    "clippy.log": "96b57b533d2c51344d44fdbc94885959fdc62d7187fd0cd0c2efe7a4d3d9aa6e"
+  }
+}
