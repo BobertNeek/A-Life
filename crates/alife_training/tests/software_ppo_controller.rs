@@ -748,6 +748,10 @@ fn frozen_gradients_match_actual_controller_epochs_and_shared_restore() {
             let (natural, _, natural_loads) =
                 run_owned(&mut trainer, &mut state, &collected, config, 6, false);
             let natural = natural.unwrap();
+            assert_eq!(
+                natural_loads,
+                (0..=epochs).flat_map(|_| 0..2).collect::<Vec<_>>()
+            );
             assert_eq!(natural.completed_epochs, epochs);
             assert!(!natural.stopped_for_kl);
             assert_eq!(
@@ -1015,6 +1019,7 @@ fn frozen_gradients_fall_back_for_more_than_one_effective_batch() {
     let (normal, _, normal_loads) =
         run_owned(&mut trainer, &mut state, &collected, config, 7, false);
     let normal = normal.unwrap();
+    assert_eq!(normal_loads, (0..9).chain(0..9).collect::<Vec<_>>());
     progress(&before_actor, &trainer.checkpoint().unwrap(), weight);
     let expected = capture(&trainer, &mut state);
     trainer.restore_checkpoint(&before_actor).unwrap();
