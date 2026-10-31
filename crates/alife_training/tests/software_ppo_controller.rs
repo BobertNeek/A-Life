@@ -71,7 +71,7 @@ fn windows(
 ) -> Vec<PpoTrainingWindow> {
     (0..9)
         .map(|index| {
-            let (ticks, burn_in_ticks) = if index % 2 == 0 { (3, 0) } else { (5, 2) };
+            let (ticks, burn_in_ticks) = if index % 2 == 0 { (3, 0) } else { (5, 1) };
             let n = trainer.phenotype().neuron_count() as usize;
             let mut initial = vec![0.0; n];
             initial[neuron] = 0.4;
@@ -144,7 +144,7 @@ fn windows(
                     let old_logp = ((p[2] / z) * p[0] / (p[0] + p[1])).ln() as f32;
                     PpoTransition {
                         policy_version: policy,
-                        trajectory_id: (index * 3 + step) as u64,
+                        trajectory_id: (index * 8 + step) as u64,
                         step: 0,
                         action: PpoJointAction {
                             candidate_count: 4,
@@ -320,6 +320,8 @@ fn progress(
 
 fn receipt_words(receipt: &PpoUpdateReceipt) -> Vec<u32> {
     let mut words = vec![
+        receipt.collection_policy_version as u32,
+        (receipt.collection_policy_version >> 32) as u32,
         receipt.completed_epochs,
         u32::from(receipt.stopped_for_kl),
         receipt.actor_optimizer_step,
@@ -327,6 +329,27 @@ fn receipt_words(receipt: &PpoUpdateReceipt) -> Vec<u32> {
     ];
     words.extend(bits(&receipt.mean_kl_before_updates));
     words
+}
+
+fn window_words(windows: &[PpoTrainingWindow]) -> Vec<u32> {
+    let mut result = Vec::new();
+    for window in windows {
+        result.extend([
+            window.sequence.ticks.len() as u32,
+            window.sequence.burn_in_ticks as u32,
+            window.batch.len() as u32,
+        ]);
+        for transition in window.batch.transitions() {
+            result.extend([
+                transition.action.old_joint_log_probability.to_bits(),
+                transition.old_value.to_bits(),
+                transition.reward.to_bits(),
+            ]);
+        }
+        result.extend(bits(window.batch.advantages()));
+        result.extend(bits(window.batch.returns()));
+    }
+    result
 }
 
 #[test]
@@ -345,6 +368,17 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
         };
         let initial_actor = trainer.checkpoint().unwrap();
         let first = windows(&mut trainer, &mut state, neuron, lane, config, 7, 0.0);
+        assert_eq!(
+            first
+                .iter()
+                .map(|window| window.batch.len())
+                .collect::<Vec<_>>(),
+            [3, 4, 3, 4, 3, 4, 3, 4, 3]
+        );
+        artifact.insert(
+            format!("{value_coefficient}/first_windows"),
+            BTreeMap::from([("immutable_collection".into(), window_words(&first))]),
+        );
         let initial_value = state.checkpoint(trainer.session()).unwrap();
         let mut stale = first.clone();
         let mut transitions = stale[8].batch.transitions().to_vec();
@@ -417,6 +451,10 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
         );
 
         let next = windows(&mut trainer, &mut state, neuron, lane, config, 8, 0.0);
+        artifact.insert(
+            format!("{value_coefficient}/continued_windows"),
+            BTreeMap::from([("immutable_collection".into(), window_words(&next))]),
+        );
         let natural = train_recurrent_ppo_cohort(
             &mut trainer,
             &mut state,
@@ -465,6 +503,10 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
             9,
             -0.0005,
         );
+        artifact.insert(
+            format!("{value_coefficient}/gated_windows"),
+            BTreeMap::from([("immutable_collection".into(), window_words(&gated))]),
+        );
         let mut loads = Vec::new();
         let stopped = train_recurrent_ppo_cohort(
             &mut trainer,
@@ -494,7 +536,7 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
             format!("{value_coefficient}/kl_receipt"),
             BTreeMap::from([("receipt".into(), receipt_words(&stopped))]),
         );
-        eprintln!("software full PPO value_coefficient={value_coefficient}: 9 windows, effective batch8, accepted actor steps4, changed masked weight, exact restore, late frozen rejection and KL cancellation passed");
+        eprintln!("software full PPO value_coefficient={value_coefficient}: 9 unequal windows (3/4 loss rows), effective batch8, final actor optimizer_step=4, changed masked weight, exact restore, late frozen rejection and KL cancellation passed");
     }
     if let Some(directory) = std::env::var_os("ALIFE_SOFTWARE_PPO_CAPTURE_DIR") {
         std::fs::create_dir_all(&directory).unwrap();
