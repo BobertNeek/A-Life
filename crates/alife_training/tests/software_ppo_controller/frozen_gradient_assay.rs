@@ -1,5 +1,5 @@
 //! Bounded release-only actual-controller assay. All data is disposable synthetic
-//! replay; software Vulkan timings do not establish physical GPU throughput.
+//! replay; execution mode and actual adapter identity are recorded explicitly.
 
 use super::*;
 use std::{path::Path, time::Instant};
@@ -219,7 +219,7 @@ fn save_report(report: &serde_json::Value) {
 }
 
 #[test]
-#[ignore = "one bounded actual-PPO release assay on explicit software Vulkan; not physical GPU evidence"]
+#[ignore = "one bounded actual-PPO release assay with explicit test-adapter selection"]
 #[allow(clippy::assertions_on_constants)]
 fn representative_actual_ppo_frozen_gradient_release_assay() {
     // Keep ordinary debug correctness targets compilable; enforce release at execution.
@@ -299,7 +299,8 @@ fn representative_actual_ppo_frozen_gradient_release_assay() {
     assert_persistent_equal(&boundary_actor, &boundary_value, &trainer, &mut state);
     let stop_file = std::env::var_os("ALIFE_FROZEN_ASSAY_STOP_FILE");
     let mut report = serde_json::json!({
-        "scope": "actual full PPO controller, explicit CPU Vulkan software test backend, disposable synthetic terminal replay only",
+        "scope": "actual full PPO controller, disposable synthetic terminal replay only",
+        "execution": execution::metadata(&trainer),
         "ppo_config": config,
         "warm_ppo_config": warm_config,
         "actor_adam_config": boundary_actor.config,
@@ -325,7 +326,7 @@ fn representative_actual_ppo_frozen_gradient_release_assay() {
         "warm_actor_progress": warm_progress,
         "pairs": [], "completed_measured_pairs": 0, "stopped": false,
         "performance_claim": false,
-        "rss_scope": "external driver may report whole-process software RSS; not VRAM or live allocator residency",
+        "rss_scope": "external driver may report whole-process RSS; not VRAM or live allocator residency",
     });
     let mut completed_measured_pairs = 0;
     for pair in 0..6 {

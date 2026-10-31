@@ -1,4 +1,4 @@
-//! Actual public PPO controller on explicit software Vulkan, never hardware evidence.
+//! Actual public PPO controller with explicit test-adapter selection.
 #![cfg(feature = "gpu-tests")]
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -17,6 +17,9 @@ use alife_training::{
     PpoValueHeadCheckpoint, StageTrainableMask, TrainingError, TrainingInitialState,
     TrainingReplayCandidate, TrainingReplayTick, TrainingSequence,
 };
+
+#[path = "software_ppo_controller/execution.rs"]
+mod execution;
 
 fn fixture() -> (FoundationTrainer, usize, usize, usize) {
     fixture_with_wide_mask(false)
@@ -65,11 +68,10 @@ fn fixture_with_wide_mask(wide_mask: bool) -> (FoundationTrainer, usize, usize, 
     };
     assert!(indices.contains(&(weight as u32)));
     let mask = StageTrainableMask::from_synapse_indices(&phenotype, &indices).unwrap();
-    let session = GpuAuthoritativeSession::new_software_vulkan_training_test().unwrap();
-    assert!(session.backend().is_software_training_test());
+    let session =
+        execution::new_session().expect("explicit selected training fixture adapter unavailable");
     eprintln!(
-        "actual_controller_adapter={:?}; neurons={}; synapses={}; trainable_weights={}; masked_weight={weight}",
-        session.backend().software_training_test_adapter_info().unwrap(),
+        "actual_controller_fixture neurons={}; synapses={}; trainable_weights={}; masked_weight={weight}",
         phenotype.neuron_count(),
         phenotype.synapses().len(),
         mask.trainable_count()
@@ -77,6 +79,10 @@ fn fixture_with_wide_mask(wide_mask: bool) -> (FoundationTrainer, usize, usize, 
     let trainer =
         FoundationTrainer::from_session(session, phenotype, source, mask, AdamWConfig::default())
             .unwrap();
+    eprintln!(
+        "actual_controller_execution_metadata={}",
+        execution::metadata(&trainer)
+    );
     assert!(trainer.replay_buffer_word_lengths().is_err());
     (trainer, weight, neuron, lane)
 }
@@ -513,7 +519,7 @@ fn assert_semantics_equal(
 }
 
 #[test]
-#[ignore = "explicit synthetic software Vulkan full PPO controller oracle; no hardware or throughput claim"]
+#[ignore = "explicit synthetic full PPO controller oracle; inspect actual adapter identity"]
 fn actual_controller_batches_restores_and_rejects_before_updates() {
     let mut artifact = BTreeMap::new();
     for value_coefficient in [0.0, 0.5] {
@@ -694,7 +700,7 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
             format!("{value_coefficient}/kl_receipt"),
             BTreeMap::from([("receipt".into(), receipt_words(&stopped))]),
         );
-        eprintln!("software full PPO value_coefficient={value_coefficient}: 9 unequal windows (3/4 loss rows), effective batch8, final actor optimizer_step=4, changed masked weight, exact restore, late frozen rejection and KL cancellation passed");
+        eprintln!("full PPO value_coefficient={value_coefficient}: 9 unequal windows (3/4 loss rows), effective batch8, final actor optimizer_step=4, changed masked weight, exact restore, late frozen rejection and KL cancellation passed");
     }
     if let Some(directory) = std::env::var_os("ALIFE_SOFTWARE_PPO_CAPTURE_DIR") {
         std::fs::create_dir_all(&directory).unwrap();
@@ -778,7 +784,7 @@ fn warm_pair(
 }
 
 #[test]
-#[ignore = "explicit synthetic software Vulkan frozen-gradient full PPO oracle; no hardware or throughput claim"]
+#[ignore = "explicit synthetic frozen-gradient full PPO oracle; inspect actual adapter identity"]
 fn frozen_gradients_match_actual_controller_epochs_and_shared_restore() {
     for value_coefficient in [0.0, 0.5] {
         for epochs in [1, 2] {
@@ -875,7 +881,7 @@ fn frozen_gradients_match_actual_controller_epochs_and_shared_restore() {
 }
 
 #[test]
-#[ignore = "explicit synthetic software Vulkan KL cancellation and restart oracle"]
+#[ignore = "explicit synthetic KL cancellation and restart oracle"]
 fn frozen_gradients_preserve_kl_cancellation_and_restart() {
     let (mut trainer, weight, neuron, lane) = fixture();
     let mut state = PpoTrainingState::default();
@@ -952,7 +958,7 @@ fn frozen_gradients_preserve_kl_cancellation_and_restart() {
 }
 
 #[test]
-#[ignore = "explicit synthetic software Vulkan frozen-validation and gradient-failure ordering oracle"]
+#[ignore = "explicit synthetic frozen-validation and gradient-failure ordering oracle"]
 fn frozen_gradients_defer_numeric_faults_and_preserve_loader_failures() {
     let (mut trainer, weight, neuron, lane) = fixture();
     let mut state = PpoTrainingState::default();
@@ -1057,7 +1063,7 @@ fn frozen_gradients_defer_numeric_faults_and_preserve_loader_failures() {
 }
 
 #[test]
-#[ignore = "explicit synthetic software Vulkan cohort-size fallback oracle"]
+#[ignore = "explicit synthetic cohort-size fallback oracle"]
 fn frozen_gradients_fall_back_for_more_than_one_effective_batch() {
     let (mut trainer, weight, neuron, lane) = fixture();
     let mut state = PpoTrainingState::default();

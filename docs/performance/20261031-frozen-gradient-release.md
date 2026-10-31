@@ -22,24 +22,24 @@ No default, CLI, schema, shader or normal device-admission behavior was changed.
 
 Exactly one warmup pair and five alternating measured pairs ran; all raw times
 are retained, with no retries or additional assays. Actual adapter information
-was CPU llvmpipe LLVM19.1.7, Mesa25.0.7, Vulkan. Cargo `--release` optimized all
+was CPU llvmpipe LLVM 19.1.7, Mesa 25.0.7, Vulkan. Cargo `--release` optimized all
 dependencies. A dedicated target forced current local core/storage/world/backend/
 runtime/training compilation; optimized third-party dependency artifacts came
 from a completed release build. Compilers were quiet during the assay.
 
 Both paths invoke the same actual controller with identical immutable Arc
 windows and full actor/value checkpoints. The procedural N2048/S32768 fixture
-uses every third synapse as trainable: 10,923 coordinates. Windows with 256 ticks/burn0 and
-384 ticks/burn128 each contribute 256 loss rows; every tick uses all four microsteps,
+uses every third synapse as trainable: 10,923 coordinates. Windows with 256 ticks / burn-in 0 and
+384 ticks / burn-in 128 each contribute 256 loss rows; every tick uses all four microsteps,
 without speech labels or auxiliary loss. GPU-generated collection log
-probabilities and values are fixed once outside timing. The target uses epochs2,
-effective batch8, value coefficient0, entropy0 and target KL100; these are chosen
+probabilities and values are fixed once outside timing. The target uses 2 epochs,
+effective batch 8, value coefficient 0, entropy 0 and target KL 100; these are chosen
 fixture settings, not a complete production workload. Full configs are in the
 [receipt](20261031-frozen-gradient-release.json).
 
-A prior actual accepted update with value coefficient.5 seeds nonzero actor and
+A prior actual accepted update with value coefficient .5 seeds nonzero actor and
 value-head history. Before each clock, both modes restore that exact boundary,
-precreate the384-tick replay and PPO objective, assert persistent bits, and flush
+precreate the 384-tick replay and PPO objective, assert persistent bits, and flush
 all setup submissions. The clock includes the whole controller call: frozen
 validation, Arc loaders, packing, forwards, objective, BPTT/ordered accumulation,
 normal metric/status waits, KL checks and Adam. Construction, collection,
@@ -48,10 +48,10 @@ and comparisons are outside the clock.
 
 After every pair, all 14 captured sections/**9,711,889 u32 words**, plus receipt
 bits and six loader indices, matched exactly. Each mode accepted two actor steps
-(ending at3 after warmup), changed 287 trainable weights and had 177 coordinates
+(ending at 3 after warmup), changed 287 trainable weights and had 177 coordinates
 with nonzero first/second moments. All 10,923 trainable integer ages advanced
-by2; all 21,845 frozen coordinates preserved weight/moment/age bits. Nonzero
-value-head parameters/moments stayed bit-exact at value step1. The cache requested
+by 2; all 21,845 frozen coordinates preserved weight/moment/age bits. Nonzero
+value-head parameters/moments stayed bit-exact at value step 1. The cache requested
 278,544 bytes, cached/reused exactly two raw vectors, and was discarded before
 update; the second epoch performed fresh original evaluation. Full logical
 state/output, all five value planes and objective fields were compared.
