@@ -67,10 +67,11 @@ jobs:
           components: clippy, rustfmt
       - name: Check formatting
         run: cargo fmt --all --check
-      - name: Run CPU kernels and native continuation contracts without an ICD
+      - name: Run CPU kernels, replay packing and native continuation contracts without an ICD
         run: |
           cargo test --locked -p alife_training --features cpu-backend --lib native_receipt::
           cargo test --locked -p alife_training --features cpu-backend --lib cpu::
+          cargo test --locked -p alife_training --features cpu-backend --lib trainer::replay_packing_assay::tests::
           cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_collect_only --test cpu_cli --test backend_handoff --test checkpoint_validation -- --nocapture
       - name: Inference-only founder merge contracts
         env:
