@@ -375,6 +375,20 @@ Coverage is deliberately scoped:
   mismatch. Invalid selectors initially exposed an error-order change in the
   prototype; it now copies both possible banks for that invalid metadata and
   lets the original consumer produce its contextual rejection.
+- A focused follow-up closes the paired-nonfinite active-weight coverage gap:
+  NaN (`7fc00001`), positive infinity and negative infinity are written with
+  identical raw bits at both pre and post. Both active banks, lifetime/fast
+  weights and first/last active words produce 24 distinct corruptions. Full,
+  selected and both-bank views each reject all 24, giving 72 production replay
+  conversion executions. The complete active weight prefixes are explicitly
+  bitwise equal and earlier topology checks pass. The exact typed error must
+  be `ScaffoldContractError::InvalidDecisionEvidence`, with its original error
+  string; the earlier no-change failure is a different string error and the
+  later sequence validator uses `PhenotypeCompile`. Twenty-four corresponding
+  paired-finite controls are accepted. Thus these cases isolate the weight
+  finite guard rather than stopping at pre/post inequality. This focused
+  addition fixes activation side 0 and four microsteps; it does not repeat the
+  original twelve-way side/bank/microstep matrix for this new error family.
 - Ninety-six distinct next-boundary cases compare full versus selected-view
   continuity, including recurrent/homeostasis resets, unrecorded weight/bank
   changes, dispatch/generation discontinuities and allowed recorded plastic
@@ -404,12 +418,18 @@ integrity tests would still be required before deploying a selective copy path.
 
 Run with `cargo test --locked -p alife_game_app --features cpu-training,gpu-tests
 --lib --config profile.test.package.alife_game_app.opt-level=0
-selective_capture_projection_falsification -- --ignored --nocapture`.
-`gpu-tests` enables test-support types; the named test never constructs a device.
-This is one deterministic falsification run, not a timing benchmark. The test
+selective_capture_ -- --ignored --nocapture --test-threads=1`.
+`gpu-tests` enables test-support types; neither named test constructs a device.
+This runs the original projection fixture and the focused paired-nonfinite
+regression. These are deterministic falsification cases, not a timing benchmark. The test
 profile overrides the app to opt-level 0; core/world/backend/runtime are opt-level
 2, debug assertions remain enabled. See the raw result and source manifest in
 [the selective-range evidence](20261031-selective-range-falsification.json).
+The coverage-completion run passed both explicit fixtures, nineteen replay I/O
+tests (one existing manual benchmark ignored), strict app library/tests Clippy,
+the normal CPU-training library check and formatting. Production source hashes
+are unchanged; prior backend/pipeline checks are identified separately in the
+evidence rather than represented as rerun checks.
 
 ## Workload and boundaries
 

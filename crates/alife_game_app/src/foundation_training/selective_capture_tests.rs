@@ -538,6 +538,139 @@ fn identical_rejection(step: &FoundationTrainingStep, asset: &FoundationWeightAs
     expected
 }
 
+fn weight_validation_view(
+    step: &FoundationTrainingStep,
+    both_banks: Option<bool>,
+) -> FoundationTrainingStep {
+    let mut view = step.clone();
+    if let Some(both_banks) = both_banks {
+        view.before = project_plan(&step.before, false, 0x7fc0_0001, both_banks)
+            .unwrap()
+            .0;
+        view.after_inference = project_plan(&step.after_inference, true, 0x7fc0_0002, both_banks)
+            .unwrap()
+            .0;
+    }
+    view
+}
+
+fn assert_matching_active_weight_words(step: &FoundationTrainingStep) {
+    let (before_lifetime, before_fast) = active_weight_ranges(&step.before).unwrap();
+    let (after_lifetime, after_fast) = active_weight_ranges(&step.after_inference).unwrap();
+    assert_eq!(
+        snapshot_words(&step.before, before_lifetime).unwrap(),
+        snapshot_words(&step.after_inference, after_lifetime).unwrap()
+    );
+    assert_eq!(
+        snapshot_words(&step.before, before_fast).unwrap(),
+        snapshot_words(&step.after_inference, after_fast).unwrap()
+    );
+}
+
+#[test]
+#[ignore = "Explicit CPU-only paired nonfinite-weight rejection; no GPU capture implementation"]
+fn selective_capture_matching_nonfinite_active_weights() {
+    let (base, _) = fixture();
+    let plans = [
+        ("full", None),
+        ("selected", Some(false)),
+        ("both_banks", Some(true)),
+    ];
+    let mut finite_controls = 0;
+    let mut rejections = Vec::new();
+    for bank in [0, 1] {
+        let mut step = base.clone();
+        step.before.active_weight_bank = bank;
+        step.after_inference.active_weight_bank = bank;
+        foundation_replay_sequence(std::slice::from_ref(&step), 0).unwrap();
+        let (before_lifetime, before_fast) = active_weight_ranges(&step.before).unwrap();
+        let (after_lifetime, after_fast) = active_weight_ranges(&step.after_inference).unwrap();
+        for (kind, before_range, after_range) in [
+            ("lifetime", before_lifetime, after_lifetime),
+            ("fast", before_fast, after_fast),
+        ] {
+            assert_eq!(
+                before_range.end - before_range.start,
+                step.before.phenotype.synapses().len() as u32
+            );
+            assert_eq!(before_range.len(), after_range.len());
+            for at_end in [false, true] {
+                let before_index = (if at_end {
+                    before_range.end - 1
+                } else {
+                    before_range.start
+                } - step.before.mutable_word_base) as usize;
+                let after_index = (if at_end {
+                    after_range.end - 1
+                } else {
+                    after_range.start
+                } - step.after_inference.mutable_word_base)
+                    as usize;
+                let mut finite = step.clone();
+                finite.before.mutable_words[before_index] = 0.125_f32.to_bits();
+                finite.after_inference.mutable_words[after_index] = 0.125_f32.to_bits();
+                for (_, plan) in plans {
+                    let view = weight_validation_view(&finite, plan);
+                    assert_matching_active_weight_words(&view);
+                    foundation_replay_sequence(std::slice::from_ref(&view), 0).unwrap();
+                    finite_controls += 1;
+                }
+                for (name, bits) in [
+                    ("nan", 0x7fc0_0001),
+                    ("positive_infinity", f32::INFINITY.to_bits()),
+                    ("negative_infinity", f32::NEG_INFINITY.to_bits()),
+                ] {
+                    let mut bad = step.clone();
+                    bad.before.mutable_words[before_index] = bits;
+                    bad.after_inference.mutable_words[after_index] = bits;
+                    for (plan_name, plan) in plans {
+                        let view = weight_validation_view(&bad, plan);
+                        // Check the exact production no-change predicate on the
+                        // complete active prefixes, including the nonfinite word.
+                        assert_matching_active_weight_words(&view);
+                        // These existing earlier checks must still succeed. With
+                        // unchanged metadata and matching finite controls above,
+                        // only the paired nonfinite weight differs from admission.
+                        let recurrent = recurrent_synapse_count(&view.before.phenotype);
+                        validate_snapshot_topology_with_recurrent(&view.before, recurrent).unwrap();
+                        validate_snapshot_topology_with_recurrent(&view.after_inference, recurrent)
+                            .unwrap();
+                        let error =
+                            foundation_replay_sequence(std::slice::from_ref(&view), 0).unwrap_err();
+                        assert_eq!(
+                            error.downcast_ref::<ScaffoldContractError>(),
+                            Some(&ScaffoldContractError::InvalidDecisionEvidence)
+                        );
+                        let error = error.to_string();
+                        assert_eq!(error, invalid().to_string());
+                        rejections.push(serde_json::json!({
+                            "weight_bank":bank,"weight_kind":kind,"at_end":at_end,
+                            "nonfinite":name,"bits_hex":format!("{bits:08x}"),"plan":plan_name,
+                            "whole_active_weight_prefixes_bitwise_equal":true,
+                            "earlier_topology_checks_pass":true,
+                            "error_variant":"InvalidDecisionEvidence","error":error,
+                        }));
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(finite_controls, 24);
+    assert_eq!(rejections.len(), 72);
+    println!(
+        "{}",
+        serde_json::json!({
+            "assay":"selective_capture_matching_nonfinite_active_weights",
+            "device_created":false,"synthetic_snapshots":true,
+            "activation_side":base.before.active_activation_side,"microsteps":base.throttle.microsteps,
+            "distinct_paired_corruptions":24,"finite_paired_controls":finite_controls,
+            "rejection_executions":rejections.len(),"rejections":rejections,
+            "production_replay_conversion_tested":true,"production_semantics_changed":false,
+            "gpu_copy_or_mapper_tested":false,"gpu_fail_stop_executed":false,
+        })
+    );
+}
+
 fn packet_plans(step: &FoundationTrainingStep) -> Vec<serde_json::Value> {
     let mut result = Vec::new();
     let limit = 64_u64 * 1024 * 1024;
