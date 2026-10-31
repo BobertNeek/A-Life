@@ -10,7 +10,7 @@ use alife_core::{
     NormalizedScalar, PhenotypeCompiler, SensorProfile, Tick,
 };
 
-fn fixture() -> (BrainPhenotype, FoundationWeightAsset) {
+pub(super) fn fixture() -> (BrainPhenotype, FoundationWeightAsset) {
     let capacity = BrainCapacityClass::n2048();
     let genome = BrainGenome::scaffold(0x7A11, capacity.id());
     let development =
@@ -107,7 +107,11 @@ fn timed(mut f: impl FnMut(), repetitions: usize) -> Vec<f64> {
         })
         .collect()
 }
-fn window(t: &CpuFoundationTrainer, ticks: usize, burn: usize) -> CpuResidualTrainingWindow {
+pub(super) fn window(
+    t: &CpuFoundationTrainer,
+    ticks: usize,
+    burn: usize,
+) -> CpuResidualTrainingWindow {
     let mut q = sequence(t.phenotype(), ticks, burn);
     for (k, tick) in q.ticks.iter_mut().enumerate() {
         let base = tick.candidates.clone();
@@ -188,7 +192,7 @@ fn window(t: &CpuFoundationTrainer, ticks: usize, burn: usize) -> CpuResidualTra
         critic_rows: rows,
     }
 }
-fn configuration() -> PpoConfig {
+pub(super) fn configuration() -> PpoConfig {
     PpoConfig {
         epochs: 2,
         target_kl: 100.,
@@ -196,7 +200,7 @@ fn configuration() -> PpoConfig {
         ..Default::default()
     }
 }
-fn learner(p: &BrainPhenotype, s: &FoundationWeightAsset) -> CpuFoundationTrainer {
+pub(super) fn learner(p: &BrainPhenotype, s: &FoundationWeightAsset) -> CpuFoundationTrainer {
     let mut t = trainer(p, s);
     let mut ck = t.checkpoint();
     ck.optimizer_step = 16_777_220;
@@ -215,7 +219,7 @@ fn learner(p: &BrainPhenotype, s: &FoundationWeightAsset) -> CpuFoundationTraine
     t.restore_checkpoint(ck).unwrap();
     t
 }
-fn value(p: &BrainPhenotype) -> CpuValueHead {
+pub(super) fn value(p: &BrainPhenotype) -> CpuValueHead {
     let width = p.neuron_count() as usize + 1;
     let mut parameters = vec![0.; width * 3];
     for i in 0..width {

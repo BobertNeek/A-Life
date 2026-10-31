@@ -157,6 +157,9 @@ The separate successive-update regression checks the final result of four
 updates against recomputation; it does not assert equivalence for all possible
 inputs or establish behavioral learning.
 
+These numerical trial files are the EPYC cohort. Independent Xeon ABBA checks
+are a distinct environment/cohort and must not be pooled with these samples.
+
 No formal confidence interval is claimed. Short sequential samples share VM,
 allocator and cache state; CPU frequency/contention are uncontrolled. Observed
 ranges and median ratios describe these runs only. Actual workload variants,
@@ -227,7 +230,13 @@ batch. Every following window and epoch calls forward again. The regression
 four successive updates against the public path that independently recomputes
 forward for every gradient. It covers unequal window lengths, burn-in, inactive
 microsteps, auxiliary imitation, six-step speech, frozen state and integer ages
-above 2^24. All 15 CPU backend tests and all 21 CPU collector tests passed, including
+above 2^24. A subsequent normal unit regression,
+`residual_tape_reuse_matches_recomputed_forward_for_unequal_windows`, combines
+3-row and 5-row windows in the same effective batch. It uses nonzero critic
+parameters/moments and compares complete actor/critic checkpoints and KL receipts
+over two updates against the public fresh-forward probe path.
+
+All 15 CPU backend tests and all 21 CPU collector tests passed, including
 finite-difference, clipping, stale-policy, private restore, sleep and preflight
 rejection coverage. The expanded CPU-enabled package run passed 195 tests across 16
 targets (one explicitly ignored benchmark). Full package Clippy with warnings

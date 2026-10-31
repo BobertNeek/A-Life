@@ -362,3 +362,104 @@ fn validate_residual_window(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod equivalence_tests {
+    use super::*;
+    use crate::cpu::hotpath_bench;
+
+    #[test]
+    fn residual_tape_reuse_matches_recomputed_forward_for_unequal_windows() {
+        let (phenotype, source) = hotpath_bench::fixture();
+        let mut actual_actor = hotpath_bench::learner(&phenotype, &source);
+        let mut expected_actor = hotpath_bench::learner(&phenotype, &source);
+        let mut actual_value = hotpath_bench::value(&phenotype);
+        let mut expected_value = hotpath_bench::value(&phenotype);
+        let config = hotpath_bench::configuration();
+        let windows = [
+            hotpath_bench::window(&actual_actor, 3, 0),
+            hotpath_bench::window(&actual_actor, 7, 2),
+        ];
+        let counts = windows.each_ref().map(|w| w.actor.batch.len());
+        assert_eq!(counts, [3, 5]);
+        let total = counts.iter().sum::<usize>();
+        let mut expected_kl = Vec::new();
+        // Reference deliberately discards loss evaluation's tape and uses the
+        // public standalone probe, which computes forward again. Keep the
+        // established residual derivative and full Adam proposal in both paths.
+        for _ in 0..config.epochs {
+            let mut actor_gradient = vec![0.; expected_actor.weights().len()];
+            let mut value_gradient = vec![0.; phenotype.neuron_count() as usize + 1];
+            let mut kl = 0.;
+            for (window, count) in windows.iter().zip(counts) {
+                let (adjoints, objectives, _, _) = super::super::objective::evaluate_window(
+                    &expected_actor,
+                    &window.actor,
+                    config,
+                    7400,
+                )
+                .unwrap();
+                let probe = expected_actor
+                    .probe_replay_gradients_with_speech(
+                        &window.actor.sequence,
+                        &adjoints,
+                        &window.actor.speech_targets,
+                    )
+                    .unwrap();
+                let scale = count as f32 / total as f32;
+                for (g, part) in actor_gradient.iter_mut().zip(probe.gradients) {
+                    *g += part * scale;
+                }
+                let (_, parts) = expected_value
+                    .residual_gradients(
+                        &window.critic_features,
+                        &window.critic_rows,
+                        config.value_coefficient,
+                    )
+                    .unwrap();
+                for (g, part) in value_gradient.iter_mut().zip(parts) {
+                    *g += part * scale;
+                }
+                for objective in objectives {
+                    kl += objective.approximate_kl / total as f32;
+                }
+            }
+            assert!(kl <= config.target_kl);
+            expected_kl.push(kl);
+            let next_value = expected_value
+                .proposal(&value_gradient, config.value_optimizer, 7400)
+                .unwrap();
+            expected_actor.apply_gradients(&actor_gradient).unwrap();
+            expected_value = next_value;
+        }
+        let receipt = train_cpu_residual_cohort(
+            &mut actual_actor,
+            &mut actual_value,
+            windows.len(),
+            2,
+            |i| Ok(windows[i].clone()),
+            config,
+            7400,
+        )
+        .unwrap();
+        assert_eq!(receipt.completed_epochs, config.epochs);
+        assert!(!receipt.stopped_for_kl);
+        assert_eq!(receipt.mean_kl_before_updates, expected_kl);
+        assert_eq!(
+            receipt.actor_optimizer_step,
+            expected_actor.optimizer_step()
+        );
+        assert_eq!(
+            receipt.value_optimizer_step,
+            expected_value.checkpoint().optimizer_step
+        );
+        assert_eq!(
+            serde_json::to_vec(&actual_actor.checkpoint()).unwrap(),
+            serde_json::to_vec(&expected_actor.checkpoint()).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&actual_value.checkpoint()).unwrap(),
+            serde_json::to_vec(&expected_value.checkpoint()).unwrap()
+        );
+    }
+}
