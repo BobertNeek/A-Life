@@ -253,13 +253,14 @@ where
                 if w.actor.batch.len() != count {
                     return Err(super::invalid());
                 }
-                let (adjoints, objectives, _replayed) =
+                let (adjoints, objectives, _replayed, tape) =
                     super::objective::evaluate_window(trainer, &w.actor, config, version)?;
                 validate_residual_window(&w, None, config)?;
-                let probe = trainer.probe_replay_gradients_with_speech(
+                let probe = trainer.replay_gradients_from_tape(
                     &w.actor.sequence,
                     &adjoints,
                     &w.actor.speech_targets,
+                    &tape,
                 )?;
                 let scale = count as f32 / total as f32;
                 for (g, part) in gradient.iter_mut().zip(probe.gradients) {
@@ -302,7 +303,7 @@ pub(super) fn validate_frozen_residual_window(
     config: PpoConfig,
     version: u64,
 ) -> Result<(), TrainingError> {
-    let (_, objectives, replayed) =
+    let (_, objectives, replayed, _) =
         super::objective::evaluate_window(trainer, &window.actor, config, version)?;
     validate_residual_window(window, Some(&replayed), config)?;
     value.residual_gradients(

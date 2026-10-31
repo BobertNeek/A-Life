@@ -392,7 +392,12 @@ impl CpuValueHead {
     }
 }
 
-type WindowEvaluation = (Vec<Vec<f32>>, Vec<CpuPpoObjective>, Vec<Vec<f32>>);
+type WindowEvaluation = (
+    Vec<Vec<f32>>,
+    Vec<CpuPpoObjective>,
+    Vec<Vec<f32>>,
+    super::replay::Tape,
+);
 pub(super) fn evaluate_window(
     trainer: &CpuFoundationTrainer,
     window: &PpoTrainingWindow,
@@ -418,7 +423,8 @@ pub(super) fn evaluate_window(
             }
         }
     }
-    let replay = trainer.evaluate_replay(&window.sequence)?;
+    let tape = trainer.forward(&window.sequence)?;
+    let replay = &tape.evaluation;
     let mut adjoints = window.sequence.ticks[window.sequence.burn_in_ticks..]
         .iter()
         .map(|t| vec![0.; t.candidates.len()])
@@ -459,7 +465,7 @@ pub(super) fn evaluate_window(
         objectives.push(objective);
         features.push(replay.final_activations[tick].clone());
     }
-    Ok((adjoints, objectives, features))
+    Ok((adjoints, objectives, features, tape))
 }
 
 /// Bounded-memory microbatch BPTT. Every window is freshly collected under one
@@ -493,7 +499,7 @@ where
     let mut counts = Vec::new();
     for i in 0..window_count {
         let w = load_window(i)?;
-        let (_, objectives, features) = evaluate_window(trainer, &w, config, version)?;
+        let (_, objectives, features, _) = evaluate_window(trainer, &w, config, version)?;
         for (r, f) in features.iter().enumerate() {
             let error = value.predict(f)? - w.batch.returns()[r];
             finite(&[error, 0.5 * config.value_coefficient * error * error])?;
@@ -525,12 +531,13 @@ where
                 if w.batch.len() != count {
                     return Err(invalid());
                 }
-                let (adjoints, objectives, features) =
+                let (adjoints, objectives, features, tape) =
                     evaluate_window(trainer, &w, config, version)?;
-                let probe = trainer.probe_replay_gradients_with_speech(
+                let probe = trainer.replay_gradients_from_tape(
                     &w.sequence,
                     &adjoints,
                     &w.speech_targets,
+                    &tape,
                 )?;
                 let scale = count as f32 / total as f32;
                 for (g, part) in gradients.iter_mut().zip(probe.gradients) {
