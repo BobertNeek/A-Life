@@ -11,8 +11,8 @@ initialization, accounting and device-loss handling. Ordinary factory/acquisitio
 CPU and Noop rejection remain unchanged. The fixture permits the Ready offline
 training queue and rejects live brain admission, tick dispatch, restore staging
 and live actions through a gameplay session wrapper. Backend/runtime software
-smoke tests and four admission/selection CPU regressions passed. This feature adds no ordinary
-software fallback.
+smoke tests and four admission/selection CPU regressions passed. This feature
+adds no ordinary software fallback.
 
 Both controller runs used the existing `FoundationTrainer::from_session`,
 `PpoTrainingState` and public cohort controller. No alternate PPO implementation
@@ -61,6 +61,24 @@ by the separate direct-device scratch oracle. This test uses terminal transition
 and does not exercise continuing/bootstrap GAE, forced actor-apply failure/value
 rollback, post-KL training restart, live world behavior or a real checkpoint.
 
+A separate, unchanged 169-line public upload test prepares five ticks, then three,
+through the actual trainer and `PpoTrainingState::prepare_for_replay`. Both legacy
+and reuse accept the last admitted boundary in PPO, frozen-value and imitation
+uploads and reject four one-word overruns with `InvalidDecisionEvidence`. The
+reuse run has 868 logical output words backed by 1,444 words and 79,872 logical
+state words backed by 129,024 words. Its rejected overruns therefore remain
+inside the backing allocations: the real facade preserves logical bounds. These
+are descriptor-admission checks; no artificial boundary row is evaluated by a
+kernel. Test/source/binary hashes and the legacy/reuse extents are in the receipt.
+
+The first bounds attempt after switching worktrees reused a legacy Cargo
+artifact and is excluded. A source-byte-preserving mtime invalidation forced
+observed recompilation; the accepted reuse run has a different copied binary
+hash and the larger backing allocations above. The full controller comparison
+used one worktree before/after the source cherry-pick, with observed
+recompilation and distinct copied binaries. Separate Cargo target directories
+avoid this cache ambiguity when reproducing across multiple worktrees.
+
 For each recorded source, the cloud command was:
 
 ```bash
@@ -75,3 +93,9 @@ The second run used `/workspace/software-ppo-capacity` as the capture directory.
 The environment selects only the local Mesa Vulkan ICD with two software worker
 threads. The test profile retains workspace package overrides. Test elapsed times
 are execution logs, not a training performance benchmark.
+
+The separate bounds command is `cargo test -p alife_training --features gpu-tests
+--test software_ppo_objective_bounds -- --ignored --nocapture`. Its legacy source
+is the legacy controller commit plus the bounds-test-only commit; the receipt
+records both resulting source identities. The original controller fixture remains
+unchanged across both primary runs and this follow-up.

@@ -556,5 +556,37 @@
         "sha256_le_u32": "c55462cf1e9da9375b3e87095278ef540831bd12106b9a9259c76d149c87028a"
       }
     }
+  },
+  "objective_upload_bounds": {
+    "test_source_sha256": "1d00b6435d8d96d319fe81ec4e0410e316266dca4bad7a8171e3281ac0777036",
+    "paths": [
+      "PPO logits and features",
+      "frozen-value features",
+      "imitation logits"
+    ],
+    "positive_admissions_per_run": 3,
+    "typed_overrun_rejections_per_run": 4,
+    "kernels_evaluated_at_artificial_boundary_rows": false,
+    "runs": {
+      "legacy": {
+        "source_commit": "b61bf50f2ffad3a3a5bd90942342f360e888d906",
+        "binary_sha256": "9de272bb818e47ca050daf3cbe5a4fb5c98110797ceea4f12793de9643a7ed8e",
+        "logical_output_words": 868,
+        "physical_output_words": 868,
+        "logical_state_words": 79872,
+        "physical_state_words": 79872,
+        "passed": true
+      },
+      "capacity": {
+        "source_commit": "0235b5b1029537ebe077b685148ea42e476ac044",
+        "binary_sha256": "460d72e51287d7890341bfb11d3802ef93fd45e0c264fddaa82e18094c7772e5",
+        "logical_output_words": 868,
+        "physical_output_words": 1444,
+        "logical_state_words": 79872,
+        "physical_state_words": 129024,
+        "passed": true
+      }
+    },
+    "excluded_attempt": "First capacity attempt reused a stale legacy artifact through the shared Cargo target; excluded. mtime-only invalidation forced observed current-source recompilation before the recorded capacity run. Source bytes unchanged."
   }
 }
