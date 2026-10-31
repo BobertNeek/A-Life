@@ -293,6 +293,7 @@ fn reused_scratch_matches_fresh_shapes_and_preserves_failed_preparation() {
             candidate.layout.training_words,
             "upload",
         );
+        let before_weights = read(&device, &queue, &candidate.weights);
         queue.submit([
             encode_update(&device, &baseline, &phenotype, None),
             encode_update(&device, &candidate, &phenotype, None),
@@ -336,6 +337,16 @@ fn reused_scratch_matches_fresh_shapes_and_preserves_failed_preparation() {
         let norm = f32::from_bits(output[candidate.layout.metrics as usize + 2]);
         assert!(norm.is_finite() && norm > 0.0);
         let actual_optimizer = read(&device, &queue, &candidate._optimizer);
+        let after_weights = read(&device, &queue, &candidate.weights);
+        let changed_trainable = (0..n)
+            .filter(|coordinate| {
+                coordinate % 3 == 0 && before_weights[*coordinate] != after_weights[*coordinate]
+            })
+            .count();
+        assert!(
+            changed_trainable > 0,
+            "an accepted update must change at least one trainable weight"
+        );
         for coordinate in 0..n {
             assert_eq!(
                 actual_optimizer[n * 2 + coordinate],
@@ -347,12 +358,13 @@ fn reused_scratch_matches_fresh_shapes_and_preserves_failed_preparation() {
                     }
             );
             if coordinate % 3 != 0 {
+                assert_eq!(after_weights[coordinate], before_weights[coordinate]);
                 assert_eq!(actual_optimizer[coordinate], optimizer[coordinate]);
                 assert_eq!(actual_optimizer[n + coordinate], optimizer[n + coordinate]);
             }
         }
         step += 1;
-        eprintln!("scratch exact continuation case {index}: ticks={ticks}, burn={burn_in}, dendrite_variant={variant}");
+        eprintln!("scratch exact accepted device update case {index}: ticks={ticks}, burn={burn_in}, dendrite_variant={variant}, changed_trainable_weights={changed_trainable}");
     }
     assert!(
         reused >= 6,
@@ -419,4 +431,204 @@ fn reused_scratch_matches_fresh_shapes_and_preserves_failed_preparation() {
         )
         .unwrap();
     eprintln!("scratch reuse cases={reused}, metadata-only growth cases={metadata_only}; invalid preparations preserved bytes and layout");
+}
+
+fn capacities(gpu: &TrainerGpuState) -> serde_json::Value {
+    let fields = [
+        ("training", gpu.training.size()),
+        ("state", gpu.state.size()),
+        ("gradients", gpu.gradients.size()),
+        ("outputs", gpu.outputs.size()),
+        ("headers", gpu.step_headers.size()),
+        ("metadata", gpu._meta.size()),
+        ("weights", gpu.weights.size()),
+        ("optimizer", gpu._optimizer.size()),
+        ("mask", gpu.mask.size()),
+        ("readback", gpu.readback.size()),
+    ];
+    let mut object = serde_json::Map::new();
+    object.insert(
+        "total".into(),
+        fields.iter().map(|(_, bytes)| bytes).sum::<u64>().into(),
+    );
+    for (name, bytes) in fields {
+        object.insert(name.into(), bytes.into());
+    }
+    object.into()
+}
+
+fn wait_submission(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    command: Option<wgpu::CommandBuffer>,
+) {
+    let submission = queue.submit(command);
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: None,
+        })
+        .unwrap();
+}
+
+#[test]
+#[ignore = "bounded explicit release preparation/forward/BPTT/Adam assay; software device is not training throughput"]
+fn replay_scratch_capacity_assay() {
+    assert!(
+        !cfg!(debug_assertions),
+        "run this matched assay with cargo test --release"
+    );
+    let output = std::env::var_os("ALIFE_REPLAY_SCRATCH_ASSAY_OUTPUT")
+        .expect("explicit writable assay output required");
+    let (device, queue) = device();
+    let phenotype = phenotype();
+    let mask = mask(&phenotype);
+    let sequences = [
+        sequence(&phenotype, 256, 0, 1),
+        sequence(&phenotype, 384, 128, 1),
+        sequence(&phenotype, 256, 0, 1),
+    ];
+    let initial = &sequences[1];
+    let fresh_bounds = sequences
+        .iter()
+        .map(|sequence| FoundationTrainer::replay_allocation_bytes(&phenotype, sequence).unwrap())
+        .collect::<Vec<_>>();
+    let mut trials = Vec::new();
+    for full_update in [false, true] {
+        // Two warm-up pairs precede seven alternating timed pairs. Preparation
+        // includes validation/packing/uploads/allocation plus queue submit/wait.
+        // The second scope also runs actual frozen graph/BPTT/Adam, no PPO head.
+        for trial in 0..9 {
+            let mut baseline = gpu(&device, &queue, &phenotype, initial);
+            let mut candidate = gpu(&device, &queue, &phenotype, initial);
+            wait_submission(&device, &queue, None);
+            let order = if trial % 2 == 0 {
+                [false, true]
+            } else {
+                [true, false]
+            };
+            for reuse in order {
+                let gpu = if reuse { &mut candidate } else { &mut baseline };
+                let mut shape = Some((initial.ticks.len(), initial.initial.dendrites.clone()));
+                let mut step = (1 << 24) + 32;
+                let starting_capacity = capacities(gpu);
+                let mut rows = Vec::new();
+                let started = Instant::now();
+                let mut measured_seconds = 0.0;
+                for (sequence_index, sequence) in sequences.iter().enumerate() {
+                    let before = capacities(gpu);
+                    let clock = Instant::now();
+                    if reuse {
+                        shape = Some(
+                            gpu.prepare_replay(
+                                &device,
+                                &queue,
+                                &phenotype,
+                                &mask,
+                                sequence,
+                                shape.as_ref(),
+                                AdamWConfig::default(),
+                                step,
+                            )
+                            .unwrap(),
+                        );
+                    } else {
+                        fresh_prepare(&device, &queue, gpu, &phenotype, sequence, step);
+                    }
+                    let command = if full_update {
+                        Some(encode_update_with_speech(
+                            &device, gpu, &phenotype, None, false,
+                        ))
+                    } else {
+                        None
+                    };
+                    wait_submission(&device, &queue, command);
+                    let seconds = clock.elapsed().as_secs_f64();
+                    measured_seconds += seconds;
+                    rows.push(serde_json::json!({"ticks":sequence.ticks.len(),"burn_in":sequence.burn_in_ticks,
+                        "seconds":seconds,"before_capacity_bytes":before,"after_capacity_bytes":capacities(gpu),
+                        "fresh_logical_allocation_bound_bytes":fresh_bounds[sequence_index]}));
+                    step += u32::from(full_update);
+                }
+                let sequence_wall_seconds = started.elapsed().as_secs_f64();
+                if trial >= 2 {
+                    trials.push(serde_json::json!({"scope":if full_update {"prepare_forward_BPTT_Adam_submit_wait"} else {"prepare_submit_wait"},
+                        "mode":if reuse {"capacity_reuse"} else {"fresh_shape_allocation"},"trial":trial-2,
+                        "seconds":measured_seconds,"sequence_wall_seconds_including_receipt_bookkeeping":sequence_wall_seconds,
+                        "starting_capacity_bytes":starting_capacity,"rows":rows}));
+                }
+            }
+            // Exactness checks and destruction are outside the timed scopes.
+            for (label, actual, expected, words) in [
+                (
+                    "weights",
+                    &candidate.weights,
+                    &baseline.weights,
+                    phenotype.synapses().len() as u64,
+                ),
+                (
+                    "optimizer",
+                    &candidate._optimizer,
+                    &baseline._optimizer,
+                    phenotype.synapses().len() as u64 * 3,
+                ),
+            ] {
+                assert_prefix(&device, &queue, actual, expected, words, label);
+            }
+            if full_update {
+                for (label, actual, expected, words) in [
+                    (
+                        "state",
+                        &candidate.state,
+                        &baseline.state,
+                        candidate.layout.state_words,
+                    ),
+                    (
+                        "outputs",
+                        &candidate.outputs,
+                        &baseline.outputs,
+                        candidate.layout.output_words,
+                    ),
+                    (
+                        "gradients",
+                        &candidate.gradients,
+                        &baseline.gradients,
+                        candidate.layout.gradient_words,
+                    ),
+                ] {
+                    assert_prefix(&device, &queue, actual, expected, words, label);
+                }
+                let status = read(&device, &queue, &candidate.outputs);
+                assert_eq!(
+                    f32::from_bits(status[candidate.layout.metrics as usize + 3]),
+                    1.0
+                );
+                let ages = read(&device, &queue, &candidate._optimizer);
+                for index in 0..phenotype.synapses().len() {
+                    assert_eq!(
+                        ages[phenotype.synapses().len() * 2 + index],
+                        seed_age(index) + if index % 3 == 0 { 3 } else { 0 }
+                    );
+                }
+            }
+            eprintln!(
+                "scratch assay scope={} pair={trial} exact",
+                if full_update {
+                    "prepare+graph+BPTT+Adam"
+                } else {
+                    "prepare"
+                }
+            );
+        }
+    }
+    let receipt = serde_json::json!({"schema":1,"kind":"synthetic-replay-scratch-capacity-assay",
+        "debug_assertions":cfg!(debug_assertions),"neuron_count":phenotype.neuron_count(),
+        "synapse_count":phenotype.synapses().len(),"route_count":phenotype.projections().len(),
+        "microsteps":phenotype.microstep_count(),"candidate_count":2,"dendritic_branches":1,"dendritic_inputs":2,
+        "warmup_pairs_per_scope":2,"timed_pairs_per_scope":7,"trials":trials,
+        "speech_objective_enabled":false,"value_or_PPO_objective_executed":false,
+        "scope":"actual production preparation and submitted/waited frozen forward/BPTT/Adam only; excludes world collection, PPO objective/value state, replay IO, checkpoint admission/persistence and temporary correctness readbacks",
+        "resource_byte_scope":"requested Buffer.size backing capacities, not physical VRAM; one current set per trainer; baseline/reference coexist only in this fixture",
+        "timing_scope":"seconds is sum of three individually timed prepare/submit/wait spans; per-row receipt construction, capacity sampling, precomputed allocation estimates, correctness readbacks and destruction are outside those spans; inclusive sequence wall is retained separately"});
+    std::fs::write(output, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
 }
