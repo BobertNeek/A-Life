@@ -141,7 +141,12 @@ fn validation_failure_and_disk_budget_failure_never_publish_partial_cohorts() {
     let _ = worker.append(changed);
     assert!(worker.finish().is_err());
     assert!(!root.join("cohort-replay.bundle").exists());
-    assert!(std::fs::metadata(root.join("cohort-replay.pending")).unwrap().len() > 0);
+    assert!(
+        std::fs::metadata(root.join("cohort-replay.pending"))
+            .unwrap()
+            .len()
+            > 0
+    );
 
     let root = fixture.0.join("budget");
     std::fs::create_dir(&root).unwrap();
