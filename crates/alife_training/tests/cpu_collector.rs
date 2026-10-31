@@ -728,3 +728,6 @@ fn semantic_preparation_cannot_edit_ordinary_senses_or_advance_a_failed_host() {
         .unwrap();
     assert_eq!(success.decisions[0].patch.header().sequence_id.raw(), 1);
 }
+
+#[path = "cpu_collector/native_replay_bench.rs"]
+mod native_replay_bench;

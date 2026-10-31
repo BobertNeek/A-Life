@@ -1,0 +1,221 @@
+{
+  "build": {
+    "baseline_revision": "eaf9e12067d649e9e27c16e6600e6e8dabfc7e99",
+    "candidate_revision": "0f57ff6f7eee4856d75b7188c0eec84801a859b2",
+    "baseline_source_sha256": {
+      "crates/alife_training/src/cpu/mod.rs": "56ac2d8ccc44966d7ac47cf8f0f821ced13340c2dc1de88e292b4e5c60915b99",
+      "crates/alife_training/src/cpu/objective.rs": "bf92e7a1dcda9d458f207229178e6bf70526a2ce80e8b1ccb2dd09ba2baa8e65",
+      "crates/alife_training/src/cpu/cohort.rs": "4f68601e8007f56394bc3f10c89ca5bbccfa1ee228dbdf595c37bca2412f247c"
+    },
+    "candidate_source_sha256": {
+      "crates/alife_training/src/cpu/mod.rs": "9433f84560c3d3c70b2d3720a484bd67413f2dd7062c222e59157ba86bd2ae01",
+      "crates/alife_training/src/cpu/objective.rs": "efb4dc0c8fa8827fca186dca9a46880146fe26f03ed8d45e733ecb3f2f71aef7",
+      "crates/alife_training/src/cpu/cohort.rs": "46926b7a8841cf9530f64693f7d6d3509b3721f03ba37cccc9e194fc544ae26b"
+    },
+    "conditions": "Both native cases unpinned. Same working path, compiler and profile; only these three production files replaced with exact base versions for baseline build, restored in finally. Native benchmark module identical."
+  },
+  "profile": "Rust 1.98.1; test profile; alife_training opt-level 3; core/world/runtime opt-level 2; debug assertions enabled; CPU unpinned; candidate process before baseline process; no concurrent build/test during timed execution",
+  "baseline": [
+    {
+      "candidate_count_max": 30,
+      "candidate_count_min": 30,
+      "case": "object-slots",
+      "collection_once_ms": 2599.6403419999997,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "03be4142baf19ea78eb38910a0e66dc0806fc55df38b81fd2bc58164be985173",
+      "effective_batch_size": 1,
+      "learner_ms": [
+        491.87142,
+        484.345636,
+        483.41445999999996,
+        485.79929100000004,
+        473.70563,
+        472.395942,
+        476.08206800000005
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "456f9926873b5769a58a95788b4aa920ff16567dc415ff2125729942292d8ac5",
+      "window_burn_in": [
+        0,
+        8
+      ],
+      "window_preparation_once_ms": 3.358632,
+      "window_rows": [
+        32,
+        32
+      ],
+      "world_steps": 65
+    },
+    {
+      "candidate_count_max": 25,
+      "candidate_count_min": 25,
+      "case": "terrain-vision",
+      "collection_once_ms": 2632.746908,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "a526952ddde93e1fe857a584be01d427624a275afb4d1d8ac661624cf3b804b6",
+      "effective_batch_size": 2,
+      "learner_ms": [
+        662.010145,
+        653.5212409999999,
+        640.19483,
+        635.8863970000001,
+        641.000876,
+        639.113471,
+        644.622922
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "a1fe832be57e41fe0ecd97039a51b5247be6d37cd491ee095f8f412d3d350695",
+      "window_burn_in": [
+        0,
+        8,
+        8
+      ],
+      "window_preparation_once_ms": 1.4709720000000002,
+      "window_rows": [
+        24,
+        24,
+        16
+      ],
+      "world_steps": 65
+    }
+  ],
+  "candidate": [
+    {
+      "candidate_count_max": 30,
+      "candidate_count_min": 30,
+      "case": "object-slots",
+      "collection_once_ms": 2617.7172410000003,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "03be4142baf19ea78eb38910a0e66dc0806fc55df38b81fd2bc58164be985173",
+      "effective_batch_size": 1,
+      "learner_ms": [
+        359.909135,
+        367.79995199999996,
+        366.238475,
+        353.64061699999996,
+        357.697795,
+        353.703112,
+        350.56185800000003
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "456f9926873b5769a58a95788b4aa920ff16567dc415ff2125729942292d8ac5",
+      "window_burn_in": [
+        0,
+        8
+      ],
+      "window_preparation_once_ms": 3.877527,
+      "window_rows": [
+        32,
+        32
+      ],
+      "world_steps": 65
+    },
+    {
+      "candidate_count_max": 25,
+      "candidate_count_min": 25,
+      "case": "terrain-vision",
+      "collection_once_ms": 2603.695569,
+      "config": {
+        "clip_ratio": 0.20000000298023224,
+        "discount_half_life_seconds": 60.0,
+        "entropy_coefficient": 0.009999999776482582,
+        "epochs": 2,
+        "gae_half_life_seconds": 10.0,
+        "target_kl": 0.019999999552965164,
+        "temperature": 0.8999999761581421,
+        "value_coefficient": 0.5,
+        "value_optimizer": {
+          "beta1": 0.8999999761581421,
+          "beta2": 0.9990000128746033,
+          "epsilon": 9.99999993922529e-09,
+          "gradient_clip": 1.0,
+          "learning_rate": 0.0003000000142492354,
+          "weight_decay": 9.999999747378752e-05
+        }
+      },
+      "decisions_sha256": "a526952ddde93e1fe857a584be01d427624a275afb4d1d8ac661624cf3b804b6",
+      "effective_batch_size": 2,
+      "learner_ms": [
+        456.817616,
+        461.517234,
+        460.589402,
+        452.48521200000005,
+        453.711726,
+        454.188825,
+        451.069965
+      ],
+      "loss_rows": 64,
+      "native_decisions": 65,
+      "private_sha256": "a1fe832be57e41fe0ecd97039a51b5247be6d37cd491ee095f8f412d3d350695",
+      "window_burn_in": [
+        0,
+        8,
+        8
+      ],
+      "window_preparation_once_ms": 1.199182,
+      "window_rows": [
+        24,
+        24,
+        16
+      ],
+      "world_steps": 65
+    }
+  ],
+  "checkpoint_bytes": 4688876,
+  "checkpoint_sha256": "948831e152fe9d679404200661574d714d724d579bb28f85c01860ac29981709",
+  "comparison_scope": "Final checkpoints and receipts of first timed trial for both cases; private host unchanged across training asserted against initial founder. Not every intermediate batch or trial."
+}
