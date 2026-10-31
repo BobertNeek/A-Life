@@ -71,6 +71,8 @@ jobs:
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib production_conversation_lineage_ui:: -- --test-threads=1 --color=never'
       - name: Run Hearthling skin, shared-material and inherited-paw CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib hearthling -- --test-threads=1 --color=never'
+      - name: Bound shipping Hearthling skin across authored and inherited transforms
+        run: python3 scripts/test_hearthling_skin_bounds.py
       - name: Run saved-appearance identity and inheritance CPU regressions
         run: 'cargo test --locked -p alife_game_app --features production-voxel-frontend --lib appearance -- --test-threads=1 --color=never'
       - name: Run graphics-capture visibility and screenshot delivery CPU regressions
