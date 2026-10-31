@@ -208,3 +208,123 @@ places to measure, but does not identify which current substage dominates. Promo
 a performance claim only with unchanged timing scope, reconciled cohort totals,
 preserved continuation and reported behavior/assistance. Any remaining unattributed
 time stays explicit rather than being called negligible.
+
+## CPU replay appendix: 2026-10-31
+
+This is an opt-in CPU learner measurement, separate from H1's Windows/GPU
+collection and retained-learning totals. [PR219](https://github.com/BobertNeek/A-Life/pull/219)
+compares base `eaf9e120` with implementation `0f57ff6f`; the complete benchmark
+report and raw trials are versioned at
+[`17c7a33a`](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/docs/performance/20261031-cpu-ppo-costs.md).
+Follow-up [`594955d8`](https://github.com/BobertNeek/A-Life/commit/594955d81678932fcc743e8d4d36aff08d3b87f9)
+adds an unequal-row residual regression and test-helper visibility; production
+replay behavior is unchanged. The documentation-only follow-up
+[`dc71292f`](https://github.com/BobertNeek/A-Life/blob/dc71292f0b1077ea3ccb46afded60408fe15e4c5/docs/performance/20261031-cpu-ppo-costs.md#saved-call-reconciliation-original-epyc-cohort-only)
+explains the unchanged-input boundary and saved-call reconciliation. These are
+versioned candidate results, not new
+measurements of current gameplay, GPU execution or whole-training throughput.
+
+The removed work was a **second full forward replay** immediately before
+backward. Loss evaluation had already computed the exact tape for that owned
+window, and weights, window data and private replay state were unchanged before
+backward. Reusing that tape removes redundant traversal and tape construction;
+it does not skip the necessary first forward. The tape is local to one window
+iteration and is dropped before effective-batch optimizer commit. Every later
+window/epoch performs a fresh replay of current weights, including after an
+optimizer update. Public standalone gradient probes still perform their own
+forward. No cross-update tape cache, lower PPO cadence or reduced learning
+objective is introduced.
+
+### C1: EPYC trials and boundaries
+
+Cloud Linux x86_64 VM, AMD EPYC 9V74, five visible virtual CPUs/four-CPU quota,
+16 GiB; Rust 1.98.1, test profile with training opt-level 3 and core/world/runtime
+opt-level 2, debug assertions enabled, one benchmark thread. These are not release
+builds. Synthetic trials run baseline then candidate; native replay trials run
+candidate then baseline. Separate pinned trials use virtual CPU 2. VM contention
+and frequency are uncontrolled; no formal confidence interval is claimed.
+
+| Timed learner cohort | Baseline median ms | Candidate median ms | Less learner wall time |
+| --- | ---: | ---: | ---: |
+| Synthetic generic PPO, unpinned | 667.699 | 476.640 | 28.6% |
+| Synthetic residual PPO, unpinned | 678.542 | 476.151 | 29.8% |
+| Synthetic residual PPO, pinned | 689.248 | 527.895 | 23.4% |
+| Native-collected object-slot fixture replay | 483.414 | 357.698 | 26.0% |
+| Native-collected terrain-vision fixture replay | 641.001 | 454.189 | 29.1% |
+
+Each row has seven timed trials after one discarded warm-up, with actor and
+critic restored outside each timed interval. The interval encloses the cohort
+learner, including frozen preflight, owned-window loading/cloning, forward,
+backward and paired actor/critic updates. It excludes native collection, window
+preparation, initial optimizer restore and checkpoint serialization/publication.
+Whole-training shares and retained rows/hour remain unknown; do not apply these
+CPU percentages to H1's GPU PPO share or FPS.
+
+Synthetic N2048 uses 2,048 neurons/32,768 synapses, four microsteps, two 40-tick
+windows each with eight detached burn-in ticks, 16 candidates/six motor factors,
+64 loss rows, two epochs and permissive KL=100. Ten full-window forwards become
+six, including unchanged frozen preflight. Native CPU fixtures collect 65 real
+decisions/profile for 64 loss rows, with ordinary KL=0.02: object-slot windows
+32/32 and effective batch 1; terrain windows 24/24/16 and effective batch 2.
+Both versions stop at matching KL boundaries after two/three accepted paired
+updates respectively. These fresh untrained fixtures are not imported acquired
+checkpoints or evidence of competence.
+
+Representative individual residual-cohort trials, milliseconds in process order:
+
+| EPYC process | Seven enclosing trials, ms |
+| --- | --- |
+| Baseline unpinned | 672.687, 682.771, 670.485, 678.542, 701.588, 676.648, 680.300 |
+| Candidate unpinned | 487.043, 487.053, 476.151, 467.584, 466.630, 464.100, 482.782 |
+| Baseline pinned | 687.705, 675.265, 689.669, 709.767, 667.107, 700.990, 689.248 |
+| Candidate pinned | 491.897, 542.803, 527.895, 548.321, 505.220, 560.138, 512.054 |
+
+The [complete CSV](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/docs/performance/20261031-cpu-ppo-trials.csv)
+also retains every saved component and native learner trial; the
+[native JSON](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/docs/performance/20261031-native-cpu-replay-trials.json)
+records configuration, source hashes, decisions/private-host hashes and equality
+scope. Sequential samples share cache/allocator state and are not independent.
+
+The baseline isolated medians identify why this work matters: one forward with
+tape creation/destruction costs 50.223 ms, backward on an existing tape 45.290 ms,
+window evaluation 51.080 ms and the public fresh-forward gradient probe 92.055 ms
+(11 timed samples/scope after warm-up). These scopes overlap and must not be
+summed or presented as an exclusive cohort breakdown. Tape-only allocation time
+is unknown. Its calculated float payload is 4,939,264 bytes for this fixture,
+excluding metadata/allocator/other buffers; this is not RSS. Destruction alone
+was 0.042 ms in a separate candidate-only check, not an allocation comparison.
+
+Four saved forwards at roughly 50.223 ms explain the scale of the original
+EPYC residual-cohort reduction: about 201 ms of isolated forward work versus
+202.391 ms less enclosing time. This is a call-count sanity check, not an exact
+exclusive accounting; cache/allocator context and the pinned spread differ.
+Native KL-stopped and Xeon cohorts are different workloads, so this model is not
+applied to their savings.
+
+### Equality limits and independent replication
+
+The EPYC comparisons retain byte-identical complete actor/critic checkpoints
+and receipts after the **first timed full cohort** of each comparison process.
+Native collected-decision and private-host hashes match, with private-host state
+asserted unchanged. This covers the tested final states, not every intermediate
+batch, every timed trial, arbitrary inputs, long-term learning or all checkpoints.
+Separate regressions compare four successive generic updates with fresh-forward
+recomputation; the `594955d8` residual test compares two updates with 3-row and
+5-row windows in one effective batch, nonzero critic moments and complete final
+checkpoints/KL receipts. Fresh replay after optimizer changes remains essential.
+
+An independent source review reported 36 affected tests passing and a separate
+Xeon ABBA replication. Its exact trial/configuration receipt has not yet been
+attached to this ledger: Xeon timings, build/affinity details and equality
+coverage remain unknown here. Do not pool that environment with C1 or invent
+replicate values from the EPYC medians.
+
+Confidence is high that the immediate repeated forward is redundant under the
+stated unchanged-state boundary; measured magnitude is workload/VM-specific.
+There is no intended learning/behavior tradeoff from removing this duplicate,
+but fixture equality does not prove acquired-state behavior. Reject the change
+if fresh-process replications lose the enclosing gain or checkpoint/receipt
+equality fails across optimizer updates. Next measure an admitted CPU trajectory
+from collection through publication with equal sampling, PPO/optimizer budgets,
+assistance and retained state; GPU and full outer training-tick costs remain
+separate unmeasured questions.
