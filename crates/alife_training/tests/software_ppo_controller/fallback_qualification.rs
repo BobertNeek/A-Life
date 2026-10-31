@@ -201,7 +201,7 @@ fn qualify(kind: Unsupported) {
             late.auxiliary = Some((
                 vec![
                     ImitationTarget {
-                        representative: Some(1 << 0),
+                        representative: Some(1),
                         motors: [None; 6],
                     };
                     late.batch.len()
