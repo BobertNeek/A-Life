@@ -101,7 +101,7 @@ weight/full-Adam device copy described above
 ([shape predicate](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L95),
 [preparation](https://github.com/BobertNeek/A-Life/blob/17c7a33a69b63b9dbac100655df1530c54696c34/crates/alife_training/src/trainer.rs#L382)).
 Actual segment lengths and initial branch changes must be counted in the run;
-no allocation latency was measured here. A capacity/pool proposal would still
+no device allocation latency was measured here. A capacity/pool proposal would still
 need current weights, both moments and exact optimizer ages on every switch,
 fresh activations after updates and bounded memory. Measure allocation/copy
 frequency and enclosing cost before selecting it over a readback change.
@@ -125,6 +125,115 @@ exclusive host encoding versus the per-window metric/status waits and accepted
 batch preflight/Adam waits on an actual production invocation. A device-free host
 assay cannot answer that latency question; live inference-tick batching does not
 remove these offline PPO fences.
+
+### Adapter-free GPU PPO packing and validation assay
+
+This separate assay uses the unchanged production host helpers in `trainer.rs`
+and `TrainingSequence::validate_for`, with no adapter, device or queue request.
+The source parent is `010f28842c8d569120433a473eae57a98535241c`; its production
+GPU trainer is unchanged from merge `4d772c327b85d7d1757f4b9c22658d0ced42c03e`.
+Only an ignored libtest module and its registration were added. The
+[raw trials, allocation passes, source hashes and conditions](20261031-gpu-ppo-host-packing.json)
+are separate from the CPU host-step, GPU-runtime host-preparation and selective
+capture assays above/below. No runtime rewrite or optimization is included.
+
+The synthetic fixture compiles the N2048 terrain phenotype (seed 99), with 2,048
+neurons, 32,768 synapses, 17 routes and four microsteps. It has 25 candidates per
+tick, nonzero periodic inputs and private weight offsets, 64 canonical initial
+dendritic branches with 128 inputs, and no structural edges. These are real
+production data types and helpers, with production replay lengths; they are not
+an acquired creature trajectory or a real checkpoint. Shapes are 512/0, 1/0,
+256/0 and 384/128 ticks/burn-in. Fixture construction and reference outputs are
+outside measurements. Complete packed words, headers and metadata are checked
+for equality outside each timed span.
+
+Two warmups precede eleven timings per component and shape. Three separate,
+untimed allocation passes per component agree exactly. The following are
+medians in milliseconds; brackets give the observed minimum–maximum, **not**
+confidence intervals. Rows and components were sequential in one process.
+
+| Ticks / burn-in | Validation | Replay packing | Warm-shape host prefix | Packed bytes |
+| --- | ---: | ---: | ---: | ---: |
+| 512 / 0 | 10.863 [10.060–11.220] | 35.019 [33.657–37.092] | 46.452 [44.909–49.387] | 85,395,456 |
+| 1 / 0 | 0.022945 [0.022924–0.023165] | 0.027482 [0.027311–0.219111] | 0.097417 [0.096646–0.277108] | 191,316 |
+| 256 / 0 | 5.089 [4.915–5.391] | 17.507 [16.969–21.460] | 22.957 [22.042–27.749] | 42,710,016 |
+| 384 / 128 | 7.604 [7.434–8.275] | 25.967 [25.284–26.170] | 33.986 [33.751–39.527] | 64,052,736 |
+
+The warm-shape prefix directly invokes validation, shape-key cloning and exact
+comparison, layout-parameter refresh, packing and header construction. Its scope
+**overlaps** the component timings and must not be added to them. It ends with
+packed words and headers alive, before queue writes and their destruction. It
+is the host subset of the existing shape-hit branch, not a measurement of the
+whole `prepare_replay` call or of the shape-change branch used by alternating
+256/384 windows. No device resource allocation, full-weight/full-Adam copy,
+speech payload upload, objective/value-head preparation, encoder, submit, wait,
+forward, backward or optimizer execution is included; those times remain
+unknown. Output destruction is excluded from every timing and allocation scope.
+
+| Helper | Additional measurement and Rust allocation evidence | Why it exists; necessity and possible improvement |
+| --- | --- | --- |
+| `validate_for` | Zero allocation calls in all shapes. | Rejects wrong binding/length, invalid dendrites, nonfinite inputs/offsets/candidates and invalid context. Required admission protection. Rechecking an identical, immutable, already-admitted window is a caching hypothesis; preserve external-byte verification and all rejection behavior before moving it. |
+| Shape-key clone and exact comparison | Clone medians 1.252–1.763 microseconds; 65 allocations, 3,584 requested bytes. Equal comparison 0.127–0.133 microseconds; differing tick count 0.0041 microseconds; both comparisons allocate zero. Comparison trials batch 1,024 calls, with all raw batch times retained. | Establishes layout identity, including raw float bits. This small cost does not justify an allocation-cleanup project. |
+| Warm-cache `pack_metadata_and_layout` | Medians 0.112 / 0.138 / 0.109 / 0.105 ms in shape order. Each: 5 alloc, 2 zeroed alloc and 25 realloc calls, 4,330,934 gross requested bytes, 6 internal deallocations; 1,412,568 returned metadata bytes. | Cached static graph metadata is cloned and replay dendrites/layout are packed; the key recomputes a raw-float digest. Needed on shape creation. Cache was already populated before warmups; cold compilation/metadata construction is unmeasured. |
+| `pack_replay_sequence` | Exactly one zeroed allocation per call, of the packed size above; no reallocations or internal deallocations. | Materializes encoded input, candidate features, context, every effective weight offset, initial state and reserved zero lanes in the upload layout. Repeating this for immutable replay across preflight/epochs supplies the same input bytes. A bounded cache tied to immutable snapshot identity could remove repacking; this assay does not implement or time such a cache. |
+| `build_step_headers` | Medians 0.090 / 0.0446 / 0.0677 / 0.0794 ms; one allocation of 524,288 / 1,024 / 262,144 / 393,216 bytes. | Supplies layout, burn-in/gain and current exact optimizer-step parameters to each microstep. The routine also recounts recurrent synapses. Step-dependent fields must refresh; the measured cost is small compared with validation/packing. |
+
+Counts describe successful Rust `GlobalAlloc` calls on the measured thread.
+Alloc and zeroed calls are separate. Gross requested bytes include the full new
+size of each realloc, and therefore are not peak live bytes. Returned output
+drop, fixture construction, verification and other threads are excluded. They
+do not count driver/device allocations or show RSS. `vec![0; ...]` uses the
+system allocator, so lazy zero pages and subsequent sparse writes are part of
+this CPU result; packed size is neither measured physical memory traffic nor
+device transfer time. All normally built libraries/applications retain their
+allocator; the pass-through counting allocator exists only in this crate's
+CPU-enabled libtest binary.
+
+An additional eleven packing timings with counters enabled had medians 34.644,
+0.027061, 17.077 and 25.734 ms. The main timings have counting disabled but still
+use the allocator wrapper's thread-local check. The control ran later, so its
+small negative deltas cannot distinguish drift from instrumentation overhead.
+There is no unwrapped-System control; exact instrumentation overhead remains
+unknown. Hardware is this cloud AMD EPYC 9V74 VM, unpinned CPUs 0–4, five visible
+vCPUs with a four-CPU quota and 16 GiB memory limit. Rust 1.98.1, test profile,
+`alife_training` opt-level 3, core/world/GPU-backend/runtime opt-level 2, debug
+assertions enabled. No other local build/test ran during the timed process.
+These sequential single-process samples have uncontrolled VM contention,
+frequency and allocator/page history; no formal confidence limit or deployed
+performance claim follows from the ranges.
+
+The continuous source first predicts old values in chunks of up to 512 captured
+references (`continuous_world.rs:1202`, then `ppo.rs:1136`). For one uninterrupted
+512-loss-row segment plus one bootstrap row that means 512 and 1, each once.
+Loss slicing at 256 with up to 128 burn-in (`continuous_world.rs:1291`) makes
+256 and 384. The frozen preflight evaluates each once before updates; each
+attempted epoch evaluates them again (`ppo.rs:1301`, `1331`, `1512`). Default
+PPO uses two epochs. With both fully attempted, this case calls preparation
+eight times: 512, 1, 256, 384, 256, 384, 256, 384. Segment breaks, other rollout
+lengths and early stopping change that count. These are conditional source
+counts, not recovered historical timings.
+
+For that conditional eight-call case, summing the isolated packing medians
+gives 165.469 ms and 405,875,028 bytes requested for the eight packed outputs;
+validation medians sum to 48.964 ms. These are **arithmetic estimates from
+separate helper trials**, not a measured enclosing cohort or additive to the
+overlapping prefix measurements. Frozen preflight still serves its on-policy
+probability check, old-value preparation still supplies rollout values, and
+epoch forwards must use current weights after optimizer updates. Reusing
+immutable packed replay inputs would not authorize reusing neural activations
+across those updates. Any future cache must preserve exact bit patterns,
+snapshot/phenotype binding, decoder and private context, burn-in/gain/header
+refresh, bounded retained memory and original failures. Falsify it with changed
+inputs, offsets, dendrites, structural edges and policy/window identities, then
+require an enclosing actual GPU PPO improvement. No caching change is proposed
+for merge by this measurement.
+
+Reproduce using `cargo test --locked -p alife_training --features cpu-backend
+--lib --config profile.test.package.alife_training.opt-level=3
+production_gpu_ppo_host_packing -- --ignored --nocapture`. The assay passed;
+fourteen existing trainer/readback/metadata tests, all 109 CPU-feature library
+tests (three manual assays ignored), strict CPU-feature library/tests Clippy
+and formatting passed.
 
 ### Device-free assay of the GPU runtime's host routines
 
@@ -375,6 +484,11 @@ Coverage is deliberately scoped:
   mismatch. Invalid selectors initially exposed an error-order change in the
   prototype; it now copies both possible banks for that invalid metadata and
   lets the original consumer produce its contextual rejection.
+  Matching NaN/positive-infinity/negative-infinity active weights at both pre
+  and post are not tested: the single-boundary corruptions can reject at the
+  exact no-change check before reaching finite-value validation. Independent
+  review found this nonblocking gap; finite validation is not independently
+  isolated by those weight cases. The fixture at `010f2884` remains unchanged.
 - Ninety-six distinct next-boundary cases compare full versus selected-view
   continuity, including recurrent/homeostasis resets, unrecorded weight/bank
   changes, dispatch/generation discontinuities and allowed recorded plastic

@@ -1,0 +1,1717 @@
+{
+  "allocation_output_drop_excluded": true,
+  "allocation_trials_per_component": 3,
+  "assay": "production_gpu_ppo_host_packing",
+  "device_requested": false,
+  "microsteps": 4,
+  "neuron_count": 2048,
+  "route_count": 17,
+  "schema": 1,
+  "shapes": [
+    {
+      "burn_in_ticks": 0,
+      "candidate_count_per_tick": 25,
+      "counted_pack_elapsed_ns": [
+        35010953,
+        35115731,
+        34263714,
+        35138125,
+        34136632,
+        33658089,
+        34708956,
+        33965864,
+        34148179,
+        35238666,
+        34644329
+      ],
+      "dendritic_branch_count": 64,
+      "dendritic_input_count": 128,
+      "header_bytes": 524288,
+      "metadata_bytes": 1412568,
+      "packed_bytes": 85395456,
+      "rows": [
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            11219847,
+            11125504,
+            10687784,
+            10553260,
+            11193306,
+            11142360,
+            10060166,
+            10395872,
+            10863419,
+            10806833,
+            10943369
+          ],
+          "operation": "validate_for",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 10060.166,
+            "median": 10863.419,
+            "max": 11219.847
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            }
+          ],
+          "elapsed_ns": [
+            1813,
+            1662,
+            1683,
+            1643,
+            1652,
+            1893,
+            1733,
+            1733,
+            1642,
+            1672,
+            1703
+          ],
+          "operation": "shape_key_clone",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 1.642,
+            "median": 1.683,
+            "max": 1.893
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            136416,
+            136586,
+            136366,
+            195836,
+            229256,
+            130948,
+            130918,
+            131008,
+            135655,
+            325882,
+            131519
+          ],
+          "operation": "shape_equal_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.127849609375,
+            "median": 0.133169921875,
+            "max": 0.318244140625
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            4166,
+            4187,
+            4166,
+            4166,
+            4157,
+            4166,
+            4167,
+            4166,
+            4156,
+            4166,
+            4156
+          ],
+          "operation": "shape_different_tick_count_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.00405859375,
+            "median": 0.004068359375,
+            "max": 0.0040888671875
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            }
+          ],
+          "elapsed_ns": [
+            145350,
+            122665,
+            110947,
+            113551,
+            120652,
+            176958,
+            103567,
+            102394,
+            102354,
+            109666,
+            111598
+          ],
+          "operation": "pack_metadata_and_layout_warm_cache",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 102.354,
+            "median": 111.598,
+            "max": 176.958
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 85395456
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 85395456
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 85395456
+            }
+          ],
+          "elapsed_ns": [
+            36076071,
+            35019154,
+            34660833,
+            33657288,
+            35704980,
+            34718691,
+            37092356,
+            33678670,
+            34976109,
+            35067117,
+            35544027
+          ],
+          "operation": "pack_replay_sequence",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 33657.288,
+            "median": 35019.154,
+            "max": 37092.356
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 524288
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 524288
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 524288
+            }
+          ],
+          "elapsed_ns": [
+            103737,
+            122645,
+            88984,
+            89295,
+            89946,
+            88955,
+            89805,
+            89866,
+            90717,
+            88984,
+            89415
+          ],
+          "operation": "build_step_headers",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 88.955,
+            "median": 89.805,
+            "max": 122.645
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 85923328
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 85923328
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 85923328
+            }
+          ],
+          "elapsed_ns": [
+            47157199,
+            48267275,
+            45744244,
+            45438913,
+            45938078,
+            44909474,
+            45664263,
+            46452444,
+            49387297,
+            46687390,
+            47183699
+          ],
+          "operation": "warm_shape_host_prefix_overlaps_components",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 44909.474,
+            "median": 46452.444,
+            "max": 49387.297
+          }
+        }
+      ],
+      "structural_edges_per_tick": 0,
+      "ticks": 512,
+      "training_words": 21348864
+    },
+    {
+      "burn_in_ticks": 0,
+      "candidate_count_per_tick": 25,
+      "counted_pack_elapsed_ns": [
+        27231,
+        27091,
+        27061,
+        27061,
+        27041,
+        27020,
+        27071,
+        27031,
+        27021,
+        27081,
+        27071
+      ],
+      "dendritic_branch_count": 64,
+      "dendritic_input_count": 128,
+      "header_bytes": 1024,
+      "metadata_bytes": 1412568,
+      "packed_bytes": 191316,
+      "rows": [
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            23165,
+            22965,
+            22944,
+            22924,
+            22945,
+            22945,
+            22945,
+            23004,
+            23135,
+            22925,
+            22975
+          ],
+          "operation": "validate_for",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 22.924,
+            "median": 22.945,
+            "max": 23.165
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            }
+          ],
+          "elapsed_ns": [
+            1282,
+            1212,
+            1292,
+            1222,
+            1212,
+            1352,
+            1302,
+            1252,
+            1222,
+            1252,
+            1252
+          ],
+          "operation": "shape_key_clone",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 1.212,
+            "median": 1.252,
+            "max": 1.352
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            132030,
+            144077,
+            131228,
+            131218,
+            131218,
+            131228,
+            131218,
+            131208,
+            141514,
+            130898,
+            130838
+          ],
+          "operation": "shape_equal_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.127771484375,
+            "median": 0.128142578125,
+            "max": 0.1407001953125
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            4166,
+            4196,
+            4167,
+            4156,
+            4166,
+            4167,
+            4166,
+            4156,
+            4167,
+            4166,
+            4156
+          ],
+          "operation": "shape_different_tick_count_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.00405859375,
+            "median": 0.004068359375,
+            "max": 0.00409765625
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            }
+          ],
+          "elapsed_ns": [
+            138480,
+            132310,
+            131028,
+            139070,
+            154954,
+            131939,
+            138269,
+            131118,
+            138069,
+            138359,
+            153182
+          ],
+          "operation": "pack_metadata_and_layout_warm_cache",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 131.028,
+            "median": 138.269,
+            "max": 154.954
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 191316
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 191316
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 191316
+            }
+          ],
+          "elapsed_ns": [
+            27692,
+            27612,
+            27612,
+            219111,
+            59430,
+            27482,
+            27311,
+            27311,
+            27352,
+            27311,
+            27322
+          ],
+          "operation": "pack_replay_sequence",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 27.311,
+            "median": 27.482,
+            "max": 219.111
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 1024
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 1024
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 1024
+            }
+          ],
+          "elapsed_ns": [
+            44617,
+            44577,
+            44538,
+            44547,
+            44557,
+            44587,
+            44568,
+            44547,
+            44597,
+            44547,
+            44557
+          ],
+          "operation": "build_step_headers",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 44.538,
+            "median": 44.557,
+            "max": 44.617
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 195924
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 195924
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 195924
+            }
+          ],
+          "elapsed_ns": [
+            97648,
+            98769,
+            97767,
+            277108,
+            135374,
+            97417,
+            97327,
+            96656,
+            96646,
+            97147,
+            97327
+          ],
+          "operation": "warm_shape_host_prefix_overlaps_components",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 96.646,
+            "median": 97.417,
+            "max": 277.108
+          }
+        }
+      ],
+      "structural_edges_per_tick": 0,
+      "ticks": 1,
+      "training_words": 47829
+    },
+    {
+      "burn_in_ticks": 0,
+      "candidate_count_per_tick": 25,
+      "counted_pack_elapsed_ns": [
+        17134790,
+        16886607,
+        17076744,
+        17245067,
+        16904664,
+        16989823,
+        16877442,
+        17620345,
+        17349356,
+        17510529,
+        16834758
+      ],
+      "dendritic_branch_count": 64,
+      "dendritic_input_count": 128,
+      "header_bytes": 262144,
+      "metadata_bytes": 1412568,
+      "packed_bytes": 42710016,
+      "rows": [
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            4914823,
+            5365194,
+            5176870,
+            5083739,
+            5097279,
+            5234957,
+            5044359,
+            4983536,
+            5088556,
+            4944229,
+            5390663
+          ],
+          "operation": "validate_for",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 4914.823,
+            "median": 5088.556,
+            "max": 5390.663
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            }
+          ],
+          "elapsed_ns": [
+            1823,
+            1683,
+            1702,
+            1652,
+            1723,
+            2063,
+            2874,
+            1792,
+            1673,
+            1713,
+            1692
+          ],
+          "operation": "shape_key_clone",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 1.652,
+            "median": 1.713,
+            "max": 2.874
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            136106,
+            135935,
+            136086,
+            166781,
+            131098,
+            130808,
+            130777,
+            130758,
+            130768,
+            130767,
+            145070
+          ],
+          "operation": "shape_equal_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.127693359375,
+            "median": 0.128025390625,
+            "max": 0.1628720703125
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            4176,
+            4186,
+            4167,
+            4156,
+            4166,
+            4166,
+            4166,
+            4167,
+            4156,
+            4166,
+            4157
+          ],
+          "operation": "shape_different_tick_count_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.00405859375,
+            "median": 0.004068359375,
+            "max": 0.004087890625
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            }
+          ],
+          "elapsed_ns": [
+            130176,
+            120743,
+            111028,
+            109465,
+            109345,
+            102365,
+            104998,
+            103637,
+            113201,
+            102655,
+            102484
+          ],
+          "operation": "pack_metadata_and_layout_warm_cache",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 102.365,
+            "median": 109.345,
+            "max": 130.176
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 42710016
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 42710016
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 42710016
+            }
+          ],
+          "elapsed_ns": [
+            17052186,
+            17476436,
+            17506884,
+            17218498,
+            16969171,
+            18002302,
+            17870203,
+            21460470,
+            18714567,
+            17048752,
+            18209556
+          ],
+          "operation": "pack_replay_sequence",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 16969.171,
+            "median": 17506.884,
+            "max": 21460.47
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 262144
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 262144
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 262144
+            }
+          ],
+          "elapsed_ns": [
+            68424,
+            67051,
+            67412,
+            67942,
+            81363,
+            67732,
+            66961,
+            67753,
+            66680,
+            66700,
+            67692
+          ],
+          "operation": "build_step_headers",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 66.68,
+            "median": 67.692,
+            "max": 81.363
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 42975744
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 42975744
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 42975744
+            }
+          ],
+          "elapsed_ns": [
+            22956835,
+            22886299,
+            24288326,
+            22653937,
+            22999269,
+            25005139,
+            22705336,
+            22836714,
+            23002986,
+            27749444,
+            22042044
+          ],
+          "operation": "warm_shape_host_prefix_overlaps_components",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 22042.044,
+            "median": 22956.835,
+            "max": 27749.444
+          }
+        }
+      ],
+      "structural_edges_per_tick": 0,
+      "ticks": 256,
+      "training_words": 10677504
+    },
+    {
+      "burn_in_ticks": 128,
+      "candidate_count_per_tick": 25,
+      "counted_pack_elapsed_ns": [
+        25507899,
+        25733620,
+        26161255,
+        25330200,
+        25629952,
+        26056907,
+        26355449,
+        25748541,
+        25710134,
+        25425023,
+        25763164
+      ],
+      "dendritic_branch_count": 64,
+      "dendritic_input_count": 128,
+      "header_bytes": 393216,
+      "metadata_bytes": 1412568,
+      "packed_bytes": 64052736,
+      "rows": [
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            7451756,
+            8021937,
+            7934555,
+            7570966,
+            8275480,
+            7654241,
+            7434218,
+            7604026,
+            7588572,
+            7503264,
+            7632187
+          ],
+          "operation": "validate_for",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 7434.218,
+            "median": 7604.026,
+            "max": 8275.48
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            },
+            {
+              "alloc_calls": 65,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 3584
+            }
+          ],
+          "elapsed_ns": [
+            1763,
+            1672,
+            1682,
+            1693,
+            1682,
+            1833,
+            1803,
+            1722,
+            1813,
+            1973,
+            1773
+          ],
+          "operation": "shape_key_clone",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 1.672,
+            "median": 1.763,
+            "max": 1.973
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            130447,
+            130427,
+            130396,
+            130396,
+            130407,
+            130397,
+            148284,
+            131368,
+            131429,
+            131368,
+            131379
+          ],
+          "operation": "shape_equal_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.12733984375,
+            "median": 0.1273896484375,
+            "max": 0.14480859375
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 0
+            }
+          ],
+          "elapsed_ns": [
+            4166,
+            4156,
+            4166,
+            4167,
+            4156,
+            4166,
+            4167,
+            4156,
+            4166,
+            4166,
+            4166
+          ],
+          "operation": "shape_different_tick_count_1024",
+          "operations_per_trial": 1024,
+          "summary_us_per_operation": {
+            "min": 0.00405859375,
+            "median": 0.004068359375,
+            "max": 0.0040693359375
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            },
+            {
+              "alloc_calls": 5,
+              "alloc_zeroed_calls": 2,
+              "dealloc_calls": 6,
+              "realloc_calls": 25,
+              "released_bytes": 1602654,
+              "requested_bytes": 4330934
+            }
+          ],
+          "elapsed_ns": [
+            132721,
+            127964,
+            131699,
+            103076,
+            103606,
+            113992,
+            110166,
+            103085,
+            102815,
+            104678,
+            102825
+          ],
+          "operation": "pack_metadata_and_layout_warm_cache",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 102.815,
+            "median": 104.678,
+            "max": 132.721
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 64052736
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 64052736
+            },
+            {
+              "alloc_calls": 0,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 64052736
+            }
+          ],
+          "elapsed_ns": [
+            25438234,
+            26120895,
+            25466025,
+            25970037,
+            26163679,
+            25575921,
+            25340345,
+            26170139,
+            25967302,
+            25977248,
+            25283509
+          ],
+          "operation": "pack_replay_sequence",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 25283.509,
+            "median": 25967.302,
+            "max": 26170.139
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 393216
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 393216
+            },
+            {
+              "alloc_calls": 1,
+              "alloc_zeroed_calls": 0,
+              "dealloc_calls": 0,
+              "realloc_calls": 0,
+              "released_bytes": 0,
+              "requested_bytes": 393216
+            }
+          ],
+          "elapsed_ns": [
+            79359,
+            79710,
+            78759,
+            80923,
+            77988,
+            78248,
+            79450,
+            79691,
+            78288,
+            94963,
+            77918
+          ],
+          "operation": "build_step_headers",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 77.918,
+            "median": 79.359,
+            "max": 94.963
+          }
+        },
+        {
+          "allocation_trials": [
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 64449536
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 64449536
+            },
+            {
+              "alloc_calls": 66,
+              "alloc_zeroed_calls": 1,
+              "dealloc_calls": 65,
+              "realloc_calls": 0,
+              "released_bytes": 3584,
+              "requested_bytes": 64449536
+            }
+          ],
+          "elapsed_ns": [
+            33996821,
+            33751470,
+            39527470,
+            33804089,
+            34268952,
+            34998043,
+            33809849,
+            34093917,
+            33776378,
+            33775266,
+            33985754
+          ],
+          "operation": "warm_shape_host_prefix_overlaps_components",
+          "operations_per_trial": 1,
+          "summary_us_per_operation": {
+            "min": 33751.47,
+            "median": 33985.754,
+            "max": 39527.47
+          }
+        }
+      ],
+      "structural_edges_per_tick": 0,
+      "ticks": 384,
+      "training_words": 16013184
+    }
+  ],
+  "synapse_count": 32768,
+  "timing_output_drop_excluded": true,
+  "timing_trials_per_component": 11,
+  "warmups_per_component": 2,
+  "provenance": {
+    "recorded_utc": "2026-10-31T06:09:37.350633+00:00",
+    "parent_commit": "010f28842c8d569120433a473eae57a98535241c",
+    "git_blobs": {
+      "crates/alife_training/src/trainer.rs": "7b68423b1f7d23d9d56a229c9890f9ed2c3d9ecd",
+      "crates/alife_training/src/trainer/host_packing_bench.rs": "ed1959f1a53e93df23ffc1df160f65940ce80f1f",
+      "crates/alife_training/src/types.rs": "320afc17691eed48cd3f0e7178b2b4ce607ef22d",
+      "crates/alife_training/src/ppo.rs": "197d0747db6939c8a85950b9b4fba2fac73bbad6",
+      "crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs": "8911c28d77403bb8bab45a82fda819588e427197",
+      "crates/alife_game_app/src/foundation_training_cycle.rs": "f4cfd943af5cb3e2815bd5ccde2764e2b60e3907",
+      "Cargo.toml": "366cb43b6591e35d4b9f20926541ed2ccdb37eff",
+      "Cargo.lock": "1f2595adce3de62ec82aa60bf2c59c306839f714"
+    },
+    "sha256": {
+      "crates/alife_training/src/trainer.rs": "8dbcb337e216a025513e8cfedc726844337dad013786d085f94713d8465c2e98",
+      "crates/alife_training/src/trainer/host_packing_bench.rs": "7029f625b40e5ae678adc2f503dafba556c284c6e2b18b0fc8082be2fa7281e5",
+      "crates/alife_training/src/types.rs": "c9c721ec41857180907fecd73a777e0d2b772f7ca705bbd6a3828ff27d3baf15",
+      "crates/alife_training/src/ppo.rs": "c6c6ff34ecc25a2d40641b96dce4656852a9cf20bc21eecb458e5aeaf243a5f8",
+      "crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs": "17ba61b1fbcd8d190af75709d307c07ca183e941d4cf1e35ab2988bff5d8fcb2",
+      "crates/alife_game_app/src/foundation_training_cycle.rs": "eae75d0773b158a26b139b9d0cb3b6355e6e087234620285ff51105aa21a4f2c",
+      "Cargo.toml": "1f389513e0040d75fa669ddd98cb257dba99b94cdf5043c251d1b59cdccc6555",
+      "Cargo.lock": "2444e04142202ffab7d0ace60ef20db7b56ca496883ae007030573835231546c"
+    },
+    "raw_log_sha256": "98aa72a4338087c68af814f78e71b34640d86671325fc7e57ce92d37fbeeee2d",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "build_profile": "test, alife_training opt-level=3 override; core/world/gpu_backend/runtime package test opt-level=2; debug assertions enabled; not release",
+    "command": "cargo test --locked -p alife_training --features cpu-backend --lib --config profile.test.package.alife_training.opt-level=3 production_gpu_ppo_host_packing -- --ignored --nocapture",
+    "hardware": "AMD EPYC 9V74 VM; 5 visible vCPUs; 4 CPU cgroup quota; 16 GiB memory limit",
+    "cpu_affinity": "0-4",
+    "cpu_max": "400000 100000",
+    "memory_max": "17179869184",
+    "kernel": "Linux 6.18.57 #1 SMP Tue Oct 20 21:56:04 UTC 2026",
+    "trial_order": "shapes 512,1,256,384 sequential; each component two warmups then eleven timings then three untimed allocation passes; enabled-counter packing control last per shape",
+    "uncertainty": "descriptive min/median/max only; sequential, unpinned single-process trials are not independent deployment samples; no formal confidence interval",
+    "allocation_count_semantics": "successful Rust GlobalAlloc calls on test thread only; alloc and zeroed counts separate; requested_bytes includes full new realloc size, released_bytes includes old realloc size and explicit drops inside operation; returned output destruction and fixture/verification excluded; not RSS or driver allocations",
+    "instrumentation_limits": "timings disable counters but retain pass-through allocator TLS check; no unwrapped-System overhead control; enabled control is later sequential cohort, so drift and counting overhead cannot be separated",
+    "fixture_limits": "synthetic untrained compiled terrain phenotype seed99, canonical initial dendrites; 25 synthetic candidates/tick, nonzero periodic inputs/weight offsets, zero structural edges; no real acquired replay/checkpoint; no device request",
+    "excluded": "queue writes, host staging in wgpu, resource/pipeline/bind-group allocation, full weight and Adam device copies, speech upload, PPO objective/value-head preparation, encoder/submission/readback, neural forward/backward, optimizer execution, output destruction",
+    "libtest_binary_sha256": "7435351c35b5caa76098ebb1cb03340da09868c5cdbe658ae90091c0c33e5174",
+    "libtest_binary_bytes": 351557120
+  },
+  "validation": {
+    "manual_assay": "1 passed, 111 filtered out, 5.67 seconds total process test execution; not a benchmark sample",
+    "trainer_scope": "14 passed, 1 ignored manual assay, 97 filtered out",
+    "all_cpu_feature_libtests": "109 passed, 0 failed, 3 ignored manual assays; 25.14 seconds total test execution",
+    "strict_clippy": "cargo clippy --locked -p alife_training --features cpu-backend --lib --tests -- -D warnings: passed",
+    "normal_library": "cargo check --locked -p alife_training --lib: passed; benchmark module and allocator excluded",
+    "format": "cargo fmt --all -- --check: passed",
+    "log_sha256": {
+      "gpu-ppo-host-packing.log": "98aa72a4338087c68af814f78e71b34640d86671325fc7e57ce92d37fbeeee2d",
+      "gpu-ppo-host-packing-trainer-tests.log": "417841f53fab0cb372b685fbe4591309e29f639e27df6609ea80597097c445a3",
+      "gpu-ppo-host-packing-all-lib-tests.log": "1d1bbd93d0458cc93e664531dc56537705243688c3e8a77bbaf903fa45cbea57",
+      "gpu-ppo-host-packing-clippy.log": "096dd34c37edd1bec3f047561f7717d5700c3b7f548e08e715acc8dee586b272",
+      "gpu-ppo-host-packing-format.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "gpu-ppo-host-packing-default-check.log": "d93e946a520095610602f434d2bdd34bc497ae14f799d65dffb2f4f1b0ebe680"
+    }
+  }
+}

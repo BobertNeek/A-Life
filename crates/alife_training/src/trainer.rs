@@ -2,6 +2,10 @@
 
 mod checkpoint_readback;
 
+#[cfg(all(test, feature = "cpu-backend"))]
+#[path = "trainer/host_packing_bench.rs"]
+mod host_packing_bench;
+
 #[cfg(all(test, feature = "gpu-tests"))]
 #[path = "trainer/packed_checkpoint_gpu_tests.rs"]
 mod packed_checkpoint_gpu_tests;
