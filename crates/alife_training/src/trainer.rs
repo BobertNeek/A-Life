@@ -502,6 +502,15 @@ impl FoundationTrainer {
         &self.gpu.state
     }
 
+    /// Current logical output/state extents in 32-bit words. Backing buffers
+    /// may retain larger capacity. Stale or unprepared replay is rejected.
+    pub fn replay_buffer_word_lengths(&self) -> Result<(u64, u64), TrainingError> {
+        if !self.gpu.layout.replay || self.replay_shape.is_none() {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        Ok((self.gpu.layout.output_words, self.gpu.layout.state_words))
+    }
+
     /// Diagnostic readback of the last replay, padded to the production
     /// candidate bound for each tick. Does not perform another forward pass.
     pub fn read_replay_logits(&self) -> Result<Vec<f32>, TrainingError> {
