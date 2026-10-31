@@ -206,6 +206,112 @@ gpu-runtime --lib single_resident_gpu_host_preparation_timing -- --ignored
 --nocapture`. This result does not establish GPU collection throughput, PPO cost,
 long-lived memory scaling or a comparison against the CPU transaction wrapper.
 
+### Training capture: bytes and necessity, independently of wait fusion
+
+The parent recovered a final historical b817 receipt reporting 139,536 world
+ticks, 279,072 capture readback submissions and 247,262,257,152 copied bytes.
+It reports collection 5,839.860 s within 8,836.258 host seconds. This worker did
+not import the receipt/checkpoint or inspect its binary; these receipt inputs
+are transcribed from that handoff. Counts/bytes do not supply transfer time.
+Collection includes other neural/world/host work and cannot be called capture
+latency or device bandwidth.
+
+The source's two captures surround the actual neural inference, before world
+selection processing and outcome-bound plasticity. They are not duplicate
+observations of an unchanged state. The
+[staged consumer](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/gpu_live_runtime/staged_tick.rs#L838)
+keeps both boundaries, then admits them with dispatch, weight-generation,
+selection, work and sealed-outcome evidence.
+
+| Snapshot portion | Consumer and purpose |
+| --- | --- |
+| Pre active activations and neural homeostasis | First-row recurrent/EMA/metabolic replay initial state; continuity against the preceding post state. |
+| Pre active lifetime/fast weight prefixes | Detached private plastic context added to genetic weights on each replay row; structural additions retain their exact live-slot mapping. |
+| Post encoded neural input | The actual GPU encoder result becomes the replay tick input. |
+| Post active activations | Detached critic features for the collected transition, and recurrent continuity evidence. |
+| Post neural homeostasis and active lifetime/fast prefixes | Continuity and checks that weights did not change inside inference. |
+| Both identities, generations, activation/weight bank labels and dendrites | Bind actual frame/dispatch/state; reject topology, reset, sleep, ownership or unrecorded weight changes. |
+
+These uses are in
+[`foundation_replay_sequence`](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training.rs#L355),
+[`ReplayContinuity`](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training.rs#L4348)
+and [continuous critic feature capture](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L1116).
+Ordinary post-action learning may change lifetime/fast weights and their active
+generation before the next row. Sleep, reset, structural changes and policy
+installation add other discontinuities. Replacing the next pre state with the
+previous post state would therefore require a proven boundary/invalidation
+contract; simple cross-tick snapshot reuse is not justified.
+
+The large routine copy is **the mutable slot arena**, not immutable graph data.
+The compiled phenotype is shared in host metadata. Additional production-only
+structural synapses are versioned/cached by resident handle/slot, exact slot
+metadata and the structural checkpoint. Only an uncached/changed structure adds
+plan and genetic/alpha word-range reads. See
+[`training_capture.rs`](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_gpu_backend/src/closed_loop_runtime/training_capture.rs#L76)
+and its [structural cache predicate](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_gpu_backend/src/closed_loop_runtime/training_capture.rs#L258).
+Cached structure is not immutable forever: generation/topology changes still
+require exact rebinding. This investigation changes none of those rules.
+
+A deterministic, device-free assay invokes the actual
+`GpuFixedClassArenaPlan::new(n2048, 1, ...)` and `slot_ranges(0)`. It asserts
+contiguous disjoint mutable ranges and accounts for final alignment padding.
+The layout source file has the same Git blob
+`8a577aeb29ffb8cf2dcb62e9a399186249ecb971` in b817 and current merge 4d772c32.
+
+| Fixed mutable slot portion | Bytes per full capture |
+| --- | ---: |
+| Lifetime and fast plastic weights, both banks | 525,312 |
+| Recurrent and decoder eligibility, both banks | 262,656 |
+| Activation banks, accumulator, neural homeostasis and encoded input | 49,152 |
+| Replay event/sample/span scratch | 48,128 |
+| Selection/logit/diagnostic/speech/extension/learning/pending headers | 544 |
+| Alignment padding | 224 |
+| Total mutable arena | **886,016** |
+
+`279072 × 886016 = 247262257152` exactly. Under the receipt's same one-resident
+N2048 fixed-slot conditions, the full mutable arenas alone account for every
+reported byte; the totals leave no extra structural readback bytes in that
+counter. The arena also reserves 4,077,824 immutable-plan and 262,656
+immutable-weight bytes, but those capacities are **not** routine copied bytes.
+The raw [per-field byte ledger](20261031-capture-layout-ledger.json) retains all
+23 mutable field ranges, provenance, padding, receipt inputs and arithmetic.
+One deterministic assay passed; it is not an elapsed-time benchmark or GPU test.
+Twelve existing fixed-arena tests, strict library/tests Clippy and formatting
+passed after adding this ignored assay. No held fusion code is used here.
+
+Two separate questions follow. Both logical boundaries serve current replay and
+validation. Whether they require two independent synchronization waits is a
+submission/ordering question; fusing waits need not reduce copied bytes. Whether
+both require the **entire** mutable arena is a payload-contract question. The
+training consumers above select active activation/weight prefixes, homeostasis
+and post encoded inputs rather than all eligibility, inactive banks and replay
+scratch. Those other fields remain necessary private state for normal neural
+learning, sleep and full capture/restore; this is not permission to discard or
+reset them on the GPU or in canonical checkpoints. Actor/critic Adam checkpoints
+are a separate retained learner contract and must remain complete.
+
+A compact training-only read view is an **unmeasured proposal**, distinct from
+wait fusion. For a 2,048-neuron, 32,768-live-synapse fixture, retaining active
+activation + homeostasis + both active plastic-weight prefixes at pre, plus
+encoded inputs at post, would copy 286,720 + 294,912 = 581,632 mutable bytes per
+pair versus 1,772,032 full bytes. This is a source-derived candidate read set,
+not an implemented format, admitted historical row, proved minimum or speedup.
+Actual live counts, added structural reads and every consumer must be checked.
+The existing public full-snapshot API must not silently return zero-filled holes
+or misrepresent a partial view as full acquired state.
+
+The next falsifiable no-device experiment is a poison/differential read-set test
+through the production replay conversion, continuity, writer admission and
+critic-feature extraction. Starting from existing synthetic replay fixtures,
+vary each retained field and poison each proposed omitted range; compare the
+complete outputs and rejection behavior. Cover both active banks, partial
+microsteps, nonzero private plastic history, structural additions, generation
+changes, sleep/reset boundaries and malformed evidence. Any newly required
+omitted word or lost rejection falsifies the proposed compact contract. Only
+then time host packing/conversion in an enclosing fixture. This cannot establish
+device copy or wait savings: those still require a real-device comparison that
+preserves exact pre/post evidence, outcomes, private continuation and full Adam.
+
 ## Workload and boundaries
 
 One fresh, untrained Standard2048 CPU host uses GroundedTerrainVisionV1, world

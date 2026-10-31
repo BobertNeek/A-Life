@@ -1,0 +1,169 @@
+{
+  "assay": "production_n2048_fixed_capture_layout",
+  "device_created": false,
+  "fields": [
+    {
+      "bytes": 8192,
+      "end_word": 2048,
+      "field": "activation_a_words",
+      "start_word": 0
+    },
+    {
+      "bytes": 8192,
+      "end_word": 4096,
+      "field": "activation_b_words",
+      "start_word": 2048
+    },
+    {
+      "bytes": 8192,
+      "end_word": 6144,
+      "field": "accumulator_words",
+      "start_word": 4096
+    },
+    {
+      "bytes": 16384,
+      "end_word": 10240,
+      "field": "homeostasis_words",
+      "start_word": 6144
+    },
+    {
+      "bytes": 131328,
+      "end_word": 43072,
+      "field": "lifetime_weight_words",
+      "start_word": 10240
+    },
+    {
+      "bytes": 131328,
+      "end_word": 75904,
+      "field": "fast_weight_words",
+      "start_word": 43072
+    },
+    {
+      "bytes": 98560,
+      "end_word": 100544,
+      "field": "recurrent_eligibility_words",
+      "start_word": 75904
+    },
+    {
+      "bytes": 32768,
+      "end_word": 108736,
+      "field": "decoder_eligibility_words",
+      "start_word": 100544
+    },
+    {
+      "bytes": 131328,
+      "end_word": 141568,
+      "field": "lifetime_weight_bank_1_words",
+      "start_word": 108736
+    },
+    {
+      "bytes": 131328,
+      "end_word": 174400,
+      "field": "fast_weight_bank_1_words",
+      "start_word": 141568
+    },
+    {
+      "bytes": 98560,
+      "end_word": 199040,
+      "field": "recurrent_eligibility_bank_1_words",
+      "start_word": 174400
+    },
+    {
+      "bytes": 32768,
+      "end_word": 207232,
+      "field": "decoder_eligibility_bank_1_words",
+      "start_word": 199040
+    },
+    {
+      "bytes": 8192,
+      "end_word": 209280,
+      "field": "encoded_input_words",
+      "start_word": 207232
+    },
+    {
+      "bytes": 128,
+      "end_word": 209312,
+      "field": "candidate_logit_words",
+      "start_word": 209280
+    },
+    {
+      "bytes": 16,
+      "end_word": 209316,
+      "field": "diagnostic_words",
+      "start_word": 209312
+    },
+    {
+      "bytes": 64,
+      "end_word": 209332,
+      "field": "selection_words",
+      "start_word": 209316
+    },
+    {
+      "bytes": 16,
+      "end_word": 209336,
+      "field": "speech_payload_words",
+      "start_word": 209332
+    },
+    {
+      "bytes": 80,
+      "end_word": 209356,
+      "field": "extension_words",
+      "start_word": 209336
+    },
+    {
+      "bytes": 96,
+      "end_word": 209380,
+      "field": "learning_state_words",
+      "start_word": 209356
+    },
+    {
+      "bytes": 144,
+      "end_word": 209416,
+      "field": "pending_eligibility_words",
+      "start_word": 209380
+    },
+    {
+      "bytes": 14336,
+      "end_word": 213000,
+      "field": "replay_event_words",
+      "start_word": 209416
+    },
+    {
+      "bytes": 32768,
+      "end_word": 221192,
+      "field": "replay_sample_words",
+      "start_word": 213000
+    },
+    {
+      "bytes": 1024,
+      "end_word": 221448,
+      "field": "replay_span_words",
+      "start_word": 221192
+    }
+  ],
+  "immutable_plan_capacity_bytes": 4077824,
+  "immutable_weight_capacity_bytes": 262656,
+  "mutable_capture_bytes": 886016,
+  "padding_bytes": 224,
+  "provenance": {
+    "layout_path": "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs",
+    "layout_git_blobs": {
+      "b817c1513a6023a5395e89b9e5fc7374b0c028c2": "8a577aeb29ffb8cf2dcb62e9a399186249ecb971",
+      "4d772c327b85d7d1757f4b9c22658d0ced42c03e": "8a577aeb29ffb8cf2dcb62e9a399186249ecb971"
+    },
+    "historical_and_current_layout_identical": true,
+    "benchmark_base": "17c7a33a69b63b9dbac100655df1530c54696c34",
+    "assay_source_sha256": "9bb989881376a01793ff654760c28738f79a7f10d9199a565ee58ffc60616481",
+    "command": "cargo test --locked -p alife_gpu_backend --lib training_capture_layout_byte_ledger -- --ignored --nocapture",
+    "samples": 1,
+    "scope": "Deterministic production layout byte counts, not elapsed-time benchmark or GPU execution; fixed N2048 class arena, one slot. All mutable ranges contiguous and padding bounded by test assertions.",
+    "receipt_input": "Parent recovered b817 final receipt; raw receipt/binary was not read by this worker",
+    "receipt_ticks": 139536,
+    "receipt_readback_submissions": 279072,
+    "receipt_bytes": 247262257152,
+    "receipt_collection_seconds": 5839.86,
+    "receipt_host_seconds": 8836.258,
+    "reconciles_exactly": true,
+    "limitations": "Does not measure copy/wait latency, prove every run segment identity or establish that any logical snapshot or field can be omitted. Immutable capacities are resident allocation sizes, not routine copied bytes."
+  }
+}

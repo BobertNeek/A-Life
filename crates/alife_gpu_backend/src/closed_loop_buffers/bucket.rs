@@ -4581,6 +4581,62 @@ mod fixed_arena_tests {
         MAX_REPLAY_CAPTURE_SYNAPSES,
     };
 
+    #[test]
+    #[ignore = "Device-free byte ledger for the production fixed capture layout"]
+    fn training_capture_layout_byte_ledger() {
+        let plan =
+            GpuFixedClassArenaPlan::new(BrainCapacityClass::n2048(), 1, 512 * 1024 * 1024).unwrap();
+        let ranges = plan.slot_ranges(0).unwrap();
+        let layout = &ranges.layout;
+        let mut fields = Vec::new();
+        let mut cursor = ranges.mutable_state_words.start;
+        macro_rules! field {
+            ($name:ident) => {{
+                let range = &layout.$name;
+                assert_eq!(range.start, cursor);
+                cursor = range.end;
+                fields.push(serde_json::json!({"field":stringify!($name),
+                    "start_word":range.start,"end_word":range.end,
+                    "bytes":u64::from(range.end-range.start)*4}));
+            }};
+        }
+        field!(activation_a_words);
+        field!(activation_b_words);
+        field!(accumulator_words);
+        field!(homeostasis_words);
+        field!(lifetime_weight_words);
+        field!(fast_weight_words);
+        field!(recurrent_eligibility_words);
+        field!(decoder_eligibility_words);
+        field!(lifetime_weight_bank_1_words);
+        field!(fast_weight_bank_1_words);
+        field!(recurrent_eligibility_bank_1_words);
+        field!(decoder_eligibility_bank_1_words);
+        field!(encoded_input_words);
+        field!(candidate_logit_words);
+        field!(diagnostic_words);
+        field!(selection_words);
+        field!(speech_payload_words);
+        field!(extension_words);
+        field!(learning_state_words);
+        field!(pending_eligibility_words);
+        field!(replay_event_words);
+        field!(replay_sample_words);
+        field!(replay_span_words);
+        assert!(cursor <= ranges.mutable_state_words.end);
+        println!(
+            "{}",
+            serde_json::json!({
+                "assay":"production_n2048_fixed_capture_layout","device_created":false,
+                "mutable_capture_bytes":u64::from(ranges.mutable_state_words.end-ranges.mutable_state_words.start)*4,
+                "padding_bytes":u64::from(ranges.mutable_state_words.end-cursor)*4,
+                "immutable_plan_capacity_bytes":u64::from(ranges.immutable_plan_words.end-ranges.immutable_plan_words.start)*4,
+                "immutable_weight_capacity_bytes":u64::from(ranges.immutable_weight_words.end-ranges.immutable_weight_words.start)*4,
+                "fields":fields,
+            })
+        );
+    }
+
     fn policy_uploads() -> (GpuFixedSlotUpload, GpuFixedSlotUpload) {
         use alife_core::{FoundationWeightAsset, N2048LivePolicyTransition, TrainingStageManifest};
         let capacity = BrainCapacityClass::n2048();
