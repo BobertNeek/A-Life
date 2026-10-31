@@ -603,6 +603,13 @@ fn replay_scratch_capacity_assay() {
                     f32::from_bits(status[candidate.layout.metrics as usize + 3]),
                     1.0
                 );
+                let trained_weights = read(&device, &queue, &candidate.weights);
+                assert!(trained_weights
+                    .iter()
+                    .zip(phenotype.synapses())
+                    .enumerate()
+                    .any(|(index, (word, synapse))| index % 3 == 0
+                        && *word != synapse.genetic_weight().to_bits()));
                 let ages = read(&device, &queue, &candidate._optimizer);
                 for index in 0..phenotype.synapses().len() {
                     assert_eq!(
