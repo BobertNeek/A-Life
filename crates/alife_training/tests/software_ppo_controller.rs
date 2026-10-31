@@ -53,6 +53,12 @@ fn fixture() -> (FoundationTrainer, usize, usize, usize) {
     let mask = StageTrainableMask::from_synapse_indices(&phenotype, &[weight as u32]).unwrap();
     let session = GpuAuthoritativeSession::new_software_vulkan_training_test().unwrap();
     assert!(session.backend().is_software_training_test());
+    eprintln!(
+        "actual_controller_adapter={:?}; neurons={}; synapses={}; trainable_weights=1; masked_weight={weight}",
+        session.backend().software_training_test_adapter_info().unwrap(),
+        phenotype.neuron_count(),
+        phenotype.synapses().len()
+    );
     let trainer =
         FoundationTrainer::from_session(session, phenotype, source, mask, AdamWConfig::default())
             .unwrap();
@@ -352,6 +358,28 @@ fn window_words(windows: &[PpoTrainingWindow]) -> Vec<u32> {
     result
 }
 
+fn assert_semantics_equal(
+    expected: &BTreeMap<String, Vec<u32>>,
+    actual: &BTreeMap<String, Vec<u32>>,
+) {
+    assert_eq!(
+        expected.keys().collect::<Vec<_>>(),
+        actual.keys().collect::<Vec<_>>()
+    );
+    for (category, left) in expected {
+        let right = &actual[category];
+        assert_eq!(left.len(), right.len(), "{category} length");
+        if let Some((index, (left, right))) = left
+            .iter()
+            .zip(right)
+            .enumerate()
+            .find(|(_, (a, b))| a != b)
+        {
+            panic!("{category} word {index}: {left:#010x} != {right:#010x}");
+        }
+    }
+}
+
 #[test]
 #[ignore = "explicit synthetic software Vulkan full PPO controller oracle; no hardware or throughput claim"]
 fn actual_controller_batches_restores_and_rejects_before_updates() {
@@ -481,7 +509,7 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
         )
         .unwrap();
         assert_eq!(receipt_words(&natural), receipt_words(&restored));
-        assert_eq!(continued, capture(&trainer, &mut state), "all logical words/checkpoints must survive restore and owned/shared window loading exactly");
+        assert_semantics_equal(&continued, &capture(&trainer, &mut state));
         artifact.insert(format!("{value_coefficient}/continued"), continued);
         artifact.insert(
             format!("{value_coefficient}/continued_receipt"),
