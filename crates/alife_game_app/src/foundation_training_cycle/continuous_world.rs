@@ -772,6 +772,7 @@ pub(super) fn run_same_individual_world(
             "actor_optimizer_step":trainer.optimizer_step(),"value_optimizer_step":value.checkpoint(trainer.session())?.optimizer_step,
         }),
     )?;
+    let mut replay_worker = crate::foundation_training::FoundationReplayWorker::new()?;
     while trained_rows < request.total_trained_decisions as u64 {
         if now()? >= request.collection_cutoff_unix_seconds {
             stop = "collection_cutoff";
@@ -803,16 +804,18 @@ pub(super) fn run_same_individual_world(
             &serde_json::to_vec(&trainer.checkpoint()?)?,
         )?;
         let budget = FoundationReplayBudget::default();
-        let mut cohort =
+        let cohort =
             crate::foundation_training::CohortReplayWriter::new(&window_root, source.clone())?;
-        let mut writer = FoundationReplayWriter::new(
+        let writer = FoundationReplayWriter::new(
             &replay_dir,
             source.clone(),
             phenotype.clone(),
             &asset,
             budget,
         )?;
-        let mut refs: Vec<crate::FoundationReplayRecordRef> = Vec::new();
+        replay_worker.start(writer, cohort)?;
+        let mut captured_rows = 0;
+        let mut last_captured_tick: Option<u64> = None;
         let mut features = Vec::new();
         let mut generic_rows = Vec::new();
         let mut meal_links = Vec::new();
@@ -878,6 +881,7 @@ pub(super) fn run_same_individual_world(
         let mut first_control_call = true;
         let mut terminal_observed = false;
         loop {
+            replay_worker.check()?;
             if now()? >= request.collection_cutoff_unix_seconds {
                 stop = "collection_cutoff";
                 break;
@@ -1070,17 +1074,13 @@ pub(super) fn run_same_individual_world(
                 if step.frame.organism_id() != id || step.frame.tick() != before_tick {
                     return Err("continuous row belongs to a different individual/tick".into());
                 }
-                let gap = refs
-                    .last()
-                    .is_some_and(|r| r.tick + 1 != step.frame.tick().raw());
-                if refs.is_empty() || gap {
+                let gap =
+                    last_captured_tick.is_some_and(|tick| tick + 1 != step.frame.tick().raw());
+                if captured_rows == 0 || gap {
                     verify_foundation_replay_step(&mut trainer, &step)?;
                 }
-                if gap {
-                    writer.start_segment()?;
-                }
                 if consumed(&step) {
-                    generic_rows.push(refs.len());
+                    generic_rows.push(captured_rows);
                 }
                 let care_row = care_row_evidence(&step, &food);
                 if care_row.teacher_food_token_heard {
@@ -1109,19 +1109,22 @@ pub(super) fn run_same_individual_world(
                             .provenance
                             .observe(observation, events, last_food_token_heard)
                     {
-                        meal_links.push((refs.len(), meal));
+                        meal_links.push((captured_rows, meal));
                         captured_meal_provenance.observe(meal);
                     }
                 }
                 features.push(crate::foundation_training::snapshot_activation(
                     &step.after_inference,
                 )?);
-                refs.push(writer.append_cohort(&step, &mut cohort)?);
+                let captured_tick = step.frame.tick().raw();
+                replay_worker.append(step, gap)?;
+                captured_rows += 1;
+                last_captured_tick = Some(captured_tick);
             }
             if terminal_observed {
                 break;
             }
-            if refs.len() > wanted {
+            if captured_rows > wanted {
                 break;
             }
         }
@@ -1130,42 +1133,44 @@ pub(super) fn run_same_individual_world(
             first_tick,
             runtime.world().tick().raw(),
             collection.elapsed().as_secs_f64(),
-            refs.len(),
+            captured_rows,
             no_progress,
             capture_before,
             runtime.foundation_training_capture_metrics(),
         )?;
         collection_seconds += causal.collection_wall_seconds;
         no_progress_total += no_progress;
-        captured_total += refs.len() as u64;
+        captured_total += captured_rows as u64;
         generic_total += generic_rows.len() as u64;
         nourished_total += meal_links.len() as u64;
         if terminal_observed {
             // The terminal row/food observations above are included in capture
             // telemetry, while all this suffix remains explicitly untrained.
             // The immutable terminal event was already committed before metrics.
-            drop(writer);
-            drop(cohort);
+            replay_worker.discard()?;
             alife_storage::remove_dir_all(&window_root)?;
             on_update(serde_json::json!({"kind":"continuous-untrained-window-v1",
-                "session_nonce":session_nonce,"captured_rows":refs.len(),"trained_rows":0,
+                "session_nonce":session_nonce,"captured_rows":captured_rows,"trained_rows":0,
                 "stop_reason":stop,"causal_collection":causal,
                 "generic_consumed_events":generic_rows.len(),"exact_nourished_meals":meal_links.len(),
-                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, refs.len()),
+                "food_meal_provenance_captured":MealProvenanceSummary::rows(&meal_links, captured_rows),
                 "food_meal_provenance_scope":food_provenance::SCOPE,
                 "policy_version":policy,"semantic_prior":compact_prior(&runtime, care_cue_emissions)}))?;
             break;
         }
-        let rows = loss_rows(refs.len(), wanted);
+        let rows = loss_rows(captured_rows, wanted);
         if rows == 0 {
-            drop(writer);
-            drop(cohort);
+            replay_worker.discard()?;
             alife_storage::remove_dir_all(&window_root)?;
             break;
         }
         let sealing = Instant::now();
-        let replay = cohort.seal()?;
-        drop(writer);
+        let finished = replay_worker.finish()?;
+        let refs = finished.references;
+        let replay = finished.commit;
+        if refs.len() != captured_rows {
+            return Err("background replay lost captured rows".into());
+        }
         replay_seal_seconds += sealing.elapsed().as_secs_f64();
         // This only drains persistence workers; it does not advance world,
         // cognition, physiology or the exploration stream.
