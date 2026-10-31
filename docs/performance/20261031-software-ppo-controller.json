@@ -1,0 +1,560 @@
+{
+  "all_captured_u32_words_exact": true,
+  "sections": 18,
+  "u32_words": 1470668,
+  "test_source_sha256": "df2f758a287df4b6ae900862152c407767697090e1a888345d4f7caf94644acd",
+  "baseline": {
+    "source_commit": "f1a3cad491bb2dfb80c7d68f6b6ffe77396e9b6c",
+    "binary_sha256": "042b3cb2d5bcfcbc16a582864d89f1c9a8eb418a33553d4606cf61fc5ffad0fb",
+    "semantic_json_sha256": "918995da9e64af81b6bd4805de968c70d1e5b0551c7d4d7d3d1961882ee40ed1"
+  },
+  "capacity_reuse": {
+    "source_commit": "3d5e0a3ba47aa9f92d527e7b81a45f5e90f345f0",
+    "binary_sha256": "4881fab9e4cdc1ee92e99f87b040eba05c5fd72aa96e95b5f3d97248d87291f6",
+    "semantic_json_sha256": "918995da9e64af81b6bd4805de968c70d1e5b0551c7d4d7d3d1961882ee40ed1"
+  },
+  "schema_version": 1,
+  "domain": "Synthetic public GPU PPO controller on real software Vulkan; no physical GPU or throughput qualification.",
+  "environment": {
+    "adapter": {
+      "name": "llvmpipe (LLVM 19.1.7, 256 bits)",
+      "device_type": "Cpu",
+      "backend": "Vulkan",
+      "vendor": 65541,
+      "device": 0,
+      "driver": "llvmpipe",
+      "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)"
+    },
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "nproc": 5,
+    "LP_NUM_THREADS": 2,
+    "rustc_vv": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "features": [
+      "gpu-tests"
+    ],
+    "profile": "test (workspace per-package overrides retained)",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "2"
+  },
+  "fixture": {
+    "path": "crates/alife_training/tests/software_ppo_controller.rs",
+    "function": "actual_controller_batches_restores_and_rejects_before_updates",
+    "neurons": 2048,
+    "synapses": 32768,
+    "trainable_weight_indices": [
+      25728
+    ],
+    "window_tick_burnin_pairs": [
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        3,
+        0
+      ]
+    ],
+    "loss_rows": [
+      3,
+      4,
+      3,
+      4,
+      3,
+      4,
+      3,
+      4,
+      3
+    ],
+    "effective_batch_size": 8,
+    "first_batch_samples": 28,
+    "tail_batch_samples": 3,
+    "value_coefficients": [
+      0.0,
+      0.5
+    ],
+    "final_actor_optimizer_step": 4,
+    "final_value_optimizer_steps": [
+      0,
+      4
+    ],
+    "kl_target": 1e-10,
+    "kl_case_old_logp_offset": -0.0005,
+    "kl_observed": 1.1920928955078125e-07,
+    "late_stale_probability_window": 8,
+    "source_input": "Procedural genetic-birth foundation only; no checkpoint files read."
+  },
+  "same_test_file_sha256_on_both_runs": true,
+  "capacity_core_files_byte_identical_to": "f0606b2d",
+  "cargo_lock_sha256": "e9da375829f39d182af9b39257eca47e749991272486ff45a26c21ecb55655bf",
+  "capture_scope": [
+    "Complete actor weight/first-moment/second-moment arrays and integer ages/steps",
+    "Current logical trainer output/state word prefixes",
+    "All five value-head planes and active objective adjoints/metrics/values/preflight",
+    "Selected immutable collection targets (shape, old logp/value, reward, advantages, returns)",
+    "PPO receipts with collection policy version, counters, ordered KL words"
+  ],
+  "not_covered": [
+    "Physical GPU behavior or whole-training performance",
+    "Continuing trajectories, bootstrap GAE, live cognition/world/biology",
+    "Forced actor-apply failure and value rollback fault paths",
+    "Post-KL training restart",
+    "Raw trainer gradient buffer or full serialized actor config/mask/source metadata"
+  ],
+  "raw_local_artifacts": {
+    "baseline": "/workspace/software-ppo-legacy",
+    "capacity_reuse": "/workspace/software-ppo-capacity",
+    "semantic_json_bytes": 9446712
+  },
+  "hash_recipe": "For each recorded category, SHA256(struct.pack(\"<%dI\" % len(words), *words)); raw JSON compared byte-for-byte and parsed complete u32 arrays also compared.",
+  "per_category_index": {
+    "0.5/continued": {
+      "first_moment": {
+        "words": 32768,
+        "sha256_le_u32": "a141102ce784d6be7316f798abc0aa97224c92003c14b6bd88a84e92c486305c"
+      },
+      "last_policy_version": {
+        "words": 2,
+        "sha256_le_u32": "6cc16abd70eefb90dc0ba0d14fb088630873b2c6ad943f7442356735984c35a3"
+      },
+      "logical_outputs": {
+        "words": 868,
+        "sha256_le_u32": "68bdcd407d6d1343bb5ffe0f01176af904d5e5faaf23046b7d09c98065b73c5d"
+      },
+      "logical_state": {
+        "words": 79872,
+        "sha256_le_u32": "8a04e96252be1a8475bbfaa24c0eb9c4e2676b95b459286d5912d3f52f322a66"
+      },
+      "objective_adjoints": {
+        "words": 96,
+        "sha256_le_u32": "d4ea400a88dfc30d1495fc60d8c180705e21aaaa1ae18f4215cf7a56fa218fec"
+      },
+      "objective_metrics": {
+        "words": 24,
+        "sha256_le_u32": "724f6a12423e016bd8f27b41b14842181ba0b3cb6f131b621b578a4e3f880f85"
+      },
+      "objective_preflight": {
+        "words": 1,
+        "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+      },
+      "objective_values": {
+        "words": 3,
+        "sha256_le_u32": "536b7ab012c84437b4727d10a8fbf73e552433173509a5ba9c84b46b9a9ae6f3"
+      },
+      "optimizer_steps": {
+        "words": 2,
+        "sha256_le_u32": "267833806a8e9c01c5355ae70125042abfa3e90ca6708f00e944a4e6e5addd9f"
+      },
+      "second_moment": {
+        "words": 32768,
+        "sha256_le_u32": "4dbf6df0142827cb2fd83b3131d5697b78cdfeed518e9709274a523ac91c1490"
+      },
+      "update_ages": {
+        "words": 32768,
+        "sha256_le_u32": "6dfa1425a05ae736c9e27025871ae24c5bd90f8e3adfe917fe00b8b3402fdfb3"
+      },
+      "value_all_five_planes": {
+        "words": 10245,
+        "sha256_le_u32": "66145e4c88bad1c882d57e20d503ee4b5bb020720be75ca26b03d115540ed985"
+      },
+      "value_parameters_moments": {
+        "words": 6147,
+        "sha256_le_u32": "eb73696f8892d91b5dace9fdee43c862ce45c6c7b3de3f04f1b705a1f1219795"
+      },
+      "weights": {
+        "words": 32768,
+        "sha256_le_u32": "bac1de9c7fd781ca2c79cd47ba1c2ed529d59b3837e68bd48973e5c6c3fa0eb9"
+      }
+    },
+    "0.5/continued_receipt": {
+      "receipt": {
+        "words": 8,
+        "sha256_le_u32": "80e59aa400f1b705a3dcb4c41b44b905bd242ad054660a34b06c839e6d7f0b0d"
+      }
+    },
+    "0.5/continued_windows": {
+      "immutable_collection": {
+        "words": 182,
+        "sha256_le_u32": "bf71ea3ed4ecfd23b53037b769910ea0f8ab216d6ed712ae5ee35ed3d0c507c2"
+      }
+    },
+    "0.5/first": {
+      "first_moment": {
+        "words": 32768,
+        "sha256_le_u32": "9d383e7da28c71abfec27d57b9c1a2203b7d9340bbca68c5435814e64433af32"
+      },
+      "last_policy_version": {
+        "words": 2,
+        "sha256_le_u32": "aae89fc0f03e2959ae4d701a80cc3915918c950b159f6abb6c92c1433b1a8534"
+      },
+      "logical_outputs": {
+        "words": 868,
+        "sha256_le_u32": "d83121ad7f17f028b20ce55e84116c52ea0d54425063748d612f4f3a525badef"
+      },
+      "logical_state": {
+        "words": 79872,
+        "sha256_le_u32": "8a04e96252be1a8475bbfaa24c0eb9c4e2676b95b459286d5912d3f52f322a66"
+      },
+      "objective_adjoints": {
+        "words": 96,
+        "sha256_le_u32": "bb58a82fef78e516b27fa8ab56fab5a2d1f701bcc6f03a240f694451839c2aaa"
+      },
+      "objective_metrics": {
+        "words": 24,
+        "sha256_le_u32": "b6294cd77c3bb9427f13b7d6e505e0e3cc7eab34fa9ac63c502b17372b178dc9"
+      },
+      "objective_preflight": {
+        "words": 1,
+        "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+      },
+      "objective_values": {
+        "words": 3,
+        "sha256_le_u32": "16e74beef1b95b1106297e86c196c6944bf8c6018777933755862749944a9512"
+      },
+      "optimizer_steps": {
+        "words": 2,
+        "sha256_le_u32": "41d805e613efbe1acb36eaa0127a35da4a1faa1ac97985d078e50d1fd96055fd"
+      },
+      "second_moment": {
+        "words": 32768,
+        "sha256_le_u32": "2064b24be115f4db62ac40f6fcedb6b800f8dfb626903312fdd509a0919bba70"
+      },
+      "update_ages": {
+        "words": 32768,
+        "sha256_le_u32": "8a7a90a6756941b5745ffcbbba8b92ae45b27b3895ef1fcead81c0677453cc4e"
+      },
+      "value_all_five_planes": {
+        "words": 10245,
+        "sha256_le_u32": "2fc85d1aaf6526ed969422f6d86c03588ce940ef481ae933d04866cced078c17"
+      },
+      "value_parameters_moments": {
+        "words": 6147,
+        "sha256_le_u32": "e7cd4a598de012bdc47c404aecbf0bb1ed1da2828eb24665cf1583a0cdc23139"
+      },
+      "weights": {
+        "words": 32768,
+        "sha256_le_u32": "1f39515d3b8f50e4d5d9250cd2a63d5b7cdf5ba0355eb07a41b5783af01c48ea"
+      }
+    },
+    "0.5/first_receipt": {
+      "receipt": {
+        "words": 8,
+        "sha256_le_u32": "0010c95e5a0359e4d1b838cb9b8c2ce441bde070426871aadcf948ce2b8cde15"
+      }
+    },
+    "0.5/first_windows": {
+      "immutable_collection": {
+        "words": 182,
+        "sha256_le_u32": "3b1937dc93eca5ec4e2fa101cd7aa28bc7b86b024c3ccd1ef8cc2c95bf051015"
+      }
+    },
+    "0.5/gated_windows": {
+      "immutable_collection": {
+        "words": 182,
+        "sha256_le_u32": "ea0c09b5f69da8af76c5459e8fea280421273a2bbe73a3b162095974dd439a5b"
+      }
+    },
+    "0.5/kl_receipt": {
+      "receipt": {
+        "words": 7,
+        "sha256_le_u32": "d0a9e08883e01e885540ad86fd4da08c53581e959476fbf818e3892723d09400"
+      }
+    },
+    "0.5/kl_stop": {
+      "first_moment": {
+        "words": 32768,
+        "sha256_le_u32": "a141102ce784d6be7316f798abc0aa97224c92003c14b6bd88a84e92c486305c"
+      },
+      "last_policy_version": {
+        "words": 2,
+        "sha256_le_u32": "6cc16abd70eefb90dc0ba0d14fb088630873b2c6ad943f7442356735984c35a3"
+      },
+      "logical_outputs": {
+        "words": 1444,
+        "sha256_le_u32": "5848a57ffa07803e30adc3b8f7b2c7f1e3f1ae8ae0c315608de8e68b2c920cdd"
+      },
+      "logical_state": {
+        "words": 129024,
+        "sha256_le_u32": "10f66d5e1e66c815ce1125ee10e379a39727373fae3704399b4f39ed82397f26"
+      },
+      "objective_adjoints": {
+        "words": 128,
+        "sha256_le_u32": "816337bb28b239e30571107336b58ab1768cc445b832dc1d1a2307a6c4c9bfb6"
+      },
+      "objective_metrics": {
+        "words": 32,
+        "sha256_le_u32": "93245278d034b4d184cebaa691e70120b46c97b853829024e6b4c5af8144f70f"
+      },
+      "objective_preflight": {
+        "words": 1,
+        "sha256_le_u32": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+      },
+      "objective_values": {
+        "words": 4,
+        "sha256_le_u32": "bcf475ba87954384575294b7e7cc00b1f84dd42d521ef9b295802739f209f72d"
+      },
+      "optimizer_steps": {
+        "words": 2,
+        "sha256_le_u32": "267833806a8e9c01c5355ae70125042abfa3e90ca6708f00e944a4e6e5addd9f"
+      },
+      "second_moment": {
+        "words": 32768,
+        "sha256_le_u32": "4dbf6df0142827cb2fd83b3131d5697b78cdfeed518e9709274a523ac91c1490"
+      },
+      "update_ages": {
+        "words": 32768,
+        "sha256_le_u32": "6dfa1425a05ae736c9e27025871ae24c5bd90f8e3adfe917fe00b8b3402fdfb3"
+      },
+      "value_all_five_planes": {
+        "words": 10245,
+        "sha256_le_u32": "222c9b49c5d8c6daef8d42ecb19ce386aff1d50e31759d5c05edca2faa65dc3b"
+      },
+      "value_parameters_moments": {
+        "words": 6147,
+        "sha256_le_u32": "eb73696f8892d91b5dace9fdee43c862ce45c6c7b3de3f04f1b705a1f1219795"
+      },
+      "weights": {
+        "words": 32768,
+        "sha256_le_u32": "bac1de9c7fd781ca2c79cd47ba1c2ed529d59b3837e68bd48973e5c6c3fa0eb9"
+      }
+    },
+    "0/continued": {
+      "first_moment": {
+        "words": 32768,
+        "sha256_le_u32": "a60f1b4184f5076040e47612769918c555640cda9e86d60ecd571a9964f36f7a"
+      },
+      "last_policy_version": {
+        "words": 2,
+        "sha256_le_u32": "6cc16abd70eefb90dc0ba0d14fb088630873b2c6ad943f7442356735984c35a3"
+      },
+      "logical_outputs": {
+        "words": 868,
+        "sha256_le_u32": "a87d278f6b38fdbb7a90d29d7fae098d4038683f7a8d2be223ba64bf5a132bf4"
+      },
+      "logical_state": {
+        "words": 79872,
+        "sha256_le_u32": "8a04e96252be1a8475bbfaa24c0eb9c4e2676b95b459286d5912d3f52f322a66"
+      },
+      "objective_adjoints": {
+        "words": 96,
+        "sha256_le_u32": "cd9a147d2c938704411ae87932f16f2cdae5d51ede0a809f6e190cb49875c162"
+      },
+      "objective_metrics": {
+        "words": 24,
+        "sha256_le_u32": "4b44613acddfa66588c3cdf874ad524af8beb2708bfa601b28a502885063a845"
+      },
+      "objective_preflight": {
+        "words": 1,
+        "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+      },
+      "objective_values": {
+        "words": 3,
+        "sha256_le_u32": "15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b"
+      },
+      "optimizer_steps": {
+        "words": 2,
+        "sha256_le_u32": "f0a0278e4372459cca6159cd5e71cfee638302a7b9ca9b05c34181ac0a65ac5d"
+      },
+      "second_moment": {
+        "words": 32768,
+        "sha256_le_u32": "ae94a8a08cfcf7654a285c26602eeeb1008f1fd3b5f60a4dd9def4d867eba7e8"
+      },
+      "update_ages": {
+        "words": 32768,
+        "sha256_le_u32": "6dfa1425a05ae736c9e27025871ae24c5bd90f8e3adfe917fe00b8b3402fdfb3"
+      },
+      "value_all_five_planes": {
+        "words": 10245,
+        "sha256_le_u32": "c59eea2463199c223041a6bae6dd6de344b1d568ca16476e92a0beaf3079ae60"
+      },
+      "value_parameters_moments": {
+        "words": 6147,
+        "sha256_le_u32": "6b7994f36e3dd213a5b17def3d7f3327c23159bca3fafd7c98fe1716cb863c50"
+      },
+      "weights": {
+        "words": 32768,
+        "sha256_le_u32": "c55462cf1e9da9375b3e87095278ef540831bd12106b9a9259c76d149c87028a"
+      }
+    },
+    "0/continued_receipt": {
+      "receipt": {
+        "words": 8,
+        "sha256_le_u32": "f75d71864a3067d66001712cc4dfbde9d55e9ba432f2b0811b5605ff5a06d1ba"
+      }
+    },
+    "0/continued_windows": {
+      "immutable_collection": {
+        "words": 182,
+        "sha256_le_u32": "a6c859e398431cfb812acb034850e099dc2d26593e460c5a3f993733edff72c4"
+      }
+    },
+    "0/first": {
+      "first_moment": {
+        "words": 32768,
+        "sha256_le_u32": "9d383e7da28c71abfec27d57b9c1a2203b7d9340bbca68c5435814e64433af32"
+      },
+      "last_policy_version": {
+        "words": 2,
+        "sha256_le_u32": "aae89fc0f03e2959ae4d701a80cc3915918c950b159f6abb6c92c1433b1a8534"
+      },
+      "logical_outputs": {
+        "words": 868,
+        "sha256_le_u32": "d83121ad7f17f028b20ce55e84116c52ea0d54425063748d612f4f3a525badef"
+      },
+      "logical_state": {
+        "words": 79872,
+        "sha256_le_u32": "8a04e96252be1a8475bbfaa24c0eb9c4e2676b95b459286d5912d3f52f322a66"
+      },
+      "objective_adjoints": {
+        "words": 96,
+        "sha256_le_u32": "bb58a82fef78e516b27fa8ab56fab5a2d1f701bcc6f03a240f694451839c2aaa"
+      },
+      "objective_metrics": {
+        "words": 24,
+        "sha256_le_u32": "03bcf67c1cda0c46620801b5f265898b2349fe9895e8abb02dc47f994d7d32e7"
+      },
+      "objective_preflight": {
+        "words": 1,
+        "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+      },
+      "objective_values": {
+        "words": 3,
+        "sha256_le_u32": "15ec7bf0b50732b49f8228e07d24365338f9e3ab994b00af08e5a3bffe55fd8b"
+      },
+      "optimizer_steps": {
+        "words": 2,
+        "sha256_le_u32": "d86e8112f3c4c4442126f8e9f44f16867da487f29052bf91b810457db34209a4"
+      },
+      "second_moment": {
+        "words": 32768,
+        "sha256_le_u32": "2064b24be115f4db62ac40f6fcedb6b800f8dfb626903312fdd509a0919bba70"
+      },
+      "update_ages": {
+        "words": 32768,
+        "sha256_le_u32": "8a7a90a6756941b5745ffcbbba8b92ae45b27b3895ef1fcead81c0677453cc4e"
+      },
+      "value_all_five_planes": {
+        "words": 10245,
+        "sha256_le_u32": "c59eea2463199c223041a6bae6dd6de344b1d568ca16476e92a0beaf3079ae60"
+      },
+      "value_parameters_moments": {
+        "words": 6147,
+        "sha256_le_u32": "6b7994f36e3dd213a5b17def3d7f3327c23159bca3fafd7c98fe1716cb863c50"
+      },
+      "weights": {
+        "words": 32768,
+        "sha256_le_u32": "1f39515d3b8f50e4d5d9250cd2a63d5b7cdf5ba0355eb07a41b5783af01c48ea"
+      }
+    },
+    "0/first_receipt": {
+      "receipt": {
+        "words": 8,
+        "sha256_le_u32": "e566e36ba99166839d6c06d25a577c093cb8a3cc960caadeddac33c2a5150a15"
+      }
+    },
+    "0/first_windows": {
+      "immutable_collection": {
+        "words": 182,
+        "sha256_le_u32": "3b1937dc93eca5ec4e2fa101cd7aa28bc7b86b024c3ccd1ef8cc2c95bf051015"
+      }
+    },
+    "0/gated_windows": {
+      "immutable_collection": {
+        "words": 182,
+        "sha256_le_u32": "476d452e1dc263625426d78e9d452647f1b6e4b63e62df4fd469b0b275d69319"
+      }
+    },
+    "0/kl_receipt": {
+      "receipt": {
+        "words": 7,
+        "sha256_le_u32": "177c12a630e65f7f94d8197e977ddf37264c2c456c9f3dc94c76ade5aa75b430"
+      }
+    },
+    "0/kl_stop": {
+      "first_moment": {
+        "words": 32768,
+        "sha256_le_u32": "a60f1b4184f5076040e47612769918c555640cda9e86d60ecd571a9964f36f7a"
+      },
+      "last_policy_version": {
+        "words": 2,
+        "sha256_le_u32": "6cc16abd70eefb90dc0ba0d14fb088630873b2c6ad943f7442356735984c35a3"
+      },
+      "logical_outputs": {
+        "words": 1444,
+        "sha256_le_u32": "deba3aff851d89450380127eb53661b73b378d1f4534cda096ebb7f44baa125c"
+      },
+      "logical_state": {
+        "words": 129024,
+        "sha256_le_u32": "10f66d5e1e66c815ce1125ee10e379a39727373fae3704399b4f39ed82397f26"
+      },
+      "objective_adjoints": {
+        "words": 128,
+        "sha256_le_u32": "669e404dc8b3e7f330a68ef5d7080923697af5bcf09b31e22e3ab3e6a220ce0a"
+      },
+      "objective_metrics": {
+        "words": 32,
+        "sha256_le_u32": "ff4aa62a11ca1c955f5b9ffc212a64ec82258e26914cee9177456be10d20c70d"
+      },
+      "objective_preflight": {
+        "words": 1,
+        "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+      },
+      "objective_values": {
+        "words": 4,
+        "sha256_le_u32": "374708fff7719dd5979ec875d56cd2286f6d3cf7ec317a3b25632aab28ec37bb"
+      },
+      "optimizer_steps": {
+        "words": 2,
+        "sha256_le_u32": "f0a0278e4372459cca6159cd5e71cfee638302a7b9ca9b05c34181ac0a65ac5d"
+      },
+      "second_moment": {
+        "words": 32768,
+        "sha256_le_u32": "ae94a8a08cfcf7654a285c26602eeeb1008f1fd3b5f60a4dd9def4d867eba7e8"
+      },
+      "update_ages": {
+        "words": 32768,
+        "sha256_le_u32": "6dfa1425a05ae736c9e27025871ae24c5bd90f8e3adfe917fe00b8b3402fdfb3"
+      },
+      "value_all_five_planes": {
+        "words": 10245,
+        "sha256_le_u32": "c59eea2463199c223041a6bae6dd6de344b1d568ca16476e92a0beaf3079ae60"
+      },
+      "value_parameters_moments": {
+        "words": 6147,
+        "sha256_le_u32": "6b7994f36e3dd213a5b17def3d7f3327c23159bca3fafd7c98fe1716cb863c50"
+      },
+      "weights": {
+        "words": 32768,
+        "sha256_le_u32": "c55462cf1e9da9375b3e87095278ef540831bd12106b9a9259c76d149c87028a"
+      }
+    }
+  }
+}
