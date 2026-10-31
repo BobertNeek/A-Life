@@ -185,3 +185,136 @@ fn continuing_gae_matches_actual_controller_after_warm_restore() {
     }
     eprintln!("continuing GAE qualification passed: coherent8GPUrows,7trajectorylosses,actualnonzero finalbootstrap,globalGAE→3/4loss windows with2burn,epochs2/value.5,nonzero warmhistory,owned/shared bit-exact actualcontroller+freshlaterupdate");
 }
+
+fn changed_weight_and_moments(
+    before: &FoundationTrainerCheckpoint,
+    after: &FoundationTrainerCheckpoint,
+) -> Vec<usize> {
+    // Enumerated by the caller's actual compiled phenotype, not assumptions
+    // about the canonical synapse index ranges.
+    (0..before.weights.len())
+        .filter(|&index| {
+            before.stage_mask.is_trainable(index)
+                && before.weights[index].to_bits() != after.weights[index].to_bits()
+                && before.first_moment[index].to_bits() != after.first_moment[index].to_bits()
+                && before.second_moment[index].to_bits() != after.second_moment[index].to_bits()
+        })
+        .collect()
+}
+
+#[test]
+#[ignore = "explicit synthetic software qualification: continuing GAE with recurrent parameter changes"]
+fn wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates() {
+    let (mut trainer, _, neuron, lane) = fixture_with_wide_mask(true);
+    let mut state = PpoTrainingState::default();
+    let config = PpoConfig {
+        epochs: 2,
+        target_kl: 100.0,
+        entropy_coefficient: 0.0,
+        value_coefficient: 0.5,
+        ..Default::default()
+    };
+    let initial = trainer.checkpoint().unwrap();
+    let warm_config = PpoConfig {
+        epochs: 1,
+        ..config
+    };
+    let warm = windows_with_count(
+        &mut trainer,
+        &mut state,
+        neuron,
+        lane,
+        warm_config,
+        5,
+        0.0,
+        2,
+    );
+    let (warm_receipt, _, _) = run_owned(&mut trainer, &mut state, &warm, warm_config, 5, false);
+    assert_eq!(warm_receipt.unwrap().completed_epochs, 1);
+    let before_actor = trainer.checkpoint().unwrap();
+    super::fallback_qualification::assert_actor_progress(&initial, &before_actor, 1);
+    assert_eq!(before_actor.stage_mask.trainable_count(), 10_923);
+    let before_value = state.checkpoint(trainer.session()).unwrap();
+    assert_eq!(before_value.optimizer_step, 1);
+    let width = before_value.feature_count as usize + 1;
+    for plane in 0..3 {
+        assert!(before_value.parameters[plane * width..(plane + 1) * width]
+            .iter()
+            .any(|&v| v != 0.0));
+    }
+    let windows = continuing_windows(&mut trainer, &mut state, neuron, lane, config);
+    assert_persistent_equal(&before_actor, &before_value, &trainer, &mut state);
+    let non_decoder_indices = trainer
+        .phenotype()
+        .synapses()
+        .iter()
+        .enumerate()
+        .filter(|(_, synapse)| !matches!(synapse.kind(), CompiledSynapseKind::Decoder(_)))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    // This separate one-epoch oracle establishes that the very first update
+    // changes backbone parameters before the fresh second epoch is required.
+    let (probe, _, loads) = run_owned(&mut trainer, &mut state, &windows, warm_config, 6, false);
+    assert_eq!(probe.unwrap().completed_epochs, 1);
+    assert_eq!(loads, [0, 1, 0, 1]);
+    let probe_actor = trainer.checkpoint().unwrap();
+    super::fallback_qualification::assert_actor_progress(&before_actor, &probe_actor, 1);
+    let first_non_decoder = changed_weight_and_moments(&before_actor, &probe_actor)
+        .into_iter()
+        .filter(|index| non_decoder_indices.contains(index))
+        .collect::<Vec<_>>();
+    assert!(
+        !first_non_decoder.is_empty(),
+        "the first actual update must change a non-decoder weight and both moments"
+    );
+    trainer.restore_checkpoint(&before_actor).unwrap();
+    state = PpoTrainingState::from_checkpoint(before_value.clone()).unwrap();
+    let (normal, _, loads) = run_owned(&mut trainer, &mut state, &windows, config, 6, false);
+    let normal = normal.unwrap();
+    assert_eq!(normal.completed_epochs, 2);
+    assert!(!normal.stopped_for_kl);
+    assert_eq!(loads, [0, 1, 0, 1, 0, 1]);
+    let after_actor = trainer.checkpoint().unwrap();
+    let after_value = state.checkpoint(trainer.session()).unwrap();
+    super::fallback_qualification::assert_actor_progress(&before_actor, &after_actor, 2);
+    let final_non_decoder = changed_weight_and_moments(&before_actor, &after_actor)
+        .into_iter()
+        .filter(|index| non_decoder_indices.contains(index))
+        .collect::<Vec<_>>();
+    assert!(!final_non_decoder.is_empty());
+    assert_eq!(after_value.optimizer_step, before_value.optimizer_step + 2);
+    for plane in 0..3 {
+        let range = plane * width..(plane + 1) * width;
+        assert_ne!(
+            bits(&before_value.parameters[range.clone()]),
+            bits(&after_value.parameters[range])
+        );
+    }
+    let expected = capture(&trainer, &mut state);
+    trainer.restore_checkpoint(&before_actor).unwrap();
+    state = PpoTrainingState::from_checkpoint(before_value).unwrap();
+    let shared = windows.into_iter().map(Arc::new).collect::<Vec<_>>();
+    let mut stats = FrozenGradientCacheStats::default();
+    let mut loads = Vec::new();
+    let receipt = train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+        &mut trainer,
+        &mut state,
+        2,
+        8,
+        |index| {
+            loads.push(index);
+            Ok(Arc::clone(&shared[index]))
+        },
+        config,
+        6,
+        &mut stats,
+    )
+    .unwrap();
+    assert_active_cache(stats);
+    assert_eq!(loads, [0, 1, 0, 1, 0, 1]);
+    assert_eq!(receipt_words(&normal), receipt_words(&receipt));
+    assert_actor_equal(&after_actor, &trainer.checkpoint().unwrap());
+    assert_value_equal(&after_value, &state.checkpoint(trainer.session()).unwrap());
+    assert_semantics_equal(&expected, &capture(&trainer, &mut state));
+    eprintln!("wide continuing GAE passed:10923trainable, first-update nondecoder weight+m+v changed at{}coordinates; two-update nondecoder changed at{}; epochs2/value.5,reuse2,fresh second epoch,allmaskages/frozenbits and fullcapturedwords exact", first_non_decoder.len(), final_non_decoder.len());
+}

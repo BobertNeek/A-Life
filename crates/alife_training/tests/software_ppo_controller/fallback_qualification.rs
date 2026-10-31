@@ -9,7 +9,7 @@ enum Unsupported {
     Auxiliary,
 }
 
-fn assert_actor_progress(
+pub(super) fn assert_actor_progress(
     before: &FoundationTrainerCheckpoint,
     after: &FoundationTrainerCheckpoint,
     updates: u32,
