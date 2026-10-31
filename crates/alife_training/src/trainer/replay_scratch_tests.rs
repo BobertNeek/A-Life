@@ -483,11 +483,16 @@ fn replay_scratch_capacity_assay() {
     let (device, queue) = device();
     let phenotype = phenotype();
     let mask = mask(&phenotype);
-    let sequences = [
+    let mut sequences = [
         sequence(&phenotype, 256, 0, 1),
         sequence(&phenotype, 384, 128, 1),
         sequence(&phenotype, 256, 0, 1),
     ];
+    for sequence in &mut sequences {
+        for tick in &mut sequence.ticks {
+            tick.microstep_count = u32::from(phenotype.microstep_count());
+        }
+    }
     let initial = &sequences[1];
     let fresh_bounds = sequences
         .iter()
@@ -498,7 +503,7 @@ fn replay_scratch_capacity_assay() {
         // Two warm-up pairs precede seven alternating timed pairs. Preparation
         // includes validation/packing/uploads/allocation plus queue submit/wait.
         // The second scope also runs actual frozen graph/BPTT/Adam, no PPO head.
-        for trial in 0..9 {
+        for trial in 0_usize..9 {
             let mut baseline = gpu(&device, &queue, &phenotype, initial);
             let mut candidate = gpu(&device, &queue, &phenotype, initial);
             wait_submission(&device, &queue, None);
@@ -551,12 +556,11 @@ fn replay_scratch_capacity_assay() {
                     step += u32::from(full_update);
                 }
                 let sequence_wall_seconds = started.elapsed().as_secs_f64();
-                if trial >= 2 {
-                    trials.push(serde_json::json!({"scope":if full_update {"prepare_forward_BPTT_Adam_submit_wait"} else {"prepare_submit_wait"},
-                        "mode":if reuse {"capacity_reuse"} else {"fresh_shape_allocation"},"trial":trial-2,
+                trials.push(serde_json::json!({"scope":if full_update {"prepare_forward_BPTT_Adam_submit_wait"} else {"prepare_submit_wait"},
+                        "mode":if reuse {"capacity_reuse"} else {"fresh_shape_allocation"},
+                        "phase":if trial<2 {"warmup"} else {"measured"},"pair_index":trial,"trial":trial.saturating_sub(2),
                         "seconds":measured_seconds,"sequence_wall_seconds_including_receipt_bookkeeping":sequence_wall_seconds,
                         "starting_capacity_bytes":starting_capacity,"rows":rows}));
-                }
             }
             // Exactness checks and destruction are outside the timed scopes.
             for (label, actual, expected, words) in [
@@ -631,7 +635,11 @@ fn replay_scratch_capacity_assay() {
     let receipt = serde_json::json!({"schema":1,"kind":"synthetic-replay-scratch-capacity-assay",
         "debug_assertions":cfg!(debug_assertions),"neuron_count":phenotype.neuron_count(),
         "synapse_count":phenotype.synapses().len(),"route_count":phenotype.projections().len(),
-        "microsteps":phenotype.microstep_count(),"candidate_count":2,"dendritic_branches":1,"dendritic_inputs":2,
+        "microsteps":phenotype.microstep_count(),"active_microstep_pattern":"all four microsteps active on every tick",
+        "max_candidate_count":2,"candidate_count_pattern":"two on even ticks; one on odd ticks",
+        "route_pattern":"all routes enabled except route zero disabled every third tick",
+        "structural_pattern":"no edge on even ticks; one source1-target2 route0 edge on odd ticks",
+        "dendritic_branches":1,"dendritic_inputs":2,
         "warmup_pairs_per_scope":2,"timed_pairs_per_scope":7,"trials":trials,
         "speech_objective_enabled":false,"value_or_PPO_objective_executed":false,
         "scope":"actual production preparation and submitted/waited frozen forward/BPTT/Adam only; excludes world collection, PPO objective/value state, replay IO, checkpoint admission/persistence and temporary correctness readbacks",
