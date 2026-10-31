@@ -531,3 +531,72 @@ equality fails across optimizer updates. Next measure an admitted CPU trajectory
 from collection through publication with equal sampling, PPO/optimizer budgets,
 assistance and retained state; GPU and full outer training-tick costs remain
 separate unmeasured questions.
+
+## CPU host-step appendix: 2026-10-31
+
+The [bounded host-step report](https://github.com/BobertNeek/A-Life/blob/5b244a66d183be0330e9585390312ac7124103af/docs/performance/20261031-cpu-host-step-costs.md)
+measures the actual `CpuCanonicalHost::step_with_preparation` wrapper with
+test-only clocks, based on source `17c7a33a`. It is a CPU collection fixture,
+separate from the CPU PPO learner assays above and H1's GPU collection/PPO.
+The GPU staged tick does not call this CPU transaction wrapper; **none of these
+percentages establishes a GPU collection share or whole-training saving**.
+
+One fresh, untrained Standard2048 organism uses GroundedTerrainVisionV1, world
+seed `0x7A1123`, sampling seed 42 and temperature 0.9. Each trial advances 65 real
+world ticks and waking decisions, retaining ordinary perception, legality,
+biology and private learning. The preparation callback is identity; no SLM,
+GPU, offline PPO/Adam, replay disk writer or durable publication runs here.
+Hardware is a cloud AMD EPYC 9V74 VM, five visible CPUs/four-CPU quota, 16 GiB,
+unpinned CPUs 0–4; Rust 1.98.1, test profile with training opt-level 3 and
+core/world/runtime opt-level 2, debug assertions enabled. No concurrent local
+build/test ran during the timed rollouts; frequency and VM contention were
+uncontrolled. These are not desktop or long-lived acquired-state measurements.
+
+Seven retained timing-enabled trials (455 ticks), after warm-up, give these
+arithmetic means per 65-tick trial. The four production intervals are exclusive
+and occur once per successful tick here; they reconcile to the enclosing call
+with its explicit remainder. They are not independently selected medians.
+
+| Exclusive CPU host interval | Mean ms / 65 ticks | Share of outer step calls |
+| --- | ---: | ---: |
+| Founder/private authority validation | 744.725 | 28.20% |
+| Full host clone | 5.128 | 0.19% |
+| `step_inner` | 1,887.418 | 71.47% |
+| Commit and old-host drop | 3.554 | 0.13% |
+| Timer/record/return remainder | 0.131 | 0.0050% |
+| Total outer step calls | 2,640.956 | 100% |
+
+The surrounding collection loop averaged 2,641.089 ms; its additional 0.133 ms
+is test-driver iteration and moving decisions. `step_inner` combines perception,
+neural execution, world legality, biology, private learning and sealing. It also
+contains a separate perception-world clone. Its 71.47% is not a neural-compute
+share, and that inner copy must not be counted again as the outer clone.
+
+Validation binds frozen founder weights and published authority to actual
+private state before mutation. It hashes all 32,768 founder weights each tick
+and recomputes a resident binding from neural/topology checkpoints, memory,
+sampling and other private exports; those internal costs are not yet split.
+Audit potentially repeated **immutable** founder work first. Reusing a sealed
+runtime binding needs an explicit mutation/generation invalidation contract;
+current mutable world/private/sampling consistency and fresh external-byte
+checks on restore/admission still need protection. The full 28.2% boundary is
+not established removable work, and no validation cache is implemented here.
+
+The outer clone and commit/drop together consume about 0.33% in this fixture
+and preserve atomic biology, cognition and sampling changes. **Rank outer clone
+removal low**; larger/older worlds may differ. Decompose the inner aggregate
+before choosing an inner optimization. Reject a proposed validation reuse if
+mutation, corruption, restore or policy-change rejection changes, or if an
+enclosing collection trial loses its gain. This documents measurement leads;
+it implements no optimization and uses no held PR215 work.
+
+Enabled/disabled timer order alternated; early/late uninstrumented controls had
+overlapping ranges and drift. Observer overhead remains unresolved, so no
+correction or speedup is inferred from the tiny remainder. All 32 rollouts
+(2,080 ticks including warm-ups/controls) matched serialized decision and full
+private-checkpoint hashes. That covers tested final states and decision
+sequences, not arbitrary inputs, failure-path latency or learned competence.
+The [summary and seven trial-level amounts](https://github.com/BobertNeek/A-Life/blob/5b244a66d183be0330e9585390312ac7124103af/docs/performance/20261031-host-step-summary.json)
+and [raw per-tick CSV](https://github.com/BobertNeek/A-Life/blob/5b244a66d183be0330e9585390312ac7124103af/docs/performance/20261031-host-step-ticks.csv)
+retain conditions, source hashes and controls. No formal confidence interval
+is claimed for these dependent short VM samples.
