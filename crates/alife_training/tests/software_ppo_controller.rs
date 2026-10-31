@@ -254,6 +254,10 @@ fn windows_with_shapes(
         .collect()
 }
 
+#[path = "software_ppo_controller/continuing_qualification.rs"]
+mod continuing_qualification;
+#[path = "software_ppo_controller/fallback_qualification.rs"]
+mod fallback_qualification;
 #[path = "software_ppo_controller/frozen_gradient_assay.rs"]
 mod frozen_gradient_assay;
 
