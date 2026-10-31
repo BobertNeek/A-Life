@@ -113,6 +113,42 @@ bottleneck. Current capture/transfer duration remains unknown; measure the full
 outer tick and attribute capture/dispatch/readback separately before prioritizing
 a change from these counts.
 
+### What the capture bytes contain
+
+The [mutable slot layout](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs#L2092)
+accounts for an N2048 slot as follows. These are source-derived byte amounts,
+not timed transfer costs or measured removable work.
+
+| Mutable slot component | Bytes |
+| --- | ---: |
+| Lifetime/fast weights in both banks | 525,312 |
+| Recurrent/decoder eligibility in both banks | 262,656 |
+| Activations, accumulator, homeostasis and encoded input | 49,152 |
+| Replay events | 14,336 |
+| Replay eligibility samples | 32,768 |
+| Replay spans | 1,024 |
+| Candidate, diagnostic, selection, speech, extension, learning and pending-eligibility records | 544 |
+| Alignment padding | 224 |
+| Full mutable slot | 886,016 |
+
+The [capture implementation](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_gpu_backend/src/closed_loop_runtime/training_capture.rs#L82)
+is byte-identical between b817 and main `4d772c32`. It copies the mutable slot;
+extra structural plan/weight ranges are conditional and cached when structural
+metadata remains unchanged. The immutable phenotype is shared; this is not an
+unconditional transfer of the inherited genotype on every capture. H1's exact
+886,016-byte aggregate average is consistent with one such slot per capture,
+but cannot rule out offsetting variations among individual captures.
+
+Pre/post captures have distinct consumers. Replay uses the
+[pre-state initial activations/homeostasis](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training.rs#L358),
+checks [pre/post weights and cross-row continuity](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training.rs#L380),
+and reads [post-inference encoded inputs](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training.rs#L530).
+The continuous trainer also retains
+[post-inference activation features](https://github.com/BobertNeek/A-Life/blob/4d772c327b85d7d1757f4b9c22658d0ced42c03e/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L1116)
+for the residual critic. Selective ranges need a complete consumer audit and
+replay/continuity/critic validation before claiming savings; neither their net
+byte reduction nor GPU latency benefit is established here.
+
 H2's two reported means total 29.57 s versus 40.56 s for the earlier sample.
 That is 27.1% less elapsed time across those two stages, or a 37.2% higher
 reciprocal stage rate. It is an uncontrolled observation, not an attributed
@@ -202,7 +238,9 @@ its publication was denied and remains pending. Its broader host interval includ
 capture copies, unlike the legacy interval's omitted pre-capture. A smaller/larger
 timer value with changed scope cannot establish speedup. No candidate code or
 artifact is reproduced here, and this ledger changes neither it nor held
-PR215/PR216.
+PR215/PR216. Fusion concerns queue/wait boundaries and expects equal capture
+bytes; it does not establish that either pre/post state is unnecessary or that
+less data can be copied.
 
 ## Necessity and alternatives to test
 
