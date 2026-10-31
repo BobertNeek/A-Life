@@ -1,0 +1,1446 @@
+{
+  "base_commit": "a1ea75a03b5f2cbbfa55b0034303cead85d439b7",
+  "example_sha256": "7958fcb68df6904a9898140d25351c5a7fb1a96a47fe1ccfe3cffdc13cd099c1",
+  "binaries": {
+    "dev": {
+      "path": "/workspace/A-Life/target/cloud-profile/debug/examples/profile_shared_host",
+      "sha256": "c25026723644a609a96c58342891438adb8766a73b216b6b76d4ced7f2a47bdf"
+    },
+    "release": {
+      "path": "/workspace/A-Life/target/cloud-profile/release/examples/profile_shared_host",
+      "sha256": "89c011a8e396395820aac999059371eda15d7e5ef112b678f699ffbcdda25b26"
+    }
+  },
+  "trials": [
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.002337486000000002,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.11925187999999995,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.278183922,
+      "shared_host_seconds": 0.238086572,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.11492617300000002,
+      "profile": "dev",
+      "trial": 0,
+      "inclusive_invocation_wall_seconds": 0.5414357079998808,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00014785000000000015,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.008778705000000006,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.037895332,
+      "shared_host_seconds": 0.016418781,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.007381926999999995,
+      "profile": "release",
+      "trial": 0,
+      "inclusive_invocation_wall_seconds": 0.05917237299945555,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00014570100000000017,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.008814259999999997,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.038403625,
+      "shared_host_seconds": 0.016503488,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.0074134840000000014,
+      "profile": "release",
+      "trial": 1,
+      "inclusive_invocation_wall_seconds": 0.059629680999933043,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.002385627,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.11890947099999986,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.275394462,
+      "shared_host_seconds": 0.23783078,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.11494840200000014,
+      "profile": "dev",
+      "trial": 1,
+      "inclusive_invocation_wall_seconds": 0.5375960710007348,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.0022810940000000004,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.12219004899999993,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.275320323,
+      "shared_host_seconds": 0.241540335,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.11549185699999998,
+      "profile": "dev",
+      "trial": 2,
+      "inclusive_invocation_wall_seconds": 0.5438076899999942,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00013514100000000005,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.008759896000000001,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.037902153,
+      "shared_host_seconds": 0.016540293,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.0075353609999999965,
+      "profile": "release",
+      "trial": 2,
+      "inclusive_invocation_wall_seconds": 0.05923520800024562,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00015917699999999996,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.010385189999999994,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.041842734,
+      "shared_host_seconds": 0.019130286,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.008460991999999997,
+      "profile": "release",
+      "trial": 3,
+      "inclusive_invocation_wall_seconds": 0.06655198299995391,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.0023579119999999954,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.11861994400000003,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.283230593,
+      "shared_host_seconds": 0.237413355,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.11482431700000004,
+      "profile": "dev",
+      "trial": 3,
+      "inclusive_invocation_wall_seconds": 0.5452872699997897,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.002216909000000001,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.11727836200000004,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.273112195,
+      "shared_host_seconds": 0.235312158,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.11418661300000003,
+      "profile": "dev",
+      "trial": 4,
+      "inclusive_invocation_wall_seconds": 0.5332620910003243,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00013508100000000014,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.00899402700000001,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.037505154,
+      "shared_host_seconds": 0.016677514,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.007436699999999999,
+      "profile": "release",
+      "trial": 4,
+      "inclusive_invocation_wall_seconds": 0.059177568000450265,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00013720400000000028,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.008743802,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.037860237,
+      "shared_host_seconds": 0.016380337,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.0073886500000000035,
+      "profile": "release",
+      "trial": 5,
+      "inclusive_invocation_wall_seconds": 0.05906812800003536,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.002263994000000001,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.12166321600000003,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.277761811,
+      "shared_host_seconds": 0.244549397,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.11898351799999995,
+      "profile": "dev",
+      "trial": 5,
+      "inclusive_invocation_wall_seconds": 0.5473737559996152,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.002642950999999998,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.125017499,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.282987255,
+      "shared_host_seconds": 0.250461253,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.121079874,
+      "profile": "dev",
+      "trial": 6,
+      "inclusive_invocation_wall_seconds": 0.558113950999541,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "index_seconds": 0.00013492500000000004,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.00878168,
+      "population": 1,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.038619499,
+      "shared_host_seconds": 0.016478806,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.007435501999999999,
+      "profile": "release",
+      "trial": 6,
+      "inclusive_invocation_wall_seconds": 0.059901206999711576,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9",
+      "frame_count": 512
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0037095859999999987,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.6115480049999981,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.50548402,
+      "shared_host_seconds": 1.18371646,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5655591850000002,
+      "profile": "dev",
+      "trial": 0,
+      "inclusive_invocation_wall_seconds": 1.8290308739997272,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.00029048900000000017,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.04971648100000006,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.066931941,
+      "shared_host_seconds": 0.093198354,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.04290100300000004,
+      "profile": "release",
+      "trial": 0,
+      "inclusive_invocation_wall_seconds": 0.18259150099947874,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.00028212900000000005,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.05016480400000017,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.071568467,
+      "shared_host_seconds": 0.09261771,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.04188298699999998,
+      "profile": "release",
+      "trial": 1,
+      "inclusive_invocation_wall_seconds": 0.186283646999982,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.003844109000000002,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.6127351419999998,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.505622859,
+      "shared_host_seconds": 1.184194476,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5647223149999994,
+      "profile": "dev",
+      "trial": 1,
+      "inclusive_invocation_wall_seconds": 1.826007378000213,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0037582080000000016,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.601266972,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.500017677,
+      "shared_host_seconds": 1.165209548,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5573045390000001,
+      "profile": "dev",
+      "trial": 2,
+      "inclusive_invocation_wall_seconds": 1.80122097200001,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0002965659999999999,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.049336695000000055,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.066869973,
+      "shared_host_seconds": 0.091473574,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.04153503800000005,
+      "profile": "release",
+      "trial": 2,
+      "inclusive_invocation_wall_seconds": 0.1810405249998439,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0002913209999999999,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.04928301000000008,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.071330637,
+      "shared_host_seconds": 0.09130463,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.04145083400000001,
+      "profile": "release",
+      "trial": 3,
+      "inclusive_invocation_wall_seconds": 0.18530750399986573,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0036648770000000004,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.6021973920000007,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.499110373,
+      "shared_host_seconds": 1.166604314,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5579688410000002,
+      "profile": "dev",
+      "trial": 3,
+      "inclusive_invocation_wall_seconds": 1.8070910590004132,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0037729909999999977,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.6282736619999988,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.504047124,
+      "shared_host_seconds": 1.212648931,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5774737099999999,
+      "profile": "dev",
+      "trial": 4,
+      "inclusive_invocation_wall_seconds": 1.856636291000541,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.00042402300000000004,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.051990302999999925,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.071693814,
+      "shared_host_seconds": 0.100472953,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.047744304,
+      "profile": "release",
+      "trial": 4,
+      "inclusive_invocation_wall_seconds": 0.19910645300024044,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.000317941,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.050336088000000064,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.067458842,
+      "shared_host_seconds": 0.092720269,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.04177127000000001,
+      "profile": "release",
+      "trial": 5,
+      "inclusive_invocation_wall_seconds": 0.18314441200072906,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0036692719999999995,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.5999221419999996,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.503505885,
+      "shared_host_seconds": 1.172670548,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5662623180000003,
+      "profile": "dev",
+      "trial": 5,
+      "inclusive_invocation_wall_seconds": 1.813128864000646,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": true,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.0037149479999999987,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.609580513999999,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.502813589,
+      "shared_host_seconds": 1.179842035,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.5637963269999997,
+      "profile": "dev",
+      "trial": 6,
+      "inclusive_invocation_wall_seconds": 1.8202617530005227,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    },
+    {
+      "debug_assertions": false,
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "index_seconds": 0.00031666800000000063,
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "kind": "disposable-shared-host-profile-fixture",
+      "neural_engine_executed": false,
+      "perception_seconds": 0.05144255199999993,
+      "population": 6,
+      "schema": 1,
+      "scope": "shared perception index, grounded draft/finalize with empty context, safe passive world tick; excludes episodic recall, neural inference, PPO and persistence",
+      "setup_seconds": 0.068059428,
+      "shared_host_seconds": 0.095574196,
+      "ticks": 512,
+      "training_executed": false,
+      "world_tick_seconds": 0.04351598100000002,
+      "profile": "release",
+      "trial": 6,
+      "inclusive_invocation_wall_seconds": 0.18540561000008893,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115",
+      "frame_count": 3072
+    }
+  ],
+  "semantic_signatures": {
+    "1": {
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          4262728719343866293,
+          16938842688868020450,
+          2762560075046036501,
+          332937247882833722
+        ]
+      },
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10358684429720205228,
+          1108342523480167905,
+          6818889314256857235,
+          13854832559798755590
+        ]
+      },
+      "frame_count": 512,
+      "signature_sha256": "824a4a579c9687db2596aba90a41c7d5f3572f845aa345bead831ed13dbd8ee9"
+    },
+    "6": {
+      "initial_signature": {
+        "schema_version": 8,
+        "words": [
+          3395406072778172197,
+          11692079883817153153,
+          15720097607119113449,
+          3790513213415211588
+        ]
+      },
+      "final_signature": {
+        "schema_version": 8,
+        "words": [
+          10655213514334779110,
+          16398365556163067815,
+          1441707205457742093,
+          18302014966861538889
+        ]
+      },
+      "frame_count": 3072,
+      "signature_sha256": "9e192af241019415bf5f00e6660e5617a1ba7d4839373b41377a0bd2371d1115"
+    }
+  },
+  "date_utc": "2026-10-31",
+  "actual_PC_profile": "UNKNOWN",
+  "historical_b817_profile": "UNKNOWN",
+  "profile_proof": {
+    "dev": {
+      "cargo_json_sha256": "7fb23d1b11b79c655470e5f1289baaa536ef85a68bb1e0b7e2466498118cae81",
+      "artifacts": [
+        {
+          "package_id": "path+file:///workspace/A-Life-build-profile-audit/crates/alife_core#0.1.0",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "alife_core",
+            "src_path": "/workspace/A-Life-build-profile-audit/crates/alife_core/src/lib.rs",
+            "edition": "2021",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 0,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          },
+          "features": [],
+          "executable": null,
+          "fresh": false
+        },
+        {
+          "package_id": "path+file:///workspace/A-Life-build-profile-audit/crates/alife_world#0.1.0",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "alife_world",
+            "src_path": "/workspace/A-Life-build-profile-audit/crates/alife_world/src/lib.rs",
+            "edition": "2021",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 0,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          },
+          "features": [],
+          "executable": null,
+          "fresh": false
+        },
+        {
+          "package_id": "path+file:///workspace/A-Life-build-profile-audit/crates/alife_world#0.1.0",
+          "target": {
+            "kind": [
+              "example"
+            ],
+            "crate_types": [
+              "bin"
+            ],
+            "name": "profile_shared_host",
+            "src_path": "/workspace/A-Life-build-profile-audit/crates/alife_world/examples/profile_shared_host.rs",
+            "edition": "2021",
+            "doc": false,
+            "doctest": false,
+            "test": false
+          },
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": 0,
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          },
+          "features": [],
+          "executable": "/workspace/A-Life/target/cloud-profile/debug/examples/profile_shared_host",
+          "fresh": false
+        }
+      ]
+    },
+    "release": {
+      "cargo_json_sha256": "ff065cf3116699a09f9069decb28e3970a166e9027c400ec112760de4a4f8c01",
+      "artifacts": [
+        {
+          "package_id": "path+file:///workspace/A-Life-build-profile-audit/crates/alife_core#0.1.0",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "alife_core",
+            "src_path": "/workspace/A-Life-build-profile-audit/crates/alife_core/src/lib.rs",
+            "edition": "2021",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "executable": null,
+          "fresh": false
+        },
+        {
+          "package_id": "path+file:///workspace/A-Life-build-profile-audit/crates/alife_world#0.1.0",
+          "target": {
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ],
+            "name": "alife_world",
+            "src_path": "/workspace/A-Life-build-profile-audit/crates/alife_world/src/lib.rs",
+            "edition": "2021",
+            "doc": true,
+            "doctest": true,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "executable": null,
+          "fresh": false
+        },
+        {
+          "package_id": "path+file:///workspace/A-Life-build-profile-audit/crates/alife_world#0.1.0",
+          "target": {
+            "kind": [
+              "example"
+            ],
+            "crate_types": [
+              "bin"
+            ],
+            "name": "profile_shared_host",
+            "src_path": "/workspace/A-Life-build-profile-audit/crates/alife_world/examples/profile_shared_host.rs",
+            "edition": "2021",
+            "doc": false,
+            "doctest": false,
+            "test": false
+          },
+          "profile": {
+            "opt_level": "3",
+            "debuginfo": 0,
+            "debug_assertions": false,
+            "overflow_checks": false,
+            "test": false
+          },
+          "features": [],
+          "executable": "/workspace/A-Life/target/cloud-profile/release/examples/profile_shared_host",
+          "fresh": false
+        }
+      ]
+    }
+  },
+  "summaries": [
+    {
+      "population": 1,
+      "world_ticks": 512,
+      "paired_trials": 7,
+      "dev_median_seconds": 0.238086572,
+      "release_median_seconds": 0.016503488,
+      "ratio_dev_over_release": 14.42643955023326,
+      "saved_seconds_per_512_ticks": 0.22158308399999999,
+      "dev_seconds_per_world_tick": 0.0004650128359375,
+      "release_seconds_per_world_tick": 3.2233375e-05,
+      "saved_seconds_per_world_tick": 0.00043277946093749997,
+      "dev_range_seconds": [
+        0.235312158,
+        0.250461253
+      ],
+      "release_range_seconds": [
+        0.016380337,
+        0.019130286
+      ],
+      "index_seconds": {
+        "dev_median_seconds": 0.002337486000000002,
+        "release_median_seconds": 0.00013720400000000028,
+        "ratio_dev_over_release": 17.036573277746985
+      },
+      "perception_seconds": {
+        "dev_median_seconds": 0.11925187999999995,
+        "release_median_seconds": 0.00878168,
+        "ratio_dev_over_release": 13.579620300443645
+      },
+      "world_tick_seconds": {
+        "dev_median_seconds": 0.11494840200000014,
+        "release_median_seconds": 0.007435501999999999,
+        "ratio_dev_over_release": 15.459400320247397
+      },
+      "setup_seconds": {
+        "dev_median_seconds": 0.277761811,
+        "release_median_seconds": 0.037902153,
+        "ratio_dev_over_release": 7.328391371329223
+      },
+      "inclusive_invocation_wall_seconds": {
+        "dev_median_seconds": 0.5438076899999942,
+        "release_median_seconds": 0.05923520800024562,
+        "ratio_dev_over_release": 9.180480804553591
+      }
+    },
+    {
+      "population": 6,
+      "world_ticks": 512,
+      "paired_trials": 7,
+      "dev_median_seconds": 1.179842035,
+      "release_median_seconds": 0.092720269,
+      "ratio_dev_over_release": 12.72474775714898,
+      "saved_seconds_per_512_ticks": 1.087121766,
+      "dev_seconds_per_world_tick": 0.002304378974609375,
+      "release_seconds_per_world_tick": 0.000181094275390625,
+      "saved_seconds_per_world_tick": 0.00212328469921875,
+      "dev_range_seconds": [
+        1.165209548,
+        1.212648931
+      ],
+      "release_range_seconds": [
+        0.09130463,
+        0.100472953
+      ],
+      "index_seconds": {
+        "dev_median_seconds": 0.0037149479999999987,
+        "release_median_seconds": 0.0002965659999999999,
+        "ratio_dev_over_release": 12.526547210401732
+      },
+      "perception_seconds": {
+        "dev_median_seconds": 0.609580513999999,
+        "release_median_seconds": 0.05016480400000017,
+        "ratio_dev_over_release": 12.151557773454014
+      },
+      "world_tick_seconds": {
+        "dev_median_seconds": 0.5647223149999994,
+        "release_median_seconds": 0.04188298699999998,
+        "ratio_dev_over_release": 13.483334295139924
+      },
+      "setup_seconds": {
+        "dev_median_seconds": 0.503505885,
+        "release_median_seconds": 0.068059428,
+        "ratio_dev_over_release": 7.398032863279427
+      },
+      "inclusive_invocation_wall_seconds": {
+        "dev_median_seconds": 1.8202617530005227,
+        "release_median_seconds": 0.18530750399986573,
+        "ratio_dev_over_release": 9.82292521193228
+      }
+    }
+  ],
+  "claim": "Shared passive-world/perception component dev versus release only; no GPU/full-simulation/training/retained-row gain established",
+  "host": {
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "visible_cpus": 5,
+    "system": "Linux",
+    "machine": "x86_64",
+    "kernel": "6.18.57"
+  },
+  "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "build_environment": {
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_BUILD_JOBS": "2",
+    "CARGO_PROFILE_DEV_DEBUG": "0",
+    "CARGO_PROFILE_TEST_DEBUG": "0",
+    "CARGO_TARGET_DIR": "/workspace/A-Life/target/cloud-profile"
+  },
+  "commands": [
+    "cargo build --locked -p alife_world --example profile_shared_host --message-format=json",
+    "cargo build --locked --release -p alife_world --example profile_shared_host --message-format=json",
+    "profile_shared_host 512 1",
+    "profile_shared_host 512 6"
+  ],
+  "fixture": {
+    "seed": 71001,
+    "founder_seed": 539363617,
+    "brain_class": "N2048",
+    "sensor_profile": "GroundedTerrainVisionV1",
+    "actions": "None; passive shared physics/ecology/biology only",
+    "neural_engine_executed": false,
+    "training_executed": false,
+    "exclusions": [
+      "episodic recall",
+      "neural inference",
+      "PPO",
+      "device work",
+      "persistence"
+    ],
+    "timing": "shared_host_seconds brackets512ticks, including cached frame-digest extraction, vector recording, and safe public world-tick rollbackclone. Excludes constructor, initial/final canonical digests and output. setup_seconds includes construction only; inclusive subprocess includes startup/setup/signatures/JSONoutput/capture but is not simulation/training throughput.",
+    "signature_oracle": "Exact Python equality of ticks,population,complete frame_signatures,initial_signature,final_signature before hashing; SHA256(json.dumps(semantic,sort_keys=True,separators=(comma,colon))).",
+    "independent_review": "Independent reviewer recomputed statistics and reran both binaries at512ticks,populations1/6, checking full512/3072frame tuples and initial/final canonical signatures against saved cohort; exact."
+  },
+  "source_audit": {
+    "test_profile": "Only profile.test hot-crate opt-level2 overrides. Dev symbol overrides are not optimization.",
+    "standard_windows_artifact": "windows-training-artifact.yml builds/packagesdev; target/debug; receipt build_profile=dev.",
+    "manual_resident_artifact": "windows-resident-experimental.yml workflow_dispatch defaultrelease; PR fallbackdev; selected directory/profile recorded.",
+    "legacy_script": "run_n2048_care_training.ps1 explicitlybuilds/launchesrelease.",
+    "continuous_launcher": "Explicit binary+inspector paths andhashes. No auto profile selection or build-receipt authentication; runtime checkout/source_revision is not compile identity.",
+    "installed_profile_evidence": "No matching installed executable/trustedbuildreceipt available locally; no PC access attempted.",
+    "default_behavior_changed": false
+  },
+  "continuity_gate": "No launch changes while actual profile unknown. Existing manualresidentworkflow already supports release. If verifieddev, qualify exact-source releaseartifact separately; preserve old pinned executables for existingowner recovery, finish/reconcile owner, retain Current weights/moments/integer ages/privateworld before explicit newlaunch. If installedbinaryalreadyrelease, no profile-switch gain expected."
+}
