@@ -710,8 +710,10 @@ fn warm_pair(
     lane: usize,
     config: PpoConfig,
 ) -> (FoundationTrainerCheckpoint, PpoValueHeadCheckpoint) {
+    // Seed a real residual critic even when the subsequent PPO update freezes it.
     let config = PpoConfig {
         epochs: 1,
+        value_coefficient: 0.5,
         ..config
     };
     let initial = trainer.checkpoint().unwrap();
@@ -720,7 +722,12 @@ fn warm_pair(
     assert_eq!(receipt.unwrap().completed_epochs, 1);
     let actor = trainer.checkpoint().unwrap();
     progress_steps(&initial, &actor, weight, 1);
-    (actor, state.checkpoint(trainer.session()).unwrap())
+    let value = state.checkpoint(trainer.session()).unwrap();
+    assert_eq!(value.optimizer_step, 1);
+    let width = value.feature_count as usize + 1;
+    assert!(value.parameters[width..width * 2].iter().any(|&v| v != 0.0));
+    assert!(value.parameters[width * 2..].iter().any(|&v| v > 0.0));
+    (actor, value)
 }
 
 #[test]
