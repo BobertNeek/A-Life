@@ -1,0 +1,110 @@
+{
+  "base_revision": "17c7a33a69b63b9dbac100655df1530c54696c34",
+  "instrumentation": "test-only timestamps in actual CpuCanonicalHost::step_with_preparation; control binary has no timing statements; benchmark registration only",
+  "conditions": {
+    "hardware": "AMD EPYC 9V74 cloud x86_64 VM",
+    "visible_cpus": 5,
+    "cpu_quota": "400000/100000 (4 CPUs)",
+    "memory_limit_bytes": 17179869184,
+    "affinity": "unpinned, CPUs 0-4",
+    "rustc": "1.98.1",
+    "profile": "test; alife_training opt-level 3; core/world/runtime opt-level 2; debug assertions enabled",
+    "fixture": "one fresh untrained Standard2048 GroundedTerrainVisionV1 CPU host; seed 0x7A1123, sampling seed 42, temperature 0.9, 65 ticks and 65 native decisions per rollout; identity prepare callback; no SLM, GPU, actor/critic update, replay file I/O or publication",
+    "trial_order": "early uninstrumented control, instrumented alternating disabled/enabled by trial parity, late uninstrumented control; one warm-up per mode/process, seven timed trials per mode/process"
+  },
+  "spans": {
+    "validation_ns": {
+      "mean_trial_ms": 744.724929,
+      "share_outer_percent": 28.199062712220353,
+      "trial_ms": [
+        766.994815,
+        744.568822,
+        727.139901,
+        752.835638,
+        748.814909,
+        748.497967,
+        724.222451
+      ]
+    },
+    "clone_ns": {
+      "mean_trial_ms": 5.127737142857143,
+      "share_outer_percent": 0.19416213373892605,
+      "trial_ms": [
+        5.392144,
+        5.261143,
+        4.239584,
+        5.429628,
+        5.057952,
+        5.596675,
+        4.917034
+      ]
+    },
+    "inner_ns": {
+      "mean_trial_ms": 1887.4183364285714,
+      "share_outer_percent": 71.4672303297422,
+      "trial_ms": [
+        1942.140264,
+        1880.325372,
+        1827.104554,
+        1908.928411,
+        1922.408462,
+        1877.216547,
+        1853.804745
+      ]
+    },
+    "commit_drop_ns": {
+      "mean_trial_ms": 3.5544477142857143,
+      "share_outer_percent": 0.1345894169771389,
+      "trial_ms": [
+        3.61951,
+        3.749591,
+        3.121264,
+        3.430641,
+        3.40814,
+        3.892193,
+        3.659795
+      ]
+    }
+  },
+  "mean_outer_trial_ms": 2640.9563204285714,
+  "mean_loop_trial_ms": 2641.089279,
+  "mean_timer_record_return_remainder_ms": 0.13087014285714285,
+  "mean_loop_outside_step_ms": 0.13295857142857143,
+  "counts": {
+    "retained_enabled_trials": 7,
+    "retained_enabled_ticks": 455,
+    "all_rollouts_including_warmups": 32,
+    "all_ticks_including_warmups": 2080,
+    "retained_ticks_all_modes": 1820
+  },
+  "identities": {
+    "decisions_sha256": "a526952ddde93e1fe857a584be01d427624a275afb4d1d8ac661624cf3b804b6",
+    "private_sha256": "a1fe832be57e41fe0ecd97039a51b5247be6d37cd491ee095f8f412d3d350695",
+    "all_runs_equal": true
+  },
+  "raw_files": {
+    "docs/performance/20261031-host-step-uninstrumented.json": {
+      "sha256": "7a0f8d318ebe461e6fc2872598f8c40fc5402477c81cab55dfc8f73b2a8c59ce",
+      "rollouts": 8
+    },
+    "docs/performance/20261031-host-step-instrumented.json": {
+      "sha256": "b73bb65cd3b311a03906c3e94b641f673f0f62140651ca0d5c90005ca0d03659",
+      "rollouts": 16
+    },
+    "docs/performance/20261031-host-step-uninstrumented-late.json": {
+      "sha256": "b12cfa3bff4ebbf3fb6f10e6a1f791a0e10c0045314675a56a17f59616e81233",
+      "rollouts": 8
+    }
+  },
+  "source_files": {
+    "crates/alife_training/src/cpu/host.rs": {
+      "sha256": "acf4d5af4f3e08f7374606357c432b67aca055a867878332e24d9f1a2bf1dbb1"
+    },
+    "crates/alife_training/src/cpu/host_step_bench.rs": {
+      "sha256": "b5504e4e5f5050d7881f24d9dab6c2e3f4038e4c8d739419afb9df65db17c6f2"
+    },
+    "control-host.rs": {
+      "sha256": "1089828a09b01325035877325af18533b3ed9e1cfd3dd4b05ef00759c59a4965"
+    }
+  }
+}

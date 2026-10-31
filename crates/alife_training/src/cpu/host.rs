@@ -612,6 +612,8 @@ impl CpuCanonicalHost {
             ExperienceSequenceId,
         ) -> Result<PerceptionFrameDraft, ScaffoldContractError>,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
+        #[cfg(test)]
+        let host_step_start = step_bench::clock();
         self.validate_founder(founder)?;
         for (&raw, r) in &self.residents {
             let record = self
@@ -621,9 +623,27 @@ impl CpuCanonicalHost {
                 .ok_or(CpuHostError::State("missing canonical organism"))?;
             validate_resident_authority(record, r, self.sampling_seed, self.sampling_counter)?;
         }
+        #[cfg(test)]
+        let host_step_validated = step_bench::clock();
         let mut next = self.clone();
+        #[cfg(test)]
+        let host_step_cloned = step_bench::clock();
         let result = next.step_inner(founder, temperature, &mut prepare)?;
+        #[cfg(test)]
+        let host_step_executed = step_bench::clock();
         *self = next;
+        #[cfg(test)]
+        step_bench::record(
+            &result,
+            self.residents.len(),
+            [
+                host_step_start,
+                host_step_validated,
+                host_step_cloned,
+                host_step_executed,
+                step_bench::clock(),
+            ],
+        );
         Ok(result)
     }
     fn step_inner(
@@ -1446,3 +1466,7 @@ fn structural_sleep_evidence(
     }
     structural_evidence
 }
+
+#[cfg(test)]
+#[path = "host_step_bench.rs"]
+mod step_bench;
