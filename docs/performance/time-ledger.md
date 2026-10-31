@@ -9,6 +9,13 @@ for newer code. **Current device and whole-training costs are unknown, not zero.
 The project desktop GPU is reported unavailable because driver startup is broken; this
 documentation change runs no desktop workload and transfers no real checkpoint.
 
+> **Applicability correction: PR219 is a CPU-only candidate. It does not reduce
+> the historical overnight GPU PPO phase (reported as 2,284 s).** The targeted
+> continuous same-individual command uses the GPU `FoundationTrainer`, and GPU
+> PPO already reuses its forward state for backward. The CPU percentages below
+> are not GPU PPO, whole-run or FPS improvements. Backend/source evidence is
+> recorded in the CPU appendix.
+
 ## What to optimize
 
 Keep these outcomes separate:
@@ -224,6 +231,29 @@ explains the unchanged-input boundary and saved-call reconciliation. These are
 versioned candidate results, not new
 measurements of current gameplay, GPU execution or whole-training throughput.
 
+**Backend applicability to the overnight target.** At audited main `3f70fedd`,
+the [host command selector](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/scripts/run_continuous_care.py#L46)
+maps `same_individual` to `train_n2048_care --resident-continuous STORE REQUEST_JSON`;
+the [CLI handler](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_game_app/src/bin/train_n2048_care.rs#L78)
+calls the continuous resident path. Its
+[handoff is `NativeGpu`](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L592),
+and [trainer construction uses `into_gpu_training_session`](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L681).
+[`FoundationTrainer` owns a `GpuAuthoritativeSession` and wgpu state](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_training/src/trainer.rs#L151).
+The audited historical [b817 producer uses the same GPU session path](https://github.com/BobertNeek/A-Life/blob/b817c1513a6023a5395e89b9e5fc7374b0c028c2/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L655).
+This invocation does not call the CPU cohort learners changed by PR219, so its
+reported overnight PPO interval receives no saving from that CPU-only change.
+The missing aggregate/raw invocation receipts remain a separate H1 provenance
+limit; the source-backed backend identification does not repair that coverage.
+
+GPU [window evaluation encodes forward once](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_training/src/ppo.rs#L1505),
+then [gradient accumulation uses the retained replay state](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_training/src/ppo.rs#L1338).
+Its backward path does not repeat the full recurrent forward as the old CPU
+probe did. GPU PPO replay/objective/gradient/Adam encoders and
+[blocking metric/status readbacks](https://github.com/BobertNeek/A-Life/blob/3f70fedd100bb2b1b4fb395d5efcf5e5f6aa707a/crates/alife_training/src/ppo.rs#L1785)
+are training work, separate from the already-batched production inference tick
+described above. Neither batching that tick nor this CPU tape change establishes
+a reduction in those GPU training costs; they require their own measurements.
+
 The removed work was a **second full forward replay** immediately before
 backward. Loss evaluation had already computed the exact tape for that owned
 window, and weights, window data and private replay state were unchanged before
@@ -259,6 +289,9 @@ backward and paired actor/critic updates. It excludes native collection, window
 preparation, initial optimizer restore and checkpoint serialization/publication.
 Whole-training shares and retained rows/hour remain unknown; do not apply these
 CPU percentages to H1's GPU PPO share or FPS.
+Even where the CPU learner gain transfers, unchanged collection, preparation,
+I/O and publication costs dilute the whole-run gain; their fraction is not
+measured by these learner timers.
 
 Synthetic N2048 uses 2,048 neurons/32,768 synapses, four microsteps, two 40-tick
 windows each with eight detached burn-in ticks, 16 candidates/six motor factors,
