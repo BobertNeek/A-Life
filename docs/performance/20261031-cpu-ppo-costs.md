@@ -8,7 +8,15 @@ opt-in CPU learner result; GPU training and ordinary simulation were not timed.
 ## Exact before/after call chain
 
 The removed work is a second full forward evaluation and its tape construction,
-not merely allocation/storage reuse. `SparseGraph::backward` never calls forward.
+not merely allocation/storage reuse. `SparseGraph::backward` never calls forward. The
+second forward gained no new information: the weights, sequence initial state,
+private tick context and other forward inputs were unchanged before backward
+within that window, and the forward call has no random draw or externally retained state mutation.
+The first pass already produced the same activations and derivative tape. Fresh
+replay after an optimizer change remains necessary: updated weights change both
+current-policy probabilities and the BPTT derivatives. Reusing the old tape then
+would change PPO learning. The implementation therefore replays every following
+window and epoch under current weights.
 
 Before, in base `eaf9e120`:
 
@@ -118,6 +126,35 @@ and the final harness check (4,640,835 bytes; SHA-256
 `4a5c44449119153f6b7ef1915d4f7b88f1e37f959187834e21ba98ffb675f766`). Equality
 covers weights, both moments, integer ages, frozen coordinates, masks, config,
 policy versions, update counts and KL receipts for this fixture.
+
+## Saved-call reconciliation (original EPYC cohort only)
+
+For two windows, two complete epochs and one effective batch per epoch, frozen
+preflight has two forwards in both versions. Four training-window evaluations
+formerly had two forwards each and now have one each: **10 → 6 forwards**, or
+four saved whole-window traversals. This count comes from the call chain above;
+no backward/Adam work is removed.
+
+| EPYC comparison | Isolated baseline forward median ms | Four times that median ms | Enclosing PPO savings ms | Enclosing residual savings ms |
+| --- | ---: | ---: | ---: | ---: |
+| Initial EPYC | 50.223 | 200.891 | 191.058 | 202.391 |
+| Pinned EPYC | 47.410 | 189.640 | 215.569 | 161.354 |
+
+Four isolated forward medians predict the scale of the enclosing savings; they
+are not an exact exclusive accounting. The first residual comparison is close
+(about 201 ms of isolated forward work versus 202 ms enclosing savings). The
+pinned comparison differs visibly, consistent with the recorded timing spread
+and differences in cache/allocator context. Removing the duplicate probe forward
+also removes repeated sequence scans, but adding isolated validation medians
+would still not establish exclusive attribution. `evaluate_window`, public
+probe, preflight and forward measurements overlap; never sum those rows.
+
+Native collected fixtures are different workloads with KL stops: object slots
+execute three training-window attempts, saving three forwards; terrain vision
+executes six training-window attempts, saving six. Their window shapes/candidates
+and stopped optimizer budgets differ, so the synthetic isolated forward cost is
+not applied to those savings. The independent Xeon ABBA cohort likewise remains
+separate and is not pooled into this reconciliation.
 
 ## Individual enclosing trials and uncertainty
 
