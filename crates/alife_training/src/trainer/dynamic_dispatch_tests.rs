@@ -314,6 +314,16 @@ fn encode_update(
     phenotype: &BrainPhenotype,
     oracle: Option<&StaticOracle>,
 ) -> wgpu::CommandBuffer {
+    encode_update_with_speech(device, gpu, phenotype, oracle, true)
+}
+
+fn encode_update_with_speech(
+    device: &wgpu::Device,
+    gpu: &TrainerGpuState,
+    phenotype: &BrainPhenotype,
+    oracle: Option<&StaticOracle>,
+    speech_active: bool,
+) -> wgpu::CommandBuffer {
     let groups = phenotype.neuron_count().div_ceil(WORKGROUP_SIZE);
     let weights = (phenotype.synapses().len() as u32).div_ceil(WORKGROUP_SIZE);
     let total = gpu.layout.ticks * u32::from(phenotype.microstep_count());
@@ -341,14 +351,16 @@ fn encode_update(
         gpu.layout.ticks,
         "assay-candidates",
     );
-    dispatch(
-        &mut encoder,
-        &gpu.pipelines.speech_forward,
-        &gpu.bind_group,
-        gpu.layout.ticks,
-        1,
-        "assay-speech",
-    );
+    if speech_active {
+        dispatch(
+            &mut encoder,
+            &gpu.pipelines.speech_forward,
+            &gpu.bind_group,
+            gpu.layout.ticks,
+            1,
+            "assay-speech",
+        );
+    }
     let mut values = vec![0_f32; (gpu.layout.ticks * gpu.layout.candidate_capacity) as usize];
     for tick in gpu.layout.burn_in_steps / u32::from(phenotype.microstep_count())..gpu.layout.ticks
     {
@@ -376,14 +388,16 @@ fn encode_update(
         gpu.layout.ticks,
         "assay-seed-candidates",
     );
-    dispatch(
-        &mut encoder,
-        &gpu.pipelines.seed_speech,
-        &gpu.bind_group,
-        groups,
-        gpu.layout.ticks,
-        "assay-seed-speech",
-    );
+    if speech_active {
+        dispatch(
+            &mut encoder,
+            &gpu.pipelines.seed_speech,
+            &gpu.bind_group,
+            groups,
+            gpu.layout.ticks,
+            "assay-seed-speech",
+        );
+    }
     match oracle {
         Some(oracle) => oracle.backward(&mut encoder, gpu.layout.burn_in_steps, total, groups),
         None => gpu.record_backward(&mut encoder, total, groups),
@@ -391,11 +405,14 @@ fn encode_update(
     for (kernel, count) in [
         (&gpu.pipelines.recurrent_gradients, weights),
         (&gpu.pipelines.candidate_gradients, weights),
-        (&gpu.pipelines.speech_gradients, weights),
+    ]
+    .into_iter()
+    .chain(speech_active.then_some((&gpu.pipelines.speech_gradients, weights)))
+    .chain([
         (&gpu.pipelines.gradient_norm, 1),
         (&gpu.pipelines.validate_adamw, 1),
         (&gpu.pipelines.adamw, weights),
-    ] {
+    ]) {
         dispatch(
             &mut encoder,
             kernel,
