@@ -108,7 +108,7 @@ fn captured_objectives(
             objective.imitation_metric_bytes(),
         );
         assert!(!metrics.is_empty());
-        for row in metrics.chunks_exact(4) {
+        for row in metrics.as_chunks::<4>().0 {
             assert!(row.iter().all(|word| f32::from_bits(*word).is_finite()));
             assert!(f32::from_bits(row[1]) > 0.0);
             assert_eq!(row[2], 0.2_f32.to_bits());
