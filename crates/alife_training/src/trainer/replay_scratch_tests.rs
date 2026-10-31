@@ -11,23 +11,28 @@ fn mask(phenotype: &BrainPhenotype) -> StageTrainableMask {
     .unwrap()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn fresh_prepare(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     gpu: &mut TrainerGpuState,
     phenotype: &BrainPhenotype,
+    mask: &StageTrainableMask,
     replay: &TrainingSequence,
+    previous_shape: Option<&ReplayShape>,
     optimizer_step: u32,
-) {
+) -> ReplayShape {
     // This reference deliberately always takes the original changed-shape path:
     // fresh storage, complete packet/header upload and exact weights/Adam copy.
     replay.validate_for(phenotype).unwrap();
+    let shape = (replay.ticks.len(), replay.initial.dendrites.clone());
+    assert!(!previous_shape.is_some_and(|previous| replay_shapes_equal(previous, &shape)));
     let zeros = vec![0_f32; phenotype.synapses().len()];
     let next = TrainerGpuState::new_for_replay(
         device,
         phenotype,
         &zeros,
-        &mask(phenotype),
+        mask,
         Some(replay),
         Some(&gpu.pipelines),
     )
@@ -37,12 +42,14 @@ fn fresh_prepare(
         phenotype,
         next.layout,
         AdamWConfig::default(),
-        optimizer_step + 1,
+        optimizer_step.checked_add(1).expect("next optimizer step"),
     )
     .unwrap();
     queue.write_buffer(&next.training, 0, bytemuck::cast_slice(&words));
     queue.write_buffer(&next.step_headers, 0, bytemuck::cast_slice(&headers));
-    let mut encoder = device.create_command_encoder(&Default::default());
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("foundation-replay-reallocate"),
+    });
     encoder.copy_buffer_to_buffer(&gpu.weights, 0, &next.weights, 0, zeros.len() as u64 * 4);
     encoder.copy_buffer_to_buffer(
         &gpu._optimizer,
@@ -53,6 +60,7 @@ fn fresh_prepare(
     );
     queue.submit(Some(encoder.finish()));
     *gpu = next;
+    shape
 }
 
 fn sequence(
@@ -265,7 +273,16 @@ fn reused_scratch_matches_fresh_shapes_and_preserves_failed_preparation() {
                 )
                 .unwrap(),
         );
-        fresh_prepare(&device, &queue, &mut baseline, &phenotype, &sequence, step);
+        fresh_prepare(
+            &device,
+            &queue,
+            &mut baseline,
+            &phenotype,
+            &mask,
+            &sequence,
+            None,
+            step,
+        );
         if candidate.training == prior_training {
             reused += 1;
             metadata_only += usize::from(candidate._meta != prior_meta);
@@ -481,6 +498,8 @@ fn replay_scratch_capacity_assay() {
     );
     let output = std::env::var_os("ALIFE_REPLAY_SCRATCH_ASSAY_OUTPUT")
         .expect("explicit writable assay output required");
+    let stop_file = std::env::var_os("ALIFE_REPLAY_SCRATCH_STOP_FILE");
+    let mut stopped_at_pair_boundary = false;
     let (device, queue) = device();
     let phenotype = phenotype();
     let mask = mask(&phenotype);
@@ -500,11 +519,18 @@ fn replay_scratch_capacity_assay() {
         .map(|sequence| FoundationTrainer::replay_allocation_bytes(&phenotype, sequence).unwrap())
         .collect::<Vec<_>>();
     let mut trials = Vec::new();
-    for full_update in [false, true] {
+    'scopes: for full_update in [false, true] {
         // Two warm-up pairs precede seven alternating timed pairs. Preparation
         // includes validation/packing/uploads/allocation plus queue submit/wait.
         // The second scope also runs actual frozen graph/BPTT/Adam, no PPO head.
         for trial in 0_usize..9 {
+            if stop_file
+                .as_ref()
+                .is_some_and(|path| std::path::Path::new(path).exists())
+            {
+                stopped_at_pair_boundary = true;
+                break 'scopes;
+            }
             let mut baseline = gpu(&device, &queue, &phenotype, initial);
             let mut candidate = gpu(&device, &queue, &phenotype, initial);
             wait_submission(&device, &queue, None);
@@ -539,7 +565,16 @@ fn replay_scratch_capacity_assay() {
                             .unwrap(),
                         );
                     } else {
-                        fresh_prepare(&device, &queue, gpu, &phenotype, sequence, step);
+                        shape = Some(fresh_prepare(
+                            &device,
+                            &queue,
+                            gpu,
+                            &phenotype,
+                            &mask,
+                            sequence,
+                            shape.as_ref(),
+                            step,
+                        ));
                     }
                     let command = if full_update {
                         Some(encode_update_with_speech(
@@ -563,7 +598,8 @@ fn replay_scratch_capacity_assay() {
                         "seconds":measured_seconds,"sequence_wall_seconds_including_receipt_bookkeeping":sequence_wall_seconds,
                         "starting_capacity_bytes":starting_capacity,"rows":rows}));
             }
-            // Exactness checks and destruction are outside the timed scopes.
+            // Exactness checks and final fixture destruction are outside the
+            // timed scopes; replaced resources retire inside fresh_prepare.
             for (label, actual, expected, words) in [
                 (
                     "weights",
@@ -642,9 +678,12 @@ fn replay_scratch_capacity_assay() {
         "structural_pattern":"no edge on even ticks; one source1-target2 route0 edge on odd ticks",
         "dendritic_branches":1,"dendritic_inputs":2,
         "warmup_pairs_per_scope":2,"timed_pairs_per_scope":7,"trials":trials,
+        "baseline_mask_source":"precomputed retained StageTrainableMask, matching original production",
+        "baseline_shape_bookkeeping":"clone, compare against previous shape, and retain; all timed transitions differ",
+        "stopped_at_pair_boundary":stopped_at_pair_boundary,
         "speech_objective_enabled":false,"value_or_PPO_objective_executed":false,
         "scope":"actual production preparation and submitted/waited frozen forward/BPTT/Adam only; excludes world collection, PPO objective/value state, replay IO, checkpoint admission/persistence and temporary correctness readbacks",
         "resource_byte_scope":"requested Buffer.size backing capacities, not physical VRAM; one current set per trainer; baseline/reference coexist only in this fixture",
-        "timing_scope":"seconds is sum of three individually timed prepare/submit/wait spans; per-row receipt construction, capacity sampling, precomputed allocation estimates, correctness readbacks and destruction are outside those spans; inclusive sequence wall is retained separately"});
+        "timing_scope":"seconds is sum of three individually timed prepare/submit/wait spans; per-row receipt construction, capacity sampling, precomputed allocation estimates, correctness readbacks and final fixture destruction are outside those spans; replaced resources retire inside preparation; inclusive sequence wall is retained separately"});
     std::fs::write(output, serde_json::to_vec_pretty(&receipt).unwrap()).unwrap();
 }

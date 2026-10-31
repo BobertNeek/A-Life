@@ -1,5 +1,13 @@
 # Bounded replay scratch capacity reuse
 
+Independent review found that the original timing reference rebuilt a stage
+mask inside every preparation, whereas original production retained that mask.
+The old cohorts below therefore include extra reference-only host work, with an
+unknown upward bias in attributed savings. Their raw evidence is preserved
+unchanged as a biased precursor, not a qualified matched-path speed claim. The
+corrected reference receives the precomputed mask and restores original shape
+bookkeeping, checked step increment and encoder label; a bounded rerun is pending.
+
 A release-profile software-Vulkan fixture measured **13.92% lower paired median
 replay-preparation elapsed time**. Including frozen forward/BPTT/Adam work, the
 paired median reduction was **2.315%**, with one pair slower. Reuse retained
