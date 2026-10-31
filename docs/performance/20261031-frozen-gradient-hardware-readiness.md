@@ -130,3 +130,34 @@ matched pairs; the current pair and its proof finish first. Keep the printed
 directory, actual adapter metadata, source revision, binary/library hashes and
 logs for parent review. No merge, default promotion or whole-training gain follows
 from this prepared fixture.
+
+## Applicability and remaining integration gates
+
+Source audit at main `a9288027e1575821e83ac434c051116218795e21`
+confirms that the default continuous host requests 512 trained decisions plus
+one real bootstrap capture. Without capture gaps, the existing span builder
+produces 256 ticks/no burn-in and 384 ticks/128 burn-in, with 256 loss rows each.
+The actual controller call uses effective batch eight, two epochs, value
+coefficient zero, no speech labels and no auxiliary objective. This matches the
+assay's structural eligibility; the ordinary API still passes no cache request.
+Capture gaps split spans, so eligibility depends on the sum of per-segment
+ceil(loss rows / 256), not just the requested row count. The separate group path
+uses effective batch 50 and is ineligible.
+
+The software 19.06% paired controller reduction is not a production forecast.
+Production uses continuing/truncated GAE, KL target .02 and entropy .01; the
+measured assay uses terminal targets, KL 100 and entropy zero. Actual replay
+varies, and the surrounding PPO timer also includes value prediction, replay
+loading, reward/GAE construction and residual-critic fitting.
+
+Any future activation belongs beside the policy-local snapshot cache and
+controller call in `foundation_training_cycle/continuous_world.rs`, after full
+targets/spans are constructed. Require explicit immutable/versioned input proof
+without changing loader/error order: `PpoWindowSnapshotCache` retention is
+optional, and every hit repeats measured host admission. Require a phase-total
+device reservation covering live and offline resources, old/new replay scratch,
+objective/rollback/readbacks and raw-cache bytes. The experiment's 2 MiB copy cap,
+the continuous host RAM budget and the separate group auxiliary allowance do not
+provide that reservation. Retention or admission failure must keep fresh replay
+available. This source assessment changes no configuration, schedule or runtime
+behavior and provides no physical-device qualification.
