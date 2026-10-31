@@ -588,5 +588,304 @@
       }
     },
     "excluded_attempt": "First capacity attempt reused a stale legacy artifact through the shared Cargo target; excluded. mtime-only invalidation forced observed current-source recompilation before the recorded capacity run. Source bytes unchanged."
+  },
+  "final_same_build_confirmation": {
+    "source_commit": "d210e1797318beacfffdb1419cda815d1d54201c",
+    "source_tree": "ef958702ace3f379f653ee224a4b1fc34f66eb48",
+    "git_status_before_run": "",
+    "tests_passed": 2,
+    "same_cargo_invocation": true,
+    "forced_current_training_library_compilation_observed": true,
+    "all_captured_u32_words_exact_to_legacy": true,
+    "sections": 18,
+    "u32_words": 1470668,
+    "semantic_json_sha256": "918995da9e64af81b6bd4805de968c70d1e5b0551c7d4d7d3d1961882ee40ed1",
+    "controller_binary_sha256": "748bf66ead95c87aff7f8bb129e040ea6141c50ecbd883d9751774fd7168a5ce",
+    "bounds_binary_sha256": "16d7f609626a92d2031511a789df70abcc6ff710666c14fb6cf5c0846184e70c",
+    "training_rlib_sha256": "10517325285a6e10e16ab23f1e7db3493829d46c48f4e45322466ac9cb9682da",
+    "compiler_artifacts_json_sha256": "be20042f44a1677a2820525e67573a78ff72318fd67ebc8440ecb783a0426d09",
+    "bounds": {
+      "logical_output_words": 868,
+      "physical_output_words": 1444,
+      "logical_state_words": 79872,
+      "physical_state_words": 129024
+    },
+    "source_inputs_sha256_text": "c9679fd5756695d508c747ad905f81737f7836befed1f5cd1aa642bdcea8578f  crates/alife_training/src/trainer.rs\n22d0097f53b368b183709d68b52baf8be54c13dd3132f2994609208ea6b21e08  crates/alife_training/src/ppo.rs\n054322a15bc452240e332ae5ba3e01b16c4442ce650eec8638e4259a8ca7d260  crates/alife_gpu_backend/src/closed_loop_runtime.rs\n0543526699f4318c48574bd29b49297fe2645cc7f11e21e866d8f969f877b58e  crates/alife_gpu_backend/src/closed_loop_runtime/software_training_test.rs\nd5150b237c251a0ccbaf28495c6c54a1d0567c812e2a280fccf3e4a4f763aa7b  crates/alife_runtime/src/session.rs\ndf2f758a287df4b6ae900862152c407767697090e1a888345d4f7caf94644acd  crates/alife_training/tests/software_ppo_controller.rs\n1d00b6435d8d96d319fe81ec4e0410e316266dca4bad7a8171e3281ac0777036  crates/alife_training/tests/software_ppo_objective_bounds.rs\ne9da375829f39d182af9b39257eca47e749991272486ff45a26c21ecb55655bf  Cargo.lock\n",
+    "raw_directory": "/workspace/software-ppo-capacity-confirmed"
+  },
+  "final_compiler_artifacts": [
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_core#0.1.0",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_core",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_core/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "2",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_core-16c9870bd3cb6733.rlib": "94839c25bc9c04e6342032dc994efc2bd6e7a0eb35a5c00f82d38f1106c893db",
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_core-16c9870bd3cb6733.rmeta": "2495713e5cc392f952799cd36a0a2716227e9d2bac95e4085c7b3ba285167c87"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_storage#0.1.0",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_storage",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_storage/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_storage-a04f2ff0363c97e0.rlib": "8d7fc92f7c655fe6e1d2289df4acff4a7c658acc14396f3536b16361e70ff735",
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_storage-a04f2ff0363c97e0.rmeta": "4d694649a82b1d14e288d68b96629a302999da5d83b3fde4334a3ebdeefd6b96"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_world#0.1.0",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_world",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_world/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "2",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "fresh": true,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_world-651f80eed48a4cf7.rlib": "8abe182d4d0f0196ac047386214975c2641590beb7c8a16bd320dd779e1c33b4",
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_world-651f80eed48a4cf7.rmeta": "cfc40d2b6b7aa7f3c62f2285755840b7dcb0112b4d4e058fefd40009bd21ed37"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_gpu_backend#0.1.0",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_gpu_backend",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_gpu_backend/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "2",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [
+        "default",
+        "gpu-tests",
+        "test-support",
+        "training-rollout"
+      ],
+      "fresh": false,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_gpu_backend-550bc273d21676ba.rlib": "c8bd3d94051df8bc94f4ff59db54e6792dd2585b551ee4374087104cfe6d9a4c",
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_gpu_backend-550bc273d21676ba.rmeta": "55fb41c43e861db2be9193a41ebddf5feb2166b02ced07d1510f79ce194e9f1a"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_training#0.1.0",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_training",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_training/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [
+        "default",
+        "gpu-tests"
+      ],
+      "fresh": false,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_training-615b3358bc954f0d.rlib": "10517325285a6e10e16ab23f1e7db3493829d46c48f4e45322466ac9cb9682da",
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_training-615b3358bc954f0d.rmeta": "408a33f01f5553e2f6c7c4041a9945a84ed1ee395a6a3f518d3102bd38234278"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_runtime#0.1.0",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_runtime",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_runtime/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "2",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [
+        "default",
+        "gpu-tests",
+        "training-rollout"
+      ],
+      "fresh": false,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_runtime-e39c7f6dc78fcdb4.rlib": "3f47030c39e09f107de5aa846d1e67c7e8c3dc49611f904bf4d827c3f18e5510",
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/libalife_runtime-e39c7f6dc78fcdb4.rmeta": "5578c398a41540dc95247d256a96917e259cbbdb131cb4efcb2009e8603c22bc"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_training#0.1.0",
+      "target": {
+        "kind": [
+          "test"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "software_ppo_objective_bounds",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_training/tests/software_ppo_objective_bounds.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": true
+      },
+      "features": [
+        "default",
+        "gpu-tests"
+      ],
+      "fresh": false,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/software_ppo_objective_bounds-11cf162b05354a4d": "16d7f609626a92d2031511a789df70abcc6ff710666c14fb6cf5c0846184e70c"
+      }
+    },
+    {
+      "package_id": "path+file:///workspace/A-Life-full-ppo-experiment/crates/alife_training#0.1.0",
+      "target": {
+        "kind": [
+          "test"
+        ],
+        "crate_types": [
+          "bin"
+        ],
+        "name": "software_ppo_controller",
+        "src_path": "/workspace/A-Life-full-ppo-experiment/crates/alife_training/tests/software_ppo_controller.rs",
+        "edition": "2021",
+        "doc": false,
+        "doctest": false,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": true
+      },
+      "features": [
+        "default",
+        "gpu-tests"
+      ],
+      "fresh": false,
+      "files_sha256": {
+        "/workspace/A-Life/target/cloud-cpu/debug/deps/software_ppo_controller-a44c78ab37eadc71": "748bf66ead95c87aff7f8bb129e040ea6141c50ecbd883d9751774fd7168a5ce"
+      }
+    }
+  ],
+  "checks": {
+    "backend_and_runtime_gpu_tests_compiled": true,
+    "explicit_backend_software_test_passed": true,
+    "explicit_runtime_software_test_passed": true,
+    "cpu_admission_and_selection_regressions_passed": 4,
+    "final_combined_controller_and_bounds_tests_passed": 2,
+    "strict_clippy_all_targets_gpu_tests": {
+      "packages": [
+        "alife_gpu_backend",
+        "alife_runtime",
+        "alife_training"
+      ],
+      "deny_warnings": true,
+      "passed": true,
+      "log": "/workspace/software-training-boundary/final-clippy.log"
+    }
   }
 }

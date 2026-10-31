@@ -79,6 +79,17 @@ used one worktree before/after the source cherry-pick, with observed
 recompilation and distinct copied binaries. Separate Cargo target directories
 avoid this cache ambiguity when reproducing across multiple worktrees.
 
+The final confirmation at clean commit `d210e1797318beacfffdb1419cda815d1d54201c`
+forced current backend/runtime/trainer recompilation and ran both unchanged test
+targets in **one Cargo invocation**. Both passed. Its complete controller capture
+again matched all 1,470,668 legacy words, and the same compiled library produced
+the retained-capacity bounds witness above. The receipt includes Cargo artifact
+features/profiles and library/dependency/test-binary hashes. Copied binaries, the
+actual trainer library and the full Cargo log remain in
+`/workspace/software-ppo-capacity-confirmed`. Strict Clippy with `-D warnings`
+passed for all targets of `alife_gpu_backend`, `alife_runtime` and
+`alife_training` with `gpu-tests` enabled.
+
 For each recorded source, the cloud command was:
 
 ```bash
@@ -99,3 +110,9 @@ The separate bounds command is `cargo test -p alife_training --features gpu-test
 is the legacy controller commit plus the bounds-test-only commit; the receipt
 records both resulting source identities. The original controller fixture remains
 unchanged across both primary runs and this follow-up.
+
+The final same-build command used the confirmed capture directory and both
+`--test software_ppo_controller --test software_ppo_objective_bounds`, with
+`--message-format=json` to preserve compiler artifact identities. Both files
+retain their original SHA256 values recorded in the receipt. No further tests or
+performance trials were needed after this confirmation.
