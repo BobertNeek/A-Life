@@ -253,9 +253,10 @@ fn synthetic_cpu_hotpath_ledger() {
         "frozen_residual_preflight_ms".into(),
         serde_json::json!(timed(
             || {
-                black_box(
-                    cohort::validate_frozen_residual_window(&t, &v, &w, config, 7400).unwrap(),
-                );
+                black_box(cohort::validate_frozen_residual_window(
+                    &t, &v, &w, config, 7400,
+                ))
+                .unwrap();
             },
             11
         )),
@@ -264,7 +265,7 @@ fn synthetic_cpu_hotpath_ledger() {
         "sequence_validation_ms".into(),
         serde_json::json!(timed(
             || {
-                black_box(q.validate_for(&p).unwrap());
+                black_box(q.validate_for(&p)).unwrap();
             },
             21
         )),
