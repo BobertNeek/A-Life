@@ -1,0 +1,128 @@
+{
+  "scope": "Synthetic software Vulkan correctness qualification only; disabled experimental frozen-gradient cache, no timing assay",
+  "identity": {
+    "source_commit": "c3b47a789a8f95d81bc097146298db2f9c88003d",
+    "source_tree": "aace502e07f58eb09b54e5847c46dafcd5e1e734",
+    "git_status": "",
+    "base": "4ee3f6ca66a638e24004086e189253387063538e",
+    "profile": "test [unoptimized]; correctness only",
+    "selector": "ALIFE_DISPATCH_REQUIRE_HARDWARE=0; explicit software Vulkan",
+    "binary": "/workspace/A-Life-frozen-gradient-continuation/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "binary_sha256": "a5804783fd7121d6e7965e00f35ef3599ecf4b8e02862ad61ac2176bd2f8c1d3",
+    "source_sha256": {
+      "crates/alife_training/tests/software_ppo_controller.rs": "97e9f490e80ac5b4a1589ede11be6aa9aaccdd765782349b8bf856d99256eff0",
+      "crates/alife_training/tests/software_ppo_controller/continuing_qualification.rs": "3443203596595d8ecd8f48c9a55a3b51c9e479a51dd254d3ca2ffb081721743e",
+      "crates/alife_training/tests/software_ppo_controller/fallback_qualification.rs": "773c09e991f3fe367febb10bdc75100afb7d7c8a89c829725cc43d60465b658e",
+      "crates/alife_training/tests/software_ppo_controller/execution.rs": "5a6d03bd78411414b633465a15e432f91a299e30b882e469e8bd616007927355",
+      "crates/alife_training/src/ppo.rs": "b2334d9a182cd1952b553b9c173aa8331d64da1e86f54927ed2adeef9abc7a2c",
+      "crates/alife_training/src/trainer.rs": "a72ce26cd299aad4cbbe1d386fa3b920b6b9113c4761ad49fb63c462b8be929c",
+      "crates/alife_training/shaders/foundation_train.wgsl": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+      "crates/alife_training/shaders/foundation_ppo.wgsl": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5"
+    }
+  },
+  "results": {
+    "results": [
+      {
+        "test": "continuing_qualification::continuing_gae_matches_actual_controller_after_warm_restore",
+        "command": [
+          "/workspace/A-Life-frozen-gradient-continuation/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+          "continuing_qualification::continuing_gae_matches_actual_controller_after_warm_restore",
+          "--exact",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "wall_seconds": 3.848798461000115
+      },
+      {
+        "test": "fallback_qualification::actual_speech_labels_force_late_frozen_cache_fallback",
+        "command": [
+          "/workspace/A-Life-frozen-gradient-continuation/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+          "fallback_qualification::actual_speech_labels_force_late_frozen_cache_fallback",
+          "--exact",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "wall_seconds": 4.195282407999912
+      },
+      {
+        "test": "fallback_qualification::actual_auxiliary_targets_force_late_frozen_cache_fallback",
+        "command": [
+          "/workspace/A-Life-frozen-gradient-continuation/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+          "fallback_qualification::actual_auxiliary_targets_force_late_frozen_cache_fallback",
+          "--exact",
+          "--ignored",
+          "--test-threads=1",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "wall_seconds": 5.730444886999976
+      }
+    ],
+    "whole_process_maxrss_kib": 252092,
+    "stopped": false
+  },
+  "coverage": {
+    "continuing_gae": "One coherent8-tick all-active GPU trajectory provides7lossrows plus actual observed nonzero bootstrap. Global GAE computed before3/4loss slices; secondwindow restored from actual aftertick0 activation/EMA/metabolic state, cloned empty dendritecontext; slicedGPUlogits/values bit-identical. Artificialwindow-edge andzerobootstrap controls differ. Warmhistory,epochs2/value.5,actor+allthreevalueparameter/momentplanesadvance;normal/cache/owned/shared finalbits andreceipts equal,reuse2 proveslaterfreshpath.",
+    "speech_fallback": "Valid positive2step token+silence targets onlatewindow1,wide10923trainablemask. ActualtrainableSpeechPayload momentdifference vsunlabelednormalcontrol. Normal/experimental resultsallcapturedwordsequal; latefallbackraw1/reuse0/eligiblefalse/requested278544bytes;twoacceptedactor/valueupdates,allages/frozenbitschecked.",
+    "auxiliary_fallback": "LegalpositiveApproachrepresentative target opposedtoPPOIdle onlatewindow1,coefficient.2. Actualauxmetrics valid/positive andactoroptimizercausal difference vsnolabelcontrol. Sameacceptedprogress/latefallback/exactstate assertions as speech."
+  },
+  "not_qualified": [
+    "Physical GPU execution/performance",
+    "Memory-cap fallback execution",
+    "Forced actor-apply/value rollback failure",
+    "Production activation or creature learning"
+  ],
+  "checks": {
+    "controller_tests": "3 passed, 0 failed",
+    "strict_gpu_tests_clippy": "passed; replaced chunks_exact(4) with equivalent as_chunks::<4>().0 in the auxiliary metric proof after execution",
+    "independent_review": "Root read both new modules before execution and found no source blocker."
+  },
+  "notes": [
+    "Base exactly4ee3f6ca66a638e24004086e189253387063538e; distinct worktree/branch. Production implementation, math, PpoConfig, shaders and normal device admission unchanged.",
+    "ALIFE_DISPATCH_REQUIRE_HARDWARE=0 selects explicit software test session; logs retain actualCpuVulkanAdapterInfo. NoPCwork or realcheckpointinput.",
+    "Per-test wall durations and whole-processRSS are correctness-process context only, not throughput or memory regression measurements.",
+    "Historical earlier receipts remain bound to their original sources; this follow-up adds software continuing-GAE and actualsupervision fallback qualification only.",
+    "Executed identity is c3 source; the later test-only chunks iterator idiom follows strict Clippy without changing controller or proof behavior. No repeated qualification run was needed."
+  ],
+  "logs": {
+    "library_build": {
+      "path": "/tmp/alife-frozen-continuation-build.log",
+      "sha256": "a7bf5a01331bb7952fd564ff1dab377e15f1a52cffeaf7fa1e98bef2894a5970",
+      "text": "   Compiling alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_core)\n   Compiling alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_storage)\n   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_gpu_backend)\n   Compiling alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_world)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 29.86s\n"
+    },
+    "test_build": {
+      "path": "/tmp/alife-frozen-continuation-test-build.log",
+      "sha256": "d7dc04a02d9b6f2b1336fc8db807a82ddb83a418c3abbd10c93c79a1061004ba",
+      "text": "   Compiling alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_core)\n   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_gpu_backend)\n   Compiling alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_world)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_training)\n    Finished `test` profile [unoptimized] target(s) in 1m 38s\n  Executable tests/software_ppo_controller.rs (target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71)\n"
+    },
+    "continuing": {
+      "path": "/tmp/alife-frozen-continuation-continuing.log",
+      "sha256": "5e27f1a77c7682e794c565d510f34f3a752793f68805b88ef3f5281619f14f6e",
+      "text": "\nrunning 1 test\ntest continuing_qualification::continuing_gae_matches_actual_controller_after_warm_restore ... actual_controller_execution=software_vulkan_test adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\ncontinuing GAE qualification passed: coherent8GPUrows,7trajectorylosses,actualnonzero finalbootstrap,globalGAE\u21923/4loss windows with2burn,epochs2/value.5,nonzero warmhistory,owned/shared bit-exact actualcontroller+freshlaterupdate\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 3.84s\n\n"
+    },
+    "speech": {
+      "path": "/tmp/alife-frozen-continuation-speech.log",
+      "sha256": "eafa1addc4b9ad0fdcb9765fda9399f148ac59354513d73413b7713a4653936e",
+      "text": "\nrunning 1 test\ntest fallback_qualification::actual_speech_labels_force_late_frozen_cache_fallback ... actual_controller_execution=software_vulkan_test adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=10923; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nactual Speech fallback: valid late labels discard one raw cached window, reuse0; two accepted actor/value updates, causal supervised moments, frozen bits/ages and every captured word match original controller\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 4.19s\n\n"
+    },
+    "auxiliary": {
+      "path": "/tmp/alife-frozen-continuation-auxiliary.log",
+      "sha256": "4037dcfaa46155becc6ce60b07cfd72592d6de6e98d2191dfab1477ba23de61a",
+      "text": "\nrunning 1 test\ntest fallback_qualification::actual_auxiliary_targets_force_late_frozen_cache_fallback ... actual_controller_execution=software_vulkan_test adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=10923; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nactual Auxiliary fallback: valid late labels discard one raw cached window, reuse0; two accepted actor/value updates, causal supervised moments, frozen bits/ages and every captured word match original controller\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 5.72s\n\n"
+    },
+    "strict_clippy_initial": {
+      "path": "/tmp/alife-frozen-continuation-clippy-initial.log",
+      "sha256": "7b57b36d6bff824a8d6995e49e6f7bb4581580b6bcc7ca538ade6800e4d3896b",
+      "text": "    Checking alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_core)\n    Checking alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_storage)\n    Checking alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_gpu_backend)\n    Checking alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_world)\n    Checking alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_runtime)\n    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_training)\nerror: using `chunks_exact` with a constant chunk size\n   --> crates/alife_training/tests/software_ppo_controller/fallback_qualification.rs:111:28\n    |\n111 |         for row in metrics.chunks_exact(4) {\n    |                            ^^^^^^^^^^^^^^^ help: consider using `as_chunks` instead: `as_chunks::<4>().0`\n    |\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#chunks_exact_to_as_chunks\n    = note: `-D clippy::chunks-exact-to-as-chunks` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::chunks_exact_to_as_chunks)]`\n\nerror: could not compile `alife_training` (test \"software_ppo_controller\") due to 1 previous error\nwarning: build failed, waiting for other jobs to finish...\n"
+    },
+    "strict_clippy": {
+      "path": "/tmp/alife-frozen-continuation-clippy.log",
+      "sha256": "22fafc3d1c49979cf4206c6c91050ba438e8e15a9f802dea0d6d01dbc8c73440",
+      "text": "    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 0.34s\n"
+    }
+  }
+}
