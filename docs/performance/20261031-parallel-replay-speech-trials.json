@@ -1,0 +1,1450 @@
+{
+  "date_utc": "2026-10-31",
+  "base_commit": "50d4407f2aa9cf2a7af19d7609418cca3e572ced",
+  "status": "Standalone disabled experiment; no gain expected on current continuous all-None speech path",
+  "applicability": {
+    "continuous_source": "crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs:1329",
+    "speech_targets": "vec![None; replay.sequence.ticks.len()]",
+    "auxiliary": "None",
+    "trainer_gating": "prepare_replay clears replay_speech_active; upload_replay_speech_targets sets targets.iter().any(Option::is_some); speech forward/seed dispatches are gated by replay_speech_active",
+    "conclusion": "Source inference: zero expected saving from these kernels where they are already skipped. No whole-training or physical GPU claim."
+  },
+  "final_source_sha256": {
+    "crates/alife_training/src/trainer/dynamic_dispatch_tests.rs": "b611852edaad2bf1f2d0479e5a9b00efdfa6497aac3417535ed991633fd3d446",
+    "crates/alife_training/shaders/foundation_train_parallel_speech.wgsl": "1c85e5a96be55be35209e4c70072f1ebfe5616e2fb893ef158ba67aa9a166d8d"
+  },
+  "final_binary_name": "alife_training-b408c1ab66e7c384",
+  "final_binary_sha256": "b0969d5399899b98d56ac61e9a8af66da34a11249de08151654c7fdb9d600f56",
+  "initial_cohort_provenance": "Retained early observations before sparse/absent test additions and a timestamp-decoder Clippy refactor; candidate shader was unchanged. Full binary hashes were not captured for these initial observations. Final receipts bind frozen source and binary hashes before/after.",
+  "compiler": "rustc 1.99.1 (58cf8f9c35b355199727627d07ae34a4e2846d67), LLVM23.1.1, x86_64-unknown-linux-gnu",
+  "build": "cargo test --release -p alife_training --features gpu-tests --lib; actual release profile for all dependencies",
+  "host": {
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "visible_cpus": 5,
+    "os": "Linux x86_64",
+    "LP_NUM_THREADS": 2,
+    "RUST_TEST_THREADS": 1
+  },
+  "adapter": {
+    "name": "llvmpipe (LLVM19.1.7,256bits)",
+    "device_type": "Cpu",
+    "driver": "Mesa25.0.7-2+deb13u1 (LLVM19.1.7)",
+    "backend": "Vulkan",
+    "subgroup_size": 8
+  },
+  "fixture": {
+    "neurons": 2048,
+    "synapses": 32768,
+    "ticks": 64,
+    "burn_in_ticks": 16,
+    "microsteps_per_tick": 4,
+    "trainable_mask": "Every third compiled synapse",
+    "speech_targets": "Every loss tick, all six steps and32 outputs supervised; burn-in target weights zero",
+    "other_context": "Active dendrite, structural edge, finite frozen effective-weight offsets, inactive/partial/full neural microsteps, heterogeneous integer ages including >2^24, signed-zero age0 moments",
+    "candidate_adjoints": "Synthetic fixed manual adjoints, not a real PPO objective or observed world trajectory",
+    "paired_updates_per_cohort": 7,
+    "order": "Alternating baseline-first and candidate-first; retain first cold pair; both sides continue matched histories, no resets between updates"
+  },
+  "timing": {
+    "host_scope": "Command encoding+finish including common adjoint Vec allocation/fill and buffer initialization, queue submit, and submission-index wait; excludes replay fixture packing/setup, pipeline creation, validation readbacks and receipt output",
+    "device_scope": "14 empty compute-pass beginning timestamp markers bracket13 stages; stage spans include empty-marker overhead. Vulkan wgpu-hal29 writes BOTTOM_OF_PIPE. Profiled host intervals also include query resolution. Unprofiled paired cohort is primary.",
+    "observer_effect": "Separate instrumented/uninstrumented pairs; observed median wall changes range from +0.88% to -2.46%, showing timing variation, not negative instrumentation cost.",
+    "setup_upload_fence": "Both execution and observer assays call queue.submit([]) then device.poll(Wait{submission_index:None}) after all gpu() setup write_buffer calls and before timer/trialloop; deferred setup uploads are excluded. Per-update adjoint buffer initialization remains timed."
+  },
+  "correctness": {
+    "short_cases": 15,
+    "contexts": [
+      [
+        3,
+        0,
+        "dense"
+      ],
+      [
+        5,
+        2,
+        "dense"
+      ],
+      [
+        9,
+        1,
+        "dense"
+      ],
+      [
+        3,
+        1,
+        "absent"
+      ],
+      [
+        3,
+        1,
+        "sparse"
+      ]
+    ],
+    "kernel_modes": [
+      "forward only",
+      "seed only",
+      "both"
+    ],
+    "oracle": "Original unchanged WGSL with independent static per-step header bindings",
+    "byte_exact_buffers": [
+      "state",
+      "outputs",
+      "gradients",
+      "weights",
+      "optimizer moments and integer ages"
+    ],
+    "continuation": "All five buffers still byte-exact after seven paired updates in each execution cohort; timestamp instrumentation also preserves state",
+    "absent_label_scope": "Kernel behavior with zero target weights under forced dispatch; existing high-level all-None dispatch skipping remains unchanged",
+    "naga": "29.0.3 all validation flags, empty capabilities; all19 entrypoints accepted; original31,654-byte shader prefix unchanged"
+  },
+  "checks": [
+    "release short equivalence test passed15 cases",
+    "unprofiled and profiled seven-update continuation assays passed",
+    "timestamp observer-effect state equivalence passed",
+    "cargo clippy --release -p alife_training --features gpu-tests --lib --tests -- -D warnings passed",
+    "cargo fmt --check -p alife_training passed",
+    "git diff --check passed"
+  ],
+  "cohorts": [
+    {
+      "id": "initial_stage_share",
+      "raw_file_sha256": "8262f84a0550fcfe3e5588a4bee15c27df8c28fb4e7c8f307c2d900ccdc2db7d",
+      "qualification_receipt": false,
+      "binary_hash_captured": false,
+      "summary": {
+        "baseline_median_seconds": 0.130395921,
+        "comparison_median_seconds": 0.131545375,
+        "comparison_elapsed_reduction_fraction": -0.008815107030840208,
+        "baseline_range_seconds": [
+          0.126664686,
+          0.137043117
+        ],
+        "comparison_range_seconds": [
+          0.128222357,
+          0.142596295
+        ],
+        "median_combined_speech_fraction_of_device_interval": 0.11514918863419978
+      },
+      "trials": [
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.137043117,
+          "trial": 0
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 718319.0,
+            "adjoints_and_candidate_seed": 10579466.0,
+            "candidate_forward": 1390467.0,
+            "candidate_weight_gradients": 17525374.0,
+            "gradient_norm": 535161.0,
+            "initialize": 6064233.0,
+            "recurrent_backward": 30015206.0,
+            "recurrent_forward": 38483583.0,
+            "recurrent_weight_gradients": 17691307.0,
+            "speech_forward": 8548087.0,
+            "speech_seed": 7459838.0,
+            "speech_weight_gradients": 1447704.0,
+            "validate_adam": 764419.0
+          },
+          "device_total_nanoseconds": 141223164.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.142596295,
+          "trial": 0
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 404162.0,
+            "adjoints_and_candidate_seed": 10160312.0,
+            "candidate_forward": 936680.0,
+            "candidate_weight_gradients": 17751999.0,
+            "gradient_norm": 197018.0,
+            "initialize": 1503028.0,
+            "recurrent_backward": 30198214.0,
+            "recurrent_forward": 34622090.0,
+            "recurrent_weight_gradients": 17033939.0,
+            "speech_forward": 8152957.0,
+            "speech_seed": 6710011.0,
+            "speech_weight_gradients": 1023251.0,
+            "validate_adam": 382090.0
+          },
+          "device_total_nanoseconds": 129075751.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.130220156,
+          "trial": 1
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.126664686,
+          "trial": 1
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.130395921,
+          "trial": 2
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 405204.0,
+            "adjoints_and_candidate_seed": 10473585.0,
+            "candidate_forward": 948277.0,
+            "candidate_weight_gradients": 17331200.0,
+            "gradient_norm": 265933.0,
+            "initialize": 896339.0,
+            "recurrent_backward": 28756448.0,
+            "recurrent_forward": 34637032.0,
+            "recurrent_weight_gradients": 17070816.0,
+            "speech_forward": 7904122.0,
+            "speech_seed": 6810654.0,
+            "speech_weight_gradients": 1003917.0,
+            "validate_adam": 406386.0
+          },
+          "device_total_nanoseconds": 126909913.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.128222357,
+          "trial": 2
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 395870.0,
+            "adjoints_and_candidate_seed": 10226360.0,
+            "candidate_forward": 917060.0,
+            "candidate_weight_gradients": 17078466.0,
+            "gradient_norm": 207154.0,
+            "initialize": 1544180.0,
+            "recurrent_backward": 29259441.0,
+            "recurrent_forward": 34646082.0,
+            "recurrent_weight_gradients": 17053390.0,
+            "speech_forward": 8220240.0,
+            "speech_seed": 6747538.0,
+            "speech_weight_gradients": 949319.0,
+            "validate_adam": 382981.0
+          },
+          "device_total_nanoseconds": 127628081.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.128817719,
+          "trial": 3
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.127400061,
+          "trial": 3
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.134184434,
+          "trial": 4
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 359575.0,
+            "adjoints_and_candidate_seed": 10196886.0,
+            "candidate_forward": 981759.0,
+            "candidate_weight_gradients": 17063565.0,
+            "gradient_norm": 194545.0,
+            "initialize": 955017.0,
+            "recurrent_backward": 32956315.0,
+            "recurrent_forward": 37105814.0,
+            "recurrent_weight_gradients": 17099809.0,
+            "speech_forward": 7987237.0,
+            "speech_seed": 6980501.0,
+            "speech_weight_gradients": 986515.0,
+            "validate_adam": 425675.0
+          },
+          "device_total_nanoseconds": 133293213.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.134604391,
+          "trial": 4
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 400457.0,
+            "adjoints_and_candidate_seed": 10419123.0,
+            "candidate_forward": 961157.0,
+            "candidate_weight_gradients": 17702243.0,
+            "gradient_norm": 220384.0,
+            "initialize": 826252.0,
+            "recurrent_backward": 31857539.0,
+            "recurrent_forward": 37382594.0,
+            "recurrent_weight_gradients": 17695683.0,
+            "speech_forward": 9097530.0,
+            "speech_seed": 6782080.0,
+            "speech_weight_gradients": 1000737.0,
+            "validate_adam": 547860.0
+          },
+          "device_total_nanoseconds": 134893639.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.136062391,
+          "trial": 5
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.129096492,
+          "trial": 5
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.132898094,
+          "trial": 6
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 385344.0,
+            "adjoints_and_candidate_seed": 10174893.0,
+            "candidate_forward": 918943.0,
+            "candidate_weight_gradients": 17229987.0,
+            "gradient_norm": 231060.0,
+            "initialize": 922188.0,
+            "recurrent_backward": 30929593.0,
+            "recurrent_forward": 36129634.0,
+            "recurrent_weight_gradients": 17222795.0,
+            "speech_forward": 7897431.0,
+            "speech_seed": 6695459.0,
+            "speech_weight_gradients": 986135.0,
+            "validate_adam": 403222.0
+          },
+          "device_total_nanoseconds": 130126684.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.131545375,
+          "trial": 6
+        }
+      ]
+    },
+    {
+      "id": "initial_unprofiled",
+      "raw_file_sha256": "cf7f204d985d48be3fdcb190e83d04554f417387d92a57ffda50ee6b76b622f8",
+      "qualification_receipt": false,
+      "binary_hash_captured": false,
+      "summary": {
+        "baseline_median_seconds": 0.137084098,
+        "comparison_median_seconds": 0.128080674,
+        "comparison_elapsed_reduction_fraction": 0.06567810658826367,
+        "baseline_range_seconds": [
+          0.125109076,
+          0.146623364
+        ],
+        "comparison_range_seconds": [
+          0.11195611800000001,
+          0.133264162
+        ],
+        "paired_elapsed_reductions": [
+          0.048113288541357435,
+          0.10513192504115376,
+          0.09353943020448863,
+          0.04637739236537841,
+          0.09217293636776747,
+          0.04897082102954875,
+          0.019915558849019188
+        ]
+      },
+      "trials": [
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.0005457,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 5.8337e-05,
+          "ticks": 64,
+          "total_seconds": 0.130198022,
+          "trial": 0,
+          "wait_seconds": 0.129593985
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000583778,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 6.7892e-05,
+          "ticks": 64,
+          "total_seconds": 0.123933767,
+          "trial": 0,
+          "wait_seconds": 0.123282097
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000546362,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.9589e-05,
+          "ticks": 64,
+          "total_seconds": 0.11195611800000001,
+          "trial": 1,
+          "wait_seconds": 0.111370167
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000625911,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.7877e-05,
+          "ticks": 64,
+          "total_seconds": 0.125109076,
+          "trial": 1,
+          "wait_seconds": 0.124445288
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000586613,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 0.00085752,
+          "ticks": 64,
+          "total_seconds": 0.14129756799999998,
+          "trial": 2,
+          "wait_seconds": 0.139853435
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000671119,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.5203e-05,
+          "ticks": 64,
+          "total_seconds": 0.128080674,
+          "trial": 2,
+          "wait_seconds": 0.127374352
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000662947,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.4232e-05,
+          "ticks": 64,
+          "total_seconds": 0.130726495,
+          "trial": 3,
+          "wait_seconds": 0.130029316
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000654975,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 9.8508e-05,
+          "ticks": 64,
+          "total_seconds": 0.137084098,
+          "trial": 3,
+          "wait_seconds": 0.136330615
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000615716,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.5303e-05,
+          "ticks": 64,
+          "total_seconds": 0.146623364,
+          "trial": 4,
+          "wait_seconds": 0.145972345
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000607003,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.2429e-05,
+          "ticks": 64,
+          "total_seconds": 0.133108658,
+          "trial": 4,
+          "wait_seconds": 0.132469226
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000628585,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.301e-05,
+          "ticks": 64,
+          "total_seconds": 0.133264162,
+          "trial": 5,
+          "wait_seconds": 0.132602567
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.00062524,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.3701e-05,
+          "ticks": 64,
+          "total_seconds": 0.14012626,
+          "trial": 5,
+          "wait_seconds": 0.139467319
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000570038,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.368e-05,
+          "ticks": 64,
+          "total_seconds": 0.129596765,
+          "trial": 6,
+          "wait_seconds": 0.128993047
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.00068437,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.2599e-05,
+          "ticks": 64,
+          "total_seconds": 0.127015773,
+          "trial": 6,
+          "wait_seconds": 0.126298804
+        }
+      ]
+    },
+    {
+      "id": "initial_profiled",
+      "raw_file_sha256": "f90763ac9a26937a4ba6e6ef46be7eb09b90178d59c9214bac5f923847661a64",
+      "qualification_receipt": false,
+      "binary_hash_captured": false,
+      "summary": {
+        "baseline_median_seconds": 0.12926109800000002,
+        "comparison_median_seconds": 0.12201604099999999,
+        "comparison_elapsed_reduction_fraction": 0.05604978692042384,
+        "baseline_range_seconds": [
+          0.128571582,
+          0.140588982
+        ],
+        "comparison_range_seconds": [
+          0.121139187,
+          0.131861583
+        ],
+        "paired_elapsed_reductions": [
+          0.06207740376127058,
+          0.050987480266051266,
+          0.06096698430313685,
+          0.03292672314496625,
+          0.05821818746810414,
+          0.07157197007566951,
+          0.058176907951068335
+        ],
+        "speech_stage_medians_nanoseconds": {
+          "speech_forward_nanoseconds": [
+            8001495.0,
+            4019155.0
+          ],
+          "speech_seed_nanoseconds": [
+            6747631.0,
+            3428638.0
+          ],
+          "device_total_nanoseconds": [
+            127747642.0,
+            120715244.0
+          ]
+        }
+      },
+      "trials": [
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 139081504.0,
+          "encode_finish_seconds": 0.000575727,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 8703834.0,
+          "speech_seed_nanoseconds": 7471980.0,
+          "submit_seconds": 5.9459e-05,
+          "ticks": 64,
+          "total_seconds": 0.140588982,
+          "trial": 0,
+          "wait_seconds": 0.139953796
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 130461777.0,
+          "encode_finish_seconds": 0.000553202,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 4370704.0,
+          "speech_seed_nanoseconds": 3781709.0,
+          "submit_seconds": 5.1578e-05,
+          "ticks": 64,
+          "total_seconds": 0.131861583,
+          "trial": 0,
+          "wait_seconds": 0.131256803
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 120715244.0,
+          "encode_finish_seconds": 0.000526972,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 4084624.0,
+          "speech_seed_nanoseconds": 3362778.0,
+          "submit_seconds": 2.2154e-05,
+          "ticks": 64,
+          "total_seconds": 0.12201604099999999,
+          "trial": 1,
+          "wait_seconds": 0.121466915
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127287851.0,
+          "encode_finish_seconds": 0.000554574,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7945823.0,
+          "speech_seed_nanoseconds": 6747631.0,
+          "submit_seconds": 2.9585e-05,
+          "ticks": 64,
+          "total_seconds": 0.128571582,
+          "trial": 1,
+          "wait_seconds": 0.127987423
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127735614.0,
+          "encode_finish_seconds": 0.000514714,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7913935.0,
+          "speech_seed_nanoseconds": 6712617.0,
+          "submit_seconds": 2.3165e-05,
+          "ticks": 64,
+          "total_seconds": 0.129004183,
+          "trial": 2,
+          "wait_seconds": 0.128466304
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 119897854.0,
+          "encode_finish_seconds": 0.000534554,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 4110913.0,
+          "speech_seed_nanoseconds": 3545794.0,
+          "submit_seconds": 2.3165e-05,
+          "ticks": 64,
+          "total_seconds": 0.121139187,
+          "trial": 2,
+          "wait_seconds": 0.120581468
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 126665324.0,
+          "encode_finish_seconds": 0.000519853,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3982971.0,
+          "speech_seed_nanoseconds": 3652404.0,
+          "submit_seconds": 2.3064e-05,
+          "ticks": 64,
+          "total_seconds": 0.12791162,
+          "trial": 3,
+          "wait_seconds": 0.127368703
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 130947575.0,
+          "encode_finish_seconds": 0.000557569,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7892953.0,
+          "speech_seed_nanoseconds": 6826678.0,
+          "submit_seconds": 2.4396e-05,
+          "ticks": 64,
+          "total_seconds": 0.13226673,
+          "trial": 3,
+          "wait_seconds": 0.131684765
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127425909.0,
+          "encode_finish_seconds": 0.000548054,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 8001495.0,
+          "speech_seed_nanoseconds": 6739408.0,
+          "submit_seconds": 2.3305e-05,
+          "ticks": 64,
+          "total_seconds": 0.128825584,
+          "trial": 4,
+          "wait_seconds": 0.128254225
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 120038776.0,
+          "encode_finish_seconds": 0.000537168,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3968540.0,
+          "speech_seed_nanoseconds": 3343469.0,
+          "submit_seconds": 2.3816e-05,
+          "ticks": 64,
+          "total_seconds": 0.121325592,
+          "trial": 4,
+          "wait_seconds": 0.120764608
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 121643630.0,
+          "encode_finish_seconds": 0.000526282,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 4019155.0,
+          "speech_seed_nanoseconds": 3428638.0,
+          "submit_seconds": 2.2043e-05,
+          "ticks": 64,
+          "total_seconds": 0.12290595900000001,
+          "trial": 5,
+          "wait_seconds": 0.122357634
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 131089600.0,
+          "encode_finish_seconds": 0.000567193,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 8052914.0,
+          "speech_seed_nanoseconds": 6716564.0,
+          "submit_seconds": 2.5739e-05,
+          "ticks": 64,
+          "total_seconds": 0.132380707,
+          "trial": 5,
+          "wait_seconds": 0.131787775
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127747642.0,
+          "encode_finish_seconds": 0.000727605,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 8074457.0,
+          "speech_seed_nanoseconds": 7149595.0,
+          "submit_seconds": 2.4917e-05,
+          "ticks": 64,
+          "total_seconds": 0.12926109800000002,
+          "trial": 6,
+          "wait_seconds": 0.128508576
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 120522465.0,
+          "encode_finish_seconds": 0.00050537,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3964303.0,
+          "speech_seed_nanoseconds": 3354987.0,
+          "submit_seconds": 2.3725e-05,
+          "ticks": 64,
+          "total_seconds": 0.121741087,
+          "trial": 6,
+          "wait_seconds": 0.121211992
+        }
+      ]
+    },
+    {
+      "id": "final_stage_share",
+      "raw_file_sha256": "974d87535455abb749f71e531bc813af455b99a1cff9eaab0bb9fa4381f4c830",
+      "qualification_receipt": true,
+      "binary_hash_captured": true,
+      "summary": {
+        "baseline_median_seconds": 0.133733361,
+        "comparison_median_seconds": 0.130445352,
+        "comparison_elapsed_reduction_fraction": 0.02458630348787849,
+        "baseline_range_seconds": [
+          0.128737231,
+          0.141969669
+        ],
+        "comparison_range_seconds": [
+          0.125404093,
+          0.136047465
+        ],
+        "median_combined_speech_fraction_of_device_interval": 0.11711165830061694
+      },
+      "trials": [
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.132230663,
+          "trial": 0
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 589844.0,
+            "adjoints_and_candidate_seed": 10722576.0,
+            "candidate_forward": 1311155.0,
+            "candidate_weight_gradients": 17793548.0,
+            "gradient_norm": 532168.0,
+            "initialize": 6234127.0,
+            "recurrent_backward": 25281463.0,
+            "recurrent_forward": 31652145.0,
+            "recurrent_weight_gradients": 17349171.0,
+            "speech_forward": 8610580.0,
+            "speech_seed": 8342197.0,
+            "speech_weight_gradients": 1437885.0,
+            "validate_adam": 770966.0
+          },
+          "device_total_nanoseconds": 130627825.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.132011851,
+          "trial": 0
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 444116.0,
+            "adjoints_and_candidate_seed": 10179657.0,
+            "candidate_forward": 876845.0,
+            "candidate_weight_gradients": 17100187.0,
+            "gradient_norm": 255122.0,
+            "initialize": 675263.0,
+            "recurrent_backward": 34766950.0,
+            "recurrent_forward": 30696321.0,
+            "recurrent_weight_gradients": 21939784.0,
+            "speech_forward": 8230550.0,
+            "speech_seed": 6691932.0,
+            "speech_weight_gradients": 1034872.0,
+            "validate_adam": 457366.0
+          },
+          "device_total_nanoseconds": 133348965.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.134606179,
+          "trial": 1
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.140130622,
+          "trial": 1
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.128737231,
+          "trial": 2
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 301142.0,
+            "adjoints_and_candidate_seed": 10223838.0,
+            "candidate_forward": 924496.0,
+            "candidate_weight_gradients": 17060298.0,
+            "gradient_norm": 234201.0,
+            "initialize": 949854.0,
+            "recurrent_backward": 29966467.0,
+            "recurrent_forward": 34977030.0,
+            "recurrent_weight_gradients": 16964975.0,
+            "speech_forward": 8091491.0,
+            "speech_seed": 6772344.0,
+            "speech_weight_gradients": 969143.0,
+            "validate_adam": 392038.0
+          },
+          "device_total_nanoseconds": 127827317.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.12929729,
+          "trial": 2
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 286109.0,
+            "adjoints_and_candidate_seed": 10253873.0,
+            "candidate_forward": 900029.0,
+            "candidate_weight_gradients": 17110294.0,
+            "gradient_norm": 240160.0,
+            "initialize": 2388701.0,
+            "recurrent_backward": 29496543.0,
+            "recurrent_forward": 35076149.0,
+            "recurrent_weight_gradients": 16870252.0,
+            "speech_forward": 8240475.0,
+            "speech_seed": 6907366.0,
+            "speech_weight_gradients": 992317.0,
+            "validate_adam": 394302.0
+          },
+          "device_total_nanoseconds": 129156570.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.130445352,
+          "trial": 3
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.134391919,
+          "trial": 3
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.141969669,
+          "trial": 4
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 261141.0,
+            "adjoints_and_candidate_seed": 10168315.0,
+            "candidate_forward": 966900.0,
+            "candidate_weight_gradients": 16922090.0,
+            "gradient_norm": 212068.0,
+            "initialize": 912368.0,
+            "recurrent_backward": 27665428.0,
+            "recurrent_forward": 34337591.0,
+            "recurrent_weight_gradients": 16903343.0,
+            "speech_forward": 8161056.0,
+            "speech_seed": 6709879.0,
+            "speech_weight_gradients": 949223.0,
+            "validate_adam": 373901.0
+          },
+          "device_total_nanoseconds": 124543303.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.125919347,
+          "trial": 4
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 347871.0,
+            "adjoints_and_candidate_seed": 10593933.0,
+            "candidate_forward": 1010645.0,
+            "candidate_weight_gradients": 17662521.0,
+            "gradient_norm": 200631.0,
+            "initialize": 839809.0,
+            "recurrent_backward": 33167406.0,
+            "recurrent_forward": 37511610.0,
+            "recurrent_weight_gradients": 17143162.0,
+            "speech_forward": 8094656.0,
+            "speech_seed": 6842980.0,
+            "speech_weight_gradients": 997846.0,
+            "validate_adam": 411387.0
+          },
+          "device_total_nanoseconds": 134824457.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.136047465,
+          "trial": 5
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.133733361,
+          "trial": 5
+        },
+        {
+          "burn_in": 16,
+          "microsteps": 4,
+          "profiled": false,
+          "ticks": 64,
+          "total_seconds": 0.133420192,
+          "trial": 6
+        },
+        {
+          "burn_in": 16,
+          "device_stages_nanoseconds": {
+            "adam": 389814.0,
+            "adjoints_and_candidate_seed": 10346843.0,
+            "candidate_forward": 910265.0,
+            "candidate_weight_gradients": 17860307.0,
+            "gradient_norm": 202113.0,
+            "initialize": 866069.0,
+            "recurrent_backward": 26948383.0,
+            "recurrent_forward": 33434777.0,
+            "recurrent_weight_gradients": 17287028.0,
+            "speech_forward": 7847355.0,
+            "speech_seed": 6692243.0,
+            "speech_weight_gradients": 994831.0,
+            "validate_adam": 371557.0
+          },
+          "device_total_nanoseconds": 124151585.0,
+          "microsteps": 4,
+          "profiled": true,
+          "ticks": 64,
+          "total_seconds": 0.125404093,
+          "trial": 6
+        }
+      ]
+    },
+    {
+      "id": "final_unprofiled",
+      "raw_file_sha256": "fb6f3e313c8dd89eaea48eaf86978888aa18de2e8bf07a30a6134df0fd8e32d1",
+      "qualification_receipt": true,
+      "binary_hash_captured": true,
+      "summary": {
+        "baseline_median_seconds": 0.118151589,
+        "comparison_median_seconds": 0.113191192,
+        "comparison_elapsed_reduction_fraction": 0.041983328721884594,
+        "baseline_range_seconds": [
+          0.117137699,
+          0.129526904
+        ],
+        "comparison_range_seconds": [
+          0.11036897000000001,
+          0.12064609800000001
+        ],
+        "paired_elapsed_reductions": [
+          0.06856340826304308,
+          0.0599457147216198,
+          -0.004025743673737869,
+          0.04409753970238561,
+          0.05547149257217354,
+          0.06711993943027172,
+          0.0025859914588198807
+        ]
+      },
+      "trials": [
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000742013,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 6.5048e-05,
+          "ticks": 64,
+          "total_seconds": 0.129526904,
+          "trial": 0,
+          "wait_seconds": 0.128719843
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.00056709,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 6.0441e-05,
+          "ticks": 64,
+          "total_seconds": 0.12064609800000001,
+          "trial": 0,
+          "wait_seconds": 0.120018567
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000529975,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.2479e-05,
+          "ticks": 64,
+          "total_seconds": 0.1106621,
+          "trial": 1,
+          "wait_seconds": 0.110099646
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000558287,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.4672e-05,
+          "ticks": 64,
+          "total_seconds": 0.11771884,
+          "trial": 1,
+          "wait_seconds": 0.117125881
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000552689,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.4311e-05,
+          "ticks": 64,
+          "total_seconds": 0.11750102300000001,
+          "trial": 2,
+          "wait_seconds": 0.116914023
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000583835,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.2599e-05,
+          "ticks": 64,
+          "total_seconds": 0.117974052,
+          "trial": 2,
+          "wait_seconds": 0.117357618
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000618687,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.6325e-05,
+          "ticks": 64,
+          "total_seconds": 0.113191192,
+          "trial": 3,
+          "wait_seconds": 0.11253618
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000603335,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.4682e-05,
+          "ticks": 64,
+          "total_seconds": 0.11841291000000001,
+          "trial": 3,
+          "wait_seconds": 0.117774893
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000570696,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.29e-05,
+          "ticks": 64,
+          "total_seconds": 0.117137699,
+          "trial": 4,
+          "wait_seconds": 0.116534103
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000575363,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.2969e-05,
+          "ticks": 64,
+          "total_seconds": 0.110639896,
+          "trial": 4,
+          "wait_seconds": 0.110031564
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000554251,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 5.6795e-05,
+          "ticks": 64,
+          "total_seconds": 0.11036897000000001,
+          "trial": 5,
+          "wait_seconds": 0.109757924
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000641281,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.4772e-05,
+          "ticks": 64,
+          "total_seconds": 0.118309925,
+          "trial": 5,
+          "wait_seconds": 0.117633872
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000546059,
+          "parallel": false,
+          "profiled": false,
+          "submit_seconds": 3.4642e-05,
+          "ticks": 64,
+          "total_seconds": 0.118151589,
+          "trial": 6,
+          "wait_seconds": 0.117570888
+        },
+        {
+          "burn_in": 16,
+          "encode_finish_seconds": 0.000561962,
+          "parallel": true,
+          "profiled": false,
+          "submit_seconds": 3.7507e-05,
+          "ticks": 64,
+          "total_seconds": 0.11784605000000001,
+          "trial": 6,
+          "wait_seconds": 0.117246581
+        }
+      ]
+    },
+    {
+      "id": "final_profiled",
+      "raw_file_sha256": "492e23503302655e7ab1797ac7ed115248a5fdfb11cd95f04b188b7dc2517004",
+      "qualification_receipt": true,
+      "binary_hash_captured": true,
+      "summary": {
+        "baseline_median_seconds": 0.130391299,
+        "comparison_median_seconds": 0.12137492100000001,
+        "comparison_elapsed_reduction_fraction": 0.06914861704077335,
+        "baseline_range_seconds": [
+          0.12876685300000001,
+          0.140067056
+        ],
+        "comparison_range_seconds": [
+          0.12001864699999999,
+          0.13608818900000003
+        ],
+        "paired_elapsed_reductions": [
+          0.028406872491130053,
+          0.05714063485717569,
+          0.07498974298890904,
+          0.050932304518029325,
+          0.06863215434197878,
+          0.05824358385150574,
+          0.07717988879620763
+        ],
+        "speech_stage_medians_nanoseconds": {
+          "speech_forward_nanoseconds": [
+            7930159.0,
+            3977693.0
+          ],
+          "speech_seed_nanoseconds": [
+            6953886.0,
+            3376793.0
+          ],
+          "device_total_nanoseconds": [
+            129167404.0,
+            120143745.0
+          ]
+        }
+      },
+      "trials": [
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 138637301.0,
+          "encode_finish_seconds": 0.000591206,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 8500304.0,
+          "speech_seed_nanoseconds": 7479123.0,
+          "submit_seconds": 5.7256e-05,
+          "ticks": 64,
+          "total_seconds": 0.140067056,
+          "trial": 0,
+          "wait_seconds": 0.139418594
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 134495762.0,
+          "encode_finish_seconds": 0.000562463,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 4457983.0,
+          "speech_seed_nanoseconds": 4024854.0,
+          "submit_seconds": 5.2098e-05,
+          "ticks": 64,
+          "total_seconds": 0.13608818900000003,
+          "trial": 0,
+          "wait_seconds": 0.135473628
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 121879797.0,
+          "encode_finish_seconds": 0.000538708,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 4022481.0,
+          "speech_seed_nanoseconds": 3368371.0,
+          "submit_seconds": 2.3786e-05,
+          "ticks": 64,
+          "total_seconds": 0.123172977,
+          "trial": 1,
+          "wait_seconds": 0.122610483
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 129383748.0,
+          "encode_finish_seconds": 0.000517676,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7921226.0,
+          "speech_seed_nanoseconds": 7023670.0,
+          "submit_seconds": 2.1422e-05,
+          "ticks": 64,
+          "total_seconds": 0.130637698,
+          "trial": 1,
+          "wait_seconds": 0.1300986
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 129167404.0,
+          "encode_finish_seconds": 0.000488282,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7902157.0,
+          "speech_seed_nanoseconds": 6993695.0,
+          "submit_seconds": 2.3425e-05,
+          "ticks": 64,
+          "total_seconds": 0.130391299,
+          "trial": 2,
+          "wait_seconds": 0.129879592
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 119375614.0,
+          "encode_finish_seconds": 0.000535313,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3977693.0,
+          "speech_seed_nanoseconds": 3399487.0,
+          "submit_seconds": 2.0841e-05,
+          "ticks": 64,
+          "total_seconds": 0.120613289,
+          "trial": 2,
+          "wait_seconds": 0.120057135
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 121369653.0,
+          "encode_finish_seconds": 0.000506018,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3961189.0,
+          "speech_seed_nanoseconds": 3691073.0,
+          "submit_seconds": 2.2905e-05,
+          "ticks": 64,
+          "total_seconds": 0.122595681,
+          "trial": 3,
+          "wait_seconds": 0.122066758
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127941826.0,
+          "encode_finish_seconds": 0.00051377,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7884561.0,
+          "speech_seed_nanoseconds": 6953886.0,
+          "submit_seconds": 2.1842e-05,
+          "ticks": 64,
+          "total_seconds": 0.12917485399999998,
+          "trial": 3,
+          "wait_seconds": 0.128639242
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127566273.0,
+          "encode_finish_seconds": 0.000512388,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7977591.0,
+          "speech_seed_nanoseconds": 6723270.0,
+          "submit_seconds": 2.3475e-05,
+          "ticks": 64,
+          "total_seconds": 0.12886277699999998,
+          "trial": 4,
+          "wait_seconds": 0.128326914
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 118735664.0,
+          "encode_finish_seconds": 0.000562954,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3963092.0,
+          "speech_seed_nanoseconds": 3376793.0,
+          "submit_seconds": 2.2083e-05,
+          "ticks": 64,
+          "total_seconds": 0.12001864699999999,
+          "trial": 4,
+          "wait_seconds": 0.11943361
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 120020040.0,
+          "encode_finish_seconds": 0.000536955,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3950673.0,
+          "speech_seed_nanoseconds": 3296763.0,
+          "submit_seconds": 2.1082e-05,
+          "ticks": 64,
+          "total_seconds": 0.12126701,
+          "trial": 5,
+          "wait_seconds": 0.120708973
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 127596849.0,
+          "encode_finish_seconds": 0.000494571,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 8236278.0,
+          "speech_seed_nanoseconds": 6693225.0,
+          "submit_seconds": 3.8428e-05,
+          "ticks": 64,
+          "total_seconds": 0.12876685300000001,
+          "trial": 5,
+          "wait_seconds": 0.128233854
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 130290217.0,
+          "encode_finish_seconds": 0.000513019,
+          "parallel": false,
+          "profiled": true,
+          "speech_forward_nanoseconds": 7930159.0,
+          "speech_seed_nanoseconds": 6914227.0,
+          "submit_seconds": 2.0771e-05,
+          "ticks": 64,
+          "total_seconds": 0.13152609,
+          "trial": 6,
+          "wait_seconds": 0.1309923
+        },
+        {
+          "burn_in": 16,
+          "device_total_nanoseconds": 120143745.0,
+          "encode_finish_seconds": 0.000505007,
+          "parallel": true,
+          "profiled": true,
+          "speech_forward_nanoseconds": 3981229.0,
+          "speech_seed_nanoseconds": 3338044.0,
+          "submit_seconds": 2.2143e-05,
+          "ticks": 64,
+          "total_seconds": 0.12137492100000001,
+          "trial": 6,
+          "wait_seconds": 0.120847771
+        }
+      ]
+    }
+  ]
+}

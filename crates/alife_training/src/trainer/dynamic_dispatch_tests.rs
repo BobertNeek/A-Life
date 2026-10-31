@@ -20,6 +20,10 @@ fn seed_age(index: usize) -> u32 {
 }
 
 fn device() -> (wgpu::Device, wgpu::Queue) {
+    device_with_features(wgpu::Features::empty())
+}
+
+fn device_with_features(features: wgpu::Features) -> (wgpu::Device, wgpu::Queue) {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = wgpu::Backends::VULKAN;
     let instance = wgpu::Instance::new(descriptor);
@@ -39,7 +43,7 @@ fn device() -> (wgpu::Device, wgpu::Queue) {
     }
     pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         label: Some("test-only-dispatch-assay"),
-        required_features: wgpu::Features::empty(),
+        required_features: features,
         required_limits: adapter.limits(),
         experimental_features: wgpu::ExperimentalFeatures::disabled(),
         memory_hints: wgpu::MemoryHints::MemoryUsage,
@@ -314,10 +318,22 @@ fn encode_update(
     phenotype: &BrainPhenotype,
     sweep: Sweep<'_>,
 ) -> wgpu::CommandBuffer {
+    encode_profiled_update(device, gpu, phenotype, sweep, None, None)
+}
+
+fn encode_profiled_update(
+    device: &wgpu::Device,
+    gpu: &TrainerGpuState,
+    phenotype: &BrainPhenotype,
+    sweep: Sweep<'_>,
+    profile: Option<&StageProfile>,
+    speech: Option<&ParallelSpeech>,
+) -> wgpu::CommandBuffer {
     let groups = phenotype.neuron_count().div_ceil(WORKGROUP_SIZE);
     let weights = (phenotype.synapses().len() as u32).div_ceil(WORKGROUP_SIZE);
     let total = gpu.layout.ticks * u32::from(phenotype.microstep_count());
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+    timestamp_marker(&mut encoder, profile, 0);
     encoder.clear_buffer(&gpu.state, 0, None);
     encoder.clear_buffer(&gpu.gradients, 0, None);
     encoder.clear_buffer(&gpu.outputs, 0, None);
@@ -329,11 +345,13 @@ fn encode_update(
         1,
         "assay-init",
     );
+    timestamp_marker(&mut encoder, profile, 1);
     match sweep {
         Sweep::Static(oracle) => oracle.forward(&mut encoder, total, groups),
         Sweep::Dynamic => gpu.record_forward(&mut encoder, total, groups),
         Sweep::Persistent(persistent) => persistent.forward(&mut encoder, gpu, total),
     }
+    timestamp_marker(&mut encoder, profile, 2);
     dispatch(
         &mut encoder,
         &gpu.pipelines.candidate_forward,
@@ -342,14 +360,18 @@ fn encode_update(
         gpu.layout.ticks,
         "assay-candidates",
     );
+    timestamp_marker(&mut encoder, profile, 3);
     dispatch(
         &mut encoder,
-        &gpu.pipelines.speech_forward,
+        speech
+            .filter(|kernels| kernels.use_forward)
+            .map_or(&gpu.pipelines.speech_forward, |kernels| &kernels.forward),
         &gpu.bind_group,
         gpu.layout.ticks,
         1,
         "assay-speech",
     );
+    timestamp_marker(&mut encoder, profile, 4);
     let mut values = vec![0_f32; (gpu.layout.ticks * gpu.layout.candidate_capacity) as usize];
     for tick in gpu.layout.burn_in_steps / u32::from(phenotype.microstep_count())..gpu.layout.ticks
     {
@@ -377,14 +399,27 @@ fn encode_update(
         gpu.layout.ticks,
         "assay-seed-candidates",
     );
-    dispatch(
-        &mut encoder,
-        &gpu.pipelines.seed_speech,
-        &gpu.bind_group,
-        groups,
-        gpu.layout.ticks,
-        "assay-seed-speech",
-    );
+    timestamp_marker(&mut encoder, profile, 5);
+    if let Some(kernels) = speech.filter(|kernels| kernels.use_seed) {
+        dispatch(
+            &mut encoder,
+            &kernels.seed,
+            &gpu.bind_group,
+            gpu.layout.ticks,
+            1,
+            "assay-parallel-seed-speech",
+        );
+    } else {
+        dispatch(
+            &mut encoder,
+            &gpu.pipelines.seed_speech,
+            &gpu.bind_group,
+            groups,
+            gpu.layout.ticks,
+            "assay-seed-speech",
+        );
+    }
+    timestamp_marker(&mut encoder, profile, 6);
     match sweep {
         Sweep::Static(oracle) => {
             oracle.backward(&mut encoder, gpu.layout.burn_in_steps, total, groups)
@@ -392,14 +427,18 @@ fn encode_update(
         Sweep::Dynamic => gpu.record_backward(&mut encoder, total, groups),
         Sweep::Persistent(persistent) => persistent.backward(&mut encoder, gpu, total),
     }
-    for (kernel, count) in [
+    timestamp_marker(&mut encoder, profile, 7);
+    for (stage, (kernel, count)) in [
         (&gpu.pipelines.recurrent_gradients, weights),
         (&gpu.pipelines.candidate_gradients, weights),
         (&gpu.pipelines.speech_gradients, weights),
         (&gpu.pipelines.gradient_norm, 1),
         (&gpu.pipelines.validate_adamw, 1),
         (&gpu.pipelines.adamw, weights),
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         dispatch(
             &mut encoder,
             kernel,
@@ -408,6 +447,10 @@ fn encode_update(
             1,
             "assay-update",
         );
+        timestamp_marker(&mut encoder, profile, 8 + stage as u32);
+    }
+    if let Some(profile) = profile {
+        encoder.resolve_query_set(&profile.queries, 0..14, &profile.resolved, 0);
     }
     encoder.finish()
 }
@@ -799,6 +842,365 @@ fn persistent_dispatch_execution_assay() {
         }
     }
     if let Ok(path) = std::env::var("ALIFE_PERSISTENT_ASSAY_PATH") {
+        std::fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
+    }
+}
+
+struct StageProfile {
+    queries: wgpu::QuerySet,
+    resolved: wgpu::Buffer,
+}
+
+impl StageProfile {
+    fn new(device: &wgpu::Device) -> Self {
+        Self {
+            queries: device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("test-only-replay-stage-timestamps"),
+                ty: wgpu::QueryType::Timestamp,
+                count: 14,
+            }),
+            resolved: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("test-only-replay-stage-timestamp-results"),
+                size: 14 * 8,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            }),
+        }
+    }
+
+    fn read(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Vec<f64> {
+        let words = read(device, queue, &self.resolved);
+        let stamps = words
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u64::from(pair[0]) | (u64::from(pair[1]) << 32))
+            .collect::<Vec<_>>();
+        stamps
+            .windows(2)
+            .map(|pair| {
+                pair[1]
+                    .checked_sub(pair[0])
+                    .expect("non-monotonic device timestamps") as f64
+                    * f64::from(queue.get_timestamp_period())
+            })
+            .collect()
+    }
+}
+
+fn timestamp_marker(
+    encoder: &mut wgpu::CommandEncoder,
+    profile: Option<&StageProfile>,
+    index: u32,
+) {
+    if let Some(profile) = profile {
+        // An empty timestamp pass avoids optional inside-encoder timestamp
+        // features. Its cost belongs to this measured instrumented cohort;
+        // matched uninstrumented updates quantify the observer effect.
+        let pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("test-only-stage-timestamp-marker"),
+            timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
+                query_set: &profile.queries,
+                beginning_of_pass_write_index: Some(index),
+                end_of_pass_write_index: None,
+            }),
+        });
+        drop(pass);
+    }
+}
+
+#[test]
+#[ignore = "software/selected Vulkan stage-share assay with measured timestamp observer effect"]
+fn replay_speech_stage_share_assay() {
+    let (device, queue) = device_with_features(wgpu::Features::TIMESTAMP_QUERY);
+    let phenotype = phenotype();
+    let replay = replay(&phenotype, 64, 16);
+    let baseline = gpu(&device, &queue, &phenotype, &replay);
+    let instrumented = gpu(&device, &queue, &phenotype, &replay);
+    let profile = StageProfile::new(&device);
+    let names = [
+        "initialize",
+        "recurrent_forward",
+        "candidate_forward",
+        "speech_forward",
+        "adjoints_and_candidate_seed",
+        "speech_seed",
+        "recurrent_backward",
+        "recurrent_weight_gradients",
+        "candidate_weight_gradients",
+        "speech_weight_gradients",
+        "gradient_norm",
+        "validate_adam",
+        "adam",
+    ];
+    queue.submit([]);
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        })
+        .unwrap();
+    let mut receipts = Vec::new();
+    for trial in 0..7 {
+        for profiled in if trial % 2 == 0 {
+            [false, true]
+        } else {
+            [true, false]
+        } {
+            let state = if profiled { &instrumented } else { &baseline };
+            let started = Instant::now();
+            let commands = encode_profiled_update(
+                &device,
+                state,
+                &phenotype,
+                Sweep::Dynamic,
+                profiled.then_some(&profile),
+                None,
+            );
+            let submission = queue.submit([commands]);
+            device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(submission),
+                    timeout: None,
+                })
+                .unwrap();
+            let total_seconds = started.elapsed().as_secs_f64();
+            let mut receipt = serde_json::json!({"trial":trial,"profiled":profiled,"total_seconds":total_seconds,
+                "ticks":64,"burn_in":16,"microsteps":phenotype.microstep_count()});
+            if profiled {
+                let times = profile.read(&device, &queue);
+                let stages = names
+                    .iter()
+                    .zip(&times)
+                    .map(|(name, value)| ((*name).to_owned(), serde_json::json!(value)))
+                    .collect::<serde_json::Map<_, _>>();
+                receipt["device_stages_nanoseconds"] = serde_json::Value::Object(stages);
+                receipt["device_total_nanoseconds"] = serde_json::json!(times.iter().sum::<f64>());
+            }
+            eprintln!("{receipt}");
+            receipts.push(receipt);
+        }
+    }
+    for (actual, expected) in [
+        (&instrumented.state, &baseline.state),
+        (&instrumented.outputs, &baseline.outputs),
+        (&instrumented.gradients, &baseline.gradients),
+        (&instrumented.weights, &baseline.weights),
+        (&instrumented._optimizer, &baseline._optimizer),
+    ] {
+        assert_eq!(
+            read(&device, &queue, actual),
+            read(&device, &queue, expected),
+            "profiling changed replay/update state"
+        );
+    }
+    if let Ok(path) = std::env::var("ALIFE_SPEECH_STAGE_ASSAY_PATH") {
+        std::fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
+    }
+}
+
+struct ParallelSpeech {
+    forward: wgpu::ComputePipeline,
+    seed: wgpu::ComputePipeline,
+    use_forward: bool,
+    use_seed: bool,
+}
+
+impl ParallelSpeech {
+    fn new(
+        device: &wgpu::Device,
+        gpu: &TrainerGpuState,
+        use_forward: bool,
+        use_seed: bool,
+    ) -> Self {
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("experimental-parallel-speech-layout"),
+            bind_group_layouts: &[Some(&gpu.pipelines.bind_group_layout)],
+            immediate_size: 0,
+        });
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("experimental-parallel-speech-source"),
+            source: wgpu::ShaderSource::Wgsl(
+                include_str!("../../shaders/foundation_train_parallel_speech.wgsl").into(),
+            ),
+        });
+        Self {
+            forward: pipeline(device, &layout, &shader, "forward_speech_parallel_32"),
+            seed: pipeline(device, &layout, &shader, "seed_speech_parallel_32"),
+            use_forward,
+            use_seed,
+        }
+    }
+}
+
+#[test]
+#[ignore = "experimental parallel replay speech; selected Vulkan adapter, no production enable"]
+fn parallel_speech_matches_serial_through_adam() {
+    let (device, queue) = device();
+    let phenotype = phenotype();
+    for (ticks, burn_in, labels) in [
+        (3, 0, "dense"),
+        (5, 2, "dense"),
+        (9, 1, "dense"),
+        (3, 1, "absent"),
+        (3, 1, "sparse"),
+    ] {
+        let replay = replay(&phenotype, ticks, burn_in);
+        let baseline = gpu(&device, &queue, &phenotype, &replay);
+        set_speech_label_fixture(&queue, &baseline, labels);
+        let total = ticks as u32 * u32::from(phenotype.microstep_count());
+        let oracle = StaticOracle::new(&device, &baseline, total);
+        queue.submit([encode_update(
+            &device,
+            &baseline,
+            &phenotype,
+            Sweep::Static(&oracle),
+        )]);
+        let expected = [
+            &baseline.state,
+            &baseline.outputs,
+            &baseline.gradients,
+            &baseline.weights,
+            &baseline._optimizer,
+        ]
+        .map(|buffer| read(&device, &queue, buffer));
+        for (forward, seed) in [(true, false), (false, true), (true, true)] {
+            let candidate = gpu(&device, &queue, &phenotype, &replay);
+            set_speech_label_fixture(&queue, &candidate, labels);
+            let kernels = ParallelSpeech::new(&device, &candidate, forward, seed);
+            queue.submit([encode_profiled_update(
+                &device,
+                &candidate,
+                &phenotype,
+                Sweep::Dynamic,
+                None,
+                Some(&kernels),
+            )]);
+            for ((label, buffer), expected) in [
+                ("state", &candidate.state),
+                ("outputs", &candidate.outputs),
+                ("gradients", &candidate.gradients),
+                ("weights", &candidate.weights),
+                ("optimizer", &candidate._optimizer),
+            ]
+            .into_iter()
+            .zip(&expected)
+            {
+                let actual = read(&device, &queue, buffer);
+                assert_eq!(actual.len(), expected.len());
+                assert_eq!(
+                    actual.iter().zip(expected).position(|(a, b)| a != b),
+                    None,
+                    "{label}:ticks={ticks},burn_in={burn_in},labels={labels},forward={forward},seed={seed}"
+                );
+            }
+            eprintln!("parallel speech exact: ticks={ticks},burn_in={burn_in},labels={labels},forward={forward},seed={seed}");
+        }
+    }
+}
+
+fn set_speech_label_fixture(queue: &wgpu::Queue, gpu: &TrainerGpuState, labels: &str) {
+    if labels == "dense" {
+        return;
+    }
+    let mut words = vec![0_u32; gpu.layout.ticks as usize * 384];
+    if labels == "sparse" {
+        // One late hidden-lane target propagates through earlier unlabelled
+        // autoregressive steps; all other target weights remain zero.
+        let at = (gpu.layout.ticks as usize - 1) * 384 + 3 * 64 + 19 * 2;
+        words[at] = 0.25_f32.to_bits();
+        words[at + 1] = 0.5_f32.to_bits();
+    } else {
+        assert_eq!(labels, "absent");
+    }
+    queue.write_buffer(
+        &gpu.training,
+        u64::from(gpu.layout.replay_speech_targets) * 4,
+        bytemuck::cast_slice(&words),
+    );
+}
+
+#[test]
+#[ignore = "paired actual-update speech assay; synthetic replay and optional measured profiling only"]
+fn parallel_speech_execution_assay() {
+    let profiled = std::env::var("ALIFE_SPEECH_PROFILE").as_deref() == Ok("1");
+    let (device, queue) = device_with_features(if profiled {
+        wgpu::Features::TIMESTAMP_QUERY
+    } else {
+        wgpu::Features::empty()
+    });
+    let phenotype = phenotype();
+    let replay = replay(&phenotype, 64, 16);
+    let baseline = gpu(&device, &queue, &phenotype, &replay);
+    let candidate = gpu(&device, &queue, &phenotype, &replay);
+    let kernels = ParallelSpeech::new(&device, &candidate, true, true);
+    let profile = profiled.then(|| StageProfile::new(&device));
+    queue.submit([]);
+    device
+        .poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        })
+        .unwrap();
+    let mut receipts = Vec::new();
+    for trial in 0..7 {
+        for parallel in if trial % 2 == 0 {
+            [false, true]
+        } else {
+            [true, false]
+        } {
+            let state = if parallel { &candidate } else { &baseline };
+            let started = Instant::now();
+            let commands = encode_profiled_update(
+                &device,
+                state,
+                &phenotype,
+                Sweep::Dynamic,
+                profile.as_ref(),
+                parallel.then_some(&kernels),
+            );
+            let encode_finish_seconds = started.elapsed().as_secs_f64();
+            let started = Instant::now();
+            let submission = queue.submit([commands]);
+            let submit_seconds = started.elapsed().as_secs_f64();
+            let started = Instant::now();
+            device
+                .poll(wgpu::PollType::Wait {
+                    submission_index: Some(submission),
+                    timeout: None,
+                })
+                .unwrap();
+            let wait_seconds = started.elapsed().as_secs_f64();
+            let mut receipt = serde_json::json!({"trial":trial,"parallel":parallel,"profiled":profiled,"ticks":64,"burn_in":16,
+                "encode_finish_seconds":encode_finish_seconds,"submit_seconds":submit_seconds,"wait_seconds":wait_seconds,
+                "total_seconds":encode_finish_seconds+submit_seconds+wait_seconds});
+            if let Some(profile) = &profile {
+                let times = profile.read(&device, &queue);
+                receipt["speech_forward_nanoseconds"] = serde_json::json!(times[3]);
+                receipt["speech_seed_nanoseconds"] = serde_json::json!(times[5]);
+                receipt["device_total_nanoseconds"] = serde_json::json!(times.iter().sum::<f64>());
+            }
+            eprintln!("{receipt}");
+            receipts.push(receipt);
+        }
+    }
+    for (label, actual, expected) in [
+        ("state", &candidate.state, &baseline.state),
+        ("outputs", &candidate.outputs, &baseline.outputs),
+        ("gradients", &candidate.gradients, &baseline.gradients),
+        ("weights", &candidate.weights, &baseline.weights),
+        ("optimizer", &candidate._optimizer, &baseline._optimizer),
+    ] {
+        let actual = read(&device, &queue, actual);
+        let expected = read(&device, &queue, expected);
+        assert_eq!(actual.len(), expected.len());
+        assert_eq!(
+            actual.iter().zip(&expected).position(|(a, b)| a != b),
+            None,
+            "{label}:seven-update continuation"
+        );
+    }
+    if let Ok(path) = std::env::var("ALIFE_PARALLEL_SPEECH_ASSAY_PATH") {
         std::fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
     }
 }
