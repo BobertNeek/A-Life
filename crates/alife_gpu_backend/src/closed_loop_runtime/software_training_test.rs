@@ -112,6 +112,7 @@ mod tests {
         )
         .unwrap();
         let info = backend.software_training_test_adapter_info().unwrap();
+        eprintln!("offline_software_training_test_adapter={info:?}");
         assert_eq!(info.device_type, wgpu::DeviceType::Cpu);
         assert_eq!(info.backend, wgpu::Backend::Vulkan);
         assert_eq!(
@@ -133,6 +134,10 @@ mod tests {
         assert_eq!(backend.admission_receipt().physical_allocated_bytes, 0);
         assert!(backend.offline_training_device_queue().is_ok());
         assert!(backend.ensure_ready().is_err());
+        assert!(matches!(
+            backend.tick_batch(&[]),
+            Err(ScaffoldContractError::NeuralBackendUnavailable)
+        ));
         assert!(backend.new_staging_like_live().is_err());
 
         struct ActualCpuFactory(wgpu::Adapter);
