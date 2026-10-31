@@ -1047,6 +1047,14 @@
       "result": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 562 filtered out; finished in 3.35s",
       "log_sha256": "e7fb2b3086f2dcc6818f0378d42cdd0b07b96b63e261cab9b21dec78e5a031eb",
       "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::continuous_world"
+    },
+    {
+      "name": "worker_policy_provenance_and_diagnostics_followup",
+      "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::replay_worker::tests -- --test-threads=1",
+      "passed": 7,
+      "result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 575 filtered out; finished in 4.78s",
+      "log_sha256": "f3b341e7f8d5fa0b501782fa7c4e705199d2e3331f8859b0d2d760bbba9561fc",
+      "scope": "Typed-record changed policy/checkpoint source isolation, stale refs, errors and panic payloads; not hardware execution"
     }
   ],
   "software_vulkan_setup": {

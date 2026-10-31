@@ -124,6 +124,96 @@ fn worker_preserves_ordered_refs_bundle_bytes_segments_and_corruption_checks() {
 }
 
 #[test]
+fn reused_worker_binds_each_window_to_its_new_policy_and_checkpoint() {
+    let fixture = Fixture::new();
+    let (old_rows, phenotype) = records();
+    let old_source = old_rows[0].source.clone();
+    let mut new_source = old_source.clone();
+    new_source.policy_version += 1;
+    new_source.actor_checkpoint_digest = alife_core::Blake3Digest::from_bytes([3; 32]);
+    assert_ne!(
+        new_source.actor_checkpoint_digest,
+        old_source.actor_checkpoint_digest
+    );
+    // Typed-record provenance fixture only: relabeling does not represent a
+    // policy update, captured trajectory or acquired learning.
+    let new_rows = old_rows
+        .iter()
+        .cloned()
+        .map(|mut record| {
+            record.source = new_source.clone();
+            record
+        })
+        .collect::<Vec<_>>();
+    let mut worker = OrderedReplayWorker::new().unwrap();
+    let old_root = fixture.0.join("old-policy");
+    worker
+        .start(EncodedWindow::new(&old_root, &old_rows[0], &phenotype))
+        .unwrap();
+    for row in &old_rows {
+        worker.append(row.clone()).unwrap();
+    }
+    let old = worker.finish().unwrap();
+
+    let new_root = fixture.0.join("new-policy");
+    worker
+        .start(EncodedWindow::new(&new_root, &new_rows[0], &phenotype))
+        .unwrap();
+    for row in &new_rows {
+        worker.append(row.clone()).unwrap();
+    }
+    let new = worker.finish().unwrap();
+    assert_eq!(new.references.len(), new_rows.len());
+    assert_eq!(new.commit.records, new_rows.len());
+    assert_eq!(new.references[0].record_index, 0);
+    assert_eq!(new.references[0].segment, 0);
+    assert_eq!(new.references[0].cohort.as_ref().unwrap().offset, 0);
+    assert_ne!(new.references[0].digest, old.references[0].digest);
+    assert_ne!(new.commit.index_blake3, old.commit.index_blake3);
+    let mut old_policy = new_source.clone();
+    old_policy.policy_version = old_source.policy_version;
+    let mut old_checkpoint = new_source.clone();
+    old_checkpoint.actor_checkpoint_digest = old_source.actor_checkpoint_digest;
+    for source in [&old_source, &old_policy, &old_checkpoint] {
+        assert!(cohort_replay::CohortReplayReader::open(&new_root, source).is_err());
+    }
+    assert!(cohort_replay::CohortReplayReader::open(&old_root, &new_source).is_err());
+    let mut reader = cohort_replay::CohortReplayReader::open(&new_root, &new_source).unwrap();
+    for reference in &new.references {
+        let record = load_foundation_replay_record_from_storage(
+            &new_root.join("individual"),
+            reference,
+            &new_source,
+            &phenotype,
+            Some(&mut reader),
+            |_| false,
+        )
+        .unwrap();
+        assert_eq!(record.source, new_source);
+        assert_eq!(record.record_index, reference.record_index);
+    }
+    assert!(reader.read(&old.references[0]).is_err());
+    let mut old_reader = cohort_replay::CohortReplayReader::open(&old_root, &old_source).unwrap();
+    assert!(old_reader.read(&new.references[0]).is_err());
+
+    for (index, source) in [old_source, old_policy, old_checkpoint]
+        .into_iter()
+        .enumerate()
+    {
+        let wrong_root = fixture.0.join(format!("wrong-source-{index}"));
+        worker
+            .start(EncodedWindow::new(&wrong_root, &new_rows[0], &phenotype))
+            .unwrap();
+        worker.append(new_rows[0].clone()).unwrap();
+        let mut wrong_row = new_rows[1].clone();
+        wrong_row.source = source;
+        let _ = worker.append(wrong_row);
+        assert!(worker.finish().is_err());
+        assert!(!wrong_root.join("cohort-replay.bundle").exists());
+    }
+}
+
+#[test]
 fn validation_failure_and_disk_budget_failure_never_publish_partial_cohorts() {
     let fixture = Fixture::new();
     let (mut rows, phenotype) = records();
@@ -249,6 +339,26 @@ fn worker_panic_is_reported_and_cannot_produce_a_successful_finish() {
     release.send(()).unwrap();
     let error = worker.finish().err().unwrap().to_string();
     assert!(error.contains("replay writer panicked"), "{error}");
+    assert!(error.contains("injected replay worker panic"), "{error}");
+}
+
+#[test]
+fn panic_messages_preserve_string_payloads_and_report_opaque_payloads() {
+    for (payload, expected) in [
+        (
+            Box::new("static panic detail") as Box<dyn Any + Send>,
+            "static panic detail",
+        ),
+        (
+            Box::new("owned panic detail".to_owned()),
+            "owned panic detail",
+        ),
+        (Box::new(42_u32), "non-string panic payload"),
+    ] {
+        let error = replay_panic("seal", payload);
+        assert!(error.contains("replay seal panicked"), "{error}");
+        assert!(error.contains(expected), "{error}");
+    }
 }
 
 /// The CPU oracle above begins at typed records. This separate gate exercises

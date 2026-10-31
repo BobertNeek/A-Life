@@ -5,6 +5,7 @@
 //! the complete cohort has been sealed. Dropping or discarding never seals.
 use super::*;
 use std::{
+    any::Any,
     panic::{catch_unwind, AssertUnwindSafe},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
@@ -29,6 +30,28 @@ trait ReplayWindow: Send + 'static {
 }
 
 type WorkerResult<T> = std::result::Result<T, String>;
+
+fn replay_panic(operation: &str, payload: Box<dyn Any + Send>) -> String {
+    let message = payload
+        .downcast_ref::<&str>()
+        .copied()
+        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+        .unwrap_or("non-string panic payload");
+    format!("replay {operation} panicked: {message}")
+}
+
+fn replay_operation_error(
+    operation: &str,
+    policy: u64,
+    next_row: u64,
+    tick: Option<u64>,
+    error: impl std::fmt::Display,
+) -> String {
+    let tick = tick.map_or_else(|| "none".to_owned(), |tick| tick.to_string());
+    format!(
+        "replay {operation} failed (policy={policy}, next_row={next_row}, tick={tick}): {error}"
+    )
+}
 
 enum Command<W: ReplayWindow> {
     Start(W),
@@ -71,7 +94,7 @@ impl<W: ReplayWindow> OrderedReplayWorker<W> {
                                         })?
                                         .append(capture)
                                 }))
-                                .unwrap_or_else(|_| Err("replay writer panicked".into()));
+                                .unwrap_or_else(|payload| Err(replay_panic("writer", payload)));
                                 if let Err(error) = outcome {
                                     if let Ok(mut observed) = observed_failure.lock() {
                                         *observed = Some(error.clone());
@@ -84,8 +107,9 @@ impl<W: ReplayWindow> OrderedReplayWorker<W> {
                             let result = match (first_error.take(), window.take()) {
                                 (Some(error), _) => Err(error),
                                 (None, Some(window)) => {
-                                    catch_unwind(AssertUnwindSafe(|| window.seal()))
-                                        .unwrap_or_else(|_| Err("replay seal panicked".into()))
+                                    catch_unwind(AssertUnwindSafe(|| window.seal())).unwrap_or_else(
+                                        |payload| Err(replay_panic("seal", payload)),
+                                    )
                                 }
                                 (None, None) => Err("replay worker has no active cohort".into()),
                             };
@@ -214,19 +238,30 @@ impl ReplayWindow for CapturedReplayWindow {
     type Finished = FinishedReplayWindow;
 
     fn append(&mut self, capture: Capture) -> WorkerResult<()> {
+        let policy = self.writer.source.policy_version;
+        let row = self.writer.next_index;
+        let tick = Some(capture.step.frame.tick().raw());
         if capture.new_segment {
-            self.writer.start_segment().map_err(|e| e.to_string())?;
+            self.writer
+                .start_segment()
+                .map_err(|e| replay_operation_error("start segment", policy, row, tick, e))?;
         }
         let reference = self
             .writer
             .append_cohort(&capture.step, &mut self.cohort)
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| replay_operation_error("append", policy, row, tick, e))?;
         self.references.push(reference);
         Ok(())
     }
 
     fn seal(self) -> WorkerResult<FinishedReplayWindow> {
-        let commit = self.cohort.seal().map_err(|e| e.to_string())?;
+        let policy = self.writer.source.policy_version;
+        let row = self.writer.next_index;
+        let tick = self.references.last().map(|reference| reference.tick);
+        let commit = self
+            .cohort
+            .seal()
+            .map_err(|e| replay_operation_error("seal", policy, row, tick, e))?;
         Ok(FinishedReplayWindow {
             references: self.references,
             commit,

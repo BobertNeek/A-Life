@@ -97,6 +97,15 @@ Clippy also passed. Full-release software equivalence passed independently of
 the earlier test-profile run. No real trained checkpoint was used, and
 `semantic_prior.rs` is unchanged.
 
+A focused seven-test worker rerun also passes after provenance and diagnostics
+followups. Reusing the worker across different policy versions and actor
+checkpoint digests resets row/index ownership and rejects stale references,
+foreign sources and policy-only/checkpoint-only mismatches. These are typed
+record provenance fixtures, not relabeled acquired trajectories. Writer errors
+now retain operation, policy, next row and tick context; caught string panic
+payloads retain their detail, with a fallback for opaque payloads. Cross-thread
+error transport and the failure/seal protocol remain unchanged.
+
 The ignored captured-step hardware oracle also type-checks in Linux GPU-test
 builds so its common API body cannot silently escape the compile gate. Its
 execution still requires Windows process-memory admission and a hardware GPU.
