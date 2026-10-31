@@ -19,6 +19,10 @@ use alife_training::{
 };
 
 fn fixture() -> (FoundationTrainer, usize, usize, usize) {
+    fixture_with_wide_mask(false)
+}
+
+fn fixture_with_wide_mask(wide_mask: bool) -> (FoundationTrainer, usize, usize, usize) {
     let genome = BrainGenome::scaffold(0x9900_2048, BrainCapacityClass::n2048().id());
     let development =
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
@@ -51,14 +55,24 @@ fn fixture() -> (FoundationTrainer, usize, usize, usize) {
             _ => None,
         })
         .unwrap();
-    let mask = StageTrainableMask::from_synapse_indices(&phenotype, &[weight as u32]).unwrap();
+    let indices = if wide_mask {
+        (0..phenotype.synapses().len())
+            .step_by(3)
+            .map(|index| index as u32)
+            .collect::<Vec<_>>()
+    } else {
+        vec![weight as u32]
+    };
+    assert!(indices.contains(&(weight as u32)));
+    let mask = StageTrainableMask::from_synapse_indices(&phenotype, &indices).unwrap();
     let session = GpuAuthoritativeSession::new_software_vulkan_training_test().unwrap();
     assert!(session.backend().is_software_training_test());
     eprintln!(
-        "actual_controller_adapter={:?}; neurons={}; synapses={}; trainable_weights=1; masked_weight={weight}",
+        "actual_controller_adapter={:?}; neurons={}; synapses={}; trainable_weights={}; masked_weight={weight}",
         session.backend().software_training_test_adapter_info().unwrap(),
         phenotype.neuron_count(),
-        phenotype.synapses().len()
+        phenotype.synapses().len(),
+        mask.trainable_count()
     );
     let trainer =
         FoundationTrainer::from_session(session, phenotype, source, mask, AdamWConfig::default())
@@ -99,9 +113,39 @@ fn windows_with_count(
     old_logp_offset: f32,
     count: usize,
 ) -> Vec<PpoTrainingWindow> {
-    (0..count)
-        .map(|index| {
-            let (ticks, burn_in_ticks) = if index % 2 == 0 { (3, 0) } else { (5, 1) };
+    let shapes = (0..count)
+        .map(|index| if index % 2 == 0 { (3, 0) } else { (5, 1) })
+        .collect::<Vec<_>>();
+    windows_with_shapes(
+        trainer,
+        state,
+        neuron,
+        lane,
+        config,
+        policy,
+        old_logp_offset,
+        &shapes,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn windows_with_shapes(
+    trainer: &mut FoundationTrainer,
+    state: &mut PpoTrainingState,
+    neuron: usize,
+    lane: usize,
+    config: PpoConfig,
+    policy: u64,
+    old_logp_offset: f32,
+    shapes: &[(usize, usize)],
+    all_active: bool,
+) -> Vec<PpoTrainingWindow> {
+    shapes
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(index, (ticks, burn_in_ticks))| {
             let n = trainer.phenotype().neuron_count() as usize;
             let mut initial = vec![0.0; n];
             initial[neuron] = 0.4;
@@ -121,7 +165,7 @@ fn windows_with_count(
                             encoded_inputs: inputs,
                             projection_gain: 0.9,
                             local_threshold_shift: 0.0,
-                            microstep_count: if tick % 2 == 0 { 4 } else { 0 },
+                            microstep_count: if all_active || tick % 2 == 0 { 4 } else { 0 },
                             enabled_routes: vec![true; trainer.phenotype().projections().len()],
                             effective_weight_offsets: vec![
                                 0.0;
@@ -174,7 +218,7 @@ fn windows_with_count(
                     let old_logp = ((p[2] / z) * p[0] / (p[0] + p[1])).ln() as f32;
                     PpoTransition {
                         policy_version: policy,
-                        trajectory_id: (index * 8 + step) as u64,
+                        trajectory_id: (index * ticks.max(8) + step) as u64,
                         step: 0,
                         action: PpoJointAction {
                             candidate_count: 4,
@@ -203,6 +247,9 @@ fn windows_with_count(
         })
         .collect()
 }
+
+#[path = "software_ppo_controller/frozen_gradient_assay.rs"]
+mod frozen_gradient_assay;
 
 fn bits(values: &[f32]) -> Vec<u32> {
     values.iter().map(|v| v.to_bits()).collect()
