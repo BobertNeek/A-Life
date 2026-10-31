@@ -33,7 +33,9 @@ camera.data.ortho_scale = 3.15
 for track in rig.animation_data.nla_tracks:
     track.mute = True
 
-# Validate the new paw extremes through every authored sample before rendering.
+# Validate the paw profiles through every authored sample before rendering.
+# Also sample the interpolated sleep pose at quarter-frame intervals; this is
+# a discrete regression, not a guarantee of clearance at every instant.
 # Contact must belong to feet (or the folded hindquarters in the existing sleep
 # clip), never an enlarged hand/ear.
 merged = bpy.data.objects['Hearthling_Runtime']
@@ -82,8 +84,10 @@ for profile, hand_scale in [('compact', (.95, .94, .98)),
     radius = 0
     for name in ['Hearthling_CuriousIdle', 'Hearthling_Walk', 'Hearthling_Sleep']:
         rig.animation_data.action = next(a for a in bpy.data.actions if a.name.startswith(name))
-        for frame in range(1, 74):
-            scene.frame_set(frame)
+        subdivisions = 4 if 'Sleep' in name else 1
+        for sample in range(72 * subdivisions + 1):
+            frame = 1 + sample / subdivisions
+            scene.frame_set(int(frame), subframe=frame % 1)
             for side in ['L', 'R']:
                 rig.pose.bones['hand.' + side].scale *= Vector(hand_scale)
             bpy.context.view_layer.update()
@@ -103,10 +107,11 @@ for profile, hand_scale in [('compact', (.95, .94, .98)),
             assert hand > low + .05 and ear > low + .10, (profile, name, frame, hand, ear)
             lowest_hand = min(lowest_hand, hand)
             radius = max(radius, max(p.length for p in points))
-    # A sphere inside the existing +/-6 mesh AABB also stays inside it under
-    # held rotations about the rig origin. This is not the root picking proxy.
-    assert radius < 6, (profile, radius)
-    print(profile, '219 pose/contact samples PASS', 'min hand', lowest_hand,
+    # Sampled radius is a quick sanity check only; the separate skin-bounds
+    # regression proves the conservative runtime envelope under its assumptions.
+    assert radius < 3, (profile, radius)
+    print(profile, '435 pose/contact samples PASS (including 289 sleep samples)',
+          'min hand', lowest_hand,
           'maximum radius', radius, flush=True)
 for name in ['Hearthling_CuriousIdle', 'Hearthling_Walk', 'Hearthling_Sleep']:
     rig.animation_data.action = next(a for a in bpy.data.actions if a.name.startswith(name))
