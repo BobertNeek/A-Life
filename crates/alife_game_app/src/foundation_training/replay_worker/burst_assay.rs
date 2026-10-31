@@ -16,8 +16,9 @@ fn verify_rows(
     let source = &rows[0].source;
     let mut reader = cohort_replay::CohortReplayReader::open(root, source).unwrap();
     for (reference, expected) in finished.references.iter().zip(rows) {
-        // Authenticate actual storage and decode each row. The optional decoded
-        // record cache is explicitly refused, rather than hiding external I/O.
+        // Storage is read/authenticated before any optional cache lookup. The
+        // false admission callback denies retention, not lookup; this isolated
+        // unique-source assay never populates that decoded-record cache.
         let actual = load_foundation_replay_record_from_storage(
             &root.join("individual"),
             reference,
