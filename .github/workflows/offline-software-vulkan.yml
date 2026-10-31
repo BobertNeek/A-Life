@@ -39,6 +39,7 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: '0'
       RUST_TEST_THREADS: '1'
       LP_NUM_THREADS: '2'
+      ALIFE_DISPATCH_REQUIRE_HARDWARE: '0'
       EXPECTED_SOURCE_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
@@ -91,7 +92,7 @@ jobs:
             echo "VK_ICD_FILENAMES=${icds[0]}"
             echo "XDG_RUNTIME_DIR=$runtime_dir"
           } >> "$GITHUB_ENV"
-      - name: Run only offline admission, session and nine-window PPO correctness
+      - name: Run offline admission, controller and disabled-cache correctness
         run: |
           set -euo pipefail
           # Synthetic Cpu/Vulkan execution, never hardware acceptance or timing.
@@ -114,3 +115,15 @@ jobs:
           run_fixture alife_training \
             actual_controller_batches_restores_and_rejects_before_updates \
             --test software_ppo_controller
+          for fixture in \
+            frozen_gradients_match_actual_controller_epochs_and_shared_restore \
+            frozen_gradients_preserve_kl_cancellation_and_restart \
+            frozen_gradients_defer_numeric_faults_and_preserve_loader_failures \
+            frozen_gradients_fall_back_for_more_than_one_effective_batch \
+            continuing_qualification::continuing_gae_matches_actual_controller_after_warm_restore \
+            continuing_qualification::wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates \
+            fallback_qualification::actual_speech_labels_force_late_frozen_cache_fallback \
+            fallback_qualification::actual_auxiliary_targets_force_late_frozen_cache_fallback
+          do
+            run_fixture alife_training "$fixture" --test software_ppo_controller
+          done

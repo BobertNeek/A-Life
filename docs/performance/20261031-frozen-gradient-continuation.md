@@ -48,7 +48,7 @@ Strict relevant all-target Clippy passed after one equivalent test-only chunks
 iterator idiom change. The receipt retains the exact executed source/binary
 hashes, build output and all raw logs.
 Memory-cap fallback, forced actor-apply/value rollback failure and physical GPU
-qualification remain untested. There is no activation or PR.
+qualification remain untested. Production activation remains held.
 
 ```sh
 source /workspace/cloud-cpu-validation/env.sh
