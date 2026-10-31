@@ -11,7 +11,7 @@ use alife_core::{
 };
 use std::time::Instant;
 
-fn seed_age(index: usize) -> u32 {
+pub(super) fn seed_age(index: usize) -> u32 {
     if index.is_multiple_of(11) {
         (1 << 24) + (index % 7) as u32
     } else {
@@ -19,7 +19,7 @@ fn seed_age(index: usize) -> u32 {
     }
 }
 
-fn device() -> (wgpu::Device, wgpu::Queue) {
+pub(super) fn device() -> (wgpu::Device, wgpu::Queue) {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = wgpu::Backends::VULKAN;
     let instance = wgpu::Instance::new(descriptor);
@@ -48,7 +48,7 @@ fn device() -> (wgpu::Device, wgpu::Queue) {
     .unwrap()
 }
 
-fn phenotype() -> BrainPhenotype {
+pub(super) fn phenotype() -> BrainPhenotype {
     let capacity = BrainCapacityClass::n2048();
     let genome = BrainGenome::scaffold(0xD15A_2048, capacity.id());
     let development =
@@ -62,7 +62,7 @@ fn phenotype() -> BrainPhenotype {
     .unwrap()
 }
 
-fn replay(phenotype: &BrainPhenotype, ticks: usize, burn_in: usize) -> TrainingSequence {
+pub(super) fn replay(phenotype: &BrainPhenotype, ticks: usize, burn_in: usize) -> TrainingSequence {
     let neurons = phenotype.neuron_count() as usize;
     let sequence = TrainingSequence {
         phenotype_hash: phenotype.phenotype_hash(),
@@ -125,7 +125,7 @@ fn replay(phenotype: &BrainPhenotype, ticks: usize, burn_in: usize) -> TrainingS
     sequence
 }
 
-fn gpu(
+pub(super) fn gpu(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     phenotype: &BrainPhenotype,
@@ -408,7 +408,7 @@ fn encode_update(
     encoder.finish()
 }
 
-fn read(device: &wgpu::Device, queue: &wgpu::Queue, buffer: &wgpu::Buffer) -> Vec<u32> {
+pub(super) fn read(device: &wgpu::Device, queue: &wgpu::Queue, buffer: &wgpu::Buffer) -> Vec<u32> {
     let staging = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("dispatch-assay-readback"),
         size: buffer.size(),

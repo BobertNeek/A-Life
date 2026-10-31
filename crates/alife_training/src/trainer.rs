@@ -13,6 +13,10 @@ mod packed_checkpoint_gpu_tests;
 #[path = "trainer/dynamic_dispatch_tests.rs"]
 mod dynamic_dispatch_tests;
 
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "trainer/pair_window_tests.rs"]
+mod pair_window_tests;
+
 use std::{num::NonZeroU64, sync::mpsc};
 
 use alife_core::{
