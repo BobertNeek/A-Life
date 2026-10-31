@@ -76,7 +76,7 @@ fn replay(phenotype: &BrainPhenotype, ticks: usize, burn_in: usize) -> TrainingS
                 0.2,
                 vec![
                     DendriticInputRef::new(1, 0.125).unwrap(),
-                    DendriticInputRef::new(3, -0.25).unwrap(),
+                    DendriticInputRef::new(3, 0.25).unwrap(),
                 ],
             )
             .unwrap()])
@@ -312,7 +312,7 @@ fn encode_update(
     device: &wgpu::Device,
     gpu: &TrainerGpuState,
     phenotype: &BrainPhenotype,
-    oracle: Option<&StaticOracle>,
+    sweep: Sweep<'_>,
 ) -> wgpu::CommandBuffer {
     let groups = phenotype.neuron_count().div_ceil(WORKGROUP_SIZE);
     let weights = (phenotype.synapses().len() as u32).div_ceil(WORKGROUP_SIZE);
@@ -329,9 +329,10 @@ fn encode_update(
         1,
         "assay-init",
     );
-    match oracle {
-        Some(oracle) => oracle.forward(&mut encoder, total, groups),
-        None => gpu.record_forward(&mut encoder, total, groups),
+    match sweep {
+        Sweep::Static(oracle) => oracle.forward(&mut encoder, total, groups),
+        Sweep::Dynamic => gpu.record_forward(&mut encoder, total, groups),
+        Sweep::Persistent(persistent) => persistent.forward(&mut encoder, gpu, total),
     }
     dispatch(
         &mut encoder,
@@ -384,9 +385,12 @@ fn encode_update(
         gpu.layout.ticks,
         "assay-seed-speech",
     );
-    match oracle {
-        Some(oracle) => oracle.backward(&mut encoder, gpu.layout.burn_in_steps, total, groups),
-        None => gpu.record_backward(&mut encoder, total, groups),
+    match sweep {
+        Sweep::Static(oracle) => {
+            oracle.backward(&mut encoder, gpu.layout.burn_in_steps, total, groups)
+        }
+        Sweep::Dynamic => gpu.record_backward(&mut encoder, total, groups),
+        Sweep::Persistent(persistent) => persistent.backward(&mut encoder, gpu, total),
     }
     for (kernel, count) in [
         (&gpu.pipelines.recurrent_gradients, weights),
@@ -447,8 +451,8 @@ fn dynamic_dispatch_matches_static_headers_through_adam() {
         let total = ticks as u32 * u32::from(phenotype.microstep_count());
         let oracle = StaticOracle::new(&device, &baseline, total);
         queue.submit([
-            encode_update(&device, &baseline, &phenotype, Some(&oracle)),
-            encode_update(&device, &candidate, &phenotype, None),
+            encode_update(&device, &baseline, &phenotype, Sweep::Static(&oracle)),
+            encode_update(&device, &candidate, &phenotype, Sweep::Dynamic),
         ]);
         for (label, actual, expected) in [
             ("state", &candidate.state, &baseline.state),
@@ -565,6 +569,236 @@ fn dynamic_dispatch_host_encoding_assay() {
         }
     }
     if let Ok(path) = std::env::var("ALIFE_DISPATCH_ASSAY_PATH") {
+        std::fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Sweep<'a> {
+    Static(&'a StaticOracle),
+    Dynamic,
+    Persistent(&'a PersistentSweep),
+}
+
+/// Experimental one-workgroup kernels, reached only by these explicit tests.
+/// Positive chunks keep dispatch duration bounded; production uses Dynamic.
+struct PersistentSweep {
+    forward: wgpu::ComputePipeline,
+    backward: wgpu::ComputePipeline,
+    chunk_steps: u32,
+}
+
+impl PersistentSweep {
+    fn new(device: &wgpu::Device, gpu: &TrainerGpuState, width: u32, chunk_steps: u32) -> Self {
+        assert!(chunk_steps > 0);
+        let (forward, backward) = match width {
+            64 => ("forward_persistent_64", "backward_persistent_64"),
+            128 => ("forward_persistent_128", "backward_persistent_128"),
+            256 => ("forward_persistent_256", "backward_persistent_256"),
+            _ => panic!("unsupported persistent width"),
+        };
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("experimental-persistent-layout"),
+            bind_group_layouts: &[Some(&gpu.pipelines.bind_group_layout)],
+            immediate_size: 0,
+        });
+        let source = include_str!("../../shaders/foundation_train_persistent.wgsl");
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("experimental-persistent-shader"),
+            source: wgpu::ShaderSource::Wgsl(source.into()),
+        });
+        let pipeline = |entry| {
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(entry),
+                layout: Some(&layout),
+                module: &shader,
+                entry_point: Some(entry),
+                compilation_options: wgpu::PipelineCompilationOptions {
+                    constants: &[("SWEEP_STEPS", f64::from(chunk_steps))],
+                    ..Default::default()
+                },
+                cache: None,
+            })
+        };
+        Self {
+            forward: pipeline(forward),
+            backward: pipeline(backward),
+            chunk_steps,
+        }
+    }
+
+    fn forward(&self, encoder: &mut wgpu::CommandEncoder, gpu: &TrainerGpuState, total: u32) {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        pass.set_pipeline(&self.forward);
+        // Header first, first+chunk, ...; the shader clamps its last partial
+        // chunk to total. Every original microstep is executed exactly once.
+        for first in (0..total).step_by(self.chunk_steps as usize) {
+            pass.set_bind_group(0, &gpu.bind_group, &[first * HEADER_BYTES as u32]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
+    }
+
+    fn backward(&self, encoder: &mut wgpu::CommandEncoder, gpu: &TrainerGpuState, total: u32) {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+        pass.set_pipeline(&self.backward);
+        // Each header names the inclusive last step. Subtract the dispatched
+        // chunk from the exclusive end; stop at the detached burn-in boundary.
+        let mut end = total;
+        while end > gpu.layout.burn_in_steps {
+            pass.set_bind_group(0, &gpu.bind_group, &[(end - 1) * HEADER_BYTES as u32]);
+            pass.dispatch_workgroups(1, 1, 1);
+            end = end
+                .saturating_sub(self.chunk_steps)
+                .max(gpu.layout.burn_in_steps);
+        }
+    }
+}
+
+#[test]
+#[ignore = "experimental persistent WGSL; selected Vulkan device, no production admission change"]
+fn persistent_dispatch_matches_static_headers_through_adam() {
+    let (device, queue) = device();
+    let phenotype = phenotype();
+    for (ticks, burn_in) in [(3, 0), (5, 2), (9, 1)] {
+        let replay = replay(&phenotype, ticks, burn_in);
+        let baseline = gpu(&device, &queue, &phenotype, &replay);
+        let total = ticks as u32 * u32::from(phenotype.microstep_count());
+        let oracle = StaticOracle::new(&device, &baseline, total);
+        queue.submit([encode_update(
+            &device,
+            &baseline,
+            &phenotype,
+            Sweep::Static(&oracle),
+        )]);
+        let expected = [
+            &baseline.state,
+            &baseline.outputs,
+            &baseline.gradients,
+            &baseline.weights,
+            &baseline._optimizer,
+        ]
+        .map(|buffer| read(&device, &queue, buffer));
+        for (width, chunk) in [
+            (64, 8),
+            (64, 32),
+            (128, 8),
+            (128, 32),
+            (256, 8),
+            (256, 32),
+            (128, 3),
+        ] {
+            let candidate = gpu(&device, &queue, &phenotype, &replay);
+            let persistent = PersistentSweep::new(&device, &candidate, width, chunk);
+            queue.submit([encode_update(
+                &device,
+                &candidate,
+                &phenotype,
+                Sweep::Persistent(&persistent),
+            )]);
+            for ((label, actual), expected) in [
+                ("state", &candidate.state),
+                ("outputs", &candidate.outputs),
+                ("gradients", &candidate.gradients),
+                ("weights", &candidate.weights),
+                ("optimizer", &candidate._optimizer),
+            ]
+            .into_iter()
+            .zip(&expected)
+            {
+                let actual = read(&device, &queue, actual);
+                assert_eq!(actual.len(), expected.len());
+                assert_eq!(
+                    actual.iter().zip(expected).position(|(a, b)| a != b),
+                    None,
+                    "{label}: ticks={ticks},burn_in={burn_in},width={width},chunk={chunk}"
+                );
+            }
+            eprintln!("persistent equivalence passed: ticks={ticks},burn_in={burn_in},width={width},chunk={chunk}");
+        }
+    }
+}
+
+#[test]
+#[ignore = "experimental paired execution assay; synthetic replay, no whole-training throughput claim"]
+fn persistent_dispatch_execution_assay() {
+    let (device, queue) = device();
+    let phenotype = phenotype();
+    let ticks = std::env::var("ALIFE_PERSISTENT_ASSAY_TICKS")
+        .ok()
+        .map(|v| v.parse::<usize>().unwrap())
+        .unwrap_or(64);
+    assert!(ticks > 0 && ticks <= crate::MAX_TRAINING_SEQUENCE_TICKS);
+    let burn_in = (ticks / 4).min(128);
+    let mut receipts = Vec::new();
+    for width in [128, 256] {
+        let replay = replay(&phenotype, ticks, burn_in);
+        let baseline = gpu(&device, &queue, &phenotype, &replay);
+        let candidate = gpu(&device, &queue, &phenotype, &replay);
+        let persistent = PersistentSweep::new(&device, &candidate, width, 32);
+        queue.submit([]);
+        device
+            .poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            })
+            .unwrap();
+        // Both sides continue their own matched optimizer history for seven
+        // paired updates. Only ephemeral replay scratch is cleared by the same
+        // common update encoder. Fixture setup and validation reads are outside
+        // the reported elapsed; no real creature/checkpoint is involved.
+        for trial in 0..7 {
+            for legacy in if trial % 2 == 0 {
+                [true, false]
+            } else {
+                [false, true]
+            } {
+                let (gpu, sweep) = if legacy {
+                    (&baseline, Sweep::Dynamic)
+                } else {
+                    (&candidate, Sweep::Persistent(&persistent))
+                };
+                let started = Instant::now();
+                let commands = encode_update(&device, gpu, &phenotype, sweep);
+                let encode_finish_seconds = started.elapsed().as_secs_f64();
+                let started = Instant::now();
+                let submission = queue.submit([commands]);
+                let submit_seconds = started.elapsed().as_secs_f64();
+                let started = Instant::now();
+                device
+                    .poll(wgpu::PollType::Wait {
+                        submission_index: Some(submission),
+                        timeout: None,
+                    })
+                    .unwrap();
+                let wait_seconds = started.elapsed().as_secs_f64();
+                let receipt = serde_json::json!({"ticks":ticks,"burn_in":burn_in,
+                    "microsteps":phenotype.microstep_count(),"width":width,"chunk_steps":32,
+                    "trial":trial,"dynamic_baseline":legacy,
+                    "encode_finish_seconds":encode_finish_seconds,"submit_seconds":submit_seconds,
+                    "wait_seconds":wait_seconds,
+                    "total_seconds":encode_finish_seconds+submit_seconds+wait_seconds});
+                eprintln!("{receipt}");
+                receipts.push(receipt);
+            }
+        }
+        for (label, actual, expected) in [
+            ("state", &candidate.state, &baseline.state),
+            ("outputs", &candidate.outputs, &baseline.outputs),
+            ("gradients", &candidate.gradients, &baseline.gradients),
+            ("weights", &candidate.weights, &baseline.weights),
+            ("optimizer", &candidate._optimizer, &baseline._optimizer),
+        ] {
+            let actual = read(&device, &queue, actual);
+            let expected = read(&device, &queue, expected);
+            assert_eq!(actual.len(), expected.len());
+            assert_eq!(
+                actual.iter().zip(&expected).position(|(a, b)| a != b),
+                None,
+                "{label} differs after seven paired actual updates at width={width}"
+            );
+        }
+    }
+    if let Ok(path) = std::env::var("ALIFE_PERSISTENT_ASSAY_PATH") {
         std::fs::write(path, serde_json::to_vec_pretty(&receipts).unwrap()).unwrap();
     }
 }

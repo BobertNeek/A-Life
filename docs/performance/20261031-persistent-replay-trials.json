@@ -1,0 +1,907 @@
+{
+  "purpose": "Rejected default candidate: software Vulkan recurrent replay sweep experiment; no physical GPU or whole-training claim",
+  "date_utc": "2026-10-31",
+  "base_commit": "c50ffdb9c00ec3c85fc825d736030aa4d978efea",
+  "source_sha256": {
+    "crates/alife_training/src/trainer/dynamic_dispatch_tests.rs": "3387d6297c3acf6413faeac3edb593c8a5d5cd9164e5358de3a5829aa0d33302",
+    "crates/alife_training/shaders/foundation_train_persistent.wgsl": "7305e93e620a50c8719bc85afbca4977b5b6902c806d31e08182f31d9424ecd3"
+  },
+  "final_binary_sha256": "dd982ae394d26a826d9d84a1ff287aad4606deb7aac3e764babe37c75d03184d",
+  "final_binary_file": "alife_training-b408c1ab66e7c384",
+  "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13), LLVM 23.1.1, x86_64-unknown-linux-gnu",
+  "build": "cargo test --release -p alife_training --features gpu-tests --lib; normal release optimization for all dependencies",
+  "adapter": {
+    "name": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+    "backend": "Vulkan",
+    "device_type": "Cpu",
+    "subgroup_size": 8
+  },
+  "host": {
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "visible_cpus": 5,
+    "os": "Linux x86_64",
+    "LP_NUM_THREADS": 2,
+    "RUST_TEST_THREADS": 1
+  },
+  "workload": {
+    "ticks": 64,
+    "burn_in_ticks": 16,
+    "microsteps_per_tick": 4,
+    "neurons": 2048,
+    "synapses": 32768,
+    "persistent_widths": [
+      128,
+      256
+    ],
+    "positive_chunk_steps": 32,
+    "paired_trials_per_width": 7,
+    "order": "alternate baseline-first and candidate-first, including first cold pair",
+    "state": "matched optimizer histories continued for seven updates, no reset within cohort"
+  },
+  "timing_scope": "sum of command encoding+finish, queue submit, and submission-index wait; fixture packing/setup, pipeline creation, validation readbacks and receipt output excluded; no GPU timestamp query",
+  "correctness": {
+    "final_release_tests": 2,
+    "persistent_short_cases": 21,
+    "ticks_and_burn_in": [
+      [
+        3,
+        0
+      ],
+      [
+        5,
+        2
+      ],
+      [
+        9,
+        1
+      ]
+    ],
+    "width_chunk_pairs": [
+      [
+        64,
+        8
+      ],
+      [
+        64,
+        32
+      ],
+      [
+        128,
+        8
+      ],
+      [
+        128,
+        32
+      ],
+      [
+        256,
+        8
+      ],
+      [
+        256,
+        32
+      ],
+      [
+        128,
+        3
+      ]
+    ],
+    "buffers_byte_exact": [
+      "state",
+      "outputs",
+      "gradients",
+      "weights",
+      "optimizer first/second moments and integer ages"
+    ],
+    "continuation": "complete five buffers still match after seven paired actual updates at each execution width",
+    "context": "active dendrite, structural edge, speech targets, inactive/partial/full microsteps, detached burn-in, valid signed-zero age0 moments and heterogeneous ages above2^24"
+  },
+  "summaries": [
+    {
+      "cohort": "first_release",
+      "width": 128,
+      "baseline_median_seconds": 0.13160837900000003,
+      "persistent_median_seconds": 0.19290279000000002,
+      "elapsed_increase_fraction": 0.4657333481783861,
+      "baseline_range_seconds": [
+        0.12879868200000003,
+        0.16224118399999998
+      ],
+      "persistent_range_seconds": [
+        0.187165063,
+        0.21915170099999998
+      ]
+    },
+    {
+      "cohort": "first_release",
+      "width": 256,
+      "baseline_median_seconds": 0.14307884699999998,
+      "persistent_median_seconds": 0.191999751,
+      "elapsed_increase_fraction": 0.3419156991109946,
+      "baseline_range_seconds": [
+        0.12985047400000002,
+        0.15255864600000002
+      ],
+      "persistent_range_seconds": [
+        0.190132718,
+        0.200141836
+      ]
+    },
+    {
+      "cohort": "final_formatted_release",
+      "width": 128,
+      "baseline_median_seconds": 0.128232481,
+      "persistent_median_seconds": 0.18922571500000002,
+      "elapsed_increase_fraction": 0.4756457453240728,
+      "baseline_range_seconds": [
+        0.12492722199999999,
+        0.13816188100000001
+      ],
+      "persistent_range_seconds": [
+        0.186266283,
+        0.201816564
+      ]
+    },
+    {
+      "cohort": "final_formatted_release",
+      "width": 256,
+      "baseline_median_seconds": 0.130275912,
+      "persistent_median_seconds": 0.191710727,
+      "elapsed_increase_fraction": 0.4715746300052768,
+      "baseline_range_seconds": [
+        0.126781595,
+        0.135381609
+      ],
+      "persistent_range_seconds": [
+        0.189284059,
+        0.200336183
+      ]
+    }
+  ],
+  "cohorts": [
+    {
+      "name": "first_release",
+      "raw_file_sha256": "beb8ba2932ae80fda5f220b5db8db78722e26dca623df32605e83ed68223223c",
+      "source_test_sha256": "19314274c44d08df4af07a7fbfd7ff5b83cbb6c43f9e9672fd64e1e2aa7ee1d9",
+      "binary_sha256": "8476be66acf8e7c567472f49429bb595106552f0374c63cf99763de19bb0bd6b",
+      "difference_from_final": "one Rust indentation correction only; no algorithm change",
+      "trials": [
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000981725,
+          "microsteps": 4,
+          "submit_seconds": 6.5799e-05,
+          "ticks": 64,
+          "total_seconds": 0.16224118399999998,
+          "trial": 0,
+          "wait_seconds": 0.16119366,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000176575,
+          "microsteps": 4,
+          "submit_seconds": 3.353e-05,
+          "ticks": 64,
+          "total_seconds": 0.21915170099999998,
+          "trial": 0,
+          "wait_seconds": 0.218941596,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000174783,
+          "microsteps": 4,
+          "submit_seconds": 0.001166681,
+          "ticks": 64,
+          "total_seconds": 0.204012582,
+          "trial": 1,
+          "wait_seconds": 0.202671118,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000656996,
+          "microsteps": 4,
+          "submit_seconds": 2.2113e-05,
+          "ticks": 64,
+          "total_seconds": 0.1437469,
+          "trial": 1,
+          "wait_seconds": 0.143067791,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000621002,
+          "microsteps": 4,
+          "submit_seconds": 0.001665099,
+          "ticks": 64,
+          "total_seconds": 0.13160837900000003,
+          "trial": 2,
+          "wait_seconds": 0.129322278,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.0004727,
+          "microsteps": 4,
+          "submit_seconds": 3.1668e-05,
+          "ticks": 64,
+          "total_seconds": 0.187165063,
+          "trial": 2,
+          "wait_seconds": 0.186660695,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000205328,
+          "microsteps": 4,
+          "submit_seconds": 3.1908e-05,
+          "ticks": 64,
+          "total_seconds": 0.19408873000000001,
+          "trial": 3,
+          "wait_seconds": 0.193851494,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000706481,
+          "microsteps": 4,
+          "submit_seconds": 3.372e-05,
+          "ticks": 64,
+          "total_seconds": 0.131867239,
+          "trial": 3,
+          "wait_seconds": 0.131127038,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000617587,
+          "microsteps": 4,
+          "submit_seconds": 3.4472e-05,
+          "ticks": 64,
+          "total_seconds": 0.130219741,
+          "trial": 4,
+          "wait_seconds": 0.129567682,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000219579,
+          "microsteps": 4,
+          "submit_seconds": 3.2449e-05,
+          "ticks": 64,
+          "total_seconds": 0.18894646999999998,
+          "trial": 4,
+          "wait_seconds": 0.188694442,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.00017347,
+          "microsteps": 4,
+          "submit_seconds": 3.1978e-05,
+          "ticks": 64,
+          "total_seconds": 0.190510935,
+          "trial": 5,
+          "wait_seconds": 0.190305487,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000808273,
+          "microsteps": 4,
+          "submit_seconds": 3.4091e-05,
+          "ticks": 64,
+          "total_seconds": 0.12879868200000003,
+          "trial": 5,
+          "wait_seconds": 0.127956318,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000709424,
+          "microsteps": 4,
+          "submit_seconds": 3.5563e-05,
+          "ticks": 64,
+          "total_seconds": 0.130640506,
+          "trial": 6,
+          "wait_seconds": 0.129895519,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000207261,
+          "microsteps": 4,
+          "submit_seconds": 3.0435e-05,
+          "ticks": 64,
+          "total_seconds": 0.19290279000000002,
+          "trial": 6,
+          "wait_seconds": 0.192665094,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.00152603,
+          "microsteps": 4,
+          "submit_seconds": 6.2013e-05,
+          "ticks": 64,
+          "total_seconds": 0.15255864600000002,
+          "trial": 0,
+          "wait_seconds": 0.150970603,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000327542,
+          "microsteps": 4,
+          "submit_seconds": 4.1001e-05,
+          "ticks": 64,
+          "total_seconds": 0.200141836,
+          "trial": 0,
+          "wait_seconds": 0.199773293,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000316445,
+          "microsteps": 4,
+          "submit_seconds": 4.053e-05,
+          "ticks": 64,
+          "total_seconds": 0.193306301,
+          "trial": 1,
+          "wait_seconds": 0.192949326,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.001026851,
+          "microsteps": 4,
+          "submit_seconds": 3.8348e-05,
+          "ticks": 64,
+          "total_seconds": 0.142849383,
+          "trial": 1,
+          "wait_seconds": 0.141784184,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000782184,
+          "microsteps": 4,
+          "submit_seconds": 3.7657e-05,
+          "ticks": 64,
+          "total_seconds": 0.14307884699999998,
+          "trial": 2,
+          "wait_seconds": 0.142259006,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000272569,
+          "microsteps": 4,
+          "submit_seconds": 3.3551e-05,
+          "ticks": 64,
+          "total_seconds": 0.190132718,
+          "trial": 2,
+          "wait_seconds": 0.189826598,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000219901,
+          "microsteps": 4,
+          "submit_seconds": 4.032e-05,
+          "ticks": 64,
+          "total_seconds": 0.191999751,
+          "trial": 3,
+          "wait_seconds": 0.19173953,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.001175034,
+          "microsteps": 4,
+          "submit_seconds": 3.8147e-05,
+          "ticks": 64,
+          "total_seconds": 0.14391348,
+          "trial": 3,
+          "wait_seconds": 0.142700299,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000730066,
+          "microsteps": 4,
+          "submit_seconds": 3.5724e-05,
+          "ticks": 64,
+          "total_seconds": 0.1432405,
+          "trial": 4,
+          "wait_seconds": 0.14247471,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000269145,
+          "microsteps": 4,
+          "submit_seconds": 3.344e-05,
+          "ticks": 64,
+          "total_seconds": 0.191301682,
+          "trial": 4,
+          "wait_seconds": 0.190999097,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000234102,
+          "microsteps": 4,
+          "submit_seconds": 3.4372e-05,
+          "ticks": 64,
+          "total_seconds": 0.19031095299999998,
+          "trial": 5,
+          "wait_seconds": 0.190042479,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000998541,
+          "microsteps": 4,
+          "submit_seconds": 3.7577e-05,
+          "ticks": 64,
+          "total_seconds": 0.130682567,
+          "trial": 5,
+          "wait_seconds": 0.129646449,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000976507,
+          "microsteps": 4,
+          "submit_seconds": 3.7076e-05,
+          "ticks": 64,
+          "total_seconds": 0.12985047400000002,
+          "trial": 6,
+          "wait_seconds": 0.128836891,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000306,
+          "microsteps": 4,
+          "submit_seconds": 3.8398e-05,
+          "ticks": 64,
+          "total_seconds": 0.192757437,
+          "trial": 6,
+          "wait_seconds": 0.192413039,
+          "width": 256
+        }
+      ]
+    },
+    {
+      "name": "final_formatted_release",
+      "raw_file_sha256": "033474ddd0a0d0376443381820a21a90633c4da4751fe0dc1ea4b3e463b2b06e",
+      "trials": [
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000763407,
+          "microsteps": 4,
+          "submit_seconds": 6.3785e-05,
+          "ticks": 64,
+          "total_seconds": 0.13816188100000001,
+          "trial": 0,
+          "wait_seconds": 0.137334689,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000152278,
+          "microsteps": 4,
+          "submit_seconds": 3.7377e-05,
+          "ticks": 64,
+          "total_seconds": 0.201816564,
+          "trial": 0,
+          "wait_seconds": 0.201626909,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000170556,
+          "microsteps": 4,
+          "submit_seconds": 3.38e-05,
+          "ticks": 64,
+          "total_seconds": 0.189413635,
+          "trial": 1,
+          "wait_seconds": 0.189209279,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000724278,
+          "microsteps": 4,
+          "submit_seconds": 3.3481e-05,
+          "ticks": 64,
+          "total_seconds": 0.128500304,
+          "trial": 1,
+          "wait_seconds": 0.127742545,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000566752,
+          "microsteps": 4,
+          "submit_seconds": 3.5233e-05,
+          "ticks": 64,
+          "total_seconds": 0.129414157,
+          "trial": 2,
+          "wait_seconds": 0.128812172,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000238398,
+          "microsteps": 4,
+          "submit_seconds": 3.1497e-05,
+          "ticks": 64,
+          "total_seconds": 0.187268351,
+          "trial": 2,
+          "wait_seconds": 0.186998456,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.00019954,
+          "microsteps": 4,
+          "submit_seconds": 3.1047e-05,
+          "ticks": 64,
+          "total_seconds": 0.187686341,
+          "trial": 3,
+          "wait_seconds": 0.187455754,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000740763,
+          "microsteps": 4,
+          "submit_seconds": 3.4802e-05,
+          "ticks": 64,
+          "total_seconds": 0.128232481,
+          "trial": 3,
+          "wait_seconds": 0.127456916,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000594964,
+          "microsteps": 4,
+          "submit_seconds": 3.328e-05,
+          "ticks": 64,
+          "total_seconds": 0.127156204,
+          "trial": 4,
+          "wait_seconds": 0.12652796,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000211087,
+          "microsteps": 4,
+          "submit_seconds": 3.1417e-05,
+          "ticks": 64,
+          "total_seconds": 0.18922571500000002,
+          "trial": 4,
+          "wait_seconds": 0.188983211,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.00019262,
+          "microsteps": 4,
+          "submit_seconds": 3.0636e-05,
+          "ticks": 64,
+          "total_seconds": 0.186266283,
+          "trial": 5,
+          "wait_seconds": 0.186043027,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000728505,
+          "microsteps": 4,
+          "submit_seconds": 3.7927e-05,
+          "ticks": 64,
+          "total_seconds": 0.12492722199999999,
+          "trial": 5,
+          "wait_seconds": 0.12416079,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000734484,
+          "microsteps": 4,
+          "submit_seconds": 3.7436e-05,
+          "ticks": 64,
+          "total_seconds": 0.125630549,
+          "trial": 6,
+          "wait_seconds": 0.124858629,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000220621,
+          "microsteps": 4,
+          "submit_seconds": 3.5243e-05,
+          "ticks": 64,
+          "total_seconds": 0.189678231,
+          "trial": 6,
+          "wait_seconds": 0.189422367,
+          "width": 128
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000799192,
+          "microsteps": 4,
+          "submit_seconds": 5.98e-05,
+          "ticks": 64,
+          "total_seconds": 0.135381609,
+          "trial": 0,
+          "wait_seconds": 0.134522617,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000273922,
+          "microsteps": 4,
+          "submit_seconds": 4.7972e-05,
+          "ticks": 64,
+          "total_seconds": 0.200336183,
+          "trial": 0,
+          "wait_seconds": 0.200014289,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000200812,
+          "microsteps": 4,
+          "submit_seconds": 0.001232924,
+          "ticks": 64,
+          "total_seconds": 0.1909474,
+          "trial": 1,
+          "wait_seconds": 0.189513664,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000987184,
+          "microsteps": 4,
+          "submit_seconds": 2.4828e-05,
+          "ticks": 64,
+          "total_seconds": 0.126781595,
+          "trial": 1,
+          "wait_seconds": 0.125769583,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000793533,
+          "microsteps": 4,
+          "submit_seconds": 0.001450471,
+          "ticks": 64,
+          "total_seconds": 0.130704518,
+          "trial": 2,
+          "wait_seconds": 0.128460514,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000277277,
+          "microsteps": 4,
+          "submit_seconds": 2.3405e-05,
+          "ticks": 64,
+          "total_seconds": 0.191710727,
+          "trial": 2,
+          "wait_seconds": 0.191410045,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000248183,
+          "microsteps": 4,
+          "submit_seconds": 0.001242789,
+          "ticks": 64,
+          "total_seconds": 0.190258123,
+          "trial": 3,
+          "wait_seconds": 0.188767151,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.001222348,
+          "microsteps": 4,
+          "submit_seconds": 2.5889e-05,
+          "ticks": 64,
+          "total_seconds": 0.127274301,
+          "trial": 3,
+          "wait_seconds": 0.126026064,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000763217,
+          "microsteps": 4,
+          "submit_seconds": 0.001494617,
+          "ticks": 64,
+          "total_seconds": 0.13019505099999998,
+          "trial": 4,
+          "wait_seconds": 0.127937217,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000294082,
+          "microsteps": 4,
+          "submit_seconds": 2.2353e-05,
+          "ticks": 64,
+          "total_seconds": 0.192489628,
+          "trial": 4,
+          "wait_seconds": 0.192173193,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000205308,
+          "microsteps": 4,
+          "submit_seconds": 0.001145783,
+          "ticks": 64,
+          "total_seconds": 0.191830637,
+          "trial": 5,
+          "wait_seconds": 0.190479546,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000996007,
+          "microsteps": 4,
+          "submit_seconds": 2.5929e-05,
+          "ticks": 64,
+          "total_seconds": 0.130275912,
+          "trial": 5,
+          "wait_seconds": 0.129253976,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": true,
+          "encode_finish_seconds": 0.000747804,
+          "microsteps": 4,
+          "submit_seconds": 0.000654604,
+          "ticks": 64,
+          "total_seconds": 0.13459807,
+          "trial": 6,
+          "wait_seconds": 0.133195662,
+          "width": 256
+        },
+        {
+          "burn_in": 16,
+          "chunk_steps": 32,
+          "dynamic_baseline": false,
+          "encode_finish_seconds": 0.000277326,
+          "microsteps": 4,
+          "submit_seconds": 0.000874165,
+          "ticks": 64,
+          "total_seconds": 0.189284059,
+          "trial": 6,
+          "wait_seconds": 0.188132568,
+          "width": 256
+        }
+      ]
+    }
+  ]
+}
