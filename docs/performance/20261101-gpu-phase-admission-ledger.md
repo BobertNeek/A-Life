@@ -177,16 +177,30 @@ optional cache and keep original callbacks/errors ordered. Do not treat the
 staging backend's empty arena receipt, host 8 GiB limit or disk quota as GPU space.
 No generic future exact peak can be inferred from the first loaded window alone.
 
-`Device::generate_allocator_report()` in pinned wgpu 29.0.3 can help establish a
-same-device tracked baseline at that existing synchronized boundary. Vulkan and
-Dx12 support it; it may return None. Allocated bytes are live suballocations;
-reserved bytes include unused block capacity. This is distinct from disabled
-internal counters. It can expose allocations omitted by an empty staging arena
-receipt, but must not be added on top of the same manually counted current
-resources. Pending frees/reserved fragmentation, heap placement, untracked driver
-resources and other processes prevent equating it with free VRAM. It supports a
-declared requested-byte guard; it does not replace the future phase bound,
-reserve memory or prove physical admission. None means unknown, not zero.
+`Device::generate_allocator_report()` in pinned wgpu 29.0.3 is an optional
+diagnostic of the allocator's tracked resources. **Some does not prove complete
+application-buffer coverage or a conservative shared-device total.** In the
+pinned Dx12 backend, `generate_allocator_report` always wraps the allocator's
+report in Some, but the committed-buffer workaround bypasses that allocator:
+when suballocation is unsupported, buffers use `CreateCommittedResource` and
+`Allocation::none`. Those buffers are absent from the returned suballocation
+report. Source: wgpu-hal 29.0.3 `dx12/device.rs:2588` and
+`dx12/suballocation.rs:21–32,100–126,174–189,405–453`.
+This is not only a workaround-specific limitation: Dx12 also creates its
+unconditional 256 KiB zero buffer directly with `CreateCommittedResource`, outside
+the allocator report (`dx12/device.rs:72–113`; `dx12/mod.rs:512`).
+
+Backend and allocation-path coverage must be established before using such a
+report as the complete baseline; otherwise retain explicit source-accounted
+live/offline buffers for the requested-byte guard. A report may still help
+explain tracked allocations omitted by the empty staging arena receipt, without
+double-counting the same manually accounted resources. Allocated bytes describe
+tracked live suballocations; reserved bytes include unused block capacity. This
+is distinct from disabled internal counters. None means unknown, not zero;
+Some alone is insufficient. Pending frees, allocator fragmentation, heap
+placement, untracked resources and other processes also prevent equating the
+report with free VRAM. It neither reserves memory nor replaces the future phase
+bound or physical qualification.
 
 ## Collection bottleneck and held fusion scope
 

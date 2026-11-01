@@ -119,8 +119,20 @@
   },
   "allocator_report": {
     "api": "wgpu29.0.3 Device::generate_allocator_report -> Option<AllocatorReport>",
-    "use": "Same-device tracked baseline at existing completed boundary can include raw trainer/PPO/upload resources outside empty staging receipt. total_allocated/reserved have different meanings; account pending-free resources and do not double-count manual current totals. No feature-counters enable required.",
-    "not_guarantee": "Not freeVRAM, externaldevice/process allocation, guaranteed future block growth, physical placement, or aggregate reservation. Must not add current manual totals twice; None is unknown."
+    "use": "Optional diagnostic of tracked same-device allocator resources at an existing completed boundary. Complete backend/allocation-path coverage must be established before substituting it for the explicit source-accounted baseline; Some alone is not a conservative shared total. No feature-counters enable required.",
+    "not_guarantee": "Some does not prove complete application-buffer coverage; None is unknown. Not freeVRAM, external process/device allocation, guaranteed future block growth, physical placement, or aggregate reservation. Do not double-count manually accounted current resources.",
+    "dx12_incomplete_some_counterexample": {
+      "dependency": "wgpu-hal29.0.3, pinned cached primary source",
+      "report": "dx12/device.rs2588 returns Some(self.mem_allocator.generate_report())",
+      "bypass": "dx12/suballocation.rs174\u2013189 selects create_committed_buffer when private_caps.suballocation_supported=false;405\u2013453 calls CreateCommittedResource and wraps Allocation::none;21\u201332 describes committed resources outside suballocated heaps.",
+      "report_scope": "suballocation.rs100\u2013126 forwards gpu_allocator allocations/blocks/totals only.",
+      "policy_consequence": "Establish backend/allocation-path coverage or retain explicit source-accounted live/offline baseline; Some is not proof of conservative total.",
+      "sha256": {
+        "dx12/suballocation.rs": "3abbde338015079fe366c5b76bd155b2c41b31ea5b44b7a67ad42f2c43545239",
+        "dx12/device.rs": "77db671eb1302646d1ff9f257413858bc23038578ecc36e0fe3c3a26b0e696dc"
+      },
+      "unconditional_zero_buffer": "dx12/device.rs72\u2013113 directly creates ZERO_BUFFER_SIZE with CreateCommittedResource outside mem_allocator on all DX12 paths; dx12/mod.rs512 defines256KiB. Therefore incompleteness is not limited to the Intel committed-buffer workaround."
+    }
   },
   "collection_verifier": {
     "frequency": "first captured row EACHcohort and actual tick gaps only; not every captured row",
