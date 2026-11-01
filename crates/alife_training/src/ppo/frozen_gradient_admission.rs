@@ -148,9 +148,7 @@ mod tests {
             fn drop(&mut self) {
                 retire_catching_failure(
                     || {
-                        if self.1 {
-                            panic!("cleanup failure");
-                        }
+                        assert!(!self.1, "cleanup failure");
                         Err(())
                     },
                     || self.0.store(true, Ordering::Release),
