@@ -1,0 +1,472 @@
+{
+  "schema_version": 1,
+  "kind": "synthetic-software-vulkan-actor-rejection-value-rollback",
+  "identity": {
+    "source_commit": "76ad6c3ce6d13a569cf595436820903a38bf6860",
+    "source_tree": "52f7e94578ef29cfd81004498e1388ffd1eb3886",
+    "git_status": "",
+    "base": "b1fd11290c99ec0ca6aa457a466cca046831885e",
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "binary": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "bound_executable_copy": "/workspace/software-ppo-frozen-rollback/controller-tests",
+    "binary_sha256": "f1c5e307d816479032e4f569c2e427d96e204bec081755d63b5fc25b46bf6bc5",
+    "source_sha256": {
+      "crates/alife_training/src/trainer.rs": "3c4cb9a04350317646fecfad5a3b5f88abbb9311721c16ebb98de7759cf9f9c9",
+      "crates/alife_training/src/ppo.rs": "b2334d9a182cd1952b553b9c173aa8331d64da1e86f54927ed2adeef9abc7a2c",
+      "crates/alife_training/shaders/foundation_train.wgsl": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+      "crates/alife_training/shaders/foundation_ppo.wgsl": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5",
+      "crates/alife_training/tests/software_ppo_controller.rs": "fe7222c944275365b90860263f8530abb28e8fa8240e98abdcc427b555bb1cc5",
+      "crates/alife_training/tests/software_ppo_controller/rollback_qualification.rs": "60283d9e6c5d90dfa62e0045dfad24b03d7ea8eb2b2b64c4211c178a5acb8883",
+      "crates/alife_training/tests/software_ppo_controller/execution.rs": "5a6d03bd78411414b633465a15e432f91a299e30b882e469e8bd616007927355"
+    },
+    "libraries": [
+      {
+        "crate": "alife_storage",
+        "path": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/libalife_storage-a04f2ff0363c97e0.rlib",
+        "sha256": "0719b0f2f7576c62cc47df6d768093ef7f4c4f20c471fdaac46b7cb226fbf994",
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": []
+      },
+      {
+        "crate": "alife_gpu_backend",
+        "path": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/libalife_gpu_backend-550bc273d21676ba.rlib",
+        "sha256": "ba6c76c8933162e7f7a17aa07b88aca5109921af7669c7f9ab7d99cb52a6f574",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "gpu-tests",
+          "test-support",
+          "training-rollout"
+        ]
+      },
+      {
+        "crate": "alife_core",
+        "path": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/libalife_core-16c9870bd3cb6733.rlib",
+        "sha256": "0be900dcbf107ccbd7c9a48b8ba1d6b55beeecc1791cc4edf020e4240fbded8c",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": []
+      },
+      {
+        "crate": "alife_world",
+        "path": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/libalife_world-651f80eed48a4cf7.rlib",
+        "sha256": "7bce2f71a3911bea438dc955c9602fb0980e4b1816ced8f569992d23201493cb",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": []
+      },
+      {
+        "crate": "alife_training",
+        "path": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/libalife_training-615b3358bc954f0d.rlib",
+        "sha256": "9a4ceaedc9de1b95a188903069ca75af9b18c33500c9a7e72bf98aa0f5ec380b",
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "gpu-tests"
+        ]
+      },
+      {
+        "crate": "alife_runtime",
+        "path": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/libalife_runtime-e39c7f6dc78fcdb4.rlib",
+        "sha256": "d1c7dac2c96495b3ac8630547bb2f0c70eb7c6cf2204dd9efba75e14f64823f6",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "gpu-tests",
+          "training-rollout"
+        ]
+      }
+    ],
+    "command": [
+      "/workspace/software-ppo-frozen-rollback/controller-tests",
+      "rollback_qualification::actor_gpu_rejection_restores_value_update_for_original_and_cache",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "selector": "ALIFE_DISPATCH_REQUIRE_HARDWARE=0 (explicit software Vulkan)",
+    "capture_directory": "/workspace/software-ppo-frozen-rollback",
+    "profile_label": "test [unoptimized]; correctness only; no timing claim",
+    "scope": "contract-valid synthetic fault; no real checkpoint input"
+  },
+  "compiler_artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///workspace/A-Life-frozen-gradient-rollback/crates/alife_training#0.1.0",
+    "manifest_path": "/workspace/A-Life-frozen-gradient-rollback/crates/alife_training/Cargo.toml",
+    "target": {
+      "kind": [
+        "test"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "software_ppo_controller",
+      "src_path": "/workspace/A-Life-frozen-gradient-rollback/crates/alife_training/tests/software_ppo_controller.rs",
+      "edition": "2021",
+      "doc": false,
+      "doctest": false,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    },
+    "features": [
+      "default",
+      "gpu-tests"
+    ],
+    "filenames": [
+      "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71"
+    ],
+    "executable": "/workspace/A-Life-frozen-gradient-rollback/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "fresh": false
+  },
+  "run": {
+    "exit_code": 0,
+    "binary_sha256": "f1c5e307d816479032e4f569c2e427d96e204bec081755d63b5fc25b46bf6bc5",
+    "source_commit": "76ad6c3ce6d13a569cf595436820903a38bf6860",
+    "command": [
+      "/workspace/software-ppo-frozen-rollback/controller-tests",
+      "rollback_qualification::actor_gpu_rejection_restores_value_update_for_original_and_cache",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ]
+  },
+  "actual_adapter": {
+    "name": "llvmpipe (LLVM 19.1.7, 256 bits)",
+    "device_type": "Cpu",
+    "backend": "Vulkan",
+    "driver": "llvmpipe",
+    "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)"
+  },
+  "observed": {
+    "fault_error": "MalformedReadback",
+    "loader_order_each_path": [
+      0,
+      1,
+      0,
+      1
+    ],
+    "fault_actor_gradient_norm_display": "0.12669115",
+    "fault_actor_gradient_norm_f32_bits": "0x3e01bb53",
+    "fault_actor_validation_flag": 0,
+    "fault_value_preflight": 1,
+    "positive_actor_validation_flag": 1,
+    "positive_changed_value_parameter_m_v_coordinates": [
+      2049,
+      2049,
+      2049
+    ],
+    "fault_actor_and_value_optimizer_steps": [
+      1,
+      1
+    ],
+    "positive_actor_and_value_optimizer_steps": [
+      2,
+      2
+    ],
+    "fault_last_policy_version_u32_words": [
+      5,
+      0
+    ],
+    "positive_last_policy_version_u32_words": [
+      6,
+      0
+    ],
+    "persistent_actor_and_value_equal_pre_fault_call": true,
+    "all_five_posterror_value_planes_exact_normal_cache": true
+  },
+  "comparison": {
+    "raw_sha256": "cf49307625762cca6b249d9031d5fd3c3ab9c92bb81a12428742f33f1d28779a",
+    "raw_bytes": 7933463,
+    "sections": {
+      "fault/cached=false": {
+        "first_moment": {
+          "words": 32768,
+          "sha256_le_u32": "7d32ec902279ed01e3ea66d3f8996d64a5d752d95ee8c327afb3941acdf2901e"
+        },
+        "last_policy_version": {
+          "words": 2,
+          "sha256_le_u32": "f13ee6ed54ea2aae9fc49a9faeb5da6e8ddef0e12ed5d30d35a624ae813e0485"
+        },
+        "logical_outputs": {
+          "words": 1444,
+          "sha256_le_u32": "3bc72a5c5bf6364b64f0b51e7e5b658d1ab5de2e3af0f75619ceeb5c92fa1868"
+        },
+        "logical_state": {
+          "words": 129024,
+          "sha256_le_u32": "55fdc7d51bb15dc69880813081ec97f4ce7e5ee999fca756d905c9330b9b2e13"
+        },
+        "objective_adjoints": {
+          "words": 128,
+          "sha256_le_u32": "cfe101a431beef2b8a21a2abf99ec7e778c1050816bb64b7c9ae6b02f3730d12"
+        },
+        "objective_metrics": {
+          "words": 32,
+          "sha256_le_u32": "3fd5f830d182fb88a4f1c599dfc71d59921c91d9f648fb7ffc4935408b540946"
+        },
+        "objective_preflight": {
+          "words": 1,
+          "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+        },
+        "objective_values": {
+          "words": 4,
+          "sha256_le_u32": "9fffd8a75199c73c16d41855af9def251da98df10479252244d69e39492a32f7"
+        },
+        "optimizer_steps": {
+          "words": 2,
+          "sha256_le_u32": "64ed86b909d6d0502b64b28db0ea1272ffb358e20e9b1d88b63ccb07fa900cf5"
+        },
+        "second_moment": {
+          "words": 32768,
+          "sha256_le_u32": "882299ef9fe1035e11a2e76b56b4f9091abafc1c00ea360deee18ba9e2d5d9df"
+        },
+        "update_ages": {
+          "words": 32768,
+          "sha256_le_u32": "bedafe5376b25617777b52e78986a9e9d47622061eafa8c6d6c5b6a1209444fa"
+        },
+        "value_all_five_planes": {
+          "words": 10245,
+          "sha256_le_u32": "ed3cef17988f40c04fc3722ae788aad525de4901a30d0c458c2a61df709859b4"
+        },
+        "value_parameters_moments": {
+          "words": 6147,
+          "sha256_le_u32": "d0a0d7fee55a1e9912508f56760dfd6e37173da91e4a3a1411e66024def953cd"
+        },
+        "weights": {
+          "words": 32768,
+          "sha256_le_u32": "7a6edc6cdd7b1526fea1783c7464717b0632d2104d6690d2356052d447694bf7"
+        }
+      },
+      "fault/cached=true": {
+        "first_moment": {
+          "words": 32768,
+          "sha256_le_u32": "7d32ec902279ed01e3ea66d3f8996d64a5d752d95ee8c327afb3941acdf2901e"
+        },
+        "last_policy_version": {
+          "words": 2,
+          "sha256_le_u32": "f13ee6ed54ea2aae9fc49a9faeb5da6e8ddef0e12ed5d30d35a624ae813e0485"
+        },
+        "logical_outputs": {
+          "words": 1444,
+          "sha256_le_u32": "3bc72a5c5bf6364b64f0b51e7e5b658d1ab5de2e3af0f75619ceeb5c92fa1868"
+        },
+        "logical_state": {
+          "words": 129024,
+          "sha256_le_u32": "55fdc7d51bb15dc69880813081ec97f4ce7e5ee999fca756d905c9330b9b2e13"
+        },
+        "objective_adjoints": {
+          "words": 128,
+          "sha256_le_u32": "cfe101a431beef2b8a21a2abf99ec7e778c1050816bb64b7c9ae6b02f3730d12"
+        },
+        "objective_metrics": {
+          "words": 32,
+          "sha256_le_u32": "3fd5f830d182fb88a4f1c599dfc71d59921c91d9f648fb7ffc4935408b540946"
+        },
+        "objective_preflight": {
+          "words": 1,
+          "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+        },
+        "objective_values": {
+          "words": 4,
+          "sha256_le_u32": "9fffd8a75199c73c16d41855af9def251da98df10479252244d69e39492a32f7"
+        },
+        "optimizer_steps": {
+          "words": 2,
+          "sha256_le_u32": "64ed86b909d6d0502b64b28db0ea1272ffb358e20e9b1d88b63ccb07fa900cf5"
+        },
+        "second_moment": {
+          "words": 32768,
+          "sha256_le_u32": "882299ef9fe1035e11a2e76b56b4f9091abafc1c00ea360deee18ba9e2d5d9df"
+        },
+        "update_ages": {
+          "words": 32768,
+          "sha256_le_u32": "bedafe5376b25617777b52e78986a9e9d47622061eafa8c6d6c5b6a1209444fa"
+        },
+        "value_all_five_planes": {
+          "words": 10245,
+          "sha256_le_u32": "ed3cef17988f40c04fc3722ae788aad525de4901a30d0c458c2a61df709859b4"
+        },
+        "value_parameters_moments": {
+          "words": 6147,
+          "sha256_le_u32": "d0a0d7fee55a1e9912508f56760dfd6e37173da91e4a3a1411e66024def953cd"
+        },
+        "weights": {
+          "words": 32768,
+          "sha256_le_u32": "7a6edc6cdd7b1526fea1783c7464717b0632d2104d6690d2356052d447694bf7"
+        }
+      },
+      "positive/cached=false": {
+        "first_moment": {
+          "words": 32768,
+          "sha256_le_u32": "8aa4cf8773138f0ffc4a5049308ffdab850c977fda5d266dcd5d87083d0897d7"
+        },
+        "last_policy_version": {
+          "words": 2,
+          "sha256_le_u32": "23d7f42b1cdc1f0d492ebd756ed0fe8003995dda554d99418d47a81813650207"
+        },
+        "logical_outputs": {
+          "words": 1444,
+          "sha256_le_u32": "466192a6f6391bf8f66a414e1f7ded0094ff6ff8e30d242d9ad4d93ef5182d2c"
+        },
+        "logical_state": {
+          "words": 129024,
+          "sha256_le_u32": "55fdc7d51bb15dc69880813081ec97f4ce7e5ee999fca756d905c9330b9b2e13"
+        },
+        "objective_adjoints": {
+          "words": 128,
+          "sha256_le_u32": "cfe101a431beef2b8a21a2abf99ec7e778c1050816bb64b7c9ae6b02f3730d12"
+        },
+        "objective_metrics": {
+          "words": 32,
+          "sha256_le_u32": "3fd5f830d182fb88a4f1c599dfc71d59921c91d9f648fb7ffc4935408b540946"
+        },
+        "objective_preflight": {
+          "words": 1,
+          "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+        },
+        "objective_values": {
+          "words": 4,
+          "sha256_le_u32": "9fffd8a75199c73c16d41855af9def251da98df10479252244d69e39492a32f7"
+        },
+        "optimizer_steps": {
+          "words": 2,
+          "sha256_le_u32": "41d805e613efbe1acb36eaa0127a35da4a1faa1ac97985d078e50d1fd96055fd"
+        },
+        "second_moment": {
+          "words": 32768,
+          "sha256_le_u32": "3e3d5c686a0b30e08aff0fe5159c9207acb9836e151bc9f46c18b5d341be9c2e"
+        },
+        "update_ages": {
+          "words": 32768,
+          "sha256_le_u32": "8a7a90a6756941b5745ffcbbba8b92ae45b27b3895ef1fcead81c0677453cc4e"
+        },
+        "value_all_five_planes": {
+          "words": 10245,
+          "sha256_le_u32": "1fe46b7a2d622bb6585d1e12c2107fe1abf1970c5f6240dd273195139c9c0478"
+        },
+        "value_parameters_moments": {
+          "words": 6147,
+          "sha256_le_u32": "054ae4de8bace1d9b867d5dcf2ad397a8c6f46a37ccff86db383b0b6bbe4f062"
+        },
+        "weights": {
+          "words": 32768,
+          "sha256_le_u32": "65c74d39d022bc4358d8011d826c7813bf1daa7f58a10465855b37b77c1864e1"
+        }
+      },
+      "positive/cached=true": {
+        "first_moment": {
+          "words": 32768,
+          "sha256_le_u32": "8aa4cf8773138f0ffc4a5049308ffdab850c977fda5d266dcd5d87083d0897d7"
+        },
+        "last_policy_version": {
+          "words": 2,
+          "sha256_le_u32": "23d7f42b1cdc1f0d492ebd756ed0fe8003995dda554d99418d47a81813650207"
+        },
+        "logical_outputs": {
+          "words": 1444,
+          "sha256_le_u32": "466192a6f6391bf8f66a414e1f7ded0094ff6ff8e30d242d9ad4d93ef5182d2c"
+        },
+        "logical_state": {
+          "words": 129024,
+          "sha256_le_u32": "55fdc7d51bb15dc69880813081ec97f4ce7e5ee999fca756d905c9330b9b2e13"
+        },
+        "objective_adjoints": {
+          "words": 128,
+          "sha256_le_u32": "cfe101a431beef2b8a21a2abf99ec7e778c1050816bb64b7c9ae6b02f3730d12"
+        },
+        "objective_metrics": {
+          "words": 32,
+          "sha256_le_u32": "3fd5f830d182fb88a4f1c599dfc71d59921c91d9f648fb7ffc4935408b540946"
+        },
+        "objective_preflight": {
+          "words": 1,
+          "sha256_le_u32": "e00e5eb9444182f352323374ef4e08ebcb784725fdd4fd612d7730540b3e0c8c"
+        },
+        "objective_values": {
+          "words": 4,
+          "sha256_le_u32": "9fffd8a75199c73c16d41855af9def251da98df10479252244d69e39492a32f7"
+        },
+        "optimizer_steps": {
+          "words": 2,
+          "sha256_le_u32": "41d805e613efbe1acb36eaa0127a35da4a1faa1ac97985d078e50d1fd96055fd"
+        },
+        "second_moment": {
+          "words": 32768,
+          "sha256_le_u32": "3e3d5c686a0b30e08aff0fe5159c9207acb9836e151bc9f46c18b5d341be9c2e"
+        },
+        "update_ages": {
+          "words": 32768,
+          "sha256_le_u32": "8a7a90a6756941b5745ffcbbba8b92ae45b27b3895ef1fcead81c0677453cc4e"
+        },
+        "value_all_five_planes": {
+          "words": 10245,
+          "sha256_le_u32": "1fe46b7a2d622bb6585d1e12c2107fe1abf1970c5f6240dd273195139c9c0478"
+        },
+        "value_parameters_moments": {
+          "words": 6147,
+          "sha256_le_u32": "054ae4de8bace1d9b867d5dcf2ad397a8c6f46a37ccff86db383b0b6bbe4f062"
+        },
+        "weights": {
+          "words": 32768,
+          "sha256_le_u32": "65c74d39d022bc4358d8011d826c7813bf1daa7f58a10465855b37b77c1864e1"
+        }
+      }
+    },
+    "total_u32_words": 1112404,
+    "normal_cache_exact_per_path": true,
+    "hash_recipe": "SHA256 of each category little-endian u32 words; raw JSON SHA256 separately",
+    "positive_normal_equals_cache_words": 278101,
+    "fault_normal_equals_cache_words": 278101
+  },
+  "qualification_limits": [
+    "Deliberately synthetic checkpoint-admitted moment fault, not naturally learned history.",
+    "Actual CPU Vulkan execution only; no physical GPU or performance qualification.",
+    "Transient value writes are not sampled: matched positive controls observe accepted value updates, and source command ordering plus final actor rejection identifies the rollback path.",
+    "Raw private actor gradient/backward-tape buffers are not captured.",
+    "Value gradient scratch planes compare across post-error paths, not against pre-cohort state."
+  ],
+  "test_stdout": "\nrunning 1 test\ntest rollback_qualification::actor_gpu_rejection_restores_value_update_for_original_and_cache ... actual_controller_execution=software_vulkan_test adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nactor_gpu_rollback cached=false; error=MalformedReadback; loads=[0, 1, 0, 1]; norm=0.12669115; actor_valid=0; value_preflight=1; positive_value_planes_changed=3; actor_and_persistent_value_unchanged=true\nactor_gpu_rollback cached=true; error=MalformedReadback; loads=[0, 1, 0, 1]; norm=0.12669115; actor_valid=0; value_preflight=1; positive_value_planes_changed=3; actor_and_persistent_value_unchanged=true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 4.80s\n\n",
+  "build_log": "   Compiling alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_core)\n   Compiling alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_storage)\n   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_gpu_backend)\n   Compiling alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_world)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_training)\n    Finished `test` profile [unoptimized] target(s) in 1m 44s\n",
+  "clippy_log": "    Checking alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_core)\n    Checking alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_storage)\n    Checking alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_gpu_backend)\n    Checking alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_world)\n    Checking alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_runtime)\n    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-rollback/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 18.27s\n"
+}
