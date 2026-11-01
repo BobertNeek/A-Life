@@ -1311,11 +1311,13 @@ struct FrozenGradientCache {
 #[cfg(feature = "gpu-tests")]
 impl Drop for FrozenGradientCache {
     fn drop(&mut self) {
+        use std::io::Write as _;
         let pending = self.pending_work;
         let retired = frozen_gradient_admission::retire_catching_failure(
             || {
                 if pending {
-                    eprintln!(
+                    let _ = writeln!(
+                        std::io::stderr().lock(),
                         "frozen_gradient_cache_cleanup_wait requested=true bytes={}",
                         self.buffer.size()
                     );
@@ -1335,7 +1337,8 @@ impl Drop for FrozenGradientCache {
             // Preserve the original Result or unwind. Subsequent live/offline
             // work sees the same monotonic failed-device latch and cannot
             // continue fresh after an unproved retirement.
-            eprintln!(
+            let _ =
+                writeln!(std::io::stderr().lock(),
                 "frozen_gradient_cache_cleanup_failed device_failed=true retirement_unknown=true"
             );
         }
@@ -1612,8 +1615,10 @@ where
                         offset + cache.actor_bytes + 4,
                         cache.value_bytes,
                     );
-                    submit(trainer.session(), encoder)?;
                     cache.pending_work = true;
+                    // Queue::submit may enqueue this work and then run a user
+                    // callback which panics before returning to this frame.
+                    submit(trainer.session(), encoder)?;
                     cache.mean_kl.push(ppo_mean_kl(&metrics)?);
                     if let Some(stats) = cache_stats.as_deref_mut() {
                         stats.raw_cached_windows += 1;
