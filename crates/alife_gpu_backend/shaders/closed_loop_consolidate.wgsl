@@ -127,6 +127,96 @@ fn sleep_transaction_valid(
     && consolidate_frame_span_within(header.replay_sample_offset,header.replay_sample_count);
 }
 
+fn sleep_initializer_phenotype_matches(request_base:u32, brain_slot_index:u32) -> bool {
+  for (var index=0u; index<8u; index+=1u) {
+    if (frame_payload_words[request_base+4u+index]
+        != phenotype_identities[brain_slot_index].phenotype_hash[index]) { return false; }
+  }
+  return true;
+}
+
+// Initializer-only compiler-pressure experiment. Bounds are checked by the
+// unchanged caller before any request load. Keep every legacy predicate in its
+// original short-circuit order; do not treat host admission as shader validation.
+fn sleep_initializer_valid(
+  header:GpuSleepHeader,
+  brain:GpuBrainSlotRecord,
+  extension:GpuBrainSlotExtensionRecord,
+  learning:GpuSlotLearningStateRecord,
+  request_base:u32,
+) -> bool {
+  if (extension.schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION) { return false; }
+  if (extension.sleep_parameter_offset == 0xffffffffu) { return false; }
+  if (!consolidate_immutable_plan_span_within(extension.sleep_parameter_offset,8u)) { return false; }
+  if (brain.recurrent_synapse_count > brain.synapse_count) { return false; }
+  if (learning.replay_event_capacity > 0xffffffffu / 28u) { return false; }
+  if (learning.replay_span_count > 0xffffffffu / 4u) { return false; }
+  if (header.replay_event_count > 0xffffffffu / 28u) { return false; }
+  if (header.replay_span_count > 0xffffffffu / 4u) { return false; }
+  if (learning.replay_span_count == 0u) { return false; }
+  if (learning.replay_event_capacity > 0xffffffffu / learning.replay_span_count) { return false; }
+  let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
+  if (!(header.schema_version == GPU_SLEEP_SCHEMA_VERSION)) { return false; }
+  if (!(header.flags == 0u)) { return false; }
+  if (!(header.reserved == 0u)) { return false; }
+  if (!(header.class_id == brain.class_id)) { return false; }
+  if (!(header.slot == brain.slot)) { return false; }
+  if (!(header.slot_generation == brain.slot_generation)) { return false; }
+  if (!(header.brain_slot_index == brain.slot)) { return false; }
+  if (!(header.synapse_count == brain.synapse_count)) { return false; }
+  if (!(header.replay_event_count <= frame_payload_words[request_base+32u])) { return false; }
+  if (!(header.replay_sample_count <= frame_payload_words[request_base+33u])) { return false; }
+  if (!(header.replay_span_count == learning.replay_span_count)) { return false; }
+  if (!(frame_payload_words[request_base] == GPU_SLEEP_SCHEMA_VERSION)) { return false; }
+  if (!(frame_payload_words[request_base+1u] == 0u)) { return false; }
+  if (!(frame_payload_words[request_base+2u] == header.cycle_id_lo)) { return false; }
+  if (!(frame_payload_words[request_base+3u] == header.cycle_id_hi)) { return false; }
+  if (!(frame_payload_words[request_base+12u] == learning.active_weight_generation_lo)) { return false; }
+  if (!(frame_payload_words[request_base+13u] == learning.active_weight_generation_hi)) { return false; }
+  if (!(sleep_initializer_phenotype_matches(request_base,header.brain_slot_index))) { return false; }
+  if (!(frame_payload_words[request_base+32u] == learning.replay_event_capacity)) { return false; }
+  if (!(frame_payload_words[request_base+33u] == learning.replay_sample_capacity)) { return false; }
+  if (!(frame_payload_words[request_base+42u] == 0u)) { return false; }
+  if (!(frame_payload_words[request_base+43u] == 0u)) { return false; }
+  if (!(parameters.schema_version == GPU_SLEEP_SCHEMA_VERSION)) { return false; }
+  if (!(consolidate_finite(parameters.staging_rate))) { return false; }
+  if (!(consolidate_finite(parameters.weight_limit))) { return false; }
+  if (!(consolidate_finite(parameters.fast_decay_rate))) { return false; }
+  if (!(parameters.staging_rate > 0.0)) { return false; }
+  if (!(parameters.staging_rate <= 1.0)) { return false; }
+  if (!(parameters.weight_limit > 0.0)) { return false; }
+  if (!(parameters.weight_limit <= 8.0)) { return false; }
+  if (!(parameters.fast_decay_rate >= 0.0)) { return false; }
+  if (!(parameters.fast_decay_rate <= 1.0)) { return false; }
+  if (!(parameters.eligibility_reset_policy == 1u)) { return false; }
+  if (!(parameters.replay_consume_policy == 1u)) { return false; }
+  if (!(all(parameters.reserved == vec2<u32>(0u)))) { return false; }
+  if (!(learning.schema_version == GPU_LEARNING_SCHEMA_VERSION)) { return false; }
+  if (!(learning.active_weight_bank <= 1u)) { return false; }
+  if (!(learning.active_eligibility_bank <= 1u)) { return false; }
+  if (!(learning.pending_valid == 0u)) { return false; }
+  if (!(learning.replay_cursor < learning.replay_event_capacity)) { return false; }
+  if (!(learning.replay_event_count == header.replay_event_count)) { return false; }
+  if (!(state_span_within(brain.lifetime_weight_offset,brain.synapse_count))) { return false; }
+  if (!(state_span_within(brain.fast_weight_offset,brain.synapse_count))) { return false; }
+  if (!(state_span_within(extension.lifetime_bank_1_offset,brain.synapse_count))) { return false; }
+  if (!(state_span_within(extension.fast_bank_1_offset,brain.synapse_count))) { return false; }
+  if (!(state_span_within(brain.recurrent_eligibility_offset,brain.recurrent_synapse_count))) { return false; }
+  if (!(state_span_within(extension.recurrent_eligibility_bank_1_offset,brain.recurrent_synapse_count))) { return false; }
+  if (!(state_span_within(brain.decoder_eligibility_offset,brain.synapse_count-brain.recurrent_synapse_count))) { return false; }
+  if (!(state_span_within(extension.decoder_eligibility_bank_1_offset,brain.synapse_count-brain.recurrent_synapse_count))) { return false; }
+  if (!(state_span_within(learning.replay_event_rows_offset,learning.replay_event_capacity*28u))) { return false; }
+  if (!(state_span_within(learning.replay_sample_offset,learning.replay_sample_capacity))) { return false; }
+  if (!(state_span_within(learning.replay_span_offset,learning.replay_span_count*4u))) { return false; }
+  if (!(state_span_within(extension.pending_eligibility_offset,SLEEP_PENDING_ELIGIBILITY_WORDS))) { return false; }
+  if (!(consolidate_frame_span_within(header.request_offset,44u))) { return false; }
+  if (!(consolidate_frame_span_within(header.replay_event_offset,header.replay_event_count*28u))) { return false; }
+  if (!(consolidate_frame_span_within(header.replay_span_offset,header.replay_span_count*4u))) { return false; }
+  if (!(consolidate_frame_span_within(header.replay_sample_offset,header.replay_sample_count))) { return false; }
+  return true;
+}
+
+
 @compute @workgroup_size(1)
 fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
   let header = load_sleep_header(gid.y*20u);
@@ -149,15 +239,18 @@ fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
     consolidate_reject(completion); return;
   }
   let learning = load_slot_learning_state(extension);
-  let request = load_consolidation_request(header.request_offset);
-  if (!sleep_transaction_valid(header,brain,extension,learning,request)
-      || request.expected_output_generation_lo == 0u && request.expected_output_generation_hi == 0u) {
+  if (!sleep_initializer_valid(header,brain,extension,learning,header.request_offset)) {
+    consolidate_reject(completion); return;
+  }
+  let expected_output_generation_lo = frame_payload_words[header.request_offset+14u];
+  let expected_output_generation_hi = frame_payload_words[header.request_offset+15u];
+  if (expected_output_generation_lo == 0u && expected_output_generation_hi == 0u) {
     consolidate_reject(completion); return;
   }
   store_state_u32(completion+4u,learning.active_weight_generation_lo);
   store_state_u32(completion+5u,learning.active_weight_generation_hi);
-  store_state_u32(completion+6u,request.expected_output_generation_lo);
-  store_state_u32(completion+7u,request.expected_output_generation_hi);
+  store_state_u32(completion+6u,expected_output_generation_lo);
+  store_state_u32(completion+7u,expected_output_generation_hi);
   store_state_u32(completion+8u,learning.active_weight_bank^1u);
   store_state_u32(completion+9u,header.replay_span_count);
   store_state_u32(completion+12u,header.job_id_lo);
