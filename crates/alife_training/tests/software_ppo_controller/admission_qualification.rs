@@ -225,7 +225,7 @@ fn requested_admission_accepts_refuses_and_drops_before_larger_replay() {
     assert_actor_equal(&tiny_actor, &tiny.checkpoint().unwrap());
     assert_value_equal(&tiny_value, &tiny_state.checkpoint(tiny.session()).unwrap());
     eprintln!(
-        "requested_admission mode=tiny_profile_refusal; actual_physical_ceiling=1; stats={stats:?}; loads={loads:?}; accepted_actor_and_value_exact=true"
+        "requested_admission mode=tiny_profile_refusal; declared_profile_ceiling=1; stats={stats:?}; loads={loads:?}; accepted_actor_and_value_exact=true"
     );
     artifacts.insert(
         "tiny_refused".into(),

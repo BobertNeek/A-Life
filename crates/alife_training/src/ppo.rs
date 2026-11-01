@@ -1280,7 +1280,8 @@ pub struct FrozenGradientCacheStats {
     pub admission: Option<FrozenGradientAdmissionStats>,
 }
 
-/// Actual optional admission observation, not free VRAM or a reservation.
+/// Initial cache-allocation decision, not free VRAM or a reservation. A later
+/// geometry/objective refusal may discard the cache after `admitted` was true.
 /// Missing proof remains unknown rather than becoming a zero-byte estimate.
 #[cfg(feature = "gpu-tests")]
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize)]
