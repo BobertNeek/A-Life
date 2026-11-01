@@ -158,6 +158,14 @@ fn run_mode(
         (result, start.elapsed())
     };
     // Additional proof readbacks, checkpoints, comparisons and reports are outside the clock.
+    if cached {
+        use std::io::Write as _;
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "frozen_gradient_admission_snapshot={:?}",
+            stats.admission
+        );
+    }
     let receipt = result.unwrap();
     assert_eq!(load_count, LOADS.len());
     assert_eq!(loads, LOADS);
