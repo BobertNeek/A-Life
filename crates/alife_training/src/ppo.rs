@@ -1299,10 +1299,47 @@ mod frozen_gradient_admission;
 #[cfg(feature = "gpu-tests")]
 struct FrozenGradientCache {
     buffer: wgpu::Buffer,
+    device: wgpu::Device,
+    failure_handle: alife_gpu_backend::closed_loop_runtime::GpuDeviceFailureHandle,
+    pending_work: bool,
     stride: u64,
     actor_bytes: u64,
     value_bytes: u64,
     mean_kl: Vec<f32>,
+}
+
+#[cfg(feature = "gpu-tests")]
+impl Drop for FrozenGradientCache {
+    fn drop(&mut self) {
+        let pending = self.pending_work;
+        let retired = frozen_gradient_admission::retire_catching_failure(
+            || {
+                if pending {
+                    eprintln!(
+                        "frozen_gradient_cache_cleanup_wait requested=true bytes={}",
+                        self.buffer.size()
+                    );
+                    self.device.poll(wgpu::PollType::Wait {
+                        submission_index: None,
+                        timeout: None,
+                    })?;
+                }
+                // Host drop alone does not retire submitted references. This
+                // explicit destruction follows completion, including opt-out.
+                self.buffer.destroy();
+                Ok::<(), wgpu::PollError>(())
+            },
+            || self.failure_handle.mark_failed(),
+        );
+        if !retired {
+            // Preserve the original Result or unwind. Subsequent live/offline
+            // work sees the same monotonic failed-device latch and cannot
+            // continue fresh after an unproved retirement.
+            eprintln!(
+                "frozen_gradient_cache_cleanup_failed device_failed=true retirement_unknown=true"
+            );
+        }
+    }
 }
 
 #[cfg(feature = "gpu-tests")]
@@ -1345,6 +1382,9 @@ impl FrozenGradientCache {
                 usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }),
+            device: device.clone(),
+            failure_handle: trainer.session().backend().device_failure_handle_for_test(),
+            pending_work: false,
             stride,
             actor_bytes,
             value_bytes,
@@ -1365,6 +1405,8 @@ impl FrozenGradientCache {
 /// allocations: loaders, window Borrow/Drop implementations and other threads
 /// must not allocate or import resources on that device. Actual continuous
 /// sealed loaders and owned/Arc fixture handles are CPU/storage-only.
+/// A retirement failure marks the shared device failed; retained raw device or
+/// queue handles must not be reused after that failure.
 #[cfg(feature = "gpu-tests")]
 #[allow(clippy::too_many_arguments)]
 pub fn train_recurrent_ppo_cohort_with_frozen_gradients_for_test<F, W>(
@@ -1402,6 +1444,8 @@ where
 /// raw/external imports or other same-device allocations, including synchronous
 /// loader callbacks and custom window Borrow/Drop implementations. Other backends or
 /// unavailable/insufficient proof retain the original controller path.
+/// A genuine retirement failure instead fail-stops the shared device; callers
+/// must not reuse retained raw device/queue handles afterward.
 #[cfg(feature = "gpu-tests")]
 #[allow(clippy::too_many_arguments)]
 pub fn train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test<F, W>(
@@ -1569,6 +1613,7 @@ where
                         cache.value_bytes,
                     );
                     submit(trainer.session(), encoder)?;
+                    cache.pending_work = true;
                     cache.mean_kl.push(ppo_mean_kl(&metrics)?);
                     if let Some(stats) = cache_stats.as_deref_mut() {
                         stats.raw_cached_windows += 1;
@@ -1665,7 +1710,10 @@ where
                     )?;
                     #[cfg(feature = "gpu-tests")]
                     if cached_mean_kl.is_some() {
-                        let cache = frozen_cache.as_ref().ok_or_else(invalid)?;
+                        let cache = frozen_cache.as_mut().ok_or_else(invalid)?;
+                        // The helper may submit and then reject its receipt.
+                        // Clear only after its existing successful status wait.
+                        cache.pending_work = true;
                         trainer.accumulate_cached_replay_gradients(
                             encoder,
                             &objective.output,
@@ -1673,6 +1721,7 @@ where
                             &cache.buffer,
                             index as u64 * cache.stride,
                         )?;
+                        cache.pending_work = false;
                         if let Some(stats) = cache_stats.as_deref_mut() {
                             stats.reused_windows += 1;
                         }

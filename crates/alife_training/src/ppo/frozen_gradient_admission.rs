@@ -11,6 +11,22 @@
 //! allocator growth and driver/external memory remain separate concerns.
 use super::*;
 
+// Device::poll may return PollError or panic for a fatal HAL DeviceError.
+// Cleanup must fail-stop the shared device without replacing an original
+// loader/validation Result or causing a second escaping panic during unwind.
+pub(super) fn retire_catching_failure<E>(
+    retire: impl FnOnce() -> Result<(), E>,
+    mark_failed: impl FnOnce(),
+) -> bool {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(retire)) {
+        Ok(Ok(())) => true,
+        Ok(Err(_)) | Err(_) => {
+            mark_failed();
+            false
+        }
+    }
+}
+
 pub(super) fn window_fits(window: &PpoTrainingWindow, max_ticks: usize) -> bool {
     (1..=crate::MAX_TRAINING_SEQUENCE_TICKS).contains(&max_ticks)
         && window.sequence.ticks.len() <= max_ticks
@@ -122,5 +138,41 @@ mod tests {
         assert!(!fits_policy(100, 201, 300));
         assert!(!fits_policy(u64::MAX, 1, u64::MAX));
         assert!(!fits_policy(0, 0, 0));
+    }
+
+    #[test]
+    fn cleanup_failure_marks_failed_without_replacing_result_or_unwind() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        struct Cleanup<'a>(&'a AtomicBool, bool);
+        impl Drop for Cleanup<'_> {
+            fn drop(&mut self) {
+                retire_catching_failure(
+                    || {
+                        if self.1 {
+                            panic!("cleanup failure");
+                        }
+                        Err(())
+                    },
+                    || self.0.store(true, Ordering::Release),
+                );
+            }
+        }
+        for cleanup_panics in [false, true] {
+            let failed = AtomicBool::new(false);
+            let result: Result<(), &str> = {
+                let _cleanup = Cleanup(&failed, cleanup_panics);
+                Err("original loader error")
+            };
+            assert_eq!(result, Err("original loader error"));
+            assert!(failed.load(Ordering::Acquire));
+            let failed = AtomicBool::new(false);
+            let original = std::panic::catch_unwind(|| {
+                let _cleanup = Cleanup(&failed, cleanup_panics);
+                panic!("original unwind");
+            })
+            .unwrap_err();
+            assert_eq!(original.downcast_ref::<&str>(), Some(&"original unwind"));
+            assert!(failed.load(Ordering::Acquire));
+        }
     }
 }
