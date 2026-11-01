@@ -770,7 +770,7 @@ fn run_owned(
             load,
             config,
             policy,
-            replay_tick_bound(&windows),
+            replay_tick_bound(windows),
             &mut stats,
         )
     } else {

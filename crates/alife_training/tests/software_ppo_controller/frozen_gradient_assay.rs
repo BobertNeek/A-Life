@@ -140,7 +140,7 @@ fn run_mode(
             load,
             config,
             POLICY,
-            replay_tick_bound(&windows),
+            replay_tick_bound(windows),
             &mut stats,
         );
         (result, start.elapsed())
