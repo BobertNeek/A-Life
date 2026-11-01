@@ -2,11 +2,38 @@
 
 use std::io::Read;
 
+fn build_info() -> serde_json::Value {
+    serde_json::json!({
+        "schema": 1,
+        "kind": "native-training-build-info-v1",
+        "package": env!("CARGO_PKG_NAME"),
+        "version": env!("CARGO_PKG_VERSION"),
+        "cargo_reported_profile": env!("ALIFE_GAME_APP_CARGO_PROFILE"),
+        "cargo_reported_opt_level": env!("ALIFE_GAME_APP_CARGO_OPT_LEVEL"),
+        "cargo_reported_target": env!("ALIFE_GAME_APP_CARGO_TARGET"),
+        "debug_assertions": cfg!(debug_assertions),
+        "selected_package_feature_flags": {
+            "foundation-training": cfg!(feature = "foundation-training"),
+            "cpu-training": cfg!(feature = "cpu-training"),
+            "gpu-runtime": cfg!(feature = "gpu-runtime"),
+            "gpu-tests": cfg!(feature = "gpu-tests"),
+            "bevy-app": cfg!(feature = "bevy-app"),
+        },
+    })
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
     let mode = args
         .next()
         .ok_or("usage: train_n2048_care --pilot|--teacher-pilot|--cycle OUTPUT_DIRECTORY [TICKS] [--seed N] [--food-after-world-tick N] | --resume-cycle PREVIOUS_DIRECTORY OUTPUT_DIRECTORY [TICKS] [--seed N] | --refresh-terrain-founder SOURCE_DIRECTORY OUTPUT_DIRECTORY")?;
+    if mode == "--build-info" {
+        if args.next().is_some() {
+            return Err("unexpected build-info argument".into());
+        }
+        println!("{}", build_info());
+        return Ok(());
+    }
     if mode == "--resident-contract" {
         if args.next().is_some() {
             return Err("unexpected resident-contract argument".into());

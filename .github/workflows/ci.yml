@@ -91,6 +91,8 @@ jobs:
           components: clippy
       - name: Check training CLI
         run: cargo check --locked -p alife_game_app --features foundation-training --bin train_n2048_care
+      - name: Read-only native build identity CLI
+        run: cargo test --locked -p alife_game_app --features foundation-training --test native_build_info -- --test-threads=1
       - name: Strict foundation-training Clippy
         run: cargo clippy --locked -p alife_game_app --features foundation-training --all-targets -- -D warnings
       - name: Adaptive game exploration shader and host CPU contracts
