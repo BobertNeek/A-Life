@@ -95,3 +95,97 @@ logging/documentation/CI edits. Reserved baseline plus future requested payload 
 **not** a bound on future reserved-block growth, physical VRAM, free VRAM or a
 reservation. Empty allocator-block retention, driver/external memory, physical
 correctness, useful whole-training throughput and activation remain open gates.
+
+## Prepared hardware handoff for the guarded source
+
+This addendum targets published
+`7665339c770a06bc1be243075dc522b0deddcaf9`, including the post-timer admission
+diagnostic. The [earlier hardware guide](20261031-frozen-gradient-hardware-readiness.md)
+pins `53c56c62`, which predates this guard; its qualification does not cover
+requested-byte admission. These instructions are prepared only. The sole PC
+owner must first reconcile cc7 admission and obtain the GPU window, and the
+stacked Windows compile-only CI gate must pass. No Windows or physical GPU
+command has run for this addendum.
+
+Reuse the earlier guide's GUID-isolated checkout/output/target directories,
+Cargo `--release --locked --features gpu-tests --test software_ppo_controller
+--no-run --message-format=json` build, and source/tree/compiler/artifact/library
+hash receipt. Replace its source pin and fetch line with:
+
+```powershell
+$source = '7665339c770a06bc1be243075dc522b0deddcaf9'
+git -C $repo fetch origin codex/frozen-gradient-requested-admission
+if ($LASTEXITCODE -ne 0) { throw 'Guarded source fetch failed' }
+```
+
+Stop that guide before its correctness/assay invocations; use the gates below.
+Keep `ALIFE_DISPATCH_REQUIRE_HARDWARE=1`, the unchanged `production_v1` policy,
+and a fresh synthetic capture directory and `ALIFE_FROZEN_ASSAY_STOP_FILE`.
+Unset/`0` selects software and cannot qualify hardware. Malformed selectors
+fail before device construction. Both commands must use the **same** release
+`$boundExe` selected and hashed from Cargo JSON, with no intervening rebuild.
+No private Current or personal trained checkpoint is opened; checkpoints are
+generated procedural fixture state.
+
+The hardware-capable correctness gate is:
+
+```powershell
+if ($env:ALIFE_DISPATCH_REQUIRE_HARDWARE -ne '1') { throw 'Hardware selector must be exactly 1' }
+if ((git rev-parse HEAD).Trim() -ne $source) { throw 'Wrong guarded source' }
+if ((Get-FileHash -LiteralPath $boundExe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $binaryHash) { throw 'Executable changed' }
+$correctnessLog = Join-Path $runRoot 'guarded-correctness.log'
+& $boundExe frozen_gradients_match_actual_controller_epochs_and_shared_restore --exact --ignored --test-threads=1 --nocapture 2>&1 | Tee-Object -FilePath $correctnessLog
+if ($LASTEXITCODE -ne 0) { throw 'Guarded hardware correctness failed; stop' }
+$metadata = @(Get-Content -LiteralPath $correctnessLog | ForEach-Object {
+    if ($_ -match 'actual_controller_execution_metadata=(\{.*\})') { $Matches[1] | ConvertFrom-Json }
+})
+if ($metadata.Count -eq 0) { throw 'Missing actual adapter identity' }
+foreach ($entry in $metadata) {
+    if ($entry.execution_mode -ne 'required_hardware' -or
+        $entry.adapter_info.device_type -eq 'Cpu' -or
+        $entry.adapter_info.backend -eq 'Noop' -or
+        $entry.adapter_info.backend -ne 'Vulkan') { throw 'Guard qualification requires actual non-CPU Vulkan hardware' }
+}
+$proofs = @(Get-Content -LiteralPath $correctnessLog | Select-String 'frozen-gradient full PPO oracle: epochs=')
+if ($proofs.Count -ne 4) { throw 'Expected all four active-cache correctness contexts' }
+```
+
+At this exact source, successful owned/shared active-cache assertions require
+initial `Some(admitted=true)` under the guard, in addition to identical captured
+semantics and accepted original/cache updates. That admission is source-derived;
+the correctness test does not print its decision numbers. Its windows contain
+only 3/5 ticks. It **does not prove** admission of the assay's larger
+256/384-tick geometry.
+
+The assay's existing warmup pair is the admission gate for accepting measured
+results at representative 256/384-tick geometry. Its cached run prints
+`frozen_gradient_admission_snapshot=Some(...)` after its controller timer and
+checks active-cache assertions before the warmup pair completes. A successful
+cached run requires initial `Some(admitted=true)` under the unchanged policy.
+This is timed validation excluded from the five measured pairs, not a pre-timer
+allocation probe. Refusal aborts before measured pairs begin; every later cached
+run checks again before its pair can be accepted. Do not substitute the software-only
+`admission_qualification::requested_admission_accepts_refuses_and_drops_before_larger_replay`
+test, which deliberately rejects selector `1`, or bypass/change the guard.
+
+After the hardware-capable correctness gate passes, the exact existing release
+assay invocation is prepared for the sole owner when the Windows/cc7 gates above
+are satisfied:
+
+```powershell
+if ($env:ALIFE_DISPATCH_REQUIRE_HARDWARE -ne '1') { throw 'Hardware selector must be exactly 1' }
+if ((git rev-parse HEAD).Trim() -ne $source) { throw 'Wrong guarded source' }
+if ((Get-FileHash -LiteralPath $boundExe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $binaryHash) { throw 'Executable changed' }
+& $boundExe frozen_gradient_assay::representative_actual_ppo_frozen_gradient_release_assay --exact --ignored --test-threads=1 --nocapture 2>&1 | Tee-Object -FilePath (Join-Path $runRoot 'guarded-release-assay.log')
+if ($LASTEXITCODE -ne 0) { throw 'Guarded assay failed or refused admission; stop without bypass' }
+if ((Get-FileHash -LiteralPath $boundExe -Algorithm SHA256).Hash.ToLowerInvariant() -ne $binaryHash) { throw 'Executable changed' }
+```
+
+Require the warmup and every retained measured cached-run decision to be present
+and admitted, including its actual reserved baseline, requested upper and declared
+ceiling. Keep the unchanged policy and all source/binary/adapter
+receipts. Creating the printed stop path requests a stop between matched pairs;
+the current original/cache pair and proof finish first. This remains disposable
+synthetic terminal replay: continuing-world context, physical correctness,
+allocator-block growth and useful whole-training throughput remain unqualified.
+No default activation or merge follows from the prepared handoff.
