@@ -260,6 +260,8 @@ mod continuing_qualification;
 mod fallback_qualification;
 #[path = "software_ppo_controller/frozen_gradient_assay.rs"]
 mod frozen_gradient_assay;
+#[path = "software_ppo_controller/rollback_qualification.rs"]
+mod rollback_qualification;
 
 fn bits(values: &[f32]) -> Vec<u32> {
     values.iter().map(|v| v.to_bits()).collect()

@@ -511,6 +511,20 @@ impl FoundationTrainer {
         Ok((self.gpu.layout.output_words, self.gpu.layout.state_words))
     }
 
+    /// Last replay update's GPU gradient norm and validation flag. This only
+    /// observes the same two words read by actor update submission; it does not
+    /// dispatch an update or alter the accumulated gradients.
+    #[cfg(feature = "gpu-tests")]
+    pub fn read_replay_update_status_for_test(&self) -> Result<[f32; 2], TrainingError> {
+        self.replay_buffer_word_lengths()?;
+        let values = self.read_float_buffer(
+            &self.gpu.outputs,
+            u64::from(self.gpu.layout.metrics + 2) * 4,
+            2,
+        )?;
+        Ok([values[0], values[1]])
+    }
+
     /// Diagnostic readback of the last replay, padded to the production
     /// candidate bound for each tick. Does not perform another forward pass.
     pub fn read_replay_logits(&self) -> Result<Vec<f32>, TrainingError> {
