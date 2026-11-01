@@ -135,7 +135,8 @@ fn collect_split(
     assert_eq!(second.initial.dendrites, sequence.initial.dendrites);
     let replay = trainer.evaluate_replay(&second).unwrap();
     let replay_values = state.predict_values(trainer, &second).unwrap();
-    for local in 0..6 {
+    assert_eq!(replay_values.len(), 6);
+    for (local, value) in replay_values.iter().enumerate() {
         let global = local + 1;
         assert_eq!(
             bits(&replay.candidate_logits[local]),
@@ -153,7 +154,7 @@ fn collect_split(
             bits(&replay.final_metabolic_load[local]),
             bits(&evaluation.final_metabolic_load[global])
         );
-        assert_eq!(replay_values[local].to_bits(), values[global].to_bits());
+        assert_eq!(value.to_bits(), values[global].to_bits());
     }
     vec![
         PpoTrainingWindow {

@@ -1,0 +1,162 @@
+{
+  "scope": "One synthetic actual-PPO software Vulkan correctness case; disabled cache, no timing/performance qualification",
+  "identity": {
+    "base": "b1fd11290c99ec0ca6aa457a466cca046831885e",
+    "source_commit": "b886a8ab0db00295af2dacd522dcf71bf5791512",
+    "source_tree": "f91983d51be7e8cb4b371027aadd265cb98c5116",
+    "git_status": "",
+    "binary": "/workspace/A-Life-frozen-gradient-context/target/context-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "binary_sha256": "0a4f12a838011ca2941e9a70668df97dc5356bc6f62365637a66ed95d9638269",
+    "source_sha256": {
+      "crates/alife_training/tests/software_ppo_controller.rs": "88eb8fcb0096846e730c25a55bfc357818ea9a4239147438f264a4cdba8b6cd4",
+      "crates/alife_training/tests/software_ppo_controller/context_qualification.rs": "5eb66c17b5200b0a8a569b6505916a21f767285c1da7b89db01daa89d8a43da9",
+      "crates/alife_training/tests/software_ppo_controller/execution.rs": "5a6d03bd78411414b633465a15e432f91a299e30b882e469e8bd616007927355",
+      "crates/alife_training/tests/software_ppo_controller/fallback_qualification.rs": "f026e09af70f290f11097f246c95d8651b1c917bebeddbfb82772922cdbc3cae",
+      "crates/alife_training/src/ppo.rs": "b2334d9a182cd1952b553b9c173aa8331d64da1e86f54927ed2adeef9abc7a2c",
+      "crates/alife_training/src/trainer.rs": "a72ce26cd299aad4cbbe1d386fa3b920b6b9113c4761ad49fb63c462b8be929c",
+      "crates/alife_training/shaders/foundation_train.wgsl": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+      "crates/alife_training/shaders/foundation_ppo.wgsl": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5"
+    },
+    "profile": "test [unoptimized], correctness only",
+    "selector": "ALIFE_DISPATCH_REQUIRE_HARDWARE=0"
+  },
+  "result": {
+    "command": [
+      "/workspace/A-Life-frozen-gradient-context/target/context-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+      "context_qualification::nonempty_dendrites_and_changing_private_context_match_fresh_ppo",
+      "--exact",
+      "--ignored",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 4.64410510900052
+  },
+  "configuration": {
+    "capacity": "N2048",
+    "synapses": 32768,
+    "trainable_every_third": 10923,
+    "frozen": 21845,
+    "full_trajectory_ticks": 8,
+    "loss_rows": 7,
+    "windows_ticks_burn": [
+      [
+        3,
+        0
+      ],
+      [
+        6,
+        2
+      ]
+    ],
+    "loss_split": [
+      3,
+      4
+    ],
+    "microsteps_every_tick": 4,
+    "epochs": 2,
+    "value_coefficient": 0.5,
+    "entropy_coefficient": 0.0,
+    "target_kl": 100.0,
+    "effective_batch": 8,
+    "nonempty_static_branch": {
+      "target": "selected decoder source neuron1776",
+      "threshold": -0.2,
+      "gain": 0.25,
+      "inputs": [
+        [
+          "same decoder source neuron",
+          0.6
+        ],
+        [
+          "neighbor neuron",
+          0.1
+        ]
+      ]
+    },
+    "structural_edge_counts": [
+      0,
+      1,
+      2,
+      0,
+      1,
+      2,
+      0,
+      1
+    ],
+    "structural_route": "actual compiled ActionPlanning\u2192ActionPlanning LateralInhibition; exact route update cadence",
+    "structural_weights": "-0.08 - 0.01*tick - 0.02*edge",
+    "warm_actor_and_value_steps": 1,
+    "final_actor_and_value_steps": 3,
+    "raw_cached_windows": 2,
+    "reused_windows": 2,
+    "selected_decoder_offset_in_dense_vector": "selected decoder coordinate25728: 0.012 + 0.001*tick; only this coordinate is nonzero/changing in an otherwise-zero32768-entry vector"
+  },
+  "proof": {
+    "component_ablations": {
+      "dendrites": {
+        "gpu_logits_changed": true,
+        "actual_trainable_recurrent_raw_gradients_changed": 96
+      },
+      "structural": {
+        "gpu_logits_changed": true,
+        "actual_trainable_recurrent_raw_gradients_changed": 96
+      },
+      "offsets": {
+        "gpu_logits_changed": true,
+        "actual_trainable_recurrent_raw_gradients_changed": 96
+      },
+      "all": {
+        "gpu_logits_changed": true,
+        "actual_trainable_recurrent_raw_gradients_changed": 96
+      }
+    },
+    "all_six_sliced_rows_gpu_logits_values_activations_ema_metabolic_exact": true,
+    "static_dendritic_descriptors_retained": true,
+    "nonzero_observed_final_bootstrap": true,
+    "global_gae_before_unequal_loss_slices": true,
+    "no_context_ppo_collected_own_gpu_probabilities_and_values": true,
+    "actual_ppo_recurrent_moments_differ_from_no_context_control": true,
+    "first_update_recurrent_weight_and_both_moments_changed": 171,
+    "two_update_recurrent_weight_and_both_moments_changed": 171,
+    "all_trainable_ages_and_frozen_bits_checked": true,
+    "all_three_value_parameter_moment_planes_advanced": true,
+    "normal_vs_cache_all_captured_words_checkpoints_receipts_and_loader_order_exact": true
+  },
+  "checks": {
+    "focused_test": "1 passed, 0 failed",
+    "strict_relevant_clippy": "passed",
+    "source_reviews": "Root and independent helper reviewed complete fixture before execution; no source blockers."
+  },
+  "notes": [
+    "Separate branch/worktree from exactb1; no PR225 head mutation or capacity implementation imported. Only one new test module and a module hook, plus evidence. Production code/shaders/device admission unchanged.",
+    "Dendritic outputs are computed from previous activations plus immutable descriptors; no separate dynamic branch register exists. Actual after-tick0 activation/EMA/metabolic state and unchanged descriptors seed the suffix. Every suffix row including burn-in is bit-compared.",
+    "Individual ablations use fixed explicit adjoints and prove direct GPU forward/BPTT effects. The additional normal PPO no-context control recollects its own GPU labels; its optimizer moment difference proves actual controller use.",
+    "Original execution is cleanb886. Later test-only lint idiom uses enumerate plus explicit six-value length assertion instead of fixed range, retaining all six equality checks. No repeated context test or performance assay.",
+    "Actual selector0/AdapterInfo identifies CPU llvmpipe Vulkan. No hardware/PC work or real checkpoint. Test wall time is correctness process context, not throughput evidence.",
+    "Memory-cap fallback, forced actor-apply/value rollback failure, physical GPU qualification, maximal dendritic topology and production activation remain unqualified.",
+    "Offset qualification covers only the selected decoder coordinate in an otherwise-zero dense storage vector; no broad active-offset or recurrent-offset coverage is claimed. Descriptive neuron/route labels are selected decoder source and actual ActionPlanning lateral-inhibition route."
+  ],
+  "logs": {
+    "build": {
+      "path": "/tmp/alife-frozen-context-build.log",
+      "sha256": "9818c5643c0d25a75f7f23c931a69ff36b1768f3bb9a7b5138f2c44847f77feb",
+      "text": "   Compiling alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_core)\n   Compiling alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_storage)\n   Compiling alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_world)\n   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_gpu_backend)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_training)\n    Finished `test` profile [unoptimized] target(s) in 1m 41s\n  Executable tests/software_ppo_controller.rs (target/context-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71)\n"
+    },
+    "focused_test": {
+      "path": "/tmp/alife-frozen-context-test.log",
+      "sha256": "b996bea1d16b507568417c968789db591165624261db7fbe3c432a4c300c4371",
+      "text": "\nrunning 1 test\ntest context_qualification::nonempty_dendrites_and_changing_private_context_match_fresh_ppo ... actual_controller_execution=software_vulkan_test adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=10923; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nprivate-context ablation dendrites: GPU logits changed; 96 trainable recurrent raw gradients differ\nprivate-context ablation structural: GPU logits changed; 96 trainable recurrent raw gradients differ\nprivate-context ablation offsets: GPU logits changed; 96 trainable recurrent raw gradients differ\nprivate-context ablation all: GPU logits changed; 96 trainable recurrent raw gradients differ\nprivate-context PPO passed: nonempty immutable dendrites; changing0/1/2structural edges and dense offsets; coherent slice ALLlogit/value/activation/EMA/metabolic words exact; firstupdate171/twoepoch171 recurrent weights+m/v changed; contextual/no-context PPO causal; epochs2/reuse2/freshlater,fullnormal/cache state exact\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 4.64s\n\n"
+    },
+    "strict_clippy_initial": {
+      "path": "/tmp/alife-frozen-context-clippy-initial.log",
+      "sha256": "12873eb3c8a56828f73cc5423e021a1984fec633eb0759b4181a878d6a8f2f3c",
+      "text": "    Checking alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_core)\n    Checking alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_storage)\n    Checking alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_gpu_backend)\n    Checking alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_world)\n    Checking alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_runtime)\n    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_training)\nerror: the loop variable `local` is used to index `replay_values`\n   --> crates/alife_training/tests/software_ppo_controller/context_qualification.rs:138:18\n    |\n138 |     for local in 0..6 {\n    |                  ^^^^\n    |\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop\n    = note: `-D clippy::needless-range-loop` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`\nhelp: consider using an iterator and enumerate()\n    |\n138 -     for local in 0..6 {\n138 +     for (local, <item>) in replay_values.iter().enumerate().take(6) {\n    |\n\nerror: could not compile `alife_training` (test \"software_ppo_controller\") due to 1 previous error\nwarning: build failed, waiting for other jobs to finish...\n"
+    },
+    "strict_clippy": {
+      "path": "/tmp/alife-frozen-context-clippy.log",
+      "sha256": "7c3905505a5512df8784810246a6458f4084db5c86e0dc137edf0695c3e71e67",
+      "text": "    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-context/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 0.37s\n"
+    }
+  }
+}
