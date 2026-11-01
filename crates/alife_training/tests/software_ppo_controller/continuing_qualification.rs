@@ -147,7 +147,7 @@ fn continuing_gae_matches_actual_controller_after_warm_restore() {
         let mut loads = Vec::new();
         let receipt = if shared {
             let handles = windows.iter().cloned().map(Arc::new).collect::<Vec<_>>();
-            train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+            train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
                 &mut trainer,
                 &mut state,
                 2,
@@ -158,10 +158,11 @@ fn continuing_gae_matches_actual_controller_after_warm_restore() {
                 },
                 config,
                 6,
+                replay_tick_bound(&handles),
                 &mut stats,
             )
         } else {
-            train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+            train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
                 &mut trainer,
                 &mut state,
                 2,
@@ -172,6 +173,7 @@ fn continuing_gae_matches_actual_controller_after_warm_restore() {
                 },
                 config,
                 6,
+                replay_tick_bound(&windows),
                 &mut stats,
             )
         }
@@ -296,7 +298,7 @@ fn wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates() {
     let shared = windows.into_iter().map(Arc::new).collect::<Vec<_>>();
     let mut stats = FrozenGradientCacheStats::default();
     let mut loads = Vec::new();
-    let receipt = train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+    let receipt = train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
         &mut trainer,
         &mut state,
         2,
@@ -307,6 +309,7 @@ fn wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates() {
         },
         config,
         6,
+        replay_tick_bound(&shared),
         &mut stats,
     )
     .unwrap();

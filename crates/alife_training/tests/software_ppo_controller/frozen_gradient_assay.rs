@@ -132,7 +132,7 @@ fn run_mode(
     flush(trainer);
     let (result, elapsed) = if cached {
         let start = Instant::now();
-        let result = train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+        let result = train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
             trainer,
             state,
             windows.len(),
@@ -140,6 +140,7 @@ fn run_mode(
             load,
             config,
             POLICY,
+            replay_tick_bound(&windows),
             &mut stats,
         );
         (result, start.elapsed())
@@ -197,6 +198,7 @@ fn run_mode(
                 "requested_gpu_bytes": stats.requested_gpu_bytes,
                 "raw_cached_windows": stats.raw_cached_windows,
                 "reused_windows": stats.reused_windows,
+                "admission": stats.admission,
             },
             "accepted_actor_progress": progress,
             "value_parameters_and_moments_frozen_bit_exact": true,

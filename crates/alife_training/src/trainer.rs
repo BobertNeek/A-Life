@@ -16,17 +16,17 @@ mod dynamic_dispatch_tests;
 use std::{num::NonZeroU64, sync::mpsc};
 
 use alife_core::{
-    BrainPhenotype, CANDIDATE_FEATURE_COUNT, CompiledSynapseKind, FoundationWeightAsset,
-    ProjectionType, ScaffoldContractError, SpeechDecoderLayoutV1, TrainingStageManifest,
+    BrainPhenotype, CompiledSynapseKind, FoundationWeightAsset, ProjectionType,
+    ScaffoldContractError, SpeechDecoderLayoutV1, TrainingStageManifest, CANDIDATE_FEATURE_COUNT,
 };
 use alife_gpu_backend::{GpuClosedLoopBackend, GpuRuntimeProfile};
 use alife_runtime::{GpuAuthoritativeSession, GpuSessionConsumerKind};
 use wgpu::util::DeviceExt;
 
 use crate::{
-    AdamWConfig, CANDIDATE_RECORD_WORDS, SequenceEvaluation, StageTrainableMask,
-    TRAINING_SEQUENCE_TICKS, TrainingError, TrainingSequence, TrainingSequence32,
-    TrainingStepReceipt, TrainingStepStatistics,
+    AdamWConfig, SequenceEvaluation, StageTrainableMask, TrainingError, TrainingSequence,
+    TrainingSequence32, TrainingStepReceipt, TrainingStepStatistics, CANDIDATE_RECORD_WORDS,
+    TRAINING_SEQUENCE_TICKS,
 };
 
 const TRAINER_SCHEMA_VERSION: u32 = 1;

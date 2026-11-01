@@ -66,6 +66,22 @@ pub(super) fn new_session() -> Result<GpuAuthoritativeSession, ScaffoldContractE
     Ok(session)
 }
 
+// Deliberately software-only policy qualification. A hardware request may not
+// silently use this constructor; profile/features/admission remain truthful.
+pub(super) fn software_session_with_profile(
+    profile: GpuRuntimeProfile,
+) -> Result<GpuAuthoritativeSession, ScaffoldContractError> {
+    let value = std::env::var_os(SELECTOR);
+    let mode = ExecutionMode::parse(value.as_deref()).unwrap_or_else(|message| panic!("{message}"));
+    if mode != ExecutionMode::SoftwareVulkan {
+        return Err(ScaffoldContractError::NeuralBackendUnavailable);
+    }
+    Ok(GpuAuthoritativeSession::new(
+        GpuClosedLoopBackend::new_software_vulkan_training_test(profile)?,
+        alife_runtime::GpuSessionConsumerKind::Training,
+    ))
+}
+
 pub(super) fn metadata(trainer: &FoundationTrainer) -> serde_json::Value {
     let backend = trainer.session().backend();
     let info = backend.adapter_info_for_test();
