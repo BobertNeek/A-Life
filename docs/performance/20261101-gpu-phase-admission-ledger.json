@@ -1,0 +1,146 @@
+{
+  "kind": "read-only source audit and integer layout arithmetic; no workload/test/GPU/PC",
+  "sources": {
+    "main": "b9f78ed077bd98c58998c8ad1fa23036ca30b096",
+    "prior_main": "0fab094c697a71f3da6eae98a6b740a7dac60eda",
+    "candidate": "b1fd11290c99ec0ca6aa457a466cca046831885e",
+    "held_fusion": "ed393a6c2885827773f303d3fde2a104048adfe9",
+    "main_files_sha256": {
+      "crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs": "4629fafb3b4fc06a8cd91f87ce031bca8479f7b96fa0a41080c7fbe38148017f",
+      "crates/alife_game_app/src/foundation_training_cycle/critic_residual.rs": "99072eb0353798e601e18c99fac05684e601bf0406868334d314fb1c6bbd347a",
+      "crates/alife_training/src/trainer.rs": "5fe0d1759d89dc4f3abf228d0d23abec4c2014911c8eaa1328fb71b9d0aaeadf",
+      "crates/alife_training/src/ppo.rs": "c6c6ff34ecc25a2d40641b96dce4656852a9cf20bc21eecb458e5aeaf243a5f8",
+      "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "054322a15bc452240e332ae5ba3e01b16c4442ce650eec8638e4259a8ca7d260",
+      "crates/alife_gpu_backend/src/closed_loop_runtime/live_policy.rs": "e169c177167fef20a121cc7b22c2e71b1fe72775884231a628a66922c12b5233",
+      "crates/alife_gpu_backend/src/closed_loop_exact_capture.rs": "3501f660c9139ccbc0f33fcee969c663d59d097f354399a5d9d792f20bc6106f",
+      "crates/alife_gpu_backend/src/closed_loop_buffers/bucket.rs": "3d45e7e92fa5f76bb7f6af4ade03b4b342695d69c263c8e7d0dfb8277c354b69",
+      "crates/alife_gpu_backend/src/closed_loop_admission.rs": "aefd897f41545ec5cf18837fa32c4fa149f540fa8b887b3a1e523e378374c4ab"
+    },
+    "main_prior_critical_diff": ""
+  },
+  "formula_symbols": {
+    "N": "neurons",
+    "S": "compiled actor synapses",
+    "m": "phenotype microsteps per tick; allocation ignores current inactive tick count",
+    "T": "replay ticks",
+    "C": "offline fixed MAX_ACTION_CANDIDATES32, not actual row count",
+    "r": "compiled routes",
+    "D": "dendritic branches",
+    "I": "total dendritic inputs",
+    "E": "MAX_STRUCTURAL_EDGES64 slots reserved per tick",
+    "Q": "PPO fixed MAX_TRAINING_SEQUENCE_TICKS2048"
+  },
+  "requested_word_formulas": {
+    "U": "(m*T+1)*N",
+    "state": "3*U",
+    "gradients": "2*U+m*T*N+2*S+T*(C+192)",
+    "outputs": "T*(3*C+192)+4",
+    "training": "T*(3*N+64*C+4+r+S+5*E+384)+3*N",
+    "metadata": "12*N+54+10*S+5*D+4*I",
+    "full_arena_B_bytes": "4*(state+gradients+outputs+training+metadata+5*S)+256*m*T+16",
+    "persistent_A_bytes": "4*S",
+    "PPO_P_bytes": "128+4*64*Q+4*(45*Q+1)+20*(N+1)",
+    "raw_K_bytes": "4*window_count*(S+N+2)"
+  },
+  "conditional_example": {
+    "WARNING": "Conditional arithmetic only: N2048,S32768,m4,routes17,C32. NOT private actual process footprint or hardware/VRAM measurements. D/I=0 unless named worst metadata.",
+    "B_bytes": {
+      "1": 2758732,
+      "256": 96195832,
+      "384": 143097592,
+      "512": 189999352,
+      "513": 190365772,
+      "2048": 752820472
+    },
+    "P_objective_bytes": 934040,
+    "A_accumulator_bytes": 131072,
+    "K_two_window_bytes": 278544,
+    "metadata_legal_delta_per_arena": 2179072,
+    "known_critical_readback_allowance": 8192,
+    "two_backend_timestamp_buffer_bytes": 128,
+    "candidate_critical_explicit_upper_no_live_no_uploads": 240645400,
+    "candidate_critical_explicit_upper_max_legal_metadata_no_live_no_uploads": 245003544,
+    "policy_ceiling_bytes": 2147483648,
+    "remaining_for_live_and_all_unknown_terms_at_policy_ceiling": 1902480104,
+    "critical_training_write_bytes": 64052736,
+    "critical_queue_write_payload_upper": 65101440,
+    "critical_mapped_init_shadow_upper": 4243672,
+    "critical_upper_including_known_HAL_upload_requests_no_live": 314348656,
+    "remaining_for_live_and_other_baseline_at_policy_including_known_HAL_upload_upper": 1833134992,
+    "older_capacity_fixture_explanation": "Older96195884/143097644 totals use D1/I2;4*(5D+4I)=52B above these D0/I0 examples, matching measured metadata1409292 vs D0 1409240."
+  },
+  "lifecycle": {
+    "uninterrupted_513ref_value_shapes": [
+      512,
+      1
+    ],
+    "PPO_windows_ticks_burn": [
+      [
+        256,
+        0
+      ],
+      [
+        384,
+        128
+      ]
+    ],
+    "epochs_default": 2,
+    "cohort_start_or_gap_verifier_ticks": 1,
+    "PPO_actor_value_coefficient": 0.0,
+    "residual_value_coefficient": 0.5,
+    "residual_rows": 512,
+    "residual_feature_states": 513,
+    "residual_persistent_bytes": 4251732,
+    "residual_max_sequential_checkpoint_readback": 24588,
+    "residual_increment_upper": 4276320,
+    "snapshot_E_one_brain": "176+T_immutable+U_mutable",
+    "snapshot_T_immutable": "4*(immutable_plan_words.len+immutable_weight_words.len)",
+    "snapshot_U_mutable": "4*mutable_state_words.len",
+    "snapshot_extra_upper": "max(E, max(U_i), max(T_i), 16*S_actor); one brain max(E,16*S_actor)",
+    "install_extra_upper": "max(4*S_actor,32+4*S_live_uploaded_weights)",
+    "next_cohort": "retainedB384\u2192first captured row verifyB1+wait\u2192valueB512\u2192B1; NOT B384\u2192B512"
+  },
+  "decision": {
+    "known_cache_phase_increment": "K adds278544 bytes to the same256/384 old+new explicit-arena overlap; cache can additionally prolong submitted old-resource lifetimes. No later critic/install peak proven to hide it. Whole-session peak comparison also needs snapshot and live-baseline terms.",
+    "max_legal_metadata_necessarily_rejects_2GiB": false,
+    "actual_live_receipt_observed": false,
+    "aggregate_fit_proven": false,
+    "minimal_metadata": "Current shared-device live arena/other requested baseline, fixed span T/burn geometry, phenotype dimensions/routes, current exact buffers, critic row/feature counts, existing slot-range snapshot bound, declared profile ceiling; legal D/I bounds can replace future exact metadata without loading callbacks.",
+    "unknowns": [
+      "actual private live arena receipt and full-slot ranges (available runtime CPU inputs, not intrinsic source blockers)",
+      "allocator granularity/physical memory placement/retirement/reserved fragmentation beyond declared requested payloads",
+      "driver/pipeline/query implementation allocation outside counted report/policy",
+      "other applications/devices physical VRAM use",
+      "future exactD/I; legal maxima bound this without eager callbacks"
+    ],
+    "declared_requested_byte_guard_feasible_with_runtime_inputs": true,
+    "private_L_unknown_is_runtime_input_not_intrinsic_source_blocker": true,
+    "implementation_status": "No implementation. Runtime guard must combine every phase/requested-HAL staging term and actual live baseline; private actual fit and physical VRAM qualification not claimed."
+  },
+  "allocator_report": {
+    "api": "wgpu29.0.3 Device::generate_allocator_report -> Option<AllocatorReport>",
+    "use": "Same-device tracked baseline at existing completed boundary can include raw trainer/PPO/upload resources outside empty staging receipt. total_allocated/reserved have different meanings; account pending-free resources and do not double-count manual current totals. No feature-counters enable required.",
+    "not_guarantee": "Not freeVRAM, externaldevice/process allocation, guaranteed future block growth, physical placement, or aggregate reservation. Must not add current manual totals twice; None is unknown."
+  },
+  "collection_verifier": {
+    "frequency": "first captured row EACHcohort and actual tick gaps only; not every captured row",
+    "numeric_receipt_bytes_N2048_T1": 24704,
+    "numeric_compact_and_readback_overlap_bytes": 49408,
+    "compute_dispatches_m4": 6,
+    "material_default_bottleneck_proven": false,
+    "true_per_row_seam": "already-batched pre-capture\u2192neural tick\u2192post-capture readbacks; held ed393 fusion directly overlaps",
+    "held_numeric_verifier_modified": false,
+    "cc7_full_object_available": false
+  },
+  "changes": "docs only; no code, test, benchmark, GPU, PC, activation, or held implementation mutation",
+  "upload_staging": {
+    "queue_write_buffer": "wgpu-core29 queue.rs518\u2013568 creates StagingBuffer exact data_size; PendingWrites/ActiveSubmission retains through submission retirement. Sum all known writes since existing completed boundary, conservatively count simultaneous even if some retire earlier.",
+    "mapped_init": "DeviceExtcreate_buffer_init mapped_at_creation padded4; wgpu-core resource.rs1138\u20131167 allocates Init staging of aligned_size when usage lacks MAP_WRITE. All trainer init sizes here are4B aligned.",
+    "critical_Qwrite_formula": "4*training_words(T)+256*m*T+4*T*384+128+256*loss_rows",
+    "critical_new_arena_Init_formula": "256*m*T+4*M(D,I)+8*S (headers,metadata,weights,mask)",
+    "other_phases": "Use same sum-of-write/init lengths for value collection (head restore12(N+1) on first creation), actor headers/scales, critic initialized data and per-step headers, installer COPY_SRC sources. No bytes from prior completed prefix need remain logically pending, though physical allocator blocks may remain reserved.",
+    "scope": "Requested HAL stage sizes can be bounded; allocator padding/placement and external physical memory are separate. Device allocator report can support same-device baseline, not freeVRAM.",
+    "repeated_headers": "Forward/raw-cache gradient encoders add no queue writes. Accumulation/apply rewrites occur after existing blocking metric/status/preflight receipts, in separate pending-write intervals; none is omitted or double-counted in the critical upload sum."
+  },
+  "review": "Root and fresh independent source/arithmetic review verified formulas, lifetimes, conditional examples, 52B fixture difference, and critical mapped-init/write payload bound314348656B. No workloads ran."
+}
