@@ -11,7 +11,7 @@ on:
       - 'rust-toolchain*'
       - '.github/workflows/offline-software-vulkan.yml'
   pull_request:
-    branches: [main]
+    branches: [main, codex/experimental-frozen-gradient-cache]
     paths:
       - 'crates/**'
       - 'Cargo.toml'
@@ -123,7 +123,8 @@ jobs:
             continuing_qualification::continuing_gae_matches_actual_controller_after_warm_restore \
             continuing_qualification::wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates \
             fallback_qualification::actual_speech_labels_force_late_frozen_cache_fallback \
-            fallback_qualification::actual_auxiliary_targets_force_late_frozen_cache_fallback
+            fallback_qualification::actual_auxiliary_targets_force_late_frozen_cache_fallback \
+            admission_qualification::requested_admission_accepts_refuses_and_drops_before_larger_replay
           do
             run_fixture alife_training "$fixture" --test software_ppo_controller
           done

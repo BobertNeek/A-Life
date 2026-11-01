@@ -10,7 +10,7 @@ use alife_core::{
 };
 use alife_runtime::GpuAuthoritativeSession;
 use alife_training::{
-    train_recurrent_ppo_cohort, train_recurrent_ppo_cohort_with_frozen_gradients_for_test,
+    train_recurrent_ppo_cohort, train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test,
     train_recurrent_ppo_cohort_with_windows, AdamWConfig, FoundationTrainer,
     FoundationTrainerCheckpoint, FrozenGradientCacheStats, PpoBatch, PpoBoundary, PpoConfig,
     PpoJointAction, PpoTrainingState, PpoTrainingWindow, PpoTransition, PpoUpdateReceipt,
@@ -26,6 +26,22 @@ fn fixture() -> (FoundationTrainer, usize, usize, usize) {
 }
 
 fn fixture_with_wide_mask(wide_mask: bool) -> (FoundationTrainer, usize, usize, usize) {
+    fixture_with_session(wide_mask, None)
+}
+
+fn fixture_with_profile(
+    profile: alife_gpu_backend::GpuRuntimeProfile,
+) -> (FoundationTrainer, usize, usize, usize) {
+    fixture_with_session(
+        false,
+        Some(execution::software_session_with_profile(profile).unwrap()),
+    )
+}
+
+fn fixture_with_session(
+    wide_mask: bool,
+    session: Option<GpuAuthoritativeSession>,
+) -> (FoundationTrainer, usize, usize, usize) {
     let genome = BrainGenome::scaffold(0x9900_2048, BrainCapacityClass::n2048().id());
     let development =
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
@@ -68,8 +84,9 @@ fn fixture_with_wide_mask(wide_mask: bool) -> (FoundationTrainer, usize, usize, 
     };
     assert!(indices.contains(&(weight as u32)));
     let mask = StageTrainableMask::from_synapse_indices(&phenotype, &indices).unwrap();
-    let session =
-        execution::new_session().expect("explicit selected training fixture adapter unavailable");
+    let session = session.unwrap_or_else(|| {
+        execution::new_session().expect("explicit selected training fixture adapter unavailable")
+    });
     eprintln!(
         "actual_controller_fixture neurons={}; synapses={}; trainable_weights={}; masked_weight={weight}",
         phenotype.neuron_count(),
@@ -254,6 +271,8 @@ fn windows_with_shapes(
         .collect()
 }
 
+#[path = "software_ppo_controller/admission_qualification.rs"]
+mod admission_qualification;
 #[path = "software_ppo_controller/continuing_qualification.rs"]
 mod continuing_qualification;
 #[path = "software_ppo_controller/fallback_qualification.rs"]
@@ -716,6 +735,14 @@ fn actual_controller_batches_restores_and_rejects_before_updates() {
     }
 }
 
+fn replay_tick_bound<W: std::borrow::Borrow<PpoTrainingWindow>>(windows: &[W]) -> usize {
+    windows
+        .iter()
+        .map(|window| window.borrow().sequence.ticks.len())
+        .max()
+        .unwrap_or(0)
+}
+
 fn run_owned(
     trainer: &mut FoundationTrainer,
     state: &mut PpoTrainingState,
@@ -735,7 +762,7 @@ fn run_owned(
         Ok(windows[index].clone())
     };
     let result = if cached {
-        train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+        train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
             trainer,
             state,
             windows.len(),
@@ -743,6 +770,7 @@ fn run_owned(
             load,
             config,
             policy,
+            replay_tick_bound(windows),
             &mut stats,
         )
     } else {
@@ -859,7 +887,7 @@ fn frozen_gradients_match_actual_controller_epochs_and_shared_restore() {
             let shared = collected.into_iter().map(Arc::new).collect::<Vec<_>>();
             let mut stats = FrozenGradientCacheStats::default();
             let mut shared_loads = Vec::new();
-            let shared_receipt = train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+            let shared_receipt = train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
                 &mut trainer,
                 &mut state,
                 shared.len(),
@@ -870,6 +898,7 @@ fn frozen_gradients_match_actual_controller_epochs_and_shared_restore() {
                 },
                 config,
                 6,
+                replay_tick_bound(&shared),
                 &mut stats,
             )
             .unwrap();
@@ -1038,7 +1067,7 @@ fn frozen_gradients_defer_numeric_faults_and_preserve_loader_failures() {
             }
         };
         let result = if cached {
-            train_recurrent_ppo_cohort_with_frozen_gradients_for_test(
+            train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
                 &mut trainer,
                 &mut state,
                 2,
@@ -1046,6 +1075,7 @@ fn frozen_gradients_defer_numeric_faults_and_preserve_loader_failures() {
                 load,
                 config,
                 6,
+                replay_tick_bound(&collected),
                 &mut stats,
             )
         } else {

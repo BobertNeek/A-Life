@@ -35,6 +35,7 @@ const HEADER_BYTES: u64 = (HEADER_WORDS * 4) as u64;
 const READBACK_BYTES: u64 = 16;
 const WORKGROUP_SIZE: u32 = 64;
 const TRAINER_WGSL: &str = include_str!("../shaders/foundation_train.wgsl");
+const REPLAY_SPEECH_TARGET_WORDS: u64 = 384;
 
 #[derive(Debug, Clone, Copy)]
 struct PackedLayout {
@@ -135,6 +136,104 @@ struct TrainerPipelines {
     validate_accumulation: wgpu::ComputePipeline,
     accumulate: wgpu::ComputePipeline,
     adamw: wgpu::ComputePipeline,
+}
+
+/// Requested descriptor bytes, shared by actual allocation and the optional
+/// count-only replay bound. These are not allocator-block or physical VRAM sizes.
+#[derive(Debug, Clone, Copy)]
+struct TrainerBufferSizes {
+    step_headers: u64,
+    metadata: u64,
+    weights: u64,
+    optimizer: u64,
+    training: u64,
+    state: u64,
+    gradients: u64,
+    outputs: u64,
+    mask: u64,
+    readback: u64,
+}
+
+impl TrainerBufferSizes {
+    fn new(
+        layout: PackedLayout,
+        metadata_words: u64,
+        synapse_count: usize,
+        microsteps: u8,
+    ) -> Result<Self, TrainingError> {
+        let weight_words =
+            u64::try_from(synapse_count).map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
+        Ok(Self {
+            step_headers: checked_count_mul(
+                checked_count_mul(u64::from(layout.ticks), u64::from(microsteps))?,
+                HEADER_BYTES,
+            )?,
+            metadata: checked_count_mul(metadata_words, 4)?,
+            weights: checked_count_mul(weight_words, 4)?,
+            optimizer: checked_count_mul(weight_words, 12)?.max(4),
+            training: checked_count_mul(layout.training_words, 4)?.max(4),
+            state: checked_count_mul(layout.state_words, 4)?.max(4),
+            gradients: checked_count_mul(layout.gradient_words, 4)?.max(4),
+            outputs: checked_count_mul(layout.output_words, 4)?.max(4),
+            mask: checked_count_mul(weight_words, 4)?,
+            readback: READBACK_BYTES,
+        })
+    }
+
+    fn arena_bytes(self) -> Result<u64, TrainingError> {
+        [
+            self.step_headers,
+            self.metadata,
+            self.weights,
+            self.optimizer,
+            self.training,
+            self.state,
+            self.gradients,
+            self.outputs,
+            self.mask,
+            self.readback,
+        ]
+        .into_iter()
+        .try_fold(0, checked_count_add)
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    fn bound(self, layout: PackedLayout) -> Result<ReplayAllocationBound, TrainingError> {
+        Ok(ReplayAllocationBound {
+            arena_bytes: self.arena_bytes()?,
+            // create_buffer_init maps these four destinations at creation;
+            // wgpu may retain equal-sized upload buffers until submission.
+            initialization_upload_bytes: [
+                self.step_headers,
+                self.metadata,
+                self.weights,
+                self.mask,
+            ]
+            .into_iter()
+            .try_fold(0, checked_count_add)?,
+            // prepare_replay uploads the complete training/header arrays.
+            // Speech preparation writes zero targets even without labels; an
+            // accumulation/apply may also upload one more complete header set.
+            queue_upload_bytes: [
+                self.training,
+                checked_count_mul(self.step_headers, 2)?,
+                checked_count_mul(
+                    checked_count_mul(u64::from(layout.ticks), REPLAY_SPEECH_TARGET_WORDS)?,
+                    4,
+                )?,
+            ]
+            .into_iter()
+            .try_fold(0, checked_count_add)?,
+        })
+    }
+}
+
+#[cfg(feature = "gpu-tests")]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ReplayAllocationBound {
+    pub arena_bytes: u64,
+    pub initialization_upload_bytes: u64,
+    pub queue_upload_bytes: u64,
 }
 
 struct TrainerGpuState {
@@ -262,19 +361,30 @@ impl FoundationTrainer {
     ) -> Result<u64, TrainingError> {
         sequence.validate_for(phenotype)?;
         let bytes = |meta_words: usize, layout: PackedLayout| {
-            let words = layout.state_words
-                + layout.gradient_words
-                + layout.output_words
-                + layout.training_words
-                + meta_words as u64
-                + phenotype.synapses().len() as u64 * 5;
-            words * 4
-                + u64::from(phenotype.microstep_count()) * u64::from(layout.ticks) * HEADER_BYTES
-                + READBACK_BYTES
+            TrainerBufferSizes::new(
+                layout,
+                meta_words as u64,
+                phenotype.synapses().len(),
+                phenotype.microstep_count(),
+            )?
+            .arena_bytes()
         };
         let (meta, replay) = pack_metadata_and_layout(phenotype, Some(sequence))?;
         let (initial_meta, initial) = pack_metadata_and_layout(phenotype, None)?;
-        Ok(bytes(meta.len(), replay).max(bytes(initial_meta.len(), initial)))
+        Ok(bytes(meta.len(), replay)?.max(bytes(initial_meta.len(), initial)?))
+    }
+
+    /// Count-only legal replay bound for an optional test-only cache lifetime.
+    /// Includes initial trainer shape, maximal legal dendritic metadata, and
+    /// source-owned initialization/preparation payloads. No replay values or
+    /// dummy tick/branch arrays are constructed. Caller-owned PPO buffers and
+    /// arena overlap must be charged separately.
+    #[cfg(feature = "gpu-tests")]
+    pub(crate) fn replay_allocation_bound_for_ticks(
+        &self,
+        max_ticks: usize,
+    ) -> Result<ReplayAllocationBound, TrainingError> {
+        replay_allocation_bound(&self.phenotype, max_ticks)
     }
 
     /// Largest storage binding needed by a replay shape, checked before upload.
@@ -467,7 +577,7 @@ impl FoundationTrainer {
         if !self.gpu.layout.replay || targets.len() != self.gpu.layout.ticks as usize {
             return Err(ScaffoldContractError::InvalidDecisionEvidence.into());
         }
-        let mut words = vec![0_u32; targets.len() * 384];
+        let mut words = vec![0_u32; targets.len() * REPLAY_SPEECH_TARGET_WORDS as usize];
         let scales = crate::replay_speech_loss_scales(targets);
         for (tick, target) in targets.iter().enumerate() {
             if let Some(target) = target {
@@ -1868,17 +1978,21 @@ impl TrainerGpuState {
         cached_pipelines: Option<&TrainerPipelines>,
     ) -> Result<Self, TrainingError> {
         let (meta, layout) = pack_metadata_and_layout(phenotype, replay)?;
-        let limits = device.limits();
-        for words in [
-            layout.state_words,
-            layout.gradient_words,
-            layout.output_words,
-            layout.training_words,
+        let sizes = TrainerBufferSizes::new(
+            layout,
             meta.len() as u64,
+            phenotype.synapses().len(),
+            phenotype.microstep_count(),
+        )?;
+        let limits = device.limits();
+        for bytes in [
+            sizes.state,
+            sizes.gradients,
+            sizes.outputs,
+            sizes.training,
+            sizes.metadata,
         ] {
-            if words * 4 > limits.max_storage_buffer_binding_size
-                || words * 4 > limits.max_buffer_size
-            {
+            if bytes > limits.max_storage_buffer_binding_size || bytes > limits.max_buffer_size {
                 return Err(ScaffoldContractError::PhenotypeCompile.into());
             }
         }
@@ -1887,7 +2001,7 @@ impl TrainerGpuState {
         // is also one complete, independently aligned uniform binding.
         if !HEADER_BYTES.is_multiple_of(u64::from(limits.min_uniform_buffer_offset_alignment))
             || u64::from(total_steps.saturating_sub(1)) * HEADER_BYTES > u64::from(u32::MAX)
-            || u64::from(total_steps) * HEADER_BYTES > limits.max_buffer_size
+            || sizes.step_headers > limits.max_buffer_size
         {
             return Err(ScaffoldContractError::PhenotypeCompile.into());
         }
@@ -1896,30 +2010,33 @@ impl TrainerGpuState {
             .and_then(|steps| steps.checked_mul(HEADER_WORDS))
             .ok_or(ScaffoldContractError::PhenotypeCompile)?;
         let zero_headers = vec![0_u32; header_capacity_words];
-        let step_headers = buffer_init(
+        let step_headers = buffer_init_sized(
             device,
             "foundation-trainer-step-headers",
             &zero_headers,
+            sizes.step_headers,
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        );
-        let meta_buffer = buffer_init(
+        )?;
+        let meta_buffer = buffer_init_sized(
             device,
             "foundation-trainer-meta",
             &meta,
+            sizes.metadata,
             wgpu::BufferUsages::STORAGE,
-        );
-        let weights = buffer_init(
+        )?;
+        let weights = buffer_init_sized(
             device,
             "foundation-trainer-weights",
             initial_weights,
+            sizes.weights,
             wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
-        );
+        )?;
         let optimizer = zero_buffer(
             device,
             "foundation-trainer-optimizer",
-            initial_weights.len() as u64 * 12,
+            sizes.optimizer,
             wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -1927,13 +2044,13 @@ impl TrainerGpuState {
         let training = zero_buffer(
             device,
             "foundation-trainer-sequence",
-            layout.training_words * 4,
+            sizes.training,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         );
         let state = zero_buffer(
             device,
             "foundation-trainer-state",
-            layout.state_words * 4,
+            sizes.state,
             wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -1941,7 +2058,7 @@ impl TrainerGpuState {
         let gradients = zero_buffer(
             device,
             "foundation-trainer-gradients",
-            layout.gradient_words * 4,
+            sizes.gradients,
             wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -1949,20 +2066,21 @@ impl TrainerGpuState {
         let outputs = zero_buffer(
             device,
             "foundation-trainer-outputs",
-            layout.output_words * 4,
+            sizes.outputs,
             wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
         );
-        let mask_buffer = buffer_init(
+        let mask_buffer = buffer_init_sized(
             device,
             "foundation-trainer-stage-mask",
             mask.words(),
+            sizes.mask,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        );
+        )?;
         let readback = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("foundation-trainer-step-readback"),
-            size: READBACK_BYTES,
+            size: sizes.readback,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -2300,12 +2418,220 @@ fn cached_phenotype_metadata(
     Ok(value)
 }
 
+// Counts every array without materializing replay ticks or dendritic values.
+// Metadata offsets are attached by pack_metadata_and_layout before device use.
+fn counted_array_layout(
+    phenotype: &BrainPhenotype,
+    ticks: usize,
+    replay: bool,
+) -> Result<PackedLayout, TrainingError> {
+    if ticks == 0 || ticks > crate::MAX_TRAINING_SEQUENCE_TICKS {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
+    }
+    let neuron_count = phenotype.neuron_count() as usize;
+    let synapse_count = phenotype.synapses().len();
+    let ticks = u64::try_from(ticks).map_err(|_| ScaffoldContractError::PhenotypeCompile)?;
+    let candidate_capacity = if replay {
+        alife_core::MAX_ACTION_CANDIDATES as u64
+    } else {
+        1
+    };
+    let neurons = neuron_count as u64;
+    let total_steps = checked_count_mul(ticks, u64::from(phenotype.microstep_count()))?;
+    let state_count = checked_count_mul(checked_count_add(total_steps, 1)?, neurons)?;
+    let state_twice = checked_count_mul(state_count, 2)?;
+    let candidate_words = checked_count_mul(ticks, candidate_capacity)?;
+    let step_neurons = checked_count_mul(total_steps, neurons)?;
+    let inputs = 0;
+    let targets = as_u32(checked_count_mul(ticks, neurons)?)?;
+    let target_weights = as_u32(checked_count_mul(u64::from(targets), 2)?)?;
+    let candidate_records = as_u32(checked_count_mul(u64::from(targets), 3)?)?;
+    let base_training_words = checked_count_mul(
+        ticks,
+        checked_count_add(
+            checked_count_mul(neurons, 3)?,
+            checked_count_mul(CANDIDATE_RECORD_WORDS as u64, candidate_capacity)?,
+        )?,
+    )?;
+    let activations = 0;
+    let metabolic = as_u32(state_count)?;
+    let activity_ema = as_u32(state_twice)?;
+    let state_words = checked_count_mul(state_count, 3)?;
+    let activation_gradients = 0;
+    let metabolic_gradients = as_u32(state_count)?;
+    let deltas = as_u32(state_twice)?;
+    let weight_gradients = as_u32(checked_count_add(state_twice, step_neurons)?)?;
+    let base_gradient_words = checked_count_add(u64::from(weight_gradients), synapse_count as u64)?;
+    let adjoints = as_u32(base_gradient_words)?;
+    let accumulated_weights = as_u32(checked_count_add(base_gradient_words, candidate_words)?)?;
+    let gradient_words = checked_count_add(
+        checked_count_add(u64::from(accumulated_weights), synapse_count as u64)?,
+        checked_count_mul(ticks, 192)?,
+    )?;
+    let candidate_logits = 0;
+    let speech_logits = as_u32(candidate_words)?;
+    let metrics = as_u32(checked_count_add(
+        candidate_words,
+        checked_count_mul(ticks, if replay { 192 } else { 1 })?,
+    )?)?;
+    let memory_raw = as_u32(checked_count_add(u64::from(metrics), 4)?)?;
+    let cognitive_raw = as_u32(checked_count_add(u64::from(memory_raw), candidate_words)?)?;
+    let output_words = checked_count_add(u64::from(cognitive_raw), candidate_words)?;
+    let context = as_u32(base_training_words)?;
+    let route_count = as_u32(phenotype.projections().len())?;
+    let context_per_tick = [
+        4,
+        u64::from(route_count),
+        synapse_count as u64,
+        checked_count_mul(alife_core::MAX_STRUCTURAL_EDGES as u64, 5)?,
+    ]
+    .into_iter()
+    .try_fold(0, checked_count_add)?;
+    let initial = as_u32(checked_count_add(
+        base_training_words,
+        checked_count_mul(ticks, context_per_tick)?,
+    )?)?;
+    let replay_speech_targets = as_u32(checked_count_add(
+        u64::from(initial),
+        checked_count_mul(neurons, 3)?,
+    )?)?;
+    let training_words = checked_count_add(
+        u64::from(replay_speech_targets),
+        checked_count_mul(ticks, REPLAY_SPEECH_TARGET_WORDS)?,
+    )?;
+    Ok(PackedLayout {
+        ticks: as_u32(ticks)?,
+        replay,
+        candidate_capacity: as_u32(candidate_capacity)?,
+        context,
+        route_count,
+        initial,
+        activity_ema,
+        adjoints,
+        memory_gain: 0.0,
+        burn_in_steps: 0,
+        memory_raw,
+        cognitive_raw,
+        accumulated_weights,
+        gradient_scale: 1.0,
+        inputs,
+        targets,
+        target_weights,
+        candidate_records,
+        activations,
+        metabolic,
+        activation_gradients,
+        metabolic_gradients,
+        deltas,
+        weight_gradients,
+        candidate_logits,
+        speech_logits,
+        metrics,
+        replay_speech_targets,
+        optimizer_v: as_u32(synapse_count)?,
+        optimizer_age: as_u32(
+            synapse_count
+                .checked_mul(2)
+                .ok_or(ScaffoldContractError::PhenotypeCompile)?,
+        )?,
+        state_words,
+        gradient_words,
+        output_words,
+        training_words,
+        dendritic_offsets: 0,
+        dendritic_branches: 0,
+        dendritic_inputs: 0,
+        dendritic_source_offsets: 0,
+        dendritic_source_branches: 0,
+        decoder_offsets: 0,
+        decoder_ids: 0,
+        target_offsets: 0,
+        incoming_ids: 0,
+        source_offsets: 0,
+        outgoing_ids: 0,
+        synapse_records: 0,
+        dynamics: 0,
+        family_biases: 0,
+        speech_target_start: 0,
+        speech_offsets: 0,
+    })
+}
+
+fn checked_count_add(a: u64, b: u64) -> Result<u64, TrainingError> {
+    a.checked_add(b)
+        .ok_or(ScaffoldContractError::PhenotypeCompile.into())
+}
+
+fn checked_count_mul(a: u64, b: u64) -> Result<u64, TrainingError> {
+    a.checked_mul(b)
+        .ok_or(ScaffoldContractError::PhenotypeCompile.into())
+}
+
+fn dendritic_metadata_words(
+    neurons: u64,
+    branches: u64,
+    inputs: u64,
+) -> Result<u64, TrainingError> {
+    [
+        checked_count_mul(checked_count_add(neurons, 1)?, 2)?,
+        checked_count_mul(branches, 5)?,
+        checked_count_mul(inputs, 4)?,
+    ]
+    .into_iter()
+    .try_fold(0, checked_count_add)
+}
+
+#[cfg(feature = "gpu-tests")]
+fn replay_allocation_bound(
+    phenotype: &BrainPhenotype,
+    max_ticks: usize,
+) -> Result<ReplayAllocationBound, TrainingError> {
+    let cached = cached_phenotype_metadata(phenotype)?;
+    let neurons = u64::from(phenotype.neuron_count());
+    let branches = checked_count_mul(
+        neurons,
+        alife_core::MAX_DENDRITIC_BRANCHES_PER_NEURON as u64,
+    )?
+    .min(alife_core::MAX_DENDRITIC_BRANCHES as u64);
+    let inputs = checked_count_mul(branches, alife_core::MAX_DENDRITIC_INPUTS as u64)?;
+    let mut bound = ReplayAllocationBound {
+        arena_bytes: 0,
+        initialization_upload_bytes: 0,
+        queue_upload_bytes: 0,
+    };
+    for (ticks, replay, d, i) in [
+        (max_ticks, true, branches, inputs),
+        (TRAINING_SEQUENCE_TICKS, false, 0, 0),
+    ] {
+        let layout = counted_array_layout(phenotype, ticks, replay)?;
+        let metadata_words = [
+            cached.prefix_meta.len() as u64,
+            dendritic_metadata_words(neurons, d, i)?,
+            cached.decoder_offset_counts.len() as u64,
+            cached.decoder_ids_vec.len() as u64,
+        ]
+        .into_iter()
+        .try_fold(0, checked_count_add)?;
+        let next = TrainerBufferSizes::new(
+            layout,
+            metadata_words,
+            phenotype.synapses().len(),
+            phenotype.microstep_count(),
+        )?
+        .bound(layout)?;
+        bound.arena_bytes = bound.arena_bytes.max(next.arena_bytes);
+        bound.initialization_upload_bytes = bound
+            .initialization_upload_bytes
+            .max(next.initialization_upload_bytes);
+        bound.queue_upload_bytes = bound.queue_upload_bytes.max(next.queue_upload_bytes);
+    }
+    Ok(bound)
+}
+
 fn pack_metadata_and_layout(
     phenotype: &BrainPhenotype,
     replay: Option<&TrainingSequence>,
 ) -> Result<(Vec<u32>, PackedLayout), TrainingError> {
-    let neuron_count = phenotype.neuron_count() as usize;
-    let synapse_count = phenotype.synapses().len();
     let cached = cached_phenotype_metadata(phenotype)?;
     let mut meta = cached.prefix_meta;
     let target_offsets = cached.target_offsets;
@@ -2317,58 +2643,11 @@ fn pack_metadata_and_layout(
     let family_biases = cached.family_biases;
     let speech_offsets = cached.speech_offsets;
 
-    let ticks = replay.map_or(TRAINING_SEQUENCE_TICKS, |r| r.ticks.len()) as u64;
-    let candidate_capacity = if replay.is_some() {
-        alife_core::MAX_ACTION_CANDIDATES as u64
-    } else {
-        1
-    };
-    let neurons = neuron_count as u64;
-    let total_steps = ticks * u64::from(phenotype.microstep_count());
-    let state_count = (total_steps + 1)
-        .checked_mul(neurons)
-        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-    let inputs = 0;
-    let targets = as_u32(ticks * neurons)?;
-    let target_weights = as_u32(ticks * neurons * 2)?;
-    let candidate_records = as_u32(ticks * neurons * 3)?;
-    let base_training_words = ticks
-        .checked_mul(neurons * 3 + CANDIDATE_RECORD_WORDS as u64 * candidate_capacity)
-        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-    let activations = 0;
-    let metabolic = as_u32(state_count)?;
-    let activity_ema = as_u32(state_count * 2)?;
-    let state_words = state_count * 3;
-    let activation_gradients = 0;
-    let metabolic_gradients = as_u32(state_count)?;
-    let deltas = as_u32(state_count * 2)?;
-    let weight_gradients = as_u32(state_count * 2 + total_steps * neurons)?;
-    let base_gradient_words = state_count
-        .checked_mul(2)
-        .and_then(|value| value.checked_add(total_steps * neurons))
-        .and_then(|value| value.checked_add(synapse_count as u64))
-        .ok_or(ScaffoldContractError::PhenotypeCompile)?;
-    let adjoints = as_u32(base_gradient_words)?;
-    let accumulated_weights = as_u32(base_gradient_words + ticks * candidate_capacity)?;
-    let gradient_words = u64::from(accumulated_weights) + synapse_count as u64 + ticks * 192;
-    let candidate_logits = 0;
-    let speech_logits = as_u32(ticks * candidate_capacity)?;
-    let metrics =
-        as_u32(ticks * candidate_capacity + ticks * if replay.is_some() { 192 } else { 1 })?;
-    let memory_raw = metrics + 4;
-    let cognitive_raw = memory_raw + as_u32(ticks * candidate_capacity)?;
-    let output_words = u64::from(cognitive_raw) + ticks * candidate_capacity;
-    let context = as_u32(base_training_words)?;
-    let route_count = as_u32(phenotype.projections().len())?;
-    let initial = as_u32(
-        base_training_words
-            + ticks
-                * (4 + u64::from(route_count)
-                    + synapse_count as u64
-                    + (alife_core::MAX_STRUCTURAL_EDGES as u64) * 5),
+    let mut layout = counted_array_layout(
+        phenotype,
+        replay.map_or(TRAINING_SEQUENCE_TICKS, |r| r.ticks.len()),
+        replay.is_some(),
     )?;
-    let replay_speech_targets = as_u32(u64::from(initial) + neurons * 3)?;
-    let training_words = u64::from(replay_speech_targets) + ticks * 384;
     let (
         dendritic_offsets,
         dendritic_branches,
@@ -2382,67 +2661,27 @@ fn pack_metadata_and_layout(
     meta.extend(cached.decoder_ids_vec);
     let speech_target_start =
         phenotype.candidate_decoder().motor_start() + SpeechDecoderLayoutV1::MOTOR_TARGET_OFFSET;
-    Ok((
-        meta,
-        PackedLayout {
-            ticks: ticks as u32,
-            replay: replay.is_some(),
-            candidate_capacity: candidate_capacity as u32,
-            context,
-            route_count,
-            dendritic_offsets,
-            dendritic_branches,
-            dendritic_inputs,
-            dendritic_source_offsets,
-            dendritic_source_branches,
-            initial,
-            activity_ema,
-            adjoints,
-            decoder_offsets,
-            decoder_ids,
-            memory_gain: replay.map_or(0.0, |r| r.memory_candidate_gain),
-            burn_in_steps: replay.map_or(0, |r| {
-                r.burn_in_ticks as u32 * u32::from(phenotype.microstep_count())
-            }),
-            memory_raw,
-            cognitive_raw,
-            accumulated_weights,
-            gradient_scale: 1.0,
-            target_offsets,
-            incoming_ids,
-            source_offsets,
-            outgoing_ids,
-            synapse_records,
-            dynamics,
-            family_biases,
-            inputs,
-            targets,
-            target_weights,
-            candidate_records,
-            activations,
-            metabolic,
-            activation_gradients,
-            metabolic_gradients,
-            deltas,
-            weight_gradients,
-            candidate_logits,
-            speech_logits,
-            metrics,
-            speech_target_start,
-            replay_speech_targets,
-            speech_offsets,
-            optimizer_v: synapse_count as u32,
-            optimizer_age: as_u32(
-                synapse_count
-                    .checked_mul(2)
-                    .ok_or(ScaffoldContractError::PhenotypeCompile)?,
-            )?,
-            state_words,
-            gradient_words,
-            output_words,
-            training_words,
-        },
-    ))
+    layout.dendritic_offsets = dendritic_offsets;
+    layout.dendritic_branches = dendritic_branches;
+    layout.dendritic_inputs = dendritic_inputs;
+    layout.dendritic_source_offsets = dendritic_source_offsets;
+    layout.dendritic_source_branches = dendritic_source_branches;
+    layout.decoder_offsets = decoder_offsets;
+    layout.decoder_ids = decoder_ids;
+    layout.memory_gain = replay.map_or(0.0, |r| r.memory_candidate_gain);
+    layout.burn_in_steps = replay.map_or(0, |r| {
+        r.burn_in_ticks as u32 * u32::from(phenotype.microstep_count())
+    });
+    layout.target_offsets = target_offsets;
+    layout.incoming_ids = incoming_ids;
+    layout.source_offsets = source_offsets;
+    layout.outgoing_ids = outgoing_ids;
+    layout.synapse_records = synapse_records;
+    layout.dynamics = dynamics;
+    layout.family_biases = family_biases;
+    layout.speech_target_start = speech_target_start;
+    layout.speech_offsets = speech_offsets;
+    Ok((meta, layout))
 }
 
 fn push_offsets(
@@ -2476,6 +2715,13 @@ fn pack_dendrites(
 ) -> Result<(u32, u32, u32, u32, u32), TrainingError> {
     let branches = replay.map_or(&[][..], |r| r.initial.dendrites.branches());
     let n = phenotype.neuron_count() as usize;
+    let input_count = branches.iter().try_fold(0_u64, |sum, branch| {
+        checked_count_add(sum, branch.inputs.len() as u64)
+    })?;
+    let expected_end = checked_count_add(
+        meta.len() as u64,
+        dendritic_metadata_words(n as u64, branches.len() as u64, input_count)?,
+    )?;
     let offsets = push_offsets(meta, n, branches.iter().map(|b| b.target))?;
     let descriptors = as_u32(meta.len())?;
     let mut inputs = Vec::new();
@@ -2500,6 +2746,9 @@ fn pack_dendrites(
     let source_branches = as_u32(meta.len())?;
     for (_, branch, weight) in outgoing {
         meta.extend_from_slice(&[branch, weight]);
+    }
+    if meta.len() as u64 != expected_end {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
     }
     Ok((
         offsets,
@@ -2808,6 +3057,19 @@ fn buffer_init<T: bytemuck::Pod>(
     })
 }
 
+fn buffer_init_sized<T: bytemuck::Pod>(
+    device: &wgpu::Device,
+    label: &'static str,
+    contents: &[T],
+    requested_bytes: u64,
+    usage: wgpu::BufferUsages,
+) -> Result<wgpu::Buffer, TrainingError> {
+    if u64::try_from(std::mem::size_of_val(contents)).ok() != Some(requested_bytes) {
+        return Err(ScaffoldContractError::PhenotypeCompile.into());
+    }
+    Ok(buffer_init(device, label, contents, usage))
+}
+
 fn zero_buffer(
     device: &wgpu::Device,
     label: &'static str,
@@ -2832,6 +3094,132 @@ fn as_u32(value: impl TryInto<u32>) -> Result<u32, TrainingError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn counted_replay_bound_covers_real_packing_without_large_dummy_windows() {
+        let phenotype = metadata_test_phenotype();
+        let n = phenotype.neuron_count() as usize;
+        let dendrites = alife_core::DendriticBranchSet::new(vec![
+            alife_core::DendriticBranch::new(
+                0,
+                0.1,
+                0.5,
+                vec![alife_core::DendriticInputRef::new(1, 0.3).unwrap()],
+            )
+            .unwrap(),
+            alife_core::DendriticBranch::new(
+                2,
+                -0.1,
+                0.4,
+                vec![
+                    alife_core::DendriticInputRef::new(0, -0.2).unwrap(),
+                    alife_core::DendriticInputRef::new(2, 0.7).unwrap(),
+                ],
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+        for ticks in [1, 3, 5] {
+            for branches in [alife_core::DendriticBranchSet::default(), dendrites.clone()] {
+                let sequence = TrainingSequence {
+                    phenotype_hash: phenotype.phenotype_hash(),
+                    initial: crate::TrainingInitialState {
+                        activations: vec![0.0; n],
+                        activity_ema: vec![0.0; n],
+                        metabolic_load: vec![0.0; n],
+                        dendrites: branches,
+                    },
+                    ticks: vec![
+                        crate::TrainingReplayTick {
+                            encoded_inputs: vec![0.0; n],
+                            projection_gain: 1.0,
+                            local_threshold_shift: 0.0,
+                            microstep_count: u32::from(phenotype.microstep_count()),
+                            enabled_routes: vec![true; phenotype.projections().len()],
+                            effective_weight_offsets: vec![0.0; phenotype.synapses().len()],
+                            structural_synapses: Vec::new(),
+                            candidates: vec![crate::TrainingReplayCandidate {
+                                family: alife_core::CandidateActionFamily::Idle,
+                                decoder_inputs: [0.0; 54],
+                                innate_bias: 0.0,
+                            }],
+                        };
+                        ticks
+                    ],
+                    burn_in_ticks: 0,
+                    memory_candidate_gain: phenotype
+                        .candidate_decoder()
+                        .memory_channel()
+                        .map_or(0.0, |p| p.max_candidate_gain()),
+                };
+                sequence.validate_for(&phenotype).unwrap();
+                let (metadata, layout) =
+                    pack_metadata_and_layout(&phenotype, Some(&sequence)).unwrap();
+                let actual = TrainerBufferSizes::new(
+                    layout,
+                    metadata.len() as u64,
+                    phenotype.synapses().len(),
+                    phenotype.microstep_count(),
+                )
+                .unwrap()
+                .bound(layout)
+                .unwrap();
+                let bound = replay_allocation_bound(&phenotype, ticks).unwrap();
+                assert!(actual.arena_bytes <= bound.arena_bytes);
+                assert!(actual.initialization_upload_bytes <= bound.initialization_upload_bytes);
+                assert!(actual.queue_upload_bytes <= bound.queue_upload_bytes);
+                assert!(
+                    FoundationTrainer::replay_allocation_bytes(&phenotype, &sequence).unwrap()
+                        <= bound.arena_bytes
+                );
+            }
+        }
+        // Maximum legal ticks/branches/inputs are counted, never materialized.
+        let max = replay_allocation_bound(&phenotype, crate::MAX_TRAINING_SEQUENCE_TICKS).unwrap();
+        assert!(max.arena_bytes > replay_allocation_bound(&phenotype, 5).unwrap().arena_bytes);
+    }
+
+    #[cfg(feature = "gpu-tests")]
+    #[test]
+    fn counted_replay_bound_checks_overflow_and_real_descriptor_minima() {
+        let phenotype = metadata_test_phenotype();
+        for invalid_ticks in [0, crate::MAX_TRAINING_SEQUENCE_TICKS + 1, usize::MAX] {
+            assert!(replay_allocation_bound(&phenotype, invalid_ticks).is_err());
+        }
+        assert!(dendritic_metadata_words(u64::MAX, 0, 0).is_err());
+        assert!(dendritic_metadata_words(1, 0, u64::MAX).is_err());
+        let mut layout = counted_array_layout(&phenotype, 1, true).unwrap();
+        assert!(TrainerBufferSizes::new(layout, u64::MAX, 1, 1).is_err());
+        layout.state_words = u64::MAX;
+        assert!(TrainerBufferSizes::new(layout, 1, 1, 1).is_err());
+        layout.training_words = 0;
+        layout.state_words = 0;
+        layout.gradient_words = 0;
+        layout.output_words = 0;
+        let empty = TrainerBufferSizes::new(layout, 0, 0, 0).unwrap();
+        // Initialized empty slices retain DeviceExt's zero-size behavior;
+        // zero_buffer destinations retain their existing four-byte minimum.
+        assert_eq!(
+            [
+                empty.step_headers,
+                empty.metadata,
+                empty.weights,
+                empty.mask
+            ],
+            [0; 4]
+        );
+        assert_eq!(
+            [
+                empty.optimizer,
+                empty.training,
+                empty.state,
+                empty.gradients,
+                empty.outputs
+            ],
+            [4; 5]
+        );
+    }
 
     #[test]
     fn adam_metadata_constrains_recurrent_routes_but_preserves_signed_decoder_readouts() {

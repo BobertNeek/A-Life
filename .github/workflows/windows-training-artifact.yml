@@ -3,7 +3,7 @@ name: Windows training artifact
 on:
   workflow_dispatch:
   pull_request:
-    branches: ["main"]
+    branches: ["main", "codex/experimental-frozen-gradient-cache"]
     paths:
       - ".gitattributes"
       - ".github/workflows/windows-training-artifact.yml"
@@ -191,6 +191,10 @@ jobs:
             }
             if (Test-Path -LiteralPath $taskOutput) { throw 'Rejected admission created output' }
           }
+      - name: Compile opt-in PPO controller without GPU execution
+        env:
+          CARGO_BUILD_JOBS: '2'
+        run: cargo test --locked -p alife_training --features receipt-lineage,gpu-tests --test software_ppo_controller --no-run
       - name: Seal artifact metadata
         run: |
           $taskBinary = 'target/debug/train_n2048_care.exe'
