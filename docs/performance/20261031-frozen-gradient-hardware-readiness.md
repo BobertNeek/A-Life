@@ -152,12 +152,56 @@ loading, reward/GAE construction and residual-critic fitting.
 
 Any future activation belongs beside the policy-local snapshot cache and
 controller call in `foundation_training_cycle/continuous_world.rs`, after full
-targets/spans are constructed. Require explicit immutable/versioned input proof
-without changing loader/error order: `PpoWindowSnapshotCache` retention is
-optional, and every hit repeats measured host admission. Require a phase-total
+targets/spans are constructed. That continuous closure already provides the
+successful-input proof described below; additional RAM pinning is unnecessary.
+Preserve loader/error order: `PpoWindowSnapshotCache` retention remains optional,
+and every hit repeats measured host admission. Require a phase-total
 device reservation covering live and offline resources, old/new replay scratch,
 objective/rollback/readbacks and raw-cache bytes. The experiment's 2 MiB copy cap,
 the continuous host RAM budget and the separate group auxiliary allowance do not
-provide that reservation. Retention or admission failure must keep fresh replay
-available. This source assessment changes no configuration, schedule or runtime
+provide that reservation. Refusing the optional optimization retains the
+original fresh path and its existing storage/host-admission failures. This source
+assessment changes no configuration, schedule or runtime
 behavior and provides no physical-device qualification.
+
+## Versioned input stability
+
+Source audit at main `0fab094c697a71f3da6eae98a6b740a7dac60eda` establishes
+identical logical PPO windows on repeated **successful** loads in the actual
+continuous closure. Its relevant loader, cohort, worker, snapshot-cache and
+orchestrator files are byte-identical at experimental
+`b1fd11290c99ec0ca6aa457a466cca046831885e`. The proof combines versioned replay
+content with captured immutable targets; sealed references alone do not contain
+old values or GAE.
+
+- The worker returns references only after sealing. The closure captures fixed
+  references, source, phenotype and spans. Old probabilities derive from recorded
+  behavior; old values and full-trajectory GAE are constructed once in the owned
+  `PpoBatch`. Each callback copies existing target slices with `batch.window()`;
+  it does not predict values or recompute GAE. See
+  [collection and target ownership](https://github.com/BobertNeek/A-Life/blob/0fab094c697a71f3da6eae98a6b740a7dac60eda/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L1168),
+  [the captured closure](https://github.com/BobertNeek/A-Life/blob/0fab094c697a71f3da6eae98a6b740a7dac60eda/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L1266)
+  and [target slicing](https://github.com/BobertNeek/A-Life/blob/b1fd11290c99ec0ca6aa457a466cca046831885e/crates/alife_training/src/ppo.rs#L393).
+- [Records and references](https://github.com/BobertNeek/A-Life/blob/0fab094c697a71f3da6eae98a6b740a7dac60eda/crates/alife_game_app/src/foundation_training.rs#L4440)
+  bind complete neural sequences and behavior to encoded length/BLAKE3 and
+  source/record identity. The source binds policy, actor-checkpoint/asset digests
+  and phenotype/compiler-input identity. Records include initial activations,
+  EMA, metabolic state, dendrites, decoder inputs, innate bias, encoded inputs,
+  routes, microsteps, structural edges and effective offsets. The
+  [loader verifies storage before decoded-record cache lookup](https://github.com/BobertNeek/A-Life/blob/0fab094c697a71f3da6eae98a6b740a7dac60eda/crates/alife_game_app/src/foundation_training.rs#L5136)
+  and decodes that same verified buffer.
+  [Cohort reads](https://github.com/BobertNeek/A-Life/blob/0fab094c697a71f3da6eae98a6b740a7dac60eda/crates/alife_game_app/src/foundation_training/cohort_replay.rs#L250)
+  also require exact sealed reference membership. No live-world, recall, clock,
+  RNG or current learner reconstruction supplies repeated inputs.
+- [Owned/Shared handles](https://github.com/BobertNeek/A-Life/blob/0fab094c697a71f3da6eae98a6b740a7dac60eda/crates/alife_game_app/src/foundation_training_cycle/replay_window_cache.rs#L13)
+  expose immutable borrows. Optional RAM retention is unnecessary for this proof:
+  a successful disk reconstruction supplies the same
+  logical fields. Data identity does **not** guarantee I/O availability. Keep
+  every original callback, storage verification, memory admission and error in
+  its original order; missing/changed storage or memory pressure may still fail.
+  The generic callback API retains its unchanged-data precondition.
+
+This does not claim full `ExperiencePatch` bit identity across embedded-JSON
+decoding, or authenticate binary identity through `source_revision`. Total GPU
+phase-memory admission and physical-device qualification remain **open**. This
+documentation neither activates the experiment nor changes normal execution.
