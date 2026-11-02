@@ -111,8 +111,17 @@ def validate(receipt):
         raise ReceiptError("complete receipts require error: null")
     if status == "error" and not isinstance(receipt["error"], str):
         raise ReceiptError("error receipts require an error string")
-    if not isinstance(receipt.get("context"), dict):
+    context = receipt.get("context")
+    if not isinstance(context, dict):
         raise ReceiptError("context must be an object")
+    # Older and early-error receipts may omit observations. Present counters
+    # come from Rust usize/u64 values; only the Option<u64> death tick is nullable.
+    for field in OBSERVATIONS:
+        if field not in context:
+            continue
+        if field == "terminal_death_tick" and context[field] is None:
+            continue
+        _integer(context[field], f"context.{field}")
     spans = receipt.get("spans")
     if not isinstance(spans, list):
         raise ReceiptError("spans must be an array")

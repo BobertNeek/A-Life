@@ -2,9 +2,16 @@
 
 mod checkpoint_readback;
 
+#[cfg(all(test, feature = "cpu-backend"))]
+mod replay_packing_assay;
+
 #[cfg(all(test, feature = "gpu-tests"))]
 #[path = "trainer/packed_checkpoint_gpu_tests.rs"]
 mod packed_checkpoint_gpu_tests;
+
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "trainer/dynamic_dispatch_tests.rs"]
+mod dynamic_dispatch_tests;
 
 use std::{num::NonZeroU64, sync::mpsc};
 
@@ -142,7 +149,6 @@ struct TrainerGpuState {
     mask: wgpu::Buffer,
     readback: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    step_bind_groups: Vec<wgpu::BindGroup>,
     pipelines: TrainerPipelines,
     layout: PackedLayout,
 }
@@ -494,6 +500,15 @@ impl FoundationTrainer {
     }
     pub fn replay_state_buffer(&self) -> &wgpu::Buffer {
         &self.gpu.state
+    }
+
+    /// Current logical output/state extents in 32-bit words. Backing buffers
+    /// may retain larger capacity. Stale or unprepared replay is rejected.
+    pub fn replay_buffer_word_lengths(&self) -> Result<(u64, u64), TrainingError> {
+        if !self.gpu.layout.replay || self.replay_shape.is_none() {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
+        Ok((self.gpu.layout.output_words, self.gpu.layout.state_words))
     }
 
     /// Diagnostic readback of the last replay, padded to the production
@@ -1700,15 +1715,35 @@ impl FoundationTrainer {
         total_steps: u32,
         neuron_groups: u32,
     ) {
+        self.gpu.record_forward(encoder, total_steps, neuron_groups);
+    }
+
+    fn record_backward(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        total_steps: u32,
+        neuron_groups: u32,
+    ) {
+        self.gpu
+            .record_backward(encoder, total_steps, neuron_groups);
+    }
+}
+
+impl TrainerGpuState {
+    fn record_forward(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        total_steps: u32,
+        neuron_groups: u32,
+    ) {
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("foundation-trainer-forward-microsteps"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.pipelines.forward);
         for step in 0..total_steps {
-            dispatch(
-                encoder,
-                &self.gpu.pipelines.forward,
-                &self.gpu.step_bind_groups[step as usize],
-                neuron_groups,
-                1,
-                "foundation-trainer-forward-microstep",
-            );
+            pass.set_bind_group(0, &self.bind_group, &[step * HEADER_BYTES as u32]);
+            pass.dispatch_workgroups(neuron_groups.max(1), 1, 1);
         }
     }
 
@@ -1718,23 +1753,19 @@ impl FoundationTrainer {
         total_steps: u32,
         neuron_groups: u32,
     ) {
-        for step in (self.gpu.layout.burn_in_steps..total_steps).rev() {
-            dispatch(
-                encoder,
-                &self.gpu.pipelines.backward_local,
-                &self.gpu.step_bind_groups[step as usize],
-                neuron_groups,
-                1,
-                "foundation-trainer-backward-local",
-            );
-            dispatch(
-                encoder,
-                &self.gpu.pipelines.backward_sources,
-                &self.gpu.step_bind_groups[step as usize],
-                neuron_groups,
-                1,
-                "foundation-trainer-backward-sources",
-            );
+        // Each compute dispatch is a separate WebGPU usage scope. wgpu emits
+        // the required storage barriers between dispatches within this pass,
+        // preserving the local -> sources -> preceding-step dependency order.
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("foundation-trainer-backward-microsteps"),
+            timestamp_writes: None,
+        });
+        for step in (self.layout.burn_in_steps..total_steps).rev() {
+            pass.set_bind_group(0, &self.bind_group, &[step * HEADER_BYTES as u32]);
+            pass.set_pipeline(&self.pipelines.backward_local);
+            pass.dispatch_workgroups(neuron_groups.max(1), 1, 1);
+            pass.set_pipeline(&self.pipelines.backward_sources);
+            pass.dispatch_workgroups(neuron_groups.max(1), 1, 1);
         }
     }
 }
@@ -1773,6 +1804,14 @@ impl TrainerGpuState {
             }
         }
         let total_steps = u32::from(phenotype.microstep_count()) * layout.ticks;
+        // Uniform offsets are u32 even when buffer sizes are u64. Every header
+        // is also one complete, independently aligned uniform binding.
+        if !HEADER_BYTES.is_multiple_of(u64::from(limits.min_uniform_buffer_offset_alignment))
+            || u64::from(total_steps.saturating_sub(1)) * HEADER_BYTES > u64::from(u32::MAX)
+            || u64::from(total_steps) * HEADER_BYTES > limits.max_buffer_size
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile.into());
+        }
         let header_capacity_words = usize::try_from(total_steps)
             .ok()
             .and_then(|steps| steps.checked_mul(HEADER_WORDS))
@@ -1855,32 +1894,28 @@ impl TrainerGpuState {
             || create_bind_group_layout(device),
             |pipelines| pipelines.bind_group_layout.clone(),
         );
-        let make_bind_group = |step: u32| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("foundation-trainer-bind-group"),
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &step_headers,
-                            offset: u64::from(step) * HEADER_BYTES,
-                            size: NonZeroU64::new(HEADER_BYTES),
-                        }),
-                    },
-                    entry(1, &meta_buffer),
-                    entry(2, &weights),
-                    entry(3, &optimizer),
-                    entry(4, &training),
-                    entry(5, &state),
-                    entry(6, &gradients),
-                    entry(7, &outputs),
-                    entry(8, &mask_buffer),
-                ],
-            })
-        };
-        let bind_group = make_bind_group(0);
-        let step_bind_groups = (0..total_steps).map(make_bind_group).collect();
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("foundation-trainer-bind-group"),
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &step_headers,
+                        offset: 0,
+                        size: NonZeroU64::new(HEADER_BYTES),
+                    }),
+                },
+                entry(1, &meta_buffer),
+                entry(2, &weights),
+                entry(3, &optimizer),
+                entry(4, &training),
+                entry(5, &state),
+                entry(6, &gradients),
+                entry(7, &outputs),
+                entry(8, &mask_buffer),
+            ],
+        });
         let pipelines = if let Some(pipelines) = cached_pipelines {
             pipelines.clone()
         } else {
@@ -1976,7 +2011,6 @@ impl TrainerGpuState {
             mask: mask_buffer,
             readback,
             bind_group,
-            step_bind_groups,
             pipelines,
             layout,
         })
@@ -2435,10 +2469,10 @@ fn pack_replay_sequence(
         for (index, enabled) in tick.enabled_routes.iter().enumerate() {
             words[base + 4 + index] = u32::from(*enabled);
         }
-        for (index, value) in tick.effective_weight_offsets.iter().enumerate() {
-            words[base + 4 + tick.enabled_routes.len() + index] = value.to_bits();
-        }
-        let edge_base = base + 4 + tick.enabled_routes.len() + tick.effective_weight_offsets.len();
+        let weight_start = base + 4 + tick.enabled_routes.len();
+        let edge_base = weight_start + tick.effective_weight_offsets.len();
+        words[weight_start..edge_base]
+            .copy_from_slice(bytemuck::cast_slice(&tick.effective_weight_offsets));
         for (index, edge) in tick.structural_synapses.iter().enumerate() {
             let at = edge_base + index * 5;
             words[at..at + 5].copy_from_slice(&[
@@ -2617,7 +2651,7 @@ fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
             ty: wgpu::BufferBindingType::Uniform,
-            has_dynamic_offset: false,
+            has_dynamic_offset: true,
             min_binding_size: NonZeroU64::new(HEADER_BYTES),
         },
         count: None,
@@ -2671,7 +2705,7 @@ fn dispatch(
         timestamp_writes: None,
     });
     pass.set_pipeline(pipeline);
-    pass.set_bind_group(0, bind_group, &[]);
+    pass.set_bind_group(0, bind_group, &[0]);
     pass.dispatch_workgroups(x.max(1), y.max(1), 1);
 }
 

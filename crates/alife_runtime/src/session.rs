@@ -152,6 +152,16 @@ pub struct GpuAuthoritativeSession {
 }
 
 impl GpuAuthoritativeSession {
+    /// Explicit software Vulkan for offline training tests only. The backend
+    /// retains its real CPU adapter identity and denies live neural actions.
+    #[cfg(feature = "gpu-tests")]
+    pub fn new_software_vulkan_training_test() -> Result<Self, ScaffoldContractError> {
+        let backend = GpuClosedLoopBackend::new_software_vulkan_training_test(
+            alife_gpu_backend::GpuRuntimeProfile::production_v1(),
+        )?;
+        Ok(Self::new(backend, GpuSessionConsumerKind::Training))
+    }
+
     pub const fn new(backend: GpuClosedLoopBackend, consumer: GpuSessionConsumerKind) -> Self {
         Self {
             backend,
@@ -187,6 +197,10 @@ impl GpuAuthoritativeSession {
     }
 
     pub fn ensure_neural_actions_available(&self) -> Result<(), ScaffoldContractError> {
+        #[cfg(feature = "gpu-tests")]
+        if self.backend.is_software_training_test() {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         self.authority.ensure_neural_actions_available()
     }
 

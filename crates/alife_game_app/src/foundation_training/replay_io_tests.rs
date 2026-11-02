@@ -306,7 +306,11 @@ fn replay_cache_charge_is_uncompressed_and_rejects_oversize_without_allocating()
 
 // Synthetic GPU-receipt fields over a measured CPU-world patch exercise the
 // codec/admission contract, not actual GPU behavior or cognition performance.
-fn record_fixture() -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
+pub(super) fn record_fixture() -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
+    record_fixture_at(0)
+}
+
+pub(super) fn record_fixture_at(tick: u64) -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
     let capacity = BrainCapacityClass::n2048();
     let genome = BrainGenome::scaffold(42, capacity.id());
     let development =
@@ -327,6 +331,9 @@ fn record_fixture() -> (FoundationReplayRecord, alife_core::BrainPhenotype) {
         false,
     )
     .unwrap();
+    for _ in 0..tick {
+        world.advance_tick();
+    }
     let frame = super::held_food_lesson_tests::frame(&mut world);
     let (_, outcome) = super::held_food_lesson_tests::eat_outcome(&mut world, scenario.food);
     let patch = super::held_food_lesson_tests::eating_narration_patch(

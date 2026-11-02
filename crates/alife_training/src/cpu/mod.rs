@@ -277,6 +277,33 @@ impl CpuFoundationTrainer {
             targets,
         )
     }
+    // Both cohort callers keep this window's fresh tape local, without mutating
+    // the trainer between forward and backward. Never retain a tape across
+    // windows or optimizer commits.
+    fn replay_gradients_from_tape(
+        &self,
+        sequence: &TrainingSequence,
+        adjoints: &[Vec<f32>],
+        targets: &[Option<crate::ReplaySpeechTarget>],
+        tape: &replay::Tape,
+    ) -> Result<TrainingGradientProbe, TrainingError> {
+        if adjoints.len() != sequence.ticks.len() - sequence.burn_in_ticks {
+            return Err(invalid());
+        }
+        let mut full = sequence.ticks[..sequence.burn_in_ticks]
+            .iter()
+            .map(|tick| vec![0.; tick.candidates.len()])
+            .collect::<Vec<_>>();
+        full.extend_from_slice(adjoints);
+        self.graph.backward(
+            &self.phenotype,
+            self.weights(),
+            sequence,
+            tape,
+            &full,
+            targets,
+        )
+    }
     fn forward(&self, sequence: &TrainingSequence) -> Result<replay::Tape, TrainingError> {
         sequence.validate_for(&self.phenotype)?;
         self.graph
@@ -364,3 +391,6 @@ fn adam_coordinate(
     finite(&[next, m, v])?;
     Ok((next, m, v))
 }
+
+#[cfg(test)]
+mod hotpath_bench;

@@ -107,8 +107,8 @@ dependencies = [
 name = "alife_archive"
 version = "0.1.0"
 dependencies = [
- "alife_storage",
  "alife_core",
+ "alife_storage",
  "alife_world",
  "blake3",
  "rusqlite",
@@ -136,7 +136,6 @@ dependencies = [
 name = "alife_game_app"
 version = "0.1.0"
 dependencies = [
- "alife_storage",
  "accesskit",
  "alife_archive",
  "alife_core",
@@ -144,6 +143,7 @@ dependencies = [
  "alife_runtime",
  "alife_school",
  "alife_semantic",
+ "alife_storage",
  "alife_training",
  "alife_world",
  "bevy",
@@ -178,9 +178,9 @@ dependencies = [
 name = "alife_runtime"
 version = "0.1.0"
 dependencies = [
- "alife_storage",
  "alife_core",
  "alife_gpu_backend",
+ "alife_storage",
  "alife_world",
  "serde",
  "serde_json",
@@ -237,6 +237,7 @@ dependencies = [
  "base64 0.22.1",
  "bytemuck",
  "naga 29.0.3",
+ "pollster",
  "serde",
  "serde_json",
  "sha2",
@@ -249,8 +250,8 @@ dependencies = [
 name = "alife_world"
 version = "0.1.0"
 dependencies = [
- "alife_storage",
  "alife_core",
+ "alife_storage",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

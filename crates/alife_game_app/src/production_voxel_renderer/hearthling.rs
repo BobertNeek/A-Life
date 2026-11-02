@@ -3,6 +3,7 @@ use super::*;
 use bevy::{camera::primitives::Aabb, gltf::Gltf, prelude::*, scene::SceneInstanceReady};
 
 const PATH: &str = "creatures/hearthling/hearthling.glb";
+const SKINNED_BOUND_HALF_EXTENT: f32 = 3.0;
 pub(super) const LOCAL_BOUNDS: CreatureVisualBounds =
     CreatureVisualBounds::new([-0.85, 0.0, -0.45], [0.85, 2.61, 0.9]);
 
@@ -471,11 +472,13 @@ fn ready(
         }
         if let Ok(handle) = mesh_materials.get(entity) {
             mesh_count += 1;
-            // Covers every authored pose and inherited ear/tail scale. Static bind-pose
-            // bounds can clip animated extremities; disabling culling costs every draw.
-            commands
-                .entity(entity)
-                .insert(Aabb::from_min_max(Vec3::splat(-6.0), Vec3::splat(6.0)));
+            // Authored translation/scale limits plus inherited proportions bound
+            // the skin within radius 2.815, even with unrestricted bone rotations.
+            // Keep margin without the old oversized box; see test_hearthling_skin_bounds.py.
+            commands.entity(entity).insert(Aabb::from_min_max(
+                Vec3::splat(-SKINNED_BOUND_HALF_EXTENT),
+                Vec3::splat(SKINNED_BOUND_HALF_EXTENT),
+            ));
             if coat_materials.contains(&handle.0.id()) {
                 let replacement =
                     shared.coat(&handle.0, visual.appearance.palette_family, &mut materials);

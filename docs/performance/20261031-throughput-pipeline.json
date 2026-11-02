@@ -1,0 +1,1091 @@
+{
+  "base_source_sha": "a1ea75a03b5f2cbbfa55b0034303cead85d439b7",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "cpu": "AMD EPYC 9V74 VM",
+  "visible_cpus": 5,
+  "cpu_max": "400000 100000",
+  "memory_max_bytes": 17179869184,
+  "adapter": "llvmpipe (LLVM 19.1.7, 256 bits)",
+  "driver": "Mesa 25.0.7-2+deb13u1",
+  "backend": "Vulkan",
+  "physical_gpu": false,
+  "software_driver_threads": 2,
+  "scope": "Synthetic direct-device exactness and host command encoding; not retained training throughput",
+  "candidate_source_sha": "c50ffdb9c00ec3c85fc825d736030aa4d978efea",
+  "replay_worker_source_sha": "ef668cc1bd50ca6e96fe0e64f0bc598b37919a70",
+  "correctness_cases": [
+    {
+      "ticks": 3,
+      "burn_in": 0
+    },
+    {
+      "ticks": 5,
+      "burn_in": 2
+    }
+  ],
+  "fixture": {
+    "neurons": 2048,
+    "synapses": 32768,
+    "microsteps": 4,
+    "sensor_profile": "GroundedObjectSlotsV1",
+    "candidates_per_tick": 2,
+    "nonempty_dendrites": true,
+    "structural_edges": true,
+    "speech": true,
+    "trainable_mask": "every third coordinate",
+    "optimizer_ages": "heterogeneous including above 2^24; valid zero-age moments; frozen signed zero"
+  },
+  "limits": [
+    "Synthetic direct-device fixtures, not acquired training trajectories",
+    "No physical GPU or whole-training gain established",
+    "Host assay excludes resource setup, buffer uploads, output destruction, submission, waits and neural execution",
+    "Static oracle setup includes pipeline compilation and is not evidence of eliminated production setup cost",
+    "First cold pair retained in each seven-pair trial cohort; no formal confidence interval",
+    "No real trained checkpoint entered this cloud environment"
+  ],
+  "profiles": [
+    {
+      "name": "test-training-opt3",
+      "profile_note": "Only alife_training opt-level3; wgpu validation remains unoptimized; not a release build",
+      "command": "cargo test -p alife_training --features gpu-tests --lib --config 'profile.test.package.alife_training.opt-level=3' dynamic_dispatch_host_encoding_assay -- --ignored --nocapture",
+      "binary": "alife_training-6c9be28db9caa3ce",
+      "binary_sha256": "5ed89b9d9e9cd7d0f3af6d227a2d3740a6a9e2345361ad79e4541d4cf3cf770d",
+      "raw_trials_sha256": "2b45a0a0d66096081430e0338c988161194c506c4740f76485a82447aa3dedf1",
+      "summary": [
+        {
+          "ticks": 256,
+          "burn_in": 0,
+          "baseline_median_seconds": 0.053662956,
+          "candidate_median_seconds": 0.022482298,
+          "ratio": 2.3868981720640834,
+          "saved_seconds": 0.031180657999999997,
+          "baseline_min_max_seconds": [
+            0.052888133,
+            0.06868602700000001
+          ],
+          "candidate_min_max_seconds": [
+            0.022105205,
+            0.023832235
+          ]
+        },
+        {
+          "ticks": 384,
+          "burn_in": 128,
+          "baseline_median_seconds": 0.062247109,
+          "candidate_median_seconds": 0.02609604,
+          "ratio": 2.3853086138739825,
+          "saved_seconds": 0.036151069,
+          "baseline_min_max_seconds": [
+            0.06184695,
+            0.080722378
+          ],
+          "candidate_min_max_seconds": [
+            0.025807275,
+            0.028190712
+          ]
+        },
+        {
+          "ticks": 512,
+          "burn_in": 128,
+          "baseline_median_seconds": 0.09383678899999999,
+          "candidate_median_seconds": 0.037802787000000004,
+          "ratio": 2.482271717162017,
+          "saved_seconds": 0.056034001999999986,
+          "baseline_min_max_seconds": [
+            0.09101712799999999,
+            0.100401826
+          ],
+          "candidate_min_max_seconds": [
+            0.03723142,
+            0.038601144999999996
+          ]
+        }
+      ],
+      "trials": [
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003238657,
+          "finish_seconds": 0.06544737,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 0
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000688232,
+          "finish_seconds": 0.022215679,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 0
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000594031,
+          "finish_seconds": 0.021617793,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 1
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003561712,
+          "finish_seconds": 0.050706521,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 1
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003036034,
+          "finish_seconds": 0.050207382,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 2
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000584868,
+          "finish_seconds": 0.021520337,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 2
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000573791,
+          "finish_seconds": 0.021559175,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 3
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003141803,
+          "finish_seconds": 0.050836966,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 3
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003018808,
+          "finish_seconds": 0.049869325,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 4
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000581271,
+          "finish_seconds": 0.021901027,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 4
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000596064,
+          "finish_seconds": 0.022167837,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 5
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003212609,
+          "finish_seconds": 0.050450347,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 5
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.003039699,
+          "finish_seconds": 0.050074502,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 6
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000602294,
+          "finish_seconds": 0.023229941,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.08985741,
+          "ticks": 256,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.003894721,
+          "finish_seconds": 0.076827657,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000805108,
+          "finish_seconds": 0.02568904,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.00080038,
+          "finish_seconds": 0.025668819,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.004343811,
+          "finish_seconds": 0.058181061,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.003744977,
+          "finish_seconds": 0.058101973,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000734292,
+          "finish_seconds": 0.025214267,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000709824,
+          "finish_seconds": 0.025386216,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.003728312,
+          "finish_seconds": 0.058151347,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.003682583,
+          "finish_seconds": 0.058298968,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000736445,
+          "finish_seconds": 0.025141628,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000697486,
+          "finish_seconds": 0.025109789,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.003835202,
+          "finish_seconds": 0.060967181,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.003886038,
+          "finish_seconds": 0.058361071,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000721112,
+          "finish_seconds": 0.0274696,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.108863937,
+          "ticks": 384,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.005784556,
+          "finish_seconds": 0.09461727,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001219088,
+          "finish_seconds": 0.036032822,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000955483,
+          "finish_seconds": 0.036275937,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.005593248,
+          "finish_seconds": 0.08542388,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.005564576,
+          "finish_seconds": 0.089517315,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000910115,
+          "finish_seconds": 0.036892672,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001069875,
+          "finish_seconds": 0.036641226,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.005521662,
+          "finish_seconds": 0.088315127,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.005578867,
+          "finish_seconds": 0.088273225,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001212989,
+          "finish_seconds": 0.037388156,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000940401,
+          "finish_seconds": 0.037129067,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.00580714,
+          "finish_seconds": 0.08713698,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.005510845,
+          "finish_seconds": 0.088213434,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000995814,
+          "finish_seconds": 0.037114626,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.123043964,
+          "ticks": 512,
+          "trial": 6
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "profile_note": "All dependencies optimized by --release",
+      "command": "cargo test --locked --release -p alife_training --features gpu-tests --lib --no-run; then run the emitted test binary with dynamic_dispatch_host_encoding_assay --ignored --nocapture --test-threads=1",
+      "binary": "alife_training-b408c1ab66e7c384",
+      "binary_sha256": "8135dcc6be81bb717ee958a10f036f44d1b0bf6f591f5a9d1d30111801020f4d",
+      "raw_trials_sha256": "8bad7b256eb1c06e562082680118b22e5323c8a1fcb1688490798ede0949f68f",
+      "summary": [
+        {
+          "ticks": 256,
+          "burn_in": 0,
+          "baseline_median_seconds": 0.005405434,
+          "candidate_median_seconds": 0.001648931,
+          "ratio": 3.2781444463109737,
+          "saved_seconds": 0.0037565029999999996,
+          "baseline_min_max_seconds": [
+            0.005065630999999999,
+            0.021379247
+          ],
+          "candidate_min_max_seconds": [
+            0.001614429,
+            0.001810663
+          ]
+        },
+        {
+          "ticks": 384,
+          "burn_in": 128,
+          "baseline_median_seconds": 0.006597022,
+          "candidate_median_seconds": 0.00207893,
+          "ratio": 3.1732775995343756,
+          "saved_seconds": 0.004518092,
+          "baseline_min_max_seconds": [
+            0.006196909,
+            0.024524407
+          ],
+          "candidate_min_max_seconds": [
+            0.0019426439999999999,
+            0.002130418
+          ]
+        },
+        {
+          "ticks": 512,
+          "burn_in": 128,
+          "baseline_median_seconds": 0.009963707,
+          "candidate_median_seconds": 0.0028284810000000003,
+          "ratio": 3.5226352943505717,
+          "saved_seconds": 0.007135226,
+          "baseline_min_max_seconds": [
+            0.009768983,
+            0.023351795
+          ],
+          "candidate_min_max_seconds": [
+            0.002736964,
+            0.0030328110000000003
+          ]
+        }
+      ],
+      "trials": [
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.001053551,
+          "finish_seconds": 0.020325696,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 0
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000169385,
+          "finish_seconds": 0.001641278,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 0
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000130467,
+          "finish_seconds": 0.001517662,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 1
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.001022785,
+          "finish_seconds": 0.005023456,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 1
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000727839,
+          "finish_seconds": 0.004462088,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 2
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000125529,
+          "finish_seconds": 0.00161563,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 2
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000129896,
+          "finish_seconds": 0.00156223,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 3
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000748761,
+          "finish_seconds": 0.004656673,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 3
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000687609,
+          "finish_seconds": 0.004378022,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 4
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 9.4202e-05,
+          "finish_seconds": 0.001540246,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 4
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 9.1278e-05,
+          "finish_seconds": 0.001557653,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 5
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000702301,
+          "finish_seconds": 0.004496931,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 5
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 0.000704043,
+          "finish_seconds": 0.005167444,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 6
+        },
+        {
+          "burn_in": 0,
+          "encode_seconds": 9.6927e-05,
+          "finish_seconds": 0.001517502,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.025338466,
+          "ticks": 256,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001265892,
+          "finish_seconds": 0.023258515,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.00021163,
+          "finish_seconds": 0.001880109,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000161394,
+          "finish_seconds": 0.001917536,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001213613,
+          "finish_seconds": 0.006420556,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000987471,
+          "finish_seconds": 0.005926209,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000171109,
+          "finish_seconds": 0.001959309,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000154804,
+          "finish_seconds": 0.001938718,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.00096002,
+          "finish_seconds": 0.005637002,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000971177,
+          "finish_seconds": 0.005414417,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000100492,
+          "finish_seconds": 0.001842152,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 9.7287e-05,
+          "finish_seconds": 0.001976074,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000860109,
+          "finish_seconds": 0.005499605,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000852998,
+          "finish_seconds": 0.005343911,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 9.898e-05,
+          "finish_seconds": 0.001848822,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.026848565,
+          "ticks": 384,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001882303,
+          "finish_seconds": 0.021469492,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000354576,
+          "finish_seconds": 0.002678235,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 0
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000211299,
+          "finish_seconds": 0.002627047,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001515198,
+          "finish_seconds": 0.009026891,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 1
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.00131771,
+          "finish_seconds": 0.008579717,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000163628,
+          "finish_seconds": 0.002582971,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 2
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000204969,
+          "finish_seconds": 0.002623512,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001358211,
+          "finish_seconds": 0.008605496,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 3
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001252922,
+          "finish_seconds": 0.008748281,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000164399,
+          "finish_seconds": 0.002697473,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 4
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000142185,
+          "finish_seconds": 0.002594779,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001321666,
+          "finish_seconds": 0.008503922,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 5
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.001243318,
+          "finish_seconds": 0.008525665,
+          "legacy": true,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 6
+        },
+        {
+          "burn_in": 128,
+          "encode_seconds": 0.000146261,
+          "finish_seconds": 0.00267518,
+          "legacy": false,
+          "microsteps": 4,
+          "oracle_setup_seconds_including_pipelines": 0.030284865,
+          "ticks": 512,
+          "trial": 6
+        }
+      ]
+    }
+  ],
+  "validation": [
+    {
+      "name": "release_software_equivalence",
+      "passed": 1,
+      "result": "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 2.48s",
+      "log_sha256": "ef6ace505ffd1006133034522364727e2419778f333da1515f67bcc0953c230c",
+      "reproduce_command": "dynamic_dispatch_matches_static_headers_through_adam"
+    },
+    {
+      "name": "training_receipt_lineage_library",
+      "passed": 75,
+      "result": "test result: ok. 75 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 54.21s",
+      "log_sha256": "3dcb7c6977489c5d436c3466ad4f9d6c787a12347524d1730fcd555391b0ba90",
+      "reproduce_command": "cargo test --locked -p alife_training --features receipt-lineage --lib"
+    },
+    {
+      "name": "replay_worker",
+      "passed": 5,
+      "result": "test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 575 filtered out; finished in 3.59s",
+      "log_sha256": "b6ab8b04d26b1a111397af6d9f200c12ec016ad6223adb464e4c08f6b2a2e837",
+      "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::replay_worker::tests"
+    },
+    {
+      "name": "replay_io",
+      "passed": 19,
+      "result": "test result: ok. 19 passed; 0 failed; 1 ignored; 0 measured; 560 filtered out; finished in 3.18s",
+      "log_sha256": "7716a87ae69c107e9fdc9b46433d9bb3939ad7fd28cf3a829b62ebcb46ac4ed2",
+      "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib replay_io_tests"
+    },
+    {
+      "name": "cohort_replay",
+      "passed": 10,
+      "result": "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 570 filtered out; finished in 0.03s",
+      "log_sha256": "1c153882d1dfa1697e741e9dcd670a042a733ae862377e95f89d2e121617f94c",
+      "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib cohort_replay"
+    },
+    {
+      "name": "continuous_world",
+      "passed": 18,
+      "result": "test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 562 filtered out; finished in 3.35s",
+      "log_sha256": "e7fb2b3086f2dcc6818f0378d42cdd0b07b96b63e261cab9b21dec78e5a031eb",
+      "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training_cycle::continuous_world"
+    },
+    {
+      "name": "worker_policy_provenance_and_diagnostics_followup",
+      "reproduce_command": "cargo test --locked -p alife_game_app --features foundation-training --lib foundation_training::replay_worker::tests -- --test-threads=1",
+      "passed": 7,
+      "result": "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 575 filtered out; finished in 4.78s",
+      "log_sha256": "f3b341e7f8d5fa0b501782fa7c4e705199d2e3331f8859b0d2d760bbba9561fc",
+      "scope": "Typed-record changed policy/checkpoint source isolation, stale refs, errors and panic payloads; not hardware execution"
+    }
+  ],
+  "software_vulkan_setup": {
+    "initial_state": "system Vulkan loader installed; no ICD",
+    "download_host": "deb.debian.org",
+    "system_packages_installed": false,
+    "extracted_root": "/workspace/vulkan-assay/root",
+    "icd_selector": "VK_ICD_FILENAMES=/workspace/vulkan-assay/lvp_icd.json",
+    "driver_library": "/workspace/vulkan-assay/root/usr/lib/x86_64-linux-gnu/libvulkan_lvp.so",
+    "device_type": "Cpu",
+    "driver_api_version": "1.4.305",
+    "packages": [
+      {
+        "name": "mesa-vulkan-drivers",
+        "version": "25.0.7-2+deb13u1",
+        "architecture": "amd64",
+        "sha256": "caf2f7d296b7522efe74e40a74bce762a3ce84c33b53b5e54e1248ac2e0a13a5"
+      },
+      {
+        "name": "libvulkan1",
+        "version": "1.4.309.0-1",
+        "architecture": "amd64",
+        "sha256": "f47da79cd140264fe21cceb08bc87a71bc7fec05819e4a421f3f518d21101a37"
+      }
+    ]
+  },
+  "qualification_compile": {
+    "command": "cargo check --locked -p alife_game_app --features foundation-training,gpu-tests --lib --tests",
+    "result": "passed",
+    "scope": "Linux compiles ignored captured-step oracle body; Windows hardware execution pending",
+    "strict_clippy_command": "cargo clippy --locked -p alife_game_app --features foundation-training,gpu-tests --lib --tests -- -D warnings",
+    "strict_clippy_result": "passed after removing a needless Into<String> argument borrow and Copy clone; no lint allowances"
+  }
+}

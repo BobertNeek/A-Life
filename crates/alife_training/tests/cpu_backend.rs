@@ -844,3 +844,190 @@ fn native_signed_decoder_adam_keeps_negative_coefficients() {
         DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
     PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, exported).unwrap();
 }
+
+#[test]
+fn cohort_tapes_follow_each_optimizer_step_with_auxiliary_and_speech_loss() {
+    use alife_training::{PpoBatch, PpoBoundary, PpoTrainingWindow, PpoTransition};
+    let (p, source) = fixture();
+    let mut actual = trainer(&p, &source);
+    let mut initial = actual.checkpoint();
+    initial.optimizer_step = 16_777_220;
+    initial.stage_mask = StageTrainableMask::from_synapse_indices(
+        &p,
+        &(0..p.synapses().len() as u32)
+            .filter(|i| i % 3 != 0)
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    for i in 0..initial.weights.len() {
+        initial.first_moment[i] = (i % 7) as f32 * 1e-6;
+        initial.second_moment[i] = (i % 11) as f32 * 1e-8;
+        initial.update_ages[i] = [321, 19_800, 16_777_217][i % 3];
+    }
+    actual.restore_checkpoint(initial.clone()).unwrap();
+    let mut expected =
+        CpuFoundationTrainer::from_checkpoint(p.clone(), source, initial.clone()).unwrap();
+    let config = PpoConfig {
+        epochs: 2,
+        target_kl: 100.,
+        value_coefficient: 0.,
+        temperature: 0.7,
+        ..Default::default()
+    };
+    let windows = [3, 4].map(|ticks| {
+        let mut q = sequence(&p, ticks, 1);
+        q.ticks[1].microstep_count = 1;
+        let replay = actual.evaluate_replay(&q).unwrap();
+        let transitions = (1..ticks)
+            .map(|tick| {
+                let mut action = PpoJointAction {
+                    candidate_count: 3,
+                    representative_mask: 7,
+                    motor_masks: [0; 6],
+                    representative: (tick % 3) as u16,
+                    forced_slots: vec![None; 3],
+                    motor_candidates: [None; 6],
+                    old_joint_log_probability: -1.,
+                    temperature: config.temperature,
+                };
+                action.old_joint_log_probability =
+                    cpu_ppo_objective(&replay.candidate_logits[tick], &action, 0., config)
+                        .unwrap()
+                        .joint_log_probability;
+                PpoTransition {
+                    policy_version: 7400,
+                    trajectory_id: 1,
+                    step: (tick - 1) as u64,
+                    action,
+                    reward: if tick % 2 == 0 { -0.2 } else { 0.3 },
+                    old_value: 0.,
+                    next_value: 0.,
+                    elapsed_seconds: 0.05,
+                    boundary: if tick + 1 == ticks {
+                        PpoBoundary::Terminated
+                    } else {
+                        PpoBoundary::Continuing
+                    },
+                }
+            })
+            .collect();
+        let mut speech_targets = vec![None; ticks];
+        speech_targets[1] = Some(ReplaySpeechTarget {
+            token: Some(8),
+            continuation: [1, 0, 0, 0, 0],
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.,
+        });
+        speech_targets[2] = Some(ReplaySpeechTarget {
+            token: None,
+            continuation: [0; 5],
+            act: alife_core::SpeechActKind::Declare,
+            weight: 1.,
+        });
+        PpoTrainingWindow {
+            sequence: q,
+            batch: PpoBatch::from_rollout(7400, transitions, config).unwrap(),
+            auxiliary: Some((
+                vec![
+                    ImitationTarget {
+                        representative: Some(2),
+                        motors: [None; 6],
+                    };
+                    ticks - 1
+                ],
+                0.2,
+            )),
+            speech_targets,
+        }
+    });
+    // Reference keeps the public, independently recomputed forward/BPTT path.
+    // Each batch changes weights, so a tape retained into the next batch or
+    // epoch must disagree with this complete optimizer state.
+    for _ in 0..config.epochs {
+        for w in &windows {
+            let replay = expected.evaluate_replay(&w.sequence).unwrap();
+            let mut adjoints = Vec::new();
+            for (row, transition) in w.batch.transitions().iter().enumerate() {
+                let logits = &replay.candidate_logits[row + w.sequence.burn_in_ticks];
+                let objective = cpu_ppo_objective(
+                    logits,
+                    &transition.action,
+                    w.batch.actor_advantage(row).unwrap(),
+                    config,
+                )
+                .unwrap();
+                let (targets, coefficient) = w.auxiliary.as_ref().unwrap();
+                let imitation = cpu_imitation_objective(
+                    logits,
+                    &ImitationExample {
+                        candidate_count: transition.action.candidate_count,
+                        representative_mask: transition.action.representative_mask,
+                        motor_masks: transition.action.motor_masks,
+                        forced_slots: transition.action.forced_slots.clone(),
+                        target: targets[row].clone(),
+                    },
+                    config.temperature,
+                    *coefficient,
+                )
+                .unwrap();
+                adjoints.push(
+                    objective
+                        .logit_gradients
+                        .iter()
+                        .zip(imitation.logit_gradients)
+                        .map(|(g, extra)| g / w.batch.len() as f32 + extra / w.batch.len() as f32)
+                        .collect(),
+                );
+            }
+            let probe = expected
+                .probe_replay_gradients_with_speech(&w.sequence, &adjoints, &w.speech_targets)
+                .unwrap();
+            expected.apply_gradients(&probe.gradients).unwrap();
+        }
+    }
+    let mut value = CpuValueHead::from_checkpoint(PpoValueHeadCheckpoint {
+        feature_count: p.neuron_count(),
+        optimizer_step: 19_800,
+        parameters: vec![0.; (p.neuron_count() as usize + 1) * 3],
+        last_updated_policy_version: Some(7399),
+    })
+    .unwrap();
+    let initial_value = value.checkpoint();
+    let receipt = train_cpu_ppo_cohort(
+        &mut actual,
+        &mut value,
+        2,
+        1,
+        |i| Ok(windows[i].clone()),
+        config,
+        7400,
+    )
+    .unwrap();
+    assert_eq!(receipt.completed_epochs, 2);
+    assert_eq!(receipt.actor_optimizer_step, initial.optimizer_step + 4);
+    assert_eq!(
+        serde_json::to_vec(&actual.checkpoint()).unwrap(),
+        serde_json::to_vec(&expected.checkpoint()).unwrap()
+    );
+    assert_eq!(
+        value.checkpoint().optimizer_step,
+        initial_value.optimizer_step
+    );
+    assert_eq!(value.checkpoint().parameters, initial_value.parameters);
+    assert_eq!(value.checkpoint().last_updated_policy_version, Some(7400));
+    let after = actual.checkpoint();
+    for i in 0..initial.weights.len() {
+        if !initial.stage_mask.is_trainable(i) {
+            assert_eq!(after.weights[i].to_bits(), initial.weights[i].to_bits());
+            assert_eq!(
+                after.first_moment[i].to_bits(),
+                initial.first_moment[i].to_bits()
+            );
+            assert_eq!(
+                after.second_moment[i].to_bits(),
+                initial.second_moment[i].to_bits()
+            );
+            assert_eq!(after.update_ages[i], initial.update_ages[i]);
+        }
+    }
+}

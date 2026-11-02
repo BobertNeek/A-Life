@@ -21,10 +21,12 @@ use crate::{FoundationTrainingStep, GpuLiveBrainRuntime};
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 mod cohort_replay;
 pub(crate) use cohort_replay::CohortReplayWriter;
+mod replay_worker;
 pub use cohort_replay::{
     inspect_foundation_cohort_replay, FoundationCohortReplayCommit, FoundationCohortReplayLocation,
     FoundationCohortReplayRecovery,
 };
+pub(crate) use replay_worker::FoundationReplayWorker;
 mod comparison_identity;
 pub(crate) mod diagnostics;
 pub use comparison_identity::{

@@ -4,6 +4,9 @@ GPU and opt-in CPU backends train the compiled production graph. Training state
 is separate from gameplay saves. Native continuation uses
 `FoundationTrainingHandoffV1` and retains full actor/critic optimizer state.
 
+The [CPU PPO cost ledger](../../docs/performance/20261031-cpu-ppo-costs.md) records
+synthetic component timings, tape reuse, full-state checks and unmeasured costs.
+
 ## Cooperative collector boundary (CPU V1)
 
 With `cpu-backend`, independent canonical CPU hosts can collect under one frozen
