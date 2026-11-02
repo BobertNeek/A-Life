@@ -737,7 +737,7 @@ mod tests {
             .backend
             .build_sleep_replay_batch(old_handle)
             .unwrap();
-        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler.clone();
+        let original_sleep = runtime.residents[&organism.raw()].sleep_scheduler;
         let original_sleep_state = original_sleep.state();
         let next_cycle = original_sleep_state
             .last_consolidated_cycle_id

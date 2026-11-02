@@ -54,9 +54,10 @@ blender --background --python-exit-code 1 --python scripts/refine_hearthling_ext
 
 The full `export_hearthling.py` pipeline includes the same pass after the fur
 bake. Bridge tessellation is explicitly nondegenerate, and the entry point checks
-3D and UV area for every new hand/foot triangle before saving. Source and runtime
-asset inspection covers all 657 authored clip/profile samples, grounding and eye
-occlusion; CPU Cycles previews are not a native gameplay/FPS benchmark.
+3D and UV area for every new hand/foot triangle before saving. The re-import
+review covers 1,305 clip/profile samples, including quarter-frame sleep poses,
+plus grounding and eye occlusion; CPU Cycles previews are not a native
+gameplay/FPS benchmark.
 
 | Shipping cost | Before | This pass |
 | --- | ---: | ---: |
@@ -79,6 +80,8 @@ are unchanged. The shipping GLB is 3,122,928 bytes with the same geometry cost.
 `refine_hearthling_sleep_pose.py --source /path/to/pre-clearance/hearthling.blend
 --output-dir /path/to/review` applies this once to the accepted native checkpoint;
 the full exporter includes the same correction. The re-import review now also
-rejects hand-versus-thigh/shin surface intersections on both sides through all
-73 sleep frames at compact, neutral and broad paw scales. This is asset-level
-pose validation, not native locomotion, contact physics or FPS qualification.
+rejects hand-versus-thigh/shin surface intersections on both sides at 289
+quarter-frame samples across the 73-frame sleep clip, at compact, neutral and
+broad paw scales. This discrete sampling is not a continuous-time guarantee.
+This is asset-level pose validation, not native locomotion, contact physics
+or FPS qualification.

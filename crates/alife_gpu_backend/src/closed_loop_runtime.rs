@@ -7,6 +7,8 @@
 #[cfg(feature = "training-rollout")]
 mod live_policy;
 mod selector_exploration;
+#[cfg(feature = "gpu-tests")]
+mod software_training_test;
 mod tick;
 #[cfg(feature = "training-rollout")]
 pub use live_policy::GpuLivePolicyInstallReceipt;
@@ -2604,6 +2606,8 @@ pub struct GpuClosedLoopBackend {
     kernels: Arc<GpuClosedLoopKernelSet>,
     pub(crate) state: GpuBackendState,
     runtime_profile: GpuRuntimeProfile,
+    #[cfg(feature = "gpu-tests")]
+    offline_software_training_test: bool,
     runtime_budget: GpuRuntimeBudget,
     activity_policy: BrainActivityPolicyV1,
     admission: GpuAdmissionReceipt,
@@ -2727,6 +2731,13 @@ impl GpuClosedLoopBackend {
     ) -> Result<Self, ScaffoldContractError> {
         profile.validate_contract()?;
         let required = acquire_required_gpu(factory)?;
+        Self::from_required_gpu(required, profile)
+    }
+
+    fn from_required_gpu(
+        required: RequiredGpuDevice,
+        profile: GpuRuntimeProfile,
+    ) -> Result<Self, ScaffoldContractError> {
         let backend_instance_id = next_backend_instance_id()
             .map_err(|_| ScaffoldContractError::NeuralBackendUnavailable)?;
         let runtime_budget = GpuRuntimeBudget::from_device(
@@ -2755,6 +2766,8 @@ impl GpuClosedLoopBackend {
             kernels,
             state: GpuBackendState::Ready,
             runtime_profile: profile,
+            #[cfg(feature = "gpu-tests")]
+            offline_software_training_test: false,
             runtime_budget,
             activity_policy,
             admission,
@@ -2797,6 +2810,10 @@ impl GpuClosedLoopBackend {
     /// admission, generations, counters, and replay state are new and cannot
     /// accept handles issued by the live backend.
     pub fn new_staging_like_live(&self) -> Result<Self, ScaffoldContractError> {
+        #[cfg(feature = "gpu-tests")]
+        if self.offline_software_training_test {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         if !matches!(self.state, GpuBackendState::Ready) || self.device_lost.load(Ordering::Acquire)
         {
             return Err(ScaffoldContractError::NeuralBackendUnavailable);
@@ -2816,6 +2833,8 @@ impl GpuClosedLoopBackend {
             kernels: Arc::clone(&self.kernels),
             state: plan.state.clone(),
             runtime_profile: self.runtime_profile,
+            #[cfg(feature = "gpu-tests")]
+            offline_software_training_test: self.offline_software_training_test,
             runtime_budget: self.runtime_budget,
             activity_policy: self.activity_policy,
             admission: GpuAdmissionReceipt::empty(self.runtime_budget),
@@ -5284,6 +5303,12 @@ impl GpuClosedLoopBackend {
     }
 
     pub(crate) fn ensure_ready(&mut self) -> Result<(), ScaffoldContractError> {
+        // Explicit software fixtures expose only the quiescent offline queue.
+        // They cannot mint resident handles, live dispatches or restore targets.
+        #[cfg(feature = "gpu-tests")]
+        if self.offline_software_training_test {
+            return Err(ScaffoldContractError::NeuralBackendUnavailable);
+        }
         if self.device_lost.load(Ordering::Acquire) {
             self.mark_device_lost();
         }

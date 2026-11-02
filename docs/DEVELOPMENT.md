@@ -210,6 +210,11 @@ Hardware checks use an available resource window. Report GPU unavailability as s
 
 ## GPU measurements
 
+The [performance time ledger](performance/time-ledger.md) separates historical
+training amounts, current timer boundaries, unknown costs and experiments on
+whether work is necessary at its present cadence. Use it when interpreting
+collection, PPO, snapshot and whole-host throughput receipts.
+
 Use the real device diagnostic for the workload being investigated:
 
 ```text
