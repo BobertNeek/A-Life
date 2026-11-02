@@ -19,6 +19,24 @@ fn consolidate_finite(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
 }
 
+// Validate serialized f32 encodings without allowing an FP operation to flush
+// subnormal inputs. Predicates match IEEE comparisons, including NaNs and +/-0;
+// no parameter value or learning arithmetic is changed.
+fn sleep_parameter_finite_bits(bits:u32) -> bool {
+  return (bits & 0x7f800000u) != 0x7f800000u;
+}
+fn sleep_parameter_gt_zero_bits(bits:u32) -> bool {
+  return bits > 0u && bits <= 0x7f800000u;
+}
+fn sleep_parameter_ge_zero_bits(bits:u32) -> bool {
+  let magnitude = bits & 0x7fffffffu;
+  return magnitude <= 0x7f800000u && (bits <= 0x7f800000u || magnitude == 0u);
+}
+fn sleep_parameter_le_positive_bits(bits:u32, upper_bits:u32) -> bool {
+  let magnitude = bits & 0x7fffffffu;
+  return magnitude <= 0x7f800000u && ((bits & 0x80000000u) != 0u || bits <= upper_bits);
+}
+
 fn consolidate_array8_equal(left:array<u32,8>, right:array<u32,8>) -> bool {
   for (var index=0u; index<8u; index+=1u) {
     if (left[index] != right[index]) { return false; }
@@ -74,7 +92,15 @@ fn sleep_transaction_valid(
       || learning.replay_event_capacity > 0xffffffffu / learning.replay_span_count) {
     return false;
   }
-  let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
+  let parameter_base = extension.sleep_parameter_offset;
+  let parameter_schema = immutable_plan_words[parameter_base+0u];
+  let staging_bits = immutable_plan_words[parameter_base+1u];
+  let limit_bits = immutable_plan_words[parameter_base+2u];
+  let decay_bits = immutable_plan_words[parameter_base+3u];
+  let reset_policy = immutable_plan_words[parameter_base+4u];
+  let consume_policy = immutable_plan_words[parameter_base+5u];
+  let parameter_reserved_0 = immutable_plan_words[parameter_base+6u];
+  let parameter_reserved_1 = immutable_plan_words[parameter_base+7u];
   return header.schema_version == GPU_SLEEP_SCHEMA_VERSION
     && header.flags == 0u && header.reserved == 0u
     && header.class_id == brain.class_id
@@ -93,16 +119,16 @@ fn sleep_transaction_valid(
     && request.max_replay_events == learning.replay_event_capacity
     && request.max_replay_eligibility_samples == learning.replay_sample_capacity
     && request.reserved_tail.x == 0u && request.reserved_tail.y == 0u
-    && parameters.schema_version == GPU_SLEEP_SCHEMA_VERSION
-    && consolidate_finite(parameters.staging_rate)
-    && consolidate_finite(parameters.weight_limit)
-    && consolidate_finite(parameters.fast_decay_rate)
-    && parameters.staging_rate > 0.0 && parameters.staging_rate <= 1.0
-    && parameters.weight_limit > 0.0 && parameters.weight_limit <= 8.0
-    && parameters.fast_decay_rate >= 0.0 && parameters.fast_decay_rate <= 1.0
-    && parameters.eligibility_reset_policy == 1u
-    && parameters.replay_consume_policy == 1u
-    && all(parameters.reserved == vec2<u32>(0u))
+    && parameter_schema == GPU_SLEEP_SCHEMA_VERSION
+    && sleep_parameter_finite_bits(staging_bits)
+    && sleep_parameter_finite_bits(limit_bits)
+    && sleep_parameter_finite_bits(decay_bits)
+    && sleep_parameter_gt_zero_bits(staging_bits) && sleep_parameter_le_positive_bits(staging_bits,0x3f800000u)
+    && sleep_parameter_gt_zero_bits(limit_bits) && sleep_parameter_le_positive_bits(limit_bits,0x41000000u)
+    && sleep_parameter_ge_zero_bits(decay_bits) && sleep_parameter_le_positive_bits(decay_bits,0x3f800000u)
+    && reset_policy == 1u
+    && consume_policy == 1u
+    && (parameter_reserved_0 == 0u && parameter_reserved_1 == 0u)
     && learning.schema_version == GPU_LEARNING_SCHEMA_VERSION
     && learning.active_weight_bank <= 1u
     && learning.active_eligibility_bank <= 1u
@@ -202,9 +228,9 @@ fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
   var r_reserved_tail_0: u32 = 0u;
   var r_reserved_tail_1: u32 = 0u;
   var p_schema_version: u32 = 0u;
-  var p_staging_rate: f32 = 0.0;
-  var p_weight_limit: f32 = 0.0;
-  var p_fast_decay_rate: f32 = 0.0;
+  var p_staging_rate_bits: u32 = 0u;
+  var p_weight_limit_bits: u32 = 0u;
+  var p_fast_decay_rate_bits: u32 = 0u;
   var p_eligibility_reset_policy: u32 = 0u;
   var p_replay_consume_policy: u32 = 0u;
   var p_reserved_0: u32 = 0u;
@@ -336,9 +362,9 @@ fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
   if (valid) {
     p_schema_version = immutable_plan_words[e_sleep_parameter_offset+0u];
-    p_staging_rate = bitcast<f32>(immutable_plan_words[e_sleep_parameter_offset+1u]);
-    p_weight_limit = bitcast<f32>(immutable_plan_words[e_sleep_parameter_offset+2u]);
-    p_fast_decay_rate = bitcast<f32>(immutable_plan_words[e_sleep_parameter_offset+3u]);
+    p_staging_rate_bits = immutable_plan_words[e_sleep_parameter_offset+1u];
+    p_weight_limit_bits = immutable_plan_words[e_sleep_parameter_offset+2u];
+    p_fast_decay_rate_bits = immutable_plan_words[e_sleep_parameter_offset+3u];
     p_eligibility_reset_policy = immutable_plan_words[e_sleep_parameter_offset+4u];
     p_replay_consume_policy = immutable_plan_words[e_sleep_parameter_offset+5u];
     p_reserved_0 = immutable_plan_words[e_sleep_parameter_offset+6u];
@@ -418,31 +444,31 @@ fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
     if (!(p_schema_version == GPU_SLEEP_SCHEMA_VERSION)) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(consolidate_finite(p_staging_rate))) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_finite_bits(p_staging_rate_bits))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(consolidate_finite(p_weight_limit))) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_finite_bits(p_weight_limit_bits))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(consolidate_finite(p_fast_decay_rate))) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_finite_bits(p_fast_decay_rate_bits))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(p_staging_rate > 0.0)) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_gt_zero_bits(p_staging_rate_bits))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(p_staging_rate <= 1.0)) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_le_positive_bits(p_staging_rate_bits,0x3f800000u))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(p_weight_limit > 0.0)) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_gt_zero_bits(p_weight_limit_bits))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(p_weight_limit <= 8.0)) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_le_positive_bits(p_weight_limit_bits,0x41000000u))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(p_fast_decay_rate >= 0.0)) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_ge_zero_bits(p_fast_decay_rate_bits))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (!(p_fast_decay_rate <= 1.0)) { consolidate_reject(completion); valid = false; }
+    if (!(sleep_parameter_le_positive_bits(p_fast_decay_rate_bits,0x3f800000u))) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
     if (!(p_eligibility_reset_policy == 1u)) { consolidate_reject(completion); valid = false; }

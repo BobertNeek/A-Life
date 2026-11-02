@@ -1,5 +1,11 @@
 # Flat sleep validation candidate
 
+Current branch: PARAMETER-BIT-VALIDATION.md describes the later raw-bit parameter
+admission repair and FXC gates. The pinned CPU reference/corpus and harness below
+are unchanged. Earlier statements about unchanged production refer to their
+historical diagnostic commits; source-program hashes are baseline identities.
+
+
 Update: the real RTX/DX12/FXC candidate production pipeline passed. The frozen
 OLD native kernel then failed FXC X3663 before oracle comparison. Under explicit
 authorization, CANDIDATE-CPU-GOLDEN.md now defines the hardware oracle: candidate

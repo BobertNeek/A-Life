@@ -1,5 +1,11 @@
 # Candidate-only native oracle against frozen CPU-original outputs
 
+Current branch: PARAMETER-BIT-VALIDATION.md describes the later raw-bit parameter
+admission repair and FXC gates. The pinned CPU reference/corpus and harness below
+are unchanged. Earlier statements about unchanged production refer to their
+historical diagnostic commits; source-program hashes are baseline identities.
+
+
 The flat production pipeline passed on RTX 3050/DX12/FXC. The prior native oracle
 then failed compiling the frozen OLD kernel with FXC X3663 (varying barrier),
 before it could compare outputs. This is a reference-kernel compilation limit,
