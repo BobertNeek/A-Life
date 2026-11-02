@@ -4808,6 +4808,10 @@ fn create_compute_pipeline(
     })
 }
 
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "closed_loop_pipeline/production_kernel_tests.rs"]
+mod production_kernel_tests;
+
 #[cfg(test)]
 #[path = "closed_loop_pipeline/batch_projection_tests.rs"]
 mod batch_projection_tests;
