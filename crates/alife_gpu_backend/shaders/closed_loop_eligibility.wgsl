@@ -489,29 +489,29 @@ fn discard_pending_eligibility_arrays(@builtin(global_invocation_id) gid:vec3<u3
   if (state_span_within(index, 1u)) { store_state_u32(index, 0u); }
 }
 
-@compute @workgroup_size(1)
-fn finalize_discard_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_discard_pending_eligibility(gid:vec3<u32>) -> vec3<u32> {
   let header = load_learning_header(LEARNING_HEADER_WORD_OFFSET);
-  if (gid.x != 0u || header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  if (gid.x != 0u || header.brain_slot_index >= arrayLength(&brain_slots)) { return vec3<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
-  if (!state_span_within(brain.extension_record_offset, 20u)) { return; }
+  if (!state_span_within(brain.extension_record_offset, 20u)) { return vec3<u32>(0u); }
   let extension = load_slot_extension(brain);
-  if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
+  if (!state_span_within(extension.learning_state_offset, 24u)) { return vec3<u32>(0u); }
   let learning = load_slot_learning_state(extension);
-  if (!discard_contract_is_valid(header, brain, extension, learning)) { return; }
+  if (!discard_contract_is_valid(header, brain, extension, learning)) { return vec3<u32>(0u); }
   let staging_bases = inactive_eligibility_bases(brain, extension, learning);
   for (var recurrent = 0u; recurrent < header.recurrent_synapse_count; recurrent += 1u) {
     let index = staging_bases.recurrent + recurrent;
-    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return; }
+    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return vec3<u32>(0u); }
   }
   for (var decoder = 0u; decoder < header.decoder_synapse_count; decoder += 1u) {
     let index = staging_bases.decoder + decoder;
-    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return; }
+    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return vec3<u32>(0u); }
   }
   let transaction_lo = learning.transaction_generation_lo + 1u;
   let transaction_carry = select(0u, 1u, transaction_lo == 0u);
   let transaction_hi = learning.transaction_generation_hi + transaction_carry;
-  if (transaction_lo == 0u && transaction_hi == 0u) { return; }
+  if (transaction_lo == 0u && transaction_hi == 0u) { return vec3<u32>(0u); }
   let receipt = header.selection_offset;
   for (var word = 0u; word < 12u; word += 1u) {
     store_state_u32(receipt + word, 0u);
@@ -534,8 +534,15 @@ fn finalize_discard_pending_eligibility(@builtin(global_invocation_id) gid:vec3<
   store_state_u32(state_base + 9u, 0u);
   store_state_u32(state_base + 22u, transaction_lo);
   store_state_u32(state_base + 23u, transaction_hi);
+  return vec3<u32>(1u, state_base, receipt);
+}
+
+@compute @workgroup_size(1)
+fn finalize_discard_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_discard_pending_eligibility(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(state_base + 3u, 0u);
+  if (publication.x != 0u) { store_state_u32(publication.y + 3u, 0u); }
   storageBarrier();
-  store_state_u32(receipt + 3u, 1u);
+  if (publication.x != 0u) { store_state_u32(publication.z + 3u, 1u); }
 }

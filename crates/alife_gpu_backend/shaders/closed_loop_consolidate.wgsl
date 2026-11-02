@@ -614,19 +614,19 @@ fn consolidate_fast_weights(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(next_fast));
 }
 
-@compute @workgroup_size(1)
-fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_sleep_staging(gid:vec3<u32>) -> vec2<u32> {
   let header = load_sleep_header(gid.y*20u);
   if (header.brain_slot_index >= arrayLength(&brain_slots)
-      || !state_span_within(header.completion_offset,16u)) { return; }
+      || !state_span_within(header.completion_offset,16u)) { return vec2<u32>(0u); }
   let status = load_state_u32(header.completion_offset+3u);
-  if (status != SLEEP_STATUS_PREPARED) { return; }
+  if (status != SLEEP_STATUS_PREPARED) { return vec2<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let request = load_consolidation_request(header.request_offset);
   if (!sleep_transaction_valid(header,brain,extension,learning,request)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
   let active_bases = active_weight_bases(brain,extension,learning);
@@ -639,25 +639,32 @@ fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
     let staged_lifetime = load_state_f32(inactive_bases.lifetime+synapse);
     let staged_fast = load_state_f32(inactive_bases.fast+synapse);
     let delta_mode = consolidate_synapse_delta_mode(extension,synapse);
-    if (delta_mode == 2u) { consolidate_reject(header.completion_offset); return; }
+    if (delta_mode == 2u) { consolidate_reject(header.completion_offset); return vec2<u32>(0u); }
     let no_replay_fast = select(active_fast*(1.0-parameters.fast_decay_rate),active_fast,delta_mode == 0u);
     if (!consolidate_finite(active_lifetime) || !consolidate_finite(active_fast)
         || !consolidate_finite(staged_lifetime) || !consolidate_finite(staged_fast)
         || !consolidate_finite(no_replay_fast)) {
-      consolidate_reject(header.completion_offset); return;
+      consolidate_reject(header.completion_offset); return vec2<u32>(0u);
     }
     promoted_fast_l1 += abs(staged_lifetime-active_lifetime);
     replay_induced_fast_l1 += abs(staged_fast-no_replay_fast);
   }
   if (!consolidate_finite(promoted_fast_l1) || !consolidate_finite(replay_induced_fast_l1)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   // Sleep receipts use conservative Q12 upper rounding so a causal sub-quantum
   // GPU update is never reported as no update.
   store_state_u32(header.completion_offset+10u,u32(ceil(promoted_fast_l1*SLEEP_DIAGNOSTIC_Q12)));
   store_state_u32(header.completion_offset+11u,u32(ceil(replay_induced_fast_l1*SLEEP_DIAGNOSTIC_Q12)));
+  return vec2<u32>(1u, header.completion_offset);
+}
+
+@compute @workgroup_size(1)
+fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_sleep_staging(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(header.completion_offset+3u,SLEEP_STATUS_SUCCESS);
+  if (publication.x != 0u) { store_state_u32(publication.y+3u,SLEEP_STATUS_SUCCESS); }
 }
 
 @compute @workgroup_size(64)
@@ -696,17 +703,17 @@ fn reset_sleep_mutable_state(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
 }
 
-@compute @workgroup_size(1)
-fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_sleep_commit(gid:vec3<u32>) -> vec2<u32> {
   let header = load_sleep_header(gid.y*20u);
   if (header.brain_slot_index >= arrayLength(&brain_slots)
-      || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_SUCCESS) { return; }
+      || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_SUCCESS) { return vec2<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let request = load_consolidation_request(header.request_offset);
   if (!sleep_transaction_valid(header,brain,extension,learning,request)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   let next_eligibility_lo = learning.active_eligibility_generation_lo+1u;
   let next_eligibility_hi = learning.active_eligibility_generation_hi+select(0u,1u,next_eligibility_lo==0u);
@@ -717,7 +724,7 @@ fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
   if ((next_eligibility_lo == 0u && next_eligibility_hi == 0u)
       || (next_replay_lo == 0u && next_replay_hi == 0u)
       || (next_transaction_lo == 0u && next_transaction_hi == 0u)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   let state = extension.learning_state_offset;
   store_state_u32(state+1u,learning.active_weight_bank^1u);
@@ -731,6 +738,13 @@ fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(state+10u,next_replay_lo); store_state_u32(state+11u,next_replay_hi);
   store_state_u32(state+12u,0u); store_state_u32(state+13u,0u);
   store_state_u32(state+22u,next_transaction_lo); store_state_u32(state+23u,next_transaction_hi);
+  return vec2<u32>(1u, header.completion_offset);
+}
+
+@compute @workgroup_size(1)
+fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_sleep_commit(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(header.completion_offset+3u,SLEEP_STATUS_COMMITTED);
+  if (publication.x != 0u) { store_state_u32(publication.y+3u,SLEEP_STATUS_COMMITTED); }
 }

@@ -1,5 +1,11 @@
 # Eligibility finalizer: converged publication barriers
 
+The later CONVERGED-PUBLICATION-BARRIERS.md contract covers the complete barrier
+pass. This packet describes historical d139 identities; its golden/corpus remain
+unchanged. Its pending oracle is independently runnable after unrelated kernel
+failures, subject to process reconciliation. Full module source hashes change
+when later finalizers change, even though the pending function stays intact.
+
 The RTX 3050/DX12/FXC 6c188a60 initializer passed the complete unchanged 8,535×512
 CPU-original oracle and negative control. The focused probe observed the expected
 legacy float >0 discrepancy for a positive subnormal while the integer predicate
