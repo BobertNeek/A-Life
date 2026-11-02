@@ -372,6 +372,7 @@ impl TerrainSurface {
         if !distance.is_finite() || distance > 64.0 || limits.validate().is_err() {
             return None;
         }
+        self.validate_terrain_sweep(start, end, limits)?;
         let step = 0.15_f32.min(limits.body_radius.max(0.001));
         let steps = (distance / step).ceil().max(1.0) as usize;
         for i in 1..=steps {
@@ -385,6 +386,122 @@ impl TerrainSurface {
             }
         }
         Some(Vec3f::new(end.x, self.height(end.x, end.z)?, end.z))
+    }
+    fn validate_terrain_sweep(
+        &self,
+        start: Vec3f,
+        end: Vec3f,
+        limits: crate::LocomotionLimits,
+    ) -> Option<()> {
+        // Public surface dimensions can be changed independently of the baked
+        // samples. Fail closed before indexing malformed geometry.
+        if self.width < 2
+            || self.depth < 2
+            || self.width.checked_mul(self.depth)? != self.heights.len()
+            || !self.spacing.is_finite()
+            || self.spacing <= 0.0
+            || !self.origin_x.is_finite()
+            || !self.origin_z.is_finite()
+            || self.origin_x + self.spacing <= self.origin_x
+            || self.origin_z + self.spacing <= self.origin_z
+            || !(self.origin_x + (self.width - 1) as f32 * self.spacing).is_finite()
+            || !(self.origin_z + (self.depth - 1) as f32 * self.spacing).is_finite()
+        {
+            return None;
+        }
+        self.sample(start.x, start.z)?;
+        self.sample(end.x, end.z)?;
+        // Canonicalize endpoints exactly as sample() does before widening for
+        // traversal. Re-dividing in f64 changes ownership of rounded mesh edges
+        // (for example, x=0.5 on a 0.1-spaced grid).
+        let grid = |p: Vec3f| {
+            [
+                f64::from(
+                    ((p.x - self.origin_x) / self.spacing).clamp(0.0, (self.width - 1) as f32),
+                ),
+                f64::from(
+                    ((p.z - self.origin_z) / self.spacing).clamp(0.0, (self.depth - 1) as f32),
+                ),
+            ]
+        };
+        let a = grid(start);
+        let b = grid(end);
+        let delta = [b[0] - a[0], b[1] - a[1]];
+        let diagonal = [a[0] - a[1], b[0] - b[1]];
+        // Work is proportional to crossed boundaries, never the whole map.
+        // Match the old sweep's order of maximum work (64 m / 0.001 m).
+        // An excessive imported-grid traversal is rejected, not undersampled.
+        const MAX_CUTS: usize = 64_000;
+        let mut cuts = vec![0.0, 1.0];
+        for (from, to) in [(a[0], b[0]), (a[1], b[1]), (diagonal[0], diagonal[1])] {
+            if from == to {
+                continue;
+            }
+            let first = from.min(to).floor() + 1.0;
+            let last = from.max(to).ceil() - 1.0;
+            let count = (last - first + 1.0).max(0.0);
+            if !count.is_finite() || count > (MAX_CUTS - cuts.len()) as f64 {
+                return None;
+            }
+            for i in 0..count as usize {
+                let t = (first + i as f64 - from) / (to - from);
+                if t > 0.0 && t < 1.0 {
+                    cuts.push(t);
+                }
+            }
+        }
+        cuts.sort_by(f64::total_cmp);
+        // Do not merge merely nearby cuts: they may enclose a thin bad triangle.
+        cuts.dedup();
+        let water_floor = self
+            .water_level
+            .map(|water| f64::from(water - limits.max_wading_depth));
+        for interval in cuts.windows(2) {
+            let middle = (interval[0] + interval[1]) * 0.5;
+            let u = a[0] + delta[0] * middle;
+            let v = a[1] + delta[1] * middle;
+            let i = (u.floor() as usize).min(self.width - 2);
+            let j = (v.floor() as usize).min(self.depth - 2);
+            let k = j * self.width + i;
+            let (h0, h1, h2, h3) = (
+                self.heights[k],
+                self.heights[k + 1],
+                self.heights[k + self.width + 1],
+                self.heights[k + self.width],
+            );
+            // sample_grid's v >= u diagonal, with its exact f32 slope rule.
+            // Interpolate u-v directly so a path on a translated diagonal
+            // stays on it even when u and v round differently at the midpoint.
+            let side = (diagonal[1] - diagonal[0]).mul_add(middle, diagonal[0]);
+            let (du, dv, gradient) = if side <= i as f64 - j as f64 {
+                (
+                    f64::from(h2) - f64::from(h3),
+                    f64::from(h3) - f64::from(h0),
+                    [(h2 - h3) / self.spacing, (h3 - h0) / self.spacing],
+                )
+            } else {
+                (
+                    f64::from(h1) - f64::from(h0),
+                    f64::from(h2) - f64::from(h1),
+                    [(h1 - h0) / self.spacing, (h2 - h1) / self.spacing],
+                )
+            };
+            if gradient[0].hypot(gradient[1]) > limits.max_slope {
+                return None;
+            }
+            if let Some(floor) = water_floor {
+                // Height is affine inside this triangle. Its two interval
+                // endpoints bound the entire interval, including water extrema.
+                for t in interval {
+                    let u = (a[0] + delta[0] * t - i as f64).clamp(0.0, 1.0);
+                    let v = (a[1] + delta[1] * t - j as f64).clamp(0.0, 1.0);
+                    if f64::from(h0) + du * u + dv * v < floor {
+                        return None;
+                    }
+                }
+            }
+        }
+        Some(())
     }
     pub fn ray_hit(&self, origin: Vec3f, direction: Vec3f, max_distance: f32) -> Option<Vec3f> {
         if origin.validate().is_err()
