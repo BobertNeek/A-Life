@@ -4795,7 +4795,9 @@ fn create_compute_pipeline(
     entry_point: &'static str,
     constants: &[(&str, f64)],
 ) -> wgpu::ComputePipeline {
-    device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+    #[cfg(feature = "pipeline-diagnostics")]
+    eprintln!("alife_pipeline_create_begin entry={entry_point} constants={constants:?}");
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: Some(entry_point),
         layout: Some(layout),
         module: shader,
@@ -4805,8 +4807,15 @@ fn create_compute_pipeline(
             zero_initialize_workgroup_memory: true,
         },
         cache: None,
-    })
+    });
+    #[cfg(feature = "pipeline-diagnostics")]
+    eprintln!("alife_pipeline_create_returned entry={entry_point} constants={constants:?}");
+    pipeline
 }
+
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "closed_loop_pipeline/kernel_diagnostics.rs"]
+mod kernel_diagnostics;
 
 #[cfg(test)]
 #[path = "closed_loop_pipeline/batch_projection_tests.rs"]

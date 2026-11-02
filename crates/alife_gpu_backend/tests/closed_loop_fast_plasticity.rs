@@ -107,11 +107,20 @@ fn r12_pending_fixture() -> (
 ) {
     let phenotype = support::controlled_learning_n512_phenotype(1.0);
     let organism = alife_core::OrganismId(12_004);
+    eprintln!("r12_stage=new_required_begin");
     let mut backend =
         GpuClosedLoopBackend::new_required(alife_gpu_backend::GpuRuntimeProfile::production_v1())
-            .unwrap();
+            .expect("r12_stage=new_required_failed");
+    eprintln!(
+        "r12_stage=new_required_ok hardware={:?}",
+        backend.hardware_receipt()
+    );
     println!("R12 hardware {:?}", backend.hardware_receipt());
-    let handle = backend.insert_brain(organism, phenotype.clone()).unwrap();
+    eprintln!("r12_stage=insert_brain_begin");
+    let handle = backend
+        .insert_brain(organism, phenotype.clone())
+        .expect("r12_stage=insert_brain_failed");
+    eprintln!("r12_stage=insert_brain_ok");
     let source = support::perception_frame_for_profile_at_tick(
         organism.raw(),
         900,
@@ -132,16 +141,23 @@ fn r12_pending_fixture() -> (
     let expression = alife_core::NeuralReceptorPhenotype::compile(&phenotype).unwrap();
     let effects = alife_core::NeuralReceptorEffects::from_frame(&receptors, &expression).unwrap();
     let (frame, recall) = support::empty_recall(&source);
+    eprintln!("r12_stage=prepare_memory_context_begin");
     let upload = backend
         .prepare_memory_context_upload(handle, &frame, &recall)
-        .unwrap()
+        .expect("r12_stage=prepare_memory_context_failed")
         .bind_neural_receptor_effects(effects)
         .unwrap();
+    eprintln!("r12_stage=prepare_memory_context_ok");
     let batch = alife_gpu_backend::GpuClosedLoopMemoryBatchInput::try_new(vec![
         alife_gpu_backend::GpuClosedLoopMemoryTickInput::try_new(handle, &frame, &upload).unwrap(),
     ])
     .unwrap();
-    let tick = backend.tick_memory_batch(&batch).unwrap().remove(0);
+    eprintln!("r12_stage=tick_memory_batch_begin");
+    let tick = backend
+        .tick_memory_batch(&batch)
+        .expect("r12_stage=tick_memory_batch_failed")
+        .remove(0);
+    eprintln!("r12_stage=tick_memory_batch_ok");
     let measured = sealed_measured_outcome(handle, &frame, &tick);
     let command = frame.candidates()[usize::from(tick.selection.candidate_index)]
         .to_command(organism, tick.selection.confidence)
@@ -201,12 +217,14 @@ fn r12_pending_fixture() -> (
             .unwrap(),
     )
     .unwrap();
+    eprintln!("r12_stage=credit_mismatch_probe_begin");
     assert_eq!(
         backend
             .sealed_outcome_credit_mismatch_receipt(handle, &patch)
-            .unwrap(),
+            .expect("r12_stage=credit_mismatch_probe_failed"),
         None
     );
+    eprintln!("r12_stage=credit_mismatch_probe_ok");
     (backend, handle, patch, receptors)
 }
 
@@ -385,11 +403,19 @@ fn r12_native_replay_guards_publish_coherent_actual_nominees() {
 #[test]
 fn r12_native_success_promotes_exactly_one_transaction() {
     let (mut backend, handle, patch, receptors) = r12_pending_fixture();
-    let before = backend.plasticity_probe_for_test(handle).unwrap();
+    eprintln!("r12_stage=before_probe_begin");
+    let before = backend
+        .plasticity_probe_for_test(handle)
+        .expect("r12_stage=before_probe_failed");
+    eprintln!("r12_stage=apply_sealed_outcome_begin");
     let receipt = backend
         .apply_sealed_outcome(handle, &patch, &receptors)
-        .unwrap();
-    let after = backend.plasticity_probe_for_test(handle).unwrap();
+        .expect("r12_stage=apply_sealed_outcome_failed");
+    eprintln!("r12_stage=after_probe_begin");
+    let after = backend
+        .plasticity_probe_for_test(handle)
+        .expect("r12_stage=after_probe_failed");
+    eprintln!("r12_stage=after_probe_ok");
     assert_eq!(after.receipt[3], 1);
     assert_eq!(
         receipt.output_fast_generation,

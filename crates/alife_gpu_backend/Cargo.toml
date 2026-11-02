@@ -21,3 +21,5 @@ default = []
 test-support = []
 gpu-tests = ["test-support"]
 training-rollout = []
+# Explicit compiler breadcrumbs only; does not alter shader source or execution.
+pipeline-diagnostics = []
