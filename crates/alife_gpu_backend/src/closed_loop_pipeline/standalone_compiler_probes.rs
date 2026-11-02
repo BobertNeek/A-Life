@@ -2,7 +2,14 @@
 use super::kernel_diagnostics::{check, scopes};
 use super::*;
 use sha2::{Digest, Sha256};
-use std::{path::Path, sync::Once, time::Duration};
+use std::{
+    path::Path,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex, Once,
+    },
+    time::Duration,
+};
 use wgpu::util::DeviceExt;
 
 const ABI: &str = include_str!("../../shaders/closed_loop_abi.wgsl");
@@ -235,6 +242,91 @@ fn export_standalone_probe_artifacts() {
 struct HalLog;
 static HAL_LOG: HalLog = HalLog;
 static LOG_ONCE: Once = Once::new();
+static HLSL_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+static HLSL_CAPTURE_LOCK: Mutex<()> = Mutex::new(());
+
+fn capture_hal_hlsl(dir: &Path, message: &str, sequence: &AtomicU64) -> Option<String> {
+    use std::io::Write;
+    let message = message.strip_prefix("Naga generated shader for ")?;
+    let (label, source) = message.split_once(":\n")?;
+    // Serialize numbering and the index append even if internal shaders compile
+    // concurrently. A repeated label is a new emission, never an overwrite.
+    let _capture = HLSL_CAPTURE_LOCK.lock().unwrap();
+    let id = sequence.fetch_add(1, Ordering::Relaxed);
+    let file_label: String = label
+        .chars()
+        .filter(|ch| *ch != '"')
+        .take(64)
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let filename = format!("runtime-hal-{id:06}-{file_label}.hlsl");
+    write_new(dir, &filename, source.as_bytes());
+    let record = serde_json::json!({
+        "sequence": id, "label": label, "file": filename,
+        "bytes": source.len(), "sha256": digest(source.as_bytes()),
+    });
+    let mut index = std::fs::OpenOptions::new()
+        .append(true)
+        .open(dir.join("runtime-hlsl-index.jsonl"))
+        .unwrap();
+    writeln!(index, "{record}").unwrap();
+    Some(filename)
+}
+
+#[test]
+fn multiple_hal_shader_emissions_keep_distinct_labeled_artifacts() {
+    let dir = std::env::temp_dir().join(format!("alife-multiple-hal-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    write_new(&dir, "runtime-hlsl-index.jsonl", b"");
+    let sequence = AtomicU64::new(0);
+    let inputs = [
+        "Naga generated shader for \"initialize_sleep_transaction\" at Compute:\nfirst input\n",
+        "Naga generated shader for \"initialize_sleep_transaction\" at Compute:\nsecond input\n",
+        "Naga generated shader for \"internal/../helper\" at Compute:\ninternal input\n",
+    ];
+    let mut files = std::collections::BTreeSet::new();
+    for (id, message) in inputs.iter().enumerate() {
+        let filename = capture_hal_hlsl(&dir, message, &sequence).unwrap();
+        assert!(
+            files.insert(filename.clone()),
+            "emissions must never share a filename"
+        );
+        assert_eq!(Path::new(&filename).components().count(), 1);
+        assert!(
+            filename.contains("Compute"),
+            "stage label must be preserved"
+        );
+        let source = message.split_once(":\n").unwrap().1;
+        assert_eq!(
+            std::fs::read(dir.join(filename)).unwrap(),
+            source.as_bytes()
+        );
+        assert_eq!(sequence.load(Ordering::Relaxed), id as u64 + 1);
+    }
+    assert!(
+        capture_hal_hlsl(&dir, "Using dynamic DXC for shader compilation", &sequence).is_none()
+    );
+    let records = std::fs::read_to_string(dir.join("runtime-hlsl-index.jsonl")).unwrap();
+    let records: Vec<serde_json::Value> = records
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(records.len(), inputs.len());
+    for (id, record) in records.iter().enumerate() {
+        assert_eq!(record["sequence"], id);
+        let filename = record["file"].as_str().unwrap();
+        let bytes = std::fs::read(dir.join(filename)).unwrap();
+        assert_eq!(record["bytes"], bytes.len());
+        assert_eq!(record["sha256"], digest(&bytes));
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
 impl log::Log for HalLog {
     fn enabled(&self, m: &log::Metadata<'_>) -> bool {
         m.target().starts_with("wgpu_hal::dx12")
@@ -266,8 +358,9 @@ impl log::Log for HalLog {
                     digest(source.as_bytes())
                 );
                 if let Some(dir) = std::env::var_os("ALIFE_COMPILER_PROBE_ARTIFACT_DIR") {
-                    write_new(Path::new(&dir), "runtime-hal.hlsl", source.as_bytes());
-                    stage("actual_hal_hlsl_emitted");
+                    let filename =
+                        capture_hal_hlsl(Path::new(&dir), &message, &HLSL_SEQUENCE).unwrap();
+                    stage(&format!("actual_hal_hlsl_emitted file={filename}"));
                 }
             }
         }
@@ -324,6 +417,7 @@ fn run(probe: Probe, software: bool, backends: wgpu::Backends, submit: bool) {
         std::fs::create_dir(dir).unwrap();
         write_new(dir, "runtime.wgsl", probe.source().as_bytes());
         write_new(dir, "runtime-hal.log", b"");
+        write_new(dir, "runtime-hlsl-index.jsonl", b"");
         write_new(dir, "runtime-stages.log", b"");
         write_new(dir,"runtime-request.txt",format!("variant={} backend={backends:?} compiler={:?} flags={:?}\nconstants=[] zero_initialize_workgroup_memory=true cache=None\nrequired_features={:?} required_limits={:?}\nsubmit={submit} software={software}\ncompiler DLL path/version/hash not resolved by this API; record from actual process separately. Actual HAL HLSL is captured if DX12 emits it. Offline SPIR-V is not driver-extracted. DXC debug/optimization flags depend on actual device workarounds; no compiler stage success is inferred from HLSL emission.\n",probe.name(),descriptor.backend_options.dx12.shader_compiler,descriptor.flags,crate::closed_loop_runtime::required_device_features(),crate::closed_loop_runtime::required_device_limits()).as_bytes());
     }

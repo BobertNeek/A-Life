@@ -28,6 +28,32 @@ ABI variants use the same body plus the feature-composed common ABI. Every probe
 uses the production seven-buffer layout/features/limits, workgroup size1 and an
 explicit entrypoint. No validation checks are disabled.
 
+## Rerun after the artifact-capture failure
+
+The recovered SDK-DXC probe reached shader emissions but the old logger failed
+on a second `runtime-hal.hlsl`. That exit is an instrumentation failure, not a
+target-compiler result. Preserve that output directory. Use the new published
+source receipt and a different, nonexistent absolute output directory. Retain the
+same admitted process-local SDK search path; do not install or replace anything.
+
+Under the sole owner's existing process/resource guard and outer deadline, this
+is the exact test-profile create-only probe (compile separately with --no-run):
+
+```powershell
+$env:ALIFE_COMPILER_PROBE_VARIANT = 'standalone-empty'
+$env:ALIFE_COMPILER_PROBE_PHASE = 'create'
+$env:ALIFE_COMPILER_PROBE_DX12_COMPILER = 'dxc'
+$env:ALIFE_COMPILER_PROBE_ARTIFACT_DIR = $NewNonexistentAbsoluteOutputDirectory
+cargo test --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --lib closed_loop_pipeline::standalone_compiler_probes::nvidia_dx12_selected_standalone_probe -- --ignored --exact --nocapture --test-threads=1
+```
+
+Require one passed test, pipeline_ok, actual NVIDIA/DX12 identity, and the target
+entrypoint among indexed HLSL emissions. Verify every indexed file's size/hash
+and preserve raw stdout/stderr/exit plus actual loaded SDK DLL identity. Internal
+emissions and sequence numbers alone do not establish target compilation success.
+Release and full-Current qualification remain the separate gates documented in
+DXC-QUALIFICATION.md; this command does not start training.
+
 These are compiler reproducers, not complete sleep validators. The conditional
 and converged bodies have identical outputs for the bounded, nonaliasing supplied
 fixtures: flag0 copies header word1 into state word0 then publishes256 in word3;
@@ -112,8 +138,11 @@ select these tests' compiler; they set the descriptor explicitly.
 Require exactly1test and no failures. In create phase expect pipeline_ok; this is
 not first-dispatch success. Submit phase checks9cases×all1024statewords. Actual
 adapter/backend/descriptor flags and requested compiler/options are logged. The
-logger also captures wgpu-hal's actual FXC/DXC choice, complete generated HLSL as
-`runtime-hal.hlsl` with SHA256, and HRESULT error messages such as Compile/GetOutput
+logger also captures wgpu-hal's actual FXC/DXC choice and complete generated HLSL.
+Every emission, including internal shaders and repeated entrypoint names, gets a
+distinct `runtime-hal-NNNNNN-LABEL.hlsl` file. `runtime-hlsl-index.jsonl` binds its
+sequence, original entrypoint/stage label, filename, byte count and SHA256. No input
+is overwritten. The logger also records HRESULT messages such as Compile/GetOutput
 from the DXGI result helper. `runtime.wgsl`, adapter/driver information,
 request/options, HAL log and stage log
 are preserved in the new directory. HLSL emission does not prove compiler success.
