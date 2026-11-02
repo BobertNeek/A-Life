@@ -16,6 +16,8 @@ const ABI: &str = include_str!("../../shaders/closed_loop_abi.wgsl");
 const ENTRY: &str = "initialize_sleep_transaction";
 const RAW: &str = "@group(0) @binding(4) var<storage,read> dispatch_header_words:array<u32>;\n@group(0) @binding(6) var<storage,read_write> mutable_state_words:array<atomic<u32>>;\n";
 const WORDS: usize = 1024;
+#[path = "native_stage_trace.rs"]
+mod native_stage_trace;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Body {
@@ -23,6 +25,7 @@ enum Body {
     Barrier,
     ConditionalAtomic,
     ConvergedAtomic,
+    ProductionInitializer,
 }
 #[derive(Clone, Copy, Debug)]
 struct Probe {
@@ -31,6 +34,9 @@ struct Probe {
 }
 impl Probe {
     fn name(self) -> String {
+        if self.body == Body::ProductionInitializer {
+            return "production-initialize-sleep-transaction".into();
+        }
         format!(
             "{}-{}",
             if self.abi { "abi" } else { "standalone" },
@@ -39,10 +45,14 @@ impl Probe {
                 Body::Barrier => "barrier",
                 Body::ConditionalAtomic => "conditional-atomic",
                 Body::ConvergedAtomic => "converged-atomic",
+                Body::ProductionInitializer => unreachable!(),
             }
         )
     }
     fn source(self) -> String {
+        if self.body == Body::ProductionInitializer {
+            return runtime_shader_source(CLOSED_LOOP_CONSOLIDATE_WGSL).into_owned();
+        }
         let prefix = if self.abi {
             runtime_shader_source(ABI).into_owned()
         } else if self.atomic() {
@@ -51,6 +61,7 @@ impl Probe {
             String::new()
         };
         let body = match self.body {
+            Body::ProductionInitializer => unreachable!(),
             Body::Empty => "",
             Body::Barrier => "storageBarrier();",
             Body::ConditionalAtomic => "if (dispatch_header_words[0] != 0u) { return; }\natomicStore(&mutable_state_words[0], dispatch_header_words[1]);\nstorageBarrier();\natomicStore(&mutable_state_words[3], 256u);",
@@ -102,6 +113,41 @@ fn module(source: &str) -> (naga::Module, naga::valid::ModuleInfo) {
     (module, info)
 }
 
+fn offline_hlsl(
+    module: &naga::Module,
+    info: &naga::valid::ModuleInfo,
+    shader_model: naga::back::hlsl::ShaderModel,
+) -> (String, naga::back::hlsl::Options, String) {
+    let options = naga::back::hlsl::Options {
+        shader_model,
+        fake_missing_bindings: false,
+        binding_map: (0..7)
+            .map(|binding| {
+                (
+                    naga::ResourceBinding { group: 0, binding },
+                    naga::back::hlsl::BindTarget {
+                        space: 0,
+                        register: binding,
+                        restrict_indexing: true,
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let pipeline = naga::back::hlsl::PipelineOptions {
+        entry_point: Some((naga::ShaderStage::Compute, ENTRY.into())),
+    };
+    let mut hlsl = String::new();
+    let reflection = naga::back::hlsl::Writer::new(&mut hlsl, &options, &pipeline)
+        .write(module, info, None)
+        .unwrap();
+    assert_eq!(reflection.entry_point_names.len(), 1);
+    let translated_entry = reflection.entry_point_names[0].as_ref().unwrap().clone();
+    (hlsl, options, translated_entry)
+}
+
 // These are fully specified offline emitter inputs, not a claim about an
 // unknown adapter's HAL register allocation, shader model or SPIR-V options.
 fn export(probe: Probe, dir: &Path) {
@@ -109,7 +155,9 @@ fn export(probe: Probe, dir: &Path) {
     let source = probe.source();
     write_new(dir, &format!("{name}.wgsl"), source.as_bytes());
     let (module, info) = module(&source);
-    assert_eq!(module.entry_points.len(), 1);
+    if probe.body != Body::ProductionInitializer {
+        assert_eq!(module.entry_points.len(), 1);
+    }
     let constants = naga::back::PipelineConstants::default();
     let (module, info) = naga::back::pipeline_constants::process_overrides(
         &module,
@@ -140,7 +188,7 @@ fn export(probe: Probe, dir: &Path) {
             .collect(),
         ..Default::default()
     };
-    let words = naga::back::spv::write_vec(
+    let spv = naga::back::spv::write_vec(
         &module,
         &info,
         &spv_options,
@@ -148,10 +196,17 @@ fn export(probe: Probe, dir: &Path) {
             shader_stage: naga::ShaderStage::Compute,
             entry_point: ENTRY.into(),
         }),
-    )
-    .unwrap();
-    let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
-    write_new(dir, &format!("{name}.offline.spv"), &bytes);
+    );
+    match spv {
+        Ok(words) => {
+            let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+            write_new(dir, &format!("{name}.offline.spv"), &bytes);
+        }
+        Err(error) if probe.body == Body::ProductionInitializer => {
+            write_new(dir,&format!("{name}.offline-spv-unavailable.txt"),format!("Checked offline SPIR-V was not emitted: {error:?}. No unchecked fallback. Runtime robustness unchanged.\n").as_bytes());
+        }
+        Err(error) => panic!("offline probe SPIR-V: {error:?}"),
+    }
     write_new(
         dir,
         &format!("{name}.offline-spv-options.txt"),
@@ -161,33 +216,7 @@ fn export(probe: Probe, dir: &Path) {
         naga::back::hlsl::ShaderModel::V5_1,
         naga::back::hlsl::ShaderModel::V6_0,
     ] {
-        let options = naga::back::hlsl::Options {
-            shader_model,
-            fake_missing_bindings: false,
-            binding_map: (0..7)
-                .map(|binding| {
-                    (
-                        naga::ResourceBinding { group: 0, binding },
-                        naga::back::hlsl::BindTarget {
-                            space: 0,
-                            register: binding,
-                            restrict_indexing: true,
-                            ..Default::default()
-                        },
-                    )
-                })
-                .collect(),
-            ..Default::default()
-        };
-        let pipeline = naga::back::hlsl::PipelineOptions {
-            entry_point: Some((naga::ShaderStage::Compute, ENTRY.into())),
-        };
-        let mut hlsl = String::new();
-        let reflection = naga::back::hlsl::Writer::new(&mut hlsl, &options, &pipeline)
-            .write(&module, &info, None)
-            .unwrap();
-        assert_eq!(reflection.entry_point_names.len(), 1);
-        let translated_entry = reflection.entry_point_names[0].as_ref().unwrap();
+        let (hlsl, options, translated_entry) = offline_hlsl(&module, &info, shader_model);
         let suffix = shader_model.to_str();
         write_new(
             dir,
@@ -276,6 +305,7 @@ fn capture_hal_hlsl(dir: &Path, message: &str, sequence: &AtomicU64) -> Option<S
         .open(dir.join("runtime-hlsl-index.jsonl"))
         .unwrap();
     writeln!(index, "{record}").unwrap();
+    native_stage_trace::set_shader(record);
     Some(filename)
 }
 
@@ -338,16 +368,22 @@ impl log::Log for HalLog {
         }
         let message = format!("{}", r.args());
         eprintln!(
-            "compiler_probe_hal level={} target={} message={message}",
+            "compiler_probe_hal level={} target={} thread={:?} active_native_stage={:?} shader={:?} message={message}",
             r.level(),
-            r.target()
+            r.target(),
+            std::thread::current().id(),
+            native_stage_trace::active(),
+            native_stage_trace::shader()
         );
         append_trace(
             "runtime-hal.log",
             &format!(
-                "level={} target={} message={message}",
+                "level={} target={} thread={:?} active_native_stage={:?} shader={:?} message={message}",
                 r.level(),
-                r.target()
+                r.target(),
+                std::thread::current().id(),
+                native_stage_trace::active(),
+                native_stage_trace::shader()
             ),
         );
         if message.starts_with("Naga generated shader for ") {
@@ -367,14 +403,16 @@ impl log::Log for HalLog {
     }
     fn flush(&self) {}
 }
+static TRACE_OUTPUT_LOCK: Mutex<()> = Mutex::new(());
+fn append_trace_file(path: &Path, message: &str) {
+    use std::io::Write;
+    let _output = TRACE_OUTPUT_LOCK.lock().unwrap();
+    let mut out = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+    writeln!(out, "{message}").unwrap();
+}
 fn append_trace(name: &str, message: &str) {
     if let Some(dir) = std::env::var_os("ALIFE_COMPILER_PROBE_ARTIFACT_DIR") {
-        use std::io::Write;
-        let mut out = std::fs::OpenOptions::new()
-            .append(true)
-            .open(Path::new(&dir).join(name))
-            .unwrap();
-        writeln!(out, "{message}").unwrap();
+        append_trace_file(&Path::new(&dir).join(name), message);
     }
 }
 fn stage(message: &str) {
@@ -398,9 +436,17 @@ fn selected_probe() -> Probe {
 }
 fn run(probe: Probe, software: bool, backends: wgpu::Backends, submit: bool) {
     install_hal_log();
+    native_stage_trace::reset();
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = backends;
-    if backends == wgpu::Backends::DX12 {
+    if probe.body == Body::ProductionInitializer && backends == wgpu::Backends::DX12 {
+        assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("dx12"));
+        assert_eq!(
+            std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
+            Ok("dxc")
+        );
+        crate::closed_loop_runtime::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
+    } else if backends == wgpu::Backends::DX12 {
         descriptor.backend_options.dx12.shader_compiler =
             match std::env::var("ALIFE_COMPILER_PROBE_DX12_COMPILER").as_deref() {
                 Ok("fxc") => wgpu::Dx12Compiler::Fxc,
@@ -419,9 +465,11 @@ fn run(probe: Probe, software: bool, backends: wgpu::Backends, submit: bool) {
         write_new(dir, "runtime-hal.log", b"");
         write_new(dir, "runtime-hlsl-index.jsonl", b"");
         write_new(dir, "runtime-stages.log", b"");
+        write_new(dir, "runtime-native-stages.jsonl", b"");
         write_new(dir,"runtime-request.txt",format!("variant={} backend={backends:?} compiler={:?} flags={:?}\nconstants=[] zero_initialize_workgroup_memory=true cache=None\nrequired_features={:?} required_limits={:?}\nsubmit={submit} software={software}\ncompiler DLL path/version/hash not resolved by this API; record from actual process separately. Actual HAL HLSL is captured if DX12 emits it. Offline SPIR-V is not driver-extracted. DXC debug/optimization flags depend on actual device workarounds; no compiler stage success is inferred from HLSL emission.\n",probe.name(),descriptor.backend_options.dx12.shader_compiler,descriptor.flags,crate::closed_loop_runtime::required_device_features(),crate::closed_loop_runtime::required_device_limits()).as_bytes());
     }
     eprintln!("compiler_probe_begin variant={} wgsl_sha256={} backend={backends:?} compiler={:?} flags={:?} compilation_options=constants_empty,zero_init_true cache=None submit={submit}",probe.name(),digest(probe.source().as_bytes()),descriptor.backend_options.dx12.shader_compiler,descriptor.flags);
+    native_stage_trace::install_once();
     stage("adapter_request_begin");
     let instance = wgpu::Instance::new(descriptor);
     let adapter = pollster::block_on(instance.enumerate_adapters(backends))
@@ -606,5 +654,89 @@ fn nvidia_dx12_selected_standalone_probe() {
         false,
         wgpu::Backends::DX12,
         selected_submit(),
+    );
+}
+
+#[test]
+#[ignore = "exact production DX12 initializer, explicit DXC; capture compiler versus native PSO stages"]
+fn nvidia_dx12_production_initializer_native_stages() {
+    assert!(
+        std::env::var_os("ALIFE_COMPILER_PROBE_ARTIFACT_DIR").is_some(),
+        "fresh artifact output required"
+    );
+    run(
+        Probe {
+            body: Body::ProductionInitializer,
+            abi: true,
+        },
+        false,
+        wgpu::Backends::DX12,
+        false,
+    );
+}
+
+#[test]
+fn production_initializer_is_already_compacted_before_hlsl_compilation() {
+    let probe = Probe {
+        body: Body::ProductionInitializer,
+        abi: true,
+    };
+    let source = probe.source();
+    assert_eq!(source, runtime_shader_source(CLOSED_LOOP_CONSOLIDATE_WGSL));
+    let (module, info) = module(&source);
+    let before = module.functions.len();
+    let entries_before = module.entry_points.len();
+    let constants = naga::back::PipelineConstants::default();
+    let (prepared, prepared_info) = naga::back::pipeline_constants::process_overrides(
+        &module,
+        &info,
+        Some((naga::ShaderStage::Compute, ENTRY)),
+        &constants,
+    )
+    .unwrap();
+    assert_eq!(prepared.entry_points.len(), 1);
+    assert!(prepared.functions.len() < before);
+    assert!(!prepared
+        .functions
+        .iter()
+        .any(|(_, f)| f.name.as_deref() == Some("sleep_transaction_valid")));
+    let mut again = prepared.clone().into_owned();
+    naga::compact::compact(&mut again, naga::compact::KeepUnused::No);
+    let again_info = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&again)
+    .unwrap();
+    for model in [
+        naga::back::hlsl::ShaderModel::V5_1,
+        naga::back::hlsl::ShaderModel::V6_0,
+    ] {
+        let (before_hlsl, _, _) = offline_hlsl(&prepared, &prepared_info, model);
+        let (after_hlsl, _, _) = offline_hlsl(&again, &again_info, model);
+        assert_eq!(
+            before_hlsl, after_hlsl,
+            "another compaction is not a new compiler input"
+        );
+        eprintln!("production_compaction before_entries={entries_before} after_entries={} before_helpers={before} after_helpers={} model={model:?} hlsl_bytes={} sha256={} second_compaction_identical=true wgsl_sha256={}",prepared.entry_points.len(),prepared.functions.len(),before_hlsl.len(),digest(before_hlsl.as_bytes()),digest(source.as_bytes()));
+    }
+    if let Some(dir) = std::env::var_os("ALIFE_COMPILER_PROBE_ANALYSIS_DIR") {
+        let dir = Path::new(&dir);
+        std::fs::create_dir(dir).unwrap();
+        export(probe, dir);
+    }
+}
+
+#[test]
+#[ignore = "explicit CPU Vulkan create-only check of exact production diagnostic source"]
+fn software_vulkan_production_initializer_native_stage_harness() {
+    run(
+        Probe {
+            body: Body::ProductionInitializer,
+            abi: true,
+        },
+        true,
+        wgpu::Backends::VULKAN,
+        false,
     );
 }

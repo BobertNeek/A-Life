@@ -18,6 +18,9 @@ serde_json.workspace = true
 naga = { version = "29.0.3", features = ["spv-out", "hlsl-out"] }
 sha2 = "0.10.9"
 log = "0.4.32"
+profiling = { version = "1.0.18", features = ["profile-with-tracing"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry"] }
 
 [features]
 default = []
