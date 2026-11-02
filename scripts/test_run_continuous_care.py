@@ -46,6 +46,11 @@ class ContinuousCareTests(unittest.TestCase):
                 session.check_pins(state)
 
     def setUp(self):
+        selection_environment = patch.dict(os.environ)
+        selection_environment.start()
+        self.addCleanup(selection_environment.stop)
+        for name in ('ALIFE_GPU_BACKEND', 'ALIFE_GPU_DX12_COMPILER'):
+            os.environ.pop(name, None)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
