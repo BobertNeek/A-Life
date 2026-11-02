@@ -4823,6 +4823,10 @@ mod kernel_diagnostics;
 #[path = "closed_loop_pipeline/barrier_diagnostics.rs"]
 mod barrier_diagnostics;
 
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "closed_loop_pipeline/standalone_compiler_probes.rs"]
+mod standalone_compiler_probes;
+
 #[cfg(test)]
 #[path = "closed_loop_pipeline/batch_projection_tests.rs"]
 mod batch_projection_tests;

@@ -15,7 +15,9 @@ wgpu.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
-naga = { version = "29.0.3", features = ["spv-out"] }
+naga = { version = "29.0.3", features = ["spv-out", "hlsl-out"] }
+sha2 = "0.10.9"
+log = "0.4.32"
 
 [features]
 default = []
