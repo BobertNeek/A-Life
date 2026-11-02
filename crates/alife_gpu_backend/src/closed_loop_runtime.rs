@@ -261,6 +261,22 @@ pub struct GpuHardwareReceipt {
     pub backend_version: String,
 }
 
+/// One-way failure signal for explicit offline `gpu-tests` cleanup. It shares
+/// the real backend's device-loss state, including its live/staging clones.
+#[cfg(feature = "gpu-tests")]
+#[derive(Clone)]
+pub struct GpuDeviceFailureHandle {
+    device_lost: Arc<AtomicBool>,
+}
+
+#[cfg(feature = "gpu-tests")]
+impl GpuDeviceFailureHandle {
+    /// Revokes further device use. This handle cannot clear or replace state.
+    pub fn mark_failed(&self) {
+        self.device_lost.store(true, Ordering::Release);
+    }
+}
+
 /// Activity snapshot whose runtime handle fields are
 /// validated before the app canonicalizes this into portable world records.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2872,6 +2888,14 @@ impl GpuClosedLoopBackend {
 
     pub const fn hardware_receipt(&self) -> &GpuHardwareReceipt {
         &self.hardware
+    }
+
+    /// Clones a one-way failure signal tied to this actual device context.
+    #[cfg(feature = "gpu-tests")]
+    pub fn device_failure_handle_for_test(&self) -> GpuDeviceFailureHandle {
+        GpuDeviceFailureHandle {
+            device_lost: Arc::clone(&self.device_lost),
+        }
     }
 
     /// Returns the shared authoritative device only for quiescent offline

@@ -14,6 +14,7 @@ pub const PPO_MAX_CANDIDATES: usize = 32;
 pub const PPO_MOTOR_SLOTS: usize = 6;
 pub const PPO_ROW_WORDS: usize = 64;
 pub const PPO_METRIC_WORDS: usize = 8;
+const PPO_HEADER_BYTES: u64 = std::mem::size_of::<[u32; 32]>() as u64;
 pub const PPO_WGSL: &str = include_str!("../shaders/foundation_ppo.wgsl");
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -477,7 +478,7 @@ impl PpoGpuObjective {
         };
         let header = make(
             "ppo-header",
-            128,
+            PPO_HEADER_BYTES,
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         );
         let rows = make(
@@ -1268,6 +1269,217 @@ where
     )
 }
 
+/// Diagnostics for the opt-in frozen-gradient experiment, not a memory residency receipt.
+#[cfg(feature = "gpu-tests")]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct FrozenGradientCacheStats {
+    pub eligible: bool,
+    pub requested_gpu_bytes: u64,
+    pub raw_cached_windows: usize,
+    pub reused_windows: usize,
+    pub admission: Option<FrozenGradientAdmissionStats>,
+}
+
+/// Initial cache-allocation decision, not free VRAM or a reservation. A later
+/// geometry/objective refusal may discard the cache after `admitted` was true.
+/// Missing proof remains unknown rather than becoming a zero-byte estimate.
+#[cfg(feature = "gpu-tests")]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct FrozenGradientAdmissionStats {
+    pub allocator_reserved_baseline_bytes: Option<u64>,
+    pub additional_requested_upper_bytes: Option<u64>,
+    pub declared_profile_ceiling_bytes: Option<u64>,
+    pub admitted: bool,
+}
+
+#[cfg(feature = "gpu-tests")]
+#[path = "ppo/frozen_gradient_admission.rs"]
+mod frozen_gradient_admission;
+
+#[cfg(feature = "gpu-tests")]
+struct FrozenGradientCache {
+    buffer: wgpu::Buffer,
+    device: wgpu::Device,
+    failure_handle: alife_gpu_backend::closed_loop_runtime::GpuDeviceFailureHandle,
+    pending_work: bool,
+    stride: u64,
+    actor_bytes: u64,
+    value_bytes: u64,
+    mean_kl: Vec<f32>,
+}
+
+#[cfg(feature = "gpu-tests")]
+impl Drop for FrozenGradientCache {
+    fn drop(&mut self) {
+        use std::io::Write as _;
+        let pending = self.pending_work;
+        let retired = frozen_gradient_admission::retire_catching_failure(
+            || {
+                if pending {
+                    let _ = writeln!(
+                        std::io::stderr().lock(),
+                        "frozen_gradient_cache_cleanup_wait requested=true bytes={}",
+                        self.buffer.size()
+                    );
+                    self.device.poll(wgpu::PollType::Wait {
+                        submission_index: None,
+                        timeout: None,
+                    })?;
+                }
+                // Host drop alone does not retire submitted references. This
+                // explicit destruction follows completion, including opt-out.
+                self.buffer.destroy();
+                Ok::<(), wgpu::PollError>(())
+            },
+            || self.failure_handle.mark_failed(),
+        );
+        if !retired {
+            // Preserve the original Result or unwind. Subsequent live/offline
+            // work sees the same monotonic failed-device latch and cannot
+            // continue fresh after an unproved retirement.
+            let _ =
+                writeln!(std::io::stderr().lock(),
+                "frozen_gradient_cache_cleanup_failed device_failed=true retirement_unknown=true"
+            );
+        }
+    }
+}
+
+#[cfg(feature = "gpu-tests")]
+impl FrozenGradientCache {
+    fn new(
+        trainer: &crate::FoundationTrainer,
+        count: usize,
+        max_replay_ticks: usize,
+        admission: &mut Option<FrozenGradientAdmissionStats>,
+    ) -> Option<Self> {
+        let actor_bytes = (trainer.phenotype().synapses().len() as u64).checked_mul(4)?;
+        let value_bytes = u64::from(trainer.phenotype().neuron_count())
+            .checked_add(1)
+            .and_then(|n| n.checked_mul(4))?;
+        let stride = actor_bytes
+            .checked_add(4)
+            .and_then(|n| n.checked_add(value_bytes))?;
+        let size = stride.checked_mul(count as u64)?;
+        let (device, _) = trainer
+            .session()
+            .backend()
+            .offline_training_device_queue()
+            .ok()?;
+        // Bounded copy-only storage; unsupported bounds retain the original path.
+        if size == 0 || size > 2 * 1024 * 1024 || size > device.limits().max_buffer_size {
+            return None;
+        }
+        // The preceding objective metric readback has completed. This query
+        // covers the actual shared device, including live and offline buffers.
+        // Every optional proof failure retains the original fresh path.
+        let decision = frozen_gradient_admission::evaluate(trainer, max_replay_ticks, size);
+        *admission = Some(decision);
+        if !decision.admitted {
+            return None;
+        }
+        Some(Self {
+            buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("experimental-frozen-raw-gradients"),
+                size,
+                usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+            device: device.clone(),
+            failure_handle: trainer.session().backend().device_failure_handle_for_test(),
+            pending_work: false,
+            stride,
+            actor_bytes,
+            value_bytes,
+            mean_kl: Vec::with_capacity(count),
+        })
+    }
+}
+
+/// Experimental software/hardware test hook for the SAME PPO controller.
+/// Repeated loads must return immutable, bit-identical windows. Loader calls and
+/// cheap CPU validation still occur in their original order. Only an entire
+/// cohort of at most eight windows fitting one effective batch is eligible;
+/// speech/auxiliary objectives and later epochs use fresh original evaluation.
+/// No cache survives the first update, KL stop, or error. Numeric gradient
+/// failures remain deferred until original ordered accumulation.
+/// Admission uses the full legal replay bound; it may refuse optimization.
+/// Throughout the cache lifetime the controller must exclusively own device
+/// allocations: loaders, window Borrow/Drop implementations and other threads
+/// must not allocate or import resources on that device. Actual continuous
+/// sealed loaders and owned/Arc fixture handles are CPU/storage-only.
+/// A retirement failure marks the shared device failed; retained raw device or
+/// queue handles must not be reused after that failure.
+#[cfg(feature = "gpu-tests")]
+#[allow(clippy::too_many_arguments)]
+pub fn train_recurrent_ppo_cohort_with_frozen_gradients_for_test<F, W>(
+    trainer: &mut crate::FoundationTrainer,
+    state: &mut PpoTrainingState,
+    window_count: usize,
+    effective_batch_size: usize,
+    load_window: F,
+    config: PpoConfig,
+    collection_policy_version: u64,
+    stats: &mut FrozenGradientCacheStats,
+) -> Result<PpoUpdateReceipt, TrainingError>
+where
+    F: FnMut(usize) -> Result<W, TrainingError>,
+    W: Borrow<PpoTrainingWindow>,
+{
+    train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test(
+        trainer,
+        state,
+        window_count,
+        effective_batch_size,
+        load_window,
+        config,
+        collection_policy_version,
+        crate::MAX_TRAINING_SEQUENCE_TICKS,
+        stats,
+    )
+}
+
+/// Same disabled experiment with a replay-size eligibility bound, not a memory
+/// budget or a claim about available VRAM. Every loaded window is checked before
+/// evaluation; exceeding the bound discards the optional cache and runs fresh.
+/// Actual continuous spans can supply `max(end - burn)` without loading ahead.
+/// Admission supports the pinned Vulkan ordinary-allocation path only, with no
+/// raw/external imports or other same-device allocations, including synchronous
+/// loader callbacks and custom window Borrow/Drop implementations. Other backends or
+/// unavailable/insufficient proof retain the original controller path.
+/// A genuine retirement failure instead fail-stops the shared device; callers
+/// must not reuse retained raw device/queue handles afterward.
+#[cfg(feature = "gpu-tests")]
+#[allow(clippy::too_many_arguments)]
+pub fn train_recurrent_ppo_cohort_with_frozen_gradients_bounded_for_test<F, W>(
+    trainer: &mut crate::FoundationTrainer,
+    state: &mut PpoTrainingState,
+    window_count: usize,
+    effective_batch_size: usize,
+    load_window: F,
+    config: PpoConfig,
+    collection_policy_version: u64,
+    max_replay_ticks: usize,
+    stats: &mut FrozenGradientCacheStats,
+) -> Result<PpoUpdateReceipt, TrainingError>
+where
+    F: FnMut(usize) -> Result<W, TrainingError>,
+    W: Borrow<PpoTrainingWindow>,
+{
+    *stats = FrozenGradientCacheStats::default();
+    train_recurrent_ppo_cohort_inner(
+        trainer,
+        state,
+        window_count,
+        effective_batch_size,
+        load_window,
+        config,
+        collection_policy_version,
+        Some(stats),
+        max_replay_ticks,
+    )
+}
+
 /// Same cohort transaction with immutable owned or shared window handles.
 /// The handle must expose identical replay data on repeated loads. Only window
 /// ownership differs; replay validation, packing, gradients and error ordering
@@ -1277,9 +1489,40 @@ pub fn train_recurrent_ppo_cohort_with_windows<F, W>(
     state: &mut PpoTrainingState,
     window_count: usize,
     effective_batch_size: usize,
+    load_window: F,
+    config: PpoConfig,
+    collection_policy_version: u64,
+) -> Result<PpoUpdateReceipt, TrainingError>
+where
+    F: FnMut(usize) -> Result<W, TrainingError>,
+    W: Borrow<PpoTrainingWindow>,
+{
+    train_recurrent_ppo_cohort_inner(
+        trainer,
+        state,
+        window_count,
+        effective_batch_size,
+        load_window,
+        config,
+        collection_policy_version,
+        #[cfg(feature = "gpu-tests")]
+        None,
+        #[cfg(feature = "gpu-tests")]
+        0,
+    )
+}
+
+#[cfg_attr(feature = "gpu-tests", allow(clippy::too_many_arguments))]
+fn train_recurrent_ppo_cohort_inner<F, W>(
+    trainer: &mut crate::FoundationTrainer,
+    state: &mut PpoTrainingState,
+    window_count: usize,
+    effective_batch_size: usize,
     mut load_window: F,
     config: PpoConfig,
     collection_policy_version: u64,
+    #[cfg(feature = "gpu-tests")] mut cache_stats: Option<&mut FrozenGradientCacheStats>,
+    #[cfg(feature = "gpu-tests")] max_replay_ticks: usize,
 ) -> Result<PpoUpdateReceipt, TrainingError>
 where
     F: FnMut(usize) -> Result<W, TrainingError>,
@@ -1296,11 +1539,28 @@ where
         return Err(invalid());
     }
     let mut counts = Vec::with_capacity(window_count);
+    #[cfg(feature = "gpu-tests")]
+    let mut cache_enabled =
+        cache_stats.is_some() && window_count <= effective_batch_size && effective_batch_size <= 8;
+    #[cfg(feature = "gpu-tests")]
+    if let Some(stats) = cache_stats.as_deref_mut() {
+        stats.eligible = cache_enabled;
+    }
+    #[cfg(feature = "gpu-tests")]
+    let mut frozen_cache: Option<FrozenGradientCache> = None;
     // This separate frozen pass is necessary: checking ratio==1 after the first
     // minibatch would reject valid later windows from this same on-policy cohort.
     for index in 0..window_count {
         let loaded_window = load_window(index)?;
         let window = loaded_window.borrow();
+        #[cfg(feature = "gpu-tests")]
+        if cache_enabled && !frozen_gradient_admission::window_fits(window, max_replay_ticks) {
+            cache_enabled = false;
+            frozen_cache = None;
+            if let Some(stats) = cache_stats.as_deref_mut() {
+                stats.eligible = false;
+            }
+        }
         let metrics =
             evaluate_ppo_window(trainer, state, window, config, collection_policy_version)?;
         if metrics
@@ -1313,6 +1573,59 @@ where
             return Err(invalid());
         }
         counts.push(window.batch.len());
+        #[cfg(feature = "gpu-tests")]
+        if cache_enabled {
+            if window.auxiliary.is_some() || window.speech_targets.iter().any(Option::is_some) {
+                cache_enabled = false;
+                frozen_cache = None;
+                if let Some(stats) = cache_stats.as_deref_mut() {
+                    stats.eligible = false;
+                }
+            } else {
+                if frozen_cache.is_none() {
+                    let mut admission = None;
+                    frozen_cache = FrozenGradientCache::new(
+                        trainer,
+                        window_count,
+                        max_replay_ticks,
+                        &mut admission,
+                    );
+                    cache_enabled = frozen_cache.is_some();
+                    if let Some(stats) = cache_stats.as_deref_mut() {
+                        stats.eligible = cache_enabled;
+                        stats.requested_gpu_bytes =
+                            frozen_cache.as_ref().map_or(0, |c| c.buffer.size());
+                        stats.admission = admission;
+                    }
+                }
+                if let Some(cache) = frozen_cache.as_mut() {
+                    let objective = state.objective.as_ref().ok_or_else(invalid)?;
+                    let offset = index as u64 * cache.stride;
+                    let mut encoder = new_encoder(trainer.session(), "cache-frozen-raw-gradients")?;
+                    trainer.encode_cache_raw_replay_gradients(
+                        &mut encoder,
+                        &objective.output,
+                        &cache.buffer,
+                        offset,
+                    )?;
+                    encoder.copy_buffer_to_buffer(
+                        &objective.value_head,
+                        cache.value_bytes * 3,
+                        &cache.buffer,
+                        offset + cache.actor_bytes + 4,
+                        cache.value_bytes,
+                    );
+                    cache.pending_work = true;
+                    // Queue::submit may enqueue this work and then run a user
+                    // callback which panics before returning to this frame.
+                    submit(trainer.session(), encoder)?;
+                    cache.mean_kl.push(ppo_mean_kl(&metrics)?);
+                    if let Some(stats) = cache_stats.as_deref_mut() {
+                        stats.raw_cached_windows += 1;
+                    }
+                }
+            }
+        }
     }
     let mut receipt = PpoUpdateReceipt {
         collection_policy_version,
@@ -1332,29 +1645,100 @@ where
                 for (index, &sample_count) in counts.iter().enumerate().take(end).skip(start) {
                     let loaded_window = load_window(index)?;
                     let window = loaded_window.borrow();
+                    #[cfg(feature = "gpu-tests")]
+                    if frozen_cache.is_some()
+                        && !frozen_gradient_admission::window_fits(window, max_replay_ticks)
+                    {
+                        // Cleanup only: the original evaluation/validation still
+                        // owns any error, at its original callback position.
+                        frozen_cache = None;
+                        if let Some(stats) = cache_stats.as_deref_mut() {
+                            stats.eligible = false;
+                        }
+                    }
                     if window.batch.len() != sample_count {
                         return Err(invalid());
                     }
-                    let metrics = evaluate_ppo_window(
-                        trainer,
-                        state,
-                        window,
-                        config,
-                        collection_policy_version,
-                    )?;
+                    let cached_mean_kl = {
+                        #[cfg(feature = "gpu-tests")]
+                        {
+                            frozen_cache
+                                .as_ref()
+                                .filter(|_| _epoch == 0 && start == 0)
+                                .map(|cache| cache.mean_kl[index])
+                        }
+                        #[cfg(not(feature = "gpu-tests"))]
+                        {
+                            None::<f32>
+                        }
+                    };
+                    let window_kl = if let Some(kl) = cached_mean_kl {
+                        #[cfg(feature = "gpu-tests")]
+                        validate_cached_ppo_window(
+                            trainer,
+                            window,
+                            config,
+                            collection_policy_version,
+                        )?;
+                        kl
+                    } else {
+                        ppo_mean_kl(&evaluate_ppo_window(
+                            trainer,
+                            state,
+                            window,
+                            config,
+                            collection_policy_version,
+                        )?)?
+                    };
                     let scale = sample_count as f32 / samples as f32;
-                    mean_kl +=
-                        f64::from(ppo_mean_kl(&metrics)?) * sample_count as f64 / samples as f64;
+                    mean_kl += f64::from(window_kl) * sample_count as f64 / samples as f64;
                     let objective = state.objective.as_ref().ok_or_else(invalid)?;
                     let mut encoder = new_encoder(trainer.session(), "ppo-accumulate")?;
                     if index == start {
                         objective.encode_clear_value_accumulation(&mut encoder);
+                    }
+                    #[cfg(feature = "gpu-tests")]
+                    if cached_mean_kl.is_some() {
+                        let cache = frozen_cache.as_ref().ok_or_else(invalid)?;
+                        encoder.copy_buffer_to_buffer(
+                            &cache.buffer,
+                            index as u64 * cache.stride + cache.actor_bytes + 4,
+                            &objective.value_head,
+                            cache.value_bytes * 3,
+                            cache.value_bytes,
+                        );
                     }
                     objective.encode_accumulate_value_gradients(
                         trainer.session(),
                         &mut encoder,
                         scale,
                     )?;
+                    #[cfg(feature = "gpu-tests")]
+                    if cached_mean_kl.is_some() {
+                        let cache = frozen_cache.as_mut().ok_or_else(invalid)?;
+                        // The helper may submit and then reject its receipt.
+                        // Clear only after its existing successful status wait.
+                        cache.pending_work = true;
+                        trainer.accumulate_cached_replay_gradients(
+                            encoder,
+                            &objective.output,
+                            scale,
+                            &cache.buffer,
+                            index as u64 * cache.stride,
+                        )?;
+                        cache.pending_work = false;
+                        if let Some(stats) = cache_stats.as_deref_mut() {
+                            stats.reused_windows += 1;
+                        }
+                    } else {
+                        trainer.accumulate_replay_gradients(
+                            encoder,
+                            &objective.output,
+                            0,
+                            scale,
+                        )?;
+                    }
+                    #[cfg(not(feature = "gpu-tests"))]
                     trainer.accumulate_replay_gradients(encoder, &objective.output, 0, scale)?;
                 }
                 let mean_kl = mean_kl as f32;
@@ -1362,6 +1746,12 @@ where
                     return Err(TrainingError::MalformedReadback);
                 }
                 receipt.mean_kl_before_updates.push(mean_kl);
+                // All cache reads have completed through the accumulation readback.
+                // Never retain frozen gradients across an update or KL cancellation.
+                #[cfg(feature = "gpu-tests")]
+                {
+                    frozen_cache = None;
+                }
                 if mean_kl > config.target_kl {
                     receipt.stopped_for_kl = true;
                     return Ok(false);
@@ -1466,6 +1856,28 @@ where
         receipt.completed_epochs += 1;
     }
     Ok(receipt)
+}
+
+#[cfg(feature = "gpu-tests")]
+fn validate_cached_ppo_window(
+    trainer: &crate::FoundationTrainer,
+    window: &PpoTrainingWindow,
+    config: PpoConfig,
+    version: u64,
+) -> Result<(), TrainingError> {
+    window.sequence.validate_for(trainer.phenotype())?;
+    if window.speech_targets.len() != window.sequence.ticks.len()
+        || window.speech_targets.iter().any(Option::is_some)
+        || window.auxiliary.is_some()
+        || window.batch.len() != window.sequence.ticks.len() - window.sequence.burn_in_ticks
+    {
+        return Err(invalid());
+    }
+    window.batch.validate_policy_version(version)?;
+    for transition in window.batch.transitions() {
+        transition.action.validate(config.temperature)?;
+    }
+    Ok(())
 }
 
 // The preparation phase may fail before actor submission; that error must not

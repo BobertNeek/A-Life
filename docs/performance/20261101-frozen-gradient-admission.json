@@ -1,0 +1,647 @@
+{
+  "schema_version": 1,
+  "kind": "disabled-frozen-gradient-requested-byte-admission-correctness",
+  "identity": {
+    "source_commit": "1f227eafc8917b821f03b8480abba8ea2d58c3f6",
+    "source_tree": "1f9c5a3ca27339de8022878450c0f0e334c1981c",
+    "git_status": "",
+    "base": "b1fd11290c99ec0ca6aa457a466cca046831885e",
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "binary": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "bound_executable_copy": "/workspace/software-ppo-frozen-admission/controller-tests",
+    "binary_sha256": "4e517c84938dd01ca651bbe23de9a5817d93ecb68a0e4c85dcfd9cd157d64995",
+    "source_sha256": {
+      "Cargo.lock": "e9da375829f39d182af9b39257eca47e749991272486ff45a26c21ecb55655bf",
+      "crates/alife_gpu_backend/src/closed_loop_runtime.rs": "88244250393902ac6942b4e2c1393718c620aa2d7729052a25bc2daef1022319",
+      "crates/alife_training/src/trainer.rs": "dbe8ba022a5599f66d39f90ced5e9a3e87e6cc0708c68bec5aaa17f2eabccbb7",
+      "crates/alife_training/src/ppo.rs": "9ce27a6734470fd56cc8d6198698eb73c9d00b33319880429a5a97d1f9953b7e",
+      "crates/alife_training/src/ppo/frozen_gradient_admission.rs": "42bf02bdf55ae63ab275a2fb515e2c4d15e2c0e79e2392fad8bdbc33ffa19de9",
+      "crates/alife_training/shaders/foundation_train.wgsl": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+      "crates/alife_training/shaders/foundation_ppo.wgsl": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5",
+      "crates/alife_training/tests/software_ppo_controller.rs": "60c9d76c8f4aa05551fbf21560ae2cc28b57dad19e601cbea60603b8473ad7ed",
+      "crates/alife_training/tests/software_ppo_controller/admission_qualification.rs": "3466cdadcdc3b316c6a94ff75e3427fd88011bacf144b4da5aac91739ca8a8f0",
+      "crates/alife_training/tests/software_ppo_controller/execution.rs": "a9e69bba7275c71067c3fbda1f9c75dcffde95324a6826f2394cbebbd3de142a"
+    },
+    "libraries": [
+      {
+        "crate": "alife_core",
+        "path": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/libalife_core-16c9870bd3cb6733.rlib",
+        "sha256": "b6e44337ce2bccb83731816d97dee802566dcfba468c9b98aa7a2fed330f292f",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": []
+      },
+      {
+        "crate": "alife_storage",
+        "path": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/libalife_storage-a04f2ff0363c97e0.rlib",
+        "sha256": "8812cf9e4d5ae59a9cb08a552fb2e4e9c982b84e4eaedcd5bfd99f9387a4559b",
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": []
+      },
+      {
+        "crate": "alife_gpu_backend",
+        "path": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/libalife_gpu_backend-550bc273d21676ba.rlib",
+        "sha256": "641fde5a2bc65196d3d4a14a8796732f976dc472fb16daf4e246d29bf628a3eb",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "gpu-tests",
+          "test-support",
+          "training-rollout"
+        ]
+      },
+      {
+        "crate": "alife_world",
+        "path": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/libalife_world-651f80eed48a4cf7.rlib",
+        "sha256": "ba772c43f14ce087457e78a154b81167e461f12dcabbf2e9f70738af80f828e7",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": []
+      },
+      {
+        "crate": "alife_runtime",
+        "path": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/libalife_runtime-e39c7f6dc78fcdb4.rlib",
+        "sha256": "f86667ec010c0ecf035680dc9f5ac2bd788c7266d6d3fa50289d5a8741df4634",
+        "profile": {
+          "opt_level": "2",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "gpu-tests",
+          "training-rollout"
+        ]
+      },
+      {
+        "crate": "alife_training",
+        "path": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/libalife_training-615b3358bc954f0d.rlib",
+        "sha256": "81ec73e8365273ec4be87e8b5fc5ceb2b2e5927b8a18d027907a7287f5741cd6",
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "default",
+          "gpu-tests"
+        ]
+      }
+    ],
+    "command": [
+      "/workspace/software-ppo-frozen-admission/controller-tests",
+      "admission_qualification::requested_admission_accepts_refuses_and_drops_before_larger_replay",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "selector": "ALIFE_DISPATCH_REQUIRE_HARDWARE=0; explicit CPU Vulkan",
+    "profile": "test [unoptimized], correctness only",
+    "scope": "requested-byte admission; no physical GPU, performance, or scratch-buffer equivalence claim"
+  },
+  "compiler_artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///workspace/A-Life-frozen-gradient-admission/crates/alife_training#0.1.0",
+    "manifest_path": "/workspace/A-Life-frozen-gradient-admission/crates/alife_training/Cargo.toml",
+    "target": {
+      "kind": [
+        "test"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "software_ppo_controller",
+      "src_path": "/workspace/A-Life-frozen-gradient-admission/crates/alife_training/tests/software_ppo_controller.rs",
+      "edition": "2021",
+      "doc": false,
+      "doctest": false,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": 0,
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    },
+    "features": [
+      "default",
+      "gpu-tests"
+    ],
+    "filenames": [
+      "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71"
+    ],
+    "executable": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "fresh": false
+  },
+  "run": {
+    "source_commit": "1f227eafc8917b821f03b8480abba8ea2d58c3f6",
+    "binary_sha256": "4e517c84938dd01ca651bbe23de9a5817d93ecb68a0e4c85dcfd9cd157d64995",
+    "command": [
+      "/workspace/software-ppo-frozen-admission/controller-tests",
+      "admission_qualification::requested_admission_accepts_refuses_and_drops_before_larger_replay",
+      "--exact",
+      "--ignored",
+      "--nocapture",
+      "--test-threads=1"
+    ],
+    "exit_code": 0
+  },
+  "admission_summary": {
+    "admitted": {
+      "actor_coordinate_count": 32768,
+      "actor_optimizer_step": 2,
+      "full_actor_and_value_equality": "asserted in the fixture; this small summary does not retain every word",
+      "last_policy_version": 6,
+      "loads": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "receipt_words": [
+        6,
+        0,
+        1,
+        0,
+        2,
+        2,
+        0
+      ],
+      "selected_actor_coordinate": 25728,
+      "selected_actor_w_m_v_age_words": [
+        1043757177,
+        3173412205,
+        953424744,
+        2
+      ],
+      "stats": {
+        "admission": {
+          "additional_requested_upper_bytes": 360615260,
+          "admitted": true,
+          "allocator_reserved_baseline_bytes": 114545664,
+          "declared_profile_ceiling_bytes": 2147483648
+        },
+        "eligible": true,
+        "raw_cached_windows": 2,
+        "requested_gpu_bytes": 278544,
+        "reused_windows": 2
+      },
+      "value_bias_parameter_m_v_words": [
+        974889730,
+        3179929112,
+        965298693
+      ],
+      "value_optimizer_step": 2
+    },
+    "fresh": {
+      "actor_coordinate_count": 32768,
+      "actor_optimizer_step": 2,
+      "full_actor_and_value_equality": "asserted in the fixture; this small summary does not retain every word",
+      "last_policy_version": 6,
+      "loads": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "receipt_words": [
+        6,
+        0,
+        1,
+        0,
+        2,
+        2,
+        0
+      ],
+      "selected_actor_coordinate": 25728,
+      "selected_actor_w_m_v_age_words": [
+        1043757177,
+        3173412205,
+        953424744,
+        2
+      ],
+      "stats": {
+        "admission": null,
+        "eligible": false,
+        "raw_cached_windows": 0,
+        "requested_gpu_bytes": 0,
+        "reused_windows": 0
+      },
+      "value_bias_parameter_m_v_words": [
+        974889730,
+        3179929112,
+        965298693
+      ],
+      "value_optimizer_step": 2
+    },
+    "geometry_fallback": {
+      "actor_coordinate_count": 32768,
+      "actor_optimizer_step": 2,
+      "full_actor_and_value_equality": "asserted in the fixture; this small summary does not retain every word",
+      "last_policy_version": 6,
+      "loads": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "receipt_words": [
+        6,
+        0,
+        1,
+        0,
+        2,
+        2,
+        0
+      ],
+      "selected_actor_coordinate": 25728,
+      "selected_actor_w_m_v_age_words": [
+        1043757177,
+        3173412205,
+        953424744,
+        2
+      ],
+      "stats": {
+        "admission": {
+          "additional_requested_upper_bytes": 244842332,
+          "admitted": true,
+          "allocator_reserved_baseline_bytes": 114545664,
+          "declared_profile_ceiling_bytes": 2147483648
+        },
+        "eligible": false,
+        "raw_cached_windows": 1,
+        "requested_gpu_bytes": 278544,
+        "reused_windows": 0
+      },
+      "value_bias_parameter_m_v_words": [
+        974889730,
+        3179929112,
+        965298693
+      ],
+      "value_optimizer_step": 2
+    },
+    "production_profile_before_controller": {
+      "declared_profile": {
+        "growth_chunk_slots": 32,
+        "logical_neural_heap_budget_bytes": 2147483648,
+        "max_hot_brains": 500,
+        "max_in_flight_batches": 8,
+        "physical_allocation_ceiling_bytes": 2147483648,
+        "profile_id": 1,
+        "reserved": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "retain_empty_chunks": 1,
+        "schema_version": 1
+      },
+      "execution": {
+        "adapter_info": {
+          "backend": "Vulkan",
+          "device": 0,
+          "device_type": "Cpu",
+          "driver": "llvmpipe",
+          "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+          "name": "llvmpipe (LLVM 19.1.7, 256 bits)",
+          "vendor": 65541
+        },
+        "execution_mode": "software_vulkan_test",
+        "selector_variable": "ALIFE_DISPATCH_REQUIRE_HARDWARE"
+      },
+      "scope": "the exact admission snapshot is recorded once in experimental stats; not free VRAM, a reservation, or future reserved peak"
+    },
+    "tiny_fresh": {
+      "actor_coordinate_count": 32768,
+      "actor_optimizer_step": 2,
+      "full_actor_and_value_equality": "asserted in the fixture; this small summary does not retain every word",
+      "last_policy_version": 6,
+      "loads": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "receipt_words": [
+        6,
+        0,
+        1,
+        0,
+        2,
+        2,
+        0
+      ],
+      "selected_actor_coordinate": 25728,
+      "selected_actor_w_m_v_age_words": [
+        1043757177,
+        3173412205,
+        953424744,
+        2
+      ],
+      "stats": {
+        "admission": null,
+        "eligible": false,
+        "raw_cached_windows": 0,
+        "requested_gpu_bytes": 0,
+        "reused_windows": 0
+      },
+      "value_bias_parameter_m_v_words": [
+        974889730,
+        3179929112,
+        965298693
+      ],
+      "value_optimizer_step": 2
+    },
+    "tiny_profile_before_controller": {
+      "declared_profile": {
+        "growth_chunk_slots": 32,
+        "logical_neural_heap_budget_bytes": 2147483648,
+        "max_hot_brains": 500,
+        "max_in_flight_batches": 8,
+        "physical_allocation_ceiling_bytes": 1,
+        "profile_id": 1,
+        "reserved": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "retain_empty_chunks": 1,
+        "schema_version": 1
+      },
+      "execution": {
+        "adapter_info": {
+          "backend": "Vulkan",
+          "device": 0,
+          "device_type": "Cpu",
+          "driver": "llvmpipe",
+          "driver_info": "Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)",
+          "name": "llvmpipe (LLVM 19.1.7, 256 bits)",
+          "vendor": 65541
+        },
+        "execution_mode": "software_vulkan_test",
+        "selector_variable": "ALIFE_DISPATCH_REQUIRE_HARDWARE"
+      },
+      "scope": "the exact admission snapshot is recorded once in experimental stats; not free VRAM, a reservation, or future reserved peak"
+    },
+    "tiny_refused": {
+      "actor_coordinate_count": 32768,
+      "actor_optimizer_step": 2,
+      "full_actor_and_value_equality": "asserted in the fixture; this small summary does not retain every word",
+      "last_policy_version": 6,
+      "loads": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "receipt_words": [
+        6,
+        0,
+        1,
+        0,
+        2,
+        2,
+        0
+      ],
+      "selected_actor_coordinate": 25728,
+      "selected_actor_w_m_v_age_words": [
+        1043757177,
+        3173412205,
+        953424744,
+        2
+      ],
+      "stats": {
+        "admission": {
+          "additional_requested_upper_bytes": 360615260,
+          "admitted": false,
+          "allocator_reserved_baseline_bytes": 130790400,
+          "declared_profile_ceiling_bytes": 1
+        },
+        "eligible": false,
+        "raw_cached_windows": 0,
+        "requested_gpu_bytes": 0,
+        "reused_windows": 0
+      },
+      "value_bias_parameter_m_v_words": [
+        974889730,
+        3179929112,
+        965298693
+      ],
+      "value_optimizer_step": 2
+    }
+  },
+  "cleanup_trace": {
+    "conditional_wait_count": 1,
+    "failure_count": 0,
+    "case": "geometry fallback; no cleanup wait in admitted/tiny-refused paths"
+  },
+  "cpu_feature_gate_identity": {
+    "source_commit": "9cd0fba4fdc8de544a4534ecebb0e9b31b805db5",
+    "artifact": {
+      "reason": "compiler-artifact",
+      "package_id": "path+file:///workspace/A-Life-frozen-gradient-admission/crates/alife_training#0.1.0",
+      "manifest_path": "/workspace/A-Life-frozen-gradient-admission/crates/alife_training/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_training",
+        "src_path": "/workspace/A-Life-frozen-gradient-admission/crates/alife_training/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": true
+      },
+      "features": [
+        "default",
+        "gpu-tests"
+      ],
+      "filenames": [
+        "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1"
+      ],
+      "executable": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1",
+      "fresh": false
+    },
+    "binary_sha256": "bf76cefd4af45c403913996f956570370d6966808afc73f1749fd89b6071e3ce"
+  },
+  "cpu_feature_gate_results": [
+    {
+      "filter": "counted_replay_bound",
+      "command": [
+        "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1",
+        "counted_replay_bound",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "filter": "requested_policy_accepts_exact_boundary_and_refuses_overflow",
+      "command": [
+        "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1",
+        "requested_policy_accepts_exact_boundary_and_refuses_overflow",
+        "--nocapture",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "cleanup_cpu_identity": {
+    "source_commit": "1f227eafc8917b821f03b8480abba8ea2d58c3f6",
+    "artifact": {
+      "reason": "compiler-artifact",
+      "package_id": "path+file:///workspace/A-Life-frozen-gradient-admission/crates/alife_training#0.1.0",
+      "manifest_path": "/workspace/A-Life-frozen-gradient-admission/crates/alife_training/Cargo.toml",
+      "target": {
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ],
+        "name": "alife_training",
+        "src_path": "/workspace/A-Life-frozen-gradient-admission/crates/alife_training/src/lib.rs",
+        "edition": "2021",
+        "doc": true,
+        "doctest": true,
+        "test": true
+      },
+      "profile": {
+        "opt_level": "0",
+        "debuginfo": 0,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": true
+      },
+      "features": [
+        "default",
+        "gpu-tests"
+      ],
+      "filenames": [
+        "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1"
+      ],
+      "executable": "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1",
+      "fresh": false
+    },
+    "binary_sha256": "c285d524753a2ada8ea33f33e6d3b6f9c8d5bfca875678464876a87f5692fc0c",
+    "command": [
+      "/workspace/A-Life-frozen-gradient-admission/target/qualification-tests/debug/deps/alife_training-eae590fddd45b2b1",
+      "ppo::frozen_gradient_admission::tests::cleanup_failure_marks_failed_without_replacing_result_or_unwind",
+      "--exact",
+      "--test-threads=1"
+    ],
+    "exit_code": 0
+  },
+  "default_library": {
+    "command": "cargo test -p alife_training --lib",
+    "features": "default; no gpu-tests",
+    "passed": 45,
+    "failed": 0,
+    "source_note": "Shared ordinary trainer layout/descriptor implementation is unchanged from d5edc885 through final tested source. Historical9cd CPU-feature identity/logs are retained; its earlier executable was not separately preserved."
+  },
+  "pinned_dependency_sources": {
+    "wgpu-29.0.3/src/api/device.rs": {
+      "sha256": "e79012fa7e520c9a87a25c3779e4d279d18090c8784a57d76673830a5d81e260",
+      "purpose": "generate_allocator_report semantics"
+    },
+    "wgpu-29.0.3/src/backend/wgpu_core.rs": {
+      "sha256": "8c0e1fab257ef93a86f6d6c93f1970f9756dececcaf3cebaa398a90a9d58efa9",
+      "purpose": "fatal Device::poll panic conversion"
+    },
+    "wgpu-types-29.0.3/src/counters.rs": {
+      "sha256": "e85dc9fa3b52896b35a051de78b2e8d351df5bbf56923aece2d4756c8490fdd0",
+      "purpose": "reserved block bytes versus allocations"
+    },
+    "wgpu-hal-29.0.3/src/vulkan/device.rs": {
+      "sha256": "7d72923762700aed073922f80d1bd510009c6249d8861cd30d9998c794eb7e27",
+      "purpose": "ordinary/map buffer allocation and destroy"
+    },
+    "wgpu-core-29.0.3/src/device/resource.rs": {
+      "sha256": "796858f878f290e872a113cb474d7ff947dfdd61f5dcf38f6f64b9e69c959644",
+      "purpose": "poll maintenance and deferred resource destruction"
+    },
+    "wgpu-core-29.0.3/src/resource.rs": {
+      "sha256": "9e317487575483203979a334e29c73f6da5ceb2a7c2f51ba6bbcc69ee802bee1",
+      "purpose": "destroyed-buffer lifetime"
+    },
+    "wgpu-core-29.0.3/src/device/queue.rs": {
+      "sha256": "b1a943fccedd5882a75252ff3e82a0d4ba8c7d46346041d2dd1bb66c5f5cba34",
+      "purpose": "submission trackers/callback ordering"
+    },
+    "gpu-allocator-0.28.0/src/vulkan/mod.rs": {
+      "sha256": "f354d1379ef33fe97d889940deb06cffa3977e65cb286661cee4d186dd4bd54d",
+      "purpose": "dedicated/personal block and complete report traversal"
+    }
+  },
+  "scope_limits": [
+    "Normal API remains fresh; no app activation flag/path was added.",
+    "Vulkan ordinary managed allocations only; no raw/external imports or other same-device allocations, including callbacks/Borrow/Drop.",
+    "Reserved snapshot includes host-visible and device-local blocks and existing live/offline buffers on the same Device.",
+    "The estimate is not future reserved-block usage, free VRAM, physical VRAM consumption or a reservation.",
+    "Positive source test asserts complete actor/value checkpoint equality; retained summary contains selected words only and no scratch arrays.",
+    "Physical GPU correctness, throughput and whole-training benefit remain unqualified."
+  ],
+  "test_log": "\nrunning 1 test\ntest admission_qualification::requested_admission_accepts_refuses_and_drops_before_larger_replay ... actual_controller_fixture neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nrequested_admission mode=admitted; max_replay_ticks=384; stats=FrozenGradientCacheStats { eligible: true, requested_gpu_bytes: 278544, raw_cached_windows: 2, reused_windows: 2, admission: Some(FrozenGradientAdmissionStats { allocator_reserved_baseline_bytes: Some(114545664), additional_requested_upper_bytes: Some(360615260), declared_profile_ceiling_bytes: Some(2147483648), admitted: true }) }; loads=[0, 1, 0, 1]; accepted_actor_and_value_exact=true\nfrozen_gradient_cache_cleanup_wait requested=true bytes=278544\nrequested_admission mode=geometry_fallback; max_replay_ticks=256; stats=FrozenGradientCacheStats { eligible: false, requested_gpu_bytes: 278544, raw_cached_windows: 1, reused_windows: 0, admission: Some(FrozenGradientAdmissionStats { allocator_reserved_baseline_bytes: Some(114545664), additional_requested_upper_bytes: Some(244842332), declared_profile_ceiling_bytes: Some(2147483648), admitted: true }) }; loads=[0, 1, 0, 1]; accepted_actor_and_value_exact=true\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=1; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nrequested_admission mode=tiny_profile_refusal; declared_profile_ceiling=1; stats=FrozenGradientCacheStats { eligible: false, requested_gpu_bytes: 0, raw_cached_windows: 0, reused_windows: 0, admission: Some(FrozenGradientAdmissionStats { allocator_reserved_baseline_bytes: Some(130790400), additional_requested_upper_bytes: Some(360615260), declared_profile_ceiling_bytes: Some(1), admitted: false }) }; loads=[0, 1, 0, 1]; accepted_actor_and_value_exact=true\nrequested_admission_observations={\"admitted\":{\"actor_coordinate_count\":32768,\"actor_optimizer_step\":2,\"full_actor_and_value_equality\":\"asserted in the fixture; this small summary does not retain every word\",\"last_policy_version\":6,\"loads\":[0,1,0,1],\"receipt_words\":[6,0,1,0,2,2,0],\"selected_actor_coordinate\":25728,\"selected_actor_w_m_v_age_words\":[1043757177,3173412205,953424744,2],\"stats\":{\"admission\":{\"additional_requested_upper_bytes\":360615260,\"admitted\":true,\"allocator_reserved_baseline_bytes\":114545664,\"declared_profile_ceiling_bytes\":2147483648},\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"value_bias_parameter_m_v_words\":[974889730,3179929112,965298693],\"value_optimizer_step\":2},\"fresh\":{\"actor_coordinate_count\":32768,\"actor_optimizer_step\":2,\"full_actor_and_value_equality\":\"asserted in the fixture; this small summary does not retain every word\",\"last_policy_version\":6,\"loads\":[0,1,0,1],\"receipt_words\":[6,0,1,0,2,2,0],\"selected_actor_coordinate\":25728,\"selected_actor_w_m_v_age_words\":[1043757177,3173412205,953424744,2],\"stats\":{\"admission\":null,\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"value_bias_parameter_m_v_words\":[974889730,3179929112,965298693],\"value_optimizer_step\":2},\"geometry_fallback\":{\"actor_coordinate_count\":32768,\"actor_optimizer_step\":2,\"full_actor_and_value_equality\":\"asserted in the fixture; this small summary does not retain every word\",\"last_policy_version\":6,\"loads\":[0,1,0,1],\"receipt_words\":[6,0,1,0,2,2,0],\"selected_actor_coordinate\":25728,\"selected_actor_w_m_v_age_words\":[1043757177,3173412205,953424744,2],\"stats\":{\"admission\":{\"additional_requested_upper_bytes\":244842332,\"admitted\":true,\"allocator_reserved_baseline_bytes\":114545664,\"declared_profile_ceiling_bytes\":2147483648},\"eligible\":false,\"raw_cached_windows\":1,\"requested_gpu_bytes\":278544,\"reused_windows\":0},\"value_bias_parameter_m_v_words\":[974889730,3179929112,965298693],\"value_optimizer_step\":2},\"production_profile_before_controller\":{\"declared_profile\":{\"growth_chunk_slots\":32,\"logical_neural_heap_budget_bytes\":2147483648,\"max_hot_brains\":500,\"max_in_flight_batches\":8,\"physical_allocation_ceiling_bytes\":2147483648,\"profile_id\":1,\"reserved\":[0,0,0,0,0,0,0],\"retain_empty_chunks\":1,\"schema_version\":1},\"execution\":{\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"},\"scope\":\"the exact admission snapshot is recorded once in experimental stats; not free VRAM, a reservation, or future reserved peak\"},\"tiny_fresh\":{\"actor_coordinate_count\":32768,\"actor_optimizer_step\":2,\"full_actor_and_value_equality\":\"asserted in the fixture; this small summary does not retain every word\",\"last_policy_version\":6,\"loads\":[0,1,0,1],\"receipt_words\":[6,0,1,0,2,2,0],\"selected_actor_coordinate\":25728,\"selected_actor_w_m_v_age_words\":[1043757177,3173412205,953424744,2],\"stats\":{\"admission\":null,\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"value_bias_parameter_m_v_words\":[974889730,3179929112,965298693],\"value_optimizer_step\":2},\"tiny_profile_before_controller\":{\"declared_profile\":{\"growth_chunk_slots\":32,\"logical_neural_heap_budget_bytes\":2147483648,\"max_hot_brains\":500,\"max_in_flight_batches\":8,\"physical_allocation_ceiling_bytes\":1,\"profile_id\":1,\"reserved\":[0,0,0,0,0,0,0],\"retain_empty_chunks\":1,\"schema_version\":1},\"execution\":{\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"},\"scope\":\"the exact admission snapshot is recorded once in experimental stats; not free VRAM, a reservation, or future reserved peak\"},\"tiny_refused\":{\"actor_coordinate_count\":32768,\"actor_optimizer_step\":2,\"full_actor_and_value_equality\":\"asserted in the fixture; this small summary does not retain every word\",\"last_policy_version\":6,\"loads\":[0,1,0,1],\"receipt_words\":[6,0,1,0,2,2,0],\"selected_actor_coordinate\":25728,\"selected_actor_w_m_v_age_words\":[1043757177,3173412205,953424744,2],\"stats\":{\"admission\":{\"additional_requested_upper_bytes\":360615260,\"admitted\":false,\"allocator_reserved_baseline_bytes\":130790400,\"declared_profile_ceiling_bytes\":1},\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"value_bias_parameter_m_v_words\":[974889730,3179929112,965298693],\"value_optimizer_step\":2}}\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 21.44s\n\n",
+  "cleanup_cpu_log": "\nrunning 1 test\ntest ppo::frozen_gradient_admission::tests::cleanup_failure_marks_failed_without_replacing_result_or_unwind ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.00s\n\n",
+  "default_library_log": "   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-admission/crates/alife_gpu_backend)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-admission/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-admission/crates/alife_training)\n    Finished `test` profile [unoptimized] target(s) in 43.04s\n     Running unittests src/lib.rs (target/qualification-tests/debug/deps/alife_training-9beb9f751ea88fe8)\n\nrunning 45 tests\ntest backend_handoff::output_resolution_tests::rooted_and_canonical_output_paths_resolve_before_source_containment_checks ... ok\ntest backend_handoff::tests::cached_n2048_compilation_matches_fresh_and_distinguishes_weight_mutations ... ok\ntest backend_handoff::tests::cached_n2048_compilation_preserves_genome_signed_zero_and_failed_admission ... ok\ntest founder_merge::tests::conflict_midpoint_rounds_once_to_f32_with_ties_to_even ... ok\ntest founder_merge::tests::finite_endpoint_midpoint_avoids_f32_intermediate_overflow ... ok\ntest founder_merge::tests::opt_in_midpoint_changes_only_sign_conflicts ... ok\ntest founder_merge::tests::selective_merge_preserves_unique_changes_averages_overlap_and_rejects_conflicts ... ok\ntest ppo::batch_update_tests::backup_prepare_and_restore_failures_keep_existing_error_precedence ... ok\ntest ppo::batch_update_tests::coefficient_boundaries_validate_before_disabling_value_work ... ok\ntest ppo::batch_update_tests::disabled_value_update_still_requires_a_ready_objective ... ok\ntest ppo::batch_update_tests::positive_value_update_retains_backup_apply_and_actor_failure_restore_order ... ok\ntest ppo::batch_update_tests::zero_value_actor_failures_propagate_without_value_cleanup ... ok\ntest ppo::batch_update_tests::zero_value_update_skips_backup_and_dispatch_but_keeps_actor_work ... ok\ntest ppo::critic_calibration::tests::batch_admission_rejects_bad_replacements_before_upload ... ok\ntest ppo::critic_calibration::tests::residual_shader_parses_and_validates ... ok\ntest ppo::tests::actor_centered_windows_keep_the_full_batch_mean ... ok\ntest ppo::tests::actor_centering_constant_credit_is_zero_and_finite_overflow_is_rejected ... ok\ntest ppo::tests::actor_centering_is_opt_in_and_preserves_raw_credit_and_targets ... ok\ntest ppo::tests::imitation_loss_uses_only_the_action_metric_and_rejects_invalid_status ... ok\ntest ppo::tests::ppo_rollout_keeps_bootstrap_boundaries_masks_and_policy_version ... ok\ntest rehearsal::tests::capacity_deduplication_and_round_robin_preserve_diversity ... ok\ntest rehearsal::tests::fresh_and_failure_reservations_and_seed_partition_are_explicit ... ok\ntest rehearsal::tests::lineage_never_promotes_historical_retry_or_stale_policy ... ok\ntest rehearsal::tests::sequence_masks_exclude_burn_in_and_bootstrap_at_boundaries ... ok\ntest rehearsal::timing_tests::delayed_death_changes_credit_discount_and_elapsed_time ... ok\ntest rehearsal::world_tests::actual_near_grab_geometry_supports_all_five_variations ... ok\ntest rehearsal::world_tests::invalid_placements_and_nonfood_fail_without_mutating_parent ... ok\ntest rehearsal::world_tests::variations_branch_real_world_and_preserve_private_biology_and_parent ... ok\ntest trainer::checkpoint_readback::tests::a_later_capture_uses_new_bytes_and_cannot_change_the_earlier_result ... ok\ntest trainer::checkpoint_readback::tests::decoding_does_not_require_the_input_slice_to_be_word_aligned ... ok\ntest trainer::checkpoint_readback::tests::every_float_lane_rejects_infinities_and_nan_payloads ... ok\ntest trainer::checkpoint_readback::tests::layout_has_two_disjoint_copies_and_one_aligned_map_without_padding ... ok\ntest trainer::checkpoint_readback::tests::layout_rejects_empty_overflow_host_span_and_device_limit ... ok\ntest trainer::checkpoint_readback::tests::packed_decode_is_bit_exact_to_three_read_reference_for_all_lanes ... ok\ntest trainer::checkpoint_readback::tests::source_sizes_reject_each_short_lane_before_copy_encoding ... ok\ntest trainer::checkpoint_readback::tests::wrong_length_rejects_short_long_and_partial_words ... ok\ntest trainer::tests::adam_metadata_constrains_recurrent_routes_but_preserves_signed_decoder_readouts ... ok\ntest trainer::tests::cached_metadata_packing_preserves_layout ... ok\ntest trainer::tests::metadata_cache_distinguishes_raw_signed_zero_dynamics ... ok\ntest trainer::tests::replay_shape_comparison_distinguishes_raw_dendritic_zero_bits ... ok\ntest trainer::tests::reused_replay_parameters_match_fresh_layout_and_headers_after_burn_in_changes ... ok\ntest trainer::tests::training_shader_validates_and_contains_every_gradient_stage ... ok\ntest types::speech_payload_diagnostic_tests::speech_payload_diagnostics_ignore_unsupervised_outputs ... ok\ntest types::speech_payload_diagnostic_tests::speech_payload_diagnostics_preserve_equal_class_budgets ... ok\ntest types::speech_payload_diagnostic_tests::speech_payload_diagnostics_reject_bad_shapes_and_labels ... ok\n\ntest result: ok. 45 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.70s\n\n",
+  "clippy_log": "    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-admission/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 1.71s\n",
+  "post_run_assay_logging_only": {
+    "path": "crates/alife_training/tests/software_ppo_controller/frozen_gradient_assay.rs",
+    "executed_source_sha256": "f604cd416cd75c2b5c5b4d15fe5660c876ca4b67ab2aa0415b8a0cc90b7bd608",
+    "followup_sha256": "05a22d5482f1b48cd1686f7be847df2881363cc29cc54abea39034a9bc0279e0",
+    "scope": "best-effort admission diagnostic after elapsed timer capture and before assertions; no GPU/performance rerun"
+  },
+  "one_byte_test_policy": "Actual valid profile declaration refuses optional K; it does not impose a global one-byte GPU limit or change fresh raw-training allocation behavior.",
+  "historical_cpu_feature_binary_note": "Historical9cd captured Cargo identity/hash and run logs are retained. Its executable path was overwritten by the final1f CPU build; the earlier executable was not separately preserved and its original hash cannot now be recomputed at that path.",
+  "retained_final_cleanup_cpu_executable": {
+    "path": "/workspace/software-ppo-frozen-admission/cleanup-cpu-tests",
+    "sha256": "c285d524753a2ada8ea33f33e6d3b6f9c8d5bfca875678464876a87f5692fc0c",
+    "source_commit": "1f227eafc8917b821f03b8480abba8ea2d58c3f6"
+  }
+}

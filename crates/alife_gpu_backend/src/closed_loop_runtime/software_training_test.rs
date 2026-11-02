@@ -78,6 +78,11 @@ impl GpuClosedLoopBackend {
         self.offline_software_training_test
             .then(|| self.adapter.get_info())
     }
+
+    /// Actual adapter identity for explicit `gpu-tests` fixtures in either mode.
+    pub fn adapter_info_for_test(&self) -> wgpu::AdapterInfo {
+        self.adapter.get_info()
+    }
 }
 
 #[cfg(test)]

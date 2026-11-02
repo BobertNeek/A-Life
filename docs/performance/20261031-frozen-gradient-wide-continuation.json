@@ -1,0 +1,102 @@
+{
+  "scope": "Additional software Vulkan correctness qualification only; actual recurrent updates before later fresh PPO epoch; no performance assay",
+  "base_milestone": "8dc809347d7a742989174cacc4774ebf0aee0b31",
+  "identity": {
+    "source_commit": "1a01abda66582ab01e35249cffe091bd09310766",
+    "source_tree": "d352e7a94608c501ee7b35ce12f43e5e25108cf9",
+    "git_status": "",
+    "binary": "/workspace/A-Life-frozen-gradient-continuation/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+    "binary_sha256": "7bb1fafc39adbb5fd57c4d180a7ff5a25a302fb496ed0e21dc4059805d661170",
+    "source_sha256": {
+      "crates/alife_training/tests/software_ppo_controller.rs": "97e9f490e80ac5b4a1589ede11be6aa9aaccdd765782349b8bf856d99256eff0",
+      "crates/alife_training/tests/software_ppo_controller/continuing_qualification.rs": "aecdbef421d8b865b7e3cef56458e330ee754a7290e1ec8acf593fc076f41d75",
+      "crates/alife_training/tests/software_ppo_controller/fallback_qualification.rs": "f026e09af70f290f11097f246c95d8651b1c917bebeddbfb82772922cdbc3cae",
+      "crates/alife_training/tests/software_ppo_controller/execution.rs": "5a6d03bd78411414b633465a15e432f91a299e30b882e469e8bd616007927355",
+      "crates/alife_training/src/ppo.rs": "b2334d9a182cd1952b553b9c173aa8331d64da1e86f54927ed2adeef9abc7a2c",
+      "crates/alife_training/src/trainer.rs": "a72ce26cd299aad4cbbe1d386fa3b920b6b9113c4761ad49fb63c462b8be929c"
+    },
+    "profile": "test [unoptimized], correctness only",
+    "selector": "ALIFE_DISPATCH_REQUIRE_HARDWARE=0"
+  },
+  "result": {
+    "command": [
+      "/workspace/A-Life-frozen-gradient-continuation/target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71",
+      "continuing_qualification::wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates",
+      "--exact",
+      "--ignored",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 3.8744294609987264
+  },
+  "configuration": {
+    "capacity": "N2048",
+    "synapses": 32768,
+    "mask": "every third synapse",
+    "trainable": 10923,
+    "frozen": 21845,
+    "coherent_replay_ticks": 8,
+    "loss_rows": 7,
+    "window_shapes": [
+      [
+        3,
+        0
+      ],
+      [
+        6,
+        2
+      ]
+    ],
+    "loss_split": [
+      3,
+      4
+    ],
+    "epochs": 2,
+    "value_coefficient": 0.5,
+    "effective_batch": 8,
+    "warm_actor_and_value_steps": 1,
+    "final_actor_and_value_steps": 3,
+    "raw_cached_windows": 2,
+    "reused_windows": 2
+  },
+  "proof": {
+    "actual_first_update_recurrent_weight_and_both_moments_changed": 171,
+    "actual_two_update_recurrent_weight_and_both_moments_changed": 171,
+    "all_masked_integer_ages_and_frozen_coordinates_checked": true,
+    "each_value_parameter_and_both_moment_planes_advanced": true,
+    "normal_vs_cache_receipts_checkpoints_and_all_captured_words_exact": true,
+    "one_epoch_probe_then_exact_warm_boundary_rewind": true,
+    "later_second_epoch_fresh": true
+  },
+  "checks": {
+    "focused_test": "1 passed, 0 failed",
+    "strict_gpu_tests_all_target_clippy": "passed",
+    "root_source_review": "No source blocker; confirmed non-decoder kind is Recurrent."
+  },
+  "notes": [
+    "The original three-pass c3 source-bound receipt and source remain unchanged. Existing three tests were not repeated.",
+    "No fixture input or production code change was needed to obtain actual recurrent gradients.",
+    "This test reuses the same coherent full-trajectory-GAE windows, observed nonzero bootstrap and initial-state equality assertions.",
+    "Warm actor/value history is preserved through exact checkpoint rewinds; the probe is discarded only as a disposable test oracle. No real checkpoint was used.",
+    "Only new test code and test-helper visibility changed. No normal activation, shader, math, production factory or PC job.",
+    "Per-test elapsed time is correctness context, not throughput evidence. Memory-cap fallback, physical GPU qualification and forced actor-apply/value rollback remain untested."
+  ],
+  "logs": {
+    "test_build": {
+      "path": "/tmp/alife-frozen-continuation-wide-build.log",
+      "sha256": "e54056a38d48c09a2e5ef6f75efd588fa7b75dec1a4bc126a86c5014caa07ff2",
+      "text": "   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_training)\n    Finished `test` profile [unoptimized] target(s) in 0.91s\n  Executable tests/software_ppo_controller.rs (target/qualification-tests/debug/deps/software_ppo_controller-a44c78ab37eadc71)\n"
+    },
+    "focused_test": {
+      "path": "/tmp/alife-frozen-continuation-wide.log",
+      "sha256": "95d82f967a7525f1dfb7b9651ad542485607908fb03e3018b1ff6a8da4493cac",
+      "text": "\nrunning 1 test\ntest continuing_qualification::wide_continuing_gae_keeps_later_epochs_fresh_after_non_decoder_updates ... actual_controller_execution=software_vulkan_test adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }\nactual_controller_fixture neurons=2048; synapses=32768; trainable_weights=10923; masked_weight=25728\nactual_controller_execution_metadata={\"adapter_info\":{\"backend\":\"Vulkan\",\"device\":0,\"device_type\":\"Cpu\",\"driver\":\"llvmpipe\",\"driver_info\":\"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\",\"name\":\"llvmpipe (LLVM 19.1.7, 256 bits)\",\"vendor\":65541},\"execution_mode\":\"software_vulkan_test\",\"selector_variable\":\"ALIFE_DISPATCH_REQUIRE_HARDWARE\"}\nwide continuing GAE passed:10923trainable, first-update nondecoder weight+m+v changed at171coordinates; two-update nondecoder changed at171; epochs2/value.5,reuse2,fresh second epoch,allmaskages/frozenbits and fullcapturedwords exact\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 11 filtered out; finished in 3.87s\n\n"
+    },
+    "strict_clippy": {
+      "path": "/tmp/alife-frozen-continuation-wide-clippy.log",
+      "sha256": "46dd91206a1756da6499bb43f88cd8fc84ce83dbbfc8205da891a143b1f54f0b",
+      "text": "    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-continuation/crates/alife_training)\n    Finished `dev` profile [unoptimized] target(s) in 0.39s\n"
+    }
+  }
+}

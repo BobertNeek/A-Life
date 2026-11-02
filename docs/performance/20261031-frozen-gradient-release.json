@@ -1,0 +1,818 @@
+{
+  "scope": "Synthetic actual full PPO controller on explicit software CPU Vulkan; legacy allocation baseline; no physical GPU/whole-training qualification",
+  "base_controller": "f1a3cad491bb2dfb80c7d68f6b6ffe77396e9b6c",
+  "identity": {
+    "source_commit": "470dde2e37843c3f93af908f3b08664508145cfe",
+    "source_tree": "cd345107ce72e52a893266af8e180d90cea9a0af",
+    "git_status": "",
+    "profile": "all-dependencies cargo --release [optimized]",
+    "binary": "/workspace/A-Life-frozen-gradient-cache/target/frozen-release/release/deps/software_ppo_controller-6a5722987a12a713",
+    "binary_sha256": "13e8224ab14b51b08091f77eacc2990b98b47ac4ede3dcaa4d16035c2face271",
+    "source_sha256": {
+      "crates/alife_training/src/ppo.rs": "b2334d9a182cd1952b553b9c173aa8331d64da1e86f54927ed2adeef9abc7a2c",
+      "crates/alife_training/src/trainer.rs": "a72ce26cd299aad4cbbe1d386fa3b920b6b9113c4761ad49fb63c462b8be929c",
+      "crates/alife_training/tests/software_ppo_controller.rs": "59860743ed86c00dbfcdce8cc1277ab92472ac2c684767e471ba84889f2ac5eb",
+      "crates/alife_training/tests/software_ppo_controller/frozen_gradient_assay.rs": "a28e93fd730a4a7c5f85cc75dc8aad48d7ce9b36bbfa1dfe254a215c656b0d4b",
+      "crates/alife_training/shaders/foundation_train.wgsl": "7fe3c0291d972077018e10c44a0cb6b89c0a19d8aca0de6c314f4420bcbb7ee9",
+      "crates/alife_training/shaders/foundation_ppo.wgsl": "d3f7c6d819e42c6d42cc789b2adee8370736cc2831aa077b10124ab52b2134e5"
+    },
+    "local_training_rlibs": {
+      "/workspace/A-Life-frozen-gradient-cache/target/frozen-release/release/deps/libalife_training-666fc604a9bd5292.rlib": "172e2768a1cc06090967335a491ffc275edbea5e168e58bce8acf13c7f1fa0fc"
+    }
+  },
+  "assay": {
+    "actor_adam_config": {
+      "beta1": 0.8999999761581421,
+      "beta2": 0.9990000128746033,
+      "epsilon": 9.99999993922529e-09,
+      "gradient_clip": 1.0,
+      "learning_rate": 0.0003000000142492354,
+      "weight_decay": 9.999999747378752e-05
+    },
+    "completed_measured_pairs": 5,
+    "configuration": {
+      "all_dependencies_release_required": true,
+      "auxiliary_objective": false,
+      "burn_in_ticks": [
+        0,
+        128
+      ],
+      "cache_raw_windows": 2,
+      "cache_requested_gpu_bytes": 278544,
+      "cache_reused_windows": 2,
+      "collection_policy_version": 6,
+      "effective_batch_size": 8,
+      "entropy_coefficient": 0.0,
+      "epochs": 2,
+      "later_epoch": "fresh original evaluation and backpropagation",
+      "loader_indices": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        1
+      ],
+      "loss_rows": [
+        256,
+        256
+      ],
+      "microsteps_every_tick": 4,
+      "neurons": 2048,
+      "planned_measured_pairs": 5,
+      "planned_warmup_pairs": 1,
+      "speech_labels": false,
+      "stage_mask": "every third synapse, including 25728",
+      "synapses": 32768,
+      "target_kl": 100.0,
+      "trainable_weights": 10923,
+      "value_coefficient": 0.0,
+      "warm_value_optimizer_step": 1,
+      "warmed_nonzero_value_coefficients_and_both_moment_planes": true,
+      "window_ticks": [
+        256,
+        384
+      ]
+    },
+    "pairs": [
+      {
+        "all_receipt_and_capture_words_exact": true,
+        "compared_capture_u32_words": 9711889,
+        "execution_order": [
+          "original",
+          "frozen_cache"
+        ],
+        "pair": 0,
+        "runs": [
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": false,
+              "raw_cached_windows": 0,
+              "requested_gpu_bytes": 0,
+              "reused_windows": 0
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "original",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 4.239086758,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          },
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": true,
+              "raw_cached_windows": 2,
+              "requested_gpu_bytes": 278544,
+              "reused_windows": 2
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "frozen_cache",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 3.529993213,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          }
+        ],
+        "warmup": true
+      },
+      {
+        "all_receipt_and_capture_words_exact": true,
+        "compared_capture_u32_words": 9711889,
+        "execution_order": [
+          "frozen_cache",
+          "original"
+        ],
+        "pair": 1,
+        "runs": [
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": true,
+              "raw_cached_windows": 2,
+              "requested_gpu_bytes": 278544,
+              "reused_windows": 2
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "frozen_cache",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 3.436118651,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          },
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": false,
+              "raw_cached_windows": 0,
+              "requested_gpu_bytes": 0,
+              "reused_windows": 0
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "original",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 4.245072969,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          }
+        ],
+        "warmup": false
+      },
+      {
+        "all_receipt_and_capture_words_exact": true,
+        "compared_capture_u32_words": 9711889,
+        "execution_order": [
+          "original",
+          "frozen_cache"
+        ],
+        "pair": 2,
+        "runs": [
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": false,
+              "raw_cached_windows": 0,
+              "requested_gpu_bytes": 0,
+              "reused_windows": 0
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "original",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 4.451253246,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          },
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": true,
+              "raw_cached_windows": 2,
+              "requested_gpu_bytes": 278544,
+              "reused_windows": 2
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "frozen_cache",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 3.558801732,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          }
+        ],
+        "warmup": false
+      },
+      {
+        "all_receipt_and_capture_words_exact": true,
+        "compared_capture_u32_words": 9711889,
+        "execution_order": [
+          "frozen_cache",
+          "original"
+        ],
+        "pair": 3,
+        "runs": [
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": true,
+              "raw_cached_windows": 2,
+              "requested_gpu_bytes": 278544,
+              "reused_windows": 2
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "frozen_cache",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 3.40005737,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          },
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": false,
+              "raw_cached_windows": 0,
+              "requested_gpu_bytes": 0,
+              "reused_windows": 0
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "original",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 4.330129801,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          }
+        ],
+        "warmup": false
+      },
+      {
+        "all_receipt_and_capture_words_exact": true,
+        "compared_capture_u32_words": 9711889,
+        "execution_order": [
+          "original",
+          "frozen_cache"
+        ],
+        "pair": 4,
+        "runs": [
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": false,
+              "raw_cached_windows": 0,
+              "requested_gpu_bytes": 0,
+              "reused_windows": 0
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "original",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 4.236154711,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          },
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": true,
+              "raw_cached_windows": 2,
+              "requested_gpu_bytes": 278544,
+              "reused_windows": 2
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "frozen_cache",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 3.4822603069999998,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          }
+        ],
+        "warmup": false
+      },
+      {
+        "all_receipt_and_capture_words_exact": true,
+        "compared_capture_u32_words": 9711889,
+        "execution_order": [
+          "frozen_cache",
+          "original"
+        ],
+        "pair": 5,
+        "runs": [
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": true,
+              "raw_cached_windows": 2,
+              "requested_gpu_bytes": 278544,
+              "reused_windows": 2
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "frozen_cache",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 3.566376434,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          },
+          {
+            "accepted_actor_progress": {
+              "actor_optimizer_step": 3,
+              "all_trainable_integer_ages_incremented_by": 2,
+              "changed_trainable_weights": 287,
+              "frozen_coordinates_exact": 21845,
+              "nonzero_trainable_first_moments": 177,
+              "positive_trainable_second_moments": 177,
+              "trainable_weights": 10923
+            },
+            "cache": {
+              "eligible": false,
+              "raw_cached_windows": 0,
+              "requested_gpu_bytes": 0,
+              "reused_windows": 0
+            },
+            "capture_sections": 14,
+            "capture_u32_words": 9711889,
+            "loader_indices": [
+              0,
+              1,
+              0,
+              1,
+              0,
+              1
+            ],
+            "mode": "original",
+            "receipt_words": [
+              6,
+              0,
+              2,
+              0,
+              3,
+              1,
+              0,
+              0
+            ],
+            "seconds": 4.163954087,
+            "value_optimizer_step": 1,
+            "value_parameters_and_moments_frozen_bit_exact": true
+          }
+        ],
+        "warmup": false
+      }
+    ],
+    "performance_claim": false,
+    "ppo_config": {
+      "clip_ratio": 0.20000000298023224,
+      "discount_half_life_seconds": 60.0,
+      "entropy_coefficient": 0.0,
+      "epochs": 2,
+      "gae_half_life_seconds": 10.0,
+      "target_kl": 100.0,
+      "temperature": 1.0,
+      "value_coefficient": 0.0,
+      "value_optimizer": {
+        "beta1": 0.8999999761581421,
+        "beta2": 0.9990000128746033,
+        "epsilon": 9.99999993922529e-09,
+        "gradient_clip": 1.0,
+        "learning_rate": 0.0003000000142492354,
+        "weight_decay": 9.999999747378752e-05
+      }
+    },
+    "rss_scope": "external driver may report whole-process software RSS; not VRAM or live allocator residency",
+    "scope": "actual full PPO controller, explicit CPU Vulkan software test backend, disposable synthetic terminal replay only",
+    "stopped": false,
+    "timing_scope": "only the actual controller call, including Arc loader callbacks with fixed-size order bookkeeping; restore, largest replay and objective allocation, setup submission/wait, collection, checkpoints, captures, comparisons, and JSON excluded",
+    "warm_actor_progress": {
+      "actor_optimizer_step": 1,
+      "all_trainable_integer_ages_incremented_by": 1,
+      "changed_trainable_weights": 287,
+      "frozen_coordinates_exact": 21845,
+      "nonzero_trainable_first_moments": 177,
+      "positive_trainable_second_moments": 177,
+      "trainable_weights": 10923
+    },
+    "warm_ppo_config": {
+      "clip_ratio": 0.20000000298023224,
+      "discount_half_life_seconds": 60.0,
+      "entropy_coefficient": 0.0,
+      "epochs": 1,
+      "gae_half_life_seconds": 10.0,
+      "target_kl": 100.0,
+      "temperature": 1.0,
+      "value_coefficient": 0.5,
+      "value_optimizer": {
+        "beta1": 0.8999999761581421,
+        "beta2": 0.9990000128746033,
+        "epsilon": 9.99999993922529e-09,
+        "gradient_clip": 1.0,
+        "learning_rate": 0.0003000000142492354,
+        "weight_decay": 9.999999747378752e-05
+      }
+    }
+  },
+  "statistics": {
+    "pairs": [
+      {
+        "pair": 0,
+        "warmup": true,
+        "original": 4.239086758,
+        "frozen_cache": 3.529993213,
+        "elapsed_reduction": 0.1672750725523131,
+        "speed_ratio": 1.2008767445752027
+      },
+      {
+        "pair": 1,
+        "warmup": false,
+        "frozen_cache": 3.436118651,
+        "original": 4.245072969,
+        "elapsed_reduction": 0.19056311255600455,
+        "speed_ratio": 1.2354267707736382
+      },
+      {
+        "pair": 2,
+        "warmup": false,
+        "original": 4.451253246,
+        "frozen_cache": 3.558801732,
+        "elapsed_reduction": 0.20049443711206005,
+        "speed_ratio": 1.2507730357595543
+      },
+      {
+        "pair": 3,
+        "warmup": false,
+        "frozen_cache": 3.40005737,
+        "original": 4.330129801,
+        "elapsed_reduction": 0.2147908893597622,
+        "speed_ratio": 1.273546099311848
+      },
+      {
+        "pair": 4,
+        "warmup": false,
+        "original": 4.236154711,
+        "frozen_cache": 3.4822603069999998,
+        "elapsed_reduction": 0.17796668333249654,
+        "speed_ratio": 1.2164957061034554
+      },
+      {
+        "pair": 5,
+        "warmup": false,
+        "frozen_cache": 3.566376434,
+        "original": 4.163954087,
+        "elapsed_reduction": 0.14351206581879872,
+        "speed_ratio": 1.1675587712230828
+      }
+    ],
+    "original_median_seconds": 4.245072969,
+    "cache_median_seconds": 3.4822603069999998,
+    "ratio_of_medians_elapsed_reduction": 0.17969365133897652,
+    "ratio_of_medians_speed_ratio": 1.2190567604801406,
+    "median_paired_elapsed_reduction": 0.19056311255600455,
+    "median_paired_speed_ratio": 1.2354267707736382
+  },
+  "process": {
+    "command": [
+      "/workspace/A-Life-frozen-gradient-cache/target/frozen-release/release/deps/software_ppo_controller-6a5722987a12a713",
+      "frozen_gradient_assay::representative_actual_ppo_frozen_gradient_release_assay",
+      "--exact",
+      "--ignored",
+      "--test-threads=1",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "wall_seconds": 56.310205193,
+    "whole_process_maxrss_kib": 530424
+  },
+  "checks": {
+    "source_reviews": "root and independent reviewer found no fairness/causal blocker",
+    "exactness": "all six pairs passed all14sections/9,711,889u32words and exact receipt comparisons",
+    "strict_release_clippy": "passed after retaining runtime release guard with targeted assertions_on_constants lint allowance",
+    "root_independent_verification": "Recomputed all six pairs/five measured statistics; checked all14sections/9,711,889word proofs, receipts, loader/cache/progress counters; verified raw JSON, binary, training rlib, six source hashes and tree against clean470 source."
+  },
+  "notes": [
+    "One warmup plus five alternating measured pairs; all retained, no repeats/cherrypicking. No cutoff observed.",
+    "Full serialized target/warm/actor optimizer configurations retained in assay. TargetKL100 and entropy0 are chosen fixture settings.",
+    "Every third trainable synapse is representative synthetic mask, not an actual saved campaign stage mask.",
+    "Nonzero warmed value-head parameters/moments and value step1 are frozen under value coefficient0; all10,923 actor integer ages advance2,287trainable weights change,177coordinates have nonzero moments,21,845 frozen coordinates stay bit-exact.",
+    "Additional proof readbacks and setup excluded from clocks; actual controller metrics/status readbacks remain included.",
+    "Source470 was clean and identity captured before execution. Later changes clarify one comment, add a targeted lint allowance for the runtime release-profile assertion, and add evidence, without behavior/timing changes.",
+    "All-dependency cargo --release used a dedicated target, seeded optimized third-party artifacts only; all local alife_* fingerprints/artifacts removed and visibly recompiled.",
+    "Whole process RSS includes fixture Arc windows, software GPU buffers, checkpoint/proof captures and all runs, not incremental cache memory or VRAM.",
+    "No real checkpoint, physical PC, PR or default promotion. Fresh evaluation resumes after first update; raw cache does not carry across accepted optimizer updates."
+  ],
+  "logs": {
+    "release_library_build": {
+      "path": "/tmp/alife-frozen-gradient-release-build.log",
+      "sha256": "5a340b36aaf2f6832380c4b5ed9cd2dd9ab57f861a862072fb9dbfa2f4ffa3a3",
+      "text": "   Compiling alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_core)\n   Compiling alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_storage)\n   Compiling alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_world)\n   Compiling alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_gpu_backend)\n   Compiling alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_runtime)\n   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\n    Finished `release` profile [optimized] target(s) in 1m 33s\n"
+    },
+    "release_test_build": {
+      "path": "/tmp/alife-frozen-gradient-release-test-build.log",
+      "sha256": "c53045c2d19595cef8f6f4a54808127759cb04b3b0500978e8d14135c8d1595c",
+      "text": "   Compiling alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\n    Finished `release` profile [optimized] target(s) in 2.87s\n  Executable tests/software_ppo_controller.rs (target/frozen-release/release/deps/software_ppo_controller-6a5722987a12a713)\n"
+    },
+    "raw_trials": {
+      "path": "/tmp/alife-frozen-gradient-release-trials.log",
+      "sha256": "09c9dd52d263cd09aeb296c2529af3075f93b0c2d3e92acc4f3c1fedcf6a83db",
+      "text": "\nrunning 1 test\ntest frozen_gradient_assay::representative_actual_ppo_frozen_gradient_release_assay ... actual_controller_adapter=AdapterInfo { name: \"llvmpipe (LLVM 19.1.7, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"llvmpipe\", driver_info: \"Mesa 25.0.7-2+deb13u1 (LLVM 19.1.7)\", backend: Vulkan, subgroup_min_size: 8, subgroup_max_size: 8, transient_saves_memory: false }; neurons=2048; synapses=32768; trainable_weights=10923; masked_weight=25728\nfrozen_gradient_release_pair={\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"original\",\"frozen_cache\"],\"pair\":0,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.239086758,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.529993213,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":true}\nfrozen_gradient_release_pair={\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"frozen_cache\",\"original\"],\"pair\":1,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.436118651,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.245072969,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false}\nfrozen_gradient_release_pair={\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"original\",\"frozen_cache\"],\"pair\":2,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.451253246,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.558801732,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false}\nfrozen_gradient_release_pair={\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"frozen_cache\",\"original\"],\"pair\":3,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.40005737,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.330129801,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false}\nfrozen_gradient_release_pair={\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"original\",\"frozen_cache\"],\"pair\":4,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.236154711,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.4822603069999998,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false}\nfrozen_gradient_release_pair={\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"frozen_cache\",\"original\"],\"pair\":5,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.566376434,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.163954087,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false}\nfrozen_gradient_release_assay={\"actor_adam_config\":{\"beta1\":0.8999999761581421,\"beta2\":0.9990000128746033,\"epsilon\":9.99999993922529e-9,\"gradient_clip\":1.0,\"learning_rate\":0.0003000000142492354,\"weight_decay\":0.00009999999747378752},\"completed_measured_pairs\":5,\"configuration\":{\"all_dependencies_release_required\":true,\"auxiliary_objective\":false,\"burn_in_ticks\":[0,128],\"cache_raw_windows\":2,\"cache_requested_gpu_bytes\":278544,\"cache_reused_windows\":2,\"collection_policy_version\":6,\"effective_batch_size\":8,\"entropy_coefficient\":0.0,\"epochs\":2,\"later_epoch\":\"fresh original evaluation and backpropagation\",\"loader_indices\":[0,1,0,1,0,1],\"loss_rows\":[256,256],\"microsteps_every_tick\":4,\"neurons\":2048,\"planned_measured_pairs\":5,\"planned_warmup_pairs\":1,\"speech_labels\":false,\"stage_mask\":\"every third synapse, including 25728\",\"synapses\":32768,\"target_kl\":100.0,\"trainable_weights\":10923,\"value_coefficient\":0.0,\"warm_value_optimizer_step\":1,\"warmed_nonzero_value_coefficients_and_both_moment_planes\":true,\"window_ticks\":[256,384]},\"pairs\":[{\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"original\",\"frozen_cache\"],\"pair\":0,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.239086758,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.529993213,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":true},{\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"frozen_cache\",\"original\"],\"pair\":1,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.436118651,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.245072969,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false},{\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"original\",\"frozen_cache\"],\"pair\":2,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.451253246,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.558801732,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false},{\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"frozen_cache\",\"original\"],\"pair\":3,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.40005737,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.330129801,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false},{\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"original\",\"frozen_cache\"],\"pair\":4,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.236154711,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.4822603069999998,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false},{\"all_receipt_and_capture_words_exact\":true,\"compared_capture_u32_words\":9711889,\"execution_order\":[\"frozen_cache\",\"original\"],\"pair\":5,\"runs\":[{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":true,\"raw_cached_windows\":2,\"requested_gpu_bytes\":278544,\"reused_windows\":2},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"frozen_cache\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":3.566376434,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true},{\"accepted_actor_progress\":{\"actor_optimizer_step\":3,\"all_trainable_integer_ages_incremented_by\":2,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"cache\":{\"eligible\":false,\"raw_cached_windows\":0,\"requested_gpu_bytes\":0,\"reused_windows\":0},\"capture_sections\":14,\"capture_u32_words\":9711889,\"loader_indices\":[0,1,0,1,0,1],\"mode\":\"original\",\"receipt_words\":[6,0,2,0,3,1,0,0],\"seconds\":4.163954087,\"value_optimizer_step\":1,\"value_parameters_and_moments_frozen_bit_exact\":true}],\"warmup\":false}],\"performance_claim\":false,\"ppo_config\":{\"clip_ratio\":0.20000000298023224,\"discount_half_life_seconds\":60.0,\"entropy_coefficient\":0.0,\"epochs\":2,\"gae_half_life_seconds\":10.0,\"target_kl\":100.0,\"temperature\":1.0,\"value_coefficient\":0.0,\"value_optimizer\":{\"beta1\":0.8999999761581421,\"beta2\":0.9990000128746033,\"epsilon\":9.99999993922529e-9,\"gradient_clip\":1.0,\"learning_rate\":0.0003000000142492354,\"weight_decay\":0.00009999999747378752}},\"rss_scope\":\"external driver may report whole-process software RSS; not VRAM or live allocator residency\",\"scope\":\"actual full PPO controller, explicit CPU Vulkan software test backend, disposable synthetic terminal replay only\",\"stopped\":false,\"timing_scope\":\"only the actual controller call, including Arc loader callbacks with fixed-size order bookkeeping; restore, largest replay and objective allocation, setup submission/wait, collection, checkpoints, captures, comparisons, and JSON excluded\",\"warm_actor_progress\":{\"actor_optimizer_step\":1,\"all_trainable_integer_ages_incremented_by\":1,\"changed_trainable_weights\":287,\"frozen_coordinates_exact\":21845,\"nonzero_trainable_first_moments\":177,\"positive_trainable_second_moments\":177,\"trainable_weights\":10923},\"warm_ppo_config\":{\"clip_ratio\":0.20000000298023224,\"discount_half_life_seconds\":60.0,\"entropy_coefficient\":0.0,\"epochs\":1,\"gae_half_life_seconds\":10.0,\"target_kl\":100.0,\"temperature\":1.0,\"value_coefficient\":0.5,\"value_optimizer\":{\"beta1\":0.8999999761581421,\"beta2\":0.9990000128746033,\"epsilon\":9.99999993922529e-9,\"gradient_clip\":1.0,\"learning_rate\":0.0003000000142492354,\"weight_decay\":0.00009999999747378752}}}\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 56.30s\n\n"
+    },
+    "strict_release_clippy_initial": {
+      "path": "/tmp/alife-frozen-gradient-release-clippy-initial.log",
+      "sha256": "4b4d956f22132ba5f33531c8881e44b8c5602b073761cb2deb84d1dc4a69ef7c",
+      "text": "    Checking num-traits v0.2.19\n    Checking hashbrown v0.15.5\n    Checking gpu-descriptor v0.3.2\n    Checking half v2.7.1\n    Checking ordered-float v5.3.0\n    Checking serde_core v1.0.228\n    Checking naga v29.0.3\n    Checking blake3 v1.8.5\n    Checking serde v1.0.228\n    Checking alife_core v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_core)\n    Checking wgpu-naga-bridge v29.0.3\n    Checking wgpu-hal v29.0.3\n    Checking wgpu-core-deps-windows-linux-android v29.0.3\n    Checking wgpu-core v29.0.3\n    Checking wgpu v29.0.3\n    Checking serde_json v1.0.150\n    Checking alife_storage v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_storage)\n    Checking alife_world v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_world)\n    Checking alife_gpu_backend v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_gpu_backend)\n    Checking alife_runtime v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_runtime)\n    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\nerror: this assertion has a constant value\n   --> crates/alife_training/tests/software_ppo_controller/frozen_gradient_assay.rs:224:5\n    |\n224 | /     assert!(\n225 | |         !cfg!(debug_assertions),\n226 | |         \"run this bounded assay with all-dependency --release\"\n227 | |     );\n    | |_____^\n    |\n    = help: consider moving this into a const block: `const { assert!(..) }`\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assertions_on_constants\n    = note: `-D clippy::assertions-on-constants` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::assertions_on_constants)]`\n\nerror: could not compile `alife_training` (test \"software_ppo_controller\") due to 1 previous error\nwarning: build failed, waiting for other jobs to finish...\n"
+    },
+    "strict_release_clippy_attribute_fix_attempt": {
+      "path": "/tmp/alife-frozen-gradient-release-clippy-attribute.log",
+      "sha256": "b2fe40dd64c552328d4192cd1baf3b2e3efdd341338981201ff568f27eb3020b",
+      "text": "    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\nerror: unused attribute `allow`\n   --> crates/alife_training/tests/software_ppo_controller/frozen_gradient_assay.rs:225:5\n    |\n225 |     #[allow(clippy::assertions_on_constants)]\n    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    |\nnote: the built-in attribute `allow` will be ignored, since it's applied to the macro invocation `assert`\n   --> crates/alife_training/tests/software_ppo_controller/frozen_gradient_assay.rs:226:5\n    |\n226 |     assert!(\n    |     ^^^^^^\n    = note: `-D unused-attributes` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(unused_attributes)]`\n\nerror: this assertion has a constant value\n   --> crates/alife_training/tests/software_ppo_controller/frozen_gradient_assay.rs:226:5\n    |\n226 | /     assert!(\n227 | |         !cfg!(debug_assertions),\n228 | |         \"run this bounded assay with all-dependency --release\"\n229 | |     );\n    | |_____^\n    |\n    = help: consider moving this into a const block: `const { assert!(..) }`\n    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assertions_on_constants\n    = note: `-D clippy::assertions-on-constants` implied by `-D warnings`\n    = help: to override `-D warnings` add `#[allow(clippy::assertions_on_constants)]`\n\nerror: could not compile `alife_training` (test \"software_ppo_controller\") due to 2 previous errors\n"
+    },
+    "strict_release_clippy": {
+      "path": "/tmp/alife-frozen-gradient-release-clippy.log",
+      "sha256": "d7f37f4d0a49b36ed4675003b11829845c6cb8464add8ee467ecdfc5c23b8d03",
+      "text": "    Checking alife_training v0.1.0 (/workspace/A-Life-frozen-gradient-cache/crates/alife_training)\n    Finished `release` profile [optimized] target(s) in 0.27s\n"
+    }
+  },
+  "assay_file": {
+    "path": "/workspace/software-ppo-frozen-release/frozen-gradient-release-assay.json",
+    "sha256": "eefd84747c9e6d9d04c0586712904566770bf19c75a5a73697566327a6190209"
+  }
+}
