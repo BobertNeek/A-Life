@@ -171,6 +171,7 @@ dependencies = [
  "pollster",
  "serde",
  "serde_json",
+ "sha2",
  "wgpu 29.0.3",
 ]
 
