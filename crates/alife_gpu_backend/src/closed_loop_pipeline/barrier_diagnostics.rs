@@ -97,6 +97,9 @@ fn discriminator_sources_validate_and_zero_init_is_not_a_new_program() {
 fn run(variant: Variant, software: bool, backend: wgpu::Backends) {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = backend;
+    if !software && backend == wgpu::Backends::DX12 {
+        crate::closed_loop_runtime::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
+    }
     let instance = wgpu::Instance::new(descriptor);
     let adapter = pollster::block_on(instance.enumerate_adapters(backend))
         .into_iter()

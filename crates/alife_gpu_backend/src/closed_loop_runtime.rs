@@ -1476,6 +1476,38 @@ fn requested_backends(
     }
 }
 
+fn requested_dx12_compiler(
+    backends: wgpu::Backends,
+    value: Option<std::ffi::OsString>,
+) -> Result<wgpu::Dx12Compiler, ScaffoldContractError> {
+    match value.as_deref() {
+        None => Ok(wgpu::Dx12Compiler::default()),
+        Some(value) if value == "dxc" && backends == wgpu::Backends::DX12 => {
+            Ok(wgpu::Dx12Compiler::DynamicDxc {
+                dxc_path: "dxcompiler.dll".into(),
+            })
+        }
+        Some(_) => Err(ScaffoldContractError::NeuralBackendUnavailable),
+    }
+}
+
+/// Apply the same explicit compiler request as the production device factory.
+/// Test harnesses retain their own strict adapter/backend selection.
+#[cfg(feature = "gpu-tests")]
+pub fn configure_gpu_test_dx12_compiler(
+    descriptor: &mut wgpu::InstanceDescriptor,
+) -> Result<(), ScaffoldContractError> {
+    descriptor.backend_options.dx12.shader_compiler = requested_dx12_compiler(
+        descriptor.backends,
+        std::env::var_os("ALIFE_GPU_DX12_COMPILER"),
+    )?;
+    eprintln!(
+        "alife_requested_dx12_compiler={:?}",
+        descriptor.backend_options.dx12.shader_compiler
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod backend_request_tests {
     use super::*;
@@ -1499,20 +1531,53 @@ mod backend_request_tests {
         }
     }
 
+    #[test]
+    fn explicit_dxc_requires_dx12_and_has_no_auto_fallback() {
+        assert!(matches!(
+            requested_dx12_compiler(wgpu::Backends::DX12, None).unwrap(),
+            wgpu::Dx12Compiler::Auto
+        ));
+        assert!(
+            matches!(requested_dx12_compiler(wgpu::Backends::DX12, Some("dxc".into())).unwrap(), wgpu::Dx12Compiler::DynamicDxc { dxc_path } if dxc_path == "dxcompiler.dll")
+        );
+        for backends in [
+            wgpu::Backends::VULKAN,
+            wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY,
+        ] {
+            assert!(requested_dx12_compiler(backends, Some("dxc".into())).is_err());
+        }
+        for invalid in ["", "auto", "fxc", "DXC", " dxc", "dxc,fxc"] {
+            assert!(requested_dx12_compiler(wgpu::Backends::DX12, Some(invalid.into())).is_err());
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn non_unicode_backend_request_is_rejected() {
         use std::os::unix::ffi::OsStringExt;
         assert!(requested_backends(Some(std::ffi::OsString::from_vec(vec![0xff]))).is_err());
+        assert!(requested_dx12_compiler(
+            wgpu::Backends::DX12,
+            Some(std::ffi::OsString::from_vec(vec![0xff]))
+        )
+        .is_err());
     }
 }
 
 impl GpuDeviceFactory for WgpuDeviceFactory {
     fn request_adapters(&self) -> Result<Vec<GpuAdapterCandidate>, ScaffoldContractError> {
         let backends = requested_backends(std::env::var_os("ALIFE_GPU_BACKEND"))?;
+        let compiler =
+            requested_dx12_compiler(backends, std::env::var_os("ALIFE_GPU_DX12_COMPILER"))?;
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
             descriptor.backends = backends;
+            descriptor.backend_options.dx12.shader_compiler = compiler;
+            #[cfg(feature = "pipeline-diagnostics")]
+            eprintln!(
+                "alife_requested_dx12_compiler={:?}",
+                descriptor.backend_options.dx12.shader_compiler
+            );
             let instance = wgpu::Instance::new(descriptor);
             let required_features = wgpu::Features::empty();
             let required_limits = required_device_limits();

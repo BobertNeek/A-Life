@@ -433,6 +433,9 @@ mod device_oracle {
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
             descriptor.backends = backends;
+            if !software_only {
+                alife_gpu_backend::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
+            }
             let instance = wgpu::Instance::new(descriptor);
             let adapter = instance
                 .enumerate_adapters(backends)

@@ -32,6 +32,9 @@ pub(super) fn check(
 fn diagnose(nvidia: bool, backends: wgpu::Backends) {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     descriptor.backends = backends;
+    if nvidia && backends == wgpu::Backends::DX12 {
+        crate::closed_loop_runtime::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
+    }
     let instance = wgpu::Instance::new(descriptor);
     let adapter = pollster::block_on(instance.enumerate_adapters(backends))
         .into_iter()

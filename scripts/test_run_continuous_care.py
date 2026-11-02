@@ -24,6 +24,17 @@ class Process:
 
 
 class ContinuousCareTests(unittest.TestCase):
+    def test_explicit_dx12_compiler_is_pinned_without_changing_prior(self):
+        state = {'checkout': session.current.checkout_context(),
+                 'prior_environment': session.current.prior_environment(),
+                 'executables': {}, 'helpers': {}, 'backend_selection': 'dx12',
+                 'dx12_compiler_selection': 'dxc'}
+        with patch.dict(os.environ, {'ALIFE_GPU_BACKEND': 'dx12', 'ALIFE_GPU_DX12_COMPILER': 'dxc'}):
+            session.check_pins(state)
+        with patch.dict(os.environ, {'ALIFE_GPU_BACKEND': 'dx12', 'ALIFE_GPU_DX12_COMPILER': 'fxc'}):
+            with self.assertRaisesRegex(ValueError, 'DX12 compiler selection changed'):
+                session.check_pins(state)
+
     def test_explicit_backend_is_pinned_without_changing_prior(self):
         state = {'checkout': session.current.checkout_context(),
                  'prior_environment': session.current.prior_environment(),
