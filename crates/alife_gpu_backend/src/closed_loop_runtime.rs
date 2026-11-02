@@ -1487,6 +1487,9 @@ fn requested_dx12_compiler(
                 dxc_path: "dxcompiler.dll".into(),
             })
         }
+        Some(value) if value == "fxc" && backends == wgpu::Backends::DX12 => {
+            Ok(wgpu::Dx12Compiler::Fxc)
+        }
         Some(_) => Err(ScaffoldContractError::NeuralBackendUnavailable),
     }
 }
@@ -1532,7 +1535,7 @@ mod backend_request_tests {
     }
 
     #[test]
-    fn explicit_dxc_requires_dx12_and_has_no_auto_fallback() {
+    fn explicit_compiler_requires_dx12_and_has_no_auto_fallback() {
         assert!(matches!(
             requested_dx12_compiler(wgpu::Backends::DX12, None).unwrap(),
             wgpu::Dx12Compiler::Auto
@@ -1540,13 +1543,18 @@ mod backend_request_tests {
         assert!(
             matches!(requested_dx12_compiler(wgpu::Backends::DX12, Some("dxc".into())).unwrap(), wgpu::Dx12Compiler::DynamicDxc { dxc_path } if dxc_path == "dxcompiler.dll")
         );
+        assert!(matches!(
+            requested_dx12_compiler(wgpu::Backends::DX12, Some("fxc".into())).unwrap(),
+            wgpu::Dx12Compiler::Fxc
+        ));
         for backends in [
             wgpu::Backends::VULKAN,
             wgpu::Backends::PRIMARY | wgpu::Backends::SECONDARY,
         ] {
             assert!(requested_dx12_compiler(backends, Some("dxc".into())).is_err());
+            assert!(requested_dx12_compiler(backends, Some("fxc".into())).is_err());
         }
-        for invalid in ["", "auto", "fxc", "DXC", " dxc", "dxc,fxc"] {
+        for invalid in ["", "auto", "DXC", "FXC", " dxc", "dxc,fxc"] {
             assert!(requested_dx12_compiler(wgpu::Backends::DX12, Some(invalid.into())).is_err());
         }
     }

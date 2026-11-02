@@ -1,5 +1,11 @@
 # Exact production DX12 stage capture
 
+This file records the earlier converged baseline and its stage diagnostics. On
+the flat-validation candidate branch, FLAT-SLEEP-VALIDATION.md supplies the current
+source/hash and explicit FXC/DXC contract. The baseline sizes/hashes below do not
+identify the flat candidate.
+
+
 The recovered release initializer failure reported 0x8007000E. Its producing
 component remains unknown. Standalone-empty success does not qualify production
 sleep. This diagnostic observes the existing calls, without replacing DXC,

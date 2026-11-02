@@ -450,9 +450,12 @@ fn run_with_pipeline_naming(
     descriptor.backends = backends;
     if probe.body == Body::ProductionInitializer && backends == wgpu::Backends::DX12 {
         assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("dx12"));
-        assert_eq!(
-            std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
-            Ok("dxc")
+        assert!(
+            matches!(
+                std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
+                Ok("dxc" | "fxc")
+            ),
+            "explicit compiler required"
         );
         crate::closed_loop_runtime::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
     } else if backends == wgpu::Backends::DX12 {
@@ -695,7 +698,7 @@ fn nvidia_dx12_selected_standalone_probe() {
 }
 
 #[test]
-#[ignore = "exact production DX12 initializer, explicit DXC; capture compiler versus native PSO stages"]
+#[ignore = "exact production DX12 initializer, explicit compiler; capture compiler versus native PSO stages"]
 fn nvidia_dx12_production_initializer_native_stages() {
     assert!(
         std::env::var_os("ALIFE_COMPILER_PROBE_ARTIFACT_DIR").is_some(),
@@ -713,7 +716,7 @@ fn nvidia_dx12_production_initializer_native_stages() {
 }
 
 #[test]
-#[ignore = "exact production DX12/DXC initializer with only target pipeline label omitted; no target SetName"]
+#[ignore = "exact production DX12 initializer with only target pipeline label omitted; no target SetName"]
 fn nvidia_dx12_production_initializer_without_pipeline_setname() {
     assert!(
         std::env::var_os("ALIFE_COMPILER_PROBE_ARTIFACT_DIR").is_some(),

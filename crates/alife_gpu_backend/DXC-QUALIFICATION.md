@@ -1,5 +1,11 @@
 # Explicit DXC qualification after FXC X3705
 
+On the flat-validation experiment branch, use FLAT-SLEEP-VALIDATION.md as the
+authoritative candidate contract. The historical explicit-DXC change below
+preserved shader bytes; the later experiment changes initializer control flow
+and adds explicit FXC selection. Its source and hardware gates are separate.
+
+
 Recovered PC evidence: RTX 3050, DX12 driver 32.0.16.1088,
 initialize_sleep_transaction pipeline creation failed with FXC X3705: flattening an
 if because of nesting limits encountered side effects. This is not DXC OOM.

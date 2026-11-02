@@ -1,5 +1,11 @@
 # Standalone compiler diagnostics
 
+The standalone diagnostic bodies remain unchanged. This experiment branch also
+contains the separate flat sleep-initializer candidate; use
+FLAT-SLEEP-VALIDATION.md for its source/hash and hardware qualification. Historical
+claims below about unchanged production refer to the diagnostic-only commits.
+
+
 Preparation only: do not run PC/hardware probes while the existing DX12 process
 or its outcome remains unreconciled. Publication of this source is not a task
 launch or hardware approval. These tests never load Current, change learned state,
