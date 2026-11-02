@@ -1514,6 +1514,8 @@ fn runtime_shader_source(source: &str) -> std::borrow::Cow<'_, str> {
 
 impl GpuClosedLoopKernelSet {
     pub(crate) fn new(device: &wgpu::Device) -> Result<Arc<Self>, GpuClosedLoopError> {
+        #[cfg(feature = "pipeline-diagnostics")]
+        eprintln!("alife_kernel_adapter={:?}", device.adapter_info());
         for (source, entries) in [
             (CLOSED_LOOP_ENCODE_WGSL, &["encode_perception"][..]),
             (
@@ -4816,6 +4818,10 @@ fn create_compute_pipeline(
 #[cfg(all(test, feature = "gpu-tests"))]
 #[path = "closed_loop_pipeline/kernel_diagnostics.rs"]
 mod kernel_diagnostics;
+
+#[cfg(all(test, feature = "gpu-tests"))]
+#[path = "closed_loop_pipeline/barrier_diagnostics.rs"]
+mod barrier_diagnostics;
 
 #[cfg(test)]
 #[path = "closed_loop_pipeline/batch_projection_tests.rs"]

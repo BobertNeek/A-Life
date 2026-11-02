@@ -154,6 +154,7 @@ def capabilities(report, decisions, *, mode='fresh_world', total_decisions=0, ca
 def check_pins(state):
     require(current.checkout_context() == state['checkout'], 'source checkout changed')
     require(current.prior_environment() == state['prior_environment'], 'semantic prior environment changed')
+    require(os.environ.get('ALIFE_GPU_BACKEND') == state.get('backend_selection'), 'explicit GPU backend selection changed')
     for path, expected in state['executables'].items():
         require(host.sha256(Path(path)) == expected, 'pinned executable changed')
     for name, expected in state['helpers'].items():
@@ -420,6 +421,7 @@ def finish(lane, state, validate):
     receipt = {'kind': 'finite-continuous-care-v1', 'ended_utc': dt.datetime.now(host.UTC).isoformat(),
         'source': state['checkout'], 'executables': state['executables'],
         'native_argv': state['native_argv'], 'prior_environment': state['prior_environment'],
+        'backend_selection': state.get('backend_selection'),
         'preflight': state['preflight'], 'guard_configuration': state['guard_configuration'],
         'baseline_sha256': state['baseline_sha256'], 'current_sha256': digest,
         'before': state['before'], 'after': {key: admitted.get(key) for key in state['before']},
@@ -619,6 +621,7 @@ def run(args):
             'binary': str(native), 'inspector': str(inspector), 'baseline_sha256': baseline,
             'before': {key: before[key] for key in ('policy_version', 'actor_optimizer_step', 'value_optimizer_step')},
             'request': request, 'checkout': checkout, 'prior_environment': current.prior_environment(),
+            'backend_selection': os.environ.get('ALIFE_GPU_BACKEND'),
             'executables': {str(native): args.binary_sha256, str(inspector): args.checkpoint_tool_sha256},
             'helpers': {name: host.sha256(Path(__file__).parent / name) for name in HELPERS},
             'started_utc': invocation_started, 'preflight': preflight,

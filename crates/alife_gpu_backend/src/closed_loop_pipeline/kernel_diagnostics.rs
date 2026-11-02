@@ -3,7 +3,7 @@ use super::*;
 use std::time::Duration;
 use wgpu::util::DeviceExt;
 
-fn scopes(device: &wgpu::Device) -> [wgpu::ErrorScopeGuard; 3] {
+pub(super) fn scopes(device: &wgpu::Device) -> [wgpu::ErrorScopeGuard; 3] {
     [
         wgpu::ErrorFilter::OutOfMemory,
         wgpu::ErrorFilter::Validation,
@@ -12,7 +12,12 @@ fn scopes(device: &wgpu::Device) -> [wgpu::ErrorScopeGuard; 3] {
     .map(|filter| device.push_error_scope(filter))
 }
 
-fn check(scopes: [wgpu::ErrorScopeGuard; 3], stage: &str, entry: &str, microstep: Option<u32>) {
+pub(super) fn check(
+    scopes: [wgpu::ErrorScopeGuard; 3],
+    stage: &str,
+    entry: &str,
+    microstep: Option<u32>,
+) {
     let errors: Vec<_> = scopes
         .into_iter()
         .rev()
@@ -24,11 +29,11 @@ fn check(scopes: [wgpu::ErrorScopeGuard; 3], stage: &str, entry: &str, microstep
     );
 }
 
-fn diagnose(nvidia: bool) {
+fn diagnose(nvidia: bool, backends: wgpu::Backends) {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
-    descriptor.backends = wgpu::Backends::VULKAN;
+    descriptor.backends = backends;
     let instance = wgpu::Instance::new(descriptor);
-    let adapter = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN))
+    let adapter = pollster::block_on(instance.enumerate_adapters(backends))
         .into_iter()
         .find(|adapter| {
             let info = adapter.get_info();
@@ -197,11 +202,17 @@ fn diagnose(nvidia: bool) {
 #[test]
 #[ignore = "explicit NVIDIA Vulkan compilation/first-dispatch diagnostic; no private state"]
 fn nvidia_vulkan_each_production_kernel_compiles_and_dispatches() {
-    diagnose(true);
+    diagnose(true, wgpu::Backends::VULKAN);
 }
 
 #[test]
 #[ignore = "explicit CPU Vulkan diagnostic harness check; not RTX qualification"]
 fn software_vulkan_each_production_kernel_compiles_and_dispatches() {
-    diagnose(false);
+    diagnose(false, wgpu::Backends::VULKAN);
+}
+
+#[test]
+#[ignore = "explicit NVIDIA DX12 production-kernel diagnostic; no private state"]
+fn nvidia_dx12_each_production_kernel_compiles_and_dispatches() {
+    diagnose(true, wgpu::Backends::DX12);
 }

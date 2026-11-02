@@ -1,6 +1,7 @@
 //! Falsification oracle for the initializer-only compiler-pressure experiment.
 //! The old shader is frozen from b9f78ed0, not rebuilt from candidate predicates.
-//! Software execution is explicit and never hardware/NVIDIA qualification.
+//! Explicit CPU Vulkan and NVIDIA DX12 modes never fall back to each other.
+//! The CPU golden digest pins every frozen-original output across all cases.
 use std::collections::BTreeSet;
 
 const ABI: &str = include_str!("../shaders/closed_loop_abi.wgsl");
@@ -412,29 +413,53 @@ fn corpus_covers_all_record_words_bits_and_both_bank_rules() {
 }
 
 #[cfg(feature = "gpu-tests")]
-mod software {
+mod device_oracle {
     use super::*;
     use wgpu::util::DeviceExt;
 
     #[test]
     #[ignore = "explicit CPU Vulkan old/new initializer equivalence; not RTX qualification"]
     fn software_vulkan_initializer_matches_frozen_legacy_for_all_corruptions() {
+        run(wgpu::Backends::VULKAN, true);
+    }
+
+    #[test]
+    #[ignore = "explicit NVIDIA DX12 full-state legacy/candidate equivalence; synthetic state only"]
+    fn nvidia_dx12_initializer_matches_frozen_legacy_for_all_corruptions() {
+        run(wgpu::Backends::DX12, false);
+    }
+
+    fn run(backends: wgpu::Backends, software_only: bool) {
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
-            descriptor.backends = wgpu::Backends::VULKAN;
+            descriptor.backends = backends;
             let instance = wgpu::Instance::new(descriptor);
             let adapter = instance
-                .enumerate_adapters(wgpu::Backends::VULKAN)
+                .enumerate_adapters(backends)
                 .await
                 .into_iter()
-                .find(|adapter| adapter.get_info().device_type == wgpu::DeviceType::Cpu)
-                .expect("explicit software fixture requires an actual CPU Vulkan adapter");
+                .find(|adapter| {
+                    let info = adapter.get_info();
+                    if software_only {
+                        info.device_type == wgpu::DeviceType::Cpu
+                    } else {
+                        info.vendor == 0x10de && info.device_type == wgpu::DeviceType::DiscreteGpu
+                    }
+                })
+                .expect("requested CPU Vulkan or NVIDIA DX12 adapter absent; no fallback");
             let info = adapter.get_info();
-            assert_eq!(info.backend, wgpu::Backend::Vulkan);
+            assert_eq!(
+                info.backend,
+                if software_only {
+                    wgpu::Backend::Vulkan
+                } else {
+                    wgpu::Backend::Dx12
+                }
+            );
             eprintln!("sleep_initializer_equivalence_adapter={info:?}");
             let (device, queue) = adapter
                 .request_device(&wgpu::DeviceDescriptor {
-                    label: Some("sleep-initializer-explicit-software-oracle"),
+                    label: Some("sleep-initializer-explicit-device-oracle"),
                     required_features: wgpu::Features::empty(),
                     required_limits: adapter.limits(),
                     experimental_features: wgpu::ExperimentalFeatures::disabled(),
@@ -485,8 +510,8 @@ mod software {
             let old = pipeline("frozen-main-initializer", OLD);
             let old_seconds = started.elapsed().as_secs_f64();
             let started = std::time::Instant::now();
-            let new = pipeline("staged-direct-offset-initializer", NEW);
-            eprintln!("software_pipeline_create_seconds old={old_seconds:.6} candidate={:.6} not_NVIDIA_timing",started.elapsed().as_secs_f64());
+            let new = pipeline("converged-barrier-initializer", NEW);
+            eprintln!("initializer_pipeline_create_seconds old={old_seconds:.6} candidate={:.6} software_only={software_only}",started.elapsed().as_secs_f64());
             // A deliberately weakened bank guard must be falsified by this
             // corpus; otherwise old/new equality could be a vacuous harness pass.
             let weakened = NEW.replacen(
@@ -606,11 +631,19 @@ mod software {
             receiver.recv().unwrap().unwrap();
             let mapped = output.slice(..).get_mapped_range();
             let words: &[u32] = bytemuck::cast_slice(&mapped);
+            let mut golden = alife_core::CanonicalDigestBuilder::new(
+                b"alife.sleep-initializer.synthetic-corpus-output.v1",
+            );
+            golden.write_sequence_len(cases.len());
+            golden.write_sequence_len(STATE_WORDS);
             let mut negative_control_differences = 0;
             for (index, case) in cases.iter().enumerate() {
                 let old = &words[(index * 3) * STATE_WORDS..(index * 3 + 1) * STATE_WORDS];
                 let new = &words[(index * 3 + 1) * STATE_WORDS..(index * 3 + 2) * STATE_WORDS];
                 let weakened = &words[(index * 3 + 2) * STATE_WORDS..(index * 3 + 3) * STATE_WORDS];
+                for word in old {
+                    golden.write_u32(*word);
+                }
                 negative_control_differences += usize::from(old != weakened);
                 assert_eq!(
                     old, new,
@@ -659,6 +692,21 @@ mod software {
                     }
                 }
             }
+            let golden = golden.finish256();
+            eprintln!("sleep_initializer_frozen_original_output_digest={golden:016x?}");
+            // Frozen original on explicit llvmpipe Vulkan. This pins all output
+            // bits across backends; old/new agreement alone could hide a shared
+            // backend miscompile. A mismatch must not refresh this reference.
+            assert_eq!(
+                golden,
+                [
+                    0xdb70_c676_c019_08bb,
+                    0xcbe9_1726_a043_5cd3,
+                    0x02dc_bc58_f3e6_9598,
+                    0xad2b_2bc0_771f_a666,
+                ],
+                "frozen original differs from the CPU Vulkan output reference"
+            );
             assert!(
                 negative_control_differences > 0,
                 "corpus must detect a weakened bank guard in actual shader execution"
@@ -668,7 +716,7 @@ mod software {
             );
             drop(mapped);
             output.unmap();
-            eprintln!("sleep_initializer_equivalence_cases={} mutable_words_compared_per_case={} old_new_identical=true software_only=true",cases.len(),STATE_WORDS);
+            eprintln!("sleep_initializer_equivalence_cases={} mutable_words_compared_per_case={} old_new_identical=true software_only={software_only} backend={:?}",cases.len(),STATE_WORDS,info.backend);
         });
     }
 }

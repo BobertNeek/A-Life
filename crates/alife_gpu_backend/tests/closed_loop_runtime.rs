@@ -475,12 +475,18 @@ mod hardware {
     }
 
     #[test]
-    fn hardware_receipt_is_one_bounded_required_vulkan_contract() {
+    fn hardware_receipt_is_one_bounded_required_backend_contract() {
         let backend = required_backend();
         let receipt = backend.hardware_receipt();
         assert_ne!(receipt.schema_version, 0);
         assert_ne!(receipt.generation, 0);
-        assert_eq!(receipt.backend_api, "vulkan");
+        assert_eq!(
+            receipt.backend_api,
+            match std::env::var("ALIFE_GPU_BACKEND").as_deref() {
+                Ok("dx12") => "dx12",
+                _ => "vulkan",
+            }
+        );
         assert!(!receipt.adapter_name.is_empty());
         assert!(receipt.adapter_name.len() <= 256);
         assert!(!receipt.backend_version.is_empty());

@@ -24,6 +24,16 @@ class Process:
 
 
 class ContinuousCareTests(unittest.TestCase):
+    def test_explicit_backend_is_pinned_without_changing_prior(self):
+        state = {'checkout': session.current.checkout_context(),
+                 'prior_environment': session.current.prior_environment(),
+                 'executables': {}, 'helpers': {}, 'backend_selection': 'dx12'}
+        with patch.dict(os.environ, {'ALIFE_GPU_BACKEND': 'dx12'}):
+            session.check_pins(state)
+        with patch.dict(os.environ, {'ALIFE_GPU_BACKEND': 'vulkan'}):
+            with self.assertRaisesRegex(ValueError, 'GPU backend selection changed'):
+                session.check_pins(state)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
