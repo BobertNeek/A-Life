@@ -62,15 +62,20 @@ fn consolidate_synapse_delta_mode(extension:GpuBrainSlotExtensionRecord, synapse
       || metadata.receptor_index > (0xffffffffu-extension.receptor_offset)/16u) { return 2u; }
   let receptor_base = extension.receptor_offset+metadata.receptor_index*16u;
   if (!consolidate_immutable_plan_span_within(receptor_base,16u)) { return 2u; }
-  let receptor = load_plasticity_receptor(receptor_base);
-  if (!consolidate_finite(receptor.learning_rate)
-      || !consolidate_finite(receptor.sleep_replay_rate)
-      || !consolidate_finite(receptor.normalization_rate)
-      || receptor.learning_rate < 0.0 || receptor.learning_rate > 1.0
-      || receptor.sleep_replay_rate < 0.0 || receptor.sleep_replay_rate > 1.0
-      || receptor.normalization_rate < 0.0 || receptor.normalization_rate > 1.0) { return 2u; }
-  return select(0u,1u,receptor.learning_rate != 0.0
-      || receptor.sleep_replay_rate != 0.0 || receptor.normalization_rate != 0.0);
+  // These are serialized rate encodings: classify before any FP operation can
+  // flush subnormals. Keep the full receptor span guard above and the original
+  // finite-then-range check order. Learning arithmetic uses the unchanged loader.
+  let learning_rate_bits = immutable_plan_words[receptor_base+1u];
+  let sleep_replay_rate_bits = immutable_plan_words[receptor_base+2u];
+  let normalization_rate_bits = immutable_plan_words[receptor_base+3u];
+  if (!sleep_parameter_finite_bits(learning_rate_bits)
+      || !sleep_parameter_finite_bits(sleep_replay_rate_bits)
+      || !sleep_parameter_finite_bits(normalization_rate_bits)
+      || !sleep_parameter_ge_zero_bits(learning_rate_bits) || !sleep_parameter_le_positive_bits(learning_rate_bits,0x3f800000u)
+      || !sleep_parameter_ge_zero_bits(sleep_replay_rate_bits) || !sleep_parameter_le_positive_bits(sleep_replay_rate_bits,0x3f800000u)
+      || !sleep_parameter_ge_zero_bits(normalization_rate_bits) || !sleep_parameter_le_positive_bits(normalization_rate_bits,0x3f800000u)) { return 2u; }
+  return select(0u,1u,(learning_rate_bits & 0x7fffffffu) != 0u
+      || (sleep_replay_rate_bits & 0x7fffffffu) != 0u || (normalization_rate_bits & 0x7fffffffu) != 0u);
 }
 
 fn sleep_transaction_valid(
