@@ -74,6 +74,36 @@ so PSO entry plus a generic later error alone does not prove PSO-call failure.
 The full error type/message and trace together identify the producing operation.
 Absent or mismatched target events leave the stage unresolved.
 
+## Target SetName exclusion after the matched production failure
+
+The recovered target input was 27,123 bytes, SHA256
+1bec64b4e322637e1af58f65d16dca06aa228f1d39e0a15afecbe7fdb0743f99.
+DXC and native PSO scopes were entered before the reported 0x8007000E. The next
+single diagnostic omits ONLY the target pipeline descriptor label. Shader-module
+label, WGSL/HLSL, entrypoint, layout, features/limits, DXC options, constants,
+zero-initialization and cache behavior remain unchanged.
+
+With the same strict DX12/DXC settings, admitted SDK DLL/flags, new output folder,
+release build and existing owner/deadline guard, run this exact filter instead:
+
+```powershell
+cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --lib closed_loop_pipeline::standalone_compiler_probes::nvidia_dx12_production_initializer_without_pipeline_setname -- --ignored --exact --nocapture --test-threads=1
+```
+
+runtime-pipeline-naming.txt records label=None. Core29 preserves that None in the
+HAL descriptor; dx12/device.rs skips its conditional SetName. After successful
+shader loading, CreateComputePipelineState is then the only remaining fallible
+native HRESULT call in that HAL method. Its failure maps Linkage to a core
+Internal error; preserve that typed scope error and complete message. Compare the
+actual target HLSL hash/size and native scope/thread with the recovered input.
+If that identical input again returns a native linkage/Internal 0x8007000E after
+PSO entry, target SetName is excluded and the PSO call is identified by the
+inspected source path. A mismatch leaves the A/B inference unresolved.
+
+A successful unnamed run shows label-sensitive or context-sensitive behavior;
+it does not alone prove SetName caused the earlier failure or qualify care
+training. No production labels or shader behavior are changed by this test.
+
 This uses profiling 1.0.18's supported profile-with-tracing feature in dev
 builds. HAL's original compiler/native calls and their error propagation are
 unchanged. No dependency fork, passthrough shader or unchecked path is used.

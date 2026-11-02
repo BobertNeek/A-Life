@@ -435,6 +435,15 @@ fn selected_probe() -> Probe {
         .expect("unknown probe; use the exact eight exported names")
 }
 fn run(probe: Probe, software: bool, backends: wgpu::Backends, submit: bool) {
+    run_with_pipeline_naming(probe, software, backends, submit, true);
+}
+fn run_with_pipeline_naming(
+    probe: Probe,
+    software: bool,
+    backends: wgpu::Backends,
+    submit: bool,
+    name_pipeline: bool,
+) {
     install_hal_log();
     native_stage_trace::reset();
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
@@ -466,6 +475,19 @@ fn run(probe: Probe, software: bool, backends: wgpu::Backends, submit: bool) {
         write_new(dir, "runtime-hlsl-index.jsonl", b"");
         write_new(dir, "runtime-stages.log", b"");
         write_new(dir, "runtime-native-stages.jsonl", b"");
+        write_new(
+            dir,
+            "runtime-pipeline-naming.txt",
+            format!(
+                "pipeline_label={}\nshader_module_label=standalone-test-only (unchanged)\n",
+                if name_pipeline {
+                    "initialize_sleep_transaction"
+                } else {
+                    "None; target HAL SetName skipped"
+                }
+            )
+            .as_bytes(),
+        );
         write_new(dir,"runtime-request.txt",format!("variant={} backend={backends:?} compiler={:?} flags={:?}\nconstants=[] zero_initialize_workgroup_memory=true cache=None\nrequired_features={:?} required_limits={:?}\nsubmit={submit} software={software}\ncompiler DLL path/version/hash not resolved by this API; record from actual process separately. Actual HAL HLSL is captured if DX12 emits it. Offline SPIR-V is not driver-extracted. DXC debug/optimization flags depend on actual device workarounds; no compiler stage success is inferred from HLSL emission.\n",probe.name(),descriptor.backend_options.dx12.shader_compiler,descriptor.flags,crate::closed_loop_runtime::required_device_features(),crate::closed_loop_runtime::required_device_limits()).as_bytes());
     }
     eprintln!("compiler_probe_begin variant={} wgsl_sha256={} backend={backends:?} compiler={:?} flags={:?} compilation_options=constants_empty,zero_init_true cache=None submit={submit}",probe.name(),digest(probe.source().as_bytes()),descriptor.backend_options.dx12.shader_compiler,descriptor.flags);
@@ -521,7 +543,22 @@ fn run(probe: Probe, software: bool, backends: wgpu::Backends, submit: bool) {
     check(scope, "shader_module", ENTRY, None);
     stage("pipeline_begin");
     let scope = scopes(&device);
-    let pipeline = create_compute_pipeline(&device, &pipeline_layout, &shader, ENTRY, &[]);
+    let pipeline = if name_pipeline {
+        create_compute_pipeline(&device, &pipeline_layout, &shader, ENTRY, &[])
+    } else {
+        stage("target_pipeline_label_none_setname_skipped");
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some(ENTRY),
+            compilation_options: wgpu::PipelineCompilationOptions {
+                constants: &[],
+                zero_initialize_workgroup_memory: true,
+            },
+            cache: None,
+        })
+    };
     check(scope, "pipeline", ENTRY, None);
     stage("pipeline_ok");
     if !submit {
@@ -671,6 +708,40 @@ fn nvidia_dx12_production_initializer_native_stages() {
         },
         false,
         wgpu::Backends::DX12,
+        false,
+    );
+}
+
+#[test]
+#[ignore = "exact production DX12/DXC initializer with only target pipeline label omitted; no target SetName"]
+fn nvidia_dx12_production_initializer_without_pipeline_setname() {
+    assert!(
+        std::env::var_os("ALIFE_COMPILER_PROBE_ARTIFACT_DIR").is_some(),
+        "fresh artifact output required"
+    );
+    run_with_pipeline_naming(
+        Probe {
+            body: Body::ProductionInitializer,
+            abi: true,
+        },
+        false,
+        wgpu::Backends::DX12,
+        false,
+        false,
+    );
+}
+
+#[test]
+#[ignore = "explicit CPU Vulkan check of exact production diagnostic without pipeline name"]
+fn software_vulkan_production_initializer_without_pipeline_name() {
+    run_with_pipeline_naming(
+        Probe {
+            body: Body::ProductionInitializer,
+            abi: true,
+        },
+        true,
+        wgpu::Backends::VULKAN,
+        false,
         false,
     );
 }
