@@ -7,6 +7,9 @@ use std::collections::BTreeSet;
 const ABI: &str = include_str!("../shaders/closed_loop_abi.wgsl");
 const OLD: &str = include_str!("fixtures/sleep_initializer_legacy_b9f78ed0.wgsl");
 const NEW: &str = include_str!("../shaders/closed_loop_consolidate.wgsl");
+#[cfg(feature = "gpu-tests")]
+#[path = "fixtures/sleep_initializer_original_sparse_golden.rs"]
+mod frozen_cpu_golden;
 const STATE_WORDS: usize = 512;
 const COMPLETION: usize = 192;
 
@@ -415,21 +418,220 @@ fn corpus_covers_all_record_words_bits_and_both_bank_rules() {
 #[cfg(feature = "gpu-tests")]
 mod device_oracle {
     use super::*;
+    use sha2::{Digest, Sha256};
     use wgpu::util::DeviceExt;
 
     #[test]
     #[ignore = "explicit CPU Vulkan old/new initializer equivalence; not RTX qualification"]
     fn software_vulkan_initializer_matches_frozen_legacy_for_all_corruptions() {
-        run(wgpu::Backends::VULKAN, true);
+        run(wgpu::Backends::VULKAN, true, true);
     }
 
     #[test]
     #[ignore = "explicit NVIDIA DX12 full-state legacy/candidate equivalence; synthetic state only"]
     fn nvidia_dx12_initializer_matches_frozen_legacy_for_all_corruptions() {
-        run(wgpu::Backends::DX12, false);
+        run(wgpu::Backends::DX12, false, true);
     }
 
-    fn run(backends: wgpu::Backends, software_only: bool) {
+    #[test]
+    #[ignore = "explicit NVIDIA DX12 candidate+negative only; all words checked against frozen CPU-original output"]
+    fn nvidia_dx12_candidate_matches_frozen_cpu_original_for_all_corruptions() {
+        run(wgpu::Backends::DX12, false, false);
+    }
+
+    #[test]
+    #[ignore = "explicit CPU Vulkan regression of candidate-only golden consumer; not hardware qualification"]
+    fn software_vulkan_candidate_matches_frozen_cpu_original_for_all_corruptions() {
+        run(wgpu::Backends::VULKAN, true, false);
+    }
+
+    fn corpus_sha256(cases: &[Case]) -> String {
+        let mut hash = Sha256::new();
+        hash.update(b"alife.sleep-initializer.corpus.v1");
+        hash.update((cases.len() as u64).to_le_bytes());
+        for case in cases {
+            hash.update((case.name.len() as u64).to_le_bytes());
+            hash.update(case.name.as_bytes());
+            hash.update(case.jobs.to_le_bytes());
+            hash.update([match case.prepared {
+                None => 0,
+                Some(false) => 1,
+                Some(true) => 2,
+            }]);
+            for words in [
+                &case.brain[..],
+                &case.identity[..],
+                &case.plan[..],
+                &[0u32][..],
+                &case.header[..],
+                &case.frame[..],
+                &case.state[..],
+            ] {
+                hash.update((words.len() as u64).to_le_bytes());
+                for word in words {
+                    hash.update(word.to_le_bytes());
+                }
+            }
+        }
+        format!("{:x}", hash.finalize())
+    }
+
+    // This exporter reads only the FROZEN OLD pipeline's output slot. Its caller
+    // has already checked the original pinned digest; candidate output is never
+    // authority for these source-only sparse fixtures.
+    fn export_cpu_original(dir: &std::path::Path, cases: &[Case], words: &[u32]) {
+        use std::io::Write;
+        assert_eq!(
+            format!("{:x}", Sha256::digest(OLD.replace("\r\n", "\n").as_bytes())),
+            "f04f1e5dfc73a94ee3820af64ebab6391d927976f43dcb8c06981b587fcf3f9d"
+        );
+        std::fs::create_dir(dir).unwrap();
+        let mut patches = Vec::<Vec<(usize, u32)>>::new();
+        let mut lookup = std::collections::BTreeMap::new();
+        let mut ids = Vec::new();
+        let mut initial = std::fs::File::create_new(dir.join("initial-states.u32le")).unwrap();
+        let mut original = std::fs::File::create_new(dir.join("original-output.u32le")).unwrap();
+        let mut raw_hash = Sha256::new();
+        for (index, case) in cases.iter().enumerate() {
+            let old = &words[(index * 3) * STATE_WORDS..(index * 3 + 1) * STATE_WORDS];
+            let delta: Vec<_> = old
+                .iter()
+                .zip(case.state)
+                .enumerate()
+                .filter_map(|(word, (&after, before))| (after != before).then_some((word, after)))
+                .collect();
+            let id = *lookup.entry(delta.clone()).or_insert_with(|| {
+                let id = u16::try_from(patches.len()).unwrap();
+                patches.push(delta);
+                id
+            });
+            ids.push(id);
+            for word in case.state {
+                initial.write_all(&word.to_le_bytes()).unwrap();
+            }
+            for word in old {
+                let bytes = word.to_le_bytes();
+                original.write_all(&bytes).unwrap();
+                raw_hash.update(bytes);
+            }
+        }
+        let raw_sha = format!("{:x}", raw_hash.finalize());
+        let mut source=String::from("// Generated from frozen b9f78ed0 OLD WGSL on explicit CPU Vulkan.\n// Every case reconstructs all 512 words from its exact input state plus captured deltas.\n// Generation requires the unchanged pinned original-output digest first.\n");
+        source+="pub const ORIGINAL_SHADER_SHA256: &str = \"f04f1e5dfc73a94ee3820af64ebab6391d927976f43dcb8c06981b587fcf3f9d\";\n";
+        source+=&format!("pub const CASE_COUNT: usize = {};\npub const STATE_WORDS: usize = {};\npub const CORPUS_SHA256: &str = \"{}\";\npub const RAW_OUTPUT_SHA256: &str = \"{raw_sha}\";\n",cases.len(),STATE_WORDS,corpus_sha256(cases));
+        source += "#[rustfmt::skip]\npub const PATCHES: &[&[(usize,u32)]] = &[\n";
+        for patch in &patches {
+            source += "    &[";
+            for (index, value) in patch {
+                source += &format!("({index},0x{value:08x}),");
+            }
+            source += "],\n";
+        }
+        source += "];\n#[rustfmt::skip]\npub const CASE_PATCH_IDS: &[u16] = &[\n";
+        for row in ids.chunks(32) {
+            source += "    ";
+            for id in row {
+                source += &format!("{id},");
+            }
+            source += "\n";
+        }
+        source += "];\n";
+        // Quotes above are ordinary Rust quotes, never escaped in emitted code.
+        source = source.replace("\\\"", "\"");
+        std::fs::write(
+            dir.join("sleep_initializer_original_sparse_golden.rs"),
+            &source,
+        )
+        .unwrap();
+        eprintln!("cpu_original_export cases={} words_each={STATE_WORDS} unique_patches={} corpus_sha256={} raw_output_sha256={raw_sha} rust_source_bytes={}",cases.len(),patches.len(),corpus_sha256(cases),source.len());
+    }
+
+    fn expected_cpu_original(index: usize, case: &Case) -> [u32; STATE_WORDS] {
+        let mut expected = case.state;
+        let patch =
+            frozen_cpu_golden::PATCHES[usize::from(frozen_cpu_golden::CASE_PATCH_IDS[index])];
+        let mut previous = None;
+        for &(word, value) in patch {
+            assert!(word < STATE_WORDS);
+            assert!(
+                previous.is_none_or(|previous| previous < word),
+                "patch indices must be unique and ascending"
+            );
+            expected[word] = value;
+            previous = Some(word);
+        }
+        expected
+    }
+
+    #[test]
+    fn captured_cpu_original_fixture_reconstructs_the_entire_pinned_output() {
+        let cases = corpus();
+        assert_eq!(cases.len(), frozen_cpu_golden::CASE_COUNT);
+        assert_eq!(corpus_sha256(&cases), frozen_cpu_golden::CORPUS_SHA256);
+        assert_eq!(frozen_cpu_golden::CASE_PATCH_IDS.len(), cases.len());
+        let mut hash = Sha256::new();
+        for (index, case) in cases.iter().enumerate() {
+            for word in expected_cpu_original(index, case) {
+                hash.update(word.to_le_bytes());
+            }
+        }
+        assert_eq!(
+            format!("{:x}", hash.finalize()),
+            frozen_cpu_golden::RAW_OUTPUT_SHA256
+        );
+    }
+
+    fn run(backends: wgpu::Backends, software_only: bool, compile_original: bool) {
+        if std::env::var_os("ALIFE_SLEEP_GOLDEN_EXPORT_DIR").is_some() {
+            assert!(
+                software_only && compile_original,
+                "only explicit CPU OLD execution may export the reference"
+            );
+        }
+        if !software_only && !compile_original {
+            assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("dx12"));
+            assert!(
+                matches!(
+                    std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
+                    Ok("fxc" | "dxc")
+                ),
+                "explicit compiler required"
+            );
+        }
+        let cases = corpus();
+        assert_eq!(cases.len(), frozen_cpu_golden::CASE_COUNT);
+        assert_eq!(STATE_WORDS, frozen_cpu_golden::STATE_WORDS);
+        assert_eq!(frozen_cpu_golden::CASE_PATCH_IDS.len(), cases.len());
+        assert_eq!(
+            corpus_sha256(&cases),
+            frozen_cpu_golden::CORPUS_SHA256,
+            "golden corpus identity changed"
+        );
+        assert_eq!(
+            format!("{:x}", Sha256::digest(OLD.replace("\r\n", "\n").as_bytes())),
+            frozen_cpu_golden::ORIGINAL_SHADER_SHA256
+        );
+        let artifact_dir =
+            std::env::var_os("ALIFE_SLEEP_ORACLE_ARTIFACT_DIR").map(std::path::PathBuf::from);
+        if let Some(dir) = &artifact_dir {
+            std::fs::create_dir(dir).unwrap();
+            let context = serde_json::json!({"mode":if compile_original{"legacy-and-candidate"}else{"candidate-against-frozen-CPU-original"},"old_compiled_on_device":compile_original,"cases":cases.len(),"state_words":STATE_WORDS,"corpus_sha256":corpus_sha256(&cases),"frozen_original_shader_sha256":frozen_cpu_golden::ORIGINAL_SHADER_SHA256,"CPU_original_raw_output_sha256":frozen_cpu_golden::RAW_OUTPUT_SHA256,"pinned_original_digest_u64_hex":["db70c676c01908bb","cbe91726a0435cd3","02dcbc58f3e69598","ad2b2bc0771fa666"],"backends":format!("{backends:?}"),"software_only":software_only,"requested_dx12_compiler":std::env::var("ALIFE_GPU_DX12_COMPILER").ok()});
+            std::fs::write(
+                dir.join("context.json"),
+                serde_json::to_vec_pretty(&context).unwrap(),
+            )
+            .unwrap();
+        }
+        eprintln!(
+            "sleep_oracle_mode={} corpus_sha256={} cases={} words_each={STATE_WORDS}",
+            if compile_original {
+                "legacy-and-candidate"
+            } else {
+                "candidate-against-frozen-CPU-original"
+            },
+            corpus_sha256(&cases),
+            cases.len()
+        );
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
             descriptor.backends = backends;
@@ -496,6 +698,17 @@ mod device_oracle {
             });
             let pipeline = |label, body: &str| {
                 let source = format!("{ABI}{body}");
+                eprintln!(
+                    "sleep_oracle_program label={label} bytes={} canonical_lf_sha256={:x}",
+                    source.len(),
+                    Sha256::digest(source.replace("\r\n", "\n").as_bytes())
+                );
+                if let Some(dir) = &artifact_dir {
+                    use std::io::Write;
+                    let mut file =
+                        std::fs::File::create_new(dir.join(format!("{label}.wgsl"))).unwrap();
+                    file.write_all(source.as_bytes()).unwrap();
+                }
                 let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some(label),
                     source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -510,11 +723,15 @@ mod device_oracle {
                 })
             };
             let started = std::time::Instant::now();
-            let old = pipeline("frozen-main-initializer", OLD);
-            let old_seconds = started.elapsed().as_secs_f64();
+            let old = if compile_original {
+                Some(pipeline("frozen-main-initializer", OLD))
+            } else {
+                None
+            };
+            let old_seconds = compile_original.then(|| started.elapsed().as_secs_f64());
             let started = std::time::Instant::now();
-            let new = pipeline("converged-barrier-initializer", NEW);
-            eprintln!("initializer_pipeline_create_seconds old={old_seconds:.6} candidate={:.6} software_only={software_only}",started.elapsed().as_secs_f64());
+            let new = pipeline("candidate-initializer", NEW);
+            eprintln!("initializer_pipeline_create_seconds original_on_device={compile_original} old={old_seconds:?} candidate={:.6} software_only={software_only}",started.elapsed().as_secs_f64());
             // A deliberately weakened bank guard must be falsified by this
             // corpus; otherwise old/new equality could be a vacuous harness pass.
             let weakened = NEW.replacen(
@@ -524,7 +741,13 @@ mod device_oracle {
             );
             assert_ne!(weakened, NEW, "negative-control mutation must be applied");
             let negative = pipeline("negative-control-weakened-bank-guard", &weakened);
-            let cases = corpus();
+            let mut variants = Vec::new();
+            if let Some(old) = &old {
+                variants.push(old);
+            }
+            variants.push(&new);
+            variants.push(&negative);
+            let variant_count = variants.len();
             let initial = Case::valid(0, 0);
             let arrays: [&[u32]; 7] = [
                 &initial.brain,
@@ -569,7 +792,7 @@ mod device_oracle {
             });
             let output = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("sleep-oracle-all-results"),
-                size: state_bytes * 3 * cases.len() as u64,
+                size: state_bytes * variant_count as u64 * cases.len() as u64,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             });
@@ -590,7 +813,7 @@ mod device_oracle {
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("sleep-oracle-case"),
                 });
-                for (variant, pipeline) in [&old, &new, &negative].into_iter().enumerate() {
+                for (variant, pipeline) in variants.iter().enumerate() {
                     encoder.copy_buffer_to_buffer(&reset, 0, &buffers[6], 0, state_bytes);
                     {
                         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -605,7 +828,7 @@ mod device_oracle {
                         &buffers[6],
                         0,
                         &output,
-                        (index as u64 * 3 + variant as u64) * state_bytes,
+                        (index as u64 * variant_count as u64 + variant as u64) * state_bytes,
                         state_bytes,
                     );
                 }
@@ -639,27 +862,41 @@ mod device_oracle {
             );
             golden.write_sequence_len(cases.len());
             golden.write_sequence_len(STATE_WORDS);
+            let mut observed_sha = Sha256::new();
             let mut negative_control_differences = 0;
             for (index, case) in cases.iter().enumerate() {
-                let old = &words[(index * 3) * STATE_WORDS..(index * 3 + 1) * STATE_WORDS];
-                let new = &words[(index * 3 + 1) * STATE_WORDS..(index * 3 + 2) * STATE_WORDS];
-                let weakened = &words[(index * 3 + 2) * STATE_WORDS..(index * 3 + 3) * STATE_WORDS];
-                for word in old {
-                    golden.write_u32(*word);
-                }
-                negative_control_differences += usize::from(old != weakened);
+                let offset = index * variant_count;
+                let reference = &words[offset * STATE_WORDS..(offset + 1) * STATE_WORDS];
+                let candidate_slot = usize::from(compile_original);
+                let candidate = &words[(offset + candidate_slot) * STATE_WORDS
+                    ..(offset + candidate_slot + 1) * STATE_WORDS];
+                let weakened = &words[(offset + variant_count - 1) * STATE_WORDS
+                    ..(offset + variant_count) * STATE_WORDS];
+                let expected = expected_cpu_original(index, case);
                 assert_eq!(
-                    old, new,
-                    "case {} changed initializer state/completion writes",
+                    candidate, &expected,
+                    "case {} differs from captured CPU-original output",
                     case.name
                 );
+                if compile_original {
+                    assert_eq!(
+                        reference, candidate,
+                        "case {} changed original/candidate state",
+                        case.name
+                    );
+                }
+                for word in candidate {
+                    golden.write_u32(*word);
+                    observed_sha.update(word.to_le_bytes());
+                }
+                negative_control_differences += usize::from(candidate != weakened);
                 if let Some(prepared) = case.prepared {
                     for job in 0..case.jobs as usize {
                         let header = job * 20;
                         let brain = case.header[header + 4] as usize * 36;
                         let completion = case.header[header + 13] as usize;
                         assert_eq!(
-                            old[completion + 3],
+                            candidate[completion + 3],
                             if prepared { 256 } else { 512 },
                             "case {} job{job} expected status",
                             case.name
@@ -669,7 +906,7 @@ mod device_oracle {
                             let learning = case.state[extension + 15] as usize;
                             let request = case.header[header + 5] as usize;
                             assert_eq!(
-                                &old[completion..completion + 16],
+                                &candidate[completion..completion + 16],
                                 &[
                                     1,
                                     case.brain[brain + 2],
@@ -695,6 +932,13 @@ mod device_oracle {
                     }
                 }
             }
+            let observed_sha = format!("{:x}", observed_sha.finalize());
+            assert_eq!(
+                observed_sha,
+                frozen_cpu_golden::RAW_OUTPUT_SHA256,
+                "observed full-word stream differs from CPU-original SHA256"
+            );
+            eprintln!("sleep_oracle_observed_output_sha256={observed_sha}");
             let golden = golden.finish256();
             eprintln!("sleep_initializer_frozen_original_output_digest={golden:016x?}");
             // Frozen original on explicit llvmpipe Vulkan. This pins all output
@@ -710,6 +954,13 @@ mod device_oracle {
                 ],
                 "frozen original differs from the CPU Vulkan output reference"
             );
+            if let Some(dir) = std::env::var_os("ALIFE_SLEEP_GOLDEN_EXPORT_DIR") {
+                assert!(
+                    software_only && compile_original,
+                    "only explicit CPU old pipeline may export the reference"
+                );
+                export_cpu_original(std::path::Path::new(&dir), &cases, words);
+            }
             assert!(
                 negative_control_differences > 0,
                 "corpus must detect a weakened bank guard in actual shader execution"
@@ -719,7 +970,7 @@ mod device_oracle {
             );
             drop(mapped);
             output.unmap();
-            eprintln!("sleep_initializer_equivalence_cases={} mutable_words_compared_per_case={} old_new_identical=true software_only={software_only} backend={:?}",cases.len(),STATE_WORDS,info.backend);
+            eprintln!("sleep_initializer_equivalence_cases={} mutable_words_compared_per_case={} original_compiled_on_device={compile_original} all_words_match_frozen_cpu_original=true software_only={software_only} backend={:?}",cases.len(),STATE_WORDS,info.backend);
         });
     }
 }

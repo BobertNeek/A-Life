@@ -1,5 +1,13 @@
 # Flat sleep validation candidate
 
+Update: the real RTX/DX12/FXC candidate production pipeline passed. The frozen
+OLD native kernel then failed FXC X3663 before oracle comparison. Under explicit
+authorization, CANDIDATE-CPU-GOLDEN.md now defines the hardware oracle: candidate
+and negative-control execution compared word-for-word against pinned original
+CPU output. The old CPU comparison remains available; it is not required to
+compile the old kernel on the compiler-limited native path.
+
+
 This is an unqualified compiler-compatibility experiment based on 618a53c6. The
 known FXC X3705 failure reported an if that could not be flattened because of
 nesting and side effects. Separately, the original DXC input reached native PSO
@@ -75,7 +83,7 @@ retain both production backend/compiler settings. Every exact filter must execut
 one test, never zero. Use the passing route and same release flags/DLL identity.
 
 ```powershell
-cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --test sleep_initializer_equivalence device_oracle::nvidia_dx12_initializer_matches_frozen_legacy_for_all_corruptions -- --ignored --exact --nocapture --test-threads=1
+cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --test sleep_initializer_equivalence device_oracle::nvidia_dx12_candidate_matches_frozen_cpu_original_for_all_corruptions -- --ignored --exact --nocapture --test-threads=1
 cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --lib closed_loop_pipeline::kernel_diagnostics::nvidia_dx12_each_production_kernel_compiles_and_dispatches -- --ignored --exact --nocapture --test-threads=1
 cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --test closed_loop_fast_plasticity r12_native_success_promotes_exactly_one_transaction -- --exact --nocapture --test-threads=1
 cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --test closed_loop_runtime hardware::hardware_receipt_is_one_bounded_required_backend_contract -- --exact --nocapture --test-threads=1
@@ -83,11 +91,11 @@ cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training
 cargo test --release --locked -p alife_gpu_backend --features gpu-tests,training-rollout,pipeline-diagnostics --test closed_loop_checkpoint -- --nocapture --test-threads=1
 ```
 
-Require frozen original/candidate full-state equality, unchanged pinned CPU output
-digest and detected negative control; exactly 28 named kernel create/submit successes;
-R12=1, receipt=1, sleep=7 and checkpoint=6 passed. If the frozen original cannot
-compile in that native context, report which input/stage failed; do not silently
-waive or refresh the oracle. All these fixtures are synthetic. They never admit
+Require captured original/candidate full-state equality, unchanged pinned CPU output
+digest/raw SHA256 and detected negative control; exactly 28 named kernel create/submit successes;
+R12=1, receipt=1, sleep=7 and checkpoint=6 passed. The known old native compilation failure is preserved as evidence; the candidate
+must match its independently captured CPU-original outputs without refreshing the
+reference or dropping a case/word. See CANDIDATE-CPU-GOLDEN.md. All these fixtures are synthetic. They never admit
 or mutate accepted Current and do not establish all training numerical behavior.
 
 ## Care continuation remains a separate admission
