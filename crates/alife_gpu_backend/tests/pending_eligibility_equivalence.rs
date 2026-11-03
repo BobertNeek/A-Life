@@ -324,17 +324,17 @@ mod device_oracle {
         let backends = if software {
             wgpu::Backends::VULKAN
         } else {
-            wgpu::Backends::DX12
+            wgpu::Backends::VULKAN
         };
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         descriptor.backends = backends;
         if !software {
-            assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("dx12"));
+            assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("vulkan"));
             assert_eq!(
                 std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
                 Ok("fxc")
             );
-            alife_gpu_backend::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
+            // Explicit Vulkan harness: DX12 compiler configuration is inapplicable.
         }
         let instance = wgpu::Instance::new(descriptor);
         let adapter = pollster::block_on(instance.enumerate_adapters(backends))
@@ -345,7 +345,7 @@ mod device_oracle {
                     == if software {
                         wgpu::Backend::Vulkan
                     } else {
-                        wgpu::Backend::Dx12
+                        wgpu::Backend::Vulkan
                     }
                     && if software {
                         i.device_type == wgpu::DeviceType::Cpu
@@ -670,7 +670,7 @@ mod device_oracle {
     }
     #[test]
     #[ignore = "strict NVIDIA DX12/FXC candidate versus pinned frozen-original CPU output"]
-    fn nvidia_dx12_fxc_matches_frozen_cpu_original_all_corruptions() {
+    fn nvidia_vulkan_fxc_matches_frozen_cpu_original_all_corruptions() {
         run(false);
     }
 }

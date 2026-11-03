@@ -1,4 +1,11 @@
-const SLEEP_STATUS_PREPARED:u32 = 256u;
+fn sleep_product_overflows_u32(a:u32,b:u32)->bool {
+  let ah=a>>16u; let bh=b>>16u;
+  let al=a&65535u; let bl=b&65535u;
+  if (ah != 0u && bh != 0u) { return true; }
+  let cross=ah*bl+al*bh;
+  if (cross>65535u) { return true; }
+  return cross+((al*bl)>>16u)>65535u;
+}const SLEEP_STATUS_PREPARED:u32 = 256u;
 const SLEEP_STATUS_SUCCESS:u32 = 1u;
 const SLEEP_STATUS_COMMITTED:u32 = 2u;
 const SLEEP_STATUS_REJECTED:u32 = 512u;
@@ -94,7 +101,7 @@ fn sleep_transaction_valid(
       || header.replay_event_count > 0xffffffffu / 28u
       || header.replay_span_count > 0xffffffffu / 4u
       || learning.replay_span_count == 0u
-      || learning.replay_event_capacity > 0xffffffffu / learning.replay_span_count) {
+      || sleep_product_overflows_u32(learning.replay_event_capacity,learning.replay_span_count)) {
     return false;
   }
   let parameter_base = extension.sleep_parameter_offset;
@@ -363,7 +370,7 @@ fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
     if (l_replay_span_count == 0u) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
-    if (l_replay_event_capacity > 0xffffffffu / l_replay_span_count) { consolidate_reject(completion); valid = false; }
+    if (sleep_product_overflows_u32(l_replay_event_capacity,l_replay_span_count)) { consolidate_reject(completion); valid = false; }
   }
   if (valid) {
     p_schema_version = immutable_plan_words[e_sleep_parameter_offset+0u];
