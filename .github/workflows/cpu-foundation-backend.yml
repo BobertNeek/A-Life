@@ -71,6 +71,7 @@ jobs:
         run: |
           cargo test --locked -p alife_training --features cpu-backend --lib native_receipt::
           cargo test --locked -p alife_training --features cpu-backend --lib cpu::
+          cargo test --locked -p alife_training --features cpu-backend --lib connection_budget_experiment::
           cargo test --locked -p alife_training --features cpu-backend --lib trainer::replay_packing_assay::tests::
           cargo test --locked -p alife_training --features cpu-backend --test cpu_backend --test cpu_collector --test cpu_collect_only --test cpu_cli --test backend_handoff --test checkpoint_validation -- --nocapture
       - name: Inference-only founder merge contracts

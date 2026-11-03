@@ -141,3 +141,44 @@ whole-episode seed reservations, provide native cooperative continuation
 admission or promote any result. Those adapters and a trainer-removed mixed-skill
 assessment are still needed for an actual synergy comparison against matched
 serial mixed-curriculum learning.
+
+## Disposable connection-budget replay experiment
+
+```sh
+cargo run --locked -p alife_training --features cpu-backend --bin experiment_connection_budget -- --disposable-public-founder --seed 70411 --ticks 32
+```
+
+This opt-in prototype creates a fresh public built-in N2048 founder, collects
+canonical CPU world decisions, ranks recurrent connections using only the first
+half's past coactivity, and compares that selection with a seeded control on the
+second half's actual baseline frames. The JSON stdout receipt reports per-lobe
+requested and resolved connection counts, capacity constraints, source/frame/
+effective-state/topology identities, candidate-logit changes and single-pass
+CPU timings. It verifies that the founder checkpoint and repeated baseline
+replay remain identical. It writes no checkpoint or native handoff and accepts
+no existing individual or trained-source path.
+
+The 0/16/32/48/64 settings are **average recurrent fan-in budgets per lobe**:
+`requested = fan_in * lobe_neurons`. Each is explicitly capped to the available
+compiled recurrent pool; the receipt flags every constraint. Degrees need not
+be uniform across neurons. The library's `exact_plan` instead requires a feasible
+explicit connection count for every enabled lobe and rejects missing, duplicate,
+unknown or excessive budgets. Decoders and dendrites retain their original
+state. Existing route gates and cadence still determine which selected
+connections fire at each microstep.
+
+This is an effective connection-mask experiment through the real CPU replay
+engine. Inactive connections have their detached effective weights cancelled;
+adaptive selection can reactivate entries in that same compiled pool. All world
+actions remain baseline actions, and each replay starts from the actual baseline
+state. It does not execute a closed-loop experimental creature, create absent
+coordinates, train weights, or demonstrate learning. Zeroed entries are still
+scanned, and trial timings include cloning and hashing; they cannot demonstrate
+a throughput gain. Native topology admission and continuation guards remain
+unchanged. The next step for a full adaptive-wiring trial is an explicit fresh
+experimental phenotype/compiler contract with rebuilt coordinate-bound learning
+plans, followed by compact native execution and matched closed-loop trials.
+
+```sh
+cargo test --locked -p alife_training --features cpu-backend --lib connection_budget_experiment
+```
