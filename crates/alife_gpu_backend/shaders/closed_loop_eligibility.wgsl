@@ -314,24 +314,25 @@ fn accumulate_decoder_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) 
   store_state_f32(staging_index, canonicalize_state_zero(clamp(next, -1.0, 1.0)));
 }
 
-@compute @workgroup_size(1)
-fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Barrier-free staging preserves the original rejection/load/write order.
+// Return only publication addresses; rejected invocations publish nothing.
+fn prepare_pending_eligibility(gid:vec3<u32>) -> vec3<u32> {
   let learning_base = gid.y * ACTIVE_DISPATCH_ROW_WORDS + LEARNING_HEADER_WORD_OFFSET;
   let header = load_learning_header(learning_base);
-  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  if (header.brain_slot_index >= arrayLength(&brain_slots)) { return vec3<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
-  if (!state_span_within(brain.extension_record_offset, 20u)) { return; }
+  if (!state_span_within(brain.extension_record_offset, 20u)) { return vec3<u32>(0u); }
   let extension = load_slot_extension(brain);
-  if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
+  if (!state_span_within(extension.learning_state_offset, 24u)) { return vec3<u32>(0u); }
   let learning = load_slot_learning_state(extension);
   let selection = load_selection_record(header.selection_offset);
-  if (selection.status != 2u) { return; }
+  if (selection.status != 2u) { return vec3<u32>(0u); }
   if ((atomicLoad(&mutable_state_words[brain.diagnostic_offset + ELIGIBILITY_DIAGNOSTIC_LANE])
-      & ELIGIBILITY_DIAGNOSTIC_FAILURE_MASK) != 0u) { return; }
+      & ELIGIBILITY_DIAGNOSTIC_FAILURE_MASK) != 0u) { return vec3<u32>(0u); }
   if (selection.status != 2u || selection.candidate_index >= header.candidate_count
-      || selection.active_activation_side != header.active_activation_side) { return; }
+      || selection.active_activation_side != header.active_activation_side) { return vec3<u32>(0u); }
   let selected = load_candidate(header.candidate_offset + selection.candidate_index * 8u);
-  if (selected.candidate_index != selection.candidate_index || selected.family >= 8u) { return; }
+  if (selected.candidate_index != selection.candidate_index || selected.family >= 8u) { return vec3<u32>(0u); }
   let template_base = header.outcome_offset;
   if (frame_payload_words[template_base] != GPU_LEARNING_SCHEMA_VERSION
       || frame_payload_words[template_base+1u] != brain.slot
@@ -340,12 +341,12 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
       || frame_payload_words[template_base+14u] != header.dispatch_generation_lo
       || frame_payload_words[template_base+15u] != header.dispatch_generation_hi
       || frame_payload_words[template_base+26u] != 0xffffffffu
-      || frame_payload_words[template_base+27u] != 0u) { return; }
+      || frame_payload_words[template_base+27u] != 0u) { return vec3<u32>(0u); }
   var identity_index = 0u;
   loop {
     if (identity_index >= 8u) { break; }
     if (frame_payload_words[template_base+4u+identity_index]
-        != phenotype_identities[header.brain_slot_index].phenotype_hash[identity_index]) { return; }
+        != phenotype_identities[header.brain_slot_index].phenotype_hash[identity_index]) { return vec3<u32>(0u); }
     identity_index += 1u;
   }
   let active_generation_lo = learning.active_eligibility_generation_lo;
@@ -357,15 +358,15 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
       || frame_payload_words[template_base+32u] != active_generation_lo
       || frame_payload_words[template_base+33u] != active_generation_hi
       || frame_payload_words[template_base+34u] != next_generation_lo
-      || frame_payload_words[template_base+35u] != next_generation_hi) { return; }
+      || frame_payload_words[template_base+35u] != next_generation_hi) { return vec3<u32>(0u); }
   let transaction_lo = learning.transaction_generation_lo + 1u;
   let transaction_carry = select(0u, 1u, transaction_lo == 0u);
   let transaction_hi = learning.transaction_generation_hi + transaction_carry;
-  if (transaction_lo == 0u && transaction_hi == 0u) { return; }
+  if (transaction_lo == 0u && transaction_hi == 0u) { return vec3<u32>(0u); }
   let digest_base = header.decoder_learning_input_offset
     + header.candidate_count * header.decoder_input_stride
     + selection.candidate_index * 4u;
-  if (!frame_span_within(digest_base, 4u)) { return; }
+  if (!frame_span_within(digest_base, 4u)) { return vec3<u32>(0u); }
   var copy_index = 0u;
   loop {
     if (copy_index >= 26u) { break; }
@@ -394,13 +395,22 @@ fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(state_base + 9u, next_generation_hi);
   store_state_u32(state_base + 22u, transaction_lo);
   store_state_u32(state_base + 23u, transaction_hi);
+  return vec3<u32>(1u, state_base, header.selection_offset);
+}
+
+@compute @workgroup_size(1)
+fn finalize_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_pending_eligibility(gid);
+  // Both barriers are reached by every invocation, including rejected rows.
+  // Each workgroup still contains exactly one invocation. Only successful rows
+  // perform the original pending-valid and winner-status publication stores.
   storageBarrier();
-  store_state_u32(state_base + 3u, 1u);
+  if (publication.x != 0u) { store_state_u32(publication.y + 3u, 1u); }
   storageBarrier();
   // Status 3 proves that the GPU completed eligibility after winner selection.
   // The host validates this proof and normalizes the public winner record back
   // to status 1; the 36-word pending identity remains resident on the GPU.
-  store_state_u32(header.selection_offset + 5u, 3u);
+  if (publication.x != 0u) { store_state_u32(publication.z + 5u, 3u); }
 }
 
 fn discard_contract_is_valid(
@@ -479,29 +489,29 @@ fn discard_pending_eligibility_arrays(@builtin(global_invocation_id) gid:vec3<u3
   if (state_span_within(index, 1u)) { store_state_u32(index, 0u); }
 }
 
-@compute @workgroup_size(1)
-fn finalize_discard_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_discard_pending_eligibility(gid:vec3<u32>) -> vec3<u32> {
   let header = load_learning_header(LEARNING_HEADER_WORD_OFFSET);
-  if (gid.x != 0u || header.brain_slot_index >= arrayLength(&brain_slots)) { return; }
+  if (gid.x != 0u || header.brain_slot_index >= arrayLength(&brain_slots)) { return vec3<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
-  if (!state_span_within(brain.extension_record_offset, 20u)) { return; }
+  if (!state_span_within(brain.extension_record_offset, 20u)) { return vec3<u32>(0u); }
   let extension = load_slot_extension(brain);
-  if (!state_span_within(extension.learning_state_offset, 24u)) { return; }
+  if (!state_span_within(extension.learning_state_offset, 24u)) { return vec3<u32>(0u); }
   let learning = load_slot_learning_state(extension);
-  if (!discard_contract_is_valid(header, brain, extension, learning)) { return; }
+  if (!discard_contract_is_valid(header, brain, extension, learning)) { return vec3<u32>(0u); }
   let staging_bases = inactive_eligibility_bases(brain, extension, learning);
   for (var recurrent = 0u; recurrent < header.recurrent_synapse_count; recurrent += 1u) {
     let index = staging_bases.recurrent + recurrent;
-    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return; }
+    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return vec3<u32>(0u); }
   }
   for (var decoder = 0u; decoder < header.decoder_synapse_count; decoder += 1u) {
     let index = staging_bases.decoder + decoder;
-    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return; }
+    if (!state_span_within(index, 1u) || load_state_u32(index) != 0u) { return vec3<u32>(0u); }
   }
   let transaction_lo = learning.transaction_generation_lo + 1u;
   let transaction_carry = select(0u, 1u, transaction_lo == 0u);
   let transaction_hi = learning.transaction_generation_hi + transaction_carry;
-  if (transaction_lo == 0u && transaction_hi == 0u) { return; }
+  if (transaction_lo == 0u && transaction_hi == 0u) { return vec3<u32>(0u); }
   let receipt = header.selection_offset;
   for (var word = 0u; word < 12u; word += 1u) {
     store_state_u32(receipt + word, 0u);
@@ -524,8 +534,15 @@ fn finalize_discard_pending_eligibility(@builtin(global_invocation_id) gid:vec3<
   store_state_u32(state_base + 9u, 0u);
   store_state_u32(state_base + 22u, transaction_lo);
   store_state_u32(state_base + 23u, transaction_hi);
+  return vec3<u32>(1u, state_base, receipt);
+}
+
+@compute @workgroup_size(1)
+fn finalize_discard_pending_eligibility(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_discard_pending_eligibility(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(state_base + 3u, 0u);
+  if (publication.x != 0u) { store_state_u32(publication.y + 3u, 0u); }
   storageBarrier();
-  store_state_u32(receipt + 3u, 1u);
+  if (publication.x != 0u) { store_state_u32(publication.z + 3u, 1u); }
 }

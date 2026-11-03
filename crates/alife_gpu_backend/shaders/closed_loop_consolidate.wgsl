@@ -1,4 +1,11 @@
-const SLEEP_STATUS_PREPARED:u32 = 256u;
+fn sleep_product_overflows_u32(a:u32,b:u32)->bool {
+  let ah=a>>16u; let bh=b>>16u;
+  let al=a&65535u; let bl=b&65535u;
+  if (ah != 0u && bh != 0u) { return true; }
+  let cross=ah*bl+al*bh;
+  if (cross>65535u) { return true; }
+  return cross+((al*bl)>>16u)>65535u;
+}const SLEEP_STATUS_PREPARED:u32 = 256u;
 const SLEEP_STATUS_SUCCESS:u32 = 1u;
 const SLEEP_STATUS_COMMITTED:u32 = 2u;
 const SLEEP_STATUS_REJECTED:u32 = 512u;
@@ -17,6 +24,24 @@ fn consolidate_immutable_plan_span_within(start:u32, count:u32) -> bool {
 
 fn consolidate_finite(value:f32) -> bool {
   return value == value && abs(value) <= 3.402823466e+38;
+}
+
+// Validate serialized f32 encodings without allowing an FP operation to flush
+// subnormal inputs. Predicates match IEEE comparisons, including NaNs and +/-0;
+// no parameter value or learning arithmetic is changed.
+fn sleep_parameter_finite_bits(bits:u32) -> bool {
+  return (bits & 0x7f800000u) != 0x7f800000u;
+}
+fn sleep_parameter_gt_zero_bits(bits:u32) -> bool {
+  return bits > 0u && bits <= 0x7f800000u;
+}
+fn sleep_parameter_ge_zero_bits(bits:u32) -> bool {
+  let magnitude = bits & 0x7fffffffu;
+  return magnitude <= 0x7f800000u && (bits <= 0x7f800000u || magnitude == 0u);
+}
+fn sleep_parameter_le_positive_bits(bits:u32, upper_bits:u32) -> bool {
+  let magnitude = bits & 0x7fffffffu;
+  return magnitude <= 0x7f800000u && ((bits & 0x80000000u) != 0u || bits <= upper_bits);
 }
 
 fn consolidate_array8_equal(left:array<u32,8>, right:array<u32,8>) -> bool {
@@ -44,15 +69,20 @@ fn consolidate_synapse_delta_mode(extension:GpuBrainSlotExtensionRecord, synapse
       || metadata.receptor_index > (0xffffffffu-extension.receptor_offset)/16u) { return 2u; }
   let receptor_base = extension.receptor_offset+metadata.receptor_index*16u;
   if (!consolidate_immutable_plan_span_within(receptor_base,16u)) { return 2u; }
-  let receptor = load_plasticity_receptor(receptor_base);
-  if (!consolidate_finite(receptor.learning_rate)
-      || !consolidate_finite(receptor.sleep_replay_rate)
-      || !consolidate_finite(receptor.normalization_rate)
-      || receptor.learning_rate < 0.0 || receptor.learning_rate > 1.0
-      || receptor.sleep_replay_rate < 0.0 || receptor.sleep_replay_rate > 1.0
-      || receptor.normalization_rate < 0.0 || receptor.normalization_rate > 1.0) { return 2u; }
-  return select(0u,1u,receptor.learning_rate != 0.0
-      || receptor.sleep_replay_rate != 0.0 || receptor.normalization_rate != 0.0);
+  // These are serialized rate encodings: classify before any FP operation can
+  // flush subnormals. Keep the full receptor span guard above and the original
+  // finite-then-range check order. Learning arithmetic uses the unchanged loader.
+  let learning_rate_bits = immutable_plan_words[receptor_base+1u];
+  let sleep_replay_rate_bits = immutable_plan_words[receptor_base+2u];
+  let normalization_rate_bits = immutable_plan_words[receptor_base+3u];
+  if (!sleep_parameter_finite_bits(learning_rate_bits)
+      || !sleep_parameter_finite_bits(sleep_replay_rate_bits)
+      || !sleep_parameter_finite_bits(normalization_rate_bits)
+      || !sleep_parameter_ge_zero_bits(learning_rate_bits) || !sleep_parameter_le_positive_bits(learning_rate_bits,0x3f800000u)
+      || !sleep_parameter_ge_zero_bits(sleep_replay_rate_bits) || !sleep_parameter_le_positive_bits(sleep_replay_rate_bits,0x3f800000u)
+      || !sleep_parameter_ge_zero_bits(normalization_rate_bits) || !sleep_parameter_le_positive_bits(normalization_rate_bits,0x3f800000u)) { return 2u; }
+  return select(0u,1u,(learning_rate_bits & 0x7fffffffu) != 0u
+      || (sleep_replay_rate_bits & 0x7fffffffu) != 0u || (normalization_rate_bits & 0x7fffffffu) != 0u);
 }
 
 fn sleep_transaction_valid(
@@ -71,10 +101,18 @@ fn sleep_transaction_valid(
       || header.replay_event_count > 0xffffffffu / 28u
       || header.replay_span_count > 0xffffffffu / 4u
       || learning.replay_span_count == 0u
-      || learning.replay_event_capacity > 0xffffffffu / learning.replay_span_count) {
+      || sleep_product_overflows_u32(learning.replay_event_capacity,learning.replay_span_count)) {
     return false;
   }
-  let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
+  let parameter_base = extension.sleep_parameter_offset;
+  let parameter_schema = immutable_plan_words[parameter_base+0u];
+  let staging_bits = immutable_plan_words[parameter_base+1u];
+  let limit_bits = immutable_plan_words[parameter_base+2u];
+  let decay_bits = immutable_plan_words[parameter_base+3u];
+  let reset_policy = immutable_plan_words[parameter_base+4u];
+  let consume_policy = immutable_plan_words[parameter_base+5u];
+  let parameter_reserved_0 = immutable_plan_words[parameter_base+6u];
+  let parameter_reserved_1 = immutable_plan_words[parameter_base+7u];
   return header.schema_version == GPU_SLEEP_SCHEMA_VERSION
     && header.flags == 0u && header.reserved == 0u
     && header.class_id == brain.class_id
@@ -93,16 +131,16 @@ fn sleep_transaction_valid(
     && request.max_replay_events == learning.replay_event_capacity
     && request.max_replay_eligibility_samples == learning.replay_sample_capacity
     && request.reserved_tail.x == 0u && request.reserved_tail.y == 0u
-    && parameters.schema_version == GPU_SLEEP_SCHEMA_VERSION
-    && consolidate_finite(parameters.staging_rate)
-    && consolidate_finite(parameters.weight_limit)
-    && consolidate_finite(parameters.fast_decay_rate)
-    && parameters.staging_rate > 0.0 && parameters.staging_rate <= 1.0
-    && parameters.weight_limit > 0.0 && parameters.weight_limit <= 8.0
-    && parameters.fast_decay_rate >= 0.0 && parameters.fast_decay_rate <= 1.0
-    && parameters.eligibility_reset_policy == 1u
-    && parameters.replay_consume_policy == 1u
-    && all(parameters.reserved == vec2<u32>(0u))
+    && parameter_schema == GPU_SLEEP_SCHEMA_VERSION
+    && sleep_parameter_finite_bits(staging_bits)
+    && sleep_parameter_finite_bits(limit_bits)
+    && sleep_parameter_finite_bits(decay_bits)
+    && sleep_parameter_gt_zero_bits(staging_bits) && sleep_parameter_le_positive_bits(staging_bits,0x3f800000u)
+    && sleep_parameter_gt_zero_bits(limit_bits) && sleep_parameter_le_positive_bits(limit_bits,0x41000000u)
+    && sleep_parameter_ge_zero_bits(decay_bits) && sleep_parameter_le_positive_bits(decay_bits,0x3f800000u)
+    && reset_policy == 1u
+    && consume_policy == 1u
+    && (parameter_reserved_0 == 0u && parameter_reserved_1 == 0u)
     && learning.schema_version == GPU_LEARNING_SCHEMA_VERSION
     && learning.active_weight_bank <= 1u
     && learning.active_eligibility_bank <= 1u
@@ -127,43 +165,415 @@ fn sleep_transaction_valid(
     && consolidate_frame_span_within(header.replay_sample_offset,header.replay_sample_count);
 }
 
+// Scalar-only initializer: preserve one dispatch, all validation and publication
+// ordering without constructing or passing aggregate ABI records. Mutable fields
+// are snapshotted AFTER the original completion prelude, before final writes.
 @compute @workgroup_size(1)
 fn initialize_sleep_transaction(@builtin(global_invocation_id) gid:vec3<u32>) {
-  let header = load_sleep_header(gid.y*20u);
-  if (header.brain_slot_index >= arrayLength(&brain_slots)
-      || !state_span_within(header.completion_offset,16u)) { return; }
-  let brain = brain_slots[header.brain_slot_index];
-  let completion = header.completion_offset;
-  for (var word=0u; word<16u; word+=1u) { store_state_u32(completion+word,0u); }
-  store_state_u32(completion,GPU_SLEEP_SCHEMA_VERSION);
-  store_state_u32(completion+1u,brain.slot);
-  store_state_u32(completion+2u,brain.slot_generation);
-  if (!state_span_within(brain.extension_record_offset,20u)) {
-    consolidate_reject(completion); return;
+  // Flat guarded stages preserve first rejection and every snapshot/write.
+  // No validation return or outer-loop break creates nested continuation flow.
+  var valid = true;
+  var header_base: u32 = 0u;
+  var h_schema_version: u32 = 0u;
+  var h_class_id: u32 = 0u;
+  var h_slot: u32 = 0u;
+  var h_slot_generation: u32 = 0u;
+  var h_brain_slot_index: u32 = 0u;
+  var h_request_offset: u32 = 0u;
+  var h_replay_event_offset: u32 = 0u;
+  var h_replay_event_count: u32 = 0u;
+  var h_replay_span_offset: u32 = 0u;
+  var h_replay_span_count: u32 = 0u;
+  var h_replay_sample_offset: u32 = 0u;
+  var h_replay_sample_count: u32 = 0u;
+  var h_synapse_count: u32 = 0u;
+  var h_completion_offset: u32 = 0u;
+  var h_job_id_lo: u32 = 0u;
+  var h_job_id_hi: u32 = 0u;
+  var h_cycle_id_lo: u32 = 0u;
+  var h_cycle_id_hi: u32 = 0u;
+  var h_flags: u32 = 0u;
+  var h_reserved: u32 = 0u;
+  var b_class_id: u32 = 0u;
+  var b_slot: u32 = 0u;
+  var b_slot_generation: u32 = 0u;
+  var b_synapse_count: u32 = 0u;
+  var b_recurrent_synapse_count: u32 = 0u;
+  var b_lifetime_weight_offset: u32 = 0u;
+  var b_fast_weight_offset: u32 = 0u;
+  var b_recurrent_eligibility_offset: u32 = 0u;
+  var b_decoder_eligibility_offset: u32 = 0u;
+  var b_extension_record_offset: u32 = 0u;
+  var completion: u32 = 0u;
+  var e_schema_version: u32 = 0u;
+  var e_recurrent_eligibility_bank_1_offset: u32 = 0u;
+  var e_decoder_eligibility_bank_1_offset: u32 = 0u;
+  var e_fast_bank_1_offset: u32 = 0u;
+  var e_lifetime_bank_1_offset: u32 = 0u;
+  var e_sleep_parameter_offset: u32 = 0u;
+  var e_learning_state_offset: u32 = 0u;
+  var e_pending_eligibility_offset: u32 = 0u;
+  var l_schema_version: u32 = 0u;
+  var l_active_weight_bank: u32 = 0u;
+  var l_active_eligibility_bank: u32 = 0u;
+  var l_pending_valid: u32 = 0u;
+  var l_active_weight_generation_lo: u32 = 0u;
+  var l_active_weight_generation_hi: u32 = 0u;
+  var l_replay_cursor: u32 = 0u;
+  var l_replay_event_count: u32 = 0u;
+  var l_replay_event_capacity: u32 = 0u;
+  var l_replay_sample_capacity: u32 = 0u;
+  var l_replay_span_count: u32 = 0u;
+  var l_replay_event_rows_offset: u32 = 0u;
+  var l_replay_sample_offset: u32 = 0u;
+  var l_replay_span_offset: u32 = 0u;
+  var r_schema_version: u32 = 0u;
+  var r_request_flags: u32 = 0u;
+  var r_cycle_id_lo: u32 = 0u;
+  var r_cycle_id_hi: u32 = 0u;
+  var r_input_generation_lo: u32 = 0u;
+  var r_input_generation_hi: u32 = 0u;
+  var r_expected_output_generation_lo: u32 = 0u;
+  var r_expected_output_generation_hi: u32 = 0u;
+  var r_max_replay_events: u32 = 0u;
+  var r_max_replay_eligibility_samples: u32 = 0u;
+  var r_reserved_tail_0: u32 = 0u;
+  var r_reserved_tail_1: u32 = 0u;
+  var p_schema_version: u32 = 0u;
+  var p_staging_rate_bits: u32 = 0u;
+  var p_weight_limit_bits: u32 = 0u;
+  var p_fast_decay_rate_bits: u32 = 0u;
+  var p_eligibility_reset_policy: u32 = 0u;
+  var p_replay_consume_policy: u32 = 0u;
+  var p_reserved_0: u32 = 0u;
+  var p_reserved_1: u32 = 0u;
+  header_base = gid.y*20u;
+  h_schema_version = dispatch_header_words[header_base+0u];
+  h_class_id = dispatch_header_words[header_base+1u];
+  h_slot = dispatch_header_words[header_base+2u];
+  h_slot_generation = dispatch_header_words[header_base+3u];
+  h_brain_slot_index = dispatch_header_words[header_base+4u];
+  h_request_offset = dispatch_header_words[header_base+5u];
+  h_replay_event_offset = dispatch_header_words[header_base+6u];
+  h_replay_event_count = dispatch_header_words[header_base+7u];
+  h_replay_span_offset = dispatch_header_words[header_base+8u];
+  h_replay_span_count = dispatch_header_words[header_base+9u];
+  h_replay_sample_offset = dispatch_header_words[header_base+10u];
+  h_replay_sample_count = dispatch_header_words[header_base+11u];
+  h_synapse_count = dispatch_header_words[header_base+12u];
+  h_completion_offset = dispatch_header_words[header_base+13u];
+  h_job_id_lo = dispatch_header_words[header_base+14u];
+  h_job_id_hi = dispatch_header_words[header_base+15u];
+  h_cycle_id_lo = dispatch_header_words[header_base+16u];
+  h_cycle_id_hi = dispatch_header_words[header_base+17u];
+  h_flags = dispatch_header_words[header_base+18u];
+  h_reserved = dispatch_header_words[header_base+19u];
+  if (valid) {
+    if (h_brain_slot_index >= arrayLength(&brain_slots)
+    || !state_span_within(h_completion_offset,16u)) { valid = false; }
   }
-  let extension = load_slot_extension(brain);
-  if (!state_span_within(extension.learning_state_offset,24u)
-      || extension.sleep_parameter_offset == 0xffffffffu
-      || !consolidate_immutable_plan_span_within(extension.sleep_parameter_offset,8u)
-      || !consolidate_frame_span_within(header.request_offset,44u)) {
-    consolidate_reject(completion); return;
+  if (valid) {
+    b_class_id = brain_slots[h_brain_slot_index].class_id;
+    b_slot = brain_slots[h_brain_slot_index].slot;
+    b_slot_generation = brain_slots[h_brain_slot_index].slot_generation;
+    b_synapse_count = brain_slots[h_brain_slot_index].synapse_count;
+    b_recurrent_synapse_count = brain_slots[h_brain_slot_index].recurrent_synapse_count;
+    b_lifetime_weight_offset = brain_slots[h_brain_slot_index].lifetime_weight_offset;
+    b_fast_weight_offset = brain_slots[h_brain_slot_index].fast_weight_offset;
+    b_recurrent_eligibility_offset = brain_slots[h_brain_slot_index].recurrent_eligibility_offset;
+    b_decoder_eligibility_offset = brain_slots[h_brain_slot_index].decoder_eligibility_offset;
+    b_extension_record_offset = brain_slots[h_brain_slot_index].extension_record_offset;
+    completion = h_completion_offset;
+    for (var word=0u; word<16u; word+=1u) { store_state_u32(completion+word,0u); }
+    store_state_u32(completion,GPU_SLEEP_SCHEMA_VERSION);
+    store_state_u32(completion+1u,b_slot);
+    store_state_u32(completion+2u,b_slot_generation);
   }
-  let learning = load_slot_learning_state(extension);
-  let request = load_consolidation_request(header.request_offset);
-  if (!sleep_transaction_valid(header,brain,extension,learning,request)
-      || request.expected_output_generation_lo == 0u && request.expected_output_generation_hi == 0u) {
-    consolidate_reject(completion); return;
+  if (valid) {
+    if (!state_span_within(b_extension_record_offset,20u)) { consolidate_reject(completion); valid = false; }
   }
-  store_state_u32(completion+4u,learning.active_weight_generation_lo);
-  store_state_u32(completion+5u,learning.active_weight_generation_hi);
-  store_state_u32(completion+6u,request.expected_output_generation_lo);
-  store_state_u32(completion+7u,request.expected_output_generation_hi);
-  store_state_u32(completion+8u,learning.active_weight_bank^1u);
-  store_state_u32(completion+9u,header.replay_span_count);
-  store_state_u32(completion+12u,header.job_id_lo);
-  store_state_u32(completion+13u,header.job_id_hi);
+  if (valid) {
+    e_schema_version = load_state_u32(b_extension_record_offset+0u);
+    e_recurrent_eligibility_bank_1_offset = load_state_u32(b_extension_record_offset+8u);
+    e_decoder_eligibility_bank_1_offset = load_state_u32(b_extension_record_offset+9u);
+    e_fast_bank_1_offset = load_state_u32(b_extension_record_offset+10u);
+    e_lifetime_bank_1_offset = load_state_u32(b_extension_record_offset+11u);
+    e_sleep_parameter_offset = load_state_u32(b_extension_record_offset+12u);
+    e_learning_state_offset = load_state_u32(b_extension_record_offset+15u);
+    e_pending_eligibility_offset = load_state_u32(b_extension_record_offset+16u);
+  }
+  if (valid) {
+    if (!state_span_within(e_learning_state_offset,24u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (e_sleep_parameter_offset == 0xffffffffu) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!consolidate_immutable_plan_span_within(e_sleep_parameter_offset,8u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!consolidate_frame_span_within(h_request_offset,44u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    l_schema_version = load_state_u32(e_learning_state_offset+0u);
+    l_active_weight_bank = load_state_u32(e_learning_state_offset+1u);
+    l_active_eligibility_bank = load_state_u32(e_learning_state_offset+2u);
+    l_pending_valid = load_state_u32(e_learning_state_offset+3u);
+    l_active_weight_generation_lo = load_state_u32(e_learning_state_offset+4u);
+    l_active_weight_generation_hi = load_state_u32(e_learning_state_offset+5u);
+    l_replay_cursor = load_state_u32(e_learning_state_offset+12u);
+    l_replay_event_count = load_state_u32(e_learning_state_offset+13u);
+    l_replay_event_capacity = load_state_u32(e_learning_state_offset+14u);
+    l_replay_sample_capacity = load_state_u32(e_learning_state_offset+15u);
+    l_replay_span_count = load_state_u32(e_learning_state_offset+16u);
+    l_replay_event_rows_offset = load_state_u32(e_learning_state_offset+17u);
+    l_replay_sample_offset = load_state_u32(e_learning_state_offset+18u);
+    l_replay_span_offset = load_state_u32(e_learning_state_offset+19u);
+    r_schema_version = frame_payload_words[h_request_offset+0u];
+    r_request_flags = frame_payload_words[h_request_offset+1u];
+    r_cycle_id_lo = frame_payload_words[h_request_offset+2u];
+    r_cycle_id_hi = frame_payload_words[h_request_offset+3u];
+    r_input_generation_lo = frame_payload_words[h_request_offset+12u];
+    r_input_generation_hi = frame_payload_words[h_request_offset+13u];
+    r_expected_output_generation_lo = frame_payload_words[h_request_offset+14u];
+    r_expected_output_generation_hi = frame_payload_words[h_request_offset+15u];
+    r_max_replay_events = frame_payload_words[h_request_offset+32u];
+    r_max_replay_eligibility_samples = frame_payload_words[h_request_offset+33u];
+    r_reserved_tail_0 = frame_payload_words[h_request_offset+42u];
+    r_reserved_tail_1 = frame_payload_words[h_request_offset+43u];
+  }
+  if (valid) {
+    if (e_schema_version != GPU_CLOSED_LOOP_LAYOUT_VERSION) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (e_sleep_parameter_offset == 0xffffffffu) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!consolidate_immutable_plan_span_within(e_sleep_parameter_offset,8u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (b_recurrent_synapse_count > b_synapse_count) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (l_replay_event_capacity > 0xffffffffu / 28u) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (l_replay_span_count > 0xffffffffu / 4u) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (h_replay_event_count > 0xffffffffu / 28u) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (h_replay_span_count > 0xffffffffu / 4u) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (l_replay_span_count == 0u) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (sleep_product_overflows_u32(l_replay_event_capacity,l_replay_span_count)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    p_schema_version = immutable_plan_words[e_sleep_parameter_offset+0u];
+    p_staging_rate_bits = immutable_plan_words[e_sleep_parameter_offset+1u];
+    p_weight_limit_bits = immutable_plan_words[e_sleep_parameter_offset+2u];
+    p_fast_decay_rate_bits = immutable_plan_words[e_sleep_parameter_offset+3u];
+    p_eligibility_reset_policy = immutable_plan_words[e_sleep_parameter_offset+4u];
+    p_replay_consume_policy = immutable_plan_words[e_sleep_parameter_offset+5u];
+    p_reserved_0 = immutable_plan_words[e_sleep_parameter_offset+6u];
+    p_reserved_1 = immutable_plan_words[e_sleep_parameter_offset+7u];
+  }
+  if (valid) {
+    if (!(h_schema_version == GPU_SLEEP_SCHEMA_VERSION)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_flags == 0u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_reserved == 0u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_class_id == b_class_id)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_slot == b_slot)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_slot_generation == b_slot_generation)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_brain_slot_index == b_slot)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_synapse_count == b_synapse_count)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_replay_event_count <= r_max_replay_events)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_replay_sample_count <= r_max_replay_eligibility_samples)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(h_replay_span_count == l_replay_span_count)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_schema_version == GPU_SLEEP_SCHEMA_VERSION)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_request_flags == 0u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_cycle_id_lo == h_cycle_id_lo)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_cycle_id_hi == h_cycle_id_hi)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_input_generation_lo == l_active_weight_generation_lo)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_input_generation_hi == l_active_weight_generation_hi)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    var phenotype_matches = true;
+    for (var lane=0u; lane<8u; lane+=1u) {
+    if (frame_payload_words[h_request_offset+4u+lane] != phenotype_identities[h_brain_slot_index].phenotype_hash[lane]) { phenotype_matches = false; break; }
+    }
+    if (!phenotype_matches) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_max_replay_events == l_replay_event_capacity)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_max_replay_eligibility_samples == l_replay_sample_capacity)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_reserved_tail_0 == 0u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(r_reserved_tail_1 == 0u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(p_schema_version == GPU_SLEEP_SCHEMA_VERSION)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_finite_bits(p_staging_rate_bits))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_finite_bits(p_weight_limit_bits))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_finite_bits(p_fast_decay_rate_bits))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_gt_zero_bits(p_staging_rate_bits))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_le_positive_bits(p_staging_rate_bits,0x3f800000u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_gt_zero_bits(p_weight_limit_bits))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_le_positive_bits(p_weight_limit_bits,0x41000000u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_ge_zero_bits(p_fast_decay_rate_bits))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(sleep_parameter_le_positive_bits(p_fast_decay_rate_bits,0x3f800000u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(p_eligibility_reset_policy == 1u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(p_replay_consume_policy == 1u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!((p_reserved_0 == 0u && p_reserved_1 == 0u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(l_schema_version == GPU_LEARNING_SCHEMA_VERSION)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(l_active_weight_bank <= 1u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(l_active_eligibility_bank <= 1u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(l_pending_valid == 0u)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(l_replay_cursor < l_replay_event_capacity)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(l_replay_event_count == h_replay_event_count)) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(b_lifetime_weight_offset,b_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(b_fast_weight_offset,b_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(e_lifetime_bank_1_offset,b_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(e_fast_bank_1_offset,b_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(b_recurrent_eligibility_offset,b_recurrent_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(e_recurrent_eligibility_bank_1_offset,b_recurrent_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(b_decoder_eligibility_offset,b_synapse_count-b_recurrent_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(e_decoder_eligibility_bank_1_offset,b_synapse_count-b_recurrent_synapse_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(l_replay_event_rows_offset,l_replay_event_capacity*28u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(l_replay_sample_offset,l_replay_sample_capacity))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(l_replay_span_offset,l_replay_span_count*4u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(state_span_within(e_pending_eligibility_offset,SLEEP_PENDING_ELIGIBILITY_WORDS))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(consolidate_frame_span_within(h_request_offset,44u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(consolidate_frame_span_within(h_replay_event_offset,h_replay_event_count*28u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(consolidate_frame_span_within(h_replay_span_offset,h_replay_span_count*4u))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (!(consolidate_frame_span_within(h_replay_sample_offset,h_replay_sample_count))) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    if (r_expected_output_generation_lo == 0u && r_expected_output_generation_hi == 0u) { consolidate_reject(completion); valid = false; }
+  }
+  if (valid) {
+    store_state_u32(completion+4u,l_active_weight_generation_lo);
+    store_state_u32(completion+5u,l_active_weight_generation_hi);
+    store_state_u32(completion+6u,r_expected_output_generation_lo);
+    store_state_u32(completion+7u,r_expected_output_generation_hi);
+    store_state_u32(completion+8u,l_active_weight_bank^1u);
+    store_state_u32(completion+9u,h_replay_span_count);
+    store_state_u32(completion+12u,h_job_id_lo);
+    store_state_u32(completion+13u,h_job_id_hi);
+  }
   storageBarrier();
-  store_state_u32(completion+3u,SLEEP_STATUS_PREPARED);
+  if (valid) {
+    store_state_u32(completion+3u,SLEEP_STATUS_PREPARED);
+  }
 }
 
 @compute @workgroup_size(64)
@@ -216,19 +626,19 @@ fn consolidate_fast_weights(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_f32(inactive.fast+gid.x,canonicalize_state_zero(next_fast));
 }
 
-@compute @workgroup_size(1)
-fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_sleep_staging(gid:vec3<u32>) -> vec2<u32> {
   let header = load_sleep_header(gid.y*20u);
   if (header.brain_slot_index >= arrayLength(&brain_slots)
-      || !state_span_within(header.completion_offset,16u)) { return; }
+      || !state_span_within(header.completion_offset,16u)) { return vec2<u32>(0u); }
   let status = load_state_u32(header.completion_offset+3u);
-  if (status != SLEEP_STATUS_PREPARED) { return; }
+  if (status != SLEEP_STATUS_PREPARED) { return vec2<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let request = load_consolidation_request(header.request_offset);
   if (!sleep_transaction_valid(header,brain,extension,learning,request)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   let parameters = load_sleep_parameter(extension.sleep_parameter_offset);
   let active_bases = active_weight_bases(brain,extension,learning);
@@ -241,25 +651,32 @@ fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
     let staged_lifetime = load_state_f32(inactive_bases.lifetime+synapse);
     let staged_fast = load_state_f32(inactive_bases.fast+synapse);
     let delta_mode = consolidate_synapse_delta_mode(extension,synapse);
-    if (delta_mode == 2u) { consolidate_reject(header.completion_offset); return; }
+    if (delta_mode == 2u) { consolidate_reject(header.completion_offset); return vec2<u32>(0u); }
     let no_replay_fast = select(active_fast*(1.0-parameters.fast_decay_rate),active_fast,delta_mode == 0u);
     if (!consolidate_finite(active_lifetime) || !consolidate_finite(active_fast)
         || !consolidate_finite(staged_lifetime) || !consolidate_finite(staged_fast)
         || !consolidate_finite(no_replay_fast)) {
-      consolidate_reject(header.completion_offset); return;
+      consolidate_reject(header.completion_offset); return vec2<u32>(0u);
     }
     promoted_fast_l1 += abs(staged_lifetime-active_lifetime);
     replay_induced_fast_l1 += abs(staged_fast-no_replay_fast);
   }
   if (!consolidate_finite(promoted_fast_l1) || !consolidate_finite(replay_induced_fast_l1)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   // Sleep receipts use conservative Q12 upper rounding so a causal sub-quantum
   // GPU update is never reported as no update.
   store_state_u32(header.completion_offset+10u,u32(ceil(promoted_fast_l1*SLEEP_DIAGNOSTIC_Q12)));
   store_state_u32(header.completion_offset+11u,u32(ceil(replay_induced_fast_l1*SLEEP_DIAGNOSTIC_Q12)));
+  return vec2<u32>(1u, header.completion_offset);
+}
+
+@compute @workgroup_size(1)
+fn finalize_sleep_staging(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_sleep_staging(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(header.completion_offset+3u,SLEEP_STATUS_SUCCESS);
+  if (publication.x != 0u) { store_state_u32(publication.y+3u,SLEEP_STATUS_SUCCESS); }
 }
 
 @compute @workgroup_size(64)
@@ -298,17 +715,17 @@ fn reset_sleep_mutable_state(@builtin(global_invocation_id) gid:vec3<u32>) {
   }
 }
 
-@compute @workgroup_size(1)
-fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
+// Original ordered preflight/staging; no barriers or success publication on failure.
+fn prepare_finalize_sleep_commit(gid:vec3<u32>) -> vec2<u32> {
   let header = load_sleep_header(gid.y*20u);
   if (header.brain_slot_index >= arrayLength(&brain_slots)
-      || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_SUCCESS) { return; }
+      || load_state_u32(header.completion_offset+3u) != SLEEP_STATUS_SUCCESS) { return vec2<u32>(0u); }
   let brain = brain_slots[header.brain_slot_index];
   let extension = load_slot_extension(brain);
   let learning = load_slot_learning_state(extension);
   let request = load_consolidation_request(header.request_offset);
   if (!sleep_transaction_valid(header,brain,extension,learning,request)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   let next_eligibility_lo = learning.active_eligibility_generation_lo+1u;
   let next_eligibility_hi = learning.active_eligibility_generation_hi+select(0u,1u,next_eligibility_lo==0u);
@@ -319,7 +736,7 @@ fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
   if ((next_eligibility_lo == 0u && next_eligibility_hi == 0u)
       || (next_replay_lo == 0u && next_replay_hi == 0u)
       || (next_transaction_lo == 0u && next_transaction_hi == 0u)) {
-    consolidate_reject(header.completion_offset); return;
+    consolidate_reject(header.completion_offset); return vec2<u32>(0u);
   }
   let state = extension.learning_state_offset;
   store_state_u32(state+1u,learning.active_weight_bank^1u);
@@ -333,6 +750,13 @@ fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
   store_state_u32(state+10u,next_replay_lo); store_state_u32(state+11u,next_replay_hi);
   store_state_u32(state+12u,0u); store_state_u32(state+13u,0u);
   store_state_u32(state+22u,next_transaction_lo); store_state_u32(state+23u,next_transaction_hi);
+  return vec2<u32>(1u, header.completion_offset);
+}
+
+@compute @workgroup_size(1)
+fn finalize_sleep_commit(@builtin(global_invocation_id) gid:vec3<u32>) {
+  let publication = prepare_finalize_sleep_commit(gid);
+  // Every invocation reaches each barrier; workgroup size remains one.
   storageBarrier();
-  store_state_u32(header.completion_offset+3u,SLEEP_STATUS_COMMITTED);
+  if (publication.x != 0u) { store_state_u32(publication.y+3u,SLEEP_STATUS_COMMITTED); }
 }
