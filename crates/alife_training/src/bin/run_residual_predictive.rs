@@ -28,8 +28,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut args = BTreeMap::new();
     let mut iter = std::env::args().skip(1);
     while let Some(key) = iter.next() {
+        if key == "--coverage-followup" {
+            config.motion_coverage = true;
+            continue;
+        }
         if key == "--help" || key == "-h" {
-            println!("run_residual_predictive --output NEW_DIRECTORY [--seed 71] [--ticks 32] [--temperature 4] [--horizons 1,4] [--epochs 16] [--head-lr 0.03] [--native-lr 0.0001] [--scale-floor 0.001] [--recording CAPTURES.json.zst]\n\nThree prepared public scenes, one complete train/validation/test world per scene. Actual sampled native actions and world outcomes; no accepted brain/PC/GPU. Zero-output residual heads begin at persistence, with scales fitted on training deltas only. Matched full, within-split shuffled-action and recurrent ablations, fixed learning curves and heldout tests. Writes recoverable LOCAL experimental states, compressed recordings/datasets and numerical results; never publishes trained artifacts.");
+            println!("run_residual_predictive --output NEW_DIRECTORY [--coverage-followup] [--seed 71] [--ticks 32] [--temperature 4] [--horizons 1,4] [--epochs 16] [--head-lr 0.03] [--native-lr 0.0001] [--scale-floor 0.001] [--recording CAPTURES.json.zst]\n\nDefault: three prepared public scenes. Coverage follow-up: six fixed flat-terrain motion scenes (18 independent worlds), each with complete train/validation/test worlds. Actual sampled native actions and world outcomes; no accepted brain/PC/GPU. Zero-output residual heads begin at persistence, with scales fitted on training deltas only. Matched full, within-split shuffled-action and recurrent ablations, fixed learning curves and heldout tests. Writes recoverable LOCAL experimental states, compressed recordings/datasets and numerical results; never publishes trained artifacts.");
             return Ok(());
         }
         if !matches!(

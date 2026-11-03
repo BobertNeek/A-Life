@@ -9,10 +9,13 @@ use alife_core::Validate;
 use std::{borrow::Cow, collections::BTreeMap};
 
 pub type ResidualResult<T> = Result<T, Box<dyn std::error::Error>>;
+pub mod motion_coverage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResidualConfig {
+    #[serde(default)]
+    pub motion_coverage: bool,
     pub seed: u64,
     pub world_ticks: usize,
     pub temperature: f32,
@@ -25,6 +28,7 @@ pub struct ResidualConfig {
 impl Default for ResidualConfig {
     fn default() -> Self {
         Self {
+            motion_coverage: false,
             seed: 71,
             world_ticks: 32,
             temperature: 4.,
@@ -40,6 +44,9 @@ impl Default for ResidualConfig {
 /// Geometry is prepared before any observation/action, using public world APIs.
 /// No recorded outcome, reward, current perception or action is overwritten.
 pub fn capture_diverse(config: &ResidualConfig) -> ResidualResult<Vec<PublicSimulationRecording>> {
+    if config.motion_coverage {
+        return motion_coverage::capture(config);
+    }
     if !(5..=128).contains(&config.world_ticks) || config.seed == 0 {
         return Err("invalid residual capture configuration".into());
     }
