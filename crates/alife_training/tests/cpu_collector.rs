@@ -7,6 +7,8 @@ use alife_world::*;
 mod collector_shards;
 #[path = "cpu_collector/need_switching.rs"]
 mod need_switching;
+#[path = "cpu_collector/sealed_authority.rs"]
+mod sealed_authority;
 fn fixture() -> (CpuCanonicalHost, CpuFoundationTrainer) {
     fixture_atp(None)
 }
@@ -345,6 +347,14 @@ fn canonical_rollout_trains_full_residual_with_native_optimizer_ages() {
     .unwrap();
     assert_eq!(receipt.actor_optimizer_step, 16_685);
     assert_eq!(receipt.value_optimizer_step, 19_801);
+    let trained = trainer.checkpoint();
+    assert!(trainer
+        .phenotype()
+        .synapses()
+        .iter()
+        .enumerate()
+        .any(|(i, s)| matches!(s.kind(), CompiledSynapseKind::Recurrent)
+            && trained.first_moment[i] != before.first_moment[i]));
     assert!(trainer
         .weights()
         .iter()
