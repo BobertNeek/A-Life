@@ -12,6 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub mod artifact;
 pub mod recording;
+pub mod residual;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -198,6 +199,8 @@ impl PredictiveDataset {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PredictiveHead {
+    #[serde(default, skip_serializing_if = "PredictionObjective::is_absolute")]
+    objective: PredictionObjective,
     phenotype_hash: PhenotypeHash,
     schema: PredictiveSchema,
     neurons: Vec<usize>,
@@ -208,6 +211,22 @@ pub struct PredictiveHead {
     output_bias: Vec<f32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+enum PredictionObjective {
+    #[default]
+    Absolute,
+    Residual {
+        scales: Vec<f32>,
+        horizon_ticks: u16,
+    },
+}
+impl PredictionObjective {
+    fn is_absolute(&self) -> bool {
+        matches!(self, Self::Absolute)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PredictiveInputs {
@@ -215,11 +234,14 @@ pub enum PredictiveInputs {
     Full,
     NoAction,
     NoRecurrent,
+    /// The residual runner supplies a separately permuted conditioning view.
+    ShuffledAction,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PredictiveMetrics {
-    /// Mean over scored ticks and sensor/body coordinates; burn-in is excluded.
+    /// Mean head objective over scored ticks/coordinates. Absolute heads use
+    /// observation MSE; residual heads use train-scaled delta MSE.
     pub mse: f64,
     pub scored_ticks: usize,
 }
@@ -238,6 +260,12 @@ struct HeadPass {
 }
 
 impl PredictiveHead {
+    pub fn objective_name(&self) -> &'static str {
+        match self.objective {
+            PredictionObjective::Absolute => "raw_observation_mse",
+            PredictionObjective::Residual { .. } => "train_scaled_delta_mse",
+        }
+    }
     pub fn new(
         p: &BrainPhenotype,
         schema: PredictiveSchema,
@@ -271,6 +299,7 @@ impl PredictiveHead {
                 .collect()
         };
         Ok(Self {
+            objective: PredictionObjective::Absolute,
             phenotype_hash: p.phenotype_hash(),
             schema,
             neurons,
@@ -280,6 +309,26 @@ impl PredictiveHead {
             output_weights: weights(output * hidden),
             output_bias: vec![0.; output],
         })
+    }
+
+    pub fn new_residual(
+        p: &BrainPhenotype,
+        schema: PredictiveSchema,
+        neurons: Vec<usize>,
+        hidden: usize,
+        seed: u64,
+        scales: Vec<f32>,
+        horizon_ticks: u16,
+    ) -> Result<Self, TrainingError> {
+        let mut head = Self::new(p, schema, neurons, hidden, seed)?;
+        head.objective = PredictionObjective::Residual {
+            scales,
+            horizon_ticks,
+        };
+        head.output_weights.fill(0.);
+        head.output_bias.fill(0.);
+        head.validate_shape(p)?;
+        Ok(head)
     }
 
     fn validate(
@@ -292,6 +341,15 @@ impl PredictiveHead {
         if self.phenotype_hash != trainer.phenotype().phenotype_hash() || self.schema != data.schema
         {
             return Err(invalid());
+        }
+        if let PredictionObjective::Residual { horizon_ticks, .. } = &self.objective {
+            if data.episodes.iter().any(|e| {
+                e.evidence
+                    .as_ref()
+                    .is_some_and(|v| v.horizon_ticks != *horizon_ticks)
+            }) {
+                return Err(invalid());
+            }
         }
         Ok(())
     }
@@ -312,6 +370,19 @@ impl PredictiveHead {
             || self.output_bias.len() != outputs
         {
             return Err(invalid());
+        }
+        if let PredictionObjective::Residual {
+            scales,
+            horizon_ticks,
+        } = &self.objective
+        {
+            if scales.len() != outputs
+                || *horizon_ticks == 0
+                || *horizon_ticks > 32
+                || scales.iter().any(|s| !s.is_finite() || *s <= 0.)
+            {
+                return Err(invalid());
+            }
         }
         for w in [
             &self.input_weights,
@@ -376,17 +447,31 @@ impl PredictiveHead {
                 .zip(&self.hidden_bias)
                 .map(|(w, b)| (b + w.iter().zip(&x).map(|(w, x)| w * x).sum::<f32>()).tanh())
                 .collect::<Vec<_>>();
-            let prediction = self
+            let raw = self
                 .output_weights
                 .chunks_exact(self.hidden)
                 .zip(&self.output_bias)
                 .map(|(w, b)| b + w.iter().zip(&h).map(|(w, h)| w * h).sum::<f32>())
                 .collect::<Vec<_>>();
+            let prediction = match &self.objective {
+                PredictionObjective::Absolute => raw.clone(),
+                PredictionObjective::Residual { scales, .. } => raw
+                    .iter()
+                    .zip(&e.observations[t])
+                    .zip(scales)
+                    .map(|((delta, current), scale)| current + scale * delta)
+                    .collect(),
+            };
             finite(&prediction)?;
             if t >= e.replay.burn_in_ticks {
                 let mut dh = vec![0.; self.hidden];
                 for (o, &value) in prediction.iter().enumerate() {
-                    let error = value - e.observations[t + 1][o];
+                    let error = match &self.objective {
+                        PredictionObjective::Absolute => value - e.observations[t + 1][o],
+                        PredictionObjective::Residual { scales, .. } => {
+                            raw[o] - (e.observations[t + 1][o] - e.observations[t][o]) / scales[o]
+                        }
+                    };
                     result.metrics.mse += f64::from(error).powi(2) / f64::from(normalizer);
                     let dy = 2. * error / normalizer;
                     result.gradients[3][o] += dy;
@@ -511,6 +596,42 @@ impl PredictiveHead {
     ) -> Result<PredictiveMetrics, TrainingError> {
         self.validate(trainer, data)?;
         let e = data.episodes.get(index).ok_or_else(invalid)?;
+        self.train_episode(trainer, e, head_learning_rate, inputs)
+    }
+
+    /// Validate one immutable dataset per epoch, keeping native replay and
+    /// atomic finite-update guards on every example. Row order is unchanged.
+    pub fn train_epoch(
+        &mut self,
+        trainer: &mut CpuFoundationTrainer,
+        data: &PredictiveDataset,
+        head_learning_rate: f32,
+        inputs: PredictiveInputs,
+    ) -> Result<(), TrainingError> {
+        self.validate(trainer, data)?;
+        if inputs == PredictiveInputs::ShuffledAction {
+            return Err(invalid());
+        }
+        for e in data
+            .episodes
+            .iter()
+            .filter(|e| e.split == PredictiveSplit::Train)
+        {
+            self.train_episode(trainer, e, head_learning_rate, inputs)?;
+        }
+        Ok(())
+    }
+
+    // Called by the runner after validating one immutable dataset. Native replay
+    // contracts and the atomic finite update checks remain active for every row.
+    fn train_episode(
+        &mut self,
+        trainer: &mut CpuFoundationTrainer,
+        e: &PredictiveEpisode,
+        head_learning_rate: f32,
+        inputs: PredictiveInputs,
+    ) -> Result<PredictiveMetrics, TrainingError> {
+        self.validate_shape(trainer.phenotype())?;
         if e.split != PredictiveSplit::Train
             || !head_learning_rate.is_finite()
             || head_learning_rate <= 0.

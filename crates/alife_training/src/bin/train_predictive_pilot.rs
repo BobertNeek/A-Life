@@ -21,7 +21,20 @@ fn read(path: &str) -> Result<Vec<u8>> {
     if fs::metadata(path)?.len() > 64 * 1024 * 1024 {
         return Err("pilot input exceeds 64 MiB".into());
     }
-    Ok(fs::read(path)?)
+    if path.ends_with(".zst") {
+        use std::io::Read;
+        let decoder = zstd::stream::read::Decoder::new(fs::File::open(path)?)?;
+        let mut bytes = Vec::new();
+        decoder
+            .take(512 * 1024 * 1024 + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > 512 * 1024 * 1024 {
+            return Err("expanded pilot input exceeds 512 MiB".into());
+        }
+        Ok(bytes)
+    } else {
+        Ok(fs::read(path)?)
+    }
 }
 
 fn main() -> Result<()> {
@@ -157,11 +170,7 @@ fn main() -> Result<()> {
     let start_step = trainer.optimizer_step();
     let start = Instant::now();
     for _ in 0..epochs {
-        for (index, e) in data.episodes.iter().enumerate() {
-            if e.split == PredictiveSplit::Train {
-                head.train_step_with_inputs(&mut trainer, &data, index, head_lr, inputs)?;
-            }
-        }
+        head.train_epoch(&mut trainer, &data, head_lr, inputs)?;
     }
     let training_seconds = start.elapsed().as_secs_f64();
     let test = if data
@@ -213,6 +222,8 @@ fn main() -> Result<()> {
             "trainable_recurrent_coordinates": selected.len(), "epochs": epochs, "seed": seed,
             "head_learning_rate": head_lr, "training_seconds": training_seconds,
             "inputs": inputs,
+            "head_objective": head.objective_name(),
+            "persistence_metric": "raw_observation_mse",
             "optimizer_step_before": start_step, "optimizer_step_after": trainer.optimizer_step(),
             "before_train": before_train, "after_train": head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Train, inputs)?,
             "before_validation": before_validation, "after_validation": head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Validation, inputs)?,

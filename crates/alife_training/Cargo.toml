@@ -49,3 +49,8 @@ required-features = ["cpu-backend"]
 name = "capture_predictive_world"
 path = "src/bin/capture_predictive_world.rs"
 required-features = ["cpu-backend"]
+
+[[bin]]
+name = "run_residual_predictive"
+path = "src/bin/run_residual_predictive.rs"
+required-features = ["cpu-backend"]

@@ -9,7 +9,7 @@ use alife_core::{
     TrainingStageManifest,
 };
 
-fn fixture() -> (CpuFoundationTrainer, PredictiveDataset, PredictiveHead) {
+pub(super) fn fixture() -> (CpuFoundationTrainer, PredictiveDataset, PredictiveHead) {
     let capacity = BrainCapacityClass::n2048();
     let genome = BrainGenome::scaffold(0x7A11, capacity.id());
     let development =
@@ -291,7 +291,9 @@ fn deterministic_updates_preserve_frozen_decoder_state_and_inference_codec() {
     let initial = trainer.checkpoint();
     for _ in 0..3 {
         head.train_step(&mut trainer, &data, 0, 0.03).unwrap();
-        other_head.train_step(&mut other, &data, 0, 0.03).unwrap();
+        other_head
+            .train_epoch(&mut other, &data, 0.03, PredictiveInputs::Full)
+            .unwrap();
     }
     assert_eq!(head, other_head);
     assert_eq!(trainer.checkpoint(), other.checkpoint());

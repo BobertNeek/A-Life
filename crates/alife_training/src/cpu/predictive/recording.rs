@@ -21,6 +21,8 @@ use alife_world::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CausalPair {
+    #[serde(default = "one", skip_serializing_if = "is_one")]
+    pub horizon_ticks: u16,
     pub collection_id: String,
     pub organism_id: u64,
     pub source_sequence: u64,
@@ -34,13 +36,24 @@ pub struct CausalPair {
     pub target_patch_sha256: [u8; 32],
     pub motor_bundle_sha256: [u8; 32],
 }
+fn one() -> u16 {
+    1
+}
+fn is_one(h: &u16) -> bool {
+    *h == 1
+}
 impl CausalPair {
     pub(super) fn validate(&self, e: &PredictiveEpisode) -> Result<(), TrainingError> {
         if self.collection_id != e.split_group
             || self.organism_id == 0
-            || self.source_sequence.checked_add(1) != Some(self.target_sequence)
-            || self.source_tick.checked_add(1) != Some(self.target_tick)
-            || self.outcome_tick != self.target_tick
+            || self.horizon_ticks == 0
+            || self.horizon_ticks > 32
+            || self
+                .source_sequence
+                .checked_add(u64::from(self.horizon_ticks))
+                != Some(self.target_sequence)
+            || self.source_tick.checked_add(u64::from(self.horizon_ticks)) != Some(self.target_tick)
+            || self.source_tick.checked_add(1) != Some(self.outcome_tick)
             || e.replay.ticks.len() != 1
             || e.replay.burn_in_ticks != 0
         {
@@ -72,12 +85,21 @@ pub struct RecordedGroup {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PublicSimulationRecording {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preparation: Option<PublicPreparation>,
     pub schema_version: u16,
     pub config: PublicCaptureConfig,
     pub source: FoundationTrainingHandoffV1,
     /// Public world inventory is fixed before collection, never fitted to targets.
     pub entity_inventory: Vec<u64>,
     pub groups: Vec<RecordedGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicPreparation {
+    pub scenario: String,
+    pub temperature: f32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -109,6 +131,18 @@ fn game(
 pub fn capture_public_simulation(
     config: PublicCaptureConfig,
 ) -> Result<PublicSimulationRecording, Box<dyn std::error::Error>> {
+    capture_prepared_public(config, None, |_, _| Ok(()))
+}
+
+pub(super) fn capture_prepared_public(
+    config: PublicCaptureConfig,
+    preparation: Option<PublicPreparation>,
+    mut setup: impl FnMut(usize, &mut CanonicalNewGame) -> Result<(), Box<dyn std::error::Error>>,
+) -> Result<PublicSimulationRecording, Box<dyn std::error::Error>> {
+    let temperature = preparation.as_ref().map_or(0.9, |p| p.temperature);
+    if !temperature.is_finite() || temperature <= 0. || temperature > 16. {
+        return Err("invalid collection temperature".into());
+    }
     if config.founder_seed == 0
         || config.world_seeds.contains(&0)
         || config.world_seeds.iter().collect::<BTreeSet<_>>().len() != 3
@@ -161,8 +195,9 @@ pub fn capture_public_simulation(
     )?;
     let mut worlds = Vec::new();
     let mut inventory = BTreeSet::new();
-    for &seed in &config.world_seeds {
-        let g = game(seed, config.founder_seed, &asset)?;
+    for (i, &seed) in config.world_seeds.iter().enumerate() {
+        let mut g = game(seed, config.founder_seed, &asset)?;
+        setup(i, &mut g)?;
         inventory.extend(g.world.object_snapshots().iter().map(|o| o.id.raw()));
         worlds.push(g);
     }
@@ -172,7 +207,7 @@ pub fn capture_public_simulation(
         let mut host = CpuCanonicalHost::new_cohort(world, &trainer, config.sampling_seeds[i])?;
         let mut decisions = Vec::new();
         for _ in 0..config.world_ticks {
-            decisions.extend(host.step(&trainer, 0.9)?.decisions);
+            decisions.extend(host.step(&trainer, temperature)?.decisions);
         }
         groups.push(RecordedGroup {
             collection_id: format!(
@@ -193,6 +228,7 @@ pub fn capture_public_simulation(
         return Err("collection changed the founder optimizer".into());
     }
     Ok(PublicSimulationRecording {
+        preparation,
         schema_version: 1,
         config,
         source,
@@ -343,7 +379,7 @@ pub fn public_schema(inventory: &[u64]) -> PredictiveSchema {
     }
 }
 
-fn observation(d: &CpuCollectedDecision) -> Vec<f32> {
+pub(super) fn observation(d: &CpuCollectedDecision) -> Vec<f32> {
     let pre = d.patch.pre_action();
     let b = pre
         .body()
@@ -570,6 +606,7 @@ pub fn convert_recording(
             stats.native_replay_max_absolute_error =
                 stats.native_replay_max_absolute_error.max(error);
             let evidence = CausalPair {
+                horizon_ticks: 1,
                 collection_id: group.collection_id.clone(),
                 organism_id: a.organism_id.raw(),
                 source_sequence: pre.sequence_id.raw(),
