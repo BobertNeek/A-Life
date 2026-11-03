@@ -4,6 +4,8 @@ use alife_core::{ActivationFunction, BrainPhenotype, CompiledSynapseKind, Decode
 
 #[cfg(test)]
 mod cadence_assay;
+mod cadence_rows;
+use cadence_rows::CadenceRows;
 
 pub(super) fn route_fires(raw: u8, step: usize) -> bool {
     match raw {
@@ -36,9 +38,7 @@ fn derivative(x: f32, kind: ActivationFunction) -> f32 {
 pub(super) struct SparseGraph {
     incoming: Vec<Vec<usize>>,
     decoders: [Vec<usize>; 8],
-    // Experimental index selection exists only in libtest, never in a trainer binary.
-    #[cfg(test)]
-    cadence_rows: Option<cadence_assay::CadenceRows>,
+    cadence_rows: Option<CadenceRows>,
 }
 pub(super) struct Tape {
     pub evaluation: TrainingReplayEvaluation,
@@ -64,9 +64,25 @@ impl SparseGraph {
         Self {
             incoming,
             decoders,
-            #[cfg(test)]
             cadence_rows: None,
         }
+    }
+    pub(super) fn set_cadence_rows(&mut self, p: &BrainPhenotype, enabled: bool) {
+        self.cadence_rows = enabled.then(|| {
+            CadenceRows::new(&self.incoming, |id| {
+                p.projections()[p.synapses()[id].route_index() as usize]
+                    .update_cadence()
+                    .raw()
+            })
+        });
+    }
+    pub(super) fn cadence_enabled(&self) -> bool {
+        self.cadence_rows.is_some()
+    }
+    fn incoming_at(&self, target: usize, step: usize) -> &[usize] {
+        self.cadence_rows
+            .as_ref()
+            .map_or(&self.incoming[target], |p| p.row(target, step))
     }
     pub fn forward(
         &self,
@@ -103,10 +119,7 @@ impl SparseGraph {
                 let mut act = vec![0.; n];
                 for target in 0..n {
                     let mut sum = 0.;
-                    #[cfg(test)]
-                    let incoming = self.assay_incoming(target, step);
-                    #[cfg(not(test))]
-                    let incoming = &self.incoming[target];
+                    let incoming = self.incoming_at(target, step);
                     for &id in incoming {
                         let s = &p.synapses()[id];
                         if tick.enabled_routes[s.route_index() as usize]
@@ -316,10 +329,7 @@ impl SparseGraph {
                     gm[step + 1][i] * gate * d.metabolic_decay() - delta[i] * d.homeostatic_gain();
             }
             for (target, _) in delta.iter().enumerate() {
-                #[cfg(test)]
-                let incoming = self.assay_incoming(target, local);
-                #[cfg(not(test))]
-                let incoming = &self.incoming[target];
+                let incoming = self.incoming_at(target, local);
                 for &id in incoming {
                     let s = &p.synapses()[id];
                     if tick.enabled_routes[s.route_index() as usize]

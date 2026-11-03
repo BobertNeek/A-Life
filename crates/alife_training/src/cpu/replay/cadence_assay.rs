@@ -6,66 +6,6 @@ use crate::cpu::{hotpath_bench, CpuFoundationTrainer};
 use crate::{AdamWConfig, StageTrainableMask, TrainingFrozenSynapse};
 use std::{hint::black_box, time::Instant};
 
-pub(super) struct CadenceRows {
-    offsets: [Vec<usize>; 3],
-    ids: [Vec<usize>; 3],
-}
-
-fn class(step: usize) -> usize {
-    if step == 0 {
-        0
-    } else if step.is_multiple_of(2) {
-        2
-    } else {
-        1
-    }
-}
-
-impl CadenceRows {
-    fn new(incoming: &[Vec<usize>], cadence: impl Fn(usize) -> u8) -> Self {
-        let mut offsets: [Vec<usize>; 3] = Default::default();
-        let mut ids: [Vec<usize>; 3] = Default::default();
-        for step in 0..3 {
-            offsets[step].push(0);
-            for row in incoming {
-                ids[step].extend(
-                    row.iter()
-                        .copied()
-                        .filter(|&id| route_fires(cadence(id), step)),
-                );
-                offsets[step].push(ids[step].len());
-            }
-        }
-        Self { offsets, ids }
-    }
-    fn row(&self, target: usize, step: usize) -> &[usize] {
-        let c = class(step);
-        &self.ids[c][self.offsets[c][target]..self.offsets[c][target + 1]]
-    }
-    fn payload_bytes(&self) -> usize {
-        self.offsets
-            .iter()
-            .chain(&self.ids)
-            .map(|v| v.len() * size_of::<usize>())
-            .sum()
-    }
-}
-
-impl SparseGraph {
-    fn enable_cadence_assay(&mut self, p: &BrainPhenotype) {
-        self.cadence_rows = Some(CadenceRows::new(&self.incoming, |id| {
-            p.projections()[p.synapses()[id].route_index() as usize]
-                .update_cadence()
-                .raw()
-        }));
-    }
-    pub(super) fn assay_incoming(&self, target: usize, step: usize) -> &[usize] {
-        self.cadence_rows
-            .as_ref()
-            .map_or(&self.incoming[target], |p| p.row(target, step))
-    }
-}
-
 fn learner(p: &BrainPhenotype, s: &alife_core::FoundationWeightAsset) -> CpuFoundationTrainer {
     let ids = (0..p.synapses().len() as u32)
         .filter(|i| i % 11 != 0)
@@ -205,7 +145,7 @@ fn complete_tapes_gradients_and_adam_remain_bit_exact() {
     for variant in 0..8 {
         let mut baseline = learner(&p, &s);
         let mut candidate = learner(&p, &s);
-        candidate.graph.enable_cadence_assay(&p);
+        candidate.graph.set_cadence_rows(&p, true);
         let q = sequence(&baseline, 6, variant % 3, variant);
         let baseline_work = work(&baseline.graph, &p, &q);
         let candidate_work = work(&candidate.graph, &p, &q);
@@ -241,7 +181,7 @@ fn complete_tapes_gradients_and_adam_remain_bit_exact() {
     let t = learner(&p, &s);
     let q = sequence(&t, 3, 0, 0);
     let mut corrupted = SparseGraph::new(&p);
-    corrupted.enable_cadence_assay(&p);
+    corrupted.set_cadence_rows(&p, true);
     // Falsifier: deleting an active contribution must break complete-state equality.
     let plan = corrupted.cadence_rows.as_mut().unwrap();
     let index = plan.ids[0]
@@ -267,7 +207,7 @@ fn work(g: &SparseGraph, p: &BrainPhenotype, q: &TrainingSequence) -> (usize, us
         for step in 0..tick.microstep_count as usize {
             let multiplicity = 1 + usize::from(tick_index >= q.burn_in_ticks);
             for target in 0..p.neuron_count() as usize {
-                let row = g.assay_incoming(target, step);
+                let row = g.incoming_at(target, step);
                 visits += row.len() * multiplicity;
                 contributions += row
                     .iter()
@@ -292,7 +232,7 @@ fn paired_full_replay_measurement() {
     let baseline = SparseGraph::new(&p);
     let mut candidate = SparseGraph::new(&p);
     let at = Instant::now();
-    candidate.enable_cadence_assay(&p);
+    candidate.set_cadence_rows(&p, true);
     let build_ms = at.elapsed().as_secs_f64() * 1000.;
     let mut results = Vec::new();
     for (ticks, burn) in [(40, 8), (256, 0), (384, 128)] {
