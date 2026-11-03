@@ -18,8 +18,10 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
 mod evaluation;
+mod predictive_smoke;
 mod round;
 pub use evaluation::*;
+pub use predictive_smoke::*;
 pub use round::*;
 type Result<T> = CpuContinuationResult<T>;
 

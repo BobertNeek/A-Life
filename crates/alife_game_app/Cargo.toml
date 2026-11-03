@@ -6,6 +6,11 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
+name = "run_predictive_care_smoke"
+path = "src/bin/run_predictive_care_smoke.rs"
+required-features = ["cpu-training"]
+
+[[bin]]
 name = "train_cpu_care"
 path = "src/bin/train_cpu_care.rs"
 required-features = ["cpu-training"]
