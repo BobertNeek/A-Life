@@ -267,7 +267,7 @@ impl CareSeedReservation {
             "output":config.output,"source":previous,"source_sha256":provenance["source_sha256"],
             "source_policy_version":provenance["native_source_receipt"]["policy_version"],
             "lesson":request.lesson,"decisions":request.decisions,"food_need_condition":request.food_need_condition,
-            "food_offset":request.food_offset,
+            "food_offset":request.food_offset,"layout":request.layout,
             "seed_admission":provenance["seed_admission"]}));
         write_atomic(&ledger_path, &ledger)?;
         Ok(Self {
@@ -677,6 +677,15 @@ pub(super) fn collection_attempts(lane: &Path) -> Result<Vec<Value>> {
 }
 
 pub(super) fn validate_food_offset_binding(attempt: &Value, episode: &Value) -> Result<()> {
+    let requested_layout: Option<super::CpuCareLayout> = serde_json::from_value(attempt["layout"].clone())?;
+    let actual_layout: Option<super::CpuCareLayout> = serde_json::from_value(episode["layout"].clone())?;
+    if requested_layout != actual_layout {
+        return Err("CPU layout differs from its reserved attempt".into());
+    }
+    if let Some(layout) = requested_layout {
+        layout.validate(serde_json::from_value(attempt["lesson"].clone())?,
+            serde_json::from_value(attempt["food_offset"].clone())?)?;
+    }
     // Missing fields in historical receipts mean legacy seed-derived placement.
     let requested: Option<[f32; 2]> = serde_json::from_value(attempt["food_offset"].clone())?;
     let actual: Option<[f32; 2]> = serde_json::from_value(episode["food_offset"].clone())?;
@@ -978,6 +987,17 @@ pub(super) fn validate_care_output(output: &Path, receipt: &Value) -> Result<()>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn authored_layout_receipts_bind_walls_not_only_food() {
+        use serde_json::json;
+        let first = json!({"lesson":"feeding", "layout":{"rows":["#######","#L#..F#","#.....#","#######"]}});
+        let other = json!({"lesson":"feeding", "layout":{"rows":["#######","#L...F#","#.#...#","#######"]}});
+        super::validate_food_offset_binding(&first, &first).unwrap();
+        assert!(super::validate_food_offset_binding(&first, &other).is_err());
+        assert!(super::validate_food_offset_binding(&json!({"lesson":"feeding"}), &first).is_err());
+        assert!(super::validate_food_offset_binding(&first, &json!({})).is_err());
+    }
+
     #[test]
     fn food_offset_receipts_bind_geometry_without_rewriting_legacy() {
         use serde_json::json;

@@ -28,11 +28,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Capture formatter patch
+        run: |
+          cargo fmt --all
+          git diff --binary > /tmp/map-format.patch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: map-format-patch
+          path: /tmp/map-format.patch
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Native position and binding contracts
-        run: cargo test --locked -p alife_game_app --no-default-features --features cpu-training --lib food_offset -- --nocapture
+        run: |
+          cargo test --locked -p alife_game_app --no-default-features --features cpu-training --lib food_offset -- --nocapture
+          cargo test --locked -p alife_game_app --no-default-features --features cpu-training --lib authored_ -- --nocapture
       - name: Build real CPU fixture executables
         run: cargo build --locked -p alife_game_app --no-default-features --features cpu-training --bin train_cpu_care --bin train_cpu_care_round
       - name: Model HTTP mock through native map assessment and sampler

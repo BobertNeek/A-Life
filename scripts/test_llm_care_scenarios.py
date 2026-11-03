@@ -8,16 +8,16 @@ import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from llm_care_scenarios import request_recipe, strict_json
-from llm_care_scenarios import LEGEND, compile_recipe
+from llm_care_scenarios import LEGEND, RANDOM_ROLL, compile_recipe
 from care_frontier_sampler import select
 
 
 def fixtures():
     recipe = {"schema": 1, "legend": LEGEND.copy(), "scenarios": [
-        {"id": "held", "map": ["C..F"], "condition": "newborn_v1", "difficulty": 0,
-         "goal": "nourish_and_survive", "random_roll": "native_seeded_v1"},
-        {"id": "feeding", "map": ["F...C"], "condition": "newborn_v1", "difficulty": 1,
-         "goal": "nourish_and_survive", "random_roll": "native_seeded_v1"}]}
+        {"id": "held", "map": ["#####", "#L.F#", "#####"], "condition": "newborn_v1", "difficulty": 0,
+         "goal": "nourish_and_survive", "random_roll": copy.deepcopy(RANDOM_ROLL)},
+        {"id": "feeding", "map": ["#####", "#F.L#", "#####"], "condition": "newborn_v1", "difficulty": 1,
+         "goal": "nourish_and_survive", "random_roll": copy.deepcopy(RANDOM_ROLL)}]}
     host = {"decision_budget": 64, "slots": 1, "sampler_seed": 42, "current_difficulty": 1,
             "pool_seeds": {"held": [101], "feeding": [102]},
             "holdout_seeds": {"held": [201], "feeding": [202]}}
@@ -30,7 +30,7 @@ class RecipeTests(unittest.TestCase):
         bank = compile_recipe(recipe, host)
         self.assertEqual(bank, compile_recipe(recipe, host))
         self.assertEqual([f['lesson'] for f in bank['families']], ['feeding', 'feeding'])
-        rows = [dict(lesson='feeding', food_need_condition='newborn_v1', food_offset=[-4, 0], seed=i,
+        rows = [dict(lesson='feeding', food_need_condition='newborn_v1', layout={'rows': ['#####', '#F.L#', '#####']}, seed=i,
                      decisions=64, temperature=1.0, actor_sha256='a', value_sha256='b',
                      policy_version=1, source_sha256='c', success=False,
                      survived_evaluated_window=True) for i in (301, 302, 303)]
@@ -40,10 +40,10 @@ class RecipeTests(unittest.TestCase):
 
     def test_rejects_unmapped_map_and_unsafe_overrides(self):
         recipe, host = fixtures()
-        for mutate in (lambda r: r['scenarios'][0].update(map=['C # F']),
+        for mutate in (lambda r: r['scenarios'][0].update(map=['#####', '#L#F#', '#####']),
                        lambda r: r['scenarios'][0].update(reward=9),
                        lambda r: r['scenarios'][0].update(random_roll='choose_seed'),
-                       lambda r: r['legend'].update(C='wall')):
+                       lambda r: r['legend'].update(L='wall')):
             bad = copy.deepcopy(recipe); mutate(bad)
             with self.assertRaises(ValueError): compile_recipe(bad, host)
 
@@ -62,10 +62,20 @@ class RecipeTests(unittest.TestCase):
         try:
             value = request_recipe('http://127.0.0.1:%s/v1/chat/completions' % server.server_port,
                                    'fixture-model', 'recipe instructions')
-            self.assertEqual(compile_recipe(value, host)['families'][0]['food_offset'], [3, 0])
+            self.assertEqual(compile_recipe(value, host)['families'][0]['layout'], {'rows': ['#####', '#L.F#', '#####']})
             self.assertEqual(calls[0]['model'], 'fixture-model')
         finally:
             server.shutdown(); thread.join(); server.server_close()
+
+    def test_walls_are_distinct_sampler_families_and_unreachable_rejected(self):
+        recipe, host = fixtures()
+        recipe['scenarios'][1]['map'] = ['#####', '#L.F#', '#...#', '#####']
+        first = compile_recipe(recipe, host)
+        self.assertNotEqual(first['families'][0]['layout'], first['families'][1]['layout'])
+        recipe['scenarios'][1]['map'] = ['#####', '#L#F#', '#####']
+        with self.assertRaises(ValueError): compile_recipe(recipe, host)
+        recipe['scenarios'][1]['map'] = ['#####', '#L.F.', '#####']
+        with self.assertRaises(ValueError): compile_recipe(recipe, host)
 
     def test_duplicate_json_keys_and_nonfinite_rejected(self):
         for text in ('{"a":1,"a":2}', '{"a":NaN}'):
@@ -84,7 +94,7 @@ class RecipeTests(unittest.TestCase):
                           Path(os.environ['ALIFE_FRONTIER_TEST_ROUND']), 2, 3, 1, bank, discovery)
             result = pilot.run()
             self.assertEqual(len(result['discovery']), 3)
-            self.assertTrue(all(row['food_offset'] == [3, 0] for row in result['discovery']))
+            self.assertTrue(all(row['layout'] == {'rows': ['#####', '#L.F#', '#####']} for row in result['discovery']))
             self.assertIn('difficulty_after', json.loads((pilot.root / 'selection.json').read_text()))
 
     def test_seed_overlap_and_unsupported_condition_reject(self):

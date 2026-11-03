@@ -18,6 +18,8 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
 mod evaluation;
+mod layout;
+pub use layout::CpuCareLayout;
 mod round;
 pub use evaluation::*;
 pub use round::*;
@@ -46,6 +48,7 @@ pub struct CpuCareRequest {
     pub food_need_condition: FoundationFoodNeedCondition,
     /// Optional world X/Z displacement from the founder; feeding only.
     pub food_offset: Option<[f32; 2]>,
+    pub layout: Option<CpuCareLayout>,
     pub seed_history: Option<PathBuf>,
     pub known_exclusions: bool,
     /// Optional bulky debug recording; the in-memory training rows are unchanged.
@@ -111,6 +114,9 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         return Err("CPU care requires an explicit supported care lesson, 1..=128 decisions and exact seed history (or an unreserved development fixture)".into());
     }
     validate_food_offset(request.lesson, request.food_offset)?;
+    if let Some(layout) = &request.layout {
+        layout.validate(request.lesson, request.food_offset)?;
+    }
     request
         .food_need_condition
         .validate_lesson(Some(request.lesson))?;
@@ -323,7 +329,9 @@ impl CpuEpisodeHooks for CareEpisode {
         Ok(())
     }
     fn prepare_world(&mut self, world: &mut alife_world::HeadlessWorld) -> Result<()> {
-        let food_position = if let Some([x, z]) = self.request.food_offset {
+        let food_position = if let Some(layout) = &self.request.layout {
+            Some(layout.prepare(world)?)
+        } else if let Some([x, z]) = self.request.food_offset {
             // Resolve against the same grounded origin used by the constructor.
             // Its second grounding call is a no-op once terrain exists.
             crate::foundation_training::ground_foundation_training_world(world)?;
@@ -610,6 +618,9 @@ impl CpuEpisodeHooks for CareEpisode {
             "semantic_prior":self.prior.as_ref().map(|p| &p.metrics),
             "prior_failure_policy":"log_and_continue_without_prior",
             "critic_optimizer":alife_training::PpoConfig::default().value_optimizer});
+        if let Some(layout) = &self.request.layout {
+            metadata["layout"] = json!(layout);
+        }
         if let Some(offset) = self.request.food_offset {
             metadata["food_offset"] = json!(offset);
         }
@@ -680,6 +691,64 @@ mod collect_only_tests {
     use super::*;
 
     #[test]
+    fn authored_layout_places_food_and_persists_collision_without_replacing_founder() {
+        let asset = crate::initial_n2048_care_asset(42).unwrap();
+        let mut config = alife_world::CanonicalNewGameConfig::phase3(42, 1).unwrap();
+        config.brain_class = alife_core::BrainScaleTier::Standard2048;
+        config.sensor_profile = asset.manifest().sensor_profile();
+        let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+        let mut world = game.world;
+        let (organism, founder) = world.organism_entity_ids()[0];
+        let flat = world.entity(founder).unwrap().position;
+        let layout = CpuCareLayout { rows: ["#######", "#L#..F#", "#.....#", "#######"].iter().map(|s| s.to_string()).collect() };
+        let (_, mut episode) = prepare_care_episode(CpuCareRequest {
+            previous: None,
+            output: PathBuf::from("unused-layout-setup-only"),
+            seed: 42,
+            decisions: 3,
+            temperature: 1.0,
+            lesson: FoundationTeacherLesson::Feeding,
+            food_need_condition: FoundationFoodNeedCondition::NewbornV1,
+            food_offset: None,
+            layout: Some(layout),
+            seed_history: None,
+            known_exclusions: false,
+            record_diagnostic_replay: false,
+            fixture: true,
+        }).unwrap();
+        episode.prepare_world(&mut world).unwrap();
+        assert_eq!(world.organism_entity_ids()[0], (organism, founder));
+        let origin = alife_core::Vec3f::new(flat.x, 0.0, flat.y);
+        assert_eq!(world.entity(founder).unwrap().position, origin);
+        let food = world.entity(world.entity_id("food-01").unwrap()).unwrap().position;
+        assert_eq!(food.x, origin.x + 8.0);
+        assert_eq!(food.z, origin.z);
+        assert!(world.terrain().unwrap().resolve_move(origin, food).is_none());
+        assert!(world.terrain().unwrap().resolve_move(origin, alife_core::Vec3f::new(origin.x, 0.0, origin.z + 2.0)).is_some());
+        for label in ["obstacle-01", "obstacle-02", "hazard-01", "food-02"] {
+            if let Some(id) = world.entity_id(label) {
+                assert!(world.entity(id).unwrap().position.x < origin.x - 50.0);
+            }
+        }
+        let save = alife_world::PortableSaveFile::from_headless_world(
+            "authored-layout-persistence-test",
+            &world,
+            alife_world::RuntimeConfig::deterministic_default(42, config.brain_class),
+            alife_world::AssetManifest::empty(),
+            game.creatures,
+        ).unwrap();
+        let decoded = alife_world::PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap()).unwrap();
+        let restored = decoded.restore_headless_world().unwrap();
+        assert_eq!(restored.terrain_binding(), world.terrain_binding());
+        assert_eq!(restored.organism_entity_ids(), world.organism_entity_ids());
+        assert_eq!(restored.entity(founder).unwrap().position, origin);
+        assert!(restored.terrain().unwrap().resolve_move(origin, food).is_none());
+        let before = world.canonical_signature_digest().unwrap();
+        assert!(episode.request.layout.as_ref().unwrap().prepare(&mut world).is_err());
+        assert_eq!(world.canonical_signature_digest().unwrap(), before);
+    }
+
+    #[test]
     fn food_offset_rejects_invalid_geometry_and_other_lessons() {
         use FoundationTeacherLesson::*;
         for offset in [
@@ -718,6 +787,7 @@ mod collect_only_tests {
                 lesson: FoundationTeacherLesson::Feeding,
                 food_need_condition: FoundationFoodNeedCondition::NewbornV1,
                 food_offset: Some(offset),
+                layout: None,
                 seed_history: None,
                 known_exclusions: false,
                 record_diagnostic_replay: false,
@@ -761,6 +831,7 @@ mod collect_only_tests {
                 lesson,
                 food_need_condition: FoundationFoodNeedCondition::OrdinaryHealthyAgingV1,
                 food_offset: None,
+                layout: None,
                 seed_history: None,
                 known_exclusions: false,
                 record_diagnostic_replay: false,
@@ -908,6 +979,7 @@ mod collect_only_tests {
             lesson: FoundationTeacherLesson::EatHeldFood,
             food_need_condition: crate::FoundationFoodNeedCondition::default(),
             food_offset: None,
+            layout: None,
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: false,
@@ -1067,6 +1139,7 @@ mod collect_only_tests {
             lesson: FoundationTeacherLesson::EatHeldFood,
             food_need_condition: crate::FoundationFoodNeedCondition::default(),
             food_offset: None,
+            layout: None,
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: true,

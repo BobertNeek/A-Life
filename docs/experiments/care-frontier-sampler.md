@@ -96,19 +96,20 @@ The model never chooses executables, paths, budgets, or seeds. Set
 `ALIFE_SCENARIO_API_KEY` only if the selected provider requires it. The chosen
 provider receives the prompt, model name, and family IDs; no checkpoint is sent.
 
-The current map language has exactly one `C` creature and one `F` food on a
-rectangular 1–9-cell grid. A cell is one world unit; columns increase world X,
-rows increase world Z. For example `C..F` sets food 3 units in +X relative to
-the founder. `.` means unspecified: it does not clear terrain or objects. Only
-feeding is supported. Food must be 2–4 units from the creature. Native setup
-and action validation remain authoritative; this does not prove reachability or
-clearance. Obstacles, custom terrain, movable entities, additional goals and
-arbitrary physical maps are rejected, not silently approximated.
+The map language has exactly one `L` learner and one `F` food on a rectangular
+3–17-cell grid with a complete `#` wall border; `.` marks open space. A cell is
+two world units; columns increase world X and rows world Z. For example
+`["#####", "#L.F#", "#####"]` places food four units east of the learner.
+The native world builds solid terrain walls, validates connectivity against its
+movement authority, and places the food and founder at their map locations.
+Map validation rejects invalid or unreachable scenes; a route is not proof the
+learner can solve the task. The current goal is feeding and does not support
+additional object classes, terrain types, or goals.
 
-Each recipe explicitly names `nourish_and_survive` and `native_seeded_v1`.
-The latter is a native seed, not a model-specified distribution: the game uses
-it for its existing seeded scenario variation, while the map fixes the food
-position. Host-provided disjoint pool, holdout and discovery seeds remain in
+Each recipe explicitly names `nourish_and_survive` and the supported food
+variety roll: `(seed // 12) % 3`, mapping 0 to root, 1 to fruit, and 2 to seed.
+This matches native scene construction. The host chooses seeds, so no probability
+distribution over a selected set of seeds is assumed. The map fixes geometry. Host-provided disjoint pool, holdout and discovery seeds remain in
 control. The generated bank feeds the same observed-outcome difficulty selector
 as the other native templates. Holdouts never drive selection; three or more
 current-tier trials are required to move at most one tier up or down.

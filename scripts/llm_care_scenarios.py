@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Generate bounded care-sampler banks from an untrusted LLM recipe.
 
-Maps encode validated relative food placement in native feeding scenarios.
-Unsupported symbols or placements reject; native world construction remains authoritative.
+Maps encode bounded native wall and food layouts for feeding scenarios.
+Unsupported symbols and unreachable layouts reject; native movement remains authoritative.
 """
 import argparse
 import json
@@ -10,31 +10,32 @@ import os
 import urllib.request
 from pathlib import Path
 
-from care_frontier_sampler import validate_bank
+from care_frontier_sampler import validate_bank, validate_layout
 
-# Grid coordinates are relative to the creature. One cell is one world unit;
-# columns increase world X, rows increase world Z. Only feeding scenes are
-# supported. Other entities remain under native scene construction.
-LEGEND = {"C": "creature", "F": "food", ".": "unspecified"}
+# A finite 2 m grid; columns increase world X and rows world Z. The learner
+# anchors the inherited founder. Native terrain owns wall and movement physics.
+LEGEND = {"L": "learner", "F": "food", ".": "open", "#": "wall"}
 GOAL = "nourish_and_survive"
+RANDOM_ROLL = {"kind": "food_variety_by_seed_v1", "formula": "(seed // 12) % 3",
+               "outcomes": ["root", "fruit", "seed"]}
 
 
-def map_offset(rows):
-    if (not isinstance(rows, list) or not 1 <= len(rows) <= 9
-            or any(not isinstance(row, str) or not 1 <= len(row) <= 9 for row in rows)
-            or len({len(row) for row in rows}) != 1):
-        raise ValueError("rectangular 1..9-cell ASCII map required")
-    cells = [(x, z, ch) for z, row in enumerate(rows) for x, ch in enumerate(row)]
-    if any(ch not in LEGEND for _, _, ch in cells):
-        raise ValueError("unsupported map symbol")
-    creature = [(x, z) for x, z, ch in cells if ch == "C"]
-    food = [(x, z) for x, z, ch in cells if ch == "F"]
-    if len(creature) != 1 or len(food) != 1:
-        raise ValueError("exactly one creature and one food required")
-    offset = [food[0][0] - creature[0][0], food[0][1] - creature[0][1]]
-    if not 4 <= sum(n*n for n in offset) <= 16:
-        raise ValueError("food must be 2 to 4 world units from creature")
-    return offset
+def map_layout(rows):
+    layout = {"rows": rows}
+    validate_layout(layout)
+    # Fast syntactic connectivity precheck. The native terrain authority still
+    # validates body clearance and movement over every path edge.
+    start = next((x, z) for z, row in enumerate(rows) for x, c in enumerate(row) if c == "L")
+    target = next((x, z) for z, row in enumerate(rows) for x, c in enumerate(row) if c == "F")
+    seen, todo = {start}, [start]
+    for x, z in todo:
+        for nx, nz in ((x+1,z), (x-1,z), (x,z+1), (x,z-1)):
+            if (0 <= nz < len(rows) and 0 <= nx < len(rows[0]) and rows[nz][nx] != "#"
+                    and (nx,nz) not in seen):
+                seen.add((nx,nz)); todo.append((nx,nz))
+    if target not in seen:
+        raise ValueError("food is unreachable in the proposed grid")
+    return layout
 
 
 def compile_recipe(recipe, host):
@@ -47,12 +48,12 @@ def compile_recipe(recipe, host):
     for scenario in scenarios:
         if not isinstance(scenario, dict) or set(scenario) != {"id", "map", "condition", "difficulty", "goal", "random_roll"}:
             raise ValueError("invalid scenario fields")
-        offset = map_offset(scenario["map"])
-        if scenario["goal"] != GOAL or scenario["random_roll"] != "native_seeded_v1":
+        layout = map_layout(scenario["map"])
+        if scenario["goal"] != GOAL or scenario["random_roll"] != RANDOM_ROLL:
             raise ValueError("unsupported goal or random roll")
         families.append({"id": scenario["id"], "lesson": "feeding",
                          "food_need_condition": scenario["condition"],
-                         "placement": "ascii_grid_v1", "food_offset": offset,
+                         "placement": "ascii_layout_v1", "layout": layout,
                          "difficulty": scenario["difficulty"]})
     if not isinstance(host, dict) or set(host) != {"decision_budget", "slots", "sampler_seed", "current_difficulty", "pool_seeds", "holdout_seeds"}:
         raise ValueError("invalid host settings")
@@ -111,12 +112,13 @@ def main():
     host = strict_json(args.host.read_text(encoding="utf-8"))
     prompt = ("Return JSON only with schema=1, legend=" + json.dumps(LEGEND) +
               ", and scenarios array. Each scenario has id, map (rectangular array of strings), condition, difficulty, "
-              "goal='nourish_and_survive', random_roll='native_seeded_v1'. The map has exactly one C and F; "
-              "all other cells are '.', meaning unspecified terrain, not cleared space. One cell is one world unit, columns are X and rows are Z. "
-              "Food must be 2–4 units from the creature, for example ['C..F']. "
+              "goal='nourish_and_survive', and random_roll=" + json.dumps(RANDOM_ROLL) + ". The map is 3..17 rows/columns, "
+              "has exactly one L and one F, uses '#' for walls and '.' for open space, with a complete wall border. "
+              "Learner and food must connect by cardinal open cells. Example: ['#####','#L.F#','#####']. "
+              "Each cell is 2 world units, columns increase X, rows increase Z. "
               "Allowed conditions: newborn_v1, ordinary_healthy_aging_v1. "
               "Use exactly these family IDs: " + json.dumps(list(host["pool_seeds"])) +
-              ". Use distinct map/condition pairs. Difficulties form contiguous integers starting at 0 and include "
+              ". Use distinct maps/condition pairs. Difficulties form contiguous integers starting at 0 and include "
               + str(host["current_difficulty"]) + ". Do not add fields.")
     recipe = request_recipe(args.endpoint, args.model, prompt, os.environ.get("ALIFE_SCENARIO_API_KEY"))
     bank = compile_recipe(recipe, host)

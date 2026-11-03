@@ -28,6 +28,8 @@ pub struct CpuCareEvaluationRequest {
     pub food_need_condition: FoundationFoodNeedCondition,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub food_offset: Option<[f32; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<CpuCareLayout>,
     #[serde(default)]
     pub known_exclusions: bool,
 }
@@ -286,7 +288,7 @@ fn verify_recovery(
         )?;
     }
     admission::validate_food_offset_binding(
-        &json!({"lesson":request.lesson,"food_offset":request.food_offset}),
+        &json!({"lesson":request.lesson,"food_offset":request.food_offset,"layout":request.layout}),
         &episode,
     )?;
     let trace: Value = read_json(&request.output.join("care-trace.json"))?;
@@ -324,6 +326,9 @@ fn verify_recovery(
 /// existing output is preserved and refused, never resumed or overwritten.
 pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value> {
     validate_food_offset(request.lesson, request.food_offset)?;
+    if let Some(layout) = &request.layout {
+        layout.validate(request.lesson, request.food_offset)?;
+    }
     request
         .food_need_condition
         .validate_lesson(Some(request.lesson))?;
@@ -343,6 +348,7 @@ pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value>
         lesson: request.lesson,
         food_need_condition: request.food_need_condition,
         food_offset: request.food_offset,
+        layout: request.layout.clone(),
         seed_history: Some(request.seed_history.clone()),
         known_exclusions: request.known_exclusions,
         record_diagnostic_replay: false,
@@ -448,6 +454,12 @@ mod tests {
         let legacy = r#"{"previous":"source","output":"output","seed_history":"history","seed":42,"decisions":3,"temperature":1.0,"lesson":"feeding","known_exclusions":false}"#;
         let mut request: super::CpuCareEvaluationRequest = serde_json::from_str(legacy).unwrap();
         assert_eq!(serde_json::to_string(&request).unwrap(), legacy);
+        assert!(request.layout.is_none());
+        let mut mapped = request.clone();
+        mapped.layout = Some(CpuCareLayout { rows: vec!["#####".into(), "#L.F#".into(), "#####".into()] });
+        let mapped_bytes = serde_json::to_string(&mapped).unwrap();
+        assert_ne!(mapped_bytes, legacy);
+        assert_eq!(serde_json::from_str::<super::CpuCareEvaluationRequest>(&mapped_bytes).unwrap(), mapped);
         assert!(request.food_offset.is_none());
         request.food_offset = Some([2.0, -3.0]);
         let geometry_encoded = serde_json::to_string(&request).unwrap();
@@ -528,6 +540,7 @@ mod tests {
             lesson: FoundationTeacherLesson::EatHeldFood,
             food_need_condition: crate::FoundationFoodNeedCondition::default(),
             food_offset: None,
+            layout: None,
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: false,
@@ -565,6 +578,7 @@ mod tests {
         let request = CpuCareEvaluationRequest {
             food_need_condition: FoundationFoodNeedCondition::default(),
             food_offset: None,
+            layout: None,
             previous: source.clone(),
             output: fixture.0.join("assessment"),
             seed_history: history.clone(),

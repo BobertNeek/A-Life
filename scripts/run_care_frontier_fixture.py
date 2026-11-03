@@ -83,6 +83,8 @@ class Pilot:
                    "lesson": family["lesson"], "food_need_condition": family["food_need_condition"], "known_exclusions": False}
         if "food_offset" in family:
             request["food_offset"] = family["food_offset"]
+        if "layout" in family:
+            request["layout"] = family["layout"]
         spec = prefix.with_suffix(".request.json")
         write_new(spec, request)
         native_result = self.command(self.round, ["evaluate", "--spec", spec], self.root)
@@ -145,6 +147,8 @@ class Pilot:
                     if "food_offset" in family:
                         arguments.extend(["--food-offset-x", family["food_offset"][0],
                                           "--food-offset-z", family["food_offset"][1]])
+                    if "layout" in family:
+                        arguments.extend(["--layout-json", json.dumps(family["layout"], separators=(",", ":"))])
                     receipt = self.command(self.care, arguments, lane)
                     records.append({"task": task, "receipt": receipt})
                     self.frozen[str(output)] = raw_tree(output)
