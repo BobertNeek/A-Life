@@ -44,9 +44,16 @@ pub struct ResolvedLobeBudget {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ConnectionBudgetPlan {
     phenotype: PhenotypeHash,
+    source_weights_identity: String,
     selected: Vec<bool>,
     pub topology_identity: String,
     pub budgets: Vec<ResolvedLobeBudget>,
+}
+
+/// Forward-only compact index view; cannot update or export a native founder.
+pub struct DisposableCompactReplay {
+    view: crate::cpu::DetachedRecurrentReplay,
+    topology_identity: String,
 }
 
 /// Only constructs a fresh public built-in founder. There is deliberately no
@@ -58,6 +65,59 @@ pub struct DisposableBudgetFounder {
 }
 
 impl DisposableBudgetFounder {
+    fn source_weights_identity(&self) -> Result<String> {
+        identity(&(
+            "disposable-budget-source-weights-v1",
+            self.trainer.phenotype().phenotype_hash(),
+            self.trainer
+                .weights()
+                .iter()
+                .map(|v| v.to_bits())
+                .collect::<Vec<_>>(),
+        ))
+    }
+
+    fn validate_plan(&self, plan: &ConnectionBudgetPlan) -> Result<()> {
+        if plan.phenotype != self.trainer.phenotype().phenotype_hash()
+            || plan.selected.len() != self.trainer.weights().len()
+            || plan.source_weights_identity != self.source_weights_identity()?
+            || plan.topology_identity
+                != identity(&(
+                    "disposable-connection-mask-v1",
+                    plan.phenotype,
+                    &plan.selected,
+                ))?
+        {
+            return Err("plan/source phenotype, weights or mask identity mismatch".into());
+        }
+        Ok(())
+    }
+
+    pub fn compact_view(&self, plan: &ConnectionBudgetPlan) -> Result<DisposableCompactReplay> {
+        self.validate_plan(plan)?;
+        Ok(DisposableCompactReplay {
+            view: self.trainer.detached_recurrent_replay(&plan.selected)?,
+            topology_identity: plan.topology_identity.clone(),
+        })
+    }
+
+    /// Phenotype-compatible input is evaluated counterfactually under this exact
+    /// source's weights. No world ownership, native continuation or gradients are claimed.
+    pub fn evaluate_compact(
+        &self,
+        view: &DisposableCompactReplay,
+        sequence: &TrainingSequence,
+    ) -> Result<TrainingReplayEvaluation> {
+        sequence.validate_for(self.trainer.phenotype())?;
+        if sequence
+            .ticks
+            .iter()
+            .any(|t| !t.structural_synapses.is_empty())
+        {
+            return Err("unbudgeted structural edges".into());
+        }
+        Ok(view.view.evaluate(&self.trainer, sequence)?)
+    }
     pub fn new(seed: u64) -> Result<Self> {
         if seed == 0 {
             return Err("experiment seed must be nonzero".into());
@@ -182,6 +242,7 @@ impl DisposableBudgetFounder {
         ))?;
         Ok(ConnectionBudgetPlan {
             phenotype: p.phenotype_hash(),
+            source_weights_identity: self.source_weights_identity()?,
             selected,
             topology_identity,
             budgets: capacities
@@ -234,12 +295,11 @@ impl DisposableBudgetFounder {
     ) -> Result<TrainingSequence> {
         let p = self.trainer.phenotype();
         sequence.validate_for(p)?;
-        if plan.phenotype != p.phenotype_hash()
-            || plan.selected.len() != p.synapses().len()
-            || sequence
-                .ticks
-                .iter()
-                .any(|t| !t.structural_synapses.is_empty())
+        self.validate_plan(plan)?;
+        if sequence
+            .ticks
+            .iter()
+            .any(|t| !t.structural_synapses.is_empty())
         {
             return Err("plan/source identity mismatch or unbudgeted structural edges".into());
         }
@@ -253,6 +313,114 @@ impl DisposableBudgetFounder {
         }
         result.validate_for(p)?;
         Ok(result)
+    }
+
+    /// Bounded real-frame comparison of complete replay alternatives. World
+    /// collection remains baseline-only; views are not training/optimizer inputs.
+    pub fn run_compact(mut self, ticks: usize) -> Result<serde_json::Value> {
+        if !(4..=256).contains(&ticks) {
+            return Err("ticks must be 4..256".into());
+        }
+        let started = Instant::now();
+        let before = self.trainer.checkpoint();
+        let source_identity = identity(&before)?;
+        let collected_at = Instant::now();
+        let mut rows = Vec::new();
+        let mut scores = vec![0.; self.trainer.weights().len()];
+        let mut warmup = 0;
+        for step in 0..ticks {
+            for d in self.host.step(&self.trainer, 1.)?.decisions {
+                if step < ticks / 2 {
+                    warmup += 1;
+                    for (i, s) in self.trainer.phenotype().synapses().iter().enumerate() {
+                        scores[i] += (f64::from(d.initial.activations[s.source() as usize])
+                            * f64::from(d.initial.activations[s.target() as usize])
+                            * f64::from(s.genetic_weight()))
+                        .abs();
+                    }
+                } else {
+                    rows.push(TrainingSequence {
+                        phenotype_hash: self.trainer.phenotype().phenotype_hash(),
+                        initial: d.initial,
+                        ticks: vec![d.replay_tick],
+                        burn_in_ticks: 0,
+                        memory_candidate_gain: self
+                            .trainer
+                            .phenotype()
+                            .candidate_decoder()
+                            .memory_channel()
+                            .map_or(0., |m| m.max_candidate_gain()),
+                    });
+                }
+            }
+        }
+        let collection_seconds = collected_at.elapsed().as_secs_f64();
+        if warmup == 0 || rows.is_empty() {
+            return Err("no awake warmup or held-out frames".into());
+        }
+        let baseline = rows
+            .iter()
+            .map(|q| self.trainer.evaluate_replay(q))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let mut results = Vec::new();
+        for fan_in in [0, 16, 64] {
+            let plan = self.capped_fan_in_plan(fan_in, Some(&scores))?;
+            let view = self.compact_view(&plan)?;
+            let selected = plan.selected.iter().filter(|v| **v).count();
+            let mut pairs = Vec::new();
+            for pair in 0..7 {
+                let mut seconds = [0.; 2];
+                let mut outputs = [None, None];
+                for which in if pair % 2 == 0 { [0, 1] } else { [1, 0] } {
+                    let at = Instant::now();
+                    let output = if which == 0 {
+                        rows.iter()
+                            .map(|q| {
+                                let cancelled = self.intervene(&plan, q)?;
+                                Ok(self.trainer.evaluate_replay(&cancelled)?)
+                            })
+                            .collect::<Result<Vec<_>>>()?
+                    } else {
+                        // Include view construction/source binding in every pair.
+                        let prepared = self.compact_view(&plan)?;
+                        rows.iter()
+                            .map(|q| self.evaluate_compact(&prepared, q))
+                            .collect::<Result<Vec<_>>>()?
+                    };
+                    std::hint::black_box(&output);
+                    seconds[which] = at.elapsed().as_secs_f64();
+                    outputs[which] = Some(output);
+                }
+                let a = outputs[0].take().unwrap();
+                let b = outputs[1].take().unwrap();
+                if evaluation_bits(&a) != evaluation_bits(&b) {
+                    return Err("compact/cancellation full-state bit mismatch".into());
+                }
+                pairs.push(serde_json::json!({"pair":pair,"first":if pair%2==0 {"cancellation"} else {"compact"},"cancellation_seconds":seconds[0],"compact_seconds":seconds[1]}));
+            }
+            results.push(serde_json::json!({"requested_average_fan_in":fan_in,"lobe_budgets":plan.budgets,"selected_recurrent_entries":selected,
+                "view_cadence_entries_step0":selected,"topology_identity":view.topology_identity,"source_weights_identity":plan.source_weights_identity,"pairs":pairs}));
+        }
+        let after = rows
+            .iter()
+            .map(|q| self.trainer.evaluate_replay(q))
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        if identity(&self.trainer.checkpoint())? != source_identity
+            || evaluation_bits(&baseline) != evaluation_bits(&after)
+        {
+            return Err("retained baseline changed".into());
+        }
+        Ok(
+            serde_json::json!({"experiment":"disposable-bound-compact-forward-replay","backend":"native-cpu","seed":self.seed,"world_ticks":ticks,"warmup_decisions":warmup,"held_out_replay_rows":rows.len(),
+            "source_checkpoint_identity":source_identity,"source_weights_identity":self.source_weights_identity()?,"frame_identity":identity(&rows)?,"baseline_retained":true,"optimizer_updates":0,
+            "collection_seconds":collection_seconds,"experiment_total_seconds":started.elapsed().as_secs_f64(),"trials":results,
+            "limits":["real canonical baseline frames; detached counterfactual evaluation, not experimental world rollout or capability",
+                "source phenotype and exact weights are bound; neither checkpoint hash nor phenotype proves world ownership",
+                "paired scopes include all replay preparation: cancellation validation/hash/clone versus compact graph construction/binding plus forward",
+                "selection, collection and controls are outside pair scopes but inside experiment total; source construction is inside CLI total",
+                "warm pairs alternate order; first output retained during second call; output drops outside pair timing",
+                "no training, gradients, optimizer changes, accepted checkpoint, topology migration or GPU"]}),
+        )
     }
 
     /// Collect actual canonical-world frames; rank on the first half, evaluate
@@ -361,6 +529,21 @@ impl DisposableBudgetFounder {
     }
 }
 
+fn evaluation_bits(values: &[TrainingReplayEvaluation]) -> Vec<Vec<u32>> {
+    values
+        .iter()
+        .flat_map(|v| {
+            [
+                &v.candidate_logits,
+                &v.final_activations,
+                &v.final_activity_ema,
+                &v.final_metabolic_load,
+            ]
+        })
+        .flat_map(|rows| rows.iter().map(|r| r.iter().map(|v| v.to_bits()).collect()))
+        .collect()
+}
+
 fn logit_delta(a: &TrainingReplayEvaluation, b: &TrainingReplayEvaluation) -> f32 {
     a.candidate_logits
         .iter()
@@ -404,6 +587,73 @@ mod tests {
                 .memory_channel()
                 .map_or(0., |m| m.max_candidate_gain()),
         }
+    }
+
+    #[test]
+    fn compact_real_frames_match_zero_full_and_sixteen_cancellation_bits() {
+        for seed in [70501, 70502] {
+            let mut e = DisposableBudgetFounder::new(seed).unwrap();
+            let before = e.trainer.checkpoint();
+            let rows = (0..4).map(|_| real_row(&mut e)).collect::<Vec<_>>();
+            let original = rows.clone();
+            let baseline = rows
+                .iter()
+                .map(|q| e.trainer.evaluate_replay(q).unwrap())
+                .collect::<Vec<_>>();
+            let mut effects = Vec::new();
+            for fan_in in [0, 16, 64] {
+                let plan = e.capped_fan_in_plan(fan_in, None).unwrap();
+                let view = e.compact_view(&plan).unwrap();
+                let a = rows
+                    .iter()
+                    .map(|q| {
+                        e.trainer
+                            .evaluate_replay(&e.intervene(&plan, q).unwrap())
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+                let b = rows
+                    .iter()
+                    .map(|q| e.evaluate_compact(&view, q).unwrap())
+                    .collect::<Vec<_>>();
+                assert_eq!(evaluation_bits(&a), evaluation_bits(&b));
+                effects.push(evaluation_bits(&b));
+                if fan_in == 64 {
+                    assert_eq!(evaluation_bits(&baseline), evaluation_bits(&b));
+                }
+            }
+            assert_ne!(
+                effects[0], effects[2],
+                "falsifier: all-zero recurrent view must change this fixture"
+            );
+            assert_eq!(rows, original);
+            assert_eq!(before, e.trainer.checkpoint());
+            assert_eq!(
+                evaluation_bits(&baseline),
+                evaluation_bits(
+                    &rows
+                        .iter()
+                        .map(|q| e.trainer.evaluate_replay(q).unwrap())
+                        .collect::<Vec<_>>()
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn compact_and_cancellation_reject_changed_weights_at_same_phenotype() {
+        let mut e = DisposableBudgetFounder::new(70503).unwrap();
+        let q = real_row(&mut e);
+        let plan = e.capped_fan_in_plan(16, None).unwrap();
+        let view = e.compact_view(&plan).unwrap();
+        let phenotype = e.trainer.phenotype().phenotype_hash();
+        let mut foreign = e.trainer.checkpoint();
+        foreign.weights[17] += 0.001;
+        e.trainer.restore_checkpoint(foreign).unwrap();
+        assert_eq!(phenotype, e.trainer.phenotype().phenotype_hash());
+        assert!(e.intervene(&plan, &q).is_err());
+        assert!(e.compact_view(&plan).is_err());
+        assert!(e.evaluate_compact(&view, &q).is_err());
     }
 
     #[test]

@@ -68,6 +68,36 @@ pub enum CpuReplayExecution {
     CadenceCsr,
 }
 
+/// Crate-private, forward-only counterfactual view. No training/checkpoint API.
+pub(crate) struct DetachedRecurrentReplay {
+    phenotype: alife_core::PhenotypeHash,
+    source_weight_bits: Vec<u32>,
+    graph: replay::SparseGraph,
+}
+
+impl DetachedRecurrentReplay {
+    pub(crate) fn evaluate(
+        &self,
+        trainer: &CpuFoundationTrainer,
+        sequence: &TrainingSequence,
+    ) -> Result<TrainingReplayEvaluation, TrainingError> {
+        sequence.validate_for(trainer.phenotype())?;
+        if self.phenotype != trainer.phenotype().phenotype_hash()
+            || !self
+                .source_weight_bits
+                .iter()
+                .copied()
+                .eq(trainer.weights().iter().map(|v| v.to_bits()))
+        {
+            return Err(invalid());
+        }
+        Ok(self
+            .graph
+            .forward(trainer.phenotype(), trainer.weights(), sequence)?
+            .evaluation)
+    }
+}
+
 /// Offline founder policy/optimizer. Cloning an organism never clones this.
 pub struct CpuFoundationTrainer {
     phenotype: BrainPhenotype,
@@ -77,6 +107,21 @@ pub struct CpuFoundationTrainer {
 }
 
 impl CpuFoundationTrainer {
+    pub(crate) fn detached_recurrent_replay(
+        &self,
+        selected: &[bool],
+    ) -> Result<DetachedRecurrentReplay, TrainingError> {
+        if selected.len() != self.weights().len() {
+            return Err(invalid());
+        }
+        let mut graph = replay::SparseGraph::new(&self.phenotype);
+        graph.set_selected_cadence_rows(&self.phenotype, selected);
+        Ok(DetachedRecurrentReplay {
+            phenotype: self.phenotype.phenotype_hash(),
+            source_weight_bits: self.weights().iter().map(|v| v.to_bits()).collect(),
+            graph,
+        })
+    }
     pub fn new(
         phenotype: BrainPhenotype,
         source: FoundationWeightAsset,

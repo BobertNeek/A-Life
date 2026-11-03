@@ -79,6 +79,17 @@ impl SparseGraph {
     pub(super) fn cadence_enabled(&self) -> bool {
         self.cadence_rows.is_some()
     }
+    pub(super) fn set_selected_cadence_rows(&mut self, p: &BrainPhenotype, selected: &[bool]) {
+        self.cadence_rows = Some(CadenceRows::new(&self.incoming, |id| {
+            if selected[id] {
+                p.projections()[p.synapses()[id].route_index() as usize]
+                    .update_cadence()
+                    .raw()
+            } else {
+                u8::MAX // Existing cadence predicate rejects every phase.
+            }
+        }));
+    }
     fn incoming_at(&self, target: usize, step: usize) -> &[usize] {
         self.cadence_rows
             .as_ref()
