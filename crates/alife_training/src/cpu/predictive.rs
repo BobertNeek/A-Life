@@ -592,4 +592,6 @@ pub fn persistence_metrics(
 }
 
 #[cfg(test)]
+mod native_finetune_tests;
+#[cfg(test)]
 mod tests;

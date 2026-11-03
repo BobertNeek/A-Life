@@ -114,6 +114,15 @@ integer ages, optimizer step and mask. It returns a disposable
 cohort/native learner. It does not forge a campaign receipt, reset an optimizer,
 restore a historical individual or promote the experimental founder.
 
+The native route is exercised by
+`exported_predictive_founder_completes_actual_native_disposable_ppo_update`.
+It collects fresh actual native decisions after export/rebind and runs the
+existing PPO/residual-critic learner: actor steps 0 -> 1 (predictive), unchanged
+at 1 through rebind, then 2 after one native update; critic step 1. Frozen
+coordinates, source identity and retained optimizer history are checked, with
+no auxiliary head in native state and no source/experimental-state mutation.
+This is continuation correctness evidence, not behavioral improvement.
+
 Run matched controls from the same initial handoff/dataset/seed and epoch count
 with `--inputs full`, `--inputs no_action` and `--inputs no_recurrent`. The latter
 uses zero recurrent features and freezes native genetic weights, training only
