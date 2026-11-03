@@ -1,5 +1,6 @@
 //! Disposable offline trial. Source handoff/dataset are read-only, and neither
-//! accepted lineage nor gameplay saves nor trained checkpoints are written.
+//! accepted lineage nor gameplay saves are written. Experimental state export
+//! is explicit, new-file-only and never an accepted native continuation receipt.
 use alife_core::CompiledSynapseKind;
 use alife_training::{
     cpu::{predictive::*, CpuFoundationTrainer},
@@ -10,6 +11,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     error::Error,
     fs,
+    path::Path,
     time::Instant,
 };
 
@@ -27,12 +29,19 @@ fn main() -> Result<()> {
     let mut iter = std::env::args().skip(1);
     while let Some(key) = iter.next() {
         if key == "--help" || key == "-h" {
-            println!("train_predictive_pilot --handoff NATIVE_HANDOFF.json --dataset DATASET.json --seed SEED [--epochs 4] [--head-lr 0.03]\n\nOpt-in native CPU recurrent BPTT/Adam plus a disposable nonlinear action-conditioned sensor/body head (SGD). Requires explicit train/validation groups and complete categorical motor bundles. Reports MSE/timing as JSON; writes no files, checkpoints or accepted lineage. Dataset provenance is caller-owned. This is not evidence of gameplay gains or a throughput improvement.");
+            println!("train_predictive_pilot (--handoff NATIVE_HANDOFF.json | --resume EXPERIMENTAL_STATE.json) --dataset DATASET.json --seed SEED [--epochs 4] [--head-lr 0.03] [--inputs full|no_action|no_recurrent] [--output NEW_EXPERIMENTAL_STATE.json]\n\nOpt-in native CPU recurrent BPTT/Adam plus a disposable nonlinear sensor/body prediction head (SGD). Reports heldout MSE and persistence comparison. Optional checksummed experimental state retains original source, topology, config, weights, moments, integer ages and training-only head, and can be resumed with a compatible dataset. Source files and existing output files are never overwritten. No accepted lineage or gameplay save is written. Loss changes do not establish behavioral or throughput gains.");
             return Ok(());
         }
         if !matches!(
             key.as_str(),
-            "--handoff" | "--dataset" | "--seed" | "--epochs" | "--head-lr"
+            "--handoff"
+                | "--resume"
+                | "--dataset"
+                | "--seed"
+                | "--epochs"
+                | "--head-lr"
+                | "--output"
+                | "--inputs"
         ) {
             return Err(format!("unknown argument {key}").into());
         }
@@ -41,7 +50,15 @@ fn main() -> Result<()> {
             return Err("duplicate argument".into());
         }
     }
-    let source = read(&args.remove("--handoff").ok_or("--handoff is required")?)?;
+    let handoff = args.remove("--handoff");
+    let resume = args.remove("--resume");
+    if handoff.is_some() == resume.is_some() {
+        return Err("choose exactly one of --handoff or --resume".into());
+    }
+    let output = args.remove("--output");
+    if output.as_ref().is_some_and(|p| Path::new(p).exists()) {
+        return Err("experimental output must be a new file".into());
+    }
     let dataset_bytes = read(&args.remove("--dataset").ok_or("--dataset is required")?)?;
     let seed: u64 = args.remove("--seed").ok_or("--seed is required")?.parse()?;
     let epochs: usize = args
@@ -55,14 +72,49 @@ fn main() -> Result<()> {
     if !(1..=256).contains(&epochs) || !head_lr.is_finite() || head_lr <= 0. {
         return Err("require 1..256 epochs and finite positive head learning rate".into());
     }
-    let admitted = serde_json::from_slice::<FoundationTrainingHandoffV1>(&source)?.admit()?;
-    let mut trainer = CpuFoundationTrainer::from_checkpoint(
-        admitted.phenotype,
-        admitted.foundation,
-        admitted.actor,
-    )?;
+    let inputs = match args.remove("--inputs").as_deref().unwrap_or("full") {
+        "full" => PredictiveInputs::Full,
+        "no_action" => PredictiveInputs::NoAction,
+        "no_recurrent" => PredictiveInputs::NoRecurrent,
+        _ => return Err("invalid --inputs".into()),
+    };
+    let parent = resume
+        .as_ref()
+        .map(|p| artifact::ExperimentalPredictiveState::read(Path::new(p)))
+        .transpose()?;
+    let source = match &parent {
+        Some(p) => p.payload.source.clone(),
+        None => serde_json::from_slice::<FoundationTrainingHandoffV1>(&read(
+            handoff.as_ref().unwrap(),
+        )?)?,
+    };
+    let (mut trainer, restored_head) = if let Some(p) = &parent {
+        let (t, h) = p.restore()?;
+        (t, Some(h))
+    } else {
+        let admitted = source.clone().admit()?;
+        (
+            CpuFoundationTrainer::from_checkpoint(
+                admitted.phenotype,
+                admitted.foundation,
+                admitted.actor,
+            )?,
+            None,
+        )
+    };
     let data: PredictiveDataset = serde_json::from_slice(&dataset_bytes)?;
     data.validate_for(trainer.phenotype())?;
+    let run = artifact::PredictiveRun::from_dataset(
+        seed,
+        &data,
+        Sha256::digest(&dataset_bytes).into(),
+        epochs,
+        head_lr,
+        inputs,
+    )?;
+    if let Some(previous) = &parent {
+        previous.validate_next_run(&run)?;
+    }
     // Respect every existing frozen coordinate and both native Adam moments.
     // Freeze decoder coordinates explicitly: zero gradients alone would still
     // permit weight decay or an old Adam momentum to move them.
@@ -94,16 +146,20 @@ fn main() -> Result<()> {
         .into_iter()
         .take(32)
         .collect();
-    let mut head =
-        PredictiveHead::new(trainer.phenotype(), data.schema.clone(), neurons, 16, seed)?;
-    let before_train = head.evaluate(&trainer, &data, PredictiveSplit::Train)?;
-    let before_validation = head.evaluate(&trainer, &data, PredictiveSplit::Validation)?;
+    let mut head = match restored_head {
+        Some(h) => h,
+        None => PredictiveHead::new(trainer.phenotype(), data.schema.clone(), neurons, 16, seed)?,
+    };
+    let before_train =
+        head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Train, inputs)?;
+    let before_validation =
+        head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Validation, inputs)?;
     let start_step = trainer.optimizer_step();
     let start = Instant::now();
     for _ in 0..epochs {
         for (index, e) in data.episodes.iter().enumerate() {
             if e.split == PredictiveSplit::Train {
-                head.train_step(&mut trainer, &data, index, head_lr)?;
+                head.train_step_with_inputs(&mut trainer, &data, index, head_lr, inputs)?;
             }
         }
     }
@@ -113,7 +169,36 @@ fn main() -> Result<()> {
         .iter()
         .any(|e| e.split == PredictiveSplit::Test)
     {
-        Some(head.evaluate(&trainer, &data, PredictiveSplit::Test)?)
+        Some(head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Test, inputs)?)
+    } else {
+        None
+    };
+    let state_identity = if let Some(path) = &output {
+        let state = artifact::ExperimentalPredictiveState::capture(
+            &trainer,
+            &head,
+            source.clone(),
+            run,
+            parent.as_ref(),
+        )?;
+        state.write_new(Path::new(path))?;
+        let restored = artifact::ExperimentalPredictiveState::read(Path::new(path))?;
+        let (restored_trainer, restored_head) = restored.restore()?;
+        if restored_trainer.checkpoint() != trainer.checkpoint() || restored_head != head {
+            return Err("experimental state did not restore exactly".into());
+        }
+        let (disposable, _) = restored.into_disposable_founder()?;
+        let a = trainer.checkpoint();
+        let b = disposable.checkpoint();
+        if a.weights != b.weights
+            || a.first_moment != b.first_moment
+            || a.second_moment != b.second_moment
+            || a.update_ages != b.update_ages
+            || a.optimizer_step != b.optimizer_step
+        {
+            return Err("disposable native rebind lost training state".into());
+        }
+        Some(restored.payload_sha256)
     } else {
         None
     };
@@ -123,14 +208,19 @@ fn main() -> Result<()> {
             "experiment": "action-conditioned-sensor-body-pilot-v1", "backend": trainer.hardware_receipt(),
             "source_description": data.source_description,
             "dataset_sha256": format!("{:x}", Sha256::digest(&dataset_bytes)),
-            "handoff_sha256": format!("{:x}", Sha256::digest(&source)),
+            "source_identity_sha256": artifact::identity(&source)?,
             "neurons": trainer.phenotype().neuron_count(), "synapses": trainer.weights().len(),
             "trainable_recurrent_coordinates": selected.len(), "epochs": epochs, "seed": seed,
             "head_learning_rate": head_lr, "training_seconds": training_seconds,
+            "inputs": inputs,
             "optimizer_step_before": start_step, "optimizer_step_after": trainer.optimizer_step(),
-            "before_train": before_train, "after_train": head.evaluate(&trainer, &data, PredictiveSplit::Train)?,
-            "before_validation": before_validation, "after_validation": head.evaluate(&trainer, &data, PredictiveSplit::Validation)?,
-            "after_test": test, "head_exported": false, "checkpoint_written": false,
+            "before_train": before_train, "after_train": head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Train, inputs)?,
+            "before_validation": before_validation, "after_validation": head.evaluate_with_inputs(&trainer, &data, PredictiveSplit::Validation, inputs)?,
+            "after_test": test, "persistence_train": persistence_metrics(&data,PredictiveSplit::Train)?,
+            "persistence_validation": persistence_metrics(&data,PredictiveSplit::Validation)?,
+            "persistence_test": if data.episodes.iter().any(|e|e.split==PredictiveSplit::Test) { Some(persistence_metrics(&data,PredictiveSplit::Test)?) } else {None},
+            "head_exported_to_experiment_only": output.is_some(), "experimental_state": output,
+            "experimental_state_payload_sha256": state_identity, "accepted_checkpoint_written": false,
             "throughput_improvement_measured": false, "gameplay_gain_measured": false
         })
     );

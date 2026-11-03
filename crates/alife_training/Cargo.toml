@@ -44,3 +44,8 @@ required-features = ["receipt-lineage"]
 name = "train_predictive_pilot"
 path = "src/bin/train_predictive_pilot.rs"
 required-features = ["cpu-backend"]
+
+[[bin]]
+name = "capture_predictive_world"
+path = "src/bin/capture_predictive_world.rs"
+required-features = ["cpu-backend"]

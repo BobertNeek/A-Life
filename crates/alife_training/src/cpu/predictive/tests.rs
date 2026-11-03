@@ -56,6 +56,7 @@ fn fixture() -> (CpuFoundationTrainer, PredictiveDataset, PredictiveHead) {
             .map_or(0., |m| m.max_candidate_gain()),
     };
     let schema = PredictiveSchema {
+        continuous_motors: vec![],
         version: "authored-numeric-contract-v1".into(),
         sensors: vec!["fixture_sensor".into()],
         body: vec!["fixture_body".into()],
@@ -71,6 +72,8 @@ fn fixture() -> (CpuFoundationTrainer, PredictiveDataset, PredictiveHead) {
         ],
     };
     let episode = PredictiveEpisode {
+        motor_values: vec![],
+        evidence: None,
         episode_id: "fixture-train".into(),
         split_group: "fixture-life-a".into(),
         split: PredictiveSplit::Train,
@@ -198,7 +201,13 @@ fn predictive_mse_reaches_native_recurrent_bptt_and_matches_finite_differences()
     );
     // Check the head's chain rule independently as well.
     let tape = trainer.forward(&e.replay).unwrap();
-    let pass = head.pass(e, &tape.evaluation.final_activations).unwrap();
+    let pass = head
+        .pass(
+            e,
+            &tape.evaluation.final_activations,
+            PredictiveInputs::Full,
+        )
+        .unwrap();
     let id = pass.gradients[0]
         .iter()
         .enumerate()
@@ -211,7 +220,11 @@ fn predictive_mse_reaches_native_recurrent_bptt_and_matches_finite_differences()
         perturbed.input_weights[id] += direction * epsilon;
         losses.push(
             perturbed
-                .pass(e, &tape.evaluation.final_activations)
+                .pass(
+                    e,
+                    &tape.evaluation.final_activations,
+                    PredictiveInputs::Full,
+                )
                 .unwrap()
                 .metrics
                 .mse,
@@ -342,6 +355,236 @@ fn topology_schema_and_bad_update_rejections_are_atomic() {
     assert!(head.train_step(&mut trainer, &wrong, 0, 0.03).is_err());
     assert_eq!(head, original);
     assert_eq!(trainer.checkpoint(), checkpoint);
+}
+
+#[test]
+fn continuous_motor_conditioning_and_explicit_ablations_work() {
+    let (trainer, mut data, _) = fixture();
+    data.schema.continuous_motors = vec!["motor.duration".into()];
+    for e in &mut data.episodes {
+        e.motor_values = vec![vec![0.2]; 3];
+    }
+    let head = PredictiveHead::new(
+        trainer.phenotype(),
+        data.schema.clone(),
+        vec![trainer
+            .phenotype()
+            .synapses()
+            .iter()
+            .find(|s| s.kind() == CompiledSynapseKind::Recurrent)
+            .unwrap()
+            .target() as usize],
+        8,
+        71,
+    )
+    .unwrap();
+    let baseline = head.probe(&trainer, &data, 0).unwrap();
+    let mut changed = data.clone();
+    changed.episodes[0].motor_values[1][0] = 0.8;
+    assert_ne!(
+        baseline.predictions[1],
+        head.probe(&trainer, &changed, 0).unwrap().predictions[1]
+    );
+    let a = head
+        .evaluate_with_inputs(
+            &trainer,
+            &data,
+            PredictiveSplit::Train,
+            PredictiveInputs::NoAction,
+        )
+        .unwrap();
+    let b = head
+        .evaluate_with_inputs(
+            &trainer,
+            &changed,
+            PredictiveSplit::Train,
+            PredictiveInputs::NoAction,
+        )
+        .unwrap();
+    assert_eq!(a, b);
+    changed.episodes[0].motor_values.pop();
+    assert!(changed.validate_for(trainer.phenotype()).is_err());
+}
+
+fn initial_handoff(trainer: &CpuFoundationTrainer) -> crate::FoundationTrainingHandoffV1 {
+    let genome = BrainGenome::scaffold(0x7A11, BrainCapacityClass::n2048().id());
+    let development =
+        DevelopmentState::new(genome.id, Tick::ZERO, NormalizedScalar::new(0.8).unwrap());
+    let (_, inputs) = PhenotypeCompiler::compile_n2048_foundation_candidate(
+        genome,
+        development,
+        trainer.source_foundation.clone(),
+    )
+    .unwrap();
+    crate::FoundationTrainingHandoffV1::new(
+        crate::FoundationTrainingBackendV1::NativeCpu,
+        1,
+        inputs,
+        trainer.checkpoint(),
+        crate::PpoValueHeadCheckpoint {
+            feature_count: trainer.phenotype().neuron_count(),
+            optimizer_step: 0,
+            parameters: vec![0.; (trainer.phenotype().neuron_count() as usize + 1) * 3],
+            last_updated_policy_version: Some(1),
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn experimental_state_recovers_resumes_and_rebinds_without_losing_optimizer_state() {
+    use artifact::*;
+    let (mut trainer, data, mut head) = fixture();
+    let source = initial_handoff(&trainer);
+    let mut aged = trainer.checkpoint();
+    aged.optimizer_step = 16_777_220;
+    for i in 0..aged.weights.len() {
+        aged.update_ages[i] = 16_777_217;
+        aged.first_moment[i] = 1e-7;
+        aged.second_moment[i] = 1e-8;
+    }
+    trainer.restore_checkpoint(aged).unwrap();
+    head.train_step(&mut trainer, &data, 0, 0.03).unwrap();
+    let run = PredictiveRun::from_dataset(
+        71,
+        &data,
+        identity(&data).unwrap(),
+        1,
+        0.03,
+        PredictiveInputs::Full,
+    )
+    .unwrap();
+    let state =
+        ExperimentalPredictiveState::capture(&trainer, &head, source.clone(), run.clone(), None)
+            .unwrap();
+    let root = std::env::temp_dir().join(format!(
+        "predictive-state-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let path = root.join("state.json");
+    state.write_new(&path).unwrap();
+    assert!(state.write_new(&path).is_err());
+    let restored = ExperimentalPredictiveState::read(&path).unwrap();
+    let mut reassigned = data.clone();
+    reassigned.episodes[0].split = PredictiveSplit::Validation;
+    reassigned.episodes[1].split = PredictiveSplit::Train;
+    let reassigned_run = PredictiveRun::from_dataset(
+        71,
+        &reassigned,
+        identity(&reassigned).unwrap(),
+        1,
+        0.03,
+        PredictiveInputs::Full,
+    )
+    .unwrap();
+    assert!(restored.validate_next_run(&reassigned_run).is_err());
+    for e in &mut reassigned.episodes {
+        e.split_group.push_str("-renamed");
+    }
+    let renamed_run = PredictiveRun::from_dataset(
+        71,
+        &reassigned,
+        identity(&reassigned).unwrap(),
+        1,
+        0.03,
+        PredictiveInputs::Full,
+    )
+    .unwrap();
+    assert!(restored.validate_next_run(&renamed_run).is_err());
+    let (mut other, mut other_head) = restored.restore().unwrap();
+    assert_eq!(other.checkpoint(), trainer.checkpoint());
+    assert_eq!(other_head, head);
+    head.train_step(&mut trainer, &data, 0, 0.03).unwrap();
+    other_head.train_step(&mut other, &data, 0, 0.03).unwrap();
+    assert_eq!(other.checkpoint(), trainer.checkpoint());
+    assert_eq!(other_head, head);
+    let next = ExperimentalPredictiveState::capture(
+        &other,
+        &other_head,
+        source.clone(),
+        run,
+        Some(&restored),
+    )
+    .unwrap();
+    assert_eq!(
+        next.payload.parent_state_sha256,
+        Some(restored.payload_sha256)
+    );
+    let (rebound, inputs) = next.into_disposable_founder().unwrap();
+    let a = other.checkpoint();
+    let b = rebound.checkpoint();
+    assert_eq!(a.weights, b.weights);
+    assert_eq!(a.first_moment, b.first_moment);
+    assert_eq!(a.second_moment, b.second_moment);
+    assert_eq!(a.update_ages, b.update_ages);
+    assert_eq!(a.optimizer_step, b.optimizer_step);
+    assert_eq!(a.stage_mask, b.stage_mask);
+    assert_eq!(inputs.n2048_candidate_asset().unwrap().weights(), a.weights);
+    assert_eq!(next.payload.source, source);
+    let pending = root.join(".recoverable.pending");
+    std::fs::rename(&path, &pending).unwrap();
+    assert_eq!(ExperimentalPredictiveState::read(&pending).unwrap(), state);
+    let mut corrupt = state.clone();
+    corrupt.payload.actor.weights[0] += 0.1;
+    assert!(corrupt.restore().is_err());
+    corrupt = state.clone();
+    corrupt.payload.head.input_weights.pop();
+    corrupt.payload_sha256 = identity(&corrupt.payload).unwrap();
+    assert!(corrupt.restore().is_err());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn public_world_capture_roundtrips_causal_pairs_and_rejects_misalignment() {
+    use recording::*;
+    let recording = capture_public_simulation(PublicCaptureConfig {
+        founder_seed: 71,
+        world_seeds: [72, 73, 74],
+        sampling_seeds: [101, 202, 303],
+        world_ticks: 5,
+    })
+    .unwrap();
+    let bytes = serde_json::to_vec(&recording).unwrap();
+    let decoded: PublicSimulationRecording = serde_json::from_slice(&bytes).unwrap();
+    let (data, metrics) = convert_recording(&decoded).unwrap();
+    assert!(metrics.converted_pairs >= 6);
+    assert!(metrics.native_replay_max_absolute_error <= 1e-5);
+    assert_eq!(recording.source.actor.optimizer_step, 0);
+    assert!(data
+        .episodes
+        .iter()
+        .all(|e| e.evidence.as_ref().unwrap().source_tick + 1
+            == e.evidence.as_ref().unwrap().target_tick));
+    assert_eq!(data.schema.continuous_motors.len(), 101);
+    let mut broken = decoded.clone();
+    broken.groups[1].world_seed = broken.groups[0].world_seed;
+    assert!(convert_recording(&broken).is_err());
+    broken = decoded.clone();
+    broken.groups[0].decisions[0].final_features[0] += 0.5;
+    assert!(convert_recording(&broken).is_err());
+    let mut broken_data = data.clone();
+    broken_data.episodes[0]
+        .evidence
+        .as_mut()
+        .unwrap()
+        .outcome_tick += 1;
+    let p = recording.source.clone().admit().unwrap().phenotype;
+    assert!(broken_data.validate_for(&p).is_err());
+    // Observation persistence is evaluated on the exact same scored pairs.
+    assert_eq!(
+        persistence_metrics(&data, PredictiveSplit::Validation)
+            .unwrap()
+            .scored_ticks,
+        data.episodes
+            .iter()
+            .filter(|e| e.split == PredictiveSplit::Validation)
+            .count()
+    );
 }
 
 #[test]

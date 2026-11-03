@@ -1,6 +1,6 @@
 //! Opt-in action-conditioned successor pilot. This head exists only in offline
-//! training memory; neither foundation assets nor gameplay saves contain it.
-//! Observations and full categorical motor bundles are caller-supplied evidence,
+//! training state; neither foundation assets nor gameplay saves contain it.
+//! Observations and full motor bundles are caller-supplied evidence,
 //! not generated rewards or proof of provenance. Lifetime plasticity is frozen
 //! replay context; only native genetic recurrent weights receive BPTT/Adam.
 
@@ -9,6 +9,9 @@ use crate::{TrainingError, TrainingGradientProbe, TrainingSequence};
 use alife_core::{BrainPhenotype, CompiledSynapseKind, PhenotypeHash};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+
+pub mod artifact;
+pub mod recording;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -36,6 +39,8 @@ pub struct PredictiveSchema {
     pub body: Vec<String>,
     /// Every simultaneously executable categorical channel, in canonical order.
     pub motors: Vec<MotorChannel>,
+    #[serde(default)]
+    pub continuous_motors: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -51,6 +56,11 @@ pub struct PredictiveEpisode {
     pub observations: Vec<Vec<f32>>,
     /// N full motor bundles; each choice index is encoded one-hot, never scalar.
     pub actions: Vec<Vec<usize>>,
+    #[serde(default)]
+    pub motor_values: Vec<Vec<f32>>,
+    /// Optional exact native event identity supplied by the recorder adapter.
+    #[serde(default)]
+    pub evidence: Option<recording::CausalPair>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,7 +87,7 @@ impl PredictiveSchema {
         self.sensors.len() + self.body.len()
     }
     fn action_width(&self) -> usize {
-        self.motors.iter().map(|m| m.choices.len()).sum()
+        self.motors.iter().map(|m| m.choices.len()).sum::<usize>() + self.continuous_motors.len()
     }
     fn validate(&self) -> Result<(), TrainingError> {
         if self.version.trim().is_empty()
@@ -93,7 +103,8 @@ impl PredictiveSchema {
                     .collect::<Vec<_>>(),
                 32,
             )
-            || self.motors.iter().any(|m| !names(&m.choices, 64))
+            || self.motors.iter().any(|m| !names(&m.choices, 512))
+            || (!self.continuous_motors.is_empty() && !names(&self.continuous_motors, 256))
         {
             return Err(invalid());
         }
@@ -134,6 +145,14 @@ impl PredictiveDataset {
                     .is_some_and(|s| s != e.split)
                 || e.observations.len() != e.replay.ticks.len() + 1
                 || e.actions.len() != e.replay.ticks.len()
+                || if self.schema.continuous_motors.is_empty() {
+                    !e.motor_values.is_empty()
+                } else {
+                    e.motor_values.len() != e.replay.ticks.len()
+                        || e.motor_values
+                            .iter()
+                            .any(|v| v.len() != self.schema.continuous_motors.len())
+                }
                 || e.observations
                     .iter()
                     .any(|o| o.len() != self.schema.feature_count())
@@ -149,11 +168,18 @@ impl PredictiveDataset {
             for o in &e.observations {
                 finite(o)?;
             }
+            for v in &e.motor_values {
+                finite(v)?;
+            }
+            if let Some(evidence) = &e.evidence {
+                evidence.validate(e)?;
+            }
             // Catch exact copied evidence across splits even if IDs were changed.
             // Group membership remains caller-owned; this is no general near-
             // duplicate or collection-provenance detector.
-            let bytes = serde_json::to_vec(&(&e.replay, &e.observations, &e.actions))
-                .map_err(|_| invalid())?;
+            let bytes =
+                serde_json::to_vec(&(&e.replay, &e.observations, &e.actions, &e.motor_values))
+                    .map_err(|_| invalid())?;
             use sha2::{Digest, Sha256};
             let digest: [u8; 32] = Sha256::digest(bytes).into();
             if contents
@@ -168,8 +194,9 @@ impl PredictiveDataset {
 }
 
 /// Small nonlinear state/action interaction model; deterministic initialization.
-/// No serialization implementation: this experimental head is disposable.
-#[derive(Debug, Clone, PartialEq)]
+/// Serialization is for the separate checksummed experimental state only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PredictiveHead {
     phenotype_hash: PhenotypeHash,
     schema: PredictiveSchema,
@@ -179,6 +206,15 @@ pub struct PredictiveHead {
     hidden_bias: Vec<f32>,
     output_weights: Vec<f32>,
     output_bias: Vec<f32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PredictiveInputs {
+    #[default]
+    Full,
+    NoAction,
+    NoRecurrent,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -251,6 +287,7 @@ impl PredictiveHead {
         trainer: &CpuFoundationTrainer,
         data: &PredictiveDataset,
     ) -> Result<(), TrainingError> {
+        self.validate_shape(trainer.phenotype())?;
         data.validate_for(trainer.phenotype())?;
         if self.phenotype_hash != trainer.phenotype().phenotype_hash() || self.schema != data.schema
         {
@@ -259,10 +296,39 @@ impl PredictiveHead {
         Ok(())
     }
 
+    fn validate_shape(&self, p: &BrainPhenotype) -> Result<(), TrainingError> {
+        self.schema.validate()?;
+        let outputs = self.schema.feature_count();
+        let inputs = self.neurons.len() + outputs + self.schema.action_width();
+        if self.phenotype_hash != p.phenotype_hash()
+            || !(1..=64).contains(&self.hidden)
+            || self.neurons.is_empty()
+            || self.neurons.len() > 256
+            || self.neurons.iter().any(|&i| i >= p.neuron_count() as usize)
+            || self.neurons.iter().collect::<BTreeSet<_>>().len() != self.neurons.len()
+            || self.input_weights.len() != inputs * self.hidden
+            || self.hidden_bias.len() != self.hidden
+            || self.output_weights.len() != outputs * self.hidden
+            || self.output_bias.len() != outputs
+        {
+            return Err(invalid());
+        }
+        for w in [
+            &self.input_weights,
+            &self.hidden_bias,
+            &self.output_weights,
+            &self.output_bias,
+        ] {
+            finite(w)?;
+        }
+        Ok(())
+    }
+
     fn pass(
         &self,
         e: &PredictiveEpisode,
         activations: &[Vec<f32>],
+        inputs_used: PredictiveInputs,
     ) -> Result<HeadPass, TrainingError> {
         let ticks = e.replay.ticks.len();
         let scored_ticks = ticks - e.replay.burn_in_ticks;
@@ -290,9 +356,19 @@ impl PredictiveHead {
                 .iter()
                 .map(|&i| activation[i])
                 .collect::<Vec<_>>();
+            if inputs_used == PredictiveInputs::NoRecurrent {
+                x.fill(0.);
+            }
             x.extend_from_slice(&e.observations[t]);
+            let action_start = x.len();
             for (&choice, channel) in e.actions[t].iter().zip(&self.schema.motors) {
                 x.extend((0..channel.choices.len()).map(|i| f32::from(i == choice)));
+            }
+            if !e.motor_values.is_empty() {
+                x.extend_from_slice(&e.motor_values[t]);
+            }
+            if inputs_used == PredictiveInputs::NoAction {
+                x[action_start..].fill(0.);
             }
             let h = self
                 .input_weights
@@ -324,7 +400,7 @@ impl PredictiveHead {
                     result.gradients[1][j] += dz;
                     for (i, &value) in x.iter().enumerate() {
                         result.gradients[0][j * inputs + i] += dz * value;
-                        if i < self.neurons.len() {
+                        if i < self.neurons.len() && inputs_used != PredictiveInputs::NoRecurrent {
                             result.activation_adjoints[t][self.neurons[i]] +=
                                 dz * self.input_weights[j * inputs + i];
                         }
@@ -353,7 +429,11 @@ impl PredictiveHead {
         self.validate(trainer, data)?;
         let e = data.episodes.get(index).ok_or_else(invalid)?;
         let tape = trainer.forward(&e.replay)?;
-        let pass = self.pass(e, &tape.evaluation.final_activations)?;
+        let pass = self.pass(
+            e,
+            &tape.evaluation.final_activations,
+            PredictiveInputs::Full,
+        )?;
         let recurrent = trainer.graph.backward_from_activations(
             trainer.phenotype(),
             trainer.weights(),
@@ -374,6 +454,16 @@ impl PredictiveHead {
         data: &PredictiveDataset,
         split: PredictiveSplit,
     ) -> Result<PredictiveMetrics, TrainingError> {
+        self.evaluate_with_inputs(trainer, data, split, PredictiveInputs::Full)
+    }
+
+    pub fn evaluate_with_inputs(
+        &self,
+        trainer: &CpuFoundationTrainer,
+        data: &PredictiveDataset,
+        split: PredictiveSplit,
+        inputs: PredictiveInputs,
+    ) -> Result<PredictiveMetrics, TrainingError> {
         self.validate(trainer, data)?;
         let mut metrics = PredictiveMetrics {
             mse: 0.,
@@ -381,7 +471,7 @@ impl PredictiveHead {
         };
         for e in data.episodes.iter().filter(|e| e.split == split) {
             let evaluation = trainer.evaluate_replay(&e.replay)?;
-            let pass = self.pass(e, &evaluation.final_activations)?;
+            let pass = self.pass(e, &evaluation.final_activations, inputs)?;
             metrics.mse += pass.metrics.mse * pass.metrics.scored_ticks as f64;
             metrics.scored_ticks += pass.metrics.scored_ticks;
         }
@@ -402,6 +492,23 @@ impl PredictiveHead {
         index: usize,
         head_learning_rate: f32,
     ) -> Result<PredictiveMetrics, TrainingError> {
+        self.train_step_with_inputs(
+            trainer,
+            data,
+            index,
+            head_learning_rate,
+            PredictiveInputs::Full,
+        )
+    }
+
+    pub fn train_step_with_inputs(
+        &mut self,
+        trainer: &mut CpuFoundationTrainer,
+        data: &PredictiveDataset,
+        index: usize,
+        head_learning_rate: f32,
+        inputs: PredictiveInputs,
+    ) -> Result<PredictiveMetrics, TrainingError> {
         self.validate(trainer, data)?;
         let e = data.episodes.get(index).ok_or_else(invalid)?;
         if e.split != PredictiveSplit::Train
@@ -420,7 +527,7 @@ impl PredictiveHead {
             return Err(invalid());
         }
         let tape = trainer.forward(&e.replay)?;
-        let pass = self.pass(e, &tape.evaluation.final_activations)?;
+        let pass = self.pass(e, &tape.evaluation.final_activations, inputs)?;
         let probe = trainer.graph.backward_from_activations(
             trainer.phenotype(),
             trainer.weights(),
@@ -443,10 +550,45 @@ impl PredictiveHead {
             }
             finite(weights)?;
         }
-        trainer.apply_gradients(&probe.gradients)?;
+        if inputs != PredictiveInputs::NoRecurrent {
+            trainer.apply_gradients(&probe.gradients)?;
+        }
         *self = next;
         Ok(pass.metrics)
     }
+}
+
+/// Fixed current-observation prediction. No labels are fitted or normalization
+/// learned from evaluation rows.
+pub fn persistence_metrics(
+    data: &PredictiveDataset,
+    split: PredictiveSplit,
+) -> Result<PredictiveMetrics, TrainingError> {
+    let mut metrics = PredictiveMetrics {
+        mse: 0.,
+        scored_ticks: 0,
+    };
+    for e in data.episodes.iter().filter(|e| e.split == split) {
+        for t in e.replay.burn_in_ticks..e.replay.ticks.len() {
+            let a = e.observations.get(t).ok_or_else(invalid)?;
+            let b = e.observations.get(t + 1).ok_or_else(invalid)?;
+            if a.is_empty() || a.len() != b.len() {
+                return Err(invalid());
+            }
+            metrics.mse += a
+                .iter()
+                .zip(b)
+                .map(|(a, b)| (f64::from(*a) - f64::from(*b)).powi(2))
+                .sum::<f64>()
+                / a.len() as f64;
+            metrics.scored_ticks += 1;
+        }
+    }
+    if metrics.scored_ticks == 0 || !metrics.mse.is_finite() {
+        return Err(invalid());
+    }
+    metrics.mse /= metrics.scored_ticks as f64;
+    Ok(metrics)
 }
 
 #[cfg(test)]
