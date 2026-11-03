@@ -182,3 +182,29 @@ plans, followed by compact native execution and matched closed-loop trials.
 ```sh
 cargo test --locked -p alife_training --features cpu-backend --lib connection_budget_experiment
 ```
+
+The separate compact-evaluation integration adds a source-weight-bound,
+forward-only index view without changing native topology or training semantics:
+
+```sh
+cargo run --release --locked -p alife_training --features cpu-backend --bin experiment_connection_budget -- --disposable-public-founder --seed 70511 --ticks 32 --compact-eval
+```
+
+It compares complete output bits for 0/16/full masks on held-out canonical-world
+frames. Seven alternating pairs include reference source validation/hash/clone/
+cancellation or compact-view construction/binding/destruction plus forward.
+Returned outputs are destroyed afterward. Neither path controls experimental
+world actions. The receipt reports collection and internal work intervals;
+measure external process wall separately to include startup and final output.
+[Raw results and identities](../../docs/performance/20261103-budget-compact-eval.json)
+record two 32-tick CLI runs (1.230/1.226 s external wall). Pair ratios of roughly
+3.38/2.48/2.17 for zero/16/full selection include substantial preparation savings;
+the full-selection result is evidence against attributing all savings to pruning.
+These are detached forward-replay results, not whole-training or capability gains.
+
+Plans bind phenotype, selected indices and source weights. A compact view checks
+every source weight bit on evaluation. This permits precise phenotype-compatible
+counterfactual replay; it does not claim ownership of an input's original world.
+There is no compact-view gradient, optimizer, checkpoint-export or accepted-source
+entry point. Source changes require a fresh plan/view. Native baseline state and
+all decoder/dendritic behavior are preserved.
