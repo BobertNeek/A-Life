@@ -23,27 +23,6 @@ REQUEST_FIELDS = ("previous", "output", "seed_history", "seed", "decisions", "te
                   "food_need_condition", "known_exclusions")
 
 
-def native_receipt_digest(receipt):
-    # Native save writes a serde_json::Value (sorted keys), while its digest
-    # serializes the typed request in declaration order. Keep that exact order.
-    # This adapter intentionally admits only temperature1 V1 care assessments.
-    request = receipt["request"]
-    require(set(request) in (set(REQUEST_FIELDS), set(REQUEST_FIELDS)-{"food_need_condition"}), "unknown/missing native request fields")
-    require(request["temperature"] == 1.0, "V1 sampler requires native temperature1")
-    ordered = {key: request[key] for key in REQUEST_FIELDS if key in request}
-    ordered["temperature"] = 1.0
-    def sorted_maps(value):
-        if isinstance(value, dict):
-            return {key: sorted_maps(value[key]) for key in sorted(value)}
-        if isinstance(value, list):
-            return [sorted_maps(child) for child in value]
-        return value
-    packet = [receipt["schema_version"], ordered, sorted_maps(receipt["input_sha256"]),
-              sorted_maps(receipt["artifacts"]), sorted_maps(receipt["result"])]
-    encoded = json.dumps(packet, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
-    return list(hashlib.sha256(b"ALIFE-CPU-CARE-EVALUATION-V1" + encoded).digest())
-
-
 def integer(value, lo, hi):
     return type(value) is int and lo <= value <= hi
 
@@ -89,13 +68,9 @@ def validate_bank(bank):
     return families
 
 
-def score_assessment(root):
-    """Checksum/score a native-admitted archive; not a private recovery loader."""
-    root = Path(root)
-    receipt = read_json(root / "care-evaluation.json", 16 * 1024**2)
+def _score_archive_metrics(root, receipt):
+    """Structural metrics only; public callers must first obtain native admission."""
     require(receipt.get("schema_version") == 1, "unsupported native assessment")
-    require(set(receipt) == {"schema_version", "request", "input_sha256", "artifacts", "result", "payload_sha256"}
-            and receipt["payload_sha256"] == native_receipt_digest(receipt), "native assessment payload seal mismatch")
     # Match native evaluation.rs inventory keys, including on Windows. Keep
     # raw_tree's OS-local keys unchanged for its other before/after callers.
     inventory = {}
@@ -155,25 +130,36 @@ def score_assessment(root):
             "receipt_sha256": hashlib.sha256((root / "care-evaluation.json").read_bytes()).hexdigest()}
 
 
-def revalidate_completed(root, binary):
-    """Use the existing native completed-output loader; no new live dispatch."""
+def score_assessment(root, binary):
+    """Admit an existing archive natively, then score; never start a new life.
+
+    Native owns the typed receipt checksum, PathBuf ordering and private recovery
+    validation. Do not duplicate Rust/serde serialization in Python.
+    """
+    root = Path(root)
+    before = raw_tree(root)  # Bounded existing nonsymlink tree, before resolution.
     root = root.resolve(strict=True)
-    before = raw_tree(root)
     receipt = read_json(root / "care-evaluation.json", 16 * 1024**2)
-    require(Path(receipt["request"]["output"]).resolve(strict=True) == root, "native output request differs from selected archive")
-    # Check the seal/shape first, and bind output to this existing completed root.
-    score_assessment(root)
+    require(set(receipt) == {"schema_version", "request", "input_sha256", "artifacts", "result", "payload_sha256"}
+            and receipt["schema_version"] == 1, "unsupported native assessment receipt")
+    request = receipt["request"]
+    require(set(request) in (set(REQUEST_FIELDS), set(REQUEST_FIELDS)-{"food_need_condition"}),
+            "unknown/missing native request fields")
+    require(request["temperature"] == 1.0, "V1 sampler requires native temperature1")
+    require(Path(request["output"]).resolve(strict=True) == root, "native output request differs from selected archive")
+    binary = Path(binary).resolve(strict=True)
     pin = file_pin(binary)
     environment = {k: v for k, v in os.environ.items() if not k.startswith("ALIFE_SLM_")}
     environment.update(ALIFE_SLM_PRIOR="off", ALIFE_SLM_PRIOR_BACKEND="off")
     with tempfile.TemporaryDirectory(prefix="alife-frontier-native-verify-") as tmp:
         spec = Path(tmp) / "request.json"
-        spec.write_text(json.dumps(receipt["request"], ensure_ascii=False), encoding="utf-8")
+        spec.write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
         completed = subprocess.run([str(binary), "evaluate", "--spec", str(spec)], stdin=subprocess.DEVNULL,
                                    capture_output=True, env=environment, timeout=60, check=False)
-    require(completed.returncode == 0 and json.loads(completed.stdout) == receipt["result"], "native completed assessment validation failed")
+    require(completed.returncode == 0 and json.loads(completed.stdout) == receipt["result"],
+            "native completed assessment validation failed")
     require(raw_tree(root) == before and file_pin(binary) == pin, "native read-only verification changed archive/executable")
-    return score_assessment(root)
+    return _score_archive_metrics(root, receipt)
 
 
 def adjust_difficulty(current, successes, trials, maximum):
@@ -265,7 +251,7 @@ def main():
         require(1 <= len(args.assessment) <= 1024, "bounded discovery evidence required before opening archives")
         bank = read_json(args.bank, 1024**2)
         validate_bank(bank)
-        result = select(bank, [revalidate_completed(p, args.native_evaluator.resolve(strict=True)) for p in args.assessment])
+        result = select(bank, [score_assessment(p, args.native_evaluator) for p in args.assessment])
     except (ValueError, KeyError, TypeError, OSError, subprocess.TimeoutExpired) as error:
         parser.error(str(error))
     print(json.dumps(result, sort_keys=True, allow_nan=False))

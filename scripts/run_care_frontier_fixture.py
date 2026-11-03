@@ -86,7 +86,7 @@ class Pilot:
         require(read_json(prefix / "care-evaluation.json")["result"] == native_result
                 and all(native_result[key] == request[key] for key in ("lesson", "seed", "decisions")),
                 "native CLI/receipt/request binding mismatch")
-        scored = score_assessment(prefix)
+        scored = score_assessment(prefix, self.round)
         self.frozen[str(prefix)] = raw_tree(prefix)
         return scored
 
