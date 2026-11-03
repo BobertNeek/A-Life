@@ -1,0 +1,696 @@
+{
+  "schema_version": 1,
+  "source_base_commit": "102e0e720c1641b9e899ff7c53b39a9780b49f37",
+  "publication_scope": "Aggregate numeric evidence only. Full fresh public fixtures remain local; no checkpoint, trajectory, weight, activation or offset payload is published.",
+  "compute": {
+    "cpu": "AMD EPYC 9V74",
+    "visible_cpus": 5,
+    "cpu_quota": 4,
+    "memory_gib": 16,
+    "rust": "1.99.1",
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "nvidia_device_present": false,
+    "nvidia_smi_present": false,
+    "nvcc_present": false,
+    "pytorch_present": false,
+    "cpu_affinity": "unpinned; shared executor"
+  },
+  "native_serial_cpu_assay": {
+    "backend": "scalar-cpu-fp32",
+    "blocks": 96,
+    "full_learner_trials": [
+      {
+        "batch": 1,
+        "full_native_residual_ppo_ms": [
+          19.732184,
+          20.658169,
+          19.80237,
+          21.639803,
+          19.258974000000002
+        ],
+        "packed": false
+      },
+      {
+        "batch": 1,
+        "full_native_residual_ppo_ms": [
+          26.152908,
+          21.98939,
+          19.57417,
+          22.657007999999998,
+          21.073600000000003
+        ],
+        "packed": true
+      },
+      {
+        "batch": 8,
+        "full_native_residual_ppo_ms": [
+          195.159865,
+          201.863232,
+          165.80505100000002,
+          177.404339,
+          163.990866
+        ],
+        "packed": false
+      },
+      {
+        "batch": 8,
+        "full_native_residual_ppo_ms": [
+          174.852961,
+          184.334856,
+          196.818296,
+          212.03267200000002,
+          183.60753899999997
+        ],
+        "packed": true
+      },
+      {
+        "batch": 16,
+        "full_native_residual_ppo_ms": [
+          394.77826300000004,
+          437.685388,
+          415.027861,
+          398.80852100000004,
+          446.167597
+        ],
+        "packed": false
+      },
+      {
+        "batch": 16,
+        "full_native_residual_ppo_ms": [
+          377.43991500000004,
+          396.709856,
+          306.445908,
+          326.138196,
+          332.229447
+        ],
+        "packed": true
+      }
+    ],
+    "limits": "synthetic independent replay windows; separate unchanged full residual-PPO cohort includes admission/critic/update receipts; plan/fixture setup excluded; sequential arms, no statistical speed claim; includes full recurrence/dendrites/structural edges/metabolism/EMA/decoders/native BPTT/Adam; frozen per-tick lifetime/fast context; no collection, disk IO, GPU transfer or CUDA kernel",
+    "pack_genetic_plus_one_tick_ms": [
+      0.040841999999999996,
+      0.024007,
+      0.023876,
+      0.023886,
+      0.023796,
+      0.023866000000000002,
+      0.023826,
+      0.023846,
+      0.023805999999999997,
+      0.023916,
+      0.038908,
+      0.024357,
+      0.023906,
+      0.023826,
+      0.023846,
+      0.023846,
+      0.023816,
+      0.023946000000000002,
+      0.023816,
+      0.023826,
+      0.023836
+    ],
+    "plan_build_ms": [
+      0.875549,
+      0.693175,
+      0.799064,
+      0.752164,
+      0.704932,
+      0.7829999999999999,
+      0.71679,
+      0.8605769999999999,
+      0.774147,
+      0.7082269999999999,
+      0.7016779999999999,
+      0.702048,
+      0.825364,
+      0.687386,
+      0.9173319999999999,
+      0.74299,
+      0.717942,
+      0.693425,
+      0.700345,
+      0.705293,
+      0.7175210000000001
+    ],
+    "plan_packed_bytes": 98304,
+    "recurrent_edges": 24576,
+    "tensor_core_execution": false,
+    "trials": [
+      {
+        "batch": 1,
+        "forward_bptt_adam_ms": [
+          8.029476,
+          7.360056,
+          5.50552,
+          4.33852,
+          5.750239
+        ],
+        "packed": false
+      },
+      {
+        "batch": 1,
+        "forward_bptt_adam_ms": [
+          5.792753,
+          7.860762,
+          5.2904349999999996,
+          5.594073,
+          7.078572
+        ],
+        "packed": true
+      },
+      {
+        "batch": 8,
+        "forward_bptt_adam_ms": [
+          47.978994,
+          44.54649,
+          46.664246,
+          48.630991,
+          51.872977
+        ],
+        "packed": false
+      },
+      {
+        "batch": 8,
+        "forward_bptt_adam_ms": [
+          45.728468,
+          52.037248,
+          53.232646,
+          44.757063,
+          57.898005000000005
+        ],
+        "packed": true
+      },
+      {
+        "batch": 16,
+        "forward_bptt_adam_ms": [
+          99.712053,
+          96.877963,
+          94.726862,
+          86.058014,
+          89.388077
+        ],
+        "packed": false
+      },
+      {
+        "batch": 16,
+        "forward_bptt_adam_ms": [
+          95.06839599999999,
+          90.75772,
+          90.04675900000001,
+          72.97469299999999,
+          73.17562699999999
+        ],
+        "packed": true
+      }
+    ]
+  },
+  "whole_prototype_cpu_process": {
+    "schema_version": 1,
+    "device_requested": "cpu",
+    "boundary": "fresh native capture, native admission/copied update, fixture IO, Python startup/import/IO, packing, component repeats and local VJP; excludes build; not full packed GPU neural training",
+    "batch": 16,
+    "commands": [
+      [
+        "$BUILT_CPU_COLLECTOR_TEST_BINARY",
+        "--ignored",
+        "--exact",
+        "packed_block_bridge::export_fresh_native_packed_block_fixture",
+        "--nocapture"
+      ],
+      [
+        "python3",
+        "scripts/experiment_packed_tiles.py",
+        "$FRESH_OUTPUT/fixture/fresh-native-block-fixture.json",
+        "--device",
+        "cpu",
+        "--repeats",
+        "5",
+        "--warmup",
+        "2"
+      ]
+    ],
+    "bridge_exit_code": 0,
+    "bridge_process_seconds": 12.80680253600076,
+    "component_exit_code": 0,
+    "component_process_seconds": 0.8792511049978202,
+    "total_process_seconds": 13.686238349000632,
+    "complete": true,
+    "tensor_core_execution_proven": false
+  },
+  "fresh_native_bridge": {
+    "actual_native_decisions": 272,
+    "actual_windows": 16,
+    "batch": 16,
+    "blocks": 96,
+    "capture_ms": [
+      723.650833,
+      725.292328,
+      756.793888,
+      714.006142,
+      713.66628,
+      840.3743900000001,
+      728.7817,
+      707.21789,
+      616.428796,
+      618.0219,
+      614.824615,
+      619.246748,
+      626.762422,
+      675.377757,
+      655.796885,
+      676.683071
+    ],
+    "collection_and_admission_seconds": 12.373543411,
+    "native_admission_and_update_ms": [
+      30.274524,
+      34.383157999999995,
+      25.991348000000002,
+      29.774081000000002,
+      30.074434,
+      31.835835,
+      30.623039000000002,
+      25.280267,
+      25.156011999999997,
+      25.51639,
+      25.31599,
+      26.047957,
+      30.700931,
+      26.750354,
+      27.336457000000003,
+      28.114838
+    ],
+    "native_old_probability_admission": "passed without changed tolerances",
+    "receipts": [
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      },
+      {
+        "actor_optimizer_step": 1,
+        "collection_policy_version": 7400,
+        "completed_epochs": 1,
+        "mean_kl_before_updates": [
+          0.0
+        ],
+        "stopped_for_kl": false,
+        "value_optimizer_step": 1
+      }
+    ],
+    "recurrent_edges": 24576,
+    "source_and_private_noop": true,
+    "tensor_core_execution": false,
+    "total_bridge_seconds": 12.795533372,
+    "unique_private_offset_vectors": 16,
+    "window_burn_in": 0,
+    "window_loss_rows": 16
+  },
+  "dense_numpy_component": {
+    "schema_version": 1,
+    "scope": "independent-window recurrent synapse-sum component only",
+    "independent_samples": 16,
+    "neurons": 2048,
+    "canonical_synapses": 32768,
+    "recurrent_synapses": 24576,
+    "tiles": 96,
+    "active_tiles_per_sample": [
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96
+    ],
+    "genetic_gemm_shape": [
+      96,
+      16,
+      16,
+      16
+    ],
+    "identity_roundtrips": {
+      "weights": true,
+      "sample_offsets": true,
+      "synthetic_fp32_moments": true,
+      "synthetic_integer_ages": true
+    },
+    "canonical_vs_native": {
+      "bit_different_values": 0,
+      "max_abs": 0.0,
+      "relative_l2": 0.0,
+      "within_tolerance": true,
+      "rtol": 0,
+      "atol": 0
+    },
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "host": {
+      "system": "Linux",
+      "machine": "x86_64",
+      "processor": "AMD EPYC 9V74 80-Core Processor",
+      "blas_thread_environment": {
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": null
+      }
+    },
+    "pack_wall_seconds": 0.001141758999438025,
+    "canonical_python_oracle_wall_seconds": 0.19322398800068186,
+    "repeats": 5,
+    "warmup": 2,
+    "limitations": [
+      "dense genetic/offset split and tile scatter change reduction order",
+      "no production training, recurrence, clamp, BPTT, optimizer or checkpoint parity claim",
+      "component timers exclude native world/trainer; Python oracle is not a native speed baseline",
+      "CUDA event spans include launch gaps; tolerances are diagnostic, not a training qualification",
+      "TF32 flag is not proof of Tensor Core use; profiler kernel/counter evidence required"
+    ],
+    "cpu": {
+      "packed_compute_wall_seconds": [
+        0.0007311800000024959,
+        0.0007939249990158714,
+        0.0009001649996207561,
+        0.000850330001412658,
+        0.000698651001584949
+      ],
+      "packed_compute_median_seconds": 0.0007939249990158714,
+      "vs_canonical": {
+        "bit_different_values": 12310,
+        "max_abs": 7.152557373046875e-07,
+        "relative_l2": 1.1720684613659993e-07,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      }
+    },
+    "cpu_local_linear_vjp": {
+      "canonical_weights": {
+        "bit_different_values": 19213,
+        "max_abs": 1.3113021850585938e-06,
+        "relative_l2": 1.5326011881927492e-07,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      },
+      "per_sample_offsets": {
+        "bit_different_values": 0,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      },
+      "activations": {
+        "bit_different_values": 14547,
+        "max_abs": 4.76837158203125e-07,
+        "relative_l2": 1.282787547887176e-07,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      }
+    },
+    "total_sidecar_wall_seconds": 0.6026211549979053,
+    "total_timing_scope": "parse/identity/pack/oracle, requested warmups+repeats+copies, CPU local VJP; excludes process/import/file IO",
+    "fixture_sha256": "4b9b6b96d974cf6bf72110f8ffd46517898e86d9b9235b0de188b41f13bba955",
+    "fixture_bytes": 11273100
+  },
+  "cuda_refusal": {
+    "schema_version": 1,
+    "scope": "independent-window recurrent synapse-sum component only",
+    "independent_samples": 16,
+    "neurons": 2048,
+    "canonical_synapses": 32768,
+    "recurrent_synapses": 24576,
+    "tiles": 96,
+    "active_tiles_per_sample": [
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96,
+      96
+    ],
+    "genetic_gemm_shape": [
+      96,
+      16,
+      16,
+      16
+    ],
+    "identity_roundtrips": {
+      "weights": true,
+      "sample_offsets": true,
+      "synthetic_fp32_moments": true,
+      "synthetic_integer_ages": true
+    },
+    "canonical_vs_native": {
+      "bit_different_values": 0,
+      "max_abs": 0.0,
+      "relative_l2": 0.0,
+      "within_tolerance": true,
+      "rtol": 0,
+      "atol": 0
+    },
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "host": {
+      "system": "Linux",
+      "machine": "x86_64",
+      "processor": "AMD EPYC 9V74 80-Core Processor",
+      "blas_thread_environment": {
+        "OPENBLAS_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "MKL_NUM_THREADS": null
+      }
+    },
+    "pack_wall_seconds": 0.0014025000018591527,
+    "canonical_python_oracle_wall_seconds": 0.1946317479996651,
+    "repeats": 5,
+    "warmup": 2,
+    "limitations": [
+      "dense genetic/offset split and tile scatter change reduction order",
+      "no production training, recurrence, clamp, BPTT, optimizer or checkpoint parity claim",
+      "component timers exclude native world/trainer; Python oracle is not a native speed baseline",
+      "CUDA event spans include launch gaps; tolerances are diagnostic, not a training qualification",
+      "TF32 flag is not proof of Tensor Core use; profiler kernel/counter evidence required"
+    ],
+    "cuda": {
+      "status": "unavailable",
+      "reason": "PyTorch is not installed; CUDA requested, no CPU fallback"
+    },
+    "cpu_local_linear_vjp": {
+      "canonical_weights": {
+        "bit_different_values": 19213,
+        "max_abs": 1.3113021850585938e-06,
+        "relative_l2": 1.5326011881927492e-07,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      },
+      "per_sample_offsets": {
+        "bit_different_values": 0,
+        "max_abs": 0.0,
+        "relative_l2": 0.0,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      },
+      "activations": {
+        "bit_different_values": 14547,
+        "max_abs": 4.76837158203125e-07,
+        "relative_l2": 1.282787547887176e-07,
+        "within_tolerance": true,
+        "rtol": 0.0001,
+        "atol": 1e-05
+      }
+    },
+    "total_sidecar_wall_seconds": 0.5770649050027714,
+    "total_timing_scope": "parse/identity/pack/oracle, requested warmups+repeats+copies, CPU local VJP; excludes process/import/file IO",
+    "fixture_sha256": "4b9b6b96d974cf6bf72110f8ffd46517898e86d9b9235b0de188b41f13bba955",
+    "fixture_bytes": 11273100
+  },
+  "validation": {
+    "rust_assay": "3 passed (including explicit ignored measurement)",
+    "native_bridge": "1 passed (explicit ignored export)",
+    "native_cpu_units": "39 passed, 3 ignored",
+    "native_cpu_backend": "15 passed",
+    "python_self_tests": "10 passed",
+    "strict_clippy": "passed for training lib and cpu_collector",
+    "production_cpu_binary_check": "passed",
+    "format_and_diff_check": "passed"
+  },
+  "limits": [
+    "No CUDA device or Tensor Core execution or performance measured.",
+    "Rust packed oracle retains canonical addition order and uses native backward/Adam; it is not a GEMM backend.",
+    "Dense sidecar tests linear recurrent sum and local VJP only; full dense nonlinear recurrence/BPTT/optimizer/PPO qualification is outstanding.",
+    "CPU timing arms are sequential, five samples after warmup on a shared executor; no statistical speed claim.",
+    "Actual fresh samples have all tiles active at local microstep zero; synthetic tests cover route/cadence masks.",
+    "Independent windows were collected from separate fresh instances with a shared public founder; ordinary single-trajectory B16 availability is not demonstrated.",
+    "B32 and B64 are unmeasured."
+  ]
+}

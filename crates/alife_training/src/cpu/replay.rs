@@ -5,6 +5,8 @@ use alife_core::{ActivationFunction, BrainPhenotype, CompiledSynapseKind, Decode
 #[cfg(test)]
 mod cadence_assay;
 mod cadence_rows;
+#[cfg(test)]
+mod packed_block_assay;
 use cadence_rows::CadenceRows;
 
 pub(super) fn route_fires(raw: u8, step: usize) -> bool {
@@ -39,6 +41,8 @@ pub(super) struct SparseGraph {
     incoming: Vec<Vec<usize>>,
     decoders: [Vec<usize>; 8],
     cadence_rows: Option<CadenceRows>,
+    #[cfg(test)]
+    experimental_blocks: Option<Box<packed_block_assay::PackedBlocks>>,
 }
 pub(super) struct Tape {
     pub evaluation: TrainingReplayEvaluation,
@@ -65,6 +69,8 @@ impl SparseGraph {
             incoming,
             decoders,
             cadence_rows: None,
+            #[cfg(test)]
+            experimental_blocks: None,
         }
     }
     pub(super) fn set_cadence_rows(&mut self, p: &BrainPhenotype, enabled: bool) {
@@ -90,6 +96,10 @@ impl SparseGraph {
         weights: &[f32],
         q: &TrainingSequence,
     ) -> Result<Tape, TrainingError> {
+        #[cfg(test)]
+        if let Some(plan) = &self.experimental_blocks {
+            return plan.forward_one(p, q, &plan.pack(weights), weights);
+        }
         let n = p.neuron_count() as usize;
         let steps = p.microstep_count() as usize;
         let mut a = vec![q.initial.activations.clone()];
