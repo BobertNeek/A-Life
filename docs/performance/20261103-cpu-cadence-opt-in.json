@@ -1,0 +1,187 @@
+{
+  "source_commit": "1f7353aa987fe00728b260a754ffe148115ce0e5",
+  "source_tree": "b32a5d57d1fd6ba4c8ec47af36a9083e0d0d0b48",
+  "source_files_sha256": {
+    "crates/alife_training/src/cpu/mod.rs": "eeb921e21bf3865ac3f71773bc5ea985da73d34e0d87eab3613f727194eb94f2",
+    "crates/alife_training/src/cpu/replay.rs": "9e9aa4bdf4488954a8cb06df860b3332cf615990d3fce362a80a1c3e1bf5db39",
+    "crates/alife_training/src/cpu/replay/cadence_rows.rs": "7fec2d8d2825f9e77074efa872a5c5f1db11ffa0758db932e9f37fd1a9a57631",
+    "crates/alife_training/src/cpu/replay/cadence_assay.rs": "a5bbc155b6676f4d010439693f64d2876db8f9d4ffaf22cddf9fac3487fa5c25",
+    "crates/alife_training/tests/cpu_cadence_csr.rs": "11a15bbfbf0b0c9fcea0f7b05eb97ab0232fe89bce72f0a93591cc2d5f47ad1a",
+    "Cargo.lock": "e9da375829f39d182af9b39257eca47e749991272486ff45a26c21ecb55655bf"
+  },
+  "binary_sha256": "349ff17baeb808ef58a0de5c196bba2cfced3ea6b6b27a4d612d63d12a43e1a6",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "profile": "cargo --release; CARGO_BUILD_JOBS=2; one test thread",
+  "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+  "cpu_quota": "400000 100000",
+  "memory_limit": "17179869184",
+  "load_observation_after_run": [
+    0.32958984375,
+    0.8427734375,
+    0.6640625
+  ],
+  "checks": {
+    "public_integration": 2,
+    "internal_full_tape_and_work": 2,
+    "existing_cpu_backend": 15,
+    "release_public_probe": 1,
+    "targeted_clippy": "pass",
+    "fmt_diff": "pass"
+  },
+  "independent_review": "1f7353aa actual-source review: no blockers; default-performance caveat retained",
+  "logs_sha256": {
+    "public-parity.log": "94b6364b2b959f7ba6b9f1e21e9a71b14c5e2d344e55b70f714bfc301b9397d9",
+    "internal-parity.log": "e06e8ec272a4bdef290b52a785e3151ae68ee5e49258ac7c176522f90d506b14",
+    "cpu-backend.log": "69bb7bc4c6adbf6a7389f8b7f33d0b660643c36f14b4e86e61ca946c69b9e3d0",
+    "clippy.log": "1af2877347ac72680a5d4c360a0e3664a571c2de58904e29ee58a2ce7c91deb6",
+    "release-build.log": "8d959bd9fdf187bc7aa699a5553376e180a2aba6f41a0b0abc1571fc62d7b174",
+    "release-timing.log": "9f70bf2d202bb6ec98506611955281872b361d19de28b97cfb66ce822dbc151b",
+    "release-1f7353aa/trials.json": "8a664f9f5d4ce11f529123cc5724034d4f6c8d72e1e6fd1f923e6a777ddf58eb"
+  },
+  "raw": {
+    "microsteps": 4,
+    "neurons": 2048,
+    "plan_build_ms": 0.23568499999999998,
+    "profiles": [
+      {
+        "burn_in": 0,
+        "ticks": 256,
+        "trials": [
+          {
+            "cadence_ms": 117.92011500000001,
+            "first": "reference",
+            "pair": 0,
+            "reference_ms": 138.973958
+          },
+          {
+            "cadence_ms": 126.00288900000001,
+            "first": "cadence",
+            "pair": 1,
+            "reference_ms": 131.805343
+          },
+          {
+            "cadence_ms": 127.284491,
+            "first": "reference",
+            "pair": 2,
+            "reference_ms": 140.98620400000001
+          },
+          {
+            "cadence_ms": 126.05898300000001,
+            "first": "cadence",
+            "pair": 3,
+            "reference_ms": 128.507657
+          },
+          {
+            "cadence_ms": 116.06393399999999,
+            "first": "reference",
+            "pair": 4,
+            "reference_ms": 134.599839
+          },
+          {
+            "cadence_ms": 121.512825,
+            "first": "cadence",
+            "pair": 5,
+            "reference_ms": 128.324722
+          },
+          {
+            "cadence_ms": 129.67473800000002,
+            "first": "reference",
+            "pair": 6,
+            "reference_ms": 135.150159
+          }
+        ]
+      },
+      {
+        "burn_in": 128,
+        "ticks": 384,
+        "trials": [
+          {
+            "cadence_ms": 146.961228,
+            "first": "reference",
+            "pair": 0,
+            "reference_ms": 174.788621
+          },
+          {
+            "cadence_ms": 149.87228,
+            "first": "cadence",
+            "pair": 1,
+            "reference_ms": 163.565299
+          },
+          {
+            "cadence_ms": 147.01655399999999,
+            "first": "reference",
+            "pair": 2,
+            "reference_ms": 194.821444
+          },
+          {
+            "cadence_ms": 148.206603,
+            "first": "cadence",
+            "pair": 3,
+            "reference_ms": 163.143407
+          },
+          {
+            "cadence_ms": 146.106728,
+            "first": "reference",
+            "pair": 4,
+            "reference_ms": 163.342137
+          },
+          {
+            "cadence_ms": 148.60583599999998,
+            "first": "cadence",
+            "pair": 5,
+            "reference_ms": 166.794423
+          },
+          {
+            "cadence_ms": 145.191438,
+            "first": "reference",
+            "pair": 6,
+            "reference_ms": 161.65151799999998
+          }
+        ]
+      }
+    ],
+    "scope": "actual public CpuFoundationTrainer probe: validation, forward, BPTT and tape destruction; returned gradients destroyed outside timer; no Adam/PPO/world/GPU; warm preparation; first gradients retained during second call; alternating order",
+    "synapses": 32768
+  },
+  "summary": [
+    {
+      "ticks": 256,
+      "burn_in": 0,
+      "reference_median_ms": 134.599839,
+      "cadence_median_ms": 126.00288900000001,
+      "lower_median_percent": 6.387043300995321,
+      "reference_range_ms": [
+        128.324722,
+        140.98620400000001
+      ],
+      "cadence_range_ms": [
+        116.06393399999999,
+        129.67473800000002
+      ]
+    },
+    {
+      "ticks": 384,
+      "burn_in": 128,
+      "reference_median_ms": 163.565299,
+      "cadence_median_ms": 147.01655399999999,
+      "lower_median_percent": 10.11751581856004,
+      "reference_range_ms": [
+        161.65151799999998,
+        194.821444
+      ],
+      "cadence_range_ms": [
+        145.191438,
+        149.87228
+      ]
+    }
+  ],
+  "limits": [
+    "Synthetic public fixture, normal library CPU path; no private brain/PC/GPU/world/competence use",
+    "New/from-checkpoint trainers default Reference; selector is process-local and not serialized",
+    "In-place restore retains selection; valid genetic rebind reconstructs selected indices",
+    "Default Reference now contains optional-index lookup; old direct-reference performance not compared",
+    "Timing includes validation/forward/BPTT/tape destruction, excludes returned gradient destruction/Adam/PPO/world/GPU",
+    "Warm preparation; first gradient output retained during second run; seven alternating pairs",
+    "No native checkpoint/format/topology migration, PR229 edit, predictive pilot merge or budget-module edit"
+  ]
+}

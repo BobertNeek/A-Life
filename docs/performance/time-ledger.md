@@ -223,8 +223,27 @@ not themselves remove forward or BPTT work.
 
 ### Runnable cadence CSR prototype
 
+The original `c315fcdc` slice below was test-only. A subsequent explicitly opt-in
+normal CPU trainer path is available as
+`trainer.set_replay_execution(CpuReplayExecution::CadenceCsr)`; use `Reference`
+for fallback. New/from-checkpoint trainers default to Reference. The choice is
+process-local and is not stored in checkpoints; in-place restore keeps it and
+valid genetic rebind rebuilds the selected indices. No care CLI default changes.
+[Public-path raw results and source identity](20261103-cpu-cadence-opt-in.json)
+record 134.600/126.003 ms and 163.565/147.017 ms Reference/CadenceCsr medians for
+256/0 and 384/128 ticks/burn-in (seven alternating release pairs; 6.4%/10.1%
+lower medians). This scope includes validation, forward, BPTT and tape destruction,
+but excludes returned-gradient destruction, PPO/Adam, world and GPU. Default
+Reference's new optional-index lookup was not benchmarked against the old direct
+lookup, so unchanged default performance is not established. The two public API
+tests, two internal tape/work tests and 15 CPU-backend tests passed.
+
+```sh
+cargo test --release --locked -p alife_training --features cpu-backend --test cpu_cadence_csr paired_public_probe_measurement -- --ignored --exact --nocapture --test-threads=1
+```
+
 `cpu::replay::cadence_assay` is compiled only into CPU libtests. Normal CPU/GPU
-trainer binaries retain the original incoming rows and execution. Three flat
+trainer binaries in the original c315 slice retain the original incoming rows and execution. Three flat
 index views omit only edges already rejected by the existing cadence predicate;
 dynamic route checks, weights, zeros, structural additions, dendrites, arithmetic,
 canonical active-edge order and all admitted topology coordinates remain intact.
