@@ -13,6 +13,7 @@ mod host;
 mod input;
 mod objective;
 mod organism;
+pub mod predictive;
 mod private_checkpoint;
 mod replay;
 mod round_output;

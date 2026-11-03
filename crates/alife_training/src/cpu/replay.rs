@@ -42,6 +42,11 @@ pub(super) struct Tape {
     memory: Vec<Vec<f32>>,
     cognitive: Vec<Vec<f32>>,
 }
+struct BackwardTargets<'a> {
+    candidates: &'a [Vec<f32>],
+    speech: &'a [Option<crate::ReplaySpeechTarget>],
+    activations: Option<&'a [Vec<f32>]>,
+}
 impl SparseGraph {
     pub fn new(p: &BrainPhenotype) -> Self {
         let mut incoming = vec![Vec::new(); p.neuron_count() as usize];
@@ -216,6 +221,56 @@ impl SparseGraph {
         adjoints: &[Vec<f32>],
         speech_targets: &[Option<crate::ReplaySpeechTarget>],
     ) -> Result<TrainingGradientProbe, TrainingError> {
+        self.backward_seeded(
+            p,
+            weights,
+            q,
+            tape,
+            BackwardTargets {
+                candidates: adjoints,
+                speech: speech_targets,
+                activations: None,
+            },
+        )
+    }
+
+    /// Training-only auxiliary objectives seed the same recurrent reverse pass.
+    pub fn backward_from_activations(
+        &self,
+        p: &BrainPhenotype,
+        weights: &[f32],
+        q: &TrainingSequence,
+        tape: &Tape,
+        activations: &[Vec<f32>],
+    ) -> Result<TrainingGradientProbe, TrainingError> {
+        let candidates = q
+            .ticks
+            .iter()
+            .map(|t| vec![0.; t.candidates.len()])
+            .collect::<Vec<_>>();
+        self.backward_seeded(
+            p,
+            weights,
+            q,
+            tape,
+            BackwardTargets {
+                candidates: &candidates,
+                speech: &vec![None; q.ticks.len()],
+                activations: Some(activations),
+            },
+        )
+    }
+
+    fn backward_seeded(
+        &self,
+        p: &BrainPhenotype,
+        weights: &[f32],
+        q: &TrainingSequence,
+        tape: &Tape,
+        targets: BackwardTargets<'_>,
+    ) -> Result<TrainingGradientProbe, TrainingError> {
+        let adjoints = targets.candidates;
+        let speech_targets = targets.speech;
         if adjoints.len() != q.ticks.len() || speech_targets.len() != q.ticks.len() {
             return Err(invalid());
         }
@@ -225,6 +280,22 @@ impl SparseGraph {
         let mut gm = vec![vec![0.; n]; tape.m.len()];
         let mut gradients = vec![0.; weights.len()];
         let mut objective = 0_f64;
+        if let Some(seeds) = targets.activations {
+            if seeds.len() != q.ticks.len() {
+                return Err(invalid());
+            }
+            for (t, seed) in seeds.iter().enumerate() {
+                if seed.len() != n || (t < q.burn_in_ticks && seed.iter().any(|g| *g != 0.)) {
+                    return Err(invalid());
+                }
+                finite(seed)?;
+                let state = (t + 1) * steps;
+                for (i, &g) in seed.iter().enumerate() {
+                    ga[state][i] += g;
+                    objective += f64::from(g) * f64::from(tape.a[state][i]);
+                }
+            }
+        }
         self.speech_backward(
             p,
             weights,

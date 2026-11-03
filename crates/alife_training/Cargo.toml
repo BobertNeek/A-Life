@@ -39,3 +39,8 @@ required-features = ["cpu-backend"]
 name = "merge_founder_inference"
 path = "src/bin/merge_founder_inference.rs"
 required-features = ["receipt-lineage"]
+
+[[bin]]
+name = "train_predictive_pilot"
+path = "src/bin/train_predictive_pilot.rs"
+required-features = ["cpu-backend"]
