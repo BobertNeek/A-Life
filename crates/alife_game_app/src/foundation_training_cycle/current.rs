@@ -3,7 +3,9 @@ use super::*;
 pub use alife_training::SameIndividualProgressV1;
 use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
+mod actor_export;
 mod life;
+pub use actor_export::export_current_actor_asset;
 #[cfg(test)]
 mod throughput_tests;
 pub(super) use life::validation_scope;
@@ -34,6 +36,12 @@ pub fn resolve_current_training_destination(
 /// Device-free validation, including the ordinary cohort's compiler coordinates.
 pub fn read_current_training_checkpoint(path: &Path) -> Result<CurrentTrainingCheckpointV1> {
     let checkpoint = CurrentTrainingCheckpointV1::read(path)?;
+    admit_current_training_checkpoint(checkpoint)
+}
+
+fn admit_current_training_checkpoint(
+    checkpoint: CurrentTrainingCheckpointV1,
+) -> Result<CurrentTrainingCheckpointV1> {
     life::validate(
         checkpoint
             .life

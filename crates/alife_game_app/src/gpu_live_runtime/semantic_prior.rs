@@ -2397,6 +2397,56 @@ mod tests {
     }
 
     #[test]
+    fn legacy_off_environment_prevents_provider_setup_and_hint_delivery() {
+        // Environment controls are process-local: never mutate the parallel
+        // test runner's environment or start a local/Luna provider as a probe.
+        const CHILD: &str = "ALIFE_TEST_PRIOR_OFF_CHILD_V1";
+        if std::env::var(CHILD).as_deref() != Ok("1") {
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "gpu_live_runtime::semantic_prior::tests::legacy_off_environment_prevents_provider_setup_and_hint_delivery",
+                    "--nocapture",
+                ])
+                .env(CHILD, "1")
+                .env("ALIFE_SLM_PRIOR", "off")
+                .env("ALIFE_SLM_PRIOR_BACKEND", "recorded")
+                .env("ALIFE_SLM_PRIOR_BANK", "missing-off-test-bank.json")
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert!(String::from_utf8_lossy(&result.stdout).contains("1 passed"));
+            return;
+        }
+        for training in [false, true] {
+            let mut disabled = RuntimeSemanticPrior::from_environment(77, training)
+                .unwrap()
+                .unwrap();
+            assert_eq!(disabled.metrics.backend, "off");
+            assert!(disabled.queue.is_none());
+            assert!(disabled.deterministic.is_none());
+            assert!(!disabled.frozen_recording);
+            assert!(disabled.cache.is_empty());
+            assert!(disabled.dropout_seed.is_none());
+            disabled.require_rich_information();
+            disabled
+                .prime_with_receipt(draft(), ExperienceSequenceId(1))
+                .unwrap();
+            let unaided = disabled.prepare(draft(), ExperienceSequenceId(2)).unwrap();
+            assert!(unaided.sensory().semantic_context.is_none());
+            assert!(!disabled.pending(5));
+            assert!(!disabled.ready(5));
+            assert_eq!(disabled.metrics.requests, 0);
+            assert_eq!(disabled.metrics.validated_provider_replies, 0);
+            assert!(disabled.lives[&5].active.is_none());
+        }
+    }
+
+    #[test]
     fn on_off_save_on_preserves_prior_developmental_state_without_delivering_hints() {
         let original = draft();
         let mut enabled = prior();
