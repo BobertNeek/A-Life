@@ -246,7 +246,9 @@ class ContinuousCareTests(unittest.TestCase):
         write = cp.write_json
 
         def interrupted(path, value):
-            if path == self.lane / session.RECEIPT:
+            # The launcher canonicalizes the lane; Windows temporary paths can
+            # use an 8.3 alias that resolves to the same directory.
+            if path == self.lane.resolve() / session.RECEIPT:
                 raise RuntimeError('before final receipt commit')
             return write(path, value)
 
