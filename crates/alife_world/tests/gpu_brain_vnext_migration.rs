@@ -103,9 +103,6 @@ fn backend_api_wire_mapping_is_exact_and_rejects_unknown_spellings() {
         NeuralGpuBackendApi::try_from_slug("vulkan"),
         Ok(NeuralGpuBackendApi::Vulkan)
     );
-    assert!(NeuralGpuBackendApi::try_from_raw(0).is_err());
-    assert!(NeuralGpuBackendApi::try_from_raw(2).is_err());
-    assert!(NeuralGpuBackendApi::try_from_slug("Vulkan").is_err());
     assert_eq!(
         serde_json::to_string(&NeuralGpuBackendApi::Vulkan).unwrap(),
         "1"
@@ -114,7 +111,69 @@ fn backend_api_wire_mapping_is_exact_and_rejects_unknown_spellings() {
         serde_json::from_str::<NeuralGpuBackendApi>("1").unwrap(),
         NeuralGpuBackendApi::Vulkan
     );
-    assert!(serde_json::from_str::<NeuralGpuBackendApi>("2").is_err());
+    assert_eq!(NeuralGpuBackendApi::Dx12.raw(), 2);
+    assert_eq!(NeuralGpuBackendApi::Dx12.slug(), "dx12");
+    assert_eq!(
+        NeuralGpuBackendApi::try_from_raw(2),
+        Ok(NeuralGpuBackendApi::Dx12)
+    );
+    assert_eq!(
+        NeuralGpuBackendApi::try_from_slug("dx12"),
+        Ok(NeuralGpuBackendApi::Dx12)
+    );
+    assert_eq!(
+        serde_json::to_string(&NeuralGpuBackendApi::Dx12).unwrap(),
+        "2"
+    );
+    assert_eq!(
+        serde_json::from_str::<NeuralGpuBackendApi>("2").unwrap(),
+        NeuralGpuBackendApi::Dx12
+    );
+    for raw in [0, 3, u16::MAX] {
+        assert!(NeuralGpuBackendApi::try_from_raw(raw).is_err());
+        assert!(serde_json::from_str::<NeuralGpuBackendApi>(&raw.to_string()).is_err());
+    }
+    for slug in ["Vulkan", "DX12", "d3d12", "dx12 ", "metal", ""] {
+        assert!(NeuralGpuBackendApi::try_from_slug(slug).is_err());
+    }
+}
+
+#[test]
+fn dx12_provenance_roundtrips_without_admitting_cross_backend_restore() {
+    let vulkan = provenance("saved adapter");
+    let mut dx12 = vulkan.clone();
+    dx12.backend_api_raw = NeuralGpuBackendApi::Dx12.raw();
+    for saved in [&vulkan, &dx12] {
+        saved.validate().unwrap();
+        let bytes = serde_json::to_vec(saved).unwrap();
+        let restored: GpuBackendProvenanceSave = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(&restored, saved);
+        assert_eq!(serde_json::to_vec(&restored).unwrap(), bytes);
+        assert_eq!(
+            restored.portable_compatibility_digest().unwrap(),
+            saved.portable_compatibility_digest().unwrap()
+        );
+        saved.validate_portable_restore_against(&restored).unwrap();
+        saved
+            .validate_same_adapter_replay_against(&restored)
+            .unwrap();
+        for change_features in [true, false] {
+            let mut drift = restored.clone();
+            if change_features {
+                drift.required_features_digest[0] ^= 1;
+            } else {
+                drift.required_limits_digest[0] ^= 1;
+            }
+            assert!(saved.validate_portable_restore_against(&drift).is_err());
+        }
+    }
+    assert_eq!(vulkan.backend_api_raw, 1); // Existing Vulkan wire bytes are unchanged.
+    assert_ne!(
+        vulkan.portable_compatibility_digest().unwrap(),
+        dx12.portable_compatibility_digest().unwrap()
+    );
+    assert!(vulkan.validate_portable_restore_against(&dx12).is_err());
+    assert!(dx12.validate_portable_restore_against(&vulkan).is_err());
 }
 
 #[test]

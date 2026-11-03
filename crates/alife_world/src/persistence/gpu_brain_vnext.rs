@@ -28,6 +28,7 @@ const THROTTLE_SEQUENCE_DOMAIN: &[u8] = b"alife.gpu.throttle-sequence.v1";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NeuralGpuBackendApi {
     Vulkan = 1,
+    Dx12 = 2,
 }
 
 impl NeuralGpuBackendApi {
@@ -38,6 +39,7 @@ impl NeuralGpuBackendApi {
     pub fn try_from_raw(raw: u16) -> Result<Self, ScaffoldContractError> {
         match raw {
             1 => Ok(Self::Vulkan),
+            2 => Ok(Self::Dx12),
             _ => Err(ScaffoldContractError::NeuralBackendUnavailable),
         }
     }
@@ -45,6 +47,7 @@ impl NeuralGpuBackendApi {
     pub fn try_from_slug(slug: &str) -> Result<Self, ScaffoldContractError> {
         match slug {
             "vulkan" => Ok(Self::Vulkan),
+            "dx12" => Ok(Self::Dx12),
             _ => Err(ScaffoldContractError::NeuralBackendUnavailable),
         }
     }
@@ -52,6 +55,7 @@ impl NeuralGpuBackendApi {
     pub const fn slug(self) -> &'static str {
         match self {
             Self::Vulkan => "vulkan",
+            Self::Dx12 => "dx12",
         }
     }
 }
