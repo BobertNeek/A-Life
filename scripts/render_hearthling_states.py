@@ -77,6 +77,28 @@ def surface_tree(points, faces):
                                [tuple(remap[i] for i in face) for face in faces],
                                all_triangles=True)
 
+# A front/back ray grid covers the formerly visible tunnel in the shipping
+# tail, in the neutral idle pose. This is a discrete aperture regression, not
+# a continuous-time or inherited-appearance guarantee.
+rig.animation_data.action = next(a for a in bpy.data.actions if a.name.startswith('Hearthling_CuriousIdle'))
+scene.frame_set(1)
+bpy.context.view_layer.update()
+evaluated = merged.evaluated_get(bpy.context.evaluated_depsgraph_get())
+points = [evaluated.matrix_world @ v.co for v in evaluated.data.vertices]
+tail_faces = [t for t in triangles if any(
+    any(name.startswith('tail.') and weight > .05 for name, weight in weights[i].items())
+    for i in t)]
+assert tail_faces, 'Missing tail surface'
+tail_tree = surface_tree(points, tail_faces)
+for side in (-1, 1):
+    for x_offset in range(-5, 6):
+        for z_offset in range(-5, 6):
+            origin = Vector((.6406 + x_offset * .002, side * 10,
+                             1.3754 + z_offset * .002))
+            location, _, _, _ = tail_tree.ray_cast(origin, Vector((0, -side, 0)), 20)
+            assert location is not None, ('Tail tunnel visible', side, x_offset, z_offset)
+print('Tail aperture: 121 rays per side PASS', flush=True)
+
 for profile, hand_scale in [('compact', (.95, .94, .98)),
                             ('neutral', (1, 1, 1)),
                             ('broad', (1.07, 1.02, 1.06))]:

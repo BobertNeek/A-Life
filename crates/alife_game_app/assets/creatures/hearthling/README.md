@@ -75,7 +75,8 @@ An animated audit found the existing left hand crossing the folded knee/thigh
 in the seated sleep pose, including before the raccoon-shaped extremity pass.
 The sleep clip now lifts the existing left upper-arm joint by 0.18 radians;
 the approved hand/foot geometry, rig, materials and all idle/walk channel values
-are unchanged. The shipping GLB is 3,122,928 bytes with the same geometry cost.
+are unchanged. At that revision the GLB was 3,122,928 bytes with the same
+geometry cost.
 
 `refine_hearthling_sleep_pose.py --source /path/to/pre-clearance/hearthling.blend
 --output-dir /path/to/review` applies this once to the accepted native checkpoint;
@@ -85,3 +86,20 @@ quarter-frame samples across the 73-frame sleep clip, at compact, neutral and
 broad paw scales. This discrete sampling is not a continuous-time guarantee.
 This is asset-level pose validation, not native locomotion, contact physics
 or FPS qualification.
+
+### Tail tuft tunnel repair
+
+A small see-through tunnel in the tuft is closed with a local surface repair.
+The repair reuses existing vertices and skin weights; the selected shape, rig,
+materials and animation channels are preserved. The resulting GLB has 32,714
+triangles, 33,956 exported vertices and 3,123,144 bytes, with six material
+primitives. These are asset counts, not a native frame-time measurement.
+
+`scripts/repair_hearthling_tail.py` applies the guarded repair to an isolated
+native checkpoint, and the full source exporter includes it. The re-import
+review checks a 121-ray grid from each side of the neutral idle tail aperture,
+in addition to the pose, grounding and eye checks above.
+`scripts/test_hearthling_tail_deformation.py` reimports the shipping GLB and
+checks cap intersections at quarter-frame samples across all three clips and
+three inherited tail scales. These discrete asset checks are not a
+continuous-time or native-gameplay guarantee.
