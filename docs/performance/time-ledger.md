@@ -255,7 +255,43 @@ dynamic contexts. They count inspected edges and successful contributions, not
 FLOPs or elapsed device work. Set `ALIFE_CADENCE_ASSAY_DIR` to a nonexistent
 directory to preserve raw JSON without overwriting previous trials.
 
+Counters cover compiled recurrent incoming entries only; decoder, structural and
+dendritic work still executes but is outside these counters. Timings compare the
+libtest selector's baseline `None` and candidate `Some` paths. Payload bytes count
+logical usize elements, excluding Vec capacity, metadata, allocator overhead and
+RSS. These distinctions were checked in an independent bounded source review.
+
 The timed scope excludes validation/packing, PPO objectives, Adam, world
 collection, output destruction, GPU work and competence evaluation. A reduced
 inspection count does not prove faster execution or retained learning. No
 production promotion follows from these CPU measurements alone.
+
+### First bounded result
+
+[Raw pairs, source/binary hashes, fixture, checks and limitations](20261103-cadence-csr.json)
+bind this assay to implementation commit `c315fcdc55c4770b15351e8b4056c5dd76750912`,
+on main `8e807694`. Full cargo release build, Rust 1.99.1, Linux AMD EPYC 9V74,
+five visible CPUs/four-core quota and 16 GiB limit; one test thread. CPU frequency,
+other VM load and allocator/cache history are uncontrolled. No adapter is requested.
+
+| Ticks / burn-in | Baseline / candidate median ms | Lower median time | Baseline / candidate inspected entries |
+| --- | ---: | ---: | ---: |
+| 40 / 8 | 16.174 / 14.247 | 11.9% | 3,612,672 / 2,461,696 |
+| 256 / 0 | 118.601 / 105.152 | 11.3% | 25,067,520 / 17,129,472 |
+| 384 / 128 | 147.654 / 131.913 | 10.7% | 31,432,704 / 21,487,616 |
+
+Every timed pair matched all tape/gradient bits; useful recurrent contributions
+were identical (1,635,328 / 11,419,648 / 14,330,880 respectively). Inspected entries
+fell 31.6–31.9%. Index construction was measured once at 0.362 ms, outside sweep
+timing; extra logical index payload was 458,776 bytes. Seven alternating pairs
+do not establish a confidence interval, tail latency, allocation/RSS reduction,
+GPU gain, whole-PPO gain or retained capability/hour. The two focused tests and
+15 existing CPU-backend tests passed, alongside strict Clippy and formatting.
+
+This fixture has four microsteps, 32,768 total edges and the reported degree
+buckets. It has **zero explicit recurrent diagonal/self edges** despite its
+ActionPlanning-to-ActionPlanning route. That differs from per-neuron state
+recurrence: each step retains `(1-leak)*prior`, updates metabolic/EMA state, and
+uses feedback cycles across lobes. Additional tied microsteps add serial work.
+Small gated motifs or trainable diagonal feedback are separate disposable
+architecture candidates, not changes made by this scheduling experiment.

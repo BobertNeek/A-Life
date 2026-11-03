@@ -1,0 +1,273 @@
+{
+  "source_commit": "c315fcdc55c4770b15351e8b4056c5dd76750912",
+  "source_tree": "846901a8832d0b29375cc0ff2d9e96e86b774009",
+  "files": {
+    "crates/alife_training/src/cpu/replay.rs": "22add908a7411b7229883c313c9018351d0ea1ac5980f1f0115daee5a0f491e3",
+    "crates/alife_training/src/cpu/replay/cadence_assay.rs": "345b282357dc5320aa3a17a5c83d736ab037cbf24a22d72da3817eb9d8be2365",
+    "docs/performance/time-ledger.md": "7fdf52b41e8ec3f2cac76d8f85179ee145a267f89ebfd3018a92e9e9436131d8",
+    "Cargo.lock": "e9da375829f39d182af9b39257eca47e749991272486ff45a26c21ecb55655bf"
+  },
+  "cpu_quota_cores": 4,
+  "memory_limit_bytes": 17179869184,
+  "cpu_model": "AMD EPYC 9V74",
+  "visible_cpus": 5,
+  "rustc": "1.99.1",
+  "scope": "CPU-only disposable public fixture; no adapter requested",
+  "reproduce_command": "cargo test --release --locked -p alife_training --features cpu-backend --lib cpu::replay::cadence_assay::paired_full_replay_measurement -- --ignored --exact --nocapture --test-threads=1",
+  "binary_sha256": "a58bba2d3cc76da1eb36f87c80faf6876171b46553cae0ed3a9ca596ed2da789",
+  "benchmark_source_profile": "Full cargo --release optimized build, CARGO_BUILD_JOBS=2; serial test process; CPU frequency/load/allocator history uncontrolled",
+  "independent_review": "Bounded actual-source review of c315fcdc: no blockers; counter/timing/payload limits retained",
+  "checks": {
+    "focused": {
+      "passed": 2,
+      "ignored_benchmark": 1
+    },
+    "existing_cpu_backend": {
+      "passed": 15
+    },
+    "release_measurement": {
+      "passed": 1
+    },
+    "clippy_warnings_denied": "pass",
+    "fmt_diff_check": "pass"
+  },
+  "raw_artifacts_sha256": {
+    "focused.log": "1679ba5b5f9ef8d959d85514617085b47e8ab7234efb005e04a1d9c45c5ba424",
+    "cpu-backend.log": "9393f597344dded3bef8fabdcfe1789285104302ad9453f3011d9d657386117d",
+    "clippy.log": "a7ecb3c73154047cf297b023159ae2e93f31bdc99f52de83bf381223e065142c",
+    "release-build.log": "59525216aac2ead333e7d9b9a8e4be9c5dae131cb0f2964f64594f09bc178709",
+    "release-timing.log": "d266f8b124390cbd815d45b5cf6a0442bd54c81343b7961cb716230fe5d59ff6",
+    "release-c315fcdc/trials.json": "c951fedcd3508e156f22d35dd24c301ff66c3ae0332f5b23e56e2cdc5ba65af9"
+  },
+  "result": {
+    "additional_index_payload_bytes": 458776,
+    "explicit_recurrent_self_edges": 0,
+    "microsteps": 4,
+    "neurons": 2048,
+    "plan_build_ms": 0.361897,
+    "preparation": "untimed fixture validation and forward; first timed pair retained, not a cold-process assay; plan built once",
+    "recurrent_degree_histogram": {
+      "0": 1024,
+      "16": 640,
+      "32": 272,
+      "48": 96,
+      "64": 16
+    },
+    "scope": "CPU synthetic full forward+BPTT; no PPO objective/Adam/world/GPU; output destruction outside timer; first result retained during second span in alternating order",
+    "synapses": 32768,
+    "trials": [
+      {
+        "baseline_visits": 3612672,
+        "burn_in": 8,
+        "candidate_visits": 2461696,
+        "identical_contributions": 1635328,
+        "ticks": 40,
+        "trials": [
+          {
+            "baseline_ms": 16.87771,
+            "candidate_ms": 15.816305,
+            "first": "baseline",
+            "pair": 0
+          },
+          {
+            "baseline_ms": 16.277773,
+            "candidate_ms": 14.03331,
+            "first": "candidate",
+            "pair": 1
+          },
+          {
+            "baseline_ms": 15.963557,
+            "candidate_ms": 14.247143,
+            "first": "baseline",
+            "pair": 2
+          },
+          {
+            "baseline_ms": 15.989116000000001,
+            "candidate_ms": 14.483902,
+            "first": "candidate",
+            "pair": 3
+          },
+          {
+            "baseline_ms": 16.027314,
+            "candidate_ms": 15.010988,
+            "first": "baseline",
+            "pair": 4
+          },
+          {
+            "baseline_ms": 16.173745,
+            "candidate_ms": 14.042344,
+            "first": "candidate",
+            "pair": 5
+          },
+          {
+            "baseline_ms": 16.214477000000002,
+            "candidate_ms": 14.101903,
+            "first": "baseline",
+            "pair": 6
+          }
+        ]
+      },
+      {
+        "baseline_visits": 25067520,
+        "burn_in": 0,
+        "candidate_visits": 17129472,
+        "identical_contributions": 11419648,
+        "ticks": 256,
+        "trials": [
+          {
+            "baseline_ms": 130.443095,
+            "candidate_ms": 113.94141300000001,
+            "first": "baseline",
+            "pair": 0
+          },
+          {
+            "baseline_ms": 118.60072600000001,
+            "candidate_ms": 106.721361,
+            "first": "candidate",
+            "pair": 1
+          },
+          {
+            "baseline_ms": 118.904134,
+            "candidate_ms": 104.222744,
+            "first": "baseline",
+            "pair": 2
+          },
+          {
+            "baseline_ms": 120.457922,
+            "candidate_ms": 105.421116,
+            "first": "candidate",
+            "pair": 3
+          },
+          {
+            "baseline_ms": 117.794166,
+            "candidate_ms": 103.562136,
+            "first": "baseline",
+            "pair": 4
+          },
+          {
+            "baseline_ms": 117.710841,
+            "candidate_ms": 105.151738,
+            "first": "candidate",
+            "pair": 5
+          },
+          {
+            "baseline_ms": 117.747606,
+            "candidate_ms": 104.247382,
+            "first": "baseline",
+            "pair": 6
+          }
+        ]
+      },
+      {
+        "baseline_visits": 31432704,
+        "burn_in": 128,
+        "candidate_visits": 21487616,
+        "identical_contributions": 14330880,
+        "ticks": 384,
+        "trials": [
+          {
+            "baseline_ms": 148.359657,
+            "candidate_ms": 139.756838,
+            "first": "baseline",
+            "pair": 0
+          },
+          {
+            "baseline_ms": 147.71906800000002,
+            "candidate_ms": 131.912751,
+            "first": "candidate",
+            "pair": 1
+          },
+          {
+            "baseline_ms": 146.566061,
+            "candidate_ms": 131.485082,
+            "first": "baseline",
+            "pair": 2
+          },
+          {
+            "baseline_ms": 147.654216,
+            "candidate_ms": 134.023889,
+            "first": "candidate",
+            "pair": 3
+          },
+          {
+            "baseline_ms": 146.683479,
+            "candidate_ms": 130.429978,
+            "first": "baseline",
+            "pair": 4
+          },
+          {
+            "baseline_ms": 147.215833,
+            "candidate_ms": 131.18311799999998,
+            "first": "candidate",
+            "pair": 5
+          },
+          {
+            "baseline_ms": 147.728498,
+            "candidate_ms": 131.951188,
+            "first": "baseline",
+            "pair": 6
+          }
+        ]
+      }
+    ]
+  },
+  "summary": [
+    {
+      "ticks": 40,
+      "burn_in": 8,
+      "baseline_median_ms": 16.173745,
+      "candidate_median_ms": 14.247143,
+      "baseline_range_ms": [
+        15.963557,
+        16.87771
+      ],
+      "candidate_range_ms": [
+        14.03331,
+        15.816305
+      ],
+      "time_reduction_percent": 11.911910321326324,
+      "visit_reduction_percent": 31.859410430839
+    },
+    {
+      "ticks": 256,
+      "burn_in": 0,
+      "baseline_median_ms": 118.60072600000001,
+      "candidate_median_ms": 105.151738,
+      "baseline_range_ms": [
+        117.710841,
+        130.443095
+      ],
+      "candidate_range_ms": [
+        103.562136,
+        113.94141300000001
+      ],
+      "time_reduction_percent": 11.339718105941454,
+      "visit_reduction_percent": 31.666666666666664
+    },
+    {
+      "ticks": 384,
+      "burn_in": 128,
+      "baseline_median_ms": 147.654216,
+      "candidate_median_ms": 131.912751,
+      "baseline_range_ms": [
+        146.566061,
+        148.359657
+      ],
+      "candidate_range_ms": [
+        130.429978,
+        139.756838
+      ],
+      "time_reduction_percent": 10.661033207477132,
+      "visit_reduction_percent": 31.639301537659627
+    }
+  ],
+  "limits": [
+    "Synthetic CPU libtest selector comparison, not production or GPU performance",
+    "Counters cover compiled recurrent entries only, excluding decoder, structural and dendritic work",
+    "Index payload is logical usize storage, not capacity or RSS",
+    "Fixture preparation includes an untimed forward; first timed pair retained",
+    "Results are retained outside timing, first output resident during second run; order alternates",
+    "No PPO objective, optimizer, world, private life, retained learning or competence timing",
+    "No PC/GPU/accepted checkpoint or held fusion used; no production promotion"
+  ]
+}
