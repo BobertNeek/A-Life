@@ -1,0 +1,42 @@
+name: LLM care map contracts
+on:
+  pull_request:
+    paths:
+      - 'crates/alife_game_app/**'
+      - 'scripts/*care*'
+      - '.github/workflows/llm-care-map.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'crates/alife_game_app/**'
+      - 'scripts/*care*'
+      - '.github/workflows/llm-care-map.yml'
+permissions:
+  contents: read
+jobs:
+  native-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUST_TEST_THREADS: '1'
+      RUST_MIN_STACK: '33554432'
+      VK_ICD_FILENAMES: /no-vulkan-icd.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Native position and binding contracts
+        run: cargo test --locked -p alife_game_app --no-default-features --features cpu-training --lib food_offset -- --nocapture
+      - name: Build real CPU fixture executables
+        run: cargo build --locked -p alife_game_app --no-default-features --features cpu-training --bin train_cpu_care --bin train_cpu_care_round
+      - name: Model HTTP mock through native map assessment and sampler
+        env:
+          ALIFE_FRONTIER_TEST_CARE: ${{ github.workspace }}/target/debug/train_cpu_care
+          ALIFE_FRONTIER_TEST_ROUND: ${{ github.workspace }}/target/debug/train_cpu_care_round
+        run: python -B -m unittest discover -s scripts -p 'test_llm_care_scenarios.py' -v

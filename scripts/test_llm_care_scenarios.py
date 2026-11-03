@@ -1,4 +1,8 @@
 import copy
+import os
+import tempfile
+from pathlib import Path
+from run_care_frontier_fixture import Pilot
 import unittest
 import json
 import threading
@@ -66,6 +70,22 @@ class RecipeTests(unittest.TestCase):
     def test_duplicate_json_keys_and_nonfinite_rejected(self):
         for text in ('{"a":1,"a":2}', '{"a":NaN}'):
             with self.assertRaises(ValueError): strict_json(text)
+
+    @unittest.skipUnless(os.environ.get('ALIFE_FRONTIER_TEST_CARE') and os.environ.get('ALIFE_FRONTIER_TEST_ROUND'),
+                         'explicit native binaries required')
+    def test_generated_map_reaches_native_assessment(self):
+        recipe, host = fixtures()
+        # Use one observed family; the second remains a disjoint holdout family.
+        host.update(decision_budget=2, slots=1, current_difficulty=0)
+        bank = compile_recipe(recipe, host)
+        discovery = [{'family': 'held', 'seed': i} for i in (301, 302, 303)]
+        with tempfile.TemporaryDirectory() as tmp:
+            pilot = Pilot(Path(tmp) / 'run', Path(os.environ['ALIFE_FRONTIER_TEST_CARE']),
+                          Path(os.environ['ALIFE_FRONTIER_TEST_ROUND']), 2, 3, 1, bank, discovery)
+            result = pilot.run()
+            self.assertEqual(len(result['discovery']), 3)
+            self.assertTrue(all(row['food_offset'] == [3, 0] for row in result['discovery']))
+            self.assertIn('difficulty_after', json.loads((pilot.root / 'selection.json').read_text()))
 
     def test_seed_overlap_and_unsupported_condition_reject(self):
         recipe, host = fixtures(); host['holdout_seeds']['held'] = [101]
