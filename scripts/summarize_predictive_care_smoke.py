@@ -98,6 +98,19 @@ def summarize(root):
                     "actions": json.dumps(actions, sort_keys=True),
                     "teacher_cue_frames_all_including_bootstrap": metric["teacher_cue_frames_all_including_bootstrap"],
                 })
+                if plan["decisions"] == 64:
+                    def held(row, boundary):
+                        ownership = row["lesson_target_ownership_" + boundary]
+                        return (ownership is not None and not ownership["consumed"]
+                                and ownership["owner"] == row["organism"])
+                    rows[-1].update({
+                        "nonzero_displacement_outcomes": sum(
+                            sum(row["outcome"]["physical"]["displacement"][c] ** 2
+                                for c in ["x", "y", "z"]) > 1e-12 for row in scored),
+                        "lesson_food_held_initially": held(scored[0], "before_decision"),
+                        "lesson_food_held_at_scored_end": held(scored[-1], "after_outcome"),
+                        "held_food_outcomes": sum(held(row, "after_outcome") for row in scored),
+                    })
     assert len(rows) == 24
     return rows
 
