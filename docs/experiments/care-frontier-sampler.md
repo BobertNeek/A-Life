@@ -5,7 +5,7 @@ It consumes completed native CPU care assessments from one frozen actor/value
 source. It changes task selection only: native biology, rewards, PPO, Adam,
 topology, semantic-prior implementation and accepted checkpoints are unchanged.
 It is inspired by adaptive problem generation, not an implementation of Dr. Zero
-or HRPO. No LLM is called and no training-speed benefit is claimed.
+or HRPO. The optional map author calls an explicitly configured model; no training-speed benefit is claimed.
 
 The task bank explicitly lists prewritten lesson/need-condition templates,
 native seeded placements, a host difficulty ladder, future training seeds and
@@ -87,25 +87,53 @@ trained/checkpoint artifacts are published. No efficacy or speedup follows from
 this result. More useful solver competence or finer validated templates are
 needed before a learning comparison can run.
 
-## Optional recipe authors and ASCII maps
+## LLM-authored feeding maps (experimental)
 
-An LLM/Luna can propose template IDs or help author new templates off the hot
-path. Its JSON is untrusted input. Host code owns the allowed template IDs,
-budget, difficulty bounds, seed allocator and holdout ledger; model text cannot
-choose rewards, executables, file paths, code or acceptance. The cheap first
-model comparison is a fixed number of proposed allowlisted template IDs versus
-the programmatic selector, charged for proposal/validation/assessment cost.
-There is no current evidence of an LLM benefit.
+`scripts/llm_care_scenarios.py` requests JSON from an explicitly configured
+OpenAI-compatible chat-completions endpoint. It writes a new sampler bank and
+an adjacent `.recipe.json` containing the model name and untrusted response.
+The model never chooses executables, paths, budgets, or seeds. Set
+`ALIFE_SCENARIO_API_KEY` only if the selected provider requires it. The chosen
+provider receives the prompt, model name, and family IDs; no checkpoint is sent.
+Remote endpoints require HTTPS, loopback may use HTTP, and redirects are rejected
+to avoid forwarding the API key to another host.
 
-ASCII maps are a future optional front end to versioned structured scene JSON,
-not supported by this sampler. A grid/legend can define roles (`A` learner,
-`F` food, `#` obstacle, `.` ground), cell size/origin and finite seeded rolls for
-allowed variants. A deterministic compiler should emit ordinary engine
-coordinates plus the recipe/seed/generated-scene hashes. Validate rectangular
-bounded dimensions, unique required roles, finite physical sizes, valid terrain,
-clearance/collisions, supported goal predicates and traversable routes using the
-engine's movement authority. Reject invalid/unreachable proposals with bounded
-work; do not silently reroll until a favorable scene appears. Goals are scored
-from world outcomes, never model declarations. Existing continuous non-grid
-scenarios remain supported. Custom map compilation/reachability and additional
-goals need their own implementation and physical positive controls.
+The map language has exactly one `L` learner and one `F` food on a rectangular
+3–17-cell grid with a complete `#` wall border; `.` marks open space. A cell is
+two world units; columns increase world X and rows world Z. For example
+`["#####", "#L.F#", "#####"]` places food four units east of the learner.
+The native world builds solid terrain walls, validates connectivity against its
+movement authority, and places the food and founder at their map locations.
+Map validation rejects invalid or unreachable scenes; a route is not proof the
+learner can solve the task. The current goal is feeding and does not support
+additional object classes, terrain types, or goals.
+
+Each recipe explicitly names `nourish_and_survive` and the supported food
+variety roll: `(seed // 12) % 3`, mapping 0 to root, 1 to fruit, and 2 to seed.
+This matches native scene construction. The host chooses seeds, so no probability
+distribution over a selected set of seeds is assumed. The map fixes geometry. Host-provided disjoint pool, holdout and discovery seeds remain in
+control. The generated bank feeds the same observed-outcome difficulty selector
+as the other native templates. Holdouts never drive selection; three or more
+current-tier trials are required to move at most one tier up or down.
+
+A host configuration supplies `decision_budget`, `slots`, `sampler_seed`,
+`current_difficulty`, and dictionaries `pool_seeds` and `holdout_seeds` keyed
+by the desired family IDs. Each value is a nonempty list of globally disjoint
+positive integer seeds. Example:
+
+```json
+{"decision_budget":64,"slots":1,"sampler_seed":42,"current_difficulty":0,
+ "pool_seeds":{"lesson_a":[101]},"holdout_seeds":{"lesson_a":[201]}}
+```
+
+```sh
+python3 scripts/llm_care_scenarios.py --host host.json --endpoint http://127.0.0.1:11434/v1/chat/completions --model MODEL --output bank.json
+python3 scripts/care_frontier_sampler.py --bank bank.json --assessment COMPLETED_ASSESSMENT --native-evaluator PATH_TO_TRAIN_CPU_CARE_ROUND
+```
+
+For an isolated native fixture, supply `--bank bank.json --slots 1 --discovery
+DISCOVERY.json` to `run_care_frontier_fixture.py`; discovery is a JSON array of
+`{"family":"lesson_a","seed":301}` entries, distinct from pool, holdout and
+fixture founder seeds. It creates only a fresh disposable founder. No result is
+claimed for a real model or native run until measured. Model output is untrusted;
+invalid maps, unsupported features, duplicates and unsafe seed overlap reject.

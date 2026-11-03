@@ -34,12 +34,13 @@ def write_new(path, value):
 
 
 class Pilot:
-    def __init__(self, root, care_binary, round_binary, decisions, discovery_trials, slots):
+    def __init__(self, root, care_binary, round_binary, decisions, discovery_trials, slots, bank=None, discovery=None):
         require(not root.exists() and not root.is_symlink(), "fresh disposable output required; never resume")
         require(1 <= decisions <= 128 and 3 <= discovery_trials <= 8 and 1 <= slots <= 8, "bounded pilot settings required")
         self.root, self.care, self.round = root, care_binary.resolve(strict=True), round_binary.resolve(strict=True)
         self.pins = {str(p): file_pin(p) for p in (self.care, self.round)}
         self.decisions, self.trials, self.slots = decisions, discovery_trials, slots
+        self.bank, self.discovery = bank, discovery
         self.calls = []
         root.mkdir(parents=True, exist_ok=False)
         self.frozen = {}
@@ -80,6 +81,10 @@ class Pilot:
         request = {"previous": str(source), "output": str(prefix), "seed_history": str(history),
                    "seed": task["seed"], "decisions": self.decisions, "temperature": 1.0,
                    "lesson": family["lesson"], "food_need_condition": family["food_need_condition"], "known_exclusions": False}
+        if "food_offset" in family:
+            request["food_offset"] = family["food_offset"]
+        if "layout" in family:
+            request["layout"] = family["layout"]
         spec = prefix.with_suffix(".request.json")
         write_new(spec, request)
         native_result = self.command(self.round, ["evaluate", "--spec", spec], self.root)
@@ -103,6 +108,19 @@ class Pilot:
                                                 for i, f in enumerate(FAMILIES) for j in range(8)],
                 "holdouts": [{"family": f["id"], "seed": 886001+100*i+j}
                              for i, f in enumerate(FAMILIES) for j in range(2)]}
+        if self.bank is not None:
+            bank, discovery = self.bank, self.discovery
+            require(bank["decision_budget"] == self.decisions and bank["slots"] == self.slots,
+                    "fixture settings differ from generated bank")
+            require(isinstance(discovery, list) and 1 <= len(discovery) <= 128,
+                    "bounded discovery seeds required")
+            known = {f["id"] for f in bank["families"]}
+            seeds = [t["seed"] for t in discovery]
+            used = {t["seed"] for kind in ("pool", "holdouts") for t in bank[kind]}
+            require(all(set(t) == {"family", "seed"} and t["family"] in known
+                        and type(t["seed"]) is int and 1 <= t["seed"] < 2**64 for t in discovery)
+                    and len(set(seeds)) == len(seeds) and not (set(seeds) & (used | {881001}))
+                    and 881001 not in used, "discovery, training, holdout and founder seeds must be disjoint")
         families = validate_bank(bank)
         write_new(self.root / "task-bank.json", bank)
         assessments = {t["seed"] for t in discovery + bank["holdouts"]}
@@ -123,9 +141,15 @@ class Pilot:
                     family = families[task["family"]]
                     history = self.history(previous, lane / f"train-{i:02d}.history.json", trained, assessments)
                     output = lane / f"train-{i:02d}"
-                    receipt = self.command(self.care, ["--previous", previous, "--output", output,
+                    arguments = ["--previous", previous, "--output", output,
                         "--seed-history", history, "--seed", task["seed"], "--lesson", family["lesson"],
-                        "--food-need-condition", family["food_need_condition"], "--decisions", self.decisions], lane)
+                        "--food-need-condition", family["food_need_condition"], "--decisions", self.decisions]
+                    if "food_offset" in family:
+                        arguments.extend(["--food-offset-x", family["food_offset"][0],
+                                          "--food-offset-z", family["food_offset"][1]])
+                    if "layout" in family:
+                        arguments.extend(["--layout-json", json.dumps(family["layout"], separators=(",", ":"))])
+                    receipt = self.command(self.care, arguments, lane)
                     records.append({"task": task, "receipt": receipt})
                     self.frozen[str(output)] = raw_tree(output)
                     previous = output
@@ -161,9 +185,15 @@ def main():
     parser.add_argument("--decisions", type=int, default=64)
     parser.add_argument("--discovery-per-family", type=int, default=4)
     parser.add_argument("--slots", type=int, default=4)
+    parser.add_argument("--bank", type=Path, help="validated generated bank")
+    parser.add_argument("--discovery", type=Path, help="separate disjoint family/seed list")
     args = parser.parse_args()
+    if bool(args.bank) != bool(args.discovery):
+        parser.error("--bank and --discovery must be supplied together")
     pilot = Pilot(args.output.absolute(), args.care_binary, args.round_binary,
-                  args.decisions, args.discovery_per_family, args.slots)
+                  args.decisions, args.discovery_per_family, args.slots,
+                  read_json(args.bank, 1024**2) if args.bank else None,
+                  read_json(args.discovery, 1024**2) if args.discovery else None)
     try:
         result = pilot.run()
     except (ValueError, KeyError, TypeError, OSError, subprocess.TimeoutExpired) as error:
