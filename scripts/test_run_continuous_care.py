@@ -1,5 +1,6 @@
 """Synthetic host ownership tests; no native process, GPU or world is created."""
 import argparse
+import base64
 import copy
 import datetime as dt
 import json
@@ -154,7 +155,9 @@ class ContinuousCareTests(unittest.TestCase):
             Path(str(log) + '.stderr.log').write_text('synthetic device warning\n')
 
     def test_one_long_world_full_state_publication_and_bound_cleanup(self):
-        receipt = session.run(self.args())
+        with patch.object(session, 'failure_stderr_excerpt', side_effect=AssertionError('success sampled stderr')):
+            receipt = session.run(self.args())
+        self.assertNotIn('native_failure_stderr', receipt)
         final = cp.read_json(self.store / cp.CURRENT)
         self.assertEqual(final['policy_version'], 41)
         self.assertEqual(final['actor_optimizer_step'], 102)
@@ -172,6 +175,113 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertIsNone(receipt['causal_speed'])  # Missing instrumentation is unknown.
         self.assertEqual(receipt['observed_rows'][0]['exact_trained_nourishing_events'], 2)
         self.assertEqual(receipt['observed_rows'][0]['generic_consumed_events'], 3)
+
+    def install_failed_child(self, stderr):
+        self.crash = True
+
+        class FailedProcess(Process):
+            def poll(self):
+                return 1
+
+        def failed(argv, log, deadline, guard, environment, on_started):
+            Path(str(log) + '.stderr.log').write_bytes(stderr)
+            try:
+                self.producer(argv, log, deadline, guard, environment,
+                              lambda _: on_started(FailedProcess()))
+            except RuntimeError:
+                raise RuntimeError('child exit 1; see owned stderr') from None
+
+        self.child.side_effect = failed
+
+    def test_failed_child_original_stderr_survives_normal_retirement(self):
+        original = b'GPU runtime error: core contract error: the GPU-authoritative neural backend is unavailable\n'
+        self.install_failed_child(original)
+        receipt = session.run(self.args())
+        diagnostic = receipt['native_failure_stderr']
+        self.assertEqual(receipt['native_exit_code'], 1)
+        self.assertEqual(receipt['native_exit_error'], 'RuntimeError: child exit 1; see owned stderr')
+        self.assertEqual(diagnostic['text'], original.decode())
+        self.assertEqual(base64.b64decode(diagnostic['prefix_base64']), original)
+        self.assertEqual(diagnostic['suffix_base64'], '')
+        self.assertEqual(diagnostic['omitted_bytes'], 0)
+        self.assertEqual(diagnostic['sha256'],
+                         receipt['retirement']['sidecars'][session.LOG + '.stderr.log']['sha256'])
+        self.assertEqual(cp.read_json(self.lane / session.RECEIPT), receipt)
+        self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
+        self.assertFalse((self.store / cp.RUN).exists())
+        self.assertEqual(receipt['retained_trained_rows'], 0)
+        self.assertEqual(receipt['actor_optimizer_step_delta'], 0)
+        self.assertEqual(receipt['value_optimizer_step_delta'], 0)
+        final = cp.read_json(self.store / cp.CURRENT)
+        self.assertEqual({k: final[k] for k in self.initial if k != 'seeds'},
+                         {k: v for k, v in self.initial.items() if k != 'seeds'})
+        self.assertEqual(final['seeds']['pending_range'], [81, 87])
+
+    def test_failure_excerpt_is_bounded_and_keeps_exact_binary_ends(self):
+        path = self.lane / (session.LOG + '.stderr.log')
+        original = b'original error\xff\n' + b'x' * (3 * session.FAILURE_STDERR_BYTES) + b'\nfinal cause\xfe'
+        path.write_bytes(original)
+        result = session.failure_stderr_excerpt(self.lane, session.sidecar_identity(path))
+        half = session.FAILURE_STDERR_BYTES // 2
+        self.assertEqual(base64.b64decode(result['prefix_base64']), original[:half])
+        self.assertEqual(base64.b64decode(result['suffix_base64']), original[-half:])
+        self.assertEqual(result['captured_bytes'], session.FAILURE_STDERR_BYTES)
+        self.assertEqual(result['omitted_bytes'], len(original) - session.FAILURE_STDERR_BYTES)
+        self.assertIn('original error', result['text'])
+        self.assertIn('final cause', result['text'])
+        self.assertLess(len(cp.encode_json(result)), 8 * session.FAILURE_STDERR_BYTES)
+        self.assertEqual(path.read_bytes(), original)
+        expected = session.sidecar_identity(path)
+        path.write_bytes(b'changed writer')
+        with self.assertRaisesRegex(ValueError, 'changed before capture'):
+            session.failure_stderr_excerpt(self.lane, expected)
+        self.assertEqual(path.read_bytes(), b'changed writer')
+        self.assertEqual(session.failure_stderr_excerpt(self.lane, None), {'available': False})
+
+    def test_failure_receipt_write_interruption_keeps_log_for_recovery(self):
+        original = b'original startup error\n'
+        self.install_failed_child(original)
+        write = cp.write_json
+
+        def interrupted(path, value):
+            if path == self.lane / session.RECEIPT:
+                raise RuntimeError('before final receipt commit')
+            return write(path, value)
+
+        with patch.object(cp, 'write_json', side_effect=interrupted):
+            with self.assertRaisesRegex(RuntimeError, 'before final receipt commit'):
+                session.run(self.args())
+        self.assertEqual((self.lane / (session.LOG + '.stderr.log')).read_bytes(), original)
+        self.assertFalse((self.lane / session.RECEIPT).exists())
+        args = self.args()
+        args.reconcile = True
+        recovered = session.run(args)
+        self.assertEqual(recovered['native_failure_stderr']['text'], original.decode())
+        self.assertEqual(self.child.call_count, 1)
+
+    def test_failure_diagnostic_survives_interrupted_log_removal_without_resampling(self):
+        original = b'original startup error\n'
+        self.install_failed_child(original)
+        retire = session.retire_sidecars
+
+        def interrupted(lane, receipt, validate):
+            def removed(name):
+                if name == session.LOG + '.stderr.log':
+                    raise RuntimeError('after stderr removal')
+            return retire(lane, receipt, validate, after_remove=removed)
+
+        with patch.object(session, 'retire_sidecars', side_effect=interrupted):
+            with self.assertRaisesRegex(RuntimeError, 'after stderr removal'):
+                session.run(self.args())
+        self.assertFalse((self.lane / (session.LOG + '.stderr.log')).exists())
+        committed = cp.read_json(self.lane / session.RECEIPT)
+        self.assertEqual(committed['native_failure_stderr']['text'], original.decode())
+        args = self.args()
+        args.reconcile = True
+        with patch.object(session, 'failure_stderr_excerpt', side_effect=AssertionError('resampled log')):
+            self.assertEqual(session.run(args), committed)
+        self.assertEqual(self.child.call_count, 1)
+        self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
 
     def test_mid_world_loss_retains_baseline_learning_and_consumes_seed(self):
         self.crash = True
