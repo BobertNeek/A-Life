@@ -473,6 +473,9 @@ def finish(lane, state, validate):
             if e['kind'] == 'continuous-terminal-v1'), None),
         'seed_admission': state.get('seed_admission'),
         'native_exit_code': state.get('native_exit_code'),
+        # A recovered snapshot proves retained state, not how its writer exited.
+        # In particular, loss of the supervisor can leave no observed exit code.
+        'native_exit_observed': state.get('native_exit_code') is not None,
         'recovery': recovery, 'cleanup': cleanup,
         'one_fresh_world': mode == 'fresh_world' and not recovery.get('initialization_aborted', False),
         'same_individual_across_sessions': progress is not None if mode == 'same_individual' else False,
@@ -491,7 +494,7 @@ def finish(lane, state, validate):
             'owner/request changed before committing retirement')
     receipt['retirement'] = {'schema': 1, 'kind': 'finite-continuous-retirement-v1',
         'owner': deepcopy(state), 'sidecars': {name: sidecar_identity(lane / name) for name in SIDECARS}}
-    if state.get('native_exit_error') is not None or state.get('native_exit_code') not in (None, 0):
+    if state.get('native_exit_error') is not None or state.get('native_exit_code') != 0:
         receipt['native_failure_stderr'] = failure_stderr_excerpt(
             lane, receipt['retirement']['sidecars'][LOG + '.stderr.log'])
     cp.write_json(lane / RECEIPT, receipt)

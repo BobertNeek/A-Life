@@ -171,6 +171,7 @@ class ContinuousCareTests(unittest.TestCase):
         self.assertTrue((self.lane / session.RECEIPT).is_file())
         self.assertEqual(self.child.call_count, 1)
         self.assertEqual(receipt['native_exit_code'], 0)
+        self.assertTrue(receipt['native_exit_observed'])
         self.assertEqual(receipt['retained_trained_rows'], 512)
         self.assertIsNone(receipt['causal_speed'])  # Missing instrumentation is unknown.
         self.assertEqual(receipt['observed_rows'][0]['exact_trained_nourishing_events'], 2)
@@ -199,6 +200,7 @@ class ContinuousCareTests(unittest.TestCase):
         receipt = session.run(self.args())
         diagnostic = receipt['native_failure_stderr']
         self.assertEqual(receipt['native_exit_code'], 1)
+        self.assertTrue(receipt['native_exit_observed'])
         self.assertEqual(receipt['native_exit_error'], 'RuntimeError: child exit 1; see owned stderr')
         self.assertEqual(diagnostic['text'], original.decode())
         self.assertEqual(base64.b64decode(diagnostic['prefix_base64']), original)
@@ -282,6 +284,43 @@ class ContinuousCareTests(unittest.TestCase):
             self.assertEqual(session.run(args), committed)
         self.assertEqual(self.child.call_count, 1)
         self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
+
+    def test_reconciliation_without_exit_observation_preserves_diagnostics_not_a_cause(self):
+        # Materialize a stopped run, then model loss of the supervisor before
+        # its final exit observation became durable. No second life is launched.
+        with patch.object(session, 'finish', side_effect=RuntimeError('owner interrupted')):
+            with self.assertRaisesRegex(RuntimeError, 'owner interrupted'):
+                session.run(self.args())
+        original = b'last native diagnostic before lost owner\xff\n'
+        stderr = self.lane / (session.LOG + '.stderr.log')
+        stderr.write_bytes(original)
+        state = cp.read_json(self.lane / session.STATE)
+        state.pop('native_exit_code')
+        state.pop('native_exit_error', None)
+        state['worker']['stopped'] = False
+        cp.write_json(self.lane / session.STATE, state)
+        args = self.args()
+        args.reconcile = True
+        with patch.object(cp, 'pid_alive', return_value=True):
+            with self.assertRaisesRegex(ValueError, 'native writer still alive'):
+                session.run(args)
+        self.assertEqual(stderr.read_bytes(), original)
+        self.assertFalse((self.lane / session.RECEIPT).exists())
+        self.assertEqual(cp.read_json(self.store / cp.CURRENT), self.initial)
+        with patch.object(cp, 'pid_alive', return_value=False):
+            receipt = session.run(args)
+        self.assertFalse(receipt['native_exit_observed'])
+        self.assertIsNone(receipt['native_exit_code'])
+        self.assertIsNone(receipt['native_exit_error'])
+        self.assertEqual(base64.b64decode(receipt['native_failure_stderr']['prefix_base64']), original)
+        self.assertEqual(receipt['retained_trained_rows'], 512)
+        self.assertEqual(receipt['actor_optimizer_step_delta'], 2)
+        self.assertEqual(receipt['value_optimizer_step_delta'], 3)
+        self.assertEqual(self.child.call_count, 1)
+        self.assertFalse((self.store / cp.RUN).exists())
+        self.assertTrue(all(not (self.lane / name).exists() for name in session.SIDECARS))
+        with patch.object(cp, 'pid_alive', return_value=False):
+            self.assertEqual(session.run(args), receipt)  # Committed retry needs no logs.
 
     def test_mid_world_loss_retains_baseline_learning_and_consumes_seed(self):
         self.crash = True
