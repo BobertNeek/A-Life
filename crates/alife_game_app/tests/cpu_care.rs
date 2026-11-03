@@ -102,6 +102,64 @@ fn snapshot(root: &Path) -> Value {
 }
 
 #[test]
+fn care_cadence_opt_in_preserves_complete_learned_checkpoints() {
+    let fixture = Fixture::new();
+    let reference = fixture.0.join("reference");
+    let cadence = fixture.0.join("cadence");
+    for (output, execution) in [(&reference, None), (&cadence, Some("cadence-csr"))] {
+        let mut args = vec![
+            "--fixture",
+            "--output",
+            text(output),
+            "--seed",
+            "70703",
+            "--lesson",
+            "eat_held_food",
+            "--decisions",
+            "4",
+        ];
+        if let Some(execution) = execution {
+            args.extend(["--replay-execution", execution]);
+        }
+        let receipt = success(&args);
+        success(&["--validate-output", text(output)]);
+        assert_eq!(receipt["backend"], "native-cpu");
+        assert!(receipt["actor_optimizer_updates"].as_u64().unwrap() > 0);
+        assert!(receipt["value_optimizer_updates"].as_u64().unwrap() > 0);
+        if execution.is_some() {
+            assert_eq!(receipt["cpu_replay_execution"], "cadence-csr");
+            assert_eq!(receipt["cpu_collection_execution"], "reference");
+        } else {
+            assert!(receipt.get("cpu_replay_execution").is_none());
+        }
+    }
+    for name in [
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+        "training-handoff.json",
+        "care-trace.json",
+    ] {
+        assert_eq!(
+            fs::read(reference.join(name)).unwrap(),
+            fs::read(cadence.join(name)).unwrap(),
+            "cadence changed native care state: {name}"
+        );
+    }
+    let invalid = fixture.0.join("invalid-mode");
+    assert!(!run(&[
+        "--fixture",
+        "--output",
+        text(&invalid),
+        "--replay-execution",
+        "gpu"
+    ])
+    .status
+    .success());
+    assert!(!invalid.exists());
+}
+
+#[test]
 fn care_fixtures_prepare_native_lessons_and_capture_exact_decision_bootstrap_dose() {
     let fixture = Fixture::new();
     for (index, lesson) in ["eat_held_food", "eat_reachable_food", "feeding"]

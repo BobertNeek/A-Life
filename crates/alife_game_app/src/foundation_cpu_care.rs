@@ -121,8 +121,16 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
 }
 
 pub fn run_cpu_care(request: CpuCareRequest) -> Result<Value> {
+    run_cpu_care_with_replay_execution(request, CpuReplayExecution::Reference)
+}
+
+/// Explicit CPU training replay scheduling; collection and admission stay unchanged.
+pub fn run_cpu_care_with_replay_execution(
+    request: CpuCareRequest,
+    execution: CpuReplayExecution,
+) -> Result<Value> {
     let (config, mut episode) = prepare_care_episode(request)?;
-    let result = run_cpu_continuation(config, &mut episode);
+    let result = run_cpu_continuation_with_replay_execution(config, &mut episode, execution);
     if let Some(reservation) = episode.reservation.as_mut() {
         match &result {
             Ok(receipt) => reservation.accept(receipt)?,

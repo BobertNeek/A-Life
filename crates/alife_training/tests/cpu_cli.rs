@@ -14,6 +14,86 @@ fn run(args: &[&str]) -> std::process::Output {
 fn text(path: &Path) -> &str {
     path.to_str().unwrap()
 }
+
+#[test]
+fn explicit_cadence_fixture_matches_default_native_training_outputs() {
+    let root = std::env::temp_dir().join(format!(
+        "alife-cpu-cadence-cli-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir(&root).unwrap();
+    let reference = root.join("reference");
+    let cadence = root.join("cadence");
+    let invalid = root.join("invalid");
+    let bad = run(&[
+        "--fixture",
+        "--output",
+        text(&invalid),
+        "--seed",
+        "70701",
+        "--ticks",
+        "6",
+        "--replay-execution",
+        "gpu",
+    ]);
+    assert!(!bad.status.success());
+    assert!(!invalid.exists());
+    let a = run(&[
+        "--fixture",
+        "--output",
+        text(&reference),
+        "--seed",
+        "70701",
+        "--ticks",
+        "6",
+    ]);
+    assert!(a.status.success(), "{}", String::from_utf8_lossy(&a.stderr));
+    let b = run(&[
+        "--fixture",
+        "--output",
+        text(&cadence),
+        "--seed",
+        "70701",
+        "--ticks",
+        "6",
+        "--replay-execution",
+        "cadence-csr",
+    ]);
+    assert!(b.status.success(), "{}", String::from_utf8_lossy(&b.stderr));
+    for name in [
+        "trained.alife-foundation",
+        "actor-checkpoint.json",
+        "value-checkpoint.json",
+        "training-handoff.json",
+    ] {
+        assert_eq!(
+            fs::read(reference.join(name)).unwrap(),
+            fs::read(cadence.join(name)).unwrap(),
+            "native output differs: {name}"
+        );
+    }
+    let a: serde_json::Value = serde_json::from_slice(&a.stdout).unwrap();
+    let b: serde_json::Value = serde_json::from_slice(&b.stdout).unwrap();
+    assert!(a.get("cpu_replay_execution").is_none());
+    assert_eq!(b["cpu_replay_execution"], "cadence-csr");
+    assert_eq!(b["cpu_collection_execution"], "reference");
+    assert_eq!(b["backend"], "native-cpu");
+    assert!(b["actor_optimizer_updates"].as_u64().unwrap() > 0);
+    assert!(b["value_optimizer_updates"].as_u64().unwrap() > 0);
+    for key in [
+        "training_rows",
+        "actor_optimizer_step",
+        "value_optimizer_step",
+        "mean_kl_before_updates",
+    ] {
+        assert_eq!(a[key], b[key], "receipt differs: {key}");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
 fn snapshot_tree(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Option<Vec<u8>>> {
     fn visit(
         root: &Path,
