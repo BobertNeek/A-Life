@@ -3,6 +3,7 @@
 use super::*;
 mod food_provenance;
 use alife_core::{N2048LivePolicyTransition, OrganismId};
+use alife_runtime::gpu_failure_context;
 use alife_training::{
     CurrentTrainingCheckpointV1, FoundationTrainingBackendV1, FoundationTrainingHandoffV1,
 };
@@ -653,19 +654,28 @@ pub(super) fn run_same_individual_world(
         .iter()
         .filter_map(|c| c.gpu_brain.clone())
         .collect::<Vec<_>>();
-    let backend = GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1())?;
-    let hardware = backend.hardware_receipt().clone();
-    let mut runtime = GpuLiveBrainRuntime::restore_foundation_rehearsal(
-        backend,
-        world,
-        world_seed,
-        BrainScaleTier::Standard2048,
-        &store,
-        &loaded.save.assets,
-        &checkpoints,
-        sampling,
+    let backend = gpu_failure_context(
+        "care.backend_create",
+        GpuClosedLoopBackend::new_required(GpuRuntimeProfile::production_v1()),
     )?;
-    runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &loaded.save)?;
+    let hardware = backend.hardware_receipt().clone();
+    let mut runtime = gpu_failure_context(
+        "care.rehearsal_restore",
+        GpuLiveBrainRuntime::restore_foundation_rehearsal(
+            backend,
+            world,
+            world_seed,
+            BrainScaleTier::Standard2048,
+            &store,
+            &loaded.save.assets,
+            &checkpoints,
+            sampling,
+        ),
+    )?;
+    gpu_failure_context(
+        "care.boundary_rebind",
+        runtime.rebind_durable_checkpoint_boundary(&save_path, &assets, &loaded.save),
+    )?;
     runtime.attach_lineage_archive(
         alife_archive::LineageLibraryConfig::profile_default(work.join("lineage")),
         alife_core::ArchiveLearnedCapturePolicy::GeneticOnly,
@@ -677,7 +687,7 @@ pub(super) fn run_same_individual_world(
     // A present saved stream is authoritative, including temperature. The request
     // only initializes an explicitly new stream when legacy metadata is absent.
     let ppo = cycle_ppo_config(sampling.temperature)?;
-    let staging = runtime.new_staging_like_live()?;
+    let staging = gpu_failure_context("care.staging_create", runtime.new_staging_like_live())?;
     let (mut trainer, mut value) = baseline.handoff.clone().into_gpu_training_session(
         alife_runtime::GpuAuthoritativeSession::new(
             staging,

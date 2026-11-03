@@ -38,7 +38,9 @@ use alife_world::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{GameAppShellError, GpuAuthoritativeSession, GpuSessionFailStopCause};
+use crate::{
+    gpu_failure_context, GameAppShellError, GpuAuthoritativeSession, GpuSessionFailStopCause,
+};
 
 use super::{
     content_store::GpuCheckpointAssetStore,
@@ -1079,19 +1081,31 @@ impl GpuCheckpointAssetStore {
             return Err(ScaffoldContractError::BrainOwnershipMismatch.into());
         }
         let capacity = BrainCapacityClass::production_for_id(state.capacity_class_id)?;
-        let current_provenance = current_backend_provenance(backend, &capacity)?;
-        state
-            .backend_provenance
-            .validate_portable_restore_against(&current_provenance)?;
+        let current_provenance = gpu_failure_context(
+            "checkpoint.current_provenance",
+            current_backend_provenance(backend, &capacity),
+        )?;
+        gpu_failure_context(
+            "checkpoint.portable_compatibility",
+            state
+                .backend_provenance
+                .validate_portable_restore_against(&current_provenance),
+        )?;
         let runtime_profile = backend.runtime_profile();
         let activity_policy = backend.activity_policy();
-        if !runtime_profile.accepts_portable_checkpoint_profile(
-            state.runtime_profile_id,
-            state.runtime_profile_digest,
+        if !gpu_failure_context(
+            "checkpoint.profile_contract",
+            runtime_profile.accepts_portable_checkpoint_profile(
+                state.runtime_profile_id,
+                state.runtime_profile_digest,
+            ),
         )? || state.activity_policy_version != activity_policy.policy_version
             || state.activity_policy_digest != activity_policy.policy_digest
         {
-            return Err(ScaffoldContractError::NeuralBackendUnavailable.into());
+            return gpu_failure_context(
+                "checkpoint.profile_activity_admission",
+                Err(ScaffoldContractError::NeuralBackendUnavailable.into()),
+            );
         }
         let (throttle_sequence, _): (Vec<PortableThrottleCheckpoint>, Vec<u8>) =
             self.read_json(manifest, &state.throttle_replay.sequence_asset)?;
@@ -1332,30 +1346,38 @@ impl GpuCheckpointAssetStore {
             pending_eligibility: pending,
         })?;
         let request = GpuBrainRestoreRequest::try_new(checkpoint)?;
-        let receipt = match live_topology {
-            Some(topology) => backend.restore_brain_with_live_topology(
-                state.organism_id,
-                phenotype.clone(),
-                topology,
-                request,
-            )?,
-            None => backend.restore_brain(state.organism_id, phenotype.clone(), request)?,
-        };
+        let receipt = gpu_failure_context(
+            "checkpoint.restore_upload",
+            match live_topology {
+                Some(topology) => backend.restore_brain_with_live_topology(
+                    state.organism_id,
+                    phenotype.clone(),
+                    topology,
+                    request,
+                ),
+                None => backend.restore_brain(state.organism_id, phenotype.clone(), request),
+            },
+        )?;
         let post_restore = (|| -> Result<Option<ExperiencePatchBuilder>, GameAppShellError> {
-            backend.restore_activity_state(
-                receipt.handle,
-                GpuActivityRestoreInput {
-                    next_sequence_cursor: state.throttle_replay.next_sequence_cursor,
-                    checkpoint_tick: state.checkpoint_tick.raw(),
-                    next_completed_gpu_time_ns: state.throttle_replay.next_completed_gpu_time_ns,
-                    brain_atp_q16: state.throttle_replay.brain_atp_q16,
-                    last_world_atp_tick: state.throttle_replay.last_world_atp_tick,
-                    record: state
-                        .throttle_replay
-                        .last_checkpoint
-                        .as_ref()
-                        .map(activity_restore_record),
-                },
+            gpu_failure_context(
+                "checkpoint.activity_restore",
+                backend.restore_activity_state(
+                    receipt.handle,
+                    GpuActivityRestoreInput {
+                        next_sequence_cursor: state.throttle_replay.next_sequence_cursor,
+                        checkpoint_tick: state.checkpoint_tick.raw(),
+                        next_completed_gpu_time_ns: state
+                            .throttle_replay
+                            .next_completed_gpu_time_ns,
+                        brain_atp_q16: state.throttle_replay.brain_atp_q16,
+                        last_world_atp_tick: state.throttle_replay.last_world_atp_tick,
+                        record: state
+                            .throttle_replay
+                            .last_checkpoint
+                            .as_ref()
+                            .map(activity_restore_record),
+                    },
+                ),
             )?;
 
             let pending_transaction = match &state.pending_experience_transaction {
@@ -1382,22 +1404,28 @@ impl GpuCheckpointAssetStore {
                 return Err(ScaffoldContractError::LearningEvidenceMismatch.into());
             }
 
-            self.restore_sleep_assets(
-                backend,
-                manifest,
-                state,
-                receipt.handle,
-                &phenotype,
-                live_total_synapse_count,
-                live_recurrent_synapse_count,
-                live_decoder_synapse_count,
+            gpu_failure_context(
+                "checkpoint.sleep_restore",
+                self.restore_sleep_assets(
+                    backend,
+                    manifest,
+                    state,
+                    receipt.handle,
+                    &phenotype,
+                    live_total_synapse_count,
+                    live_recurrent_synapse_count,
+                    live_decoder_synapse_count,
+                ),
             )?;
             Ok(pending_transaction)
         })();
         let pending_transaction = match post_restore {
             Ok(pending_transaction) => pending_transaction,
             Err(error) => {
-                if let Err(cleanup_error) = cleanup_failed_restore(backend, &receipt) {
+                if let Err(cleanup_error) = gpu_failure_context(
+                    "checkpoint.restore_cleanup",
+                    cleanup_failed_restore(backend, &receipt),
+                ) {
                     backend.record_contract_failure(&cleanup_error);
                     backend.fail_stop(GpuSessionFailStopCause::CheckpointRestoreFailed);
                     return Err(GameAppShellError::InvalidProductionFrontend {

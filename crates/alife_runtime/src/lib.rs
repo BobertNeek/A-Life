@@ -2,6 +2,7 @@
 
 pub mod canonical_preparation;
 mod checkpoint_assets;
+mod failure_context;
 mod session;
 mod sleep_scheduler;
 
@@ -15,6 +16,7 @@ pub use checkpoint_assets::{
     GpuSleepTransactionJournalV2, RestoredGpuBrainCheckpoint, RestoredRetainedLearning,
     RetainedLearningCapture, GPU_SLEEP_TRANSACTION_JOURNAL_MAX_ENTRIES,
 };
+pub use failure_context::gpu_failure_context;
 pub use session::*;
 pub use sleep_scheduler::*;
 
