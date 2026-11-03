@@ -208,3 +208,28 @@ counterfactual replay; it does not claim ownership of an input's original world.
 There is no compact-view gradient, optimizer, checkpoint-export or accepted-source
 entry point. Source changes require a fresh plan/view. Native baseline state and
 all decoder/dendritic behavior are preserved.
+
+The [native-reference follow-up](../../docs/performance/20261103-full-mask-native-reference.json)
+corrects the interpretation of the full-mask ratio. On 16 real captured rows,
+seven warm rotating release trials measured native Reference 7.420 ms, native
+CadenceCsr 6.726 ms, cancellation 17.826 ms, fresh compact 8.185 ms and reused
+compact 7.302 ms (medians). Fresh compact is 10.3% slower than genuine native
+Reference. Repeated full-plan SHA/source binding measured 9.347 ms per batch;
+sequence cloning 0.198 ms; one native sequence-validation pass 0.367 ms; raw
+native graph forward 7.025 ms. These isolated component calls overlap broader
+scopes and must not be summed as an exact decomposition. External wall for the
+whole assay, including collection, all alternatives, controls and component work,
+was 1.182 s. The older direct-lookup main binary was not separately timed.
+
+No new full-mask preparation/training API follows from this result: native replay
+already avoids the cancellation wrapper and retains its graph. Existing opt-in
+`CpuReplayExecution::CadenceCsr` is reusable through genetic Adam updates; a new
+real-frame test verifies complete output/gradient/checkpoint equivalence, with
+nonzero moments and integer ages above 2^24. The frozen-weight detached view
+correctly rejects those updates and remains forward-only. All new measurement
+helpers are test-only; defaults, native checkpoints and accepted brains remain
+unchanged.
+
+```sh
+cargo test --release --locked -p alife_training --features cpu-backend --lib connection_budget_experiment::full_mask_assay::full_mask_components_and_native_reference -- --ignored --exact --nocapture --test-threads=1
+```

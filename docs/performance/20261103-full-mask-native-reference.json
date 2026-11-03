@@ -1,0 +1,454 @@
+{
+  "source_commit": "b7ef6e6a1a1ba925e26b40878436d08178592b64",
+  "source_tree": "f1de0b12d8c189df2d6255ef055b4d08d4015479",
+  "binary_sha256": "93c0846db58284efd0ea41ae7395c8b177a718ab892c570b2df1c890a934d183",
+  "argv": [
+    "/workspace/A-Life/target/cloud-cpu/release/deps/alife_training-9bab60013a6017fa",
+    "connection_budget_experiment::full_mask_assay::full_mask_components_and_native_reference",
+    "--ignored",
+    "--exact",
+    "--nocapture",
+    "--test-threads=1"
+  ],
+  "external_process_wall_seconds": 1.1824520759982988,
+  "paths": {
+    "compact_fresh": {
+      "median_ms": 8.185454,
+      "range_ms": [
+        8.140417000000001,
+        8.632659
+      ],
+      "median_setup_ms": 0.00035999999999999997
+    },
+    "compact_reused": {
+      "median_ms": 7.301941,
+      "range_ms": [
+        7.238174,
+        7.57948
+      ],
+      "median_setup_ms": 7.000000000000001e-05
+    },
+    "full_cancellation": {
+      "median_ms": 17.826495,
+      "range_ms": [
+        17.656619,
+        19.7308
+      ],
+      "median_setup_ms": 0.00051
+    },
+    "native_cadence": {
+      "median_ms": 6.7259210000000005,
+      "range_ms": [
+        6.662885999999999,
+        7.097652
+      ],
+      "median_setup_ms": 0.182405
+    },
+    "native_reference": {
+      "median_ms": 7.42046,
+      "range_ms": [
+        7.324425,
+        7.6680530000000005
+      ],
+      "median_setup_ms": 0.00011
+    }
+  },
+  "component_medians_ms": {
+    "aggregate_view_construction_seconds": 0.9012399999999999,
+    "cadence_index_construction_seconds": 0.15471300000000002,
+    "full_plan_sha_binding_per_frame_seconds": 9.347438,
+    "graph_construction_seconds": 0.147052,
+    "native_raw_forward_seconds": 7.025335000000002,
+    "native_tape_destruction_seconds": 0.008865000000000001,
+    "native_validation_seconds": 0.366984,
+    "sequence_clone_drop_seconds": 0.0264,
+    "sequence_clone_seconds": 0.198079,
+    "sequence_validation_seconds": 0.36414,
+    "weight_bit_snapshot_seconds": 0.003916
+  },
+  "raw": {
+    "frame_identity": "27fb20641cdee0fb6d22495d7a9f740f4da0685b0bed9fe2c4320a6d52c94468",
+    "held_out_rows": 16,
+    "isolated_component_calls": [
+      {
+        "aggregate_view_construction_seconds": 0.001216006,
+        "cadence_index_construction_seconds": 0.000156196,
+        "full_plan_sha_binding_per_frame_seconds": 0.009940042,
+        "graph_construction_seconds": 0.000174153,
+        "native_raw_forward_seconds": 0.007271854999999999,
+        "native_tape_destruction_seconds": 9.033999999999999e-06,
+        "native_validation_seconds": 0.000391771,
+        "sample": 0,
+        "sequence_clone_drop_seconds": 3.2239e-05,
+        "sequence_clone_seconds": 0.000287745,
+        "sequence_validation_seconds": 0.000352121,
+        "weight_bit_snapshot_seconds": 4.667e-06
+      },
+      {
+        "aggregate_view_construction_seconds": 0.00141776,
+        "cadence_index_construction_seconds": 0.000153612,
+        "full_plan_sha_binding_per_frame_seconds": 0.009347438,
+        "graph_construction_seconds": 0.000147052,
+        "native_raw_forward_seconds": 0.007277942,
+        "native_tape_destruction_seconds": 8.623e-06,
+        "native_validation_seconds": 0.00039746,
+        "sample": 1,
+        "sequence_clone_drop_seconds": 2.9344e-05,
+        "sequence_clone_seconds": 0.000198079,
+        "sequence_validation_seconds": 0.000368427,
+        "weight_bit_snapshot_seconds": 4.036e-06
+      },
+      {
+        "aggregate_view_construction_seconds": 0.000897765,
+        "cadence_index_construction_seconds": 0.000171409,
+        "full_plan_sha_binding_per_frame_seconds": 0.009447058,
+        "graph_construction_seconds": 0.000142234,
+        "native_raw_forward_seconds": 0.006937472,
+        "native_tape_destruction_seconds": 8.822e-06,
+        "native_validation_seconds": 0.00036315599999999995,
+        "sample": 2,
+        "sequence_clone_drop_seconds": 2.3606e-05,
+        "sequence_clone_seconds": 0.000189015,
+        "sequence_validation_seconds": 0.000331781,
+        "weight_bit_snapshot_seconds": 3.275e-06
+      },
+      {
+        "aggregate_view_construction_seconds": 0.00090124,
+        "cadence_index_construction_seconds": 0.000155695,
+        "full_plan_sha_binding_per_frame_seconds": 0.009211723,
+        "graph_construction_seconds": 0.00016566,
+        "native_raw_forward_seconds": 0.0070253350000000015,
+        "native_tape_destruction_seconds": 8.865e-06,
+        "native_validation_seconds": 0.000366984,
+        "sample": 3,
+        "sequence_clone_drop_seconds": 3.1608e-05,
+        "sequence_clone_seconds": 0.00021215,
+        "sequence_validation_seconds": 0.000388416,
+        "weight_bit_snapshot_seconds": 4.397e-06
+      },
+      {
+        "aggregate_view_construction_seconds": 0.000897285,
+        "cadence_index_construction_seconds": 0.000154063,
+        "full_plan_sha_binding_per_frame_seconds": 0.009219154,
+        "graph_construction_seconds": 0.000142655,
+        "native_raw_forward_seconds": 0.007033465000000001,
+        "native_tape_destruction_seconds": 9.675e-06,
+        "native_validation_seconds": 0.000367793,
+        "sample": 4,
+        "sequence_clone_drop_seconds": 2.64e-05,
+        "sequence_clone_seconds": 0.000183006,
+        "sequence_validation_seconds": 0.00036414,
+        "weight_bit_snapshot_seconds": 3.916e-06
+      },
+      {
+        "aggregate_view_construction_seconds": 0.000892578,
+        "cadence_index_construction_seconds": 0.000152871,
+        "full_plan_sha_binding_per_frame_seconds": 0.009245193,
+        "graph_construction_seconds": 0.000142525,
+        "native_raw_forward_seconds": 0.006949889000000001,
+        "native_tape_destruction_seconds": 9.112999999999997e-06,
+        "native_validation_seconds": 0.00036232499999999993,
+        "sample": 5,
+        "sequence_clone_drop_seconds": 2.4798e-05,
+        "sequence_clone_seconds": 0.000202024,
+        "sequence_validation_seconds": 0.000360904,
+        "weight_bit_snapshot_seconds": 3.175e-06
+      },
+      {
+        "aggregate_view_construction_seconds": 0.000950955,
+        "cadence_index_construction_seconds": 0.000154713,
+        "full_plan_sha_binding_per_frame_seconds": 0.009406768,
+        "graph_construction_seconds": 0.000161334,
+        "native_raw_forward_seconds": 0.007011354,
+        "native_tape_destruction_seconds": 8.733e-06,
+        "native_validation_seconds": 0.00035574799999999997,
+        "sample": 6,
+        "sequence_clone_drop_seconds": 2.5188e-05,
+        "sequence_clone_seconds": 0.000169546,
+        "sequence_validation_seconds": 0.000413164,
+        "weight_bit_snapshot_seconds": 3.255e-06
+      }
+    ],
+    "limits": [
+      "real baseline-world frames; forward-only timing; no experimental rollout or learning throughput",
+      "all paths compared to native Reference output bits; full cancellation is not the genuine reference baseline",
+      "mode setup recorded separately and included in overall assay wall; native cadence table is reused across all rows in its timed call",
+      "components are separate actual primitive calls, not an additive decomposition of the separately timed public call",
+      "aggregate construction includes SHA binding plus graph/index construction; inner component scopes overlap that aggregate",
+      "output destruction and parity checks outside path timing; frequency/allocator/cache history uncontrolled",
+      "no new prepared training API; existing native cadence handles full graph BPTT/Adam; no accepted brain or GPU"
+    ],
+    "pairs": [
+      {
+        "order": [
+          "native_reference",
+          "native_cadence",
+          "full_cancellation",
+          "compact_fresh",
+          "compact_reused"
+        ],
+        "pair": 0,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 3.6e-07,
+            "seconds": 0.008632659
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 7.1e-08,
+            "seconds": 0.007538598
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 5.1e-07,
+            "seconds": 0.0197308
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000195155,
+            "seconds": 0.006716817
+          },
+          "native_reference": {
+            "mode_setup_seconds": 1.6e-07,
+            "seconds": 0.00742046
+          }
+        }
+      },
+      {
+        "order": [
+          "native_cadence",
+          "full_cancellation",
+          "compact_fresh",
+          "compact_reused",
+          "native_reference"
+        ],
+        "pair": 1,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 3.61e-07,
+            "seconds": 0.00842121
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 2.1e-07,
+            "seconds": 0.007572309
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 4.31e-07,
+            "seconds": 0.018580603
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000193802,
+            "seconds": 0.006870228
+          },
+          "native_reference": {
+            "mode_setup_seconds": 2.6e-07,
+            "seconds": 0.007659972
+          }
+        }
+      },
+      {
+        "order": [
+          "full_cancellation",
+          "compact_fresh",
+          "compact_reused",
+          "native_reference",
+          "native_cadence"
+        ],
+        "pair": 2,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 3.81e-07,
+            "seconds": 0.008473108
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 7.1e-08,
+            "seconds": 0.007263482
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 2.3e-07,
+            "seconds": 0.018624254
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000179431,
+            "seconds": 0.006865151
+          },
+          "native_reference": {
+            "mode_setup_seconds": 1e-07,
+            "seconds": 0.007324425
+          }
+        }
+      },
+      {
+        "order": [
+          "compact_fresh",
+          "compact_reused",
+          "native_reference",
+          "native_cadence",
+          "full_cancellation"
+        ],
+        "pair": 3,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 8e-08,
+            "seconds": 0.008168389
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 5e-08,
+            "seconds": 0.007238174
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 5.71e-07,
+            "seconds": 0.017823581
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000185971,
+            "seconds": 0.006725921
+          },
+          "native_reference": {
+            "mode_setup_seconds": 3e-08,
+            "seconds": 0.007443003
+          }
+        }
+      },
+      {
+        "order": [
+          "compact_reused",
+          "native_reference",
+          "native_cadence",
+          "full_cancellation",
+          "compact_fresh"
+        ],
+        "pair": 4,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 9e-08,
+            "seconds": 0.008175129
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 7e-08,
+            "seconds": 0.007301941
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 5.91e-07,
+            "seconds": 0.017738683
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000182405,
+            "seconds": 0.007097652
+          },
+          "native_reference": {
+            "mode_setup_seconds": 7e-08,
+            "seconds": 0.007668053
+          }
+        }
+      },
+      {
+        "order": [
+          "native_reference",
+          "native_cadence",
+          "full_cancellation",
+          "compact_fresh",
+          "compact_reused"
+        ],
+        "pair": 5,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 8e-08,
+            "seconds": 0.008185454
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 6e-08,
+            "seconds": 0.00757948
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 4.9e-07,
+            "seconds": 0.017826495
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000181554,
+            "seconds": 0.006662886
+          },
+          "native_reference": {
+            "mode_setup_seconds": 2.01e-07,
+            "seconds": 0.007398977
+          }
+        }
+      },
+      {
+        "order": [
+          "native_cadence",
+          "full_cancellation",
+          "compact_fresh",
+          "compact_reused",
+          "native_reference"
+        ],
+        "pair": 6,
+        "paths": {
+          "compact_fresh": {
+            "mode_setup_seconds": 3.6e-07,
+            "seconds": 0.008140417
+          },
+          "compact_reused": {
+            "mode_setup_seconds": 7e-08,
+            "seconds": 0.007252926
+          },
+          "full_cancellation": {
+            "mode_setup_seconds": 5.81e-07,
+            "seconds": 0.017656619
+          },
+          "native_cadence": {
+            "mode_setup_seconds": 0.000182175,
+            "seconds": 0.006724789
+          },
+          "native_reference": {
+            "mode_setup_seconds": 1.1e-07,
+            "seconds": 0.007336472
+          }
+        }
+      }
+    ],
+    "seed": 70602,
+    "source_checkpoint_identity": "b214f6a6f14c7f9d9ba80131ed7f486155840b5475268bbbfffec3e00c8cf4fe",
+    "world_ticks": 32
+  },
+  "code_files_sha256": {
+    "crates/alife_training/src/cpu/mod.rs": "05d086ce7a8e973c0d6064081934939fcd821e554b9e29bc601e0830c41651b0",
+    "crates/alife_training/src/connection_budget_experiment.rs": "73cd1052bc67186d87231d2a618a84e7fe4e56b0ce49a0734f612b502158e146",
+    "crates/alife_training/src/connection_budget_experiment/full_mask_assay.rs": "b4e57b0dd6243bdfd25c85e302f48c37c7225322e83326538e4a62461f5dfb35",
+    "Cargo.lock": "e9da375829f39d182af9b39257eca47e749991272486ff45a26c21ecb55655bf"
+  },
+  "checks": {
+    "real_frame_native_BPTT_Adam_parity": 1,
+    "release_five_path_assay": 1,
+    "clippy_warnings_denied": "pass",
+    "fmt_diff": "pass",
+    "independent_source_review": "no blockers at b7ef6e6"
+  },
+  "logs_sha256": {
+    "parity.log": "2e2bbd0fe12ebc0e7b965a1e5c231cadc002da2af9c544fff89643fc4dc964db",
+    "clippy.log": "e4f130601227c1a712750bf431267c09291b7a7ae4ae275cdc7079ac3e85230d",
+    "release-build.log": "b62e1e3946bfececfaf5af4955792f317291b4f3eebb1dbed378c1c0bfde4505",
+    "release-stdout.log": "6fb20c57d40257528fb145ada3459839452266167c363f0e59e258c12ef1c2bd",
+    "release-stderr.log": "157b0af72fd0f680f4ed2050131216aa1b22c7e1dd4e8873d5db527e1256b063",
+    "release-b7ef6e6a/trials.json": "cd566c2456603f869e52784aa3e3267166d9954c817851e64132d4019a18cd60"
+  },
+  "machine": "AMD EPYC9V74, five visible CPUs/four-core quota,16GiB limit; rustc1.99.1; full cargo release, one test thread; frequency/load/allocator uncontrolled",
+  "main_reconciliation": {
+    "current_main": "8a9032e4a02961b3edfb58dd35ebc79033c9688a",
+    "common_budget_commit": "d4ad1e3fb9c0181dd906cf2ffd666cba675bd026",
+    "main_tree_matches_budget_commit": true,
+    "pinned_base": "d9ac7f543f9037c38229f1c5791475564bd8e0f4",
+    "rebased_or_merged_new_main": false
+  },
+  "conclusion": {
+    "fresh_view_slower_than_native_percent": 10.309253065173852,
+    "reused_view_lower_than_native_percent": 1.5971920878220525,
+    "native_cadence_lower_than_native_percent": 9.359783625273899,
+    "add_new_training_preparation_API": false,
+    "reason": "genuine native path already retains graph and avoids cancellation/hash/clone wrapper; existing opt-in cadence remains reusable through full BPTT/Adam; frozen detached view rejects changed weights"
+  },
+  "caveats": [
+    "Native reference is the d9 public default optional-lookup implementation; old main direct-lookup binary not separately timed",
+    "Five paths rotate over seven warm trials; not fully balanced; no confidence or tail claim",
+    "Component samples are separate actual primitive calls, overlap aggregate scopes, and are not additive decomposition",
+    "External process wall covers the entire assay, collection, all paths, components, parity and output; not a baseline-versus-candidate training interval",
+    "No new validation bypass/cache, accepted-state use, PC/GPU work, or whole-training/competence claim"
+  ]
+}
