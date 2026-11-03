@@ -321,11 +321,7 @@ mod device_oracle {
         if let Some(p) = &artifact {
             std::fs::create_dir(p).unwrap();
         }
-        let backends = if software {
-            wgpu::Backends::VULKAN
-        } else {
-            wgpu::Backends::VULKAN
-        };
+        let backends = wgpu::Backends::VULKAN;
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         descriptor.backends = backends;
         if !software {
@@ -341,12 +337,7 @@ mod device_oracle {
             .into_iter()
             .find(|a| {
                 let i = a.get_info();
-                i.backend
-                    == if software {
-                        wgpu::Backend::Vulkan
-                    } else {
-                        wgpu::Backend::Vulkan
-                    }
+                i.backend == wgpu::Backend::Vulkan
                     && if software {
                         i.device_type == wgpu::DeviceType::Cpu
                     } else {

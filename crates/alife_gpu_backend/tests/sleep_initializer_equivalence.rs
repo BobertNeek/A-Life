@@ -635,9 +635,6 @@ mod device_oracle {
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
             descriptor.backends = backends;
-            if false {
-                alife_gpu_backend::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
-            }
             let instance = wgpu::Instance::new(descriptor);
             let adapter = instance
                 .enumerate_adapters(backends)
@@ -653,14 +650,7 @@ mod device_oracle {
                 })
                 .expect("requested CPU Vulkan or NVIDIA DX12 adapter absent; no fallback");
             let info = adapter.get_info();
-            assert_eq!(
-                info.backend,
-                if software_only {
-                    wgpu::Backend::Vulkan
-                } else {
-                    wgpu::Backend::Vulkan
-                }
-            );
+            assert_eq!(info.backend, wgpu::Backend::Vulkan);
             eprintln!("sleep_initializer_equivalence_adapter={info:?}");
             let (device, queue) = adapter
                 .request_device(&wgpu::DeviceDescriptor {
