@@ -32,15 +32,17 @@ native training settings. Actual optimizer updates/early KL stops must also be
 compared before claiming a matched learning result. A ready adaptive learning
 run has not yet been demonstrated by the native pilot below.
 
-Assessment import checks the native V1 payload seal, archive hashes, full-dose
-trace, offline-head identity and teacher/prior/bootstrap boundaries. The
-standalone CLI additionally requires `--native-evaluator`: it invokes native
-completed-output validation on the exact existing output, compares its returned
-result, and checks unchanged output/executable hashes. This is read-only reuse,
-not another live assessment. The Python seal adapter is restricted to native
-temperature1 care V1; it is not a replacement private-state loader. Every future
-batch must use fresh discovery seeds and one current frozen source. Holdout
-results never enter the selector.
+Every public assessment import requires an explicit native evaluator. Both the
+standalone CLI (`--native-evaluator`) and fixture runner invoke the existing
+native completed-output loader on the exact selected, bounded archive. Native
+checks its typed V1 checksum, source/history admission and full private recovery;
+Python does not emulate Rust path ordering or receipt serialization. The returned
+result must equal the sealed result, and archive/executable hashes must remain
+unchanged. This reuses a completed assessment without another live dispatch.
+Python also checks archive hashes, full-dose trace, offline-head identity and
+teacher/prior/bootstrap boundaries before selection. Every future batch must use
+fresh discovery seeds and one current frozen source. Holdout results never enter
+the selector.
 
 Build the disposable CPU harness and run a fresh output (never resume):
 
@@ -49,6 +51,21 @@ cargo build --locked -p alife_game_app --no-default-features --features cpu-trai
 python3 -B scripts/run_care_frontier_fixture.py --output NEW_DISPOSABLE_DIRECTORY --care-binary PATH_TO_TRAIN_CPU_CARE --round-binary PATH_TO_TRAIN_CPU_CARE_ROUND --decisions 64 --discovery-per-family 4 --slots 4
 python3 -B -m unittest discover -s scripts -p 'test_care_frontier_sampler.py'
 ```
+
+The ordinary Python tests mock native admission while exercising the structural
+and refusal guards. To also run the genuine sibling-path regression with two
+negative tamper controls, point it at the just-built CPU executables:
+
+```sh
+ALIFE_FRONTIER_TEST_CARE=PATH_TO_TRAIN_CPU_CARE ALIFE_FRONTIER_TEST_ROUND=PATH_TO_TRAIN_CPU_CARE_ROUND python3 -B -m unittest discover -s scripts -p 'test_care_frontier_sampler.py' -v
+```
+
+That test generates a fresh disposable founder, places `source-history.json`
+beside the `source` directory, creates one two-decision native assessment, and
+requires unchanged read-only reuse. It then rejects receipt-only and artifact
+byte tampering. This layout exercises the difference between native path
+component ordering and whole-string sorting without inventing another checksum
+implementation. Without both explicit binaries the native test is skipped.
 
 The runner has no accepted-source input. It creates a new founder, preserves raw
 commands/results/diagnostics, pins its binaries and completed sources, and never

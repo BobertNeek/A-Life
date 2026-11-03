@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
@@ -62,7 +63,7 @@ def fixture(root, mutate=None):
     path.write_text(json.dumps(trace))
     receipt = {"schema_version": 1, "request": request, "result": result, "input_sha256": {},
                "artifacts": {"care-trace.json": hashlib.sha256(path.read_bytes()).hexdigest()}}
-    receipt["payload_sha256"] = sampler.native_receipt_digest(receipt)
+    receipt["payload_sha256"] = [0] * 32  # Synthetic; only mocked native admission may accept it.
     (root / "care-evaluation.json").write_text(json.dumps(receipt))
 
 
@@ -74,9 +75,17 @@ def nested_fixture(root):
     path = root / "care-evaluation.json"
     receipt = json.loads(path.read_text())
     receipt["artifacts"]["source-native/evidence.json"] = hashlib.sha256(nested.read_bytes()).hexdigest()
-    receipt["payload_sha256"] = sampler.native_receipt_digest(receipt)
+    receipt["payload_sha256"] = [0] * 32  # Synthetic; only mocked native admission may accept it.
     path.write_text(json.dumps(receipt))
     return nested
+
+
+def admitted_score(root):
+    """Mock only native admission while exercising Python structural guards."""
+    result = sampler.read_json(root / "care-evaluation.json")["result"]
+    admitted = subprocess.CompletedProcess([], 0, json.dumps(result).encode(), b"")
+    with patch.object(sampler.subprocess, "run", return_value=admitted):
+        return sampler.score_assessment(root, Path(__file__))
 
 
 class FrontierTests(unittest.TestCase):
@@ -137,15 +146,15 @@ class FrontierTests(unittest.TestCase):
     def test_native_score_excludes_bootstrap_and_binds_the_archive(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); fixture(root)
-            score = sampler.score_assessment(root)
+            score = admitted_score(root)
             self.assertEqual(score["nourished_meals"], 1)
             self.assertTrue(score["success"])
             self.assertTrue(score["survived_evaluated_window"])
             (root / "care-trace.json").write_text("changed")
             with self.assertRaisesRegex(ValueError, "archive changed"):
-                sampler.score_assessment(root)
+                admitted_score(root)
 
-    def test_receipt_only_edits_reject_without_changing_artifacts(self):
+    def test_native_refusal_blocks_receipt_only_edits_without_fallback(self):
         for change in (lambda r: r["request"].update(food_need_condition="ordinary_healthy_aging_v1"),
                        lambda r: r["result"].update(actor_checkpoint_before_sha256="forged"),
                        lambda r: r["result"].update(semantic_prior_enabled=True)):
@@ -153,18 +162,50 @@ class FrontierTests(unittest.TestCase):
                 root = Path(tmp); fixture(root)
                 path = root / "care-evaluation.json"
                 receipt = json.loads(path.read_text()); change(receipt); path.write_text(json.dumps(receipt))
-                with self.assertRaisesRegex(ValueError, "seal mismatch"):
-                    sampler.score_assessment(root)
+                before = sampler.raw_tree(root)
+                failed = subprocess.CompletedProcess([], 1, b"", b"invalid native seal")
+                with patch.object(sampler.subprocess, "run", return_value=failed) as native:
+                    with self.assertRaisesRegex(ValueError, "native completed assessment validation failed"):
+                        sampler.score_assessment(root, Path(__file__))
+                native.assert_called_once()
+                self.assertEqual(sampler.raw_tree(root), before)
+
+    def test_public_scoring_requires_native_evaluator_and_exact_native_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); fixture(root)
+            with self.assertRaises(TypeError):
+                sampler.score_assessment(root)
+            def native(argv, **kwargs):
+                self.assertEqual(argv[:3], [str(Path(__file__).resolve()), "evaluate", "--spec"])
+                self.assertEqual(json.loads(Path(argv[3]).read_text()), sampler.read_json(root / "care-evaluation.json")["request"])
+                self.assertEqual(kwargs["env"]["ALIFE_SLM_PRIOR"], "off")
+                self.assertEqual(kwargs["env"]["ALIFE_SLM_PRIOR_BACKEND"], "off")
+                return subprocess.CompletedProcess(argv, 0, b'{"different":"result"}', b"")
+            with patch.object(sampler.subprocess, "run", side_effect=native):
+                with self.assertRaisesRegex(ValueError, "native completed assessment validation failed"):
+                    sampler.score_assessment(root, Path(__file__))
+            self.assertTrue(admitted_score(root)["success"])
+
+    def test_native_read_only_validation_cannot_mutate_the_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); fixture(root)
+            result = sampler.read_json(root / "care-evaluation.json")["result"]
+            def native(argv, **kwargs):
+                (root / "unexpected-write").write_bytes(b"changed")
+                return subprocess.CompletedProcess(argv, 0, json.dumps(result).encode(), b"")
+            with patch.object(sampler.subprocess, "run", side_effect=native):
+                with self.assertRaisesRegex(ValueError, "changed archive/executable"):
+                    sampler.score_assessment(root, Path(__file__))
 
     def test_nested_native_archive_uses_forward_slashes_and_still_rejects_changed_bytes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); nested = nested_fixture(root)
             original_receipt = (root / "care-evaluation.json").read_bytes()
-            self.assertTrue(sampler.score_assessment(root)["success"])
+            self.assertTrue(admitted_score(root)["success"])
             self.assertEqual((root / "care-evaluation.json").read_bytes(), original_receipt)
             nested.write_bytes(b"changed nested artifact")
             with self.assertRaisesRegex(ValueError, "archive changed/unsealed"):
-                sampler.score_assessment(root)
+                admitted_score(root)
 
     def test_windows_relative_inventory_matches_the_unchanged_native_receipt(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -174,7 +215,7 @@ class FrontierTests(unittest.TestCase):
             self.assertIn("source-native\\evidence.json", windows)
             original_receipt = (root / "care-evaluation.json").read_bytes()
             with patch.object(sampler, "raw_tree", return_value=windows):
-                self.assertTrue(sampler.score_assessment(root)["success"])
+                self.assertTrue(admitted_score(root)["success"])
             self.assertEqual((root / "care-evaluation.json").read_bytes(), original_receipt)
 
     def test_separator_normalization_rejects_ambiguous_names(self):
@@ -185,7 +226,7 @@ class FrontierTests(unittest.TestCase):
             raw["source-native\\evidence.json"] = {"sha256": "b"*64}
             with patch.object(sampler, "raw_tree", return_value=raw):
                 with self.assertRaisesRegex(ValueError, "ambiguous archive path"):
-                    sampler.score_assessment(root)
+                    admitted_score(root)
 
     def test_native_score_refuses_cues_prior_updates_censoring_and_unmeasured_success(self):
         mutations = [lambda t, q, r: r.update(teacher_present=True),
@@ -202,7 +243,7 @@ class FrontierTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp); fixture(root, mutation)
                 with self.assertRaises((ValueError, KeyError)):
-                    sampler.score_assessment(root)
+                    admitted_score(root)
 
     def test_fixture_runner_cannot_resume_or_accept_a_retained_source(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -221,10 +262,73 @@ class FrontierTests(unittest.TestCase):
             path = root / "care-evaluation.json"
             receipt = json.loads(path.read_text())
             receipt["request"]["output"] = str(root.parent)
-            receipt["payload_sha256"] = sampler.native_receipt_digest(receipt)
+            receipt["payload_sha256"] = [0] * 32  # Synthetic; only mocked native admission may accept it.
             path.write_text(json.dumps(receipt))
             with self.assertRaisesRegex(ValueError, "differs from selected archive"):
-                sampler.revalidate_completed(root, Path("missing-binary"))
+                sampler.score_assessment(root, Path("missing-binary"))
+
+
+@unittest.skipUnless(os.environ.get("ALIFE_FRONTIER_TEST_CARE") and os.environ.get("ALIFE_FRONTIER_TEST_ROUND"),
+                     "explicit native CPU fixture binaries required")
+class NativeFrontierTests(unittest.TestCase):
+    def test_genuine_sibling_path_order_and_negative_tamper_controls(self):
+        """Fresh public founder only; native owns its PathBuf/serde checksum."""
+        care = Path(os.environ["ALIFE_FRONTIER_TEST_CARE"]).resolve(strict=True)
+        evaluator = Path(os.environ["ALIFE_FRONTIER_TEST_ROUND"]).resolve(strict=True)
+        environment = {key: value for key, value in os.environ.items() if not key.startswith("ALIFE_SLM_")}
+        environment.update(ALIFE_SLM_PRIOR="off", ALIFE_SLM_PRIOR_BACKEND="off")
+        def run(binary, args):
+            completed = subprocess.run([str(binary), *map(str, args)], env=environment,
+                                       stdin=subprocess.DEVNULL, capture_output=True, timeout=60, check=True)
+            return json.loads(completed.stdout)
+        with tempfile.TemporaryDirectory(prefix="alife-frontier-sibling-regression-") as tmp:
+            root = Path(tmp).resolve()
+            source, history, output = root / "source", root / "source-history.json", root / "assessment"
+            run(care, ["--fixture", "--output", source, "--seed", 881001,
+                       "--lesson", "eat_held_food", "--decisions", 2])
+            names = ("cpu-cycle.json", "trained.alife-foundation", "actor-checkpoint.json", "value-checkpoint.json")
+            history.write_text(json.dumps({"schema": 1, "kind": "mixed-care-seed-history", "complete": True,
+                "evidence": "New disposable public fixture only; no retained lineage or capability claim",
+                "source_sha256": {name: sampler.file_pin(source / name)["sha256"] for name in names},
+                "consumed_seed_ranges": [[881001, 881001]], "reserved_seed_ranges": [],
+                "assessment_seeds": [889901], "imports": []}), encoding="utf-8")
+            request = {"previous": str(source), "output": str(output), "seed_history": str(history),
+                       "seed": 889901, "decisions": 2, "temperature": 1.0, "lesson": "eat_held_food",
+                       "food_need_condition": "newborn_v1", "known_exclusions": False}
+            spec = root / "request.json"
+            spec.write_text(json.dumps(request), encoding="utf-8")
+            native_result = run(evaluator, ["evaluate", "--spec", spec])
+            receipt_path = output / "care-evaluation.json"
+            receipt_bytes = receipt_path.read_bytes()
+            receipt = json.loads(receipt_bytes)
+            keys = receipt["input_sha256"]
+            self.assertNotEqual(sorted(keys), sorted(keys, key=lambda name: Path(name).parts))
+            before = sampler.raw_tree(root)
+            score = sampler.score_assessment(output, evaluator)
+            self.assertEqual(score["seed"], 889901)
+            self.assertEqual(score["nourished_meals"], native_result["evaluated_nourished_meals"])
+            self.assertEqual(sampler.raw_tree(root), before)
+            # Receipt-only tamper leaves artifact hashes unchanged; native must
+            # reject the typed seal, with no Python-only scoring fallback.
+            receipt["result"]["policy_version"] += 1
+            try:
+                receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+                tampered = sampler.raw_tree(output)
+                with self.assertRaisesRegex(ValueError, "native completed assessment validation failed"):
+                    sampler.score_assessment(output, evaluator)
+                self.assertEqual(sampler.raw_tree(output), tampered)
+            finally:
+                receipt_path.write_bytes(receipt_bytes)
+            artifact = output / "care-trace.json"
+            artifact_bytes = artifact.read_bytes()
+            try:
+                artifact.write_bytes(artifact_bytes + b" ")
+                with self.assertRaisesRegex(ValueError, "native completed assessment validation failed"):
+                    sampler.score_assessment(output, evaluator)
+            finally:
+                artifact.write_bytes(artifact_bytes)
+            self.assertEqual(sampler.raw_tree(root), before)
+            self.assertEqual(sampler.score_assessment(output, evaluator), score)
 
 
 if __name__ == "__main__":
