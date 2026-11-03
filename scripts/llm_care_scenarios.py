@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import urllib.request
+from urllib.parse import urlsplit
 from pathlib import Path
 
 from care_frontier_sampler import validate_bank, validate_layout
@@ -86,7 +87,17 @@ def strict_json(raw):
     return json.loads(raw, object_pairs_hook=unique, parse_constant=lambda _: (_ for _ in ()).throw(ValueError("non-finite JSON number")))
 
 
+class RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def request_recipe(endpoint, model, prompt, api_key=None):
+    # Never forward credentials across redirects or send them over plaintext.
+    url = urlsplit(endpoint)
+    if (url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password
+            or url.fragment or (url.scheme == "http" and url.hostname not in {"127.0.0.1", "::1", "localhost"})):
+        raise ValueError("endpoint must be HTTPS or a loopback HTTP URL without userinfo")
     # Explicitly configured endpoint; credentials come only from environment.
     payload = {"model": model, "messages": [{"role": "system", "content": prompt}],
                "response_format": {"type": "json_object"}, "temperature": 0}
@@ -94,7 +105,7 @@ def request_recipe(endpoint, model, prompt, api_key=None):
     if api_key:
         headers["Authorization"] = "Bearer " + api_key
     request = urllib.request.Request(endpoint, data=json.dumps(payload).encode(), headers=headers, method="POST")
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with urllib.request.build_opener(RejectRedirects()).open(request, timeout=60) as response:
         raw = response.read(1_000_001)
     if len(raw) > 1_000_000:
         raise ValueError("model response too large")

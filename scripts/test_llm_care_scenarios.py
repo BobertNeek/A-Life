@@ -77,6 +77,28 @@ class RecipeTests(unittest.TestCase):
         recipe['scenarios'][1]['map'] = ['#####', '#L.F.', '#####']
         with self.assertRaises(ValueError): compile_recipe(recipe, host)
 
+    def test_redirect_never_forwards_api_key(self):
+        calls = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                self.send_response(302)
+                self.send_header('Location', 'http://127.0.0.1:%s/stolen' % self.server.server_port)
+                self.end_headers()
+            def do_GET(self):
+                calls.append(self.headers.get('Authorization'))
+                self.send_response(200); self.end_headers()
+            def log_message(self, *_): pass
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        try:
+            with self.assertRaises(Exception):
+                request_recipe('http://127.0.0.1:%s/start' % server.server_port, 'test', 'prompt', 'secret')
+            self.assertEqual(calls, [])
+            with self.assertRaises(ValueError):
+                request_recipe('http://example.com/v1/chat/completions', 'test', 'prompt', 'secret')
+        finally:
+            server.shutdown(); thread.join(); server.server_close()
+
     def test_duplicate_json_keys_and_nonfinite_rejected(self):
         for text in ('{"a":1,"a":2}', '{"a":NaN}'):
             with self.assertRaises(ValueError): strict_json(text)
@@ -96,6 +118,20 @@ class RecipeTests(unittest.TestCase):
             self.assertEqual(len(result['discovery']), 3)
             self.assertTrue(all(row['layout'] == {'rows': ['#####', '#L.F#', '#####']} for row in result['discovery']))
             self.assertIn('difficulty_after', json.loads((pilot.root / 'selection.json').read_text()))
+            # Independently exercise an authored-layout learning episode even
+            # when this tiny assessment finds no empirical frontier. This is a
+            # disposable control, not an adaptive learning-gain claim.
+            lane = pilot.root / 'layout-training-control'; lane.mkdir()
+            source = pilot.root / 'initial-source'
+            history = pilot.history(source, lane / 'history.json', [881001], [201, 202, 301, 302, 303])
+            training = lane / 'episode'
+            receipt = pilot.command(pilot.care, ['--previous', source, '--output', training,
+                '--seed-history', history, '--seed', 401, '--lesson', 'feeding',
+                '--food-need-condition', 'newborn_v1', '--decisions', 2,
+                '--layout-json', json.dumps(bank['families'][0]['layout'], separators=(',', ':'))], lane)
+            self.assertEqual(receipt['episode']['layout'], bank['families'][0]['layout'])
+            verified = pilot.command(pilot.care, ['--validate-output', training], lane)
+            self.assertEqual(verified['episode']['layout'], bank['families'][0]['layout'])
 
     def test_seed_overlap_and_unsupported_condition_reject(self):
         recipe, host = fixtures(); host['holdout_seeds']['held'] = [101]

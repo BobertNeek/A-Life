@@ -95,6 +95,8 @@ an adjacent `.recipe.json` containing the model name and untrusted response.
 The model never chooses executables, paths, budgets, or seeds. Set
 `ALIFE_SCENARIO_API_KEY` only if the selected provider requires it. The chosen
 provider receives the prompt, model name, and family IDs; no checkpoint is sent.
+Remote endpoints require HTTPS, loopback may use HTTP, and redirects are rejected
+to avoid forwarding the API key to another host.
 
 The map language has exactly one `L` learner and one `F` food on a rectangular
 3–17-cell grid with a complete `#` wall border; `.` marks open space. A cell is
