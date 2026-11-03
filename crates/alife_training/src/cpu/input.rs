@@ -1,5 +1,5 @@
 //! CPU spelling of the production encoder, conditional sampling and speech ABI.
-use super::{finite, invalid, CpuFoundationTrainer};
+use super::{finite, invalid, CpuFounderPolicy};
 use crate::{PpoJointAction, TrainingError, TrainingReplayCandidate, TrainingReplayTick};
 use alife_core::*;
 
@@ -261,7 +261,7 @@ pub fn sample_cpu_joint_action(
 /// Six recurrent speech steps, including the byte confidence quantization in
 /// closed_loop_decode.wgsl. Silence is a valid absence of a payload receipt.
 pub fn decode_cpu_speech(
-    founder: &CpuFoundationTrainer,
+    founder: &impl CpuFounderPolicy,
     activations: &[f32],
     offsets: &[f32],
 ) -> Result<Option<SpeechMotorPayload>, TrainingError> {

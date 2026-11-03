@@ -18,8 +18,10 @@ use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, path::PathBuf};
 mod admission;
 mod evaluation;
+mod founder_evaluation;
 mod round;
 pub use evaluation::*;
+pub use founder_evaluation::*;
 pub use round::*;
 type Result<T> = CpuContinuationResult<T>;
 
@@ -116,6 +118,7 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         collection_binding: None,
         explicit_deterministic_prior: false,
         assessment: false,
+        founder_only: false,
     };
     Ok((config, episode))
 }
@@ -149,6 +152,7 @@ struct CareEpisode {
     collection_binding: Option<(CpuCollectorAssignmentV1, [u8; 32])>,
     explicit_deterministic_prior: bool,
     assessment: bool,
+    founder_only: bool,
 }
 
 impl CareEpisode {
@@ -180,95 +184,8 @@ impl CareEpisode {
     }
 }
 
-impl CpuEpisodeHooks for CareEpisode {
-    fn preserve_collection_recovery(
-        &mut self,
-        host: &CpuCanonicalHost,
-        _founder: &CpuFoundationTrainer,
-        output: &std::path::Path,
-    ) -> Result<()> {
-        let (_, archive) = self.private_life_archive(host, output)?;
-        admission::write_atomic(&output.join("care-prior-lives.json"), &archive).map_err(
-            |error| {
-                format!(
-                    "care prior recovery archive at {} could not be sealed: {error}",
-                    output.display()
-                )
-            },
-        )?;
-        if self.assessment {
-            let rows = self
-                .traces
-                .iter()
-                .enumerate()
-                .map(|(i, row)| {
-                    let mut row = row.clone();
-                    row["loss_row"] = json!(false);
-                    row["evaluation_row"] = json!(i < self.request.decisions);
-                    row["bootstrap_row"] = json!(i >= self.request.decisions);
-                    row["teacher_heard"] = json!(false);
-                    row
-                })
-                .collect::<Vec<_>>();
-            admission::write_atomic(
-                &output.join("care-trace.json"),
-                &json!({
-                    "schema":1,"backend":"native-cpu","lesson":self.request.lesson,
-                    "complete":false,"recovery_prefix":true,"world_tick":host.world().tick(),"rows":rows
-                }),
-            )?;
-        }
-        Ok(())
-    }
-    fn decision_budget(&self) -> Option<usize> {
-        Some(self.request.decisions)
-    }
-    fn fixture_asset(&self, seed: u64) -> Result<Option<alife_core::FoundationWeightAsset>> {
-        Ok(Some(crate::initial_n2048_care_asset(seed)?))
-    }
-    fn admit(
-        &mut self,
-        config: &CpuContinuationConfig,
-        _source: Option<&Value>,
-        _hashes: &BTreeMap<String, String>,
-    ) -> Result<Value> {
-        if config.fixture {
-            return Ok(
-                json!({"allocation":"development-fixture-only","historical_freshness":"unknown"}),
-            );
-        }
-        if self.assessment {
-            let provenance =
-                crate::foundation_training_cycle::admit_native_cpu_care_assessment_seed(
-                    config
-                        .previous
-                        .as_deref()
-                        .ok_or("assessment source missing")?,
-                    self.request
-                        .seed_history
-                        .as_deref()
-                        .ok_or("assessment history missing")?,
-                    &config.output,
-                    config.seed,
-                    self.request.known_exclusions,
-                )?;
-            return Ok(json!({"allocation":"assessment-no-training",
-                "seed_admission":provenance["seed_admission"],"source_sha256":provenance["source_sha256"]}));
-        }
-        let reservation = match &self.collection_binding {
-            Some((assignment, plan)) => admission::CareSeedReservation::reserve_collection(
-                config,
-                &self.request,
-                assignment,
-                *plan,
-            )?,
-            None => admission::CareSeedReservation::reserve(config, &self.request)?,
-        };
-        let provenance = reservation.provenance["seed_admission"].clone();
-        self.reservation = Some(reservation);
-        Ok(provenance)
-    }
-    fn validate_policy(&mut self, founder: &CpuFoundationTrainer) -> Result<()> {
+impl CareEpisode {
+    fn validate_founder_policy(&mut self, founder: &impl CpuFounderPolicy) -> Result<()> {
         if founder.phenotype().sensor_profile() != SensorProfile::GroundedTerrainVisionV1 {
             return Err("CPU care requires the retained grounded natural-senses policy; sensor conversion is not continuation".into());
         }
@@ -291,49 +208,10 @@ impl CpuEpisodeHooks for CareEpisode {
         }
         Ok(())
     }
-    fn prepare_world(&mut self, world: &mut alife_world::HeadlessWorld) -> Result<()> {
-        let mut scenario = configure_foundation_scenario_with_food_need(
-            world,
-            self.request.seed,
-            Some(self.request.lesson),
-            None,
-            true,
-            self.request.food_need_condition,
-        )?;
-        if self.assessment {
-            evaluation::ensure_no_teacher(world)?;
-            scenario.silent_request = true;
-            scenario.teacher_cue_tokens.clear();
-        }
-        let learner = world
-            .organism_entity_ids()
-            .first()
-            .ok_or("care learner missing")?
-            .0;
-        if self.request.lesson == FoundationTeacherLesson::RelocatedFood {
-            let body = world.organism_entity_ids()[0].1;
-            let origin = world.entity(body).ok_or("learner body missing")?.position;
-            let start = world.entity(scenario.food).ok_or("food missing")?.position;
-            // One sideways relocation, not continuous pursuit or an action hint.
-            let side = if self.request.seed & 1 == 0 {
-                1.0
-            } else {
-                -1.0
-            };
-            self.relocation_target = Some(alife_core::Vec3f::new(
-                origin.x - side * (start.z - origin.z),
-                start.y,
-                origin.z + side * (start.x - origin.x),
-            ));
-        }
-        self.summary = Some(FoundationFoodOutcome::new(learner, scenario.food));
-        self.scenario = Some(scenario);
-        Ok(())
-    }
-    fn before_step(
+    fn before_care_step(
         &mut self,
         host: &mut CpuCanonicalHost,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
     ) -> Result<()> {
         let scenario = self.scenario.as_ref().ok_or("care scene is not prepared")?;
         close_foundation_navigation_gate_in_world(host.world_mut(), scenario)?;
@@ -369,20 +247,10 @@ impl CpuEpisodeHooks for CareEpisode {
         self.ownership_before = ownership(host.world(), scenario.food);
         Ok(())
     }
-    fn prepare_draft(
-        &mut self,
-        draft: PerceptionFrameDraft,
-        sequence: ExperienceSequenceId,
-    ) -> std::result::Result<PerceptionFrameDraft, ScaffoldContractError> {
-        match self.prior.as_mut() {
-            Some(prior) => prior.prepare(draft, sequence),
-            None => Ok(draft),
-        }
-    }
-    fn after_step(
+    fn after_care_step(
         &mut self,
         host: &CpuCanonicalHost,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         step: &CpuCanonicalStep,
     ) -> Result<()> {
         if self.assessment {
@@ -479,10 +347,9 @@ impl CpuEpisodeHooks for CareEpisode {
         }
         Ok(())
     }
-    fn finish_collection(
+    fn finish_care_collection(
         &mut self,
         host: &CpuCanonicalHost,
-        _founder: &CpuFoundationTrainer,
         rows: &BTreeMap<u64, Vec<CpuCollectedDecision>>,
         train_rows: usize,
         output: &std::path::Path,
@@ -591,6 +458,13 @@ impl CpuEpisodeHooks for CareEpisode {
             metadata["offline_value_optimizer_updates"] = json!(0);
             metadata["persistent_learning"] = json!("fresh-private-life-with-ordinary-biology-waking-learning-and-sleep; frozen-founder-and-full-optimizers");
         }
+        if self.founder_only {
+            metadata["persistent_learning"] = json!("fresh-private-life; native waking plasticity and sleep; immutable founder; no offline actor/critic optimizer exists");
+            metadata
+                .as_object_mut()
+                .ok_or("invalid episode metadata")?
+                .remove("critic_optimizer");
+        }
         add_unknown_freshness_context(&mut metadata, self.request.known_exclusions);
         write("care-episode.json", &metadata)?;
         let private_path = cpu_private_checkpoint_path(output)?;
@@ -608,6 +482,14 @@ impl CpuEpisodeHooks for CareEpisode {
             "collection-actor-checkpoint.json",
             "initial-value-checkpoint.json",
         ];
+        if self.founder_only {
+            artifacts.retain(|name| {
+                !matches!(
+                    *name,
+                    "collection-actor-checkpoint.json" | "initial-value-checkpoint.json"
+                )
+            });
+        }
         if self.request.record_diagnostic_replay {
             artifacts.push("care-replay.json");
         }
@@ -621,6 +503,173 @@ impl CpuEpisodeHooks for CareEpisode {
             metadata,
             artifacts: artifacts.into_iter().map(str::to_owned).collect(),
         })
+    }
+}
+
+impl CpuEpisodeHooks for CareEpisode {
+    fn preserve_collection_recovery(
+        &mut self,
+        host: &CpuCanonicalHost,
+        _founder: &CpuFoundationTrainer,
+        output: &std::path::Path,
+    ) -> Result<()> {
+        let (_, archive) = self.private_life_archive(host, output)?;
+        admission::write_atomic(&output.join("care-prior-lives.json"), &archive).map_err(
+            |error| {
+                format!(
+                    "care prior recovery archive at {} could not be sealed: {error}",
+                    output.display()
+                )
+            },
+        )?;
+        if self.assessment {
+            let rows = self
+                .traces
+                .iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    let mut row = row.clone();
+                    row["loss_row"] = json!(false);
+                    row["evaluation_row"] = json!(i < self.request.decisions);
+                    row["bootstrap_row"] = json!(i >= self.request.decisions);
+                    row["teacher_heard"] = json!(false);
+                    row
+                })
+                .collect::<Vec<_>>();
+            admission::write_atomic(
+                &output.join("care-trace.json"),
+                &json!({
+                    "schema":1,"backend":"native-cpu","lesson":self.request.lesson,
+                    "complete":false,"recovery_prefix":true,"world_tick":host.world().tick(),"rows":rows
+                }),
+            )?;
+        }
+        Ok(())
+    }
+    fn decision_budget(&self) -> Option<usize> {
+        Some(self.request.decisions)
+    }
+    fn fixture_asset(&self, seed: u64) -> Result<Option<alife_core::FoundationWeightAsset>> {
+        Ok(Some(crate::initial_n2048_care_asset(seed)?))
+    }
+    fn admit(
+        &mut self,
+        config: &CpuContinuationConfig,
+        _source: Option<&Value>,
+        _hashes: &BTreeMap<String, String>,
+    ) -> Result<Value> {
+        if config.fixture {
+            return Ok(
+                json!({"allocation":"development-fixture-only","historical_freshness":"unknown"}),
+            );
+        }
+        if self.assessment {
+            let provenance =
+                crate::foundation_training_cycle::admit_native_cpu_care_assessment_seed(
+                    config
+                        .previous
+                        .as_deref()
+                        .ok_or("assessment source missing")?,
+                    self.request
+                        .seed_history
+                        .as_deref()
+                        .ok_or("assessment history missing")?,
+                    &config.output,
+                    config.seed,
+                    self.request.known_exclusions,
+                )?;
+            return Ok(json!({"allocation":"assessment-no-training",
+                "seed_admission":provenance["seed_admission"],"source_sha256":provenance["source_sha256"]}));
+        }
+        let reservation = match &self.collection_binding {
+            Some((assignment, plan)) => admission::CareSeedReservation::reserve_collection(
+                config,
+                &self.request,
+                assignment,
+                *plan,
+            )?,
+            None => admission::CareSeedReservation::reserve(config, &self.request)?,
+        };
+        let provenance = reservation.provenance["seed_admission"].clone();
+        self.reservation = Some(reservation);
+        Ok(provenance)
+    }
+    fn validate_policy(&mut self, founder: &CpuFoundationTrainer) -> Result<()> {
+        self.validate_founder_policy(founder)
+    }
+    fn prepare_world(&mut self, world: &mut alife_world::HeadlessWorld) -> Result<()> {
+        let mut scenario = configure_foundation_scenario_with_food_need(
+            world,
+            self.request.seed,
+            Some(self.request.lesson),
+            None,
+            true,
+            self.request.food_need_condition,
+        )?;
+        if self.assessment {
+            evaluation::ensure_no_teacher(world)?;
+            scenario.silent_request = true;
+            scenario.teacher_cue_tokens.clear();
+        }
+        let learner = world
+            .organism_entity_ids()
+            .first()
+            .ok_or("care learner missing")?
+            .0;
+        if self.request.lesson == FoundationTeacherLesson::RelocatedFood {
+            let body = world.organism_entity_ids()[0].1;
+            let origin = world.entity(body).ok_or("learner body missing")?.position;
+            let start = world.entity(scenario.food).ok_or("food missing")?.position;
+            // One sideways relocation, not continuous pursuit or an action hint.
+            let side = if self.request.seed & 1 == 0 {
+                1.0
+            } else {
+                -1.0
+            };
+            self.relocation_target = Some(alife_core::Vec3f::new(
+                origin.x - side * (start.z - origin.z),
+                start.y,
+                origin.z + side * (start.x - origin.x),
+            ));
+        }
+        self.summary = Some(FoundationFoodOutcome::new(learner, scenario.food));
+        self.scenario = Some(scenario);
+        Ok(())
+    }
+    fn before_step(
+        &mut self,
+        host: &mut CpuCanonicalHost,
+        founder: &CpuFoundationTrainer,
+    ) -> Result<()> {
+        self.before_care_step(host, founder)
+    }
+    fn prepare_draft(
+        &mut self,
+        draft: PerceptionFrameDraft,
+        sequence: ExperienceSequenceId,
+    ) -> std::result::Result<PerceptionFrameDraft, ScaffoldContractError> {
+        match self.prior.as_mut() {
+            Some(prior) => prior.prepare(draft, sequence),
+            None => Ok(draft),
+        }
+    }
+    fn after_step(
+        &mut self,
+        host: &CpuCanonicalHost,
+        founder: &CpuFoundationTrainer,
+        step: &CpuCanonicalStep,
+    ) -> Result<()> {
+        self.after_care_step(host, founder, step)
+    }
+    fn finish_collection(
+        &mut self,
+        host: &CpuCanonicalHost,
+        _founder: &CpuFoundationTrainer,
+        rows: &BTreeMap<u64, Vec<CpuCollectedDecision>>,
+        train_rows: usize,
+        output: &std::path::Path,
+    ) -> Result<CpuEpisodeReceipt> {
+        self.finish_care_collection(host, rows, train_rows, output)
     }
 }
 

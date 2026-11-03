@@ -1,7 +1,7 @@
 //! Per-organism sparse recurrent and waking plasticity state. The collector
 //! supplies canonical encoded perception/receptor evidence; there is no body or
 //! chemistry simulator here and no synthetic-biology training entry point.
-use super::{finite, invalid, CpuFoundationTrainer};
+use super::{finite, invalid, CpuFounderPolicy};
 use crate::{
     PpoJointAction, TrainingError, TrainingInitialState, TrainingReplayTick, TrainingSequence,
 };
@@ -171,7 +171,7 @@ impl CpuOrganismState {
     /// somatic offsets always come from this organism, never another batch row.
     pub fn advance(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         mut context: TrainingReplayTick,
         effects: &NeuralReceptorEffects,
     ) -> Result<CpuDecisionOutput, TrainingError> {
@@ -207,11 +207,11 @@ impl CpuOrganismState {
                 .map_or(0., |m| m.max_candidate_gain()),
         };
         q.validate_for(p)?;
-        let tape = founder.forward(&q)?;
+        let tape = founder.infer_organism_step(&q)?;
         let pre = if context.microstep_count == 0 {
             self.checkpoint.inactive_activations.clone()
         } else {
-            tape.a[context.microstep_count as usize - 1].clone()
+            tape.previous_activations.clone().ok_or_else(invalid)?
         };
         let logits = tape.evaluation.candidate_logits[0].clone();
         let generation = self
@@ -334,7 +334,7 @@ impl CpuOrganismState {
     /// chemistry tick. No raw reward scalar API is exposed.
     pub fn apply_credit(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         patch: &ExperiencePatch,
         receptors: &NeuralReceptorFrame,
         development: &DevelopmentState,
@@ -427,7 +427,7 @@ impl CpuOrganismState {
     /// The enclosing host commits its world and all sidecars atomically.
     pub fn consolidate_sleep(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         evidence: &alife_core::sleep::SleepReplayEvidence,
         development: &DevelopmentState,
         parameters: &PlasticityGenomeParameters,
@@ -540,6 +540,7 @@ fn decay(reference: f32, elapsed: u64) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cpu::CpuFoundationTrainer;
     use alife_core::*;
     fn fixture() -> (CpuFoundationTrainer, BrainGenome, DevelopmentState) {
         let capacity = BrainCapacityClass::n2048();

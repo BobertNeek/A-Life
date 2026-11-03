@@ -205,7 +205,7 @@ fn merge(
             &cpu_view,
             &parent.actor.stage_mask,
         )?,
-        FounderMergeConflictPolicy::Midpoint => merge_founder_branches_with_policy(
+        _ => merge_founder_branches_with_policy(
             &parent.phenotype,
             &parent.asset,
             &pc_view,
@@ -322,9 +322,7 @@ fn run(
     }
     let algorithm = match merged.conflict_policy {
         FounderMergeConflictPolicy::AncestorRevert => "alife_training::merge_founder_branches",
-        FounderMergeConflictPolicy::Midpoint => {
-            "alife_training::merge_founder_branches_with_policy"
-        }
+        _ => "alife_training::merge_founder_branches_with_policy",
     };
     let receipt = json!({"schema":1,"mode":"offline_optimizer_frozen_inference_only","ancestry_authenticated_by_tool":false,
         "ancestry_audit":request.ancestry_audit,"input_sha256":pins,"algorithm":algorithm,
@@ -335,6 +333,40 @@ fn run(
         "non_resumable":true,"evaluation_views":views,
         "unique_changes":merged.unique_changes,"averaged_changes":merged.averaged_changes,
         "sign_conflicts":merged.sign_conflicts,"unchanged":merged.unchanged,"route_thresholds":merged.route_thresholds});
+    let mut receipt = receipt;
+    if matches!(
+        conflict_policy,
+        FounderMergeConflictPolicy::UniformSoup | FounderMergeConflictPolicy::Ties20
+    ) {
+        receipt["experimental"] = json!(true);
+        receipt["route_thresholds_applied"] = json!(false);
+        receipt["opposing_ancestor_deltas_before_trim"] = json!(parent
+            .asset
+            .weights()
+            .iter()
+            .zip(pc.asset.weights())
+            .zip(cpu.asset.weights())
+            .enumerate()
+            .filter(
+                |(i, ((base, a), b))| parent.actor.stage_mask.is_trainable(*i)
+                    && (f64::from(**a) - f64::from(**base)) * (f64::from(**b) - f64::from(**base))
+                        < 0.
+            )
+            .count());
+        receipt["experimental_parameters"] = match conflict_policy {
+            FounderMergeConflictPolicy::UniformSoup => {
+                json!({"left_weight":0.5,"right_weight":0.5,"existing_sparse_graph_only":true})
+            }
+            _ => {
+                json!({"delta_reference":"verified_common_ancestor","keep_fraction":0.2,"scale":1.0,
+                "selection":"global top ceil(trainable_count/5) magnitudes independently per branch; ties by parameter index",
+                "sign_election":"sign of sum of retained deltas; exact zero retains ancestor",
+                "reduction":"mean of retained nonzero deltas matching elected sign",
+                "frozen_coordinates":"bit-identical ancestor","not_qualified_for_retention":true})
+            }
+        };
+        receipt["parameter_disposition_scope"] = json!("changed output coordinates classified by original parent delta agreement; not the count of trimmed/elected coordinates");
+    }
     let receipt_bytes = serde_json::to_vec_pretty(&receipt)?;
     publish(&output, &encoded, &receipt_bytes, |file, bytes| {
         file.write_all(bytes)
@@ -343,7 +375,7 @@ fn run(
 }
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
-    let usage = "usage: merge_founder_inference REQUEST.json ABSENT_OUTPUT_DIRECTORY [--conflict-policy ancestor-revert|midpoint]";
+    let usage = "usage: merge_founder_inference REQUEST.json ABSENT_OUTPUT_DIRECTORY [--conflict-policy ancestor-revert|midpoint|uniform-soup|ties20]";
     let conflict_policy = match args.as_slice() {
         [_, _] => FounderMergeConflictPolicy::AncestorRevert,
         [_, _, flag, policy] if flag == "--conflict-policy" => {
@@ -351,6 +383,10 @@ fn main() -> Result<()> {
                 FounderMergeConflictPolicy::AncestorRevert
             } else if policy == "midpoint" {
                 FounderMergeConflictPolicy::Midpoint
+            } else if policy == "uniform-soup" {
+                FounderMergeConflictPolicy::UniformSoup
+            } else if policy == "ties20" {
+                FounderMergeConflictPolicy::Ties20
             } else {
                 return Err(usage.into());
             }

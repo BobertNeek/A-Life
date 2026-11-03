@@ -170,6 +170,57 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn experimental_modes_are_explicit_nonresumable_and_preserve_input_bytes() {
+    for policy in ["uniform-soup", "ties20"] {
+        let fixture = Fixture::new();
+        let request = fixture.request_with_deltas(
+            false,
+            false,
+            None,
+            &[0.04, -0.03, 0., 0.001, 0.],
+            &[0.02, 0.05, 0.01, 0., 0.],
+        );
+        let original = fs::read(request["pc"]["foundation"].as_str().unwrap()).unwrap();
+        let result = fixture.run_policy("experiment", Some(policy));
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let receipt: Value = serde_json::from_slice(&result.stdout).unwrap();
+        assert_eq!(receipt["experimental"], true);
+        assert_eq!(receipt["route_thresholds_applied"], false);
+        assert_eq!(receipt["non_resumable"], true);
+        assert_eq!(receipt["adam_merged"], false);
+        assert_eq!(receipt["critic_merged"], false);
+        assert_eq!(receipt["private_state_merged"], false);
+        assert_eq!(receipt["optimizer_updates"], 0);
+        assert_eq!(receipt["opposing_ancestor_deltas_before_trim"], 1);
+        assert_eq!(
+            fs::read(request["pc"]["foundation"].as_str().unwrap()).unwrap(),
+            original
+        );
+        let bytes = fs::read(fixture.0.join("experiment/merged.alife-foundation")).unwrap();
+        assert!(FoundationWeightAsset::decode_canonical(&bytes).is_ok());
+    }
+}
+
+#[test]
+fn experimental_modes_keep_original_frozen_and_mask_admission_guards() {
+    for policy in ["uniform-soup", "ties20"] {
+        for (mask, frozen) in [(true, false), (false, true)] {
+            let fixture = Fixture::new();
+            fixture.request(mask, frozen);
+            assert!(!fixture
+                .run_policy("experiment", Some(policy))
+                .status
+                .success());
+            assert!(!fixture.0.join("experiment").exists());
+        }
+    }
+}
+
+#[test]
 fn differing_real_stage_counts_create_bit_identical_views_without_changing_inputs() {
     let fixture = Fixture::new();
     let request = fixture.request(false, false);

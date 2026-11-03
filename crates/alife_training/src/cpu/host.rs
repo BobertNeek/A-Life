@@ -117,7 +117,7 @@ pub struct CpuCanonicalStep {
     pub sleeping_organisms: usize,
     pub sleep_consolidations: usize,
 }
-fn weight_digest(founder: &CpuFoundationTrainer) -> Result<[u64; 4], ScaffoldContractError> {
+fn weight_digest(founder: &impl CpuFounderPolicy) -> Result<[u64; 4], ScaffoldContractError> {
     let mut d = CanonicalDigestBuilder::new(b"ALIFE-CPU-FOUNDER-WEIGHTS-V1");
     for &w in founder.weights() {
         d.write_f32(w)?;
@@ -141,7 +141,7 @@ impl CpuCanonicalHost {
     /// existing somatic state is never inferred from a founder asset.
     pub fn new_cohort(
         game: CanonicalNewGame,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         sampling_seed: u32,
     ) -> Result<Self, CpuHostError> {
         let world = game.world;
@@ -227,7 +227,7 @@ impl CpuCanonicalHost {
     /// an aged retained individual or substitute a founder for its private state.
     pub fn new_prepared_cohort<T, E: std::fmt::Display>(
         game: CanonicalNewGame,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         sampling_seed: u32,
         prepare: impl FnOnce(&mut HeadlessWorld) -> Result<T, E>,
     ) -> Result<(Self, T), CpuHostError> {
@@ -279,7 +279,7 @@ impl CpuCanonicalHost {
     /// advances no world tick, neural state, exposure or action sequence.
     pub fn semantic_prior_inputs(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
     ) -> Result<Vec<(PerceptionFrameDraft, ExperienceSequenceId)>, CpuHostError> {
         self.validate_founder(founder)?;
         let tick = self.world.tick();
@@ -320,13 +320,13 @@ impl CpuCanonicalHost {
     pub fn restore_snapshot(
         &mut self,
         snapshot: Self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
     ) -> Result<(), CpuHostError> {
         snapshot.validate_founder(founder)?;
         *self = snapshot;
         Ok(())
     }
-    fn validate_founder(&self, founder: &CpuFoundationTrainer) -> Result<(), CpuHostError> {
+    fn validate_founder(&self, founder: &impl CpuFounderPolicy) -> Result<(), CpuHostError> {
         if self.phenotype_hash != founder.phenotype().phenotype_hash()
             || self.founder_weight_digest != weight_digest(founder)?
         {
@@ -360,7 +360,7 @@ impl CpuCanonicalHost {
     }
     pub fn checkpoint(
         &self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
     ) -> Result<CpuCanonicalCheckpoint, CpuHostError> {
         self.validate_founder(founder)?;
         let mut config =
@@ -428,7 +428,7 @@ impl CpuCanonicalHost {
     }
     pub fn from_checkpoint(
         checkpoint: CpuCanonicalCheckpoint,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
     ) -> Result<Self, CpuHostError> {
         if checkpoint.schema_version == 1 {
             return Err(CpuHostError::State("version1 CPU checkpoint lacks tracked-object identity; exact private-life restore requires version2"));
@@ -594,7 +594,7 @@ impl CpuCanonicalHost {
     /// back body, biology, all cognitive rows and the sampling counter together.
     pub fn step(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         temperature: f32,
     ) -> Result<CpuCanonicalStep, CpuHostError> {
         self.step_with_preparation(founder, temperature, |draft, _| Ok(draft))
@@ -605,7 +605,7 @@ impl CpuCanonicalHost {
     /// that state and reconciles a failed episode instead of retrying its seed.
     pub fn step_with_preparation(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         temperature: f32,
         mut prepare: impl FnMut(
             PerceptionFrameDraft,
@@ -628,7 +628,7 @@ impl CpuCanonicalHost {
     }
     fn step_inner(
         &mut self,
-        founder: &CpuFoundationTrainer,
+        founder: &impl CpuFounderPolicy,
         temperature: f32,
         prepare: &mut impl FnMut(
             PerceptionFrameDraft,
@@ -1288,7 +1288,7 @@ fn replay_evidence(
 
 pub(super) fn validate_record_founder(
     record: &alife_world::WorldOrganismRecord,
-    founder: &CpuFoundationTrainer,
+    founder: &impl CpuFounderPolicy,
 ) -> Result<(), CpuHostError> {
     let p = founder.phenotype();
     let genome = &record.phenotype().brain_genome;
@@ -1308,7 +1308,7 @@ pub(super) fn validate_record_founder(
     let (compiled, _) = PhenotypeCompiler::compile_n2048_foundation_candidate(
         genome.clone(),
         development,
-        founder.source_foundation.clone(),
+        founder.foundation_asset().clone(),
     )?;
     if compiled.phenotype_hash() != p.phenotype_hash() {
         return Err(CpuHostError::State("organism compiler identity differs from CPU founder; heterogeneous graphs require per-row compilation"));
@@ -1321,7 +1321,7 @@ pub(super) fn validate_record_founder(
             .ok_or(CpuHostError::State(
                 "canonical organism lacks inherited candidate asset",
             ))?;
-    if inherited.encode_canonical()? != founder.source_foundation.encode_canonical()? {
+    if inherited.encode_canonical()? != founder.foundation_asset().encode_canonical()? {
         return Err(CpuHostError::State(
             "organism inherited foundation differs from CPU founder",
         ));

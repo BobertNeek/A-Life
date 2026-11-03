@@ -17,6 +17,81 @@ fn fixture_atp(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
         trainer,
     )
 }
+
+#[test]
+fn founder_only_inference_matches_full_trainer_actions_private_learning_sleep_and_restore() {
+    let (mut control, trainer) = fixture();
+    let original_actor = serde_json::to_vec(&trainer.checkpoint()).unwrap();
+    let inference = CpuInferenceFounder::new(
+        trainer.phenotype().clone(),
+        trainer.foundation_asset().clone(),
+    )
+    .unwrap();
+    let checkpoint = control.checkpoint(&trainer).unwrap();
+    let mut candidate = CpuCanonicalHost::from_checkpoint(checkpoint, &inference).unwrap();
+    for _ in 0..8 {
+        let a = control.step(&trainer, 1.).unwrap();
+        let b = candidate.step(&inference, 1.).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+    }
+    assert!(control.checkpoint(&trainer).unwrap().residents[0]
+        .neural
+        .eligibility
+        .iter()
+        .any(|v| *v != 0.));
+    let id = control.world().organism_entity_ids()[0].0;
+    control.request_recovery_sleep(id).unwrap();
+    candidate.request_recovery_sleep(id).unwrap();
+    let mut consolidated = false;
+    let mut resumed = false;
+    for _ in 0..512 {
+        let a = control.step(&trainer, 1.).unwrap();
+        let b = candidate.step(&inference, 1.).unwrap();
+        assert_eq!(a.sleeping_organisms, b.sleeping_organisms);
+        assert_eq!(a.sleep_consolidations, b.sleep_consolidations);
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        consolidated |= a.sleep_consolidations > 0;
+        if consolidated && !a.decisions.is_empty() {
+            resumed = true;
+            break;
+        }
+    }
+    assert!(consolidated && resumed);
+    let expected = serde_json::to_vec(&control.checkpoint(&trainer).unwrap()).unwrap();
+    assert_eq!(
+        expected,
+        serde_json::to_vec(&candidate.checkpoint(&inference).unwrap()).unwrap()
+    );
+    let mut restored =
+        CpuCanonicalHost::from_checkpoint(candidate.checkpoint(&inference).unwrap(), &inference)
+            .unwrap();
+    assert_eq!(
+        expected,
+        serde_json::to_vec(&restored.checkpoint(&inference).unwrap()).unwrap()
+    );
+    assert_eq!(
+        original_actor,
+        serde_json::to_vec(&trainer.checkpoint()).unwrap()
+    );
+    for _ in 0..3 {
+        let a = candidate.step(&inference, 1.).unwrap();
+        let b = restored.step(&inference, 1.).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&a.decisions).unwrap(),
+            serde_json::to_vec(&b.decisions).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&candidate.checkpoint(&inference).unwrap()).unwrap(),
+            serde_json::to_vec(&restored.checkpoint(&inference).unwrap()).unwrap()
+        );
+    }
+}
 fn new_game_fixture(atp: Option<f32>) -> (CanonicalNewGame, CpuFoundationTrainer) {
     let (game, trainer, _) = new_game_with_inputs_fixture(atp);
     (game, trainer)

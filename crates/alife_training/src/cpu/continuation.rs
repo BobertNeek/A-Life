@@ -121,7 +121,7 @@ pub struct CpuEpisodeReceipt {
 }
 pub struct DefaultCpuEpisode;
 impl CpuEpisodeHooks for DefaultCpuEpisode {}
-fn compile_game(
+pub fn compile_cpu_founder_game(
     seed: u64,
     founder_seed: u64,
     asset: &FoundationWeightAsset,
@@ -691,7 +691,7 @@ fn collect_cpu_episode_inner(
         None
     };
     let seed_admission = episode.admit(&args, source_receipt.as_ref(), &source_hashes)?;
-    let (game, p, inputs) = compile_game(args.seed, founder_seed, &asset)?;
+    let (game, p, inputs) = compile_cpu_founder_game(args.seed, founder_seed, &asset)?;
     let trainer = if let Some(actor) = actor {
         if actor
             .weights
@@ -926,7 +926,7 @@ pub fn run_cpu_continuation(
     )?;
     let update_seconds = update_started.elapsed().as_secs_f64();
     let trained = trainer.export_candidate(asset.manifest().training_stage())?;
-    let (_, next, next_inputs) = compile_game(args.seed, founder_seed, &trained)?;
+    let (_, next, next_inputs) = compile_cpu_founder_game(args.seed, founder_seed, &trained)?;
     trainer.rebind_for_next_cohort(next, trained.clone())?;
     fs::write(
         args.output.join("trained.alife-foundation"),

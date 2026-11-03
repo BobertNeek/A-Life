@@ -9,13 +9,18 @@ use alife_core::{
 
 use crate::StageTrainableMask;
 
-/// How same-parent actor deltas with opposing signs are handled.
+/// Same-parent actor merge experiment. The default retains its original contract.
 /// Neither policy merges acquired life state, critic weights, or optimizer history.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum FounderMergeConflictPolicy {
     #[default]
     AncestorRevert,
     Midpoint,
+    /// Experimental equal-weight soup on the existing sparse parameter graph.
+    UniformSoup,
+    /// Experimental TIES-style delta merge: top20% per branch, scale1,
+    /// sign-sum election, disjoint mean. Exact sign ties retain the ancestor.
+    Ties20,
 }
 
 impl FounderMergeConflictPolicy {
@@ -23,6 +28,8 @@ impl FounderMergeConflictPolicy {
         match self {
             Self::AncestorRevert => "ancestor_revert",
             Self::Midpoint => "midpoint",
+            Self::UniformSoup => "uniform_soup",
+            Self::Ties20 => "ties20",
         }
     }
 }
@@ -134,6 +141,21 @@ pub fn merge_founder_branches_with_policy(
         ..FounderMergeReceipt::default()
     };
     let mut weights = parent.weights().to_vec();
+    let experimental = matches!(
+        conflict_policy,
+        FounderMergeConflictPolicy::UniformSoup | FounderMergeConflictPolicy::Ties20
+    )
+    .then(|| {
+        experimental_weights(
+            parent.weights(),
+            left.asset.weights(),
+            right.asset.weights(),
+            &(0..parent.weights().len())
+                .map(|i| mask.is_trainable(i))
+                .collect::<Vec<_>>(),
+            conflict_policy,
+        )
+    });
     for (index, synapse) in phenotype.synapses().iter().enumerate() {
         let base = parent.weights()[index];
         let a = left.asset.weights()[index];
@@ -146,7 +168,21 @@ pub fn merge_founder_branches_with_policy(
             continue;
         }
         let threshold = receipt.route_thresholds[&synapse.route_index()];
-        let (merged, kind) = merge_coordinate_with_policy(base, a, b, threshold, conflict_policy);
+        let (merged, kind) = if let Some(values) = &experimental {
+            let value = values[index];
+            let kind = if value.to_bits() == base.to_bits() {
+                0
+            } else if (f64::from(a) - f64::from(base)) * (f64::from(b) - f64::from(base)) < 0. {
+                3
+            } else if a.to_bits() == base.to_bits() || b.to_bits() == base.to_bits() {
+                1
+            } else {
+                2
+            };
+            (value, kind)
+        } else {
+            merge_coordinate_with_policy(base, a, b, threshold, conflict_policy)
+        };
         if !merged.is_finite() {
             return Err(ScaffoldContractError::NonFiniteFloat);
         }
@@ -190,6 +226,62 @@ fn midpoint(left: f32, right: f32) -> f32 {
     ((f64::from(left) + f64::from(right)) * 0.5) as f32
 }
 
+fn experimental_weights(
+    parent: &[f32],
+    left: &[f32],
+    right: &[f32],
+    trainable: &[bool],
+    policy: FounderMergeConflictPolicy,
+) -> Vec<f32> {
+    if policy == FounderMergeConflictPolicy::UniformSoup {
+        return parent
+            .iter()
+            .enumerate()
+            .map(|(i, base)| {
+                if trainable[i] {
+                    midpoint(left[i], right[i])
+                } else {
+                    *base
+                }
+            })
+            .collect();
+    }
+    // Compute changes from the verified ancestor, never signs of raw weights.
+    let trimmed = |branch: &[f32]| {
+        let mut deltas = branch
+            .iter()
+            .zip(parent)
+            .enumerate()
+            .filter(|(i, _)| trainable[*i])
+            .map(|(i, (value, base))| (i, f64::from(*value) - f64::from(*base)))
+            .collect::<Vec<_>>();
+        let keep = deltas.len().div_ceil(5);
+        deltas.sort_by(|(ia, a), (ib, b)| b.abs().total_cmp(&a.abs()).then(ia.cmp(ib)));
+        let mut result = vec![0.; parent.len()];
+        for (i, value) in deltas.into_iter().take(keep) {
+            result[i] = value;
+        }
+        result
+    };
+    let a = trimmed(left);
+    let b = trimmed(right);
+    parent
+        .iter()
+        .enumerate()
+        .map(|(i, base)| {
+            let sum = a[i] + b[i];
+            if !trainable[i] || sum == 0. {
+                return *base;
+            }
+            let selected = [a[i], b[i]]
+                .into_iter()
+                .filter(|d| *d != 0. && d.is_sign_positive() == sum.is_sign_positive())
+                .collect::<Vec<_>>();
+            (f64::from(*base) + selected.iter().sum::<f64>() / selected.len() as f64) as f32
+        })
+        .collect()
+}
+
 fn merge_coordinate_with_policy(
     parent: f32,
     left: f32,
@@ -208,6 +300,10 @@ fn merge_coordinate_with_policy(
             match conflict_policy {
                 FounderMergeConflictPolicy::AncestorRevert => parent,
                 FounderMergeConflictPolicy::Midpoint => midpoint(left, right),
+                // Experimental policies are handled as whole vectors above.
+                FounderMergeConflictPolicy::UniformSoup | FounderMergeConflictPolicy::Ties20 => {
+                    unreachable!("experimental merge requires vector selection")
+                }
             },
             3,
         ),
@@ -220,6 +316,56 @@ mod tests {
         merge_coordinate_with_policy, validate_recorded_parent, FounderMergeConflictPolicy,
     };
     use alife_core::{Blake3Digest, PhenotypeHash};
+
+    #[test]
+    fn ties20_trims_deltas_not_raw_weights_and_elects_dominant_sign() {
+        let base = [10.; 5];
+        let left = [12., 10.1, 10., 10., 10.];
+        let right = [9., 10.2, 10., 10., 10.];
+        let merged = super::experimental_weights(
+            &base,
+            &left,
+            &right,
+            &[true; 5],
+            FounderMergeConflictPolicy::Ties20,
+        );
+        assert_eq!(merged, [12., 10., 10., 10., 10.]);
+        // Both raw weights at0 are positive. The conflicting deltas are+2/-1.
+        let tied = super::experimental_weights(
+            &base,
+            &left,
+            &[8., 10.2, 10., 10., 10.],
+            &[true; 5],
+            FounderMergeConflictPolicy::Ties20,
+        );
+        assert_eq!(tied, base);
+    }
+
+    #[test]
+    fn experimental_soup_preserves_sparse_frozen_coordinates_and_averages_unique_change() {
+        let base = [1., 2., 3.];
+        let result = super::experimental_weights(
+            &base,
+            &[1., 4., 9.],
+            &[3., 2., 8.],
+            &[true, true, false],
+            FounderMergeConflictPolicy::UniformSoup,
+        );
+        assert_eq!(result, [2., 3., 3.]);
+    }
+
+    #[test]
+    fn ties20_magnitude_ties_are_deterministic_by_parameter_index() {
+        let base = [0.; 5];
+        let result = super::experimental_weights(
+            &base,
+            &[1., 1., 1., 1., 1.],
+            &base,
+            &[true; 5],
+            FounderMergeConflictPolicy::Ties20,
+        );
+        assert_eq!(result, [1., 0., 0., 0., 0.]);
+    }
 
     #[test]
     fn opt_in_midpoint_changes_only_sign_conflicts() {

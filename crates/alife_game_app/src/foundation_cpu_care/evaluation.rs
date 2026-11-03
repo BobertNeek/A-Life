@@ -81,12 +81,12 @@ pub(super) fn teacher_heard(frame: &alife_core::PerceptionFrame) -> bool {
 fn hash_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-fn hash_value(value: &impl Serialize) -> Result<String> {
+pub(super) fn hash_value(value: &impl Serialize) -> Result<String> {
     let mut hash = Sha256::new();
     serde_json::to_writer(&mut hash, value)?;
     Ok(format!("{:x}", hash.finalize()))
 }
-fn file_hash(path: &Path) -> Result<String> {
+pub(super) fn file_hash(path: &Path) -> Result<String> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {
         return Err("assessment artifacts must be regular nonsymlink files".into());
@@ -98,14 +98,14 @@ fn file_hash(path: &Path) -> Result<String> {
     }
     Ok(format!("{:x}", hash.finalize()))
 }
-fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
+pub(super) fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
     if fs::symlink_metadata(path)?.len() > 64 * 1024 * 1024 {
         return Err("assessment JSON exceeds64 MiB".into());
     }
     file_hash(path)?;
     Ok(serde_json::from_reader(fs::File::open(path)?)?)
 }
-fn inventory(root: &Path) -> Result<BTreeMap<String, String>> {
+pub(super) fn inventory(root: &Path) -> Result<BTreeMap<String, String>> {
     fn visit(
         root: &Path,
         dir: &Path,
@@ -146,7 +146,7 @@ fn inventory(root: &Path) -> Result<BTreeMap<String, String>> {
     visit(root, root, &mut result, 0)?;
     Ok(result)
 }
-fn input_pins(
+pub(super) fn input_pins(
     request: &CpuCareEvaluationRequest,
     files: &BTreeMap<String, Vec<u8>>,
     provenance: &Value,
@@ -178,7 +178,7 @@ fn input_pins(
     }
     Ok(pins)
 }
-fn verify_pins(pins: &BTreeMap<PathBuf, String>) -> Result<()> {
+pub(super) fn verify_pins(pins: &BTreeMap<PathBuf, String>) -> Result<()> {
     for (path, expected) in pins {
         if file_hash(path)? != *expected {
             return Err("assessment source/history changed".into());
