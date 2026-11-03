@@ -1,6 +1,16 @@
 use std::{collections::BTreeMap, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = std::env::args().skip(1);
+    let all = std::env::args().skip(1).collect::<Vec<_>>();
+    if all.len() == 2 && all[0] == "--validate-recovery" {
+        let (actor, critic) =
+            alife_game_app::restore_disposable_teacher_actor(std::path::Path::new(&all[1]))?;
+        println!(
+            "{}",
+            serde_json::json!({"valid_disposable_actor_only_recovery":true,"actor_optimizer_step":actor.optimizer_step(),"critic_optimizer_step":critic.checkpoint().optimizer_step,"critic_source_policy_binding":critic.checkpoint().last_updated_policy_version})
+        );
+        return Ok(());
+    }
+    let mut args = all.into_iter();
     let mut values = BTreeMap::new();
     let mut check_only = false;
     while let Some(key) = args.next() {
