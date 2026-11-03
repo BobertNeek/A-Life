@@ -456,10 +456,15 @@ mod tests {
         assert_eq!(serde_json::to_string(&request).unwrap(), legacy);
         assert!(request.layout.is_none());
         let mut mapped = request.clone();
-        mapped.layout = Some(CpuCareLayout { rows: vec!["#####".into(), "#L.F#".into(), "#####".into()] });
+        mapped.layout = Some(CpuCareLayout {
+            rows: vec!["#####".into(), "#L.F#".into(), "#####".into()],
+        });
         let mapped_bytes = serde_json::to_string(&mapped).unwrap();
         assert_ne!(mapped_bytes, legacy);
-        assert_eq!(serde_json::from_str::<super::CpuCareEvaluationRequest>(&mapped_bytes).unwrap(), mapped);
+        assert_eq!(
+            serde_json::from_str::<super::CpuCareEvaluationRequest>(&mapped_bytes).unwrap(),
+            mapped
+        );
         assert!(request.food_offset.is_none());
         request.food_offset = Some([2.0, -3.0]);
         let geometry_encoded = serde_json::to_string(&request).unwrap();

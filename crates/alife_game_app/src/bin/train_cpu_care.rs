@@ -109,7 +109,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     let request = CpuCareRequest {
         food_offset,
-        layout: values.remove("--layout-json").map(|value| serde_json::from_str(&value)).transpose()?,
+        layout: values
+            .remove("--layout-json")
+            .map(|value| serde_json::from_str(&value))
+            .transpose()?,
         previous: values.remove("--previous").map(PathBuf::from),
         output: values.remove("--output").ok_or("--output required")?.into(),
         seed: values.remove("--seed").ok_or("--seed required")?.parse()?,

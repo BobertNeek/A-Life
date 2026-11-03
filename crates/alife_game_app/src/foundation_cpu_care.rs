@@ -696,11 +696,17 @@ mod collect_only_tests {
         let mut config = alife_world::CanonicalNewGameConfig::phase3(42, 1).unwrap();
         config.brain_class = alife_core::BrainScaleTier::Standard2048;
         config.sensor_profile = asset.manifest().sensor_profile();
-        let game = alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
+        let game =
+            alife_world::create_canonical_new_game_with_n2048_candidate(&config, &asset).unwrap();
         let mut world = game.world;
         let (organism, founder) = world.organism_entity_ids()[0];
         let flat = world.entity(founder).unwrap().position;
-        let layout = CpuCareLayout { rows: ["#######", "#L#..F#", "#.....#", "#######"].iter().map(|s| s.to_string()).collect() };
+        let layout = CpuCareLayout {
+            rows: ["#######", "#L#..F#", "#.....#", "#######"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        };
         let (_, mut episode) = prepare_care_episode(CpuCareRequest {
             previous: None,
             output: PathBuf::from("unused-layout-setup-only"),
@@ -715,16 +721,31 @@ mod collect_only_tests {
             known_exclusions: false,
             record_diagnostic_replay: false,
             fixture: true,
-        }).unwrap();
+        })
+        .unwrap();
         episode.prepare_world(&mut world).unwrap();
         assert_eq!(world.organism_entity_ids()[0], (organism, founder));
         let origin = alife_core::Vec3f::new(flat.x, 0.0, flat.y);
         assert_eq!(world.entity(founder).unwrap().position, origin);
-        let food = world.entity(world.entity_id("food-01").unwrap()).unwrap().position;
+        let food = world
+            .entity(world.entity_id("food-01").unwrap())
+            .unwrap()
+            .position;
         assert_eq!(food.x, origin.x + 8.0);
         assert_eq!(food.z, origin.z);
-        assert!(world.terrain().unwrap().resolve_move(origin, food).is_none());
-        assert!(world.terrain().unwrap().resolve_move(origin, alife_core::Vec3f::new(origin.x, 0.0, origin.z + 2.0)).is_some());
+        assert!(world
+            .terrain()
+            .unwrap()
+            .resolve_move(origin, food)
+            .is_none());
+        assert!(world
+            .terrain()
+            .unwrap()
+            .resolve_move(
+                origin,
+                alife_core::Vec3f::new(origin.x, 0.0, origin.z + 2.0)
+            )
+            .is_some());
         for label in ["obstacle-01", "obstacle-02", "hazard-01", "food-02"] {
             if let Some(id) = world.entity_id(label) {
                 assert!(world.entity(id).unwrap().position.x < origin.x - 50.0);
@@ -736,15 +757,28 @@ mod collect_only_tests {
             alife_world::RuntimeConfig::deterministic_default(42, config.brain_class),
             alife_world::AssetManifest::empty(),
             game.creatures,
-        ).unwrap();
-        let decoded = alife_world::PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap()).unwrap();
+        )
+        .unwrap();
+        let decoded =
+            alife_world::PortableSaveFile::from_json_str(&save.to_json_string_pretty().unwrap())
+                .unwrap();
         let restored = decoded.restore_headless_world().unwrap();
         assert_eq!(restored.terrain_binding(), world.terrain_binding());
         assert_eq!(restored.organism_entity_ids(), world.organism_entity_ids());
         assert_eq!(restored.entity(founder).unwrap().position, origin);
-        assert!(restored.terrain().unwrap().resolve_move(origin, food).is_none());
+        assert!(restored
+            .terrain()
+            .unwrap()
+            .resolve_move(origin, food)
+            .is_none());
         let before = world.canonical_signature_digest().unwrap();
-        assert!(episode.request.layout.as_ref().unwrap().prepare(&mut world).is_err());
+        assert!(episode
+            .request
+            .layout
+            .as_ref()
+            .unwrap()
+            .prepare(&mut world)
+            .is_err());
         assert_eq!(world.canonical_signature_digest().unwrap(), before);
     }
 

@@ -677,14 +677,18 @@ pub(super) fn collection_attempts(lane: &Path) -> Result<Vec<Value>> {
 }
 
 pub(super) fn validate_food_offset_binding(attempt: &Value, episode: &Value) -> Result<()> {
-    let requested_layout: Option<super::CpuCareLayout> = serde_json::from_value(attempt["layout"].clone())?;
-    let actual_layout: Option<super::CpuCareLayout> = serde_json::from_value(episode["layout"].clone())?;
+    let requested_layout: Option<super::CpuCareLayout> =
+        serde_json::from_value(attempt["layout"].clone())?;
+    let actual_layout: Option<super::CpuCareLayout> =
+        serde_json::from_value(episode["layout"].clone())?;
     if requested_layout != actual_layout {
         return Err("CPU layout differs from its reserved attempt".into());
     }
     if let Some(layout) = requested_layout {
-        layout.validate(serde_json::from_value(attempt["lesson"].clone())?,
-            serde_json::from_value(attempt["food_offset"].clone())?)?;
+        layout.validate(
+            serde_json::from_value(attempt["lesson"].clone())?,
+            serde_json::from_value(attempt["food_offset"].clone())?,
+        )?;
     }
     // Missing fields in historical receipts mean legacy seed-derived placement.
     let requested: Option<[f32; 2]> = serde_json::from_value(attempt["food_offset"].clone())?;

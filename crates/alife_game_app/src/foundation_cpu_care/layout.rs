@@ -33,20 +33,29 @@ impl CpuCareLayout {
                     b'#' | b'.' => {}
                     b'L' if learner.replace((x, z)).is_none() => {}
                     b'F' if food.replace((x, z)).is_none() => {}
-                    _ => return Err("layout needs exactly one L and F, and only # . L F cells".into()),
+                    _ => {
+                        return Err(
+                            "layout needs exactly one L and F, and only # . L F cells".into()
+                        )
+                    }
                 }
             }
         }
-        Ok((learner.ok_or("layout lacks learner L")?, food.ok_or("layout lacks food F")?))
+        Ok((
+            learner.ok_or("layout lacks learner L")?,
+            food.ok_or("layout lacks food F")?,
+        ))
     }
 
     fn geometry(&self, origin: Vec3f) -> Result<(WorldTerrain, Vec3f)> {
         let (learner, food) = self.cells()?;
-        let position = |(x, z): (usize, usize)| Vec3f::new(
-            origin.x + 2.0 * (x as f32 - learner.0 as f32),
-            0.0,
-            origin.z + 2.0 * (z as f32 - learner.1 as f32),
-        );
+        let position = |(x, z): (usize, usize)| {
+            Vec3f::new(
+                origin.x + 2.0 * (x as f32 - learner.0 as f32),
+                0.0,
+                origin.z + 2.0 * (z as f32 - learner.1 as f32),
+            )
+        };
         let mut obstacles = Vec::new();
         for (z, row) in self.rows.iter().enumerate() {
             for (x, cell) in row.bytes().enumerate() {
@@ -56,16 +65,19 @@ impl CpuCareLayout {
                 }
             }
         }
-        let terrain = WorldTerrain::new(TerrainData {
-            width: 2,
-            depth: 2,
-            origin_x: -256.0,
-            origin_z: -256.0,
-            spacing: 512.0,
-            heights: vec![0.0; 4],
-            obstacles,
-            water_level: None,
-        }, LocomotionLimits::default())?;
+        let terrain = WorldTerrain::new(
+            TerrainData {
+                width: 2,
+                depth: 2,
+                origin_x: -256.0,
+                origin_z: -256.0,
+                spacing: 512.0,
+                heights: vec![0.0; 4],
+                obstacles,
+                water_level: None,
+            },
+            LocomotionLimits::default(),
+        )?;
         // Every accepted route edge must be traversable under the engine's
         // swept body collision authority. No teleport or policy-visible route.
         let mut seen = BTreeSet::from([learner]);
@@ -74,9 +86,17 @@ impl CpuCareLayout {
             if (x, z) == food {
                 return Ok((terrain, position(food)));
             }
-            for (nx, nz) in [(x as isize - 1, z as isize), (x as isize + 1, z as isize),
-                (x as isize, z as isize - 1), (x as isize, z as isize + 1)] {
-                if nx < 0 || nz < 0 || nz as usize >= self.rows.len() || nx as usize >= self.rows[0].len() {
+            for (nx, nz) in [
+                (x as isize - 1, z as isize),
+                (x as isize + 1, z as isize),
+                (x as isize, z as isize - 1),
+                (x as isize, z as isize + 1),
+            ] {
+                if nx < 0
+                    || nz < 0
+                    || nz as usize >= self.rows.len()
+                    || nx as usize >= self.rows[0].len()
+                {
                     continue;
                 }
                 let next = (nx as usize, nz as usize);
@@ -84,8 +104,10 @@ impl CpuCareLayout {
                     continue;
                 }
                 let target = position(next);
-                if terrain.resolve_move(position((x, z)), target).is_some_and(|p|
-                    (p.x - target.x).abs() < 1e-5 && (p.z - target.z).abs() < 1e-5) {
+                if terrain
+                    .resolve_move(position((x, z)), target)
+                    .is_some_and(|p| (p.x - target.x).abs() < 1e-5 && (p.z - target.z).abs() < 1e-5)
+                {
                     seen.insert(next);
                     queue.push_back(next);
                 }
@@ -94,7 +116,11 @@ impl CpuCareLayout {
         Err("layout food is unreachable under native terrain collision".into())
     }
 
-    pub(super) fn validate(&self, lesson: FoundationTeacherLesson, offset: Option<[f32; 2]>) -> Result<()> {
+    pub(super) fn validate(
+        &self,
+        lesson: FoundationTeacherLesson,
+        offset: Option<[f32; 2]>,
+    ) -> Result<()> {
         if lesson != FoundationTeacherLesson::Feeding || offset.is_some() {
             return Err("layout requires feeding and cannot be combined with food_offset".into());
         }
@@ -106,35 +132,74 @@ impl CpuCareLayout {
         // This hook runs on a fresh episode body, never a retained private world.
         // Refuse rather than replace any pre-existing terrain/private life.
         if world.terrain().is_some() || world.tick().raw() != 0 {
-            return Err("authored layout requires a fresh ungrounded tick-zero episode world".into());
+            return Err(
+                "authored layout requires a fresh ungrounded tick-zero episode world".into(),
+            );
         }
         let mut prepared = world.clone();
-        let founder = prepared.organism_entity_ids().first().ok_or("layout founder missing")?.1;
-        let flat = world.entity(founder).ok_or("layout founder missing")?.position;
+        let founder = prepared
+            .organism_entity_ids()
+            .first()
+            .ok_or("layout founder missing")?
+            .1;
+        let flat = world
+            .entity(founder)
+            .ok_or("layout founder missing")?
+            .position;
         let origin = Vec3f::new(flat.x, 0.0, flat.y);
         let (terrain, food) = self.geometry(origin)?;
         // Move stock clutter before terrain conversion, so it cannot force a
         // relocation search inside an authored wall or an unrelated closed room.
-        for (index, label) in ["obstacle-01", "obstacle-02", "hazard-01", "food-02",
-            "meadow-ball", "meadow-activity-toy"].iter().enumerate() {
+        for (index, label) in [
+            "obstacle-01",
+            "obstacle-02",
+            "hazard-01",
+            "food-02",
+            "meadow-ball",
+            "meadow-activity-toy",
+        ]
+        .iter()
+        .enumerate()
+        {
             if let Some(id) = prepared.entity_id(label) {
-                prepared.editor_move_object(id, Vec3f::new(origin.x - 80.0 - index as f32 * 3.0, origin.z - 80.0, 0.0))?;
+                prepared.editor_move_object(
+                    id,
+                    Vec3f::new(origin.x - 80.0 - index as f32 * 3.0, origin.z - 80.0, 0.0),
+                )?;
             }
         }
         if let Some(id) = prepared.entity_id("food-01") {
             prepared.editor_move_object(id, Vec3f::new(food.x, food.z, 0.0))?;
         }
         prepared.enable_terrain_for_new_game(terrain, Vec3f::ZERO)?;
-        let actual = prepared.entity(founder).ok_or("layout founder missing")?.position;
+        let actual = prepared
+            .entity(founder)
+            .ok_or("layout founder missing")?
+            .position;
         if actual != origin {
             return Err("terrain conversion moved the authored layout learner anchor".into());
         }
         // Authored open cells must not retain the stock scene's hidden clutter.
-        for (index, label) in ["obstacle-01", "obstacle-02", "hazard-01", "food-02",
-            "meadow-ball", "meadow-activity-toy"].iter().enumerate() {
+        for (index, label) in [
+            "obstacle-01",
+            "obstacle-02",
+            "hazard-01",
+            "food-02",
+            "meadow-ball",
+            "meadow-activity-toy",
+        ]
+        .iter()
+        .enumerate()
+        {
             if let Some(id) = prepared.entity_id(label) {
-                let mut physical = prepared.entity(id).ok_or("layout clutter missing")?.grounded_physical;
-                prepared.editor_move_object(id, Vec3f::new(origin.x - 80.0 - index as f32 * 3.0, 0.0, origin.z - 80.0))?;
+                let mut physical = prepared
+                    .entity(id)
+                    .ok_or("layout clutter missing")?
+                    .grounded_physical;
+                prepared.editor_move_object(
+                    id,
+                    Vec3f::new(origin.x - 80.0 - index as f32 * 3.0, 0.0, origin.z - 80.0),
+                )?;
                 physical.velocity = Vec3f::ZERO;
                 prepared.set_grounded_physical_properties(id, physical)?;
             }
@@ -148,7 +213,9 @@ impl CpuCareLayout {
 mod tests {
     use super::*;
     fn layout(rows: &[&str]) -> CpuCareLayout {
-        CpuCareLayout { rows: rows.iter().map(|s| s.to_string()).collect() }
+        CpuCareLayout {
+            rows: rows.iter().map(|s| s.to_string()).collect(),
+        }
     }
     #[test]
     fn authored_walls_block_native_motion_but_detour_remains_reachable() {
@@ -157,7 +224,10 @@ mod tests {
         assert_eq!(food, Vec3f::new(8.0, 0.0, 0.0));
         assert!(!terrain.walkable(2.0, 0.0));
         assert!(terrain.resolve_move(Vec3f::ZERO, food).is_none());
-        assert_eq!(terrain.resolve_move(Vec3f::ZERO, Vec3f::new(0.0, 0.0, 2.0)), Some(Vec3f::new(0.0, 0.0, 2.0)));
+        assert_eq!(
+            terrain.resolve_move(Vec3f::ZERO, Vec3f::new(0.0, 0.0, 2.0)),
+            Some(Vec3f::new(0.0, 0.0, 2.0))
+        );
         // Native terrain serialization retains exactly the same collision shape.
         let state = terrain.state();
         let restored = WorldTerrain::new(state.data, state.locomotion).unwrap();
@@ -166,14 +236,24 @@ mod tests {
     }
     #[test]
     fn authored_layout_rejects_invalid_and_unreachable_maps() {
-        for rows in [vec!["#####", "#L#F#", "#####"], vec!["#####", "#L.F.", "#####"],
-            vec!["#####", "#LLF#", "#####"], vec!["#####", "#L?F#", "#####"],
-            vec!["#####", "#L.F#", "####"]] {
+        for rows in [
+            vec!["#####", "#L#F#", "#####"],
+            vec!["#####", "#L.F.", "#####"],
+            vec!["#####", "#LLF#", "#####"],
+            vec!["#####", "#L?F#", "#####"],
+            vec!["#####", "#L.F#", "####"],
+        ] {
             assert!(layout(&rows).geometry(Vec3f::ZERO).is_err());
         }
         let valid = layout(&["#####", "#L.F#", "#####"]);
-        assert!(valid.validate(FoundationTeacherLesson::RelocatedFood, None).is_err());
-        assert!(valid.validate(FoundationTeacherLesson::Feeding, Some([2.0, 0.0])).is_err());
-        valid.validate(FoundationTeacherLesson::Feeding, None).unwrap();
+        assert!(valid
+            .validate(FoundationTeacherLesson::RelocatedFood, None)
+            .is_err());
+        assert!(valid
+            .validate(FoundationTeacherLesson::Feeding, Some([2.0, 0.0]))
+            .is_err());
+        valid
+            .validate(FoundationTeacherLesson::Feeding, None)
+            .unwrap();
     }
 }
