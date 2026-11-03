@@ -1,5 +1,6 @@
 //! Explicit CPU continuation using the existing held/reachable/feeding/blocked-route lessons.
-use alife_game_app::{run_cpu_care, CpuCareRequest, FoundationTeacherLesson};
+use alife_game_app::{run_cpu_care_with_replay_execution, CpuCareRequest, FoundationTeacherLesson};
+use alife_training::cpu::CpuReplayExecution;
 use std::{collections::BTreeMap, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Cooperative predecessors validate full round proofs. Use the same bounded
@@ -43,6 +44,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         match key.as_str() {
             "--help" | "-h" => {
                 println!("train_cpu_care --previous FINAL_PORTABLE_OR_CPU_SOURCE --output NEW_CPU_LANE/NEW_EPISODE --seed-history EXACT_HISTORY --seed EXPLICIT_NEW_SEED --lesson eat_held_food|eat_reachable_food|feeding|obstacle_navigation|relocated_food --decisions 1..128 [--temperature 1] [--food-need-condition newborn_v1|ordinary_healthy_aging_v1] [--known-exclusions] [--record-diagnostic-replay]\n\nThe opt-in ordinary healthy aging condition applies only to Feeding/RelocatedFood and preserves their geometry and cues.\n\nBulky raw diagnostic replay is opt-in; in-memory training and checkpoint state are unchanged.\n\nDevelopment only: --fixture replaces --previous and --seed-history. No GPU/device is created. New prepared episode body/private cognition; full inherited founder and actor/value Adam state. A separate original individual archive remains required. No automatic curriculum progression or terminal GPU individual restore is claimed.");
+                println!("\n--replay-execution reference|cadence-csr selects offline CPU training replay only. Reference is default; collection remains Reference. This does not accelerate GPU PPO.");
                 return Ok(());
             }
             "--fixture" => {
@@ -70,6 +72,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             | "--lesson"
             | "--decisions"
             | "--temperature"
+            | "--replay-execution"
             | "--food-need-condition" => {
                 let value = arguments.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
@@ -79,6 +82,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("unknown CPU care argument {key}").into()),
         }
     }
+    let execution = match values.remove("--replay-execution").as_deref() {
+        None | Some("reference") => CpuReplayExecution::Reference,
+        Some("cadence-csr") => CpuReplayExecution::CadenceCsr,
+        _ => return Err("--replay-execution must be reference or cadence-csr".into()),
+    };
     let lesson = match values.remove("--lesson").as_deref() {
         Some("eat_held_food") => FoundationTeacherLesson::EatHeldFood,
         Some("eat_reachable_food") => FoundationTeacherLesson::EatReachableFood,
@@ -110,6 +118,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         known_exclusions,
         record_diagnostic_replay,
     };
-    println!("{}", serde_json::to_string(&run_cpu_care(request)?)?);
+    println!(
+        "{}",
+        serde_json::to_string(&run_cpu_care_with_replay_execution(request, execution)?)?
+    );
     Ok(())
 }
