@@ -10,6 +10,9 @@ use alife_training::{
 use alife_world::{create_canonical_new_game_with_n2048_candidate, CanonicalNewGameConfig};
 use std::{fs, path::Path, time::Instant};
 
+mod teacher_control;
+pub use teacher_control::*;
+
 const TEMPERATURE: f32 = 1.;
 const TRAIN_SEEDS: [u64; 4] = [41001, 41002, 41003, 41004];
 const EVAL_SEEDS: [u64; 4] = [51001, 51002, 51003, 51004];

@@ -11,6 +11,11 @@ path = "src/bin/run_predictive_care_smoke.rs"
 required-features = ["cpu-training"]
 
 [[bin]]
+name = "run_predictive_care_teacher_control"
+path = "src/bin/run_predictive_care_teacher_control.rs"
+required-features = ["cpu-training"]
+
+[[bin]]
 name = "train_cpu_care"
 path = "src/bin/train_cpu_care.rs"
 required-features = ["cpu-training"]

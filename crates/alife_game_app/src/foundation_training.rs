@@ -1152,6 +1152,18 @@ struct GroundedLessonTargets {
     waypoint: alife_core::WorldEntityId,
 }
 
+/// The existing care demonstrator's bounded Eat label. The candidate must be
+/// present in ordinary current perception; this does not execute a learner action.
+pub(crate) fn care_eat_teacher_candidate(
+    frame: &alife_core::PerceptionFrame,
+    food: alife_core::WorldEntityId,
+) -> Option<&alife_core::ActionCandidate> {
+    frame.candidates().iter().find(|candidate| {
+        candidate.action_id == alife_world::HeadlessActionIds::EAT
+            && candidate.target.entity == Some(food)
+    })
+}
+
 fn grounded_lesson_teacher(
     frame: &alife_core::PerceptionFrame,
     enabled_channels: u32,
@@ -1183,13 +1195,7 @@ fn grounded_lesson_teacher(
     ) {
         // Eat prepares its own grip when needed, then consumes on a later
         // selected Eat. Deliberate Grab is not a care prerequisite.
-        let chosen = frame
-            .candidates()
-            .iter()
-            .find(|candidate| {
-                candidate.action_id == alife_world::HeadlessActionIds::EAT
-                    && candidate.target.entity == Some(food)
-            })
+        let chosen = care_eat_teacher_candidate(frame, food)
             .ok_or(ScaffoldContractError::InvalidActionDecision)?;
         return assemble_grounded_teacher(frame, enabled_channels, chosen);
     }
