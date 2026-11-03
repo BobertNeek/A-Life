@@ -8,6 +8,120 @@ const TEACHER_EPOCHS: usize = 16;
 const TEACHER_LR: f32 = 0.003;
 const TEACHER_DOSE: usize = 64;
 
+/// Actor-only imitation must not pretend that an unchanged PPO critic was
+/// updated under the new actor. Keep its exact old policy binding explicit.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TeacherRecovery {
+    schema: u16,
+    disposable_only: bool,
+    source: FoundationTrainingHandoffV1,
+    source_identity: [u8; 32],
+    compiler_inputs: alife_core::PhenotypeCompilerInputs,
+    actor: alife_training::FoundationTrainerCheckpoint,
+    unchanged_source_critic: alife_training::PpoValueHeadCheckpoint,
+    payload_identity: [u8; 32],
+}
+
+impl TeacherRecovery {
+    fn capture(
+        actor: &mut CpuFoundationTrainer,
+        critic: &CpuValueHead,
+        source: &FoundationTrainingHandoffV1,
+    ) -> Result<Self> {
+        if critic.checkpoint() != source.value {
+            return Err("actor-only training changed critic provenance".into());
+        }
+        let compiler_inputs = bind(actor, source)?;
+        let mut state = Self {
+            schema: 1,
+            disposable_only: true,
+            source: source.clone(),
+            source_identity: identity(source)?,
+            compiler_inputs,
+            actor: actor.checkpoint(),
+            unchanged_source_critic: critic.checkpoint(),
+            payload_identity: [0; 32],
+        };
+        state.payload_identity = state.digest()?;
+        let (restored, value) = state.restore()?;
+        if restored.checkpoint() != actor.checkpoint() || value.checkpoint() != critic.checkpoint()
+        {
+            return Err("actor-only cold restoration changed native state".into());
+        }
+        Ok(state)
+    }
+    fn restore(&self) -> Result<(CpuFoundationTrainer, CpuValueHead)> {
+        if self.schema != 1
+            || !self.disposable_only
+            || identity(&self.source)? != self.source_identity
+            || self.unchanged_source_critic != self.source.value
+            || self.payload_identity != self.digest()?
+            || self.compiler_inputs.genome() != self.source.compiler_inputs.genome()
+            || self.compiler_inputs.development() != self.source.compiler_inputs.development()
+            || self.compiler_inputs.sensor_profile() != self.source.compiler_inputs.sensor_profile()
+        {
+            return Err("invalid actor-only recovery identity".into());
+        }
+        self.source.validate()?;
+        let capacity = alife_core::BrainCapacityClass::n2048();
+        self.compiler_inputs.validate_against(&capacity)?;
+        let p = alife_training::compile_validated_n2048_cached(&self.compiler_inputs, &capacity)?;
+        let asset = self
+            .compiler_inputs
+            .n2048_candidate_asset()
+            .ok_or("actor-only recovery lacks actual foundation asset")?
+            .clone();
+        if self
+            .actor
+            .weights
+            .iter()
+            .zip(asset.weights())
+            .any(|(a, b)| a.to_bits() != b.to_bits())
+        {
+            return Err("actor-only weights differ from its actual exported asset".into());
+        }
+        Ok((
+            CpuFoundationTrainer::from_checkpoint(p, asset, self.actor.clone())?,
+            CpuValueHead::from_checkpoint(self.unchanged_source_critic.clone())?,
+        ))
+    }
+    fn digest(&self) -> Result<[u8; 32]> {
+        Ok(identity(&(
+            self.schema,
+            self.disposable_only,
+            self.source_identity,
+            &self.compiler_inputs,
+            &self.actor,
+            &self.unchanged_source_critic,
+        ))?)
+    }
+}
+
+/// Restore a separate experimental actor plus its honestly unchanged critic.
+/// This is not admission to a retained PPO/care lineage.
+pub fn restore_disposable_teacher_actor(
+    path: &Path,
+) -> Result<(CpuFoundationTrainer, CpuValueHead)> {
+    if fs::metadata(path)?.len() > 128 * 1024 * 1024 {
+        return Err("actor-only recovery exceeds 128 MiB".into());
+    }
+    let state: TeacherRecovery = serde_json::from_slice(&fs::read(path)?)?;
+    state.restore()
+}
+
+fn save_teacher_actor(
+    path: &Path,
+    actor: &mut CpuFoundationTrainer,
+    critic: &CpuValueHead,
+    source: &FoundationTrainingHandoffV1,
+) -> Result<()> {
+    let state = TeacherRecovery::capture(actor, critic, source)?;
+    write_new(path, &state)?;
+    restore_disposable_teacher_actor(path)?;
+    Ok(())
+}
+
 fn configure(actor: &mut CpuFoundationTrainer) -> Result<()> {
     let before = actor.checkpoint();
     let ids = actor.phenotype().synapses().iter().enumerate().filter_map(|(i,s)| {
@@ -355,6 +469,8 @@ pub fn run_predictive_care_teacher_control(
         if actor.checkpoint() != before {
             return Err("preflight mutated the real experimental learner".into());
         }
+        let critic = CpuValueHead::from_checkpoint(source.value.clone())?;
+        TeacherRecovery::capture(&mut copy, &critic, &source)?.restore()?;
         checks.push(json!({"arm":name,"read_only_source_copy_update":check}));
     }
     fs::create_dir_all(&output)?;
@@ -381,12 +497,11 @@ pub fn run_predictive_care_teacher_control(
         let dir = output.join(name);
         fs::create_dir(&dir)?;
         let critic = CpuValueHead::from_checkpoint(source.value.clone())?;
-        save_founder(
-            &dir.join("initial-experimental-handoff.json"),
+        save_teacher_actor(
+            &dir.join("initial-actor-only-recovery.json"),
             &mut actor,
             &critic,
             &source,
-            1,
         )?;
         let initial_step = actor.optimizer_step();
         let mut evaluations = Vec::new();
@@ -413,16 +528,27 @@ pub fn run_predictive_care_teacher_control(
                     let probabilities = selection_metrics(&actor, &c.rows[..TEACHER_DOSE], food)?;
                     let mut curve = Vec::new();
                     for epoch in 0..TEACHER_EPOCHS {
-                        let update = teacher_update(&mut actor, &c.rows[..TEACHER_DOSE], food)?;
+                        let update = teacher_update(&mut actor, &c.rows[..TEACHER_DOSE], food)
+                            .map_err(|e| {
+                                format!("{name} lesson {case} teacher epoch {epoch}: {e}")
+                            })?;
+                        write_new(
+                            &dir.join(format!("lesson-{case}-epoch-{epoch}-actor.json")),
+                            &actor.checkpoint(),
+                        )?;
+                        write_new(
+                            &dir.join(format!("lesson-{case}-epoch-{epoch}-update.json")),
+                            &update,
+                        )?;
                         curve.push(json!({"epoch":epoch+1,"update":update}));
                     }
-                    save_founder(
-                        &dir.join(format!("after-lesson-{case}-experimental-handoff.json")),
+                    save_teacher_actor(
+                        &dir.join(format!("after-lesson-{case}-actor-only-recovery.json")),
                         &mut actor,
                         &critic,
                         &source,
-                        2 + case,
-                    )?;
+                    )
+                    .map_err(|e| format!("{name} lesson {case} actor-only recovery: {e}"))?;
                     training.push(json!({"behavior":c.metrics,"collection_policy":probabilities,"teacher_updates":curve}));
                 }
             }

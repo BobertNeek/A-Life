@@ -64,3 +64,22 @@ PC/GPU, `replay.rs`, inferred meals or denied-PR retry is part of this work.
 Report this run's entire control/capture/training/evaluation/export wall time,
 the previous cumulative 1,292.091 seconds of experiments, and build/check overhead
 separately. Prediction or teacher-loss changes do not prove behavioral gain.
+
+Actor-only imitation recovery is deliberately separate from a joint PPO handoff:
+the critic retains its actual source-policy binding and is never marked updated
+under the learned actor. The checksummed experimental envelope binds the original
+source, unchanged genome/development/profile, current compiler inputs and actual
+exported native weights, full actor Adam state and unchanged source critic.
+`restore_disposable_teacher_actor` cold-restores these through native compiler,
+asset and checkpoint validation. Each epoch also retains its native actor
+checkpoint and update receipt; completed lesson envelopes are self-contained.
+
+The first attempt at source `19fec9f1` passed direct-world and decoder-update
+checks, captured both baseline assessments and its first real lesson, then
+stopped at the ordinary joint-handoff guard: the actor-only update had not updated
+the critic's policy binding. That guard remains intact. Its 74.018 seconds and
+all captured data remain retained. A deterministic replay of the retained first
+lesson confirmed all 16 native teacher updates and native rebind worked; only
+the attempted joint PPO packaging was wrong. The corrected envelope does not
+forge a new critic binding. No hyperparameter or world was selected or changed
+in response to that failure, and both copy-check gates now include cold restore.
