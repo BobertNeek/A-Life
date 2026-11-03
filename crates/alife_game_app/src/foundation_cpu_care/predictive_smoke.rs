@@ -10,7 +10,6 @@ use alife_training::{
 use alife_world::{create_canonical_new_game_with_n2048_candidate, CanonicalNewGameConfig};
 use std::{fs, path::Path, time::Instant};
 
-const DOSE: usize = 16;
 const TEMPERATURE: f32 = 1.;
 const TRAIN_SEEDS: [u64; 4] = [41001, 41002, 41003, 41004];
 const EVAL_SEEDS: [u64; 4] = [51001, 51002, 51003, 51004];
@@ -26,7 +25,15 @@ fn write_new(path: &Path, value: &impl serde::Serialize) -> Result<()> {
     Ok(())
 }
 
-fn lesson(index: usize) -> FoundationTeacherLesson {
+fn lesson(index: usize, long_horizon: bool) -> FoundationTeacherLesson {
+    if long_horizon {
+        return [
+            FoundationTeacherLesson::EatHeldFood,
+            FoundationTeacherLesson::EatReachableFood,
+            FoundationTeacherLesson::Feeding,
+            FoundationTeacherLesson::RelocatedFood,
+        ][index];
+    }
     if index.is_multiple_of(2) {
         FoundationTeacherLesson::Feeding
     } else {
@@ -95,10 +102,10 @@ struct Captured {
 fn capture(
     actor: &CpuFoundationTrainer,
     value: &CpuValueHead,
-    _source: &FoundationTrainingHandoffV1,
     seed: u64,
     lesson: FoundationTeacherLesson,
     assessment: bool,
+    dose: usize,
     output: &Path,
 ) -> Result<Captured> {
     let started = Instant::now();
@@ -121,7 +128,7 @@ fn capture(
         previous: None,
         output: output.into(),
         seed,
-        decisions: DOSE,
+        decisions: dose,
         temperature: TEMPERATURE,
         lesson,
         food_need_condition: FoundationFoodNeedCondition::NewbornV1,
@@ -173,10 +180,10 @@ fn capture(
                     json!(teacher_outcome_blocked(step.decisions[0].patch.outcome()));
             }
             rows.extend(step.decisions);
-            if rows.len() == DOSE + 1 {
+            if rows.len() == dose + 1 {
                 break;
             }
-            if rows.len() > DOSE + 1
+            if rows.len() > dose + 1
                 || host
                     .world()
                     .organism_registry()
@@ -186,16 +193,16 @@ fn capture(
                 return Err("disposable care dose interrupted; prefix retained".into());
             }
         }
-        if rows.len() != DOSE + 1 {
+        if rows.len() != dose + 1 {
             return Err("disposable care dose incomplete; prefix retained".into());
         }
         Ok(())
     })();
     write_cpu_private_checkpoint(output, &host.checkpoint(actor)?)?;
     for (i, trace) in episode.traces.iter_mut().enumerate() {
-        trace["bootstrap_row"] = json!(i >= DOSE);
-        trace["loss_row"] = json!(!assessment && i < DOSE);
-        trace["evaluation_row"] = json!(assessment && i < DOSE);
+        trace["bootstrap_row"] = json!(i >= dose);
+        trace["loss_row"] = json!(!assessment && i < dose);
+        trace["evaluation_row"] = json!(assessment && i < dose);
     }
     write_new(&output.join("raw-care-trace.json"), &episode.traces)?;
     // Exact decisions are retained compressed, including failures and bootstrap.
@@ -210,18 +217,18 @@ fn capture(
     if actor.checkpoint() != before || value.checkpoint() != critic_before {
         return Err("collection changed offline learner state".into());
     }
-    let scored = &episode.traces[..DOSE];
+    let scored = &episode.traces[..dose];
     let count = |field: &str| scored.iter().filter(|row| row[field] == true).count();
     let mut actions = BTreeMap::<String, usize>::new();
     for row in scored {
         *actions.entry(row["action"].to_string()).or_default() += 1;
     }
-    let success = rows[..DOSE]
+    let success = rows[..dose]
         .iter()
         .filter(|r| r.patch.outcome().success)
         .count();
     let metrics = json!({"seed":seed,"lesson":lesson,"assessment":assessment,
-        "decisions":DOSE,"bootstrap_decisions":1,"successes":success,"failures":DOSE-success,
+        "decisions":dose,"bootstrap_decisions":1,"successes":success,"failures":dose-success,
         "nourished_meals":count("nourished_meal"),"acquisitions":count("acquisition_event"),
         "consumptions":count("consumption_event"),"selected_actions":actions,
         "moved":count("moved"),"blocked":count("blocked"),
@@ -250,7 +257,31 @@ pub fn run_predictive_care_smoke(
     upstream_path: &Path,
     output: &Path,
 ) -> Result<Value> {
+    run_mode(state_path, upstream_path, output, false)
+}
+
+/// Separately labeled fixed 64-decision retention/reach/approach follow-up.
+pub fn run_predictive_care_long_smoke(
+    state_path: &Path,
+    upstream_path: &Path,
+    output: &Path,
+) -> Result<Value> {
+    run_mode(state_path, upstream_path, output, true)
+}
+
+fn run_mode(
+    state_path: &Path,
+    upstream_path: &Path,
+    output: &Path,
+    long_horizon: bool,
+) -> Result<Value> {
     let started = Instant::now();
+    let dose = if long_horizon { 64 } else { 16 };
+    let experiment = if long_horizon {
+        "fixed-disposable-native-care-long-smoke-v1"
+    } else {
+        "fixed-disposable-native-care-smoke-v1"
+    };
     let output = resolve_isolated_training_output(output, [state_path, upstream_path])?;
     if output.exists() {
         return Err("smoke output must be fresh".into());
@@ -299,9 +330,10 @@ pub fn run_predictive_care_smoke(
         &output.join("fixed-plan.json"),
         &json!({"disposable_only":true,
         "source_identity":source_identity,"state_identity":state.payload_sha256,
-        "train_seeds":TRAIN_SEEDS,"eval_seeds":EVAL_SEEDS,"decisions":DOSE,
+        "experiment":experiment,
+        "train_seeds":TRAIN_SEEDS,"eval_seeds":EVAL_SEEDS,"decisions":dose,
         "temperature":TEMPERATURE,"ppo_epochs_per_lesson":1,
-        "schedule":["feeding","relocated_food","feeding","relocated_food"],
+        "schedule":(0..4).map(|i| lesson(i, long_horizon)).collect::<Vec<_>>(),
         "sensor_profile":"original-grounded-object-slots-v1","semantic_prior":false,
         "baseline_downstream_adam_config":trained_config,"upstream_seconds":upstream_seconds}),
     )?;
@@ -332,10 +364,10 @@ pub fn run_predictive_care_smoke(
                     let captured = capture(
                         &actor,
                         &critic,
-                        &source,
                         seed,
-                        lesson(index),
+                        lesson(index, long_horizon),
                         false,
+                        dose,
                         &arm_output.join(format!("train-{index}")),
                     )?;
                     let version = 2 + index as u64;
@@ -351,7 +383,7 @@ pub fn run_predictive_care_smoke(
                         16,
                         0,
                     )?;
-                    if windows.iter().map(|w| w.actor.batch.len()).sum::<usize>() != DOSE {
+                    if windows.iter().map(|w| w.actor.batch.len()).sum::<usize>() != dose {
                         return Err("native care training dose mismatch".into());
                     }
                     let receipt = train_cpu_residual_cohort(
@@ -385,10 +417,10 @@ pub fn run_predictive_care_smoke(
                 let captured = capture(
                     &actor,
                     &critic,
-                    &source,
                     seed,
-                    lesson(index),
+                    lesson(index, long_horizon),
                     true,
+                    dose,
                     &arm_output.join(format!("eval-{phase}-{index}")),
                 )?;
                 evaluations.push(json!({"phase":phase,"behavior":captured.metrics}));
@@ -405,7 +437,7 @@ pub fn run_predictive_care_smoke(
         return Err("input/source changed during disposable trial".into());
     }
     let elapsed = started.elapsed().as_secs_f64();
-    let result = json!({"experiment":"fixed-disposable-native-care-smoke-v1","backend":"native-cpu",
+    let result = json!({"experiment":experiment,"backend":"native-cpu",
         "upstream_capture_pretraining_and_controls_seconds":upstream_seconds,
         "downstream_load_finetune_evaluation_export_seconds":elapsed,
         "total_pipeline_seconds":upstream_seconds+elapsed,

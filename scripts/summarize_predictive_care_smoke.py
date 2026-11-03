@@ -34,7 +34,10 @@ def verify_learner_history(root, arm):
 def summarize(root):
     result = json.loads((root / "result.json").read_text())
     plan = json.loads((root / "fixed-plan.json").read_text())
-    assert result["experiment"] == "fixed-disposable-native-care-smoke-v1"
+    assert (result["experiment"], plan["decisions"]) in [
+        ("fixed-disposable-native-care-smoke-v1", 16),
+        ("fixed-disposable-native-care-long-smoke-v1", 64),
+    ]
     assert not result["accepted_state_written"]
     assert not result["trained_artifacts_published"]
     assert set(plan["train_seeds"]).isdisjoint(plan["eval_seeds"])
@@ -62,6 +65,7 @@ def summarize(root):
                 assert all(row["evaluation_row"] == (phase != "train") for row in scored)
                 seeds = plan["train_seeds"] if phase == "train" else plan["eval_seeds"]
                 assert metric["seed"] == seeds[i]
+                assert metric["lesson"] == plan["schedule"][i]
                 if phase != "train":
                     assert metric["teacher_cue_frames_all_including_bootstrap"] == 0
                 for key, field in [("nourished_meals", "nourished_meal"),

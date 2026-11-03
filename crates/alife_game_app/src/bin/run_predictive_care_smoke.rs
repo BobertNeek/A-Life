@@ -3,9 +3,17 @@ use std::{collections::BTreeMap, path::PathBuf};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     let mut values = BTreeMap::new();
+    let mut long_horizon = false;
     while let Some(key) = args.next() {
+        if key == "--long-horizon" {
+            if long_horizon {
+                return Err("duplicate --long-horizon".into());
+            }
+            long_horizon = true;
+            continue;
+        }
         if key == "--help" {
-            println!("run_predictive_care_smoke --state LOCAL_ONE_TICK_FULL_STATE --upstream-result LOCAL_MOTION_RESULT --output NEW_DIRECTORY\nFixed: separate pretrained/source actors and critics, four native 16-decision care lessons, matched teacher/prior-removed heldout evaluations before/after. Retains original sensor profile and all failures. Local recovery artifacts only; no accepted-source admission or promotion.");
+            println!("run_predictive_care_smoke [--long-horizon] --state LOCAL_ONE_TICK_FULL_STATE --upstream-result LOCAL_MOTION_RESULT --output NEW_DIRECTORY\nFixed: separate pretrained/source actors and critics, matched teacher/prior-removed heldout evaluations before/after. Default retains the original four 16-decision lessons. The separately labeled long follow-up uses 64 decisions each for held-food, reachable-food, feeding and relocated-food lessons. Retains original sensor profile and all failures. Local recovery artifacts only; no accepted-source admission or promotion.");
             return Ok(());
         }
         if !matches!(key.as_str(), "--state" | "--upstream-result" | "--output") {
@@ -16,7 +24,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("duplicate argument".into());
         }
     }
-    let result = alife_game_app::run_predictive_care_smoke(
+    let run = if long_horizon {
+        alife_game_app::run_predictive_care_long_smoke
+    } else {
+        alife_game_app::run_predictive_care_smoke
+    };
+    let result = run(
         &values.remove("--state").ok_or("--state required")?,
         &values
             .remove("--upstream-result")
