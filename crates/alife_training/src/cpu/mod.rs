@@ -107,6 +107,63 @@ pub struct CpuFoundationTrainer {
 }
 
 impl CpuFoundationTrainer {
+    // Measurement-only breakdown of the same primitives used by the native
+    // public API. No unchecked evaluation entry point enters a trainer binary.
+    #[cfg(test)]
+    pub(crate) fn measure_replay_components(
+        &self,
+        sequence: &TrainingSequence,
+    ) -> Result<(TrainingReplayEvaluation, [f64; 3]), TrainingError> {
+        use std::time::Instant;
+        let at = Instant::now();
+        sequence.validate_for(&self.phenotype)?;
+        let validation = at.elapsed().as_secs_f64();
+        let evaluation;
+        let forward;
+        let drop_at;
+        {
+            let at = Instant::now();
+            let tape = self
+                .graph
+                .forward(&self.phenotype, self.weights(), sequence)?;
+            forward = at.elapsed().as_secs_f64();
+            drop_at = Instant::now();
+            evaluation = tape.evaluation;
+        }
+        Ok((
+            evaluation,
+            [validation, forward, drop_at.elapsed().as_secs_f64()],
+        ))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn measure_detached_construction(
+        &self,
+        selected: &[bool],
+    ) -> Result<(DetachedRecurrentReplay, [f64; 3]), TrainingError> {
+        use std::time::Instant;
+        if selected.len() != self.weights().len() {
+            return Err(invalid());
+        }
+        let at = Instant::now();
+        let mut graph = replay::SparseGraph::new(&self.phenotype);
+        let graph_seconds = at.elapsed().as_secs_f64();
+        let at = Instant::now();
+        graph.set_selected_cadence_rows(&self.phenotype, selected);
+        let csr_seconds = at.elapsed().as_secs_f64();
+        let at = Instant::now();
+        let source_weight_bits = self.weights().iter().map(|v| v.to_bits()).collect();
+        let binding_seconds = at.elapsed().as_secs_f64();
+        Ok((
+            DetachedRecurrentReplay {
+                phenotype: self.phenotype.phenotype_hash(),
+                source_weight_bits,
+                graph,
+            },
+            [graph_seconds, csr_seconds, binding_seconds],
+        ))
+    }
+
     pub(crate) fn detached_recurrent_replay(
         &self,
         selected: &[bool],

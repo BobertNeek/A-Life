@@ -11,6 +11,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, error::Error, time::Instant};
 
+#[cfg(test)]
+mod full_mask_assay;
+
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 fn identity(value: &impl Serialize) -> Result<String> {
