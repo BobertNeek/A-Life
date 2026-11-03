@@ -2,6 +2,9 @@ use super::{finite, invalid};
 use crate::{TrainingError, TrainingGradientProbe, TrainingReplayEvaluation, TrainingSequence};
 use alife_core::{ActivationFunction, BrainPhenotype, CompiledSynapseKind, DecoderHeadKind};
 
+#[cfg(test)]
+mod cadence_assay;
+
 pub(super) fn route_fires(raw: u8, step: usize) -> bool {
     match raw {
         0 => true,
@@ -33,6 +36,9 @@ fn derivative(x: f32, kind: ActivationFunction) -> f32 {
 pub(super) struct SparseGraph {
     incoming: Vec<Vec<usize>>,
     decoders: [Vec<usize>; 8],
+    // Experimental index selection exists only in libtest, never in a trainer binary.
+    #[cfg(test)]
+    cadence_rows: Option<cadence_assay::CadenceRows>,
 }
 pub(super) struct Tape {
     pub evaluation: TrainingReplayEvaluation,
@@ -55,7 +61,12 @@ impl SparseGraph {
                 _ => {}
             }
         }
-        Self { incoming, decoders }
+        Self {
+            incoming,
+            decoders,
+            #[cfg(test)]
+            cadence_rows: None,
+        }
     }
     pub fn forward(
         &self,
@@ -92,7 +103,11 @@ impl SparseGraph {
                 let mut act = vec![0.; n];
                 for target in 0..n {
                     let mut sum = 0.;
-                    for &id in &self.incoming[target] {
+                    #[cfg(test)]
+                    let incoming = self.assay_incoming(target, step);
+                    #[cfg(not(test))]
+                    let incoming = &self.incoming[target];
+                    for &id in incoming {
                         let s = &p.synapses()[id];
                         if tick.enabled_routes[s.route_index() as usize]
                             && route_fires(
@@ -301,7 +316,11 @@ impl SparseGraph {
                     gm[step + 1][i] * gate * d.metabolic_decay() - delta[i] * d.homeostatic_gain();
             }
             for (target, _) in delta.iter().enumerate() {
-                for &id in &self.incoming[target] {
+                #[cfg(test)]
+                let incoming = self.assay_incoming(target, local);
+                #[cfg(not(test))]
+                let incoming = &self.incoming[target];
+                for &id in incoming {
                     let s = &p.synapses()[id];
                     if tick.enabled_routes[s.route_index() as usize]
                         && route_fires(

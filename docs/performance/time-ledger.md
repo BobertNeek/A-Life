@@ -1,13 +1,13 @@
 # Performance time ledger
 
-Updated 2026-10-31. Source audit: main
+Updated 2026-11-03 with recovered historical receipt provenance. Original source audit: main
 [`eaf9e12067d649e9e27c16e6600e6e8dabfc7e99`](https://github.com/BobertNeek/A-Life/commit/eaf9e12067d649e9e27c16e6600e6e8dabfc7e99).
 This ledger records what consumes time, what that work buys, and experiments
 that could show it should be cheaper or less frequent. Append new measurement
 cohorts with their provenance; do not replace historical timings with estimates
 for newer code. **Current device and whole-training costs are unknown, not zero.**
-The project desktop GPU is reported unavailable because driver startup is broken; this
-documentation change runs no desktop workload and transfers no real checkpoint.
+This ledger runs no desktop workload and transfers no real checkpoint. Hardware
+availability and qualification are separate from these historical measurements.
 
 ## What to optimize
 
@@ -31,39 +31,34 @@ does not define a new numerical staleness or loss budget. See the
 
 | ID | Date, code and hardware/workload | Source and limits |
 | --- | --- | --- |
-| H1: combined night | 2026-10-28, Windows RTX 3050, continuing assisted care of one N2048 individual; 139,264 retained rows and 6,976.8 retained simulated seconds reported. Multiple code segments; b817 was the later active segment, not the identity of the entire aggregate. CPU/RAM, exact driver/API and build profile are not established here. | Project operational report at 15:01 UTC and the 2026-10-31 task handoff: 56,738 rows/hour, 0.790 sim/wall, cumulative collection 5,840 s, PPO 2,284 s, snapshots 321 s. Raw inclusive `host_wall_seconds`, complete per-segment receipts/binary hashes, exact aggregate coverage and cohort membership were not supplied in this checkout. These are transcribed historical observations, not a newly reproduced benchmark. |
+| H1: final b817 session | 2026-10-28, Windows RTX 3050, continuing assisted care of one N2048 individual; 139,264 retained rows and 6,976.8 retained simulated seconds reported. The recovered raw receipt establishes one final session at `b817c1513a6023a5395e89b9e5fc7374b0c028c2`, not a mixed-segment aggregate. CPU/RAM, exact driver/API and build profile are not established here. | Recovered raw-receipt values supplied by the coordinating task on 2026-11-03: inclusive host 8,836.258 s; collection 5,839.860 s; PPO 2,284.019 s; snapshots 321.254 s. The receipt file/hash is not copied into this repository. Earlier rounded operational rates were 56,738 rows/hour and 0.790 sim/wall. These are historical receipt observations, not current-main measurements or a newly reproduced benchmark. |
 | H2: later segment | First eight 512-row windows (4,096 rows), reported 2026-10-28 12:39 UTC, Windows RTX 3050, combined PR202/203 build [`b817c1513a6023a5395e89b9e5fc7374b0c028c2`](https://github.com/BobertNeek/A-Life/commit/b817c1513a6023a5395e89b9e5fc7374b0c028c2); PR204 was test-only. | Operational report and task handoff: mean collection 20.94 s/window, mean PPO 8.63 s/update. Earlier PR203-only sample: 24.43 and 16.13 s respectively. Different sequential trajectories and assistance; not paired or controlled. No whole-host or snapshot denominator for this slice. |
 | H3: isolated cache copy | [PR214](https://github.com/BobertNeek/A-Life/pull/214), head `a63010a1`, 2026-10-30; Linux, rustc 1.98.1, opt3 source-extracted types/cache, synthetic finite N2048 payload, 25 candidates/tick, seven alternating paired trials. CPU model/RAM not established in the cited report. | Old cache-hit deep-copy median 5.20 ms [4.47–6.10] for 256 ticks/no burn-in; 7.98 ms [7.80–9.15] for 384 ticks/128 burn-in. Shared hits remove payload copies. First retain still compacts/copies. Windows memory guard stubbed in this assay. No admitted trajectory, GPU, whole-PPO or learning/hour measurement. |
 | S1: current source | 2026-10-31 audit of main `eaf9e120`; no timing workload run. | Code boundaries below establish what timers include, not how expensive current work is. [PR210](https://github.com/BobertNeek/A-Life/pull/210) changed host authority/replay costs; [PR211](https://github.com/BobertNeek/A-Life/pull/211) removed disabled PPO value-head work; [PR213](https://github.com/BobertNeek/A-Life/pull/213) changed checkpoint serialization; PR214 changed cache-hit ownership. Historical proportions cannot certify today's proportions or device speedup. |
 
 Earlier that night, **8,704 unsaved rows were lost** (reported in the handoff).
-They are not an extra retained gain. Raw receipts must establish whether their
-elapsed work and reconciliation downtime are already in H1's denominator and
-whether their stage counters occur in H1's totals. Do not silently add or remove
-them. H1's operational report also records substantial teaching/food repositioning;
+They are not an extra retained gain. Do not silently add another attempt's work
+or downtime to the recovered single-session receipt without matching attempt
+receipts. H1's operational report also records substantial teaching/food repositioning;
 its nourishing outcomes do not prove independent food finding or survival.
 
-## Historical amounts and conditional reconciliation
+## Historical receipt reconciliation
 
-H1's exact inclusive denominator **T is unknown** until the raw receipt is
-available. The reported sim/wall rate suggests roughly 8,832 s (2.45 h).
-For transparency, `6976.8 / 0.790 = 8831.39 s`, while
-`139264 * 3600 / 56738 = 8836.24 s`. These reported rates do not recover an
-identical exact denominator. Use raw inclusive elapsed, not either inversion,
-for a future definitive reconciliation.
+H1's recovered inclusive denominator is **T = 8,836.258 s**. Use that raw value,
+not inversion of rounded throughput or sim/wall rates. The correction establishes
+the historical session's provenance; it does not establish today's cost shares.
 
-| Stage | H1 amount | Conditional share if T ≈ 8,832 s | Current main amount/share |
+| Stage | H1 amount | Share of recovered T | Current main amount/share |
 | --- | ---: | ---: | --- |
-| Collection, inclusive of its tick/capture/replay work | 5,840 s cumulative | ≈66.1% | Unknown s and % |
-| Training timer named PPO, inclusive of preparation and residual critic | 2,284 s cumulative | ≈25.9% | Unknown s and % |
-| Full periodic/final snapshots | 321 s cumulative | ≈3.6% | Unknown s and % |
-| Other host time, derived only under the coverage assumptions below | ≈387 s if T = 8,832 s | ≈4.4% | Unknown s and % |
-| Inclusive host interval | ≈8.83 ks inferred; exact unknown | 100% by definition | Unknown s |
+| Collection, inclusive of its tick/capture/replay work | 5,839.860 s | 66.0897% | Unknown s and % |
+| Training timer named PPO, inclusive of preparation and residual critic | 2,284.019 s | 25.8483% | Unknown s and % |
+| Full periodic/final snapshots | 321.254 s | 3.6356% | Unknown s and % |
+| Other host time, arithmetic remainder | 391.125 s | 4.4264% | Unknown s and % |
+| Inclusive host interval | 8,836.258 s | 100% by definition | Unknown s |
 
-The three reported stage amounts sum to **8,445 s**. Conditional accounting is
-`R = T - collection - PPO - snapshots`; with the alternative rate-derived T,
-the arithmetic remainder is about 391 s. Neither result is a measured residual
-stage, a statistical interval, nor proof that all timers cover the same cohort.
+The three stage amounts sum to **8,445.133 s**. Accounting gives
+`R = T - collection - PPO - snapshots = 391.125 s`. This is an arithmetic
+remainder, not a separately timed residual stage or a statistical interval.
 
 Inspection of the
 [b817 continuous producer](https://github.com/BobertNeek/A-Life/blob/b817c1513a6023a5395e89b9e5fc7374b0c028c2/crates/alife_game_app/src/foundation_training_cycle/continuous_world.rs#L834)
@@ -71,8 +66,8 @@ confirms that these three host intervals are sequential and do not nest in one
 invocation: collection closes before replay seal/boundary wait; PPO closes before
 policy installation; snapshots run after installation/event handling or at the
 final boundary. This permits addition **within matching invocation coverage**.
-It does not verify H1's aggregation, earlier segments, failed work, or host wrapper
-coverage. Persistence workers and GPU work can overlap host work; wall spans
+The recovered receipt binds H1 to one final b817 invocation; other attempts and
+their losses remain separate. Persistence workers and GPU work can overlap host work; wall spans
 include waits and are not independent CPU and GPU service times.
 
 H2's two reported means total 29.57 s versus 40.56 s for the earlier sample.
@@ -82,8 +77,8 @@ code speedup or retained rows/hour improvement. Do not extrapolate it across H1.
 
 ### Conditional Amdahl scenarios
 
-If H1's provisional shares are exclusive, cover the same elapsed cohort, and
-remain representative, changing only a fraction `s` by a factor `k` gives the
+If H1's historical shares remain representative of a future workload, changing
+only a fraction `s` by a factor `k` gives the
 overall scenario `1 / ((1 - s) + s / k)`. Elimination uses `1 / (1 - s)`.
 These are arithmetic ceilings/scenarios, **not predictions or current
 measurements**; added synchronization, memory pressure, lost work or worse
@@ -91,9 +86,9 @@ learning can erase the apparent gain.
 
 | Historical parent share, rounded | Halve that parent's elapsed cost | Eliminate that parent entirely |
 | --- | ---: | ---: |
-| Collection ≈66% | ≈1.49× overall | ≈2.94× overall ceiling |
+| Collection ≈66% | ≈1.49× overall | ≈2.95× overall ceiling |
 | Broad PPO ≈26% | ≈1.15× overall | ≈1.35× overall ceiling |
-| Snapshots ≈3.6% | ≈1.018× overall | ≈1.037× overall ceiling |
+| Snapshots ≈3.6% | ≈1.019× overall | ≈1.038× overall ceiling |
 
 Eliminating collection or PPO is not a useful learning implementation: these
 rows show why measuring collection's removable work matters more than assuming
@@ -162,10 +157,10 @@ mechanism; current whole-run speedup confidence remains low until measured.
 
 ## Small next measurements and promotion rules
 
-First recover the original H1 receipts if available. Record immutable source paths
-and hashes, binary/source/tree identity and the request; map each segment and
-failed attempt once. Establish whether native stage sums and retained rows refer
-to the same sessions. Reconcile raw `host_wall_seconds` against `producer_seconds`
+Preserve the recovered H1 receipt separately from new measurement cohorts. Record
+source paths/hashes, binary/source/tree identity and the request when those
+artifacts are available; map each failed attempt once. Reconcile raw
+`host_wall_seconds` against `producer_seconds`
 plus wrapper work. Include startup, sleeps, bootstrap, unsaved work, crashes,
 recovery and cleanup in their actual intervals; do not subtract inconvenient time.
 
@@ -208,3 +203,59 @@ places to measure, but does not identify which current substage dominates. Promo
 a performance claim only with unchanged timing scope, reconciled cohort totals,
 preserved continuation and reported behavior/assistance. Any remaining unattributed
 time stays explicit rather than being called negligible.
+
+## Ranked next experiments (2026-11-03)
+
+The reference graph is already sparse, with compiled recurrent degree buckets
+0/16/32/48/64. A uniform K16-to-K4 argument does not describe it. A zero effective
+weight is not proof of dormancy: genetic, lifetime and alpha-scaled fast strength,
+eligibility and stable graph coordinates have distinct roles. Optimizer masks do
+not themselves remove forward or BPTT work.
+
+| Rank | Concrete slice and baseline | Gate before promotion |
+| --- | --- | --- |
+| 1 | Authentic same-individual inclusive phase baseline: at least two PPO windows, policy install, snapshot and restore on one exact qualified build. Use existing receipt/timer boundaries, including replay-drain tails. | Reconcile unique retained rows and host wall; include assistance, failures, prior cost, recovery and capability outcomes. No current device profile or 10x result is established here. |
+| 2 | Test-only cadence CSR prototype below, compared with the existing CPU replay engine. Build zero-step, odd-step and positive-even-step views that retain canonical IDs/order. | Bit-exact full tapes, BPTT gradients and retained Adam state; identical useful contributions; reduced inspected entries; include plan construction and additional memory. GPU port requires its own parity, failure-path and device timing evidence. |
+| 3 | Batch two/four independent PPO windows under the same weights using a separate dispatch dimension. Baseline is existing serial sample-weighted accumulation. | Preserve detached boundaries, canonical accumulation, KL decisions, accepted steps and integer ages; measure whole PPO and peak memory, not occupancy alone. |
+| 4 | Reconstructible training-capture/replay deltas with dense fallback. Baseline remains exact pre/post capture and the already-merged bulk packer/shared cache. | Reconstruct every captured state/weight bit across local learning, sleep, growth and install; measure collection plus drain, decoding and retained memory. No held fused implementation is reused. |
+| 5 | Grounded predictive/imitation founder pretraining before ordinary PPO. Baseline is equal-total-budget PPO on multiple fresh public worlds. | Include data/teacher cost; remove training assistance; compare unprompted nourishment, retention, transfer and subsequent learning per inclusive hour. Keep semantic-prior identity and organism authority intact. |
+| 6 | Compact per-lobe fan-in/growth candidates, small gated motifs or diagonal feedback on disposable new graph identities. | Explicit topology admission/mapping and rollback, bounded growth/probing cost, retained old skills, full-state continuation and matched behavior. Do not migrate accepted Current or count added recurrent iterations as a free speedup. |
+
+### Runnable cadence CSR prototype
+
+`cpu::replay::cadence_assay` is compiled only into CPU libtests. Normal CPU/GPU
+trainer binaries retain the original incoming rows and execution. Three flat
+index views omit only edges already rejected by the existing cadence predicate;
+dynamic route checks, weights, zeros, structural additions, dendrites, arithmetic,
+canonical active-edge order and all admitted topology coordinates remain intact.
+The original rows are retained. This is execution scheduling, not fan-in pruning.
+
+The default tests cover all raw cadence classes (including invalid/inactive
+values), 256 route masks and eight local steps. Eight full replay variants compare
+every tape float bit, every gradient/objective bit and the complete serialized
+post-Adam checkpoint, using nonzero moments, frozen coordinates and integer ages
+above 2^24. Variants include detached burn-in, changing routes, zero/partial/full
+microsteps, nonempty structural/dendritic context and exactly cancelled weights.
+Removing an active edge is a negative control that must break state equality.
+
+```sh
+cargo test --locked -p alife_training --features cpu-backend --lib cpu::replay::cadence_assay -- --test-threads=1
+cargo test --release --locked -p alife_training --features cpu-backend --lib cpu::replay::cadence_assay::paired_full_replay_measurement -- --ignored --exact --nocapture --test-threads=1
+```
+
+The ignored assay alternates seven baseline/candidate pairs for 40/8, 256/0 and
+384/128 ticks/burn-in. It times existing complete forward+BPTT calls, with results
+retained outside the timer for bit comparisons. The first result remains resident
+during the second span; alternating order is a control, not elimination of this
+allocator/cache effect. Fixture construction already performs an untimed forward,
+so the first timed pair is retained but is not a cold-process measurement. Plan
+construction is timed separately; the index payload is reported separately from
+RSS. Work counters are computed outside the timed calls from actual rows and
+dynamic contexts. They count inspected edges and successful contributions, not
+FLOPs or elapsed device work. Set `ALIFE_CADENCE_ASSAY_DIR` to a nonexistent
+directory to preserve raw JSON without overwriting previous trials.
+
+The timed scope excludes validation/packing, PPO objectives, Adam, world
+collection, output destruction, GPU work and competence evaluation. A reduced
+inspection count does not prove faster execution or retained learning. No
+production promotion follows from these CPU measurements alone.
