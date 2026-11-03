@@ -987,10 +987,10 @@ mod tests {
         super::validate_food_offset_binding(&authored, &authored).unwrap();
         assert!(super::validate_food_offset_binding(&legacy, &authored).is_err());
         assert!(super::validate_food_offset_binding(&authored, &legacy).is_err());
-        assert!(super::validate_food_offset_binding(
-            &authored,
-            &json!({"food_offset":[3.0,-2.0]})
-        ).is_err());
+        assert!(
+            super::validate_food_offset_binding(&authored, &json!({"food_offset":[3.0,-2.0]}))
+                .is_err()
+        );
         let invalid = json!({"lesson":"relocated_food", "food_offset":[2.0,-3.0]});
         assert!(super::validate_food_offset_binding(&invalid, &invalid).is_err());
     }

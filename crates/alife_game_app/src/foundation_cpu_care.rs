@@ -88,7 +88,8 @@ pub(crate) fn validate_food_offset(
             || !(0.5..=8.0).contains(&x.hypot(z))
         {
             return Err(
-                "food_offset requires feeding and finite X/Z distance in 0.5..=8 world units".into(),
+                "food_offset requires feeding and finite X/Z distance in 0.5..=8 world units"
+                    .into(),
             );
         }
     }
@@ -326,8 +327,15 @@ impl CpuEpisodeHooks for CareEpisode {
             // Resolve against the same grounded origin used by the constructor.
             // Its second grounding call is a no-op once terrain exists.
             crate::foundation_training::ground_foundation_training_world(world)?;
-            let founder = world.organism_entity_ids().first().ok_or("care founder missing")?.1;
-            let origin = world.entity(founder).ok_or("care founder missing")?.position;
+            let founder = world
+                .organism_entity_ids()
+                .first()
+                .ok_or("care founder missing")?
+                .1;
+            let origin = world
+                .entity(founder)
+                .ok_or("care founder missing")?
+                .position;
             Some([origin.x + x, origin.z + z])
         } else {
             None
