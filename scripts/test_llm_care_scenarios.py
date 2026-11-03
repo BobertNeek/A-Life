@@ -1,0 +1,76 @@
+import copy
+import unittest
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from llm_care_scenarios import request_recipe, strict_json
+from llm_care_scenarios import LEGEND, compile_recipe
+from care_frontier_sampler import select
+
+
+def fixtures():
+    recipe = {"schema": 1, "legend": LEGEND.copy(), "scenarios": [
+        {"id": "held", "map": ["C..F"], "condition": "newborn_v1", "difficulty": 0,
+         "goal": "nourish_and_survive", "random_roll": "native_seeded_v1"},
+        {"id": "feeding", "map": ["F...C"], "condition": "newborn_v1", "difficulty": 1,
+         "goal": "nourish_and_survive", "random_roll": "native_seeded_v1"}]}
+    host = {"decision_budget": 64, "slots": 1, "sampler_seed": 42, "current_difficulty": 1,
+            "pool_seeds": {"held": [101], "feeding": [102]},
+            "holdout_seeds": {"held": [201], "feeding": [202]}}
+    return recipe, host
+
+
+class RecipeTests(unittest.TestCase):
+    def test_compile_is_deterministic_and_selects_native_lessons(self):
+        recipe, host = fixtures()
+        bank = compile_recipe(recipe, host)
+        self.assertEqual(bank, compile_recipe(recipe, host))
+        self.assertEqual([f['lesson'] for f in bank['families']], ['feeding', 'feeding'])
+        rows = [dict(lesson='feeding', food_need_condition='newborn_v1', food_offset=[-4, 0], seed=i,
+                     decisions=64, temperature=1.0, actor_sha256='a', value_sha256='b',
+                     policy_version=1, source_sha256='c', success=False,
+                     survived_evaluated_window=True) for i in (301, 302, 303)]
+        self.assertEqual(select(bank, rows)['difficulty_after'], 0)
+        for r in rows: r['success'] = True
+        self.assertEqual(select(bank, rows)['difficulty_after'], 1)
+
+    def test_rejects_unmapped_map_and_unsafe_overrides(self):
+        recipe, host = fixtures()
+        for mutate in (lambda r: r['scenarios'][0].update(map=['C # F']),
+                       lambda r: r['scenarios'][0].update(reward=9),
+                       lambda r: r['scenarios'][0].update(random_roll='choose_seed'),
+                       lambda r: r['legend'].update(C='wall')):
+            bad = copy.deepcopy(recipe); mutate(bad)
+            with self.assertRaises(ValueError): compile_recipe(bad, host)
+
+    def test_provider_http_to_compiled_bank(self):
+        recipe, host = fixtures()
+        calls = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                calls.append(json.loads(self.rfile.read(int(self.headers['Content-Length']))))
+                data = json.dumps({'choices': [{'message': {'content': json.dumps(recipe)}}]}).encode()
+                self.send_response(200); self.send_header('Content-Length', str(len(data)))
+                self.end_headers(); self.wfile.write(data)
+            def log_message(self, *_): pass
+        server = HTTPServer(('127.0.0.1', 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+        try:
+            value = request_recipe('http://127.0.0.1:%s/v1/chat/completions' % server.server_port,
+                                   'fixture-model', 'recipe instructions')
+            self.assertEqual(compile_recipe(value, host)['families'][0]['food_offset'], [3, 0])
+            self.assertEqual(calls[0]['model'], 'fixture-model')
+        finally:
+            server.shutdown(); thread.join(); server.server_close()
+
+    def test_duplicate_json_keys_and_nonfinite_rejected(self):
+        for text in ('{"a":1,"a":2}', '{"a":NaN}'):
+            with self.assertRaises(ValueError): strict_json(text)
+
+    def test_seed_overlap_and_unsupported_condition_reject(self):
+        recipe, host = fixtures(); host['holdout_seeds']['held'] = [101]
+        with self.assertRaises(ValueError): compile_recipe(recipe, host)
+        recipe, host = fixtures(); recipe['scenarios'][0]['condition'] = 'invalid_condition'
+        with self.assertRaises(ValueError): compile_recipe(recipe, host)
+
+if __name__ == '__main__': unittest.main()

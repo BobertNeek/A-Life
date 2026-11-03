@@ -685,6 +685,7 @@ fn collect(
         temperature: plan.spec.temperature,
         lesson: lesson.lesson,
         food_need_condition: crate::FoundationFoodNeedCondition::default(),
+        food_offset: None,
         seed_history: Some(history),
         known_exclusions: plan.spec.known_exclusions,
         record_diagnostic_replay: plan.spec.record_diagnostic_replay,

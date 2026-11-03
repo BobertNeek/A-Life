@@ -27,8 +27,8 @@ def integer(value, lo, hi):
     return type(value) is int and lo <= value <= hi
 
 
-def family_key(lesson, condition):
-    return lesson, condition
+def family_key(lesson, condition, offset=None):
+    return lesson, condition, tuple(offset) if offset is not None else None
 
 
 def validate_bank(bank):
@@ -39,16 +39,23 @@ def validate_bank(bank):
     require(type(bank["families"]) is list and 1 <= len(bank["families"]) <= 16, "bounded families required")
     families, keys = {}, set()
     for family in bank["families"]:
-        require(set(family) == {"id", "lesson", "food_need_condition", "placement", "difficulty"}, "invalid family fields")
+        require(set(family) in ({"id", "lesson", "food_need_condition", "placement", "difficulty"},
+                                {"id", "lesson", "food_need_condition", "placement", "difficulty", "food_offset"}), "invalid family fields")
         name = family["id"]
         require(isinstance(name, str) and name.isascii() and name.replace("_", "").isalnum() and len(name) <= 48
                 and name not in families, "unique portable family ID required")
         lesson, condition = family["lesson"], family["food_need_condition"]
         require(lesson in LESSONS and condition in {"newborn_v1", "ordinary_healthy_aging_v1"}, "unsupported lesson/need condition")
         require(condition == "newborn_v1" or lesson in {"feeding", "relocated_food"}, "need preparation unsupported for lesson")
-        require(family["placement"] == "native_seeded_v1", "unvalidated/custom/impossible placements rejected; native placements only")
+        offset = family.get("food_offset")
+        if family["placement"] == "ascii_grid_v1":
+            require(lesson == "feeding" and isinstance(offset, list) and len(offset) == 2
+                    and all(integer(n, -4, 4) for n in offset) and 4 <= sum(n*n for n in offset) <= 16,
+                    "invalid bounded ASCII feeding offset")
+        else:
+            require(family["placement"] == "native_seeded_v1" and "food_offset" not in family, "unsupported placement")
         require(integer(family["difficulty"], 0, 7), "bounded prewritten difficulty required")
-        key = family_key(lesson, condition)
+        key = family_key(lesson, condition, offset)
         require(key not in keys, "ambiguous family recipe")
         keys.add(key)
         families[name] = family
@@ -123,6 +130,7 @@ def _score_archive_metrics(root, receipt):
     require(len(organisms) == 1 and nourished == result["evaluated_nourished_meals"], "native subject/meal tally mismatch")
     return {"lesson": request["lesson"], "food_need_condition": request.get("food_need_condition", "newborn_v1"),
             "seed": request["seed"], "decisions": n, "temperature": request["temperature"],
+            "food_offset": request.get("food_offset"),
             "actor_sha256": result["actor_checkpoint_before_sha256"],
             "value_sha256": result["value_checkpoint_before_sha256"], "source_sha256": result["source_sha256"],
             "policy_version": result["policy_version"], "nourished_meals": nourished,
@@ -143,7 +151,7 @@ def score_assessment(root, binary):
     require(set(receipt) == {"schema_version", "request", "input_sha256", "artifacts", "result", "payload_sha256"}
             and receipt["schema_version"] == 1, "unsupported native assessment receipt")
     request = receipt["request"]
-    require(set(request) in (set(REQUEST_FIELDS), set(REQUEST_FIELDS)-{"food_need_condition"}),
+    require(set(request) - {"food_offset"} in (set(REQUEST_FIELDS), set(REQUEST_FIELDS)-{"food_need_condition"}),
             "unknown/missing native request fields")
     require(request["temperature"] == 1.0, "V1 sampler requires native temperature1")
     require(Path(request["output"]).resolve(strict=True) == root, "native output request differs from selected archive")
@@ -177,11 +185,11 @@ def adjust_difficulty(current, successes, trials, maximum):
 def select(bank, observations):
     families = validate_bank(bank)
     require(type(observations) is list and 1 <= len(observations) <= 1024, "bounded discovery evidence required")
-    recipes = {family_key(f["lesson"], f["food_need_condition"]): name for name, f in families.items()}
+    recipes = {family_key(f["lesson"], f["food_need_condition"], f.get("food_offset")): name for name, f in families.items()}
     forbidden = {t["seed"] for kind in ("pool", "holdouts") for t in bank[kind]}
     seen, identity, grouped = set(), None, {name: [] for name in families}
     for row in observations:
-        key = family_key(row["lesson"], row["food_need_condition"])
+        key = family_key(row["lesson"], row["food_need_condition"], row.get("food_offset"))
         require(key in recipes and row["seed"] not in seen and row["seed"] not in forbidden, "discovery/task/holdout overlap or unknown recipe")
         require(row["decisions"] == bank["decision_budget"] and row["temperature"] == 1.0, "discovery dose/sampling mismatch")
         source = (row["actor_sha256"], row["value_sha256"], row["policy_version"], row["source_sha256"])

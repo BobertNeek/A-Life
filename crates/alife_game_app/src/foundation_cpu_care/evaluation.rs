@@ -26,6 +26,8 @@ pub struct CpuCareEvaluationRequest {
         skip_serializing_if = "FoundationFoodNeedCondition::is_newborn"
     )]
     pub food_need_condition: FoundationFoodNeedCondition,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub food_offset: Option<[f32; 2]>,
     #[serde(default)]
     pub known_exclusions: bool,
 }
@@ -283,6 +285,10 @@ fn verify_recovery(
             &episode,
         )?;
     }
+    admission::validate_food_offset_binding(
+        &json!({"lesson":request.lesson,"food_offset":request.food_offset}),
+        &episode,
+    )?;
     let trace: Value = read_json(&request.output.join("care-trace.json"))?;
     let rows = trace["rows"]
         .as_array()
@@ -317,6 +323,7 @@ fn verify_recovery(
 /// lifetime namespace. A completed exact result is read-only reusable; any other
 /// existing output is preserved and refused, never resumed or overwritten.
 pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value> {
+    validate_food_offset(request.lesson, request.food_offset)?;
     request
         .food_need_condition
         .validate_lesson(Some(request.lesson))?;
@@ -335,6 +342,7 @@ pub fn evaluate_cpu_care(mut request: CpuCareEvaluationRequest) -> Result<Value>
         temperature: request.temperature,
         lesson: request.lesson,
         food_need_condition: request.food_need_condition,
+        food_offset: request.food_offset,
         seed_history: Some(request.seed_history.clone()),
         known_exclusions: request.known_exclusions,
         record_diagnostic_replay: false,
@@ -440,6 +448,15 @@ mod tests {
         let legacy = r#"{"previous":"source","output":"output","seed_history":"history","seed":42,"decisions":3,"temperature":1.0,"lesson":"feeding","known_exclusions":false}"#;
         let mut request: super::CpuCareEvaluationRequest = serde_json::from_str(legacy).unwrap();
         assert_eq!(serde_json::to_string(&request).unwrap(), legacy);
+        assert!(request.food_offset.is_none());
+        request.food_offset = Some([2.0, -3.0]);
+        let geometry_encoded = serde_json::to_string(&request).unwrap();
+        assert!(geometry_encoded.contains("food_offset"));
+        assert_ne!(geometry_encoded, legacy);
+        assert_eq!(
+            serde_json::from_str::<super::CpuCareEvaluationRequest>(&geometry_encoded).unwrap(),
+            request
+        );
         request.food_need_condition = crate::FoundationFoodNeedCondition::OrdinaryHealthyAgingV1;
         let encoded = serde_json::to_string(&request).unwrap();
         assert!(encoded.contains("ordinary_healthy_aging_v1"));
@@ -510,6 +527,7 @@ mod tests {
             temperature: 1.,
             lesson: FoundationTeacherLesson::EatHeldFood,
             food_need_condition: crate::FoundationFoodNeedCondition::default(),
+            food_offset: None,
             seed_history: None,
             known_exclusions: false,
             record_diagnostic_replay: false,
@@ -546,6 +564,7 @@ mod tests {
         let history_before = fs::read(&history).unwrap();
         let request = CpuCareEvaluationRequest {
             food_need_condition: FoundationFoodNeedCondition::default(),
+            food_offset: None,
             previous: source.clone(),
             output: fixture.0.join("assessment"),
             seed_history: history.clone(),
