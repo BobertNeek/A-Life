@@ -27,7 +27,7 @@ fn write_new(path: &Path, value: &impl serde::Serialize) -> Result<()> {
 }
 
 fn lesson(index: usize) -> FoundationTeacherLesson {
-    if index % 2 == 0 {
+    if index.is_multiple_of(2) {
         FoundationTeacherLesson::Feeding
     } else {
         FoundationTeacherLesson::RelocatedFood
