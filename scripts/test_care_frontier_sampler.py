@@ -2,11 +2,12 @@
 import copy
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
 import subprocess
 import sys
+from unittest.mock import patch
 
 import care_frontier_sampler as sampler
 from run_care_frontier_fixture import Pilot
@@ -63,6 +64,19 @@ def fixture(root, mutate=None):
                "artifacts": {"care-trace.json": hashlib.sha256(path.read_bytes()).hexdigest()}}
     receipt["payload_sha256"] = sampler.native_receipt_digest(receipt)
     (root / "care-evaluation.json").write_text(json.dumps(receipt))
+
+
+def nested_fixture(root):
+    fixture(root)
+    nested = root / "source-native" / "evidence.json"
+    nested.parent.mkdir()
+    nested.write_bytes(b'{"scope":"synthetic native nested artifact"}')
+    path = root / "care-evaluation.json"
+    receipt = json.loads(path.read_text())
+    receipt["artifacts"]["source-native/evidence.json"] = hashlib.sha256(nested.read_bytes()).hexdigest()
+    receipt["payload_sha256"] = sampler.native_receipt_digest(receipt)
+    path.write_text(json.dumps(receipt))
+    return nested
 
 
 class FrontierTests(unittest.TestCase):
@@ -140,6 +154,37 @@ class FrontierTests(unittest.TestCase):
                 path = root / "care-evaluation.json"
                 receipt = json.loads(path.read_text()); change(receipt); path.write_text(json.dumps(receipt))
                 with self.assertRaisesRegex(ValueError, "seal mismatch"):
+                    sampler.score_assessment(root)
+
+    def test_nested_native_archive_uses_forward_slashes_and_still_rejects_changed_bytes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); nested = nested_fixture(root)
+            original_receipt = (root / "care-evaluation.json").read_bytes()
+            self.assertTrue(sampler.score_assessment(root)["success"])
+            self.assertEqual((root / "care-evaluation.json").read_bytes(), original_receipt)
+            nested.write_bytes(b"changed nested artifact")
+            with self.assertRaisesRegex(ValueError, "archive changed/unsealed"):
+                sampler.score_assessment(root)
+
+    def test_windows_relative_inventory_matches_the_unchanged_native_receipt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); nested_fixture(root)
+            raw = sampler.raw_tree(root)
+            windows = {str(PureWindowsPath(name)): pin for name, pin in raw.items()}
+            self.assertIn("source-native\\evidence.json", windows)
+            original_receipt = (root / "care-evaluation.json").read_bytes()
+            with patch.object(sampler, "raw_tree", return_value=windows):
+                self.assertTrue(sampler.score_assessment(root)["success"])
+            self.assertEqual((root / "care-evaluation.json").read_bytes(), original_receipt)
+
+    def test_separator_normalization_rejects_ambiguous_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); nested_fixture(root)
+            raw = sampler.raw_tree(root)
+            raw["source-native/evidence.json"] = {"sha256": "a"*64}
+            raw["source-native\\evidence.json"] = {"sha256": "b"*64}
+            with patch.object(sampler, "raw_tree", return_value=raw):
+                with self.assertRaisesRegex(ValueError, "ambiguous archive path"):
                     sampler.score_assessment(root)
 
     def test_native_score_refuses_cues_prior_updates_censoring_and_unmeasured_success(self):

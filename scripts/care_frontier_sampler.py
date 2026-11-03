@@ -96,7 +96,14 @@ def score_assessment(root):
     require(receipt.get("schema_version") == 1, "unsupported native assessment")
     require(set(receipt) == {"schema_version", "request", "input_sha256", "artifacts", "result", "payload_sha256"}
             and receipt["payload_sha256"] == native_receipt_digest(receipt), "native assessment payload seal mismatch")
-    inventory = {name: pin["sha256"] for name, pin in raw_tree(root).items() if name != "care-evaluation.json"}
+    # Match native evaluation.rs inventory keys, including on Windows. Keep
+    # raw_tree's OS-local keys unchanged for its other before/after callers.
+    inventory = {}
+    for name, pin in raw_tree(root).items():
+        native_name = name.replace("\\", "/")
+        if native_name != "care-evaluation.json":
+            require(native_name not in inventory, "ambiguous archive path after separator normalization")
+            inventory[native_name] = pin["sha256"]
     require(receipt["artifacts"] == inventory, "native assessment archive changed/unsealed")
     request, result = receipt["request"], receipt["result"]
     require(result["input_sha256"] == receipt["input_sha256"], "native input binding mismatch")
