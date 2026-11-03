@@ -123,7 +123,11 @@ class RecipeTests(unittest.TestCase):
             # disposable control, not an adaptive learning-gain claim.
             lane = pilot.root / 'layout-training-control'; lane.mkdir()
             source = pilot.root / 'initial-source'
-            history = pilot.history(source, lane / 'history.json', [881001], [201, 202, 301, 302, 303])
+            assessed = {row['seed'] for row in result['discovery'] + result['initial_holdouts']
+                        + result.get('fixed_frozen_reference', [])}
+            for arm in result['arms'].values():
+                assessed.update(row['seed'] for row in arm['heldouts'])
+            history = pilot.history(source, lane / 'history.json', [881001], assessed)
             training = lane / 'episode'
             receipt = pilot.command(pilot.care, ['--previous', source, '--output', training,
                 '--seed-history', history, '--seed', 401, '--lesson', 'feeding',
