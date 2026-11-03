@@ -2,6 +2,11 @@ use super::{finite, invalid};
 use crate::{TrainingError, TrainingGradientProbe, TrainingReplayEvaluation, TrainingSequence};
 use alife_core::{ActivationFunction, BrainPhenotype, CompiledSynapseKind, DecoderHeadKind};
 
+#[cfg(test)]
+mod cadence_assay;
+mod cadence_rows;
+use cadence_rows::CadenceRows;
+
 pub(super) fn route_fires(raw: u8, step: usize) -> bool {
     match raw {
         0 => true,
@@ -33,6 +38,7 @@ fn derivative(x: f32, kind: ActivationFunction) -> f32 {
 pub(super) struct SparseGraph {
     incoming: Vec<Vec<usize>>,
     decoders: [Vec<usize>; 8],
+    cadence_rows: Option<CadenceRows>,
 }
 pub(super) struct Tape {
     pub evaluation: TrainingReplayEvaluation,
@@ -55,7 +61,28 @@ impl SparseGraph {
                 _ => {}
             }
         }
-        Self { incoming, decoders }
+        Self {
+            incoming,
+            decoders,
+            cadence_rows: None,
+        }
+    }
+    pub(super) fn set_cadence_rows(&mut self, p: &BrainPhenotype, enabled: bool) {
+        self.cadence_rows = enabled.then(|| {
+            CadenceRows::new(&self.incoming, |id| {
+                p.projections()[p.synapses()[id].route_index() as usize]
+                    .update_cadence()
+                    .raw()
+            })
+        });
+    }
+    pub(super) fn cadence_enabled(&self) -> bool {
+        self.cadence_rows.is_some()
+    }
+    fn incoming_at(&self, target: usize, step: usize) -> &[usize] {
+        self.cadence_rows
+            .as_ref()
+            .map_or(&self.incoming[target], |p| p.row(target, step))
     }
     pub fn forward(
         &self,
@@ -92,7 +119,8 @@ impl SparseGraph {
                 let mut act = vec![0.; n];
                 for target in 0..n {
                     let mut sum = 0.;
-                    for &id in &self.incoming[target] {
+                    let incoming = self.incoming_at(target, step);
+                    for &id in incoming {
                         let s = &p.synapses()[id];
                         if tick.enabled_routes[s.route_index() as usize]
                             && route_fires(
@@ -301,7 +329,8 @@ impl SparseGraph {
                     gm[step + 1][i] * gate * d.metabolic_decay() - delta[i] * d.homeostatic_gain();
             }
             for (target, _) in delta.iter().enumerate() {
-                for &id in &self.incoming[target] {
+                let incoming = self.incoming_at(target, local);
+                for &id in incoming {
                     let s = &p.synapses()[id];
                     if tick.enabled_routes[s.route_index() as usize]
                         && route_fires(

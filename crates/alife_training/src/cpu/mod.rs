@@ -58,6 +58,16 @@ pub struct CpuHardwareReceipt {
     pub logical_parallelism: usize,
 }
 
+/// Process-local CPU replay scheduling; never changes graph or checkpoint identity.
+/// New/from-checkpoint trainers use Reference until the caller opts in. In-place
+/// checkpoint restore retains the process-local choice; no mode enters the save.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CpuReplayExecution {
+    #[default]
+    Reference,
+    CadenceCsr,
+}
+
 /// Offline founder policy/optimizer. Cloning an organism never clones this.
 pub struct CpuFoundationTrainer {
     phenotype: BrainPhenotype,
@@ -152,6 +162,19 @@ impl CpuFoundationTrainer {
             logical_parallelism: std::thread::available_parallelism().map_or(1, usize::from),
         }
     }
+    /// Opt in to cadence-filtered canonical index views, or release them and
+    /// restore reference traversal. Weights, private replay and Adam are untouched.
+    pub fn set_replay_execution(&mut self, execution: CpuReplayExecution) {
+        self.graph
+            .set_cadence_rows(&self.phenotype, execution == CpuReplayExecution::CadenceCsr);
+    }
+    pub fn replay_execution(&self) -> CpuReplayExecution {
+        if self.graph.cadence_enabled() {
+            CpuReplayExecution::CadenceCsr
+        } else {
+            CpuReplayExecution::Reference
+        }
+    }
     pub fn set_stage_mask(&mut self, mask: StageTrainableMask) -> Result<(), TrainingError> {
         mask.validate_for(&self.phenotype)?;
         self.checkpoint.stage_mask = mask;
@@ -218,9 +241,12 @@ impl CpuFoundationTrainer {
         {
             return Err(invalid());
         }
+        let execution = self.replay_execution();
+        let mut graph = replay::SparseGraph::new(&next);
+        graph.set_cadence_rows(&next, execution == CpuReplayExecution::CadenceCsr);
         self.checkpoint.phenotype_hash = next.phenotype_hash();
         self.checkpoint.source_foundation_digest = asset.digest();
-        self.graph = replay::SparseGraph::new(&next);
+        self.graph = graph;
         self.phenotype = next;
         self.source_foundation = asset;
         Ok(())
