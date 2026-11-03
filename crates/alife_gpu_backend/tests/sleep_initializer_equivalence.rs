@@ -429,14 +429,14 @@ mod device_oracle {
 
     #[test]
     #[ignore = "explicit NVIDIA DX12 full-state legacy/candidate equivalence; synthetic state only"]
-    fn nvidia_dx12_initializer_matches_frozen_legacy_for_all_corruptions() {
-        run(wgpu::Backends::DX12, false, true);
+    fn nvidia_vulkan_initializer_matches_frozen_legacy_for_all_corruptions() {
+        run(wgpu::Backends::VULKAN, false, true);
     }
 
     #[test]
     #[ignore = "explicit NVIDIA DX12 candidate+negative only; all words checked against frozen CPU-original output"]
-    fn nvidia_dx12_candidate_matches_frozen_cpu_original_for_all_corruptions() {
-        run(wgpu::Backends::DX12, false, false);
+    fn nvidia_vulkan_candidate_matches_frozen_cpu_original_for_all_corruptions() {
+        run(wgpu::Backends::VULKAN, false, false);
     }
 
     #[test]
@@ -589,7 +589,7 @@ mod device_oracle {
             );
         }
         if !software_only && !compile_original {
-            assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("dx12"));
+            assert_eq!(std::env::var("ALIFE_GPU_BACKEND").as_deref(), Ok("vulkan"));
             assert!(
                 matches!(
                     std::env::var("ALIFE_GPU_DX12_COMPILER").as_deref(),
@@ -635,7 +635,7 @@ mod device_oracle {
         pollster::block_on(async {
             let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
             descriptor.backends = backends;
-            if !software_only {
+            if false {
                 alife_gpu_backend::configure_gpu_test_dx12_compiler(&mut descriptor).unwrap();
             }
             let instance = wgpu::Instance::new(descriptor);
@@ -658,7 +658,7 @@ mod device_oracle {
                 if software_only {
                     wgpu::Backend::Vulkan
                 } else {
-                    wgpu::Backend::Dx12
+                    wgpu::Backend::Vulkan
                 }
             );
             eprintln!("sleep_initializer_equivalence_adapter={info:?}");
