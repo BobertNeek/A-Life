@@ -1,4 +1,7 @@
 fn main() {
+    // This script only reads Cargo's package settings. Changes to diagnostic
+    // examples must not rerun it and rebuild the entire application library.
+    println!("cargo:rerun-if-changed=build.rs");
     // Cargo-reported settings for this package, not an effective compiler-flags
     // fingerprint. Keep the values compiled into diagnostics, never read them
     // from the executable's runtime environment.

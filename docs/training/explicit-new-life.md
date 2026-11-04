@@ -166,7 +166,9 @@ qualification above before training is resumed.
 
 `assess_retained_cpu inspect CURRENT UNUSED_OUTPUT EXPECTED_SHA256` performs full
 Current admission, native fixed-slot topology reconstruction, canonical-to-live
-mapping, exact optimizer retention and a two-tick scalar forward check. The
+mapping, exact optimizer retention and a two-tick scalar recurrent-state check.
+That initial probe uses an Idle candidate with zero decoder inputs; it does not
+qualify candidate logits, action decoding or sampling. The
 explicit body bridge allows only derived neural identity hashes to differ; all
 neural execution fields must match. Saved physiological bits are preserved.
 Cross-platform phenotype admission permits only an adjacent-f32 difference in
@@ -191,7 +193,41 @@ with no policy-only fallback. Ordinary waking learning and sleep use the existin
 CPU contracts. Incomplete, dead and failed trials retain their prefix artifacts
 and remain in results. Existing output is never restarted or overwritten.
 
-The fixed-slot scalar check validates mapping and formulas. It does not execute a
-GPU or certify Windows/NVIDIA parity. Results from this executable are a separate
+The fixed-slot scalar check covers the recurrent mapping and state formulas.
+It does not execute a GPU or certify Windows/NVIDIA parity. Results from this executable are a separate
 CPU benchmark until both actual parents and initial states are qualified under
 the same executable. Unknown historical seed freshness remains unknown.
+
+### Bounded decoder and motor diagnosis
+
+Build `audit_retained_bridge` and `audit_retained_motor` as examples with
+`--features cpu-training`. Run the bridge with `CURRENT EXPECTED_SHA256
+BATTERY_DIRECTORY NEW_OUTPUT`, then run `python3 scripts/audit_retained_bridge.py
+NEW_OUTPUT` (NumPy required), followed by the motor example with
+`BATTERY_DIRECTORY NEW_OUTPUT`.
+
+The bridge restores six saved decisions from each of the held and ordinarily
+aged feeding cases. It records actual candidate identities, features, recurrent
+state, mutable offsets, logits and temperature-1 training-sampler state. Replay
+controls remove the acquired edge, then remove both acquired edges and dendrites;
+both retain base somatic weights and the same input state. These controls measure
+local sensitivity, not ablated world rollouts. An artificial nonzero-input case
+exercises all eight decoder families only to qualify arithmetic.
+
+The independent Python implementation composes canonical-to-packed-to-live
+coordinates by skipping acquired slots, checks native ABI metadata, and evaluates
+packed recurrence and decoder maps. It also rebuilds the sensor encoder, candidate
+features, confidence-weighted memory lanes, innate bias and conditional sampling.
+The motor example passes those independently selected actions through the native
+world motor transaction and compares commands, bundles and physical receipts.
+It does not independently continue predictor updates, waking plasticity or the
+following world tick. Raw diagnostic exports contain private state and remain
+outside the repository.
+
+For an explicitly available CPU Vulkan adapter, compile the bridge with
+`--features cpu-training,gpu-tests` and request `--offline-wgsl`. This uses only
+the offline trainer factory. If that factory is unavailable, retain the failure
+and report the scalar-only scope; do not change the live software-device guard.
+Neither software offline replay nor the motor control establishes hardware-live
+parity. Inspect the representative and selected manipulation channel separately:
+factorized sampling can legitimately fill every enabled nonempty channel.

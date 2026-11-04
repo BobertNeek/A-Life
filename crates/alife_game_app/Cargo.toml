@@ -54,6 +54,14 @@ required-features = ["foundation-training"]
 name = "inspect_saved_policy"
 required-features = ["foundation-training"]
 
+[[example]]
+name = "audit_retained_bridge"
+required-features = ["cpu-training"]
+
+[[example]]
+name = "audit_retained_motor"
+required-features = ["cpu-training"]
+
 [dependencies]
 alife_storage.workspace = true
 accesskit = { version = "=0.21.1", optional = true }
