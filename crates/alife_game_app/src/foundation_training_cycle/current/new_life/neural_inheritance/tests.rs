@@ -347,6 +347,88 @@ fn retained_neural_round_trip_preserves_structure_all_banks_and_canonical_adam()
 }
 
 #[test]
+fn retained_neural_preserves_multiple_candidates_including_their_complete_state() {
+    let (mut source, birth) = fixture();
+    let retained = RetainedNeural::read(&source).unwrap();
+    let event = source.terminal_disposition.take().unwrap();
+    let mut topology = retained.topology;
+    let evidence = (31..34)
+        .map(|source| CoactivationEvidence {
+            region: 0,
+            source,
+            target: source - 29,
+            coactivation: 1,
+            eligibility: 1,
+            concept_gap_support: 0,
+        })
+        .collect::<Vec<_>>();
+    topology
+        .v11_checkpoint
+        .structural
+        .discover_candidates(&evidence)
+        .unwrap();
+    assert_eq!(topology.v11_checkpoint.structural.candidate_count(), 4);
+    topology.canonical_digest = topology.recompute_canonical_digest().unwrap();
+    let expected = serde_json::to_vec(&topology.v11_checkpoint.structural).unwrap();
+    let mut exact = retained.exact;
+    exact.structural_plasticity = topology.v11_checkpoint.structural.clone();
+    let mut life = source.life.take().unwrap();
+    let mut save = PortableSaveFile::from_json_str(&life.world_json).unwrap();
+    let mut brain = save.creatures[0].gpu_brain.clone().unwrap();
+    brain.live_structural_topology = Some(
+        put(
+            &mut life,
+            &mut save,
+            "live-structural-topology",
+            &serde_json::to_vec(&topology).unwrap(),
+        )
+        .unwrap(),
+    );
+    brain.exact_cognitive_state = Some(
+        put(
+            &mut life,
+            &mut save,
+            "exact-cognitive-state",
+            &exact.encode().unwrap(),
+        )
+        .unwrap(),
+    );
+    save.creatures[0].gpu_brain = Some(brain);
+    life.world_json = serde_json::to_string(&save).unwrap();
+    source.same_individual.as_mut().unwrap().private_life_sha256 =
+        sha(&serde_json::to_vec(&life).unwrap());
+    source.life = Some(life);
+    let source = source
+        .with_terminal_disposition(
+            &event.baseline_current_sha256,
+            &event.request_sha256,
+            event.session_nonce,
+            event.terminal_event,
+        )
+        .unwrap();
+    let original = source.encode().unwrap();
+    let (life, proof) = inherit(&source, birth).unwrap();
+    let child = source
+        .seal_new_life_with_retained_neural(&original, 8000, 2, life, proof)
+        .unwrap();
+    let decoded = CurrentTrainingCheckpointV1::decode(&child.encode().unwrap()).unwrap();
+    let inherited = RetainedNeural::read(&decoded).unwrap();
+    assert_eq!(
+        inherited
+            .topology
+            .v11_checkpoint
+            .structural
+            .candidate_count(),
+        4
+    );
+    assert_eq!(
+        serde_json::to_vec(&inherited.exact.structural_plasticity).unwrap(),
+        expected
+    );
+    assert_eq!(source.encode().unwrap(), original);
+}
+
+#[test]
 fn retained_neural_rejects_tampered_mapping_partial_assets_and_identity_reuse() {
     let (source, birth) = fixture();
     let p = source.handoff.clone().admit().unwrap().phenotype;
