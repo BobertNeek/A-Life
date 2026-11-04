@@ -244,9 +244,11 @@ pub fn run_retained_cpu_battery(
                 &mut founder,
                 &value,
                 &trial,
-                seed,
-                lesson,
-                condition,
+                TrialScenario {
+                    seed,
+                    lesson,
+                    condition,
+                },
                 128,
             );
             let mut record = match result {
@@ -357,9 +359,11 @@ pub fn run_retained_cpu_fresh_controls(
                     &mut founder,
                     &value,
                     &trial,
-                    seed,
-                    lesson,
-                    condition,
+                    TrialScenario {
+                        seed,
+                        lesson,
+                        condition,
+                    },
                     128,
                 ) {
                     Ok(record) => record,
@@ -392,17 +396,26 @@ pub fn run_retained_cpu_fresh_controls(
     Ok(result)
 }
 
+struct TrialScenario {
+    seed: u64,
+    lesson: FoundationTeacherLesson,
+    condition: FoundationFoodNeedCondition,
+}
+
 fn run_trial(
     source: &CurrentTrainingCheckpointV1,
     retained: Option<&CpuRetainedNeuralInheritance>,
     founder: &mut CpuFoundationTrainer,
     value: &CpuValueHead,
     output: &Path,
-    seed: u64,
-    lesson: FoundationTeacherLesson,
-    condition: FoundationFoodNeedCondition,
+    scenario: TrialScenario,
     scored_limit: usize,
 ) -> Result<Value> {
+    let TrialScenario {
+        seed,
+        lesson,
+        condition,
+    } = scenario;
     let started = Instant::now();
     let (_, mut episode) = prepare_care_episode(CpuCareRequest {
         previous: None,
