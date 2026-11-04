@@ -317,6 +317,14 @@ impl CpuFoundationTrainer {
     ) -> Result<TrainingReplayEvaluation, TrainingError> {
         Ok(self.forward(sequence)?.evaluation)
     }
+    /// Diagnostic native recurrent tape, including the detached initial state.
+    /// Uses the same forward pass as collection and BPTT; performs no update.
+    pub fn replay_activation_tape(
+        &self,
+        sequence: &TrainingSequence,
+    ) -> Result<Vec<Vec<f32>>, TrainingError> {
+        Ok(self.forward(sequence)?.a)
+    }
     pub fn probe_replay_gradients(
         &self,
         sequence: &TrainingSequence,

@@ -175,6 +175,7 @@ pub fn continue_action_gated_language(
                 AssessmentPlan {
                     recovery_sleep: true,
                     collect_utterance_timing: true,
+                    paired_request_focus: false,
                     factorial_grounding: false
                 },
                 &mut trace
@@ -224,6 +225,7 @@ pub fn continue_action_gated_language(
                     recovery_sleep: true,
                     collect_utterance_timing: true,
                     factorial_grounding: false,
+                    paired_request_focus: false,
                 }),
             },
             next.ok_or("no update")?,

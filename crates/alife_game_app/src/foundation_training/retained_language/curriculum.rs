@@ -4,7 +4,7 @@ mod action_gate;
 mod factorial;
 mod payload_stage;
 pub use action_gate::continue_action_gated_language;
-pub use factorial::continue_factorial_grounded_language;
+pub use factorial::{continue_factorial_grounded_language, continue_focused_grounded_language};
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -14,6 +14,8 @@ pub(super) struct AssessmentPlan {
     collect_utterance_timing: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     factorial_grounding: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    paired_request_focus: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -549,6 +551,7 @@ fn continue_curriculum(
                     recovery_sleep: true,
                     collect_utterance_timing: false,
                     factorial_grounding: false,
+                    paired_request_focus: false,
                 },
                 &mut baseline_trace
             )?);
@@ -604,6 +607,7 @@ fn continue_curriculum(
                     recovery_sleep: true,
                     collect_utterance_timing: false,
                     factorial_grounding: false,
+                    paired_request_focus: false,
                 }),
             },
             next_gradient.ok_or("no native update")?,

@@ -1,5 +1,8 @@
 //! Three real commands separate noun choice from action choice; align narration timing.
 use super::*;
+mod focus;
+#[cfg(test)]
+mod token_probe;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Lesson {
     EatFood,
@@ -179,6 +182,7 @@ fn collect_factorial(
     arm: Arm,
     round: usize,
     traces: &mut impl Write,
+    focused: bool,
 ) -> Result<(Vec<Episode>, Value)> {
     let (mut episodes, mut counts, mut heard, mut positive) = (vec![], [0usize; 3], 0usize, 0usize);
     let mut lag = vec![];
@@ -245,7 +249,7 @@ fn collect_factorial(
                         s,
                         requested,
                         speech.is_some(),
-                        is_heard,
+                        is_heard || (focused && tick == 0),
                         legal_grasp,
                         requested_held,
                     )?;
@@ -354,7 +358,18 @@ pub(super) fn evaluate_factorial(
         if sleep && !plan.recovery_sleep {
             continue;
         }
-        let (mut base, s) = base_host(actor, asset, c.seed + 90_000 + layout as u64, c.seed)?;
+        let (mut base, s) = base_host(
+            actor,
+            asset,
+            c.seed
+                + if plan.paired_request_focus {
+                    190_000
+                } else {
+                    90_000
+                }
+                + layout as u64,
+            c.seed,
+        )?;
         for _ in 0..2 {
             base.step(actor, 1.)?;
         }
@@ -391,13 +406,17 @@ pub(super) fn evaluate_factorial(
                 return Err("factorial native sleep did not consolidate and wake".into());
             }
         }
-        place(
-            base.world_mut(),
-            s,
-            layout,
-            if layout == 0 { 0.48 } else { 0.85 },
-            true,
-        )?;
+        if plan.paired_request_focus {
+            focus::held_out_place(base.world_mut(), s, layout)?;
+        } else {
+            place(
+                base.world_mut(),
+                s,
+                layout,
+                if layout == 0 { 0.48 } else { 0.85 },
+                true,
+            )?;
+        }
         let paired = identity(&base.checkpoint(actor)?)?;
         for requested in [
             Some(Lesson::EatFood),
@@ -505,6 +524,21 @@ pub fn continue_factorial_grounded_language(
     output: &Path,
     c: LanguagePilotConfig,
 ) -> Result<Value> {
+    run_factorial(source, output, c, false)
+}
+pub fn continue_focused_grounded_language(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+) -> Result<Value> {
+    run_factorial(source, output, c, true)
+}
+fn run_factorial(
+    source: &Path,
+    output: &Path,
+    c: LanguagePilotConfig,
+    focused: bool,
+) -> Result<Value> {
     if c.llamacpp_translation
         || !c.experimental_word_bridge
         || !(1..=2).contains(&c.rounds)
@@ -555,6 +589,7 @@ pub fn continue_factorial_grounded_language(
             recovery_sleep: true,
             collect_utterance_timing: true,
             factorial_grounding: true,
+            paired_request_focus: focused,
         };
         if arm == Arm::Grounded {
             eprintln!("factorial common baseline");
@@ -576,11 +611,16 @@ pub fn continue_factorial_grounded_language(
         let (mut collections, mut updates, mut next) = (vec![], vec![], None);
         for round in 0..c.rounds {
             eprintln!("factorial {arm:?} round{round} native collection");
-            let (e, receipt) = collect_factorial(&actor, &asset, c, arm, round, &mut trace)?;
+            let (e, receipt) =
+                collect_factorial(&actor, &asset, c, arm, round, &mut trace, focused)?;
             eprintln!("factorial collection {receipt}");
             collections.push(receipt);
             for epoch in 0..c.epochs {
-                let (mut g, action) = gradients_with_speech(&actor, &e, false)?;
+                let (mut g, action) = if focused {
+                    focus::gradients(&actor, &e)?
+                } else {
+                    gradients_with_speech(&actor, &e, false)?
+                };
                 let (payload, objective) = balanced_activity_payload(&actor, &e)?;
                 for (dst, src) in g.iter_mut().zip(payload) {
                     *dst += src
@@ -610,7 +650,7 @@ pub fn continue_factorial_grounded_language(
         arms.push(json!({"arm":arm,"common_source_actor_sha256":initial,"source_private_sha256":source_private,"source_step":start,"actor_step":actor.optimizer_step(),"actor_sha256":identity(&actor.checkpoint())?,"collections":collections,"updates":updates,"evaluation":evaluation,"continuity":continuity}));
     }
     trace.finish()?;
-    let report = json!({"kind":"experimental-factorial-hold-aware-v11","execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
+    let report = json!({"kind":if focused {"experimental-paired-request-focus-v12"} else {"experimental-factorial-hold-aware-v11"},"paired_request_focus":focused,"execution_domain":"native-cpu","config":c,"source_report_sha256":identity(&old)?,"lessons":Lesson::ALL,"training_distances":[0.36,0.44],"native_grasp_legality_for_teaching":true,"common_baseline":baseline,"semantic_prior_enabled":false,"teacher":"scripted ordinary spatial speech","arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["One common retained V8 history and seed; NoSpeech removes incremental teacher requests, not prior learning or truthful offline activity labels.","Training and assessment both stop request speech after any genuine completed activity; narration keeps the original three eligible quiet-row criterion.","GetFood ownership distinguishes noun choice from GetToy and action choice from EatFood. Missing physical activity classes receive no invented payload labels.","First-event discrimination is reported separately from eventual requested completion: grabbing food can be a legitimate prefix to eating food.","Native actor/Adam continuation across fresh cohorts; exact private/cold/sleep recovery is measured, not same-individual live optimizer rebase.","Induced RecoveryProtocol sleep, relocated contact/near fixtures and visible distractor; no spontaneous sleep or far-navigation claim.","Multiple targeted curriculum changes; no equal-dose old-objective arm, no real SLM delivery claim."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }

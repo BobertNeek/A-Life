@@ -253,6 +253,7 @@ fn refine(
                     recovery_sleep: true,
                     collect_utterance_timing: false,
                     factorial_grounding: false,
+                    paired_request_focus: false,
                 }),
             },
             next.ok_or("no payload update")?,
