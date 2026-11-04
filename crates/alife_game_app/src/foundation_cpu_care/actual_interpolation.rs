@@ -3,6 +3,7 @@
 use super::retained::{run_view_trial, saved_source_phenotype, AssessmentCase, AssessmentView};
 use super::*;
 mod ablations;
+mod fraction_search;
 mod merge_reset;
 use alife_core::*;
 use alife_training::{cpu::retained_interpolation_experiment::*, AdamWConfig, StageTrainableMask};
@@ -31,6 +32,12 @@ struct Request {
     ablation_variant: Option<String>,
     #[serde(default)]
     previous_assessment: Option<PathBuf>,
+    #[serde(default)]
+    seed_first: Option<u64>,
+    #[serde(default)]
+    seed_count: Option<usize>,
+    #[serde(default)]
+    record_physiology: bool,
 }
 struct Model {
     role: &'static str,
@@ -94,9 +101,11 @@ fn model_candidate(
 ) -> Result<Model> {
     let role = match spec.fraction {
         0. => "pc_fraction0",
+        0.25 => "interpolation_025",
         0.5 => "interpolation_05",
+        0.75 => "interpolation_075",
         1. => "cloud_genetics_pc_overlay",
-        _ => return Err("bounded comparison supports only fractions 0, 0.5 and 1".into()),
+        _ => return Err("supported fractions are 0, 0.25, 0.5, 0.75 and 1".into()),
     };
     let compressed = fs::read(spec.directory.join("experiment.json.zst"))?;
     let reader = zstd::stream::read::Decoder::new(std::io::Cursor::new(&compressed))?
@@ -177,7 +186,12 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             .is_some_and(|v| v != "lifetime_refine")
         || !matches!(
             request.phase.as_str(),
-            "ablations" | "fresh_battery" | "merge_reset_battery"
+            "ablations"
+                | "fresh_battery"
+                | "merge_reset_battery"
+                | "fraction_search_pilot"
+                | "fraction_search_battery"
+                | "injury_trace"
         ) && request.ablation_variant.is_some()
     {
         return Err("unexpected state-variant selector for this phase".into());
@@ -190,6 +204,9 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             | "fresh_battery"
             | "merge_reset_pilot"
             | "merge_reset_battery"
+            | "fraction_search_pilot"
+            | "fraction_search_battery"
+            | "injury_trace"
     ) {
         return Err(
             "explicit controls, candidates, ablations or fresh_battery phase required".into(),
@@ -211,6 +228,9 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             || request.candidates[1].fraction != 0.5)
     {
         return Err("unexpected bounded candidate set".into());
+    }
+    if request.phase.starts_with("fraction_search_") || request.phase == "injury_trace" {
+        fraction_search::validate_request(&request)?;
     }
     let mut protected = vec![
         request.pc_current.as_path(),
@@ -260,7 +280,18 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let cloud_seed_evidence: Value = serde_json::from_slice(&fs::read(
         request.cloud_native_root.join("care-seed-admission.json"),
     )?)?;
-    let seeds = if matches!(
+    let seeds = if request.phase.starts_with("fraction_search_") || request.phase == "injury_trace"
+    {
+        let first = request
+            .seed_first
+            .ok_or("new search requires explicit seeds")?;
+        first
+            ..=first
+                + request
+                    .seed_count
+                    .ok_or("new search requires explicit count")? as u64
+                - 1
+    } else if matches!(
         request.phase.as_str(),
         "fresh_battery" | "merge_reset_battery"
     ) {
@@ -341,6 +372,8 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
         )?);
         models.push(model_parent("pc_native_fresh", &pc.handoff, None)?);
         models.push(model_parent("cloud_native_fresh", &cloud.handoff, None)?);
+    } else if request.phase.starts_with("fraction_search_") || request.phase == "injury_trace" {
+        models = fraction_search::models(&request, &pc, &cloud.handoff, &pc_bytes, &proof)?;
     } else if matches!(
         request.phase.as_str(),
         "merge_reset_pilot" | "merge_reset_battery"
@@ -376,7 +409,7 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let mut trace_pins = BTreeMap::new();
     let mut conditions = if matches!(
         request.phase.as_str(),
-        "fresh_battery" | "merge_reset_battery"
+        "fresh_battery" | "merge_reset_battery" | "fraction_search_battery"
     ) {
         vec![
             (
@@ -424,7 +457,10 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             ),
         ]
     };
-    if request.phase == "merge_reset_pilot" {
+    if matches!(
+        request.phase.as_str(),
+        "merge_reset_pilot" | "fraction_search_pilot"
+    ) {
         conditions.insert(
             1,
             (
@@ -456,6 +492,7 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
                         lesson,
                         condition,
                         scored_limit: 128,
+                        record_physiology: request.record_physiology,
                     },
                 ) {
                     Ok(result) => result,

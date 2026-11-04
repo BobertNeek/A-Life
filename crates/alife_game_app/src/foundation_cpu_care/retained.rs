@@ -449,6 +449,7 @@ fn run_trial(
             lesson,
             condition,
             scored_limit,
+            record_physiology: false,
         },
     )
 }
@@ -468,6 +469,7 @@ pub(super) struct AssessmentCase {
     pub lesson: FoundationTeacherLesson,
     pub condition: FoundationFoodNeedCondition,
     pub scored_limit: usize,
+    pub record_physiology: bool,
 }
 
 pub(super) fn run_view_trial(
@@ -483,6 +485,7 @@ pub(super) fn run_view_trial(
         lesson,
         condition,
         scored_limit,
+        record_physiology,
     } = *case;
     let started = Instant::now();
     let (_, mut episode) = prepare_care_episode(CpuCareRequest {
@@ -541,6 +544,9 @@ pub(super) fn run_view_trial(
     )?;
     let mut rows = BTreeMap::<u64, Vec<CpuCollectedDecision>>::new();
     let mut failure = None;
+    let mut physiology = Vec::new();
+    let mut peak_injury = 0f32;
+    let mut minimum_health = 1f32;
     for _ in 0..(scored_limit + 1) * 256 {
         let step = (|| -> Result<CpuCanonicalStep> {
             episode.before_step(&mut host, founder)?;
@@ -559,6 +565,15 @@ pub(super) fn run_view_trial(
             Err(e) => {
                 failure = Some(e.to_string());
                 break;
+            }
+        }
+        if record_physiology {
+            for record in host.world().organism_registry().iter() {
+                let biology = record.biochemistry();
+                peak_injury = peak_injury.max(biology.body.injury);
+                minimum_health = minimum_health.min(biology.body.health);
+                let observation = json!({"tick":host.world().tick(),"organism":record.organism_id(),"alive":record.lifecycle().is_alive(),"body":biology.body,"homeostasis":biology.homeostasis,"captured_decisions":rows.values().map(Vec::len).sum::<usize>()});
+                physiology.push(observation);
             }
         }
         if rows.values().map(Vec::len).sum::<usize>() > scored_limit
@@ -594,8 +609,27 @@ pub(super) fn run_view_trial(
         write(output.join("care-episode.json"), &receipt.metadata)?;
     }
     let organisms=host.world().organism_registry().iter().map(|r|json!({"organism":r.organism_id(),"alive":r.lifecycle().is_alive(),"biology":r.biochemistry()})).collect::<Vec<_>>();
-    let complete = decisions == scored_limit + 1 && alive && failure.is_none();
+    let dose_complete = decisions == scored_limit + 1;
+    let complete = dose_complete && alive && failure.is_none();
+    if record_physiology {
+        write(output.join("physiology-trace.json"), &physiology)?;
+    }
     let result = json!({"lesson":lesson,"food_need_condition":condition,"seed":seed,"body_seed":view.body_seed,"policy":view.identity["policy"],"model":view.identity,"complete":complete,"lesson_completed":receipt.metadata["lesson_completed"],"scored_decisions":scored,"captured_decisions":decisions,"bootstrap_decisions":decisions.saturating_sub(scored_limit),"error":failure,"alive":alive,"organisms":organisms,"seconds":started.elapsed().as_secs_f64(),"body_compatibility":compatibility,"episode":receipt.metadata,"teacher_present":false,"semantic_prior_enabled":false,"private_waking_learning":"ordinary","offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0});
+    let mut result = result;
+    result["dose_complete"] = json!(dose_complete);
+    result["physiology_recorded"] = json!(record_physiology);
+    result["early_physiology_stop_enabled"] = json!(false);
+    result["peak_injury_observed"] = json!(if record_physiology {
+        Some(peak_injury)
+    } else {
+        None
+    });
+    result["minimum_health_observed"] = json!(if record_physiology {
+        Some(minimum_health)
+    } else {
+        None
+    });
+    result["stop_semantics"] = json!("full decision horizon unless natural death or technical failure; physiology observer only; no health/injury stop, intervention or rollback");
     write(output.join("retained-assessment.json"), &result)?;
     Ok(result)
 }
