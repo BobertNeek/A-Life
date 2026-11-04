@@ -1346,6 +1346,7 @@ mod hands;
 pub use hands::{ActionPhase, GripTransfer, GripTransferKind};
 mod local_steering;
 pub use local_steering::LocalSteeringState;
+mod observation_diagnostics;
 mod naming;
 pub(crate) mod player_hand;
 pub use naming::{RenameAgentError, MAX_AGENT_NAME_CHARS};

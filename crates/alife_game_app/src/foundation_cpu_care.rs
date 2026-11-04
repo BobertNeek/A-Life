@@ -116,6 +116,12 @@ fn prepare_care_episode(request: CpuCareRequest) -> Result<(CpuContinuationConfi
         collection_binding: None,
         explicit_deterministic_prior: false,
         assessment: false,
+        // Explicit private developer traces only. No learned parameters, private
+        // memory contents or diagnostic world facts are sent to the learner.
+        observation_diagnostics_enabled: std::env::var_os("ALIFE_CPU_CARE_OBSERVATION_DIAGNOSTICS")
+            .is_some_and(|value| value == "1"),
+        observation_diagnostics_before: None,
+        previously_observed_food_tracking_id: Value::Null,
     };
     Ok((config, episode))
 }
@@ -149,6 +155,9 @@ struct CareEpisode {
     collection_binding: Option<(CpuCollectorAssignmentV1, [u8; 32])>,
     explicit_deterministic_prior: bool,
     assessment: bool,
+    observation_diagnostics_enabled: bool,
+    observation_diagnostics_before: Option<Value>,
+    previously_observed_food_tracking_id: Value,
 }
 
 impl CareEpisode {
@@ -367,6 +376,21 @@ impl CpuEpisodeHooks for CareEpisode {
             }
         }
         self.ownership_before = ownership(host.world(), scenario.food);
+        if self.observation_diagnostics_enabled {
+            let organism = self
+                .summary
+                .as_ref()
+                .ok_or("care outcome identity missing")?
+                .organism;
+            self.observation_diagnostics_before = Some(json!({
+                "food":host.world().observation_target_diagnostics(organism,scenario.food)?,
+                "gate":scenario.closing_gate.and_then(|(gate,_)| host.world().entity(gate))
+                    .map(|gate| json!({"entity":gate.id,"position":gate.position,"radius":gate.radius})),
+                "phase":"before_host_step_after_lesson_preparation",
+                "diagnostic_only":true,
+                "learner_inputs_modified":false,
+            }));
+        }
         Ok(())
     }
     fn prepare_draft(
@@ -443,6 +467,62 @@ impl CpuEpisodeHooks for CareEpisode {
                 "action":row.patch.decision().selected_action,"bundle":row.patch.selected_bundle(),
                 "outcome":row.patch.outcome(),"ppo_action":row.action,
                 "nourished_meal":summary.nourished_meal_events>before});
+            if let Some(before) = self.observation_diagnostics_before.as_ref() {
+                if before["food"]["tick"] != json!(step.tick_before) {
+                    return Err(
+                        "observation diagnostic geometry tick does not match the decision".into(),
+                    );
+                }
+                // Bind historical food identity only through the actual
+                // prepared candidate-to-observed-slot mapping, not a guessed ID.
+                for candidate in frame
+                    .candidates()
+                    .iter()
+                    .filter(|candidate| candidate.target.entity == Some(summary.target))
+                {
+                    if let alife_core::CandidateObservationRef::ObjectSlot(index) =
+                        candidate.observation
+                    {
+                        if let Some(slot) = frame
+                            .grounded_object_slots()
+                            .iter()
+                            .find(|slot| slot.slot_index == index)
+                        {
+                            self.previously_observed_food_tracking_id =
+                                json!(slot.tracked_object_id);
+                        }
+                    }
+                }
+                let primary = row
+                    .patch
+                    .pre_action()
+                    .cognitive_context
+                    .as_ref()
+                    .and_then(|context| context.attention.focal_targets.first());
+                let primary_tracking = match primary {
+                    Some(alife_core::StableFocusIdentity::TrackedObject(id)) => json!(id),
+                    _ => Value::Null,
+                };
+                let primary_currently_observed = !primary_tracking.is_null()
+                    && frame
+                        .grounded_object_slots()
+                        .iter()
+                        .any(|slot| json!(slot.tracked_object_id) == primary_tracking);
+                trace["observation_diagnostics"] = json!({
+                    "schema":1,"world_before":before,"perception_tick":frame.tick(),
+                    "frame_digest":frame.frame_digest(),"homeostasis":frame.homeostasis(),
+                    "observed_slots":frame.grounded_object_slots(),
+                    "primary_focus":primary,"primary_focus_currently_observed":primary_currently_observed,
+                    "previously_observed_food_tracking_id":self.previously_observed_food_tracking_id,
+                    "historical_food_identity_source":"actual_pre_action_candidate_slot_mapping",
+                    "primary_focus_is_previous_food":!primary_tracking.is_null()
+                        && primary_tracking == self.previously_observed_food_tracking_id,
+                    "candidates":frame.candidates(),
+                    "food_has_candidate":frame.candidates().iter()
+                        .any(|candidate| candidate.target.entity == Some(summary.target)),
+                    "claim_scope":"world geometry, actual prepared perception/focus/candidates and ordinary physiology; visibility is not path reachability",
+                });
+            }
             if self.assessment {
                 trace["acquisition_event"] =
                     json!(summary.ordinary_acquisition_events > before_acquisitions);
@@ -562,6 +642,17 @@ impl CpuEpisodeHooks for CareEpisode {
             "semantic_prior":self.prior.as_ref().map(|p| &p.metrics),
             "prior_failure_policy":"log_and_continue_without_prior",
             "critic_optimizer":alife_training::PpoConfig::default().value_optimizer});
+        if self.observation_diagnostics_enabled {
+            metadata["observation_diagnostics"] = json!({
+                "schema":1,"enabled":true,
+                "opt_in":"ALIFE_CPU_CARE_OBSERVATION_DIAGNOSTICS=1",
+                "private_developer_output":true,
+                "geometry_phase":"before_host_step_after_lesson_preparation",
+                "focus_and_candidates_phase":"actual_pre_action_perception",
+                "learner_inputs_modified":false,
+                "historical_replay_claimed":false,
+            });
+        }
         if let Some((_, plan)) = &self.collection_binding {
             metadata["care_round_plan_sha256"] = json!(plan);
             metadata["comparison_role"] = json!("serial-collection-parity-control");
@@ -627,6 +718,75 @@ impl CpuEpisodeHooks for CareEpisode {
 #[cfg(test)]
 mod collect_only_tests {
     use super::*;
+
+    #[test]
+    fn observation_diagnostics_preserve_native_fixture_actions_and_private_state() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-observation-parity-fixture-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut runs = Vec::new();
+        for enabled in [false, true] {
+            let output = root.join(if enabled { "diagnostics" } else { "baseline" });
+            let (config, mut episode) = prepare_care_episode(CpuCareRequest {
+                previous: None,
+                output: output.clone(),
+                seed: 0x93_80,
+                decisions: 4,
+                temperature: 1.0,
+                lesson: FoundationTeacherLesson::ObstacleNavigation,
+                food_need_condition: FoundationFoodNeedCondition::default(),
+                seed_history: None,
+                known_exclusions: false,
+                record_diagnostic_replay: false,
+                fixture: true,
+            })
+            .unwrap();
+            episode.explicit_deterministic_prior = true;
+            episode.observation_diagnostics_enabled = enabled;
+            let collected = collect_cpu_episode(config, &mut episode).unwrap();
+            assert_eq!(collected.actor_checkpoint().optimizer_step, 0);
+            assert_eq!(collected.value_checkpoint().optimizer_step, 0);
+            assert!(episode.reservation.is_none());
+            let mut trace: Value =
+                serde_json::from_slice(&std::fs::read(output.join("care-trace.json")).unwrap())
+                    .unwrap();
+            assert_eq!(trace["rows"].as_array().unwrap().len(), 5);
+            for row in trace["rows"].as_array_mut().unwrap() {
+                let diagnostics = row
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("observation_diagnostics");
+                assert_eq!(diagnostics.is_some(), enabled);
+                if let Some(diagnostics) = diagnostics {
+                    assert_eq!(diagnostics["perception_tick"], row["decision_tick"]);
+                    assert_eq!(
+                        diagnostics["world_before"]["food"]["tick"],
+                        row["decision_tick"]
+                    );
+                    assert_eq!(diagnostics["food_has_candidate"], row["food_visible"]);
+                    assert_eq!(
+                        diagnostics["world_before"]["food"]["terrain_route_reachability"],
+                        "not_assessed"
+                    );
+                }
+            }
+            runs.push((
+                serde_json::to_value(collected.actor_checkpoint()).unwrap(),
+                serde_json::to_value(collected.value_checkpoint()).unwrap(),
+                serde_json::to_value(collected.host_checkpoint().unwrap()).unwrap(),
+                trace,
+            ));
+        }
+        assert_eq!(runs[0], runs[1]);
+        // Fixture artifacts are deliberately retained for inspection. This test
+        // imports no acquired brain and reserves no production/assessment seed.
+        println!("observation parity fixture artifacts: {}", root.display());
+    }
 
     #[test]
     fn cpu_need_condition_prepares_before_capture_without_changing_lesson_cues() {
