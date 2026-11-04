@@ -7,7 +7,7 @@ pub use action_gate::continue_action_gated_language;
 pub use factorial::{
     continue_balanced_grounded_language, continue_contrastive_grounded_language,
     continue_event_confirmed_speech, continue_factorial_grounded_language,
-    continue_focused_grounded_language, continue_linear_grounded_language,
+    continue_focused_grounded_language, continue_linear_grounded_language, continue_report_choice,
     continue_visible_balanced_grounded_language,
 };
 pub use payload_stage::{refine_language_payload, refine_language_shared_gates};

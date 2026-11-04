@@ -100,7 +100,12 @@ fn diagnose_native_cue_payload_and_voice_factors() {
     assert!(!out.exists(), "preserve an existing diagnostic result");
     let measured: Value =
         serde_json::from_slice(&fs::read(source.join("results.json")).unwrap()).unwrap();
-    assert_eq!(measured["kind"], "experimental-event-confirmed-speech-v17");
+    assert!([
+        "experimental-event-confirmed-speech-v17",
+        "experimental-report-choice-noun-margin-v18"
+    ]
+    .iter()
+    .any(|kind| measured["kind"] == *kind));
     let started = Instant::now();
     let mut records = vec![];
     let mut swaps = vec![];

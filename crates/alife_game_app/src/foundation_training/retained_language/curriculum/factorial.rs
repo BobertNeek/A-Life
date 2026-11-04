@@ -2,7 +2,7 @@
 use super::*;
 pub(super) mod balanced;
 pub use balanced::{
-    continue_balanced_grounded_language, continue_event_confirmed_speech,
+    continue_balanced_grounded_language, continue_event_confirmed_speech, continue_report_choice,
     continue_visible_balanced_grounded_language,
 };
 mod contrastive;
