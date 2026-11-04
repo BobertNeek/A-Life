@@ -14,6 +14,8 @@ mod terminal;
 pub use terminal::*;
 mod training_attempt;
 pub use training_attempt::*;
+mod new_life;
+pub use new_life::*;
 
 /// Exact union of consumed, reserved, interrupted and assessment seeds. Ranges
 /// are coalesced, not a receipt log. Unknown historical freshness stays unknown.
@@ -148,6 +150,8 @@ pub struct CurrentTrainingCheckpointV1 {
     pub terminal_disposition: Option<CurrentTerminalDispositionV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub training_attempt_origin: Option<TrainingAttemptOriginV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_life_origin: Option<NewLifeOriginV1>,
 }
 impl CurrentTrainingCheckpointV1 {
     pub fn validate(&self) -> Result<()> {
@@ -186,6 +190,9 @@ impl CurrentTrainingCheckpointV1 {
             disposition.validate(self)?;
         }
         if let Some(origin) = &self.training_attempt_origin {
+            origin.validate(self)?;
+        }
+        if let Some(origin) = &self.new_life_origin {
             origin.validate(self)?;
         }
         self.handoff

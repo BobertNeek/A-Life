@@ -59,7 +59,7 @@ impl std::io::Write for Sha256Writer {
     }
 }
 
-fn sha(value: &impl Serialize) -> Result<String> {
+pub(super) fn sha(value: &impl Serialize) -> Result<String> {
     let mut writer = Sha256Writer(Sha256::new());
     serde_json::to_writer(&mut writer, value)?;
     Ok(format!("{:x}", writer.0.finalize()))
@@ -141,7 +141,7 @@ mod foundation_anchor_tests {
     }
 }
 
-fn private_asset(
+pub(super) fn private_asset(
     life: &CurrentLifeCheckpointV1,
     save: &alife_world::PortableSaveFile,
     asset_id: &str,
@@ -163,7 +163,7 @@ fn private_asset(
 /// Validates actual saved compiler/immutable-head coordinates, without a device
 /// or any fresh-cohort compiler. Native admission additionally validates every
 /// private asset, journal and mutable-state codec through the ordinary loader.
-fn private_binding(
+pub(super) fn private_binding(
     life: &CurrentLifeCheckpointV1,
     handoff: &FoundationTrainingHandoffV1,
     progress: &SameIndividualProgressV1,
@@ -489,6 +489,7 @@ impl CurrentTrainingCheckpointV1 {
             same_individual: Some(tag),
             terminal_disposition: None,
             training_attempt_origin: self.training_attempt_origin.clone(),
+            new_life_origin: self.new_life_origin.clone(),
         };
         next.validate()?;
         Ok(next)
@@ -652,6 +653,7 @@ mod cache_codec_tests {
             same_individual: None,
             terminal_disposition: None,
             training_attempt_origin: None,
+            new_life_origin: None,
         }
     }
 

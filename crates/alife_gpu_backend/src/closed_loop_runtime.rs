@@ -2702,6 +2702,33 @@ fn compile_v11_slot_upload(
     Ok(upload)
 }
 
+impl GpuLiveTopologyCheckpointV1 {
+    /// Device-free projection through the same fixed-slot compiler used by
+    /// native restore. Physical offsets and slot generations are not identities.
+    pub fn recompile_for_phenotype(
+        phenotype: &BrainPhenotype,
+        checkpoint: GpuV11Checkpoint,
+    ) -> Result<Self, ScaffoldContractError> {
+        let capacity = BrainCapacityClass::production_for_id(phenotype.brain_class_id())?;
+        phenotype.validate_against(&capacity)?;
+        // One bounded CPU plan only; native admission still enforces its actual
+        // device budget. This method creates no device or GPU allocation.
+        let plan =
+            GpuFixedClassArenaPlan::new(capacity, 1, u64::MAX).map_err(map_gpu_contract_error)?;
+        let base = plan
+            .prepare_slot_upload(0, 1, phenotype)
+            .map_err(map_gpu_contract_error)?;
+        let state = GpuV11CausalState::restore(checkpoint)?;
+        let upload = compile_v11_slot_upload(&plan, base.brain_slot(), phenotype, &state)
+            .map_err(map_gpu_contract_error)?;
+        let result = upload
+            .live_topology_checkpoint(phenotype.phenotype_hash(), state.checkpoint())
+            .map_err(map_gpu_contract_error)?;
+        result.validate_for_capacity(&capacity)?;
+        Ok(result)
+    }
+}
+
 pub struct GpuClosedLoopBackend {
     pub(crate) backend_instance_id: NonZeroU64,
     pub(crate) hardware: GpuHardwareReceipt,
