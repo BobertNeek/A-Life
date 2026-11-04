@@ -201,6 +201,15 @@ Original corrected-pilot recovery also remains exact under this implementation.
 No natural sleep or sleep consolidation occurs in assessment, and no natural
 sleep retention claim is made.
 
+A final recovery I/O fix at source
+`56f651c9982e41a3c85be53ceab43d454a5b2378` permits repeat cold reload without
+overwriting the existing assessment trace. It regenerates the assessment and
+verifies the saved trace's native-content hash. A real repeat of the grounded
+recovery completed in 35.631 seconds: all 288 assessment decisions/metrics,
+private continuation and next Adam state matched the original result exactly;
+the recovery JSON, checksum and compressed trace stayed byte-identical. This
+additional verification does not add training or change the scored outcomes.
+
 Validation: 270 normal tests passed (5 experiment, 68 compiler/identity/ABI,
 158 core/training library, 39 native CPU backend/collector), plus both explicitly
 invoked diagnostic captures. Strict Clippy and formatting checks passed. Hosted

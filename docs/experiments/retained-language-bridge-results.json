@@ -4850,5 +4850,19 @@
       "shuffled": "16c3ae8fbeefade209717ee8978a5a15dcc93dfbca8a17e19bd68755569d1c06",
       "no_speech": "8441b64906ce1d55cc6c80471857904d323b94c36fe3e4c05bc6ddb41f606a10"
     }
+  },
+  "repeat_cold_recovery_validation": {
+    "source": "56f651c9982e41a3c85be53ceab43d454a5b2378",
+    "binary_sha256": "f8e77d26d5e962772a9fb7e1dab020a23a3fb87d4ba60b2e84c95dbe79af4fd6",
+    "started_utc": "2026-11-04T11:52:18.606290+00:00",
+    "exit_code": 0,
+    "elapsed_seconds": 35.63077851900016,
+    "full_native_result_exact": true,
+    "three_existing_evidence_files_unchanged": true,
+    "original_evidence_sha256": {
+      "experimental-recovery.json": "916e28f7047f23ab249b4a95a1e338715d96277e2a565bfcc885b7debbd11363",
+      "experimental-recovery.sha256": "b0cd60b61ce408ff8cb8ecb5551bc631e65c90b78182b6fb4a8e3ea6cef9dd53",
+      "reloaded-evaluation.jsonl.zst": "2114254c1d52250ae3204398cdce4a66844ae8e98d2d0893149dc1320d3c8edd"
+    }
   }
 }
