@@ -50,6 +50,16 @@ pub(crate) fn admit_native_cpu_care_assessment_seed(
     admission::admit_assessment(previous, history, output, seed, known_exclusions)
 }
 
+/// Check an already natively admitted parent's retained history without allocating
+/// a seed. Only explicit assessment declarations receive the assessment exception.
+#[cfg(feature = "cpu-training")]
+pub(crate) fn verify_native_cpu_care_assessment_exclusions(
+    evidence: &serde_json::Value,
+    seed: u64,
+) -> Result<()> {
+    admission::exclusions(evidence, seed, true)
+}
+
 /// Recheck the qualified known-exclusions recovery proof without admitting or
 /// reserving any seed. This opens no GPU and cannot restart a private lifetime.
 #[cfg(feature = "cpu-training")]

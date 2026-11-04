@@ -132,7 +132,7 @@ pub(super) fn read(path: &Path) -> Result<(Vec<u8>, Value)> {
     Ok(alife_training::native_receipt::read(path)?)
 }
 
-fn exclusions(value: &Value, seed: u64, assessment: bool) -> Result<()> {
+pub(super) fn exclusions(value: &Value, seed: u64, assessment: bool) -> Result<()> {
     match value {
         Value::Object(map) => {
             for (key, value) in map {

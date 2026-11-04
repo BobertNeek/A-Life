@@ -20,6 +20,8 @@ mod admission;
 mod evaluation;
 mod retained;
 pub use retained::*;
+mod actual_interpolation;
+pub use actual_interpolation::run_actual_interpolation_assessment;
 mod layout;
 pub use layout::CpuCareLayout;
 mod round;

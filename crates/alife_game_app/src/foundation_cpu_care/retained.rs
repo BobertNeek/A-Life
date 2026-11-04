@@ -45,9 +45,39 @@ fn newborn(
         .compiler_inputs
         .n2048_candidate_asset()
         .ok_or("source asset missing")?;
+    let saved = saved_source_phenotype(source)?;
+    newborn_for_view(asset, source.founder_seed_base, &saved, seed, founder)
+}
+
+pub(super) fn saved_source_phenotype(
+    source: &CurrentTrainingCheckpointV1,
+) -> Result<CreaturePhenotype> {
+    let raw: Value = serde_json::from_str(
+        &source
+            .life
+            .as_ref()
+            .ok_or("source private life missing")?
+            .world_json,
+    )?;
+    Ok(serde_json::from_value(
+        raw["world"]["organism_records"][0]["phenotype"].clone(),
+    )?)
+}
+
+fn newborn_for_view(
+    asset: &FoundationWeightAsset,
+    body_seed: u64,
+    saved: &CreaturePhenotype,
+    seed: u64,
+    founder: &mut CpuFoundationTrainer,
+) -> Result<(
+    CanonicalNewGame,
+    Value,
+    Option<SavedBodyRoundingCompatibilityV1>,
+)> {
     let mut config = CanonicalNewGameConfig::phase3(seed, 1)?;
     config.brain_class = BrainScaleTier::Standard2048;
-    config.founder_seed_base = source.founder_seed_base;
+    config.founder_seed_base = body_seed;
     config.sensor_profile = asset.manifest().sensor_profile();
     let mut game = create_canonical_new_game_with_n2048_candidate(&config, asset)?;
     let record = game
@@ -57,19 +87,10 @@ fn newborn(
         .next()
         .ok_or("newborn missing")?
         .clone();
-    let raw: Value = serde_json::from_str(
-        &source
-            .life
-            .as_ref()
-            .ok_or("source private life missing")?
-            .world_json,
-    )?;
-    let saved: CreaturePhenotype =
-        serde_json::from_value(raw["world"]["organism_records"][0]["phenotype"].clone())?;
     let mut phenotype = record.phenotype().clone();
     let generated_turnover = phenotype.body.metabolic_turnover;
     let saved_turnover = saved.body.metabolic_turnover;
-    let mut body = saved.body;
+    let mut body = saved.body.clone();
     body.metabolic_turnover = generated_turnover;
     if body != phenotype.body
         || generated_turnover
@@ -392,6 +413,7 @@ pub fn run_retained_cpu_fresh_controls(
     Ok(result)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_trial(
     source: &CurrentTrainingCheckpointV1,
     retained: Option<&CpuRetainedNeuralInheritance>,
@@ -403,6 +425,65 @@ fn run_trial(
     condition: FoundationFoodNeedCondition,
     scored_limit: usize,
 ) -> Result<Value> {
+    let asset = source
+        .handoff
+        .compiler_inputs
+        .n2048_candidate_asset()
+        .ok_or("source asset missing")?;
+    let saved = saved_source_phenotype(source)?;
+    run_view_trial(
+        &AssessmentView {
+            asset,
+            compiler_inputs: &source.handoff.compiler_inputs,
+            body_seed: source.founder_seed_base,
+            saved_body: &saved,
+            identity: json!({"kind":"native-source-parent","policy":source.handoff.policy_version}),
+            archive_heads: true,
+        },
+        retained,
+        founder,
+        Some(value),
+        output,
+        &AssessmentCase {
+            seed,
+            lesson,
+            condition,
+            scored_limit,
+        },
+    )
+}
+
+pub(super) struct AssessmentView<'a> {
+    pub asset: &'a FoundationWeightAsset,
+    pub compiler_inputs: &'a PhenotypeCompilerInputs,
+    pub body_seed: u64,
+    pub saved_body: &'a CreaturePhenotype,
+    pub identity: Value,
+    /// Parent controls archive their real heads. Inference-only candidates
+    /// export neither the evaluator's internal optimizer container nor a critic.
+    pub archive_heads: bool,
+}
+pub(super) struct AssessmentCase {
+    pub seed: u64,
+    pub lesson: FoundationTeacherLesson,
+    pub condition: FoundationFoodNeedCondition,
+    pub scored_limit: usize,
+}
+
+pub(super) fn run_view_trial(
+    view: &AssessmentView<'_>,
+    retained: Option<&CpuRetainedNeuralInheritance>,
+    founder: &mut CpuFoundationTrainer,
+    value: Option<&CpuValueHead>,
+    output: &Path,
+    case: &AssessmentCase,
+) -> Result<Value> {
+    let AssessmentCase {
+        seed,
+        lesson,
+        condition,
+        scored_limit,
+    } = *case;
     let started = Instant::now();
     let (_, mut episode) = prepare_care_episode(CpuCareRequest {
         previous: None,
@@ -421,7 +502,8 @@ fn run_trial(
     })?;
     episode.assessment = true;
     episode.validate_policy(founder)?;
-    let (game, compatibility, _) = newborn(source, seed, founder)?;
+    let (game, compatibility, _) =
+        newborn_for_view(view.asset, view.body_seed, view.saved_body, seed, founder)?;
     let (mut host, ()) = CpuCanonicalHost::new_prepared_cohort(
         game,
         founder,
@@ -432,27 +514,27 @@ fn run_trial(
         host.inherit_retained_neural(founder, retained)?;
     }
     fs::create_dir(output)?;
-    let asset = source
-        .handoff
-        .compiler_inputs
-        .n2048_candidate_asset()
-        .unwrap();
     fs::write(
         output.join("collection-policy.alife-foundation"),
-        asset.encode_canonical()?,
+        view.asset.encode_canonical()?,
     )?;
     write(
         output.join("collection-compiler-inputs.json"),
-        &source.handoff.compiler_inputs,
+        view.compiler_inputs,
     )?;
-    write(
-        output.join("collection-actor-checkpoint.json"),
-        &founder.checkpoint(),
-    )?;
-    write(
-        output.join("initial-value-checkpoint.json"),
-        &value.checkpoint(),
-    )?;
+    write(output.join("assessment-model.json"), &view.identity)?;
+    if view.archive_heads {
+        write(
+            output.join("collection-actor-checkpoint.json"),
+            &founder.checkpoint(),
+        )?;
+        write(
+            output.join("initial-value-checkpoint.json"),
+            &value
+                .ok_or("parent assessment lacks its actual value head")?
+                .checkpoint(),
+        )?;
+    }
     write(
         output.join("initial-checkpoint.json"),
         &host.checkpoint(founder)?,
@@ -479,7 +561,7 @@ fn run_trial(
                 break;
             }
         }
-        if rows.values().map(Vec::len).sum::<usize>() >= scored_limit + 1
+        if rows.values().map(Vec::len).sum::<usize>() > scored_limit
             || host
                 .world()
                 .organism_registry()
@@ -499,10 +581,21 @@ fn run_trial(
     let checkpoint = host.checkpoint(founder)?;
     write_cpu_private_checkpoint(output, &checkpoint)?;
     episode.preserve_collection_recovery(&host, founder, output)?;
-    let receipt = episode.finish_collection(&host, founder, &rows, scored, output)?;
+    let mut receipt = episode.finish_collection(&host, founder, &rows, scored, output)?;
+    if !view.archive_heads {
+        receipt.artifacts.retain(|name| {
+            !matches!(
+                name.as_str(),
+                "collection-actor-checkpoint.json" | "initial-value-checkpoint.json"
+            )
+        });
+        receipt.metadata["persistent_learning"] = json!("fresh-private-life-with-ordinary-waking-plasticity; genetic-weights-frozen; candidate-has-no-optimizer-or-critic; not-resumable");
+        receipt.metadata["inference_only_candidate"] = json!(true);
+        write(output.join("care-episode.json"), &receipt.metadata)?;
+    }
     let organisms=host.world().organism_registry().iter().map(|r|json!({"organism":r.organism_id(),"alive":r.lifecycle().is_alive(),"biology":r.biochemistry()})).collect::<Vec<_>>();
     let complete = decisions == scored_limit + 1 && alive && failure.is_none();
-    let result = json!({"lesson":lesson,"food_need_condition":condition,"seed":seed,"body_seed":source.founder_seed_base,"policy":source.handoff.policy_version,"complete":complete,"lesson_completed":receipt.metadata["lesson_completed"],"scored_decisions":scored,"captured_decisions":decisions,"bootstrap_decisions":decisions.saturating_sub(scored_limit),"error":failure,"alive":alive,"organisms":organisms,"seconds":started.elapsed().as_secs_f64(),"body_compatibility":compatibility,"episode":receipt.metadata,"teacher_present":false,"semantic_prior_enabled":false,"private_waking_learning":"ordinary","offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0});
+    let result = json!({"lesson":lesson,"food_need_condition":condition,"seed":seed,"body_seed":view.body_seed,"policy":view.identity["policy"],"model":view.identity,"complete":complete,"lesson_completed":receipt.metadata["lesson_completed"],"scored_decisions":scored,"captured_decisions":decisions,"bootstrap_decisions":decisions.saturating_sub(scored_limit),"error":failure,"alive":alive,"organisms":organisms,"seconds":started.elapsed().as_secs_f64(),"body_compatibility":compatibility,"episode":receipt.metadata,"teacher_present":false,"semantic_prior_enabled":false,"private_waking_learning":"ordinary","offline_actor_optimizer_updates":0,"offline_value_optimizer_updates":0});
     write(output.join("retained-assessment.json"), &result)?;
     Ok(result)
 }

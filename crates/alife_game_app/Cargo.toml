@@ -16,6 +16,11 @@ path = "src/bin/assess_retained_cpu.rs"
 required-features = ["cpu-training"]
 
 [[bin]]
+name = "assess_actual_interpolation"
+path = "src/bin/assess_actual_interpolation.rs"
+required-features = ["cpu-training"]
+
+[[bin]]
 name = "train_cpu_care_round"
 path = "src/bin/train_cpu_care_round.rs"
 required-features = ["cpu-training"]
