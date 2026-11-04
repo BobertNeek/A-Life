@@ -108,7 +108,7 @@ fn collect(
         json!({"round":round,"native_decisions":c.decisions*6,"teacher_heard_rows":heard,"actual_activity_counts":count,"positive_narration_rows":positive,"instruction_window_rows":48,"fixed_eight_tick_instruction_window":true}),
     ))
 }
-fn single(actor: &CpuFoundationTrainer, r: &CpuCollectedDecision) -> TrainingSequence {
+pub(super) fn single(actor: &CpuFoundationTrainer, r: &CpuCollectedDecision) -> TrainingSequence {
     TrainingSequence {
         phenotype_hash: actor.phenotype().phenotype_hash(),
         initial: r.initial.clone(),
@@ -390,6 +390,8 @@ pub fn continue_linear_grounded_language(
             factorial_grounding: true,
             paired_request_focus: true,
             linear_readout: true,
+            balanced_grounding_v1: false,
+            balanced_grounding_v2: false,
         };
         if arm == Arm::Grounded {
             eprintln!("linear profile untreated baseline");

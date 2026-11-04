@@ -1,5 +1,9 @@
 //! Three real commands separate noun choice from action choice; align narration timing.
 use super::*;
+pub(super) mod balanced;
+pub use balanced::{
+    continue_balanced_grounded_language, continue_visible_balanced_grounded_language,
+};
 mod contrastive;
 mod focus;
 pub(super) mod readout;
@@ -604,6 +608,8 @@ fn run_factorial(
             factorial_grounding: true,
             paired_request_focus: focused,
             linear_readout: false,
+            balanced_grounding_v1: false,
+            balanced_grounding_v2: false,
         };
         if arm == Arm::Grounded {
             eprintln!("factorial common baseline");
