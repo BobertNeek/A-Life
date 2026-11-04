@@ -697,10 +697,12 @@ pub(super) fn validate_food_need_condition(attempt: &Value, episode: &Value) -> 
     let condition: crate::FoundationFoodNeedCondition = serde_json::from_value(condition.clone())?;
     let lesson: crate::FoundationTeacherLesson = serde_json::from_value(attempt["lesson"].clone())?;
     condition.validate_lesson(Some(lesson))?;
-    if matches!(
-        lesson,
-        crate::FoundationTeacherLesson::Feeding | crate::FoundationTeacherLesson::RelocatedFood
-    ) && episode["food_need_initialization"]["condition"] != json!(condition)
+    if (condition != crate::FoundationFoodNeedCondition::NewbornV1
+        || matches!(
+            lesson,
+            crate::FoundationTeacherLesson::Feeding | crate::FoundationTeacherLesson::RelocatedFood
+        ))
+        && episode["food_need_initialization"]["condition"] != json!(condition)
     {
         return Err("CPU food need condition differs from its reserved attempt".into());
     }
@@ -992,6 +994,26 @@ mod tests {
         super::validate_food_need_condition(&aged, &serde_json::json!({"food_need_initialization":{"condition":"ordinary_healthy_aging_v1"}})).unwrap();
         let invalid = serde_json::json!({"lesson":"eat_held_food", "food_need_condition":"ordinary_healthy_aging_v1"});
         assert!(super::validate_food_need_condition(&invalid, &serde_json::json!({})).is_err());
+    }
+
+    #[test]
+    fn aged_obstacle_condition_requires_reserved_matching_initialization() {
+        let explicit = serde_json::json!({"lesson":"obstacle_navigation","food_need_condition":"ordinary_healthy_obstacle_v1"});
+        let prepared = serde_json::json!({"food_need_initialization":{"condition":"ordinary_healthy_obstacle_v1"}});
+        super::validate_food_need_condition(&explicit, &prepared).unwrap();
+        for incompatible in [
+            serde_json::json!({}),
+            serde_json::json!({"food_need_initialization":{"condition":"newborn_v1"}}),
+            serde_json::json!({"food_need_initialization":{"condition":"ordinary_healthy_aging_v1"}}),
+        ] {
+            assert!(super::validate_food_need_condition(&explicit, &incompatible).is_err());
+        }
+        assert!(super::validate_food_need_condition(
+            &serde_json::json!({"lesson":"obstacle_navigation"}),
+            &prepared
+        )
+        .is_err());
+        assert!(super::validate_food_need_condition(&serde_json::json!({"lesson":"feeding","food_need_condition":"ordinary_healthy_obstacle_v1"}), &prepared).is_err());
     }
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};

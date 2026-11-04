@@ -3194,7 +3194,7 @@ pub(crate) fn close_foundation_navigation_gate_in_world(
     world: &mut alife_world::HeadlessWorld,
     scenario: &FoundationScenarioSetup,
 ) -> Result<()> {
-    if world.tick().raw() >= 2 {
+    if world.tick().raw().saturating_sub(scenario.start_tick) >= 2 {
         if let Some((gate, position)) = scenario.closing_gate {
             if world
                 .entity(gate)
@@ -3557,9 +3557,9 @@ pub(crate) fn configure_foundation_scenario_with_food_need(
     condition.validate_lesson(lesson)?;
     let mut scenario =
         configure_foundation_scenario(world, seed, lesson, food_position, precondition_recovery)?;
-    if condition == FoundationFoodNeedCondition::OrdinaryHealthyAgingV1 {
+    if condition != FoundationFoodNeedCondition::NewbornV1 {
         scenario.food_need_initialization = Some(food_need::initialize(world, condition)?);
-        // Relocation and repeated cues measure time from the prepared scene,
+        // Gates, relocation and repeated cues measure time from the prepared scene,
         // never from biological setup time.
         scenario.start_tick = world.tick().raw();
     }

@@ -720,6 +720,112 @@ mod collect_only_tests {
     use super::*;
 
     #[test]
+    fn aged_obstacle_native_matches_control_without_founder_updates() {
+        let root = std::env::temp_dir().join(format!(
+            "alife-aged-obstacle-controls-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mut summaries = Vec::new();
+        for seed in [42, 100, 519] {
+            let mut parents = Vec::new();
+            let mut initial_geometry = Vec::new();
+            for condition in [
+                FoundationFoodNeedCondition::NewbornV1,
+                FoundationFoodNeedCondition::OrdinaryHealthyObstacleV1,
+            ] {
+                let output = root.join(format!("{seed}-{condition:?}"));
+                let (config, mut episode) = prepare_care_episode(CpuCareRequest {
+                    previous: None,
+                    output: output.clone(),
+                    seed,
+                    decisions: 128,
+                    temperature: 1.0,
+                    lesson: FoundationTeacherLesson::ObstacleNavigation,
+                    food_need_condition: condition,
+                    seed_history: None,
+                    known_exclusions: false,
+                    record_diagnostic_replay: false,
+                    fixture: true,
+                })
+                .unwrap();
+                episode.assessment = true;
+                episode.observation_diagnostics_enabled = true;
+                let collected = collect_cpu_episode(config, &mut episode).unwrap();
+                assert!(episode.reservation.is_none() && episode.prior.is_none());
+                assert_eq!(episode.cue_frames, 0);
+                assert_eq!(collected.actor_checkpoint().optimizer_step, 0);
+                assert_eq!(collected.value_checkpoint().optimizer_step, 0);
+                parents.push((
+                    serde_json::to_value(collected.actor_checkpoint()).unwrap(),
+                    serde_json::to_value(collected.value_checkpoint()).unwrap(),
+                ));
+                let trace: Value =
+                    serde_json::from_slice(&std::fs::read(output.join("care-trace.json")).unwrap())
+                        .unwrap();
+                let rows = trace["rows"].as_array().unwrap();
+                assert_eq!(rows.len(), 129);
+                let prepared = episode.scenario.as_ref().unwrap().start_tick;
+                for (i, row) in rows.iter().enumerate() {
+                    assert_eq!(row["decision_tick"], prepared + i as u64);
+                    assert_eq!(row["navigation_gate_closed"], i >= 2);
+                    assert_eq!(row["loss_row"], false);
+                    assert_eq!(row["teacher_heard"], false);
+                }
+                let first = &rows[0]["observation_diagnostics"];
+                initial_geometry.push(json!({
+                    "body_position":first["world_before"]["food"]["body_position"],
+                    "body_yaw":first["world_before"]["food"]["body_yaw"],
+                    "head_yaw":first["world_before"]["food"]["head_yaw"],
+                    "food":first["world_before"]["food"]["target_position"],
+                    "gate":first["world_before"]["gate"],
+                }));
+                let hunger = first["homeostasis"]["drives"]["hunger"].as_f64().unwrap();
+                if condition == FoundationFoodNeedCondition::NewbornV1 {
+                    assert_eq!(prepared, 0);
+                    assert_eq!(hunger, 0.0);
+                } else {
+                    assert!(prepared > 2 && hunger >= 0.12);
+                }
+                let evaluated = &rows[..128];
+                let meal = evaluated.iter().any(|row| row["nourished_meal"] == true);
+                let completed = grounded_navigation_completed(
+                    meal,
+                    evaluated.iter().map(|row| {
+                        (
+                            row["food_visible"].as_bool().unwrap(),
+                            row["navigation_blocked"].as_bool().unwrap(),
+                            row["navigation_moved"].as_bool().unwrap(),
+                        )
+                    }),
+                );
+                let metadata: Value = serde_json::from_slice(
+                    &std::fs::read(output.join("care-episode.json")).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(metadata["lesson_completed"], completed);
+                summaries.push(json!({"seed":seed,"condition":condition,"setup_tick":prepared,
+                    "initial_hunger":hunger,"decisions":128,"bootstrap":1,
+                    "meal":meal,"completed":completed,"teacher_cue_frames":0,
+                    "semantic_prior_enabled":false,"offline_actor_updates":0,"offline_value_updates":0,
+                    "food_candidate_rows":evaluated.iter().filter(|row| row["food_visible"]==true).count(),
+                    "blocked_rows":evaluated.iter().filter(|row| row["navigation_blocked"]==true).count(),
+                    "moved_rows":evaluated.iter().filter(|row| row["navigation_moved"]==true).count()}));
+            }
+            assert_eq!(parents[0], parents[1]);
+            assert_eq!(initial_geometry[0], initial_geometry[1]);
+        }
+        println!(
+            "aged obstacle fixture comparisons: {}",
+            serde_json::to_string(&summaries).unwrap()
+        );
+        println!("aged obstacle fixture artifacts: {}", root.display());
+    }
+
+    #[test]
     fn observation_diagnostics_preserve_native_fixture_actions_and_private_state() {
         let root = std::env::temp_dir().join(format!(
             "alife-observation-parity-fixture-{}-{}",

@@ -9,6 +9,8 @@ pub enum FoundationFoodNeedCondition {
     #[default]
     NewbornV1,
     OrdinaryHealthyAgingV1,
+    /// Explicit obstacle preparation; keeps the original newborn lesson available.
+    OrdinaryHealthyObstacleV1,
 }
 
 impl std::str::FromStr for FoundationFoodNeedCondition {
@@ -17,7 +19,8 @@ impl std::str::FromStr for FoundationFoodNeedCondition {
         match value {
             "newborn_v1" => Ok(Self::NewbornV1),
             "ordinary_healthy_aging_v1" => Ok(Self::OrdinaryHealthyAgingV1),
-            _ => Err("food need condition must be newborn_v1 or ordinary_healthy_aging_v1"),
+            "ordinary_healthy_obstacle_v1" => Ok(Self::OrdinaryHealthyObstacleV1),
+            _ => Err("food need condition must be newborn_v1, ordinary_healthy_aging_v1 or ordinary_healthy_obstacle_v1"),
         }
     }
 }
@@ -28,13 +31,21 @@ impl FoundationFoodNeedCondition {
         *self == Self::NewbornV1
     }
     pub(crate) fn validate_lesson(self, lesson: Option<FoundationTeacherLesson>) -> Result<()> {
-        if self != Self::NewbornV1
-            && !matches!(
-                lesson,
-                Some(FoundationTeacherLesson::Feeding | FoundationTeacherLesson::RelocatedFood)
-            )
-        {
-            return Err("ordinary healthy food aging requires Feeding or RelocatedFood".into());
+        match self {
+            Self::NewbornV1 => {}
+            Self::OrdinaryHealthyAgingV1
+                if matches!(
+                    lesson,
+                    Some(FoundationTeacherLesson::Feeding | FoundationTeacherLesson::RelocatedFood)
+                ) => {}
+            Self::OrdinaryHealthyObstacleV1
+                if lesson == Some(FoundationTeacherLesson::ObstacleNavigation) => {}
+            Self::OrdinaryHealthyAgingV1 => {
+                return Err("ordinary healthy food aging requires Feeding or RelocatedFood".into())
+            }
+            Self::OrdinaryHealthyObstacleV1 => {
+                return Err("ordinary healthy obstacle aging requires ObstacleNavigation".into())
+            }
         }
         Ok(())
     }
@@ -124,7 +135,7 @@ pub(super) fn initialize(
         .ok_or("food need organism missing")?
         .0;
     let before = state(world, organism)?;
-    if condition == FoundationFoodNeedCondition::OrdinaryHealthyAgingV1 {
+    if condition != FoundationFoodNeedCondition::NewbornV1 {
         advance_healthy_need(world, organism)?;
     }
     Ok(FoundationFoodNeedInitialization {
@@ -304,6 +315,146 @@ mod tests {
             },
         ] {
             assert!(validate_ready(&invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn aged_obstacle_is_ordinary_biology_and_gate_waits_for_prepared_decisions() {
+        use crate::foundation_training::close_foundation_navigation_gate_in_world;
+        for seed in [42, 100, 519] {
+            let original = unconfigured(seed);
+            let mut baseline = original.clone();
+            let old = configure_foundation_scenario(
+                &mut baseline,
+                seed,
+                Some(FoundationTeacherLesson::ObstacleNavigation),
+                None,
+                true,
+            )
+            .unwrap();
+            let gate = old.closing_gate.unwrap();
+            let open_gate = baseline.entity(gate.0).unwrap().position;
+            let original_food = baseline.entity(old.food).unwrap().clone();
+            let mut aged = original.clone();
+            let setup = configure_foundation_scenario_with_food_need(
+                &mut aged,
+                seed,
+                Some(FoundationTeacherLesson::ObstacleNavigation),
+                None,
+                true,
+                FoundationFoodNeedCondition::OrdinaryHealthyObstacleV1,
+            )
+            .unwrap();
+            let initialization = setup.food_need_initialization.as_ref().unwrap();
+            assert!(initialization.prepared.tick > initialization.before.tick);
+            assert!(initialization.prepared.hunger >= 0.12);
+            assert!(initialization.prepared.health >= 0.95);
+            assert_eq!(setup.start_tick, initialization.prepared.tick);
+            assert_eq!(setup.closing_gate, old.closing_gate);
+            assert_eq!(setup.teacher_cue_tokens, old.teacher_cue_tokens);
+            assert_eq!(setup.silent_request, old.silent_request);
+            assert_eq!(
+                setup.training_language_feedback,
+                old.training_language_feedback
+            );
+            assert_eq!(
+                aged.entity(setup.food).unwrap().position,
+                original_food.position
+            );
+            assert_eq!(
+                aged.entity(setup.food).unwrap().nutrition,
+                original_food.nutrition
+            );
+            while baseline.tick().raw() < initialization.prepared.tick {
+                baseline.try_advance_tick().unwrap();
+            }
+            assert_eq!(
+                baseline.canonical_signature_digest().unwrap(),
+                aged.canonical_signature_digest().unwrap()
+            );
+            // A literal legacy absolute-clock call would close the aged gate
+            // immediately. The real helper now leaves two prepared decisions.
+            assert!(aged.tick().raw() >= 2);
+            let mut legacy_aged = aged.clone();
+            crate::foundation_training::move_scenario_object(&mut legacy_aged, gate.0, gate.1)
+                .unwrap();
+            assert_eq!(legacy_aged.entity(gate.0).unwrap().position, gate.1);
+            assert_ne!(aged.entity(gate.0).unwrap().position, gate.1);
+            for elapsed in 0..=3 {
+                close_foundation_navigation_gate_in_world(&mut aged, &setup).unwrap();
+                assert_eq!(aged.tick().raw(), setup.start_tick + elapsed);
+                assert_eq!(
+                    aged.entity(gate.0).unwrap().position,
+                    if elapsed < 2 { open_gate } else { gate.1 }
+                );
+                aged.try_advance_tick().unwrap();
+            }
+            // The original newborn absolute-clock behavior remains identical.
+            let mut newborn = original.clone();
+            let control = configure_foundation_scenario_with_food_need(
+                &mut newborn,
+                seed,
+                Some(FoundationTeacherLesson::ObstacleNavigation),
+                None,
+                true,
+                FoundationFoodNeedCondition::NewbornV1,
+            )
+            .unwrap();
+            assert_eq!(control.start_tick, 0);
+            let mut legacy = newborn.clone();
+            for _ in 0..=3 {
+                if legacy.tick().raw() >= 2 {
+                    let (id, position) = control.closing_gate.unwrap();
+                    if legacy.entity(id).unwrap().position != position {
+                        crate::foundation_training::move_scenario_object(&mut legacy, id, position)
+                            .unwrap();
+                    }
+                }
+                close_foundation_navigation_gate_in_world(&mut newborn, &control).unwrap();
+                assert_eq!(
+                    newborn.canonical_signature_digest().unwrap(),
+                    legacy.canonical_signature_digest().unwrap()
+                );
+                newborn.try_advance_tick().unwrap();
+                legacy.try_advance_tick().unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn aged_obstacle_requires_its_explicit_version_and_correct_lesson() {
+        let condition: FoundationFoodNeedCondition =
+            "ordinary_healthy_obstacle_v1".parse().unwrap();
+        assert_eq!(
+            condition,
+            FoundationFoodNeedCondition::OrdinaryHealthyObstacleV1
+        );
+        assert_eq!(
+            serde_json::from_value::<FoundationFoodNeedCondition>(serde_json::json!(
+                "ordinary_healthy_obstacle_v1"
+            ))
+            .unwrap(),
+            condition
+        );
+        condition
+            .validate_lesson(Some(FoundationTeacherLesson::ObstacleNavigation))
+            .unwrap();
+        FoundationFoodNeedCondition::OrdinaryHealthyAgingV1
+            .validate_lesson(Some(FoundationTeacherLesson::ObstacleNavigation))
+            .unwrap_err();
+        for lesson in [
+            None,
+            Some(FoundationTeacherLesson::Feeding),
+            Some(FoundationTeacherLesson::RelocatedFood),
+            Some(FoundationTeacherLesson::EatHeldFood),
+        ] {
+            let mut world = unconfigured(42);
+            let before = world.canonical_signature_digest().unwrap();
+            assert!(configure_foundation_scenario_with_food_need(
+                &mut world, 42, lesson, None, true, condition
+            )
+            .is_err());
+            assert_eq!(world.canonical_signature_digest().unwrap(), before);
         }
     }
 
