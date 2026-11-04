@@ -202,6 +202,7 @@ impl CpuFoundationTrainer {
             || p.neuron_count() != next.neuron_count()
             || p.microstep_count() != next.microstep_count()
             || p.sensor_profile() != next.sensor_profile()
+            || p.experimental_language_input() != next.experimental_language_input()
             || p.lobe_layout() != next.lobe_layout()
             || p.language_codebook() != next.language_codebook()
             || p.cognitive_architecture() != next.cognitive_architecture()

@@ -1,0 +1,480 @@
+{
+  "demonstrates_retained_behavior": false,
+  "experimental": {
+    "activation_changes": [
+      {
+        "changed_action_sources": 66,
+        "changed_by_lobe": {
+          "ActionPlanning": 101,
+          "MultimodalAssociation": 3,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 0
+      },
+      {
+        "changed_action_sources": 66,
+        "changed_by_lobe": {
+          "ActionPlanning": 101,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 1
+      },
+      {
+        "changed_action_sources": 67,
+        "changed_by_lobe": {
+          "ActionPlanning": 102,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 2
+      },
+      {
+        "changed_action_sources": 66,
+        "changed_by_lobe": {
+          "ActionPlanning": 101,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 3
+      },
+      {
+        "changed_action_sources": 65,
+        "changed_by_lobe": {
+          "ActionPlanning": 100,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 4
+      },
+      {
+        "changed_action_sources": 64,
+        "changed_by_lobe": {
+          "ActionPlanning": 99,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 5
+      },
+      {
+        "changed_action_sources": 64,
+        "changed_by_lobe": {
+          "ActionPlanning": 99,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 6
+      },
+      {
+        "changed_action_sources": 61,
+        "changed_by_lobe": {
+          "ActionPlanning": 96,
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 19,
+        "tick": 7
+      }
+    ],
+    "actual_word_comparison": {
+      "first_tick_logits": {
+        "changed_values": 31,
+        "max_absolute_difference": 0.12012434005737305
+      },
+      "gradient": {
+        "changed_values": 14352,
+        "max_absolute_difference": 0.005770266056060791
+      },
+      "logits": {
+        "changed_values": 230,
+        "max_absolute_difference": 0.1415414810180664
+      }
+    },
+    "additional_structural_edges": 0,
+    "all_compiled_routes_enabled": true,
+    "changed_input_neurons": [
+      643,
+      872,
+      875,
+      1728,
+      1736,
+      1737,
+      1744,
+      1752,
+      1753,
+      1760,
+      1768,
+      1769,
+      1776,
+      1784,
+      1785,
+      1792,
+      1800,
+      1801,
+      1808,
+      1816,
+      1817,
+      1824,
+      1832,
+      1833,
+      1840,
+      1848,
+      1849,
+      1856,
+      1864,
+      1865,
+      1872,
+      1880,
+      1881
+    ],
+    "diagnostic_input_pulses": {
+      "ingest_readout_pulse": {
+        "activations": {
+          "changed_values": 128,
+          "max_absolute_difference": 0.7136997580528259
+        },
+        "gradient": {
+          "changed_values": 13655,
+          "max_absolute_difference": 2.384185791015625e-07
+        },
+        "logits": {
+          "changed_values": 21,
+          "max_absolute_difference": 10.040596961975098
+        }
+      },
+      "word_neuron_pulse": {
+        "activations": {
+          "changed_values": 264,
+          "max_absolute_difference": 0.8107868432998657
+        },
+        "gradient": {
+          "changed_values": 0,
+          "max_absolute_difference": 0.0
+        },
+        "logits": {
+          "changed_values": 0,
+          "max_absolute_difference": 0.0
+        }
+      }
+    },
+    "experimental_language_input": "TwoTokenReadoutBroadcastV1",
+    "first_tick_motor_masks": [
+      294000648,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "first_tick_native_masks_exact": {
+      "candidate_count": true,
+      "forced_slots": true,
+      "motor_masks": true,
+      "representative_mask": true
+    },
+    "first_tick_non_input_replay_context_exact": {
+      "candidates": true,
+      "effective_weight_offsets": true,
+      "enabled_routes": true,
+      "local_threshold_shift": true,
+      "microstep_count": true,
+      "projection_gain": true,
+      "structural_synapses": true
+    },
+    "native_baseline_nonzero_gradient_coordinates": 14352,
+    "phenotype_sha256": "a57d7dbbdaa174d3c02988822c4a549616d2fae387adc69b51d4698a26fea054",
+    "reachability_groups": [
+      {
+        "input_neurons": [
+          643
+        ],
+        "outdegree": 16,
+        "reachable_action_sources": 0,
+        "reachable_neurons_by_lobe": {
+          "MultimodalAssociation": 17,
+          "WorkingContextExecutive": 16
+        },
+        "reachable_speech_sources": 0
+      },
+      {
+        "input_neurons": [
+          872,
+          875
+        ],
+        "outdegree": 0,
+        "reachable_action_sources": 0,
+        "reachable_neurons_by_lobe": {
+          "MultimodalAssociation": 1
+        },
+        "reachable_speech_sources": 0
+      },
+      {
+        "input_neurons": [
+          1728,
+          1736,
+          1737,
+          1744,
+          1752,
+          1753,
+          1760,
+          1768,
+          1769,
+          1808,
+          1816,
+          1817,
+          1824,
+          1832,
+          1833,
+          1840,
+          1848,
+          1849
+        ],
+        "outdegree": 0,
+        "reachable_action_sources": 1,
+        "reachable_neurons_by_lobe": {
+          "ActionPlanning": 1
+        },
+        "reachable_speech_sources": 0
+      },
+      {
+        "input_neurons": [
+          1776,
+          1784,
+          1785
+        ],
+        "outdegree": 16,
+        "reachable_action_sources": 1,
+        "reachable_neurons_by_lobe": {
+          "ActionPlanning": 17
+        },
+        "reachable_speech_sources": 0
+      },
+      {
+        "input_neurons": [
+          1792,
+          1800,
+          1801
+        ],
+        "outdegree": 16,
+        "reachable_action_sources": 17,
+        "reachable_neurons_by_lobe": {
+          "ActionPlanning": 17
+        },
+        "reachable_speech_sources": 0
+      },
+      {
+        "input_neurons": [
+          1856,
+          1864,
+          1865
+        ],
+        "outdegree": 16,
+        "reachable_action_sources": 16,
+        "reachable_neurons_by_lobe": {
+          "ActionPlanning": 33
+        },
+        "reachable_speech_sources": 17
+      },
+      {
+        "input_neurons": [
+          1872,
+          1880,
+          1881
+        ],
+        "outdegree": 16,
+        "reachable_action_sources": 16,
+        "reachable_neurons_by_lobe": {
+          "ActionPlanning": 17
+        },
+        "reachable_speech_sources": 1
+      }
+    ]
+  },
+  "kind": "experimental-native-language-causal-audit-v1",
+  "legacy": {
+    "activation_changes": [
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 3,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 0
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 1
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 2
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 3
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 4
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 5
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 6
+      },
+      {
+        "changed_action_sources": 0,
+        "changed_by_lobe": {
+          "MultimodalAssociation": 19,
+          "WorkingContextExecutive": 16
+        },
+        "changed_speech_sources": 0,
+        "tick": 7
+      }
+    ],
+    "actual_word_comparison": {
+      "first_tick_logits": {
+        "changed_values": 0,
+        "max_absolute_difference": 0.0
+      },
+      "gradient": {
+        "changed_values": 0,
+        "max_absolute_difference": 0.0
+      },
+      "logits": {
+        "changed_values": 0,
+        "max_absolute_difference": 0.0
+      }
+    },
+    "additional_structural_edges": 0,
+    "all_compiled_routes_enabled": true,
+    "changed_input_neurons": [
+      643,
+      872,
+      875
+    ],
+    "diagnostic_input_pulses": {
+      "ingest_readout_pulse": {
+        "activations": {
+          "changed_values": 128,
+          "max_absolute_difference": 0.6659771800041199
+        },
+        "gradient": {
+          "changed_values": 13228,
+          "max_absolute_difference": 7.152557373046875e-07
+        },
+        "logits": {
+          "changed_values": 21,
+          "max_absolute_difference": 9.615534543991089
+        }
+      },
+      "word_neuron_pulse": {
+        "activations": {
+          "changed_values": 264,
+          "max_absolute_difference": 0.8107868432998657
+        },
+        "gradient": {
+          "changed_values": 0,
+          "max_absolute_difference": 0.0
+        },
+        "logits": {
+          "changed_values": 0,
+          "max_absolute_difference": 0.0
+        }
+      }
+    },
+    "experimental_language_input": null,
+    "first_tick_motor_masks": [
+      294000648,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "first_tick_native_masks_exact": {
+      "candidate_count": true,
+      "forced_slots": true,
+      "motor_masks": true,
+      "representative_mask": true
+    },
+    "first_tick_non_input_replay_context_exact": {
+      "candidates": true,
+      "effective_weight_offsets": true,
+      "enabled_routes": true,
+      "local_threshold_shift": true,
+      "microstep_count": true,
+      "projection_gain": true,
+      "structural_synapses": true
+    },
+    "native_baseline_nonzero_gradient_coordinates": 14352,
+    "phenotype_sha256": "7b7aca53bb50bdefd162c0b88ea990026004192fec2d85848c2fde16ecf9a308",
+    "reachability_groups": [
+      {
+        "input_neurons": [
+          643
+        ],
+        "outdegree": 16,
+        "reachable_action_sources": 0,
+        "reachable_neurons_by_lobe": {
+          "MultimodalAssociation": 17,
+          "WorkingContextExecutive": 16
+        },
+        "reachable_speech_sources": 0
+      },
+      {
+        "input_neurons": [
+          872,
+          875
+        ],
+        "outdegree": 0,
+        "reachable_action_sources": 0,
+        "reachable_neurons_by_lobe": {
+          "MultimodalAssociation": 1
+        },
+        "reachable_speech_sources": 0
+      }
+    ]
+  }
+}

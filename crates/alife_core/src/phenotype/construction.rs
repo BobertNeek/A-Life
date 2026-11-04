@@ -55,8 +55,7 @@ fn compile_inner(
             capacity.execution().max_neurons(),
         )?
     };
-    let encoder =
-        super::io_compile::compile_encoder(genome, development, &layout, inputs.sensor_profile())?;
+    let encoder = super::io_compile::compile_encoder_for_inputs(inputs, &layout)?;
     let (mut projections, mut synapses, mut receipts) =
         super::topology_compile::compile_recurrent(genome, &layout, capacity)?;
     let decoders = super::io_compile::compile_decoders(

@@ -5,6 +5,11 @@ distinction **eat food / get toy**. It runs the canonical CPU organism and world
 including biology, memory, plasticity, ATP scheduling and complete motor bundles.
 It does not qualify CFF ChiChi competence or implement a living LLM harness.
 
+The preserved negatives below are followed by a separate
+[causal connectivity experiment](retained-language-causal-followup.md), which
+adds an explicit experimental input profile and an equally trained no-speech
+control. It does not replace these historical results.
+
 ```sh
 cargo --config profile.test.package.alife_training.opt-level=2 \
   build -p alife_game_app --features cpu-training --profile test \

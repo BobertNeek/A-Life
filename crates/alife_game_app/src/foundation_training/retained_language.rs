@@ -12,14 +12,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{fs, io::Write, process::Command};
+mod curriculum;
+#[cfg(test)]
+mod provider_probe;
+pub use curriculum::{
+    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
+};
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct LanguagePilotConfig {
     pub seed: u64,
     pub epochs: usize,
     pub rounds: usize,
     pub decisions: usize,
     pub llamacpp_translation: bool,
+    pub experimental_word_bridge: bool,
 }
 
 fn hash(bytes: &[u8]) -> String {
@@ -62,12 +69,13 @@ impl Goal {
         }
     }
 }
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Arm {
     Grounded,
     Shuffled,
     Untreated,
+    NoSpeech,
 }
 #[derive(Clone, Copy, Serialize, Deserialize)]
 struct Scene {
@@ -137,9 +145,10 @@ fn game(seed: u64, founder: u64, asset: &FoundationWeightAsset) -> Result<Canoni
     )?)
 }
 
-fn compile(
+fn compile_profile(
     seed: u64,
     asset: &FoundationWeightAsset,
+    bridge: bool,
 ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs)> {
     let initial = game(seed, seed, asset)?;
     let record = initial
@@ -155,15 +164,33 @@ fn compile(
         &capacity,
         &record.phenotype().development_state_at(Tick::ZERO)?,
     )?;
-    Ok(PhenotypeCompiler::compile_n2048_foundation_candidate(
-        genome,
-        development,
-        asset.clone(),
-    )?)
+    if bridge {
+        Ok(
+            PhenotypeCompiler::compile_experimental_n2048_language_candidate(
+                genome,
+                development,
+                asset.clone(),
+            )?,
+        )
+    } else {
+        Ok(PhenotypeCompiler::compile_n2048_foundation_candidate(
+            genome,
+            development,
+            asset.clone(),
+        )?)
+    }
 }
 
+#[cfg(test)]
 fn new_actor(seed: u64, asset: &FoundationWeightAsset) -> Result<CpuFoundationTrainer> {
-    let (p, _) = compile(seed, asset)?;
+    new_actor_profile(seed, asset, false)
+}
+fn new_actor_profile(
+    seed: u64,
+    asset: &FoundationWeightAsset,
+    bridge: bool,
+) -> Result<CpuFoundationTrainer> {
+    let (p, _) = compile_profile(seed, asset, bridge)?;
     let ids = p
         .synapses()
         .iter()
@@ -438,7 +465,7 @@ fn collect(
             speech: Vec::new(),
         };
         for tick in 0..config.decisions {
-            if arm != Arm::Untreated && tick % 8 == 0 {
+            if matches!(arm, Arm::Grounded | Arm::Shuffled) && tick % 8 == 0 {
                 // Four counterbalanced blocks: half aligned, half crossed in
                 // the shuffled control, for each physical lesson and layout.
                 let index = goal.index()
@@ -679,7 +706,11 @@ fn preserve_frozen(
 fn export(actor: &mut CpuFoundationTrainer, seed: u64) -> Result<FoundationWeightAsset> {
     let before = actor.checkpoint();
     let asset = actor.export_candidate(TrainingStageManifest::new(1, 1, 1))?;
-    let (p, _) = compile(seed, &asset)?;
+    let (p, _) = compile_profile(
+        seed,
+        &asset,
+        actor.phenotype().experimental_language_input().is_some(),
+    )?;
     actor.rebind_for_next_cohort(p, asset.clone())?;
     let after = actor.checkpoint();
     if before.weights != after.weights
@@ -963,17 +994,99 @@ struct Recovery {
     actor: FoundationTrainerCheckpoint,
     host: CpuCanonicalCheckpoint,
     next_gradient: Vec<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    assessment: Option<RecoveredAssessment>,
 }
-fn reload(recovery: Recovery) -> Result<Value> {
+#[derive(Serialize, Deserialize)]
+struct RecoveredAssessment {
+    config: LanguagePilotConfig,
+    arm: Arm,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    curriculum: Option<curriculum::AssessmentPlan>,
+}
+struct HashedTrace<W> {
+    inner: W,
+    digest: Sha256,
+}
+impl<W: Write> Write for HashedTrace<W> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        let written = self.inner.write(bytes)?;
+        self.digest.update(&bytes[..written]);
+        Ok(written)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+fn recovered_assessment(
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    request: RecoveredAssessment,
+    traces: impl Write,
+) -> Result<Value> {
+    let mut traces = HashedTrace {
+        inner: traces,
+        digest: Sha256::new(),
+    };
+    let evaluation = if let Some(plan) = request.curriculum {
+        curriculum::evaluate(actor, asset, request.config, request.arm, plan, &mut traces)?
+    } else {
+        evaluate(actor, asset, request.config, request.arm, &mut traces)?
+    };
+    Ok(
+        json!({"evaluation":evaluation,"native_trace_sha256":format!("{:x}",traces.digest.finalize())}),
+    )
+}
+fn reload(recovery: Recovery, directory: Option<&Path>) -> Result<Value> {
     if recovery.kind != "disposable-retained-language-pilot-v1" {
         return Err("not an experimental pilot recovery".into());
     }
     let p = PhenotypeCompiler::compile_validated(&recovery.inputs, &BrainCapacityClass::n2048())?;
     let source = FoundationWeightAsset::decode_canonical(&recovery.foundation)?;
-    let mut actor = CpuFoundationTrainer::from_checkpoint(p, source, recovery.actor)?;
+    let mut actor = CpuFoundationTrainer::from_checkpoint(p, source.clone(), recovery.actor)?;
     let mut host = CpuCanonicalHost::from_checkpoint(recovery.host, &actor)?;
     let before_host = identity(&host.checkpoint(&actor)?)?;
     let before_actor = identity(&actor.checkpoint())?;
+    // The child restores the full actor before constructing assessment worlds.
+    // No update, forced action, teacher actor or semantic prior enters assessment.
+    let assessment = if let Some(request) = recovery.assessment {
+        Some(if let Some(directory) = directory {
+            let file = fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(directory.join("reloaded-evaluation.jsonl.zst"));
+            match file {
+                Ok(file) => {
+                    let mut traces = zstd::stream::write::Encoder::new(file, 3)?;
+                    let result = recovered_assessment(&actor, &source, request, &mut traces)?;
+                    traces.finish()?;
+                    result
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    // A repeat cold restore must preserve prior evidence. Verify
+                    // its complete native trace against the regenerated one.
+                    let result = recovered_assessment(&actor, &source, request, std::io::sink())?;
+                    let mut saved = zstd::stream::read::Decoder::new(fs::File::open(
+                        directory.join("reloaded-evaluation.jsonl.zst"),
+                    )?)?;
+                    let mut digest = HashedTrace {
+                        inner: std::io::sink(),
+                        digest: Sha256::new(),
+                    };
+                    std::io::copy(&mut saved, &mut digest)?;
+                    if result["native_trace_sha256"] != format!("{:x}", digest.digest.finalize()) {
+                        return Err("existing assessment trace differs from cold replay".into());
+                    }
+                    result
+                }
+                Err(error) => return Err(error.into()),
+            }
+        } else {
+            recovered_assessment(&actor, &source, request, std::io::sink())?
+        })
+    } else {
+        None
+    };
     let mut decisions = Vec::new();
     for _ in 0..8 {
         decisions.extend(host.step(&actor, 1.)?.decisions);
@@ -981,14 +1094,16 @@ fn reload(recovery: Recovery) -> Result<Value> {
     let after_host = identity(&host.checkpoint(&actor)?)?;
     let rows = identity(&decisions)?;
     actor.apply_gradients(&recovery.next_gradient)?;
-    Ok(
-        json!({"before_host":before_host,"before_actor":before_actor,"after_host":after_host,"decisions":rows,"after_native_adam_update":identity(&actor.checkpoint())?}),
-    )
+    let mut result = json!({"before_host":before_host,"before_actor":before_actor,"after_host":after_host,"decisions":rows,"after_native_adam_update":identity(&actor.checkpoint())?});
+    if let Some(assessment) = assessment {
+        result["assessment"] = assessment;
+    }
+    Ok(result)
 }
 
 /// Only the experimental runner uses this path; it is not a native joint-PPO
 /// handoff and makes no critic/version continuity claim.
-pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
+fn read_recovery(directory: &Path) -> Result<Recovery> {
     let bytes = fs::read(directory.join("experimental-recovery.json"))?;
     let expected = fs::read_to_string(directory.join("experimental-recovery.sha256"))?;
     if hash(&bytes) != expected {
@@ -996,22 +1111,50 @@ pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
     }
     let mut de = serde_json::Deserializer::from_slice(&bytes);
     de.disable_recursion_limit();
-    reload(Recovery::deserialize(&mut de)?)
+    Ok(Recovery::deserialize(&mut de)?)
+}
+pub fn reload_language_pilot_child(directory: &Path) -> Result<Value> {
+    reload(read_recovery(directory)?, Some(directory))
 }
 
 fn exact_reload(
     directory: &Path,
     actor: &CpuFoundationTrainer,
     asset: &FoundationWeightAsset,
-    seed: u64,
+    config: LanguagePilotConfig,
+    arm: Arm,
+    gradient: Vec<f32>,
+) -> Result<Value> {
+    exact_reload_plan(
+        directory,
+        actor,
+        asset,
+        RecoveredAssessment {
+            config,
+            arm,
+            curriculum: None,
+        },
+        gradient,
+    )
+}
+fn exact_reload_plan(
+    directory: &Path,
+    actor: &CpuFoundationTrainer,
+    asset: &FoundationWeightAsset,
+    assessment: RecoveredAssessment,
     gradient: Vec<f32>,
 ) -> Result<Value> {
     fs::create_dir(directory)?;
+    let seed = assessment.config.seed;
     let (mut host, _) = host(seed + 20_000, seed, asset, actor, 0, true)?;
     for _ in 0..4 {
         host.step(actor, 1.)?;
     }
-    let (_, inputs) = compile(seed, asset)?;
+    let (_, inputs) = compile_profile(
+        seed,
+        asset,
+        actor.phenotype().experimental_language_input().is_some(),
+    )?;
     let recovery = Recovery {
         kind: "disposable-retained-language-pilot-v1".into(),
         inputs,
@@ -1019,11 +1162,12 @@ fn exact_reload(
         actor: actor.checkpoint(),
         host: host.checkpoint(actor)?,
         next_gradient: gradient,
+        assessment: Some(assessment),
     };
     let bytes = serde_json::to_vec(&recovery)?;
     fs::write(directory.join("experimental-recovery.sha256"), hash(&bytes))?;
     fs::write(directory.join("experimental-recovery.json"), bytes)?;
-    let expected = reload(recovery)?;
+    let expected = reload(recovery, None)?;
     let child = Command::new(std::env::current_exe()?)
         .arg("--experimental-reload-child")
         .arg(directory)
@@ -1057,7 +1201,7 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
     let translations = teacher_input(config.llamacpp_translation)?;
     write_json(&output.join("teacher-deliveries.json"), &translations)?;
     let source = initial_n2048_care_asset(config.seed)?;
-    let control_actor = new_actor(config.seed, &source)?;
+    let control_actor = new_actor_profile(config.seed, &source, config.experimental_word_bridge)?;
     let controls = physical_controls(&control_actor, &source, config.seed)?;
     let initial = control_actor.checkpoint();
     let initial_word_probe = word_path_probe(&control_actor, &source, config.seed)?;
@@ -1067,9 +1211,17 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
         .open(output.join("native-trace.jsonl.zst"))?;
     let mut traces = zstd::stream::write::Encoder::new(trace_file, 3)?;
     let mut arms = Vec::new();
-    for arm in [Arm::Grounded, Arm::Shuffled, Arm::Untreated] {
+    for arm in [
+        Arm::Grounded,
+        Arm::Shuffled,
+        if config.experimental_word_bridge {
+            Arm::NoSpeech
+        } else {
+            Arm::Untreated
+        },
+    ] {
         let mut asset = source.clone();
-        let mut actor = new_actor(config.seed, &asset)?;
+        let mut actor = new_actor_profile(config.seed, &asset, config.experimental_word_bridge)?;
         if actor.checkpoint() != initial {
             return Err("matched actors differ before treatment".into());
         }
@@ -1112,23 +1264,28 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
             }
         }
         eprintln!("language pilot {arm:?}: teacher-absent evaluation");
-        let evaluation = evaluate(&actor, &asset, config, arm, &mut traces)?;
         let final_word_probe = word_path_probe(&actor, &asset, config.seed)?;
         let continuity = if let Some(gradient) = next_gradient {
             exact_reload(
                 &output.join(format!("recovery-{arm:?}")),
                 &actor,
                 &asset,
-                config.seed,
+                config,
+                arm,
                 gradient,
             )?
         } else {
             Value::Null
         };
+        let evaluation = if continuity.is_null() {
+            json!(evaluate(&actor, &asset, config, arm, &mut traces)?)
+        } else {
+            continuity["native_private_and_optimizer_hashes"]["assessment"]["evaluation"].clone()
+        };
         arms.push(json!({"arm":arm,"collections":collections,"updates":updates,"actor_step":actor.optimizer_step(),"final_word_path_probe":final_word_probe,"actor_sha256":identity(&actor.checkpoint())?,"evaluation":evaluation,"continuity":continuity}));
     }
     traces.finish()?;
-    let report = json!({"kind":"experimental-retained-grounded-language-v2","execution_domain":"native-cpu","config":config,"teacher_translation_deliveries":translations,"semantic_prior_deliveries":0,"semantic_prior_enabled":false,"initial_actor_sha256":identity(&initial)?,"initial_word_path_probe":initial_word_probe,"scripted_world_positive_controls":controls,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Fixed small pilot, not standard CFF ChiChi competence or a general language model.","Actor-only supervised foundation learning across fresh cohorts; no same-individual optimizer rebase or critic update.","Recorded lifetime/fast offsets, memory and route context remain fixed during conditional replay; recurrent prefixes are rebuilt under current weights for every update.","Subjects pass native hearing/association/motor developmental gates through ordinary world ticks before neural capture. No natural-sleep retention trial; sleeping ticks within ordinary assessment are reported without forcing sleep.","Default uses a deterministic bounded teacher translator; a real SLM delivery is claimed only with confirmed optional llama.cpp receipts.","Fresh-process reload covers exact private state, next eight native steps and the next native Adam update using a retained real gradient; it does not retrain the gradient after reload."]});
+    let report = json!({"kind":"experimental-retained-grounded-language-v3","execution_domain":"native-cpu","config":config,"teacher_translation_deliveries":translations,"semantic_prior_deliveries":0,"semantic_prior_enabled":false,"initial_actor_sha256":identity(&initial)?,"initial_word_path_probe":initial_word_probe,"scripted_world_positive_controls":controls,"arms":arms,"elapsed_seconds":started.elapsed().as_secs_f64(),"limitations":["Fixed small pilot, not standard CFF ChiChi competence or a general language model.","Experimental word bridge is explicit in compiler inputs/phenotype; it copies raw bits to shared native readouts, not token meanings. Foundation assets alone do not carry this profile; no promotion or existing-brain migration is supported.","Actor-only supervised foundation learning across fresh cohorts; no same-individual optimizer rebase or critic update.","Recorded lifetime/fast offsets, memory and route context remain fixed during conditional replay; recurrent prefixes are rebuilt under current weights for every update.","Subjects pass native hearing/association/motor developmental gates through ordinary world ticks before neural capture. No natural-sleep retention trial; sleeping ticks within ordinary assessment are reported without forcing sleep.","Default uses a deterministic bounded teacher translator; a real SLM delivery is claimed only with confirmed optional llama.cpp receipts.","Fresh-process reload covers exact private state, next eight native steps and the next native Adam update using a retained real gradient; it does not retrain the gradient after reload."]});
     write_json(&output.join("results.json"), &report)?;
     Ok(report)
 }
@@ -1136,6 +1293,155 @@ pub fn run_retained_language_pilot(output: &Path, config: LanguagePilotConfig) -
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "explicit native causal capture; requires a new audit output directory"]
+    fn capture_native_language_causal_source() {
+        let directory =
+            std::path::PathBuf::from(std::env::var("ALIFE_LANGUAGE_AUDIT_DIR").unwrap());
+        fs::create_dir(&directory).unwrap();
+        let seed = 847_501;
+        let source = initial_n2048_care_asset(seed).unwrap();
+        let bridge = std::env::var("ALIFE_LANGUAGE_AUDIT_BRIDGE").as_deref() == Ok("1");
+        let actor = new_actor_profile(seed, &source, bridge).unwrap();
+        write_json(&directory.join("phenotype.json"), actor.phenotype()).unwrap();
+        let (base, scene) = host(seed + 40_000, seed, &source, &actor, 0, false).unwrap();
+        for (name, words) in [("eat", vec![8, 1]), ("get", vec![9, 2])] {
+            let mut subject = base.snapshot();
+            let id = subject.world().organism_entity_ids()[0].0;
+            let position = speech_position(subject.world()).unwrap();
+            alife_school::LanguageNursery::speak_in_world(
+                subject.world_mut(),
+                id,
+                position,
+                words
+                    .into_iter()
+                    .map(|w| LanguageTokenId::new(w).unwrap())
+                    .collect(),
+            )
+            .unwrap();
+            let mut rows = Vec::new();
+            for _ in 0..8 {
+                rows.extend(subject.step(&actor, 1.).unwrap().decisions);
+            }
+            let labels = rows
+                .iter()
+                .map(|r| action_label(r, Goal::EatFood, scene, false).unwrap())
+                .collect();
+            let speech = vec![None; rows.len()];
+            let episode = Episode {
+                rows,
+                labels,
+                speech,
+            };
+            if name == "eat" {
+                let base = sequence(&actor, &episode, episode.rows.len(), 0);
+                let evaluate = |q: &TrainingSequence| {
+                    let evaluated = actor.evaluate_replay(q).unwrap();
+                    let adjoints = evaluated
+                        .candidate_logits
+                        .iter()
+                        .enumerate()
+                        .map(|(i, logits)| {
+                            let action = &episode.rows[i].action;
+                            let example = ImitationExample {
+                                candidate_count: action.candidate_count,
+                                representative_mask: action.representative_mask,
+                                motor_masks: action.motor_masks,
+                                forced_slots: action.forced_slots.clone(),
+                                target: episode.labels[i].clone(),
+                            };
+                            if example.target.motors.iter().all(Option::is_none)
+                                && example.target.representative.is_none()
+                            {
+                                return vec![0.; logits.len()];
+                            }
+                            cpu_imitation_objective(logits, &example, 1., 1.)
+                                .unwrap()
+                                .logit_gradients
+                        })
+                        .collect::<Vec<_>>();
+                    let gradient = actor.probe_replay_gradients(q, &adjoints).unwrap();
+                    json!({"logits":evaluated.candidate_logits,"activations":evaluated.final_activations,"gradient":gradient.gradients})
+                };
+                let mut word_pulse = base.clone();
+                let mut readout_pulse = base.clone();
+                for tick in &mut word_pulse.ticks {
+                    for n in [643, 872, 875] {
+                        tick.encoded_inputs[n] += 0.75;
+                    }
+                }
+                for tick in &mut readout_pulse.ticks {
+                    for n in 1824..1840 {
+                        tick.encoded_inputs[n] += 0.75;
+                    }
+                }
+                write_json(&directory.join("diagnostic-interventions.json"), &json!({"not_behavior_or_learning_claim":true,"baseline":evaluate(&base),"word_neuron_pulse":evaluate(&word_pulse),"ingest_readout_pulse":evaluate(&readout_pulse)})).unwrap();
+            }
+            let evaluation = actor
+                .evaluate_replay(&sequence(&actor, &episode, episode.rows.len(), 0))
+                .unwrap();
+            let (gradient, objective) = gradients(&actor, std::slice::from_ref(&episode)).unwrap();
+            write_json(&directory.join(format!("{name}-rows.json")), &episode.rows).unwrap();
+            write_json(&directory.join(format!("{name}-evaluation.json")),&json!({"logits":evaluation.candidate_logits,"activations":evaluation.final_activations,"gradient":gradient,"objective":objective})).unwrap();
+        }
+    }
+
+    #[test]
+    fn experimental_word_profile_opens_native_objective_and_preserves_legacy_identity() {
+        let seed = 847_501;
+        let source = initial_n2048_care_asset(seed).unwrap();
+        let (legacy, inputs) = compile_profile(seed, &source, false).unwrap();
+        let legacy_bytes = serde_json::to_vec(&legacy).unwrap();
+        let encoded = serde_json::to_vec(&inputs).unwrap();
+        assert!(!String::from_utf8_lossy(&encoded).contains("experimental_language_input"));
+        let old_inputs: PhenotypeCompilerInputs = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(
+            serde_json::to_vec(
+                &PhenotypeCompiler::compile_validated(&old_inputs, &BrainCapacityClass::n2048())
+                    .unwrap()
+            )
+            .unwrap(),
+            legacy_bytes
+        );
+        let (experimental, experimental_inputs) = compile_profile(seed, &source, true).unwrap();
+        assert_eq!(legacy.synapses(), experimental.synapses());
+        assert_ne!(legacy.phenotype_hash(), experimental.phenotype_hash());
+        assert_eq!(
+            experimental.sensor_encoder().assignments().len(),
+            legacy.sensor_encoder().assignments().len() + 160
+        );
+        let mut stripped = serde_json::to_value(&experimental_inputs).unwrap();
+        stripped
+            .as_object_mut()
+            .unwrap()
+            .remove("experimental_language_input");
+        assert!(serde_json::from_value::<PhenotypeCompilerInputs>(stripped).is_err());
+        let mut phenotype_stripped = serde_json::to_value(&experimental).unwrap();
+        phenotype_stripped
+            .as_object_mut()
+            .unwrap()
+            .remove("experimental_language_input");
+        assert!(serde_json::from_value::<BrainPhenotype>(phenotype_stripped).is_err());
+        let actor = new_actor_profile(seed, &source, true).unwrap();
+        let report = word_path_probe(&actor, &source, seed).unwrap();
+        assert!(report["changed_candidate_logits"].as_u64().unwrap() > 0);
+        assert!(report["changed_trainable_gradients"].as_u64().unwrap() > 0);
+        let ordinary = new_actor(seed, &source).unwrap();
+        let (mut host, _) = host(seed, seed, &source, &actor, 0, false).unwrap();
+        host.step(&actor, 1.).unwrap();
+        let saved = host.checkpoint(&actor).unwrap();
+        assert!(CpuCanonicalHost::from_checkpoint(saved.clone(), &ordinary).is_err());
+        let restored = CpuCanonicalHost::from_checkpoint(
+            serde_json::from_slice(&serde_json::to_vec(&saved).unwrap()).unwrap(),
+            &actor,
+        )
+        .unwrap();
+        assert_eq!(
+            identity(&restored.checkpoint(&actor).unwrap()).unwrap(),
+            identity(&saved).unwrap()
+        );
+    }
 
     #[test]
     fn native_world_controls_consume_nourish_and_acquire_distinct_visible_objects() {

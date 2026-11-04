@@ -106,6 +106,8 @@ pub struct BrainPhenotype {
     neuron_count: u32,
     microstep_count: u8,
     sensor_profile: SensorProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    experimental_language_input: Option<super::ExperimentalLanguageInputV1>,
     foundation_abi_selection: FoundationAbiSelection,
     language_codebook: LanguageCodebookV1,
     cognitive_architecture: CognitiveArchitecturePlan,
@@ -292,6 +294,9 @@ impl BrainPhenotype {
     }
     pub const fn sensor_profile(&self) -> SensorProfile {
         self.sensor_profile
+    }
+    pub const fn experimental_language_input(&self) -> Option<super::ExperimentalLanguageInputV1> {
+        self.experimental_language_input
     }
     pub const fn compiler_inputs_digest(&self) -> [u64; 4] {
         self.compiler_inputs_digest
@@ -529,6 +534,7 @@ impl BrainPhenotype {
             neuron_count,
             microstep_count,
             sensor_profile: inputs.sensor_profile(),
+            experimental_language_input: inputs.experimental_language_input(),
             foundation_abi_selection,
             language_codebook,
             cognitive_architecture,
@@ -572,6 +578,9 @@ impl BrainPhenotype {
         d.write_u16(self.schema_version);
         for word in self.compiler_inputs_digest {
             d.write_u64(word);
+        }
+        if self.experimental_language_input.is_some() {
+            d.write_bytes(b"experimental-two-token-readout-broadcast-v1");
         }
         self.cognitive_architecture.write_canonical(&mut d)?;
         d.write_u16(self.brain_class_id.raw());
@@ -681,6 +690,13 @@ impl BrainPhenotype {
         &self,
         capacity: &BrainCapacityClass,
     ) -> Result<(), ScaffoldContractError> {
+        if self.experimental_language_input.is_some()
+            && (self.brain_class_id != BrainCapacityClass::N2048_ID
+                || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1)
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+
         capacity.validate_contract()?;
         self.foundation_abi_selection
             .validate_against(capacity, self.sensor_profile)?;
@@ -1038,6 +1054,8 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: u32,
             microstep_count: u8,
             sensor_profile: SensorProfile,
+            #[serde(default)]
+            experimental_language_input: Option<super::ExperimentalLanguageInputV1>,
             foundation_abi_selection: FoundationAbiSelection,
             language_codebook: LanguageCodebookV1,
             cognitive_architecture: CognitiveArchitecturePlan,
@@ -1071,6 +1089,7 @@ impl<'de> Deserialize<'de> for BrainPhenotype {
             neuron_count: w.neuron_count,
             microstep_count: w.microstep_count,
             sensor_profile: w.sensor_profile,
+            experimental_language_input: w.experimental_language_input,
             foundation_abi_selection: w.foundation_abi_selection,
             language_codebook: w.language_codebook,
             cognitive_architecture: w.cognitive_architecture,

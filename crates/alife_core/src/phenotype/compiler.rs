@@ -13,6 +13,27 @@ use super::{BrainCapacityClass, BrainPhenotype, PhenotypeCompilerInputs};
 pub struct PhenotypeCompiler;
 
 impl PhenotypeCompiler {
+    /// New disposable founder path. Existing inputs and accepted phenotypes
+    /// never opt in implicitly, and retained state is bound to the new hash.
+    pub fn compile_experimental_n2048_language_candidate(
+        genome: BrainGenome,
+        development: DevelopmentState,
+        asset: FoundationWeightAsset,
+    ) -> Result<(BrainPhenotype, PhenotypeCompilerInputs), ScaffoldContractError> {
+        let capacity = BrainCapacityClass::n2048();
+        let inputs = PhenotypeCompilerInputs::try_new_with_n2048_candidate(
+            genome,
+            &capacity,
+            development,
+            asset.manifest().sensor_profile(),
+            asset,
+        )?
+        .with_experimental_language_input(
+            super::ExperimentalLanguageInputV1::TwoTokenReadoutBroadcastV1,
+        )?;
+        let phenotype = Self::compile_validated(&inputs, &capacity)?;
+        Ok((phenotype, inputs))
+    }
     /// Exact, explicit training candidate admission. Builtin compilation and its
     /// inherited coordinate variation retain their existing behavior.
     pub fn compile_n2048_foundation_candidate(

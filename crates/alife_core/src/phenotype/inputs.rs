@@ -22,6 +22,12 @@ pub enum FoundationWeightApplication {
     Nano512FounderOverlayV1 { seed: u64 },
 }
 
+/// Explicit disposable connectivity experiment. No word meanings or motor labels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ExperimentalLanguageInputV1 {
+    TwoTokenReadoutBroadcastV1,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct PhenotypeCompilerInputs {
     schema_version: u16,
@@ -31,6 +37,8 @@ pub struct PhenotypeCompilerInputs {
     foundation_abi_selection: FoundationAbiSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    experimental_language_input: Option<ExperimentalLanguageInputV1>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     foundation_weight_application: Option<FoundationWeightApplication>,
     /// Explicit opt-in exact genetic weights; absent in existing builtin inputs.
@@ -45,6 +53,26 @@ pub struct PhenotypeCompilerInputs {
 }
 
 impl PhenotypeCompilerInputs {
+    /// Opt in only for an explicitly experimental N2048 terrain founder.
+    /// None preserves existing serialized bytes and canonical digests.
+    pub fn with_experimental_language_input(
+        mut self,
+        profile: ExperimentalLanguageInputV1,
+    ) -> Result<Self, ScaffoldContractError> {
+        if self.capacity_class_id != BrainCapacityClass::N2048_ID
+            || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1
+            || self.live_policy.is_some()
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        self.experimental_language_input = Some(profile);
+        self.canonical_digest = self.recompute_digest()?;
+        Ok(self)
+    }
+    pub const fn experimental_language_input(&self) -> Option<ExperimentalLanguageInputV1> {
+        self.experimental_language_input
+    }
+
     pub fn try_new_with_live_n2048_policy(
         genome: BrainGenome,
         capacity: &BrainCapacityClass,
@@ -211,6 +239,7 @@ impl PhenotypeCompilerInputs {
             sensor_profile,
             foundation_abi_selection,
             cognitive_channel_extension,
+            experimental_language_input: None,
             foundation_weight_application,
             capacity_class_id: capacity.id(),
             n2048_candidate_asset: None,
@@ -335,6 +364,13 @@ impl PhenotypeCompilerInputs {
                 return Err(ScaffoldContractError::PhenotypeCompile);
             }
         }
+        if self.experimental_language_input.is_some()
+            && (capacity.id() != BrainCapacityClass::N2048_ID
+                || self.sensor_profile != SensorProfile::GroundedTerrainVisionV1
+                || self.live_policy.is_some())
+        {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
         validate_weight_application(
             &self.foundation_abi_selection,
             self.foundation_weight_application,
@@ -392,6 +428,9 @@ impl PhenotypeCompilerInputs {
             d.write_u8(1);
             d.write_u64(seed);
         }
+        if self.experimental_language_input.is_some() {
+            d.write_bytes(b"experimental-two-token-readout-broadcast-v1");
+        }
         let language_codebook = self.foundation_abi_selection.language_codebook();
         if let Some(asset) = &self.n2048_candidate_asset {
             // Bind the exact candidate asset in addition to its ABI selection.
@@ -432,6 +471,8 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             #[serde(default)]
             cognitive_channel_extension: Option<crate::CognitiveChannelExtensionV1>,
             #[serde(default)]
+            experimental_language_input: Option<ExperimentalLanguageInputV1>,
+            #[serde(default)]
             foundation_weight_application: Option<FoundationWeightApplication>,
             #[serde(default)]
             n2048_candidate_asset: Option<crate::FoundationWeightAsset>,
@@ -455,6 +496,7 @@ impl<'de> Deserialize<'de> for PhenotypeCompilerInputs {
             sensor_profile: w.sensor_profile,
             foundation_abi_selection: w.foundation_abi_selection,
             cognitive_channel_extension: w.cognitive_channel_extension,
+            experimental_language_input: w.experimental_language_input,
             foundation_weight_application: w.foundation_weight_application,
             n2048_candidate_asset: w.n2048_candidate_asset,
             live_policy: w.live_policy,

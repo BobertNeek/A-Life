@@ -188,12 +188,11 @@ impl SensorEncoderPlan {
         inputs: &PhenotypeCompilerInputs,
     ) -> Result<(), ScaffoldContractError> {
         self.validate_against(phenotype)?;
-        let expected = super::io_compile::compile_encoder(
-            inputs.genome(),
-            inputs.development(),
-            phenotype.lobe_layout(),
-            self.sensor_profile,
-        )?;
+        if phenotype.experimental_language_input() != inputs.experimental_language_input() {
+            return Err(ScaffoldContractError::PhenotypeCompile);
+        }
+        let expected =
+            super::io_compile::compile_encoder_for_inputs(inputs, phenotype.lobe_layout())?;
         if self == &expected {
             Ok(())
         } else {
@@ -211,6 +210,7 @@ impl SensorEncoderPlan {
         source_inputs.validate_against(&source_capacity)?;
         source.validate_against(&source_capacity)?;
         if source.compiler_inputs_digest() != source_inputs.canonical_digest()
+            || source.experimental_language_input().is_some()
             || source.lobe_layout() != &crate::N2048FoundationLayoutV1::lobe_layout()
             || phenotype.brain_class_id() != super::BrainCapacityClass::N4096_RESEARCH_ID
             || phenotype.lobe_layout() != &super::N4096ResearchLayoutV1::lobe_layout()?
