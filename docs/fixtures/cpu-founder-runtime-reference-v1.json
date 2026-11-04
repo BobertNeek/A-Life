@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "kind": "public-procedural-cpu-runtime-calibration",
+  "user_model_or_life_data": false,
+  "test": "public_terrain_founder_runtime_fingerprint",
+  "construction_seed": 7999779,
+  "sampler_seed": 42,
+  "temperature": 1.0,
+  "sensor_profile": "GroundedTerrainVisionV1",
+  "reference_target": "x86_64-unknown-linux-gnu",
+  "reference_rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "profile": "release",
+  "features": "alife_training/cpu-backend",
+  "public_cpu_founder_runtime_sha256": "9bfb4b5411f2f5d46471fb14b8f6ae5bd475f610edf32469ac6beadb1402f767",
+  "scope": "synthetic native actions and complete private-state fingerprint across waking, sleep, consolidation and cold restore; no claim of learned-parent or GPU parity"
+}

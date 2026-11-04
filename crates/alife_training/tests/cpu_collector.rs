@@ -20,7 +20,28 @@ fn fixture_atp(atp: Option<f32>) -> (CpuCanonicalHost, CpuFoundationTrainer) {
 
 #[test]
 fn founder_only_inference_matches_full_trainer_actions_private_learning_sleep_and_restore() {
-    let (mut control, trainer) = fixture();
+    check_founder_inference_parity(fixture());
+}
+
+/// Public procedural fixture only. This fingerprint contains no retained model,
+/// private life or user evidence; it can be compared across CPU build platforms.
+#[test]
+fn public_terrain_founder_runtime_fingerprint() {
+    let (game, trainer, _) =
+        new_game_with_profile_fixture(None, SensorProfile::GroundedTerrainVisionV1);
+    check_founder_inference_parity((
+        CpuCanonicalHost::new_cohort(game, &trainer, 42).unwrap(),
+        trainer,
+    ));
+}
+
+fn check_founder_inference_parity(
+    (mut control, trainer): (CpuCanonicalHost, CpuFoundationTrainer),
+) {
+    use sha2::{Digest, Sha256};
+    let mut fingerprint = Sha256::new();
+    fingerprint.update(b"ALIFE-PUBLIC-CPU-FOUNDER-PARITY-V1");
+    fingerprint.update(serde_json::to_vec(&control.checkpoint(&trainer).unwrap()).unwrap());
     let original_actor = serde_json::to_vec(&trainer.checkpoint()).unwrap();
     let inference = CpuInferenceFounder::new(
         trainer.phenotype().clone(),
@@ -32,6 +53,7 @@ fn founder_only_inference_matches_full_trainer_actions_private_learning_sleep_an
     for _ in 0..8 {
         let a = control.step(&trainer, 1.).unwrap();
         let b = candidate.step(&inference, 1.).unwrap();
+        fingerprint.update(serde_json::to_vec(&a.decisions).unwrap());
         assert_eq!(
             serde_json::to_vec(&a.decisions).unwrap(),
             serde_json::to_vec(&b.decisions).unwrap()
@@ -50,6 +72,7 @@ fn founder_only_inference_matches_full_trainer_actions_private_learning_sleep_an
     for _ in 0..512 {
         let a = control.step(&trainer, 1.).unwrap();
         let b = candidate.step(&inference, 1.).unwrap();
+        fingerprint.update(serde_json::to_vec(&a.decisions).unwrap());
         assert_eq!(a.sleeping_organisms, b.sleeping_organisms);
         assert_eq!(a.sleep_consolidations, b.sleep_consolidations);
         assert_eq!(
@@ -82,6 +105,7 @@ fn founder_only_inference_matches_full_trainer_actions_private_learning_sleep_an
     for _ in 0..3 {
         let a = candidate.step(&inference, 1.).unwrap();
         let b = restored.step(&inference, 1.).unwrap();
+        fingerprint.update(serde_json::to_vec(&a.decisions).unwrap());
         assert_eq!(
             serde_json::to_vec(&a.decisions).unwrap(),
             serde_json::to_vec(&b.decisions).unwrap()
@@ -91,6 +115,11 @@ fn founder_only_inference_matches_full_trainer_actions_private_learning_sleep_an
             serde_json::to_vec(&restored.checkpoint(&inference).unwrap()).unwrap()
         );
     }
+    fingerprint.update(serde_json::to_vec(&candidate.checkpoint(&inference).unwrap()).unwrap());
+    println!(
+        "public_cpu_founder_runtime_sha256={:x}",
+        fingerprint.finalize()
+    );
 }
 fn new_game_fixture(atp: Option<f32>) -> (CanonicalNewGame, CpuFoundationTrainer) {
     let (game, trainer, _) = new_game_with_inputs_fixture(atp);

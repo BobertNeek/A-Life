@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "kind": "source-only-cpu-care-handoff",
+  "runtime_source_commit": "0ba8b8b1263de079e29766bbe06d8e673cbb5fff",
+  "runtime_source_tree": "77363cfa0c8e95f9a05f47069b056fc1b2309b38",
+  "includes_trained_or_private_artifacts": false,
+  "files": {
+    "crates/alife_training/tests/cpu_collector.rs": {
+      "bytes": 31212,
+      "sha256": "22cf1d153b4fe0aeb3bed4a0c139dbe0e703135443d8fa6c325d86bf556ce41a"
+    },
+    "docs/conservative-foundation-consolidation.md": {
+      "bytes": 12853,
+      "sha256": "c01c6e306cd1d0f751559670b79f0d7158fb2da6fd073ae7d520ef53895f6160"
+    },
+    "docs/cpu-care-comparison-handoff.md": {
+      "bytes": 12812,
+      "sha256": "41e6a0d68878ce4bc3b10c82492010d301a6a0ab07b7b0d4682c37e54374d88a"
+    },
+    "docs/fixtures/cpu-care-eight-cases-v1.json": {
+      "bytes": 1305,
+      "sha256": "bd11f2487003798b5b670add0256996fd9cbeecb3ad8aa5326f75a34b833240d"
+    },
+    "docs/fixtures/cpu-founder-runtime-reference-v1.json": {
+      "bytes": 746,
+      "sha256": "a4868b8ee9df14096eab190ad24ba38f5e5101cdfbbba27ed42986915e15fb78"
+    },
+    "scripts/prepare_cpu_care_comparison.py": {
+      "bytes": 3248,
+      "sha256": "afa2f72dec9ea40d1e7431dd7db55a46f4a945369efbf9c8b16ec33c835a52eb"
+    }
+  }
+}

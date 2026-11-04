@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "kind": "public-cpu-care-comparison-cases",
+  "runtime_source_commit": "0ba8b8b1263de079e29766bbe06d8e673cbb5fff",
+  "founder_seed_base": 539363617,
+  "decisions": 128,
+  "bootstrap_decisions": 1,
+  "temperature": 1.0,
+  "known_exclusions": true,
+  "historical_freshness": "unknown",
+  "cases": [
+    {"id": "navigation-1", "lesson": "obstacle_navigation", "seed": 202611044001, "food_need_condition": "newborn_v1"},
+    {"id": "navigation-2", "lesson": "obstacle_navigation", "seed": 202611044002, "food_need_condition": "newborn_v1"},
+    {"id": "relocated-aged-1", "lesson": "relocated_food", "seed": 202611044003, "food_need_condition": "ordinary_healthy_aging_v1"},
+    {"id": "relocated-aged-2", "lesson": "relocated_food", "seed": 202611044004, "food_need_condition": "ordinary_healthy_aging_v1"},
+    {"id": "feeding-1-newborn", "lesson": "feeding", "seed": 202611044005, "food_need_condition": "newborn_v1"},
+    {"id": "feeding-1-aged", "lesson": "feeding", "seed": 202611044005, "food_need_condition": "ordinary_healthy_aging_v1"},
+    {"id": "feeding-2-newborn", "lesson": "feeding", "seed": 202611044006, "food_need_condition": "newborn_v1"},
+    {"id": "feeding-2-aged", "lesson": "feeding", "seed": 202611044006, "food_need_condition": "ordinary_healthy_aging_v1"}
+  ]
+}

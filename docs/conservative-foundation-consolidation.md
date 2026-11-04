@@ -64,6 +64,10 @@ and private recovery. It requires exact source-bound seed history. It does not
 accept a bare merged founder asset: do not fabricate a CPU handoff or zero Adam
 to force that admission.
 
+The [eight-case CPU handoff](cpu-care-comparison-handoff.md) supplies public case
+fixtures, exact build/run commands, a synthetic runtime calibration and the
+Current-input/cross-build limits for a separate owner.
+
 `evaluate_cpu_founder` provides a separate founder-only native CPU path:
 
 ```text
