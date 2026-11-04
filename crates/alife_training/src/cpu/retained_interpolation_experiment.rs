@@ -1,9 +1,8 @@
 //! Disposable, unqualified two-parent interpolation. No ancestry is asserted and
 //! no candidate Adam/critic or resumable Current checkpoint is manufactured.
 //!
-//! The explicit retained projection is checked against the PC graph, but this
-//! fixture harness does not authenticate its extraction from the archived Current
-//! private assets. A native source-binding adapter is required before real use.
+//! The retained projection is extracted from the hash-pinned PC Current's own
+//! manifest-bound assets. This does not qualify full native recovery or dispatch.
 use super::{CpuHostError, CpuRetainedNeuralInheritance};
 use crate::{native_receipt::sha256, CurrentTrainingCheckpointV1};
 use alife_core::{
@@ -12,6 +11,8 @@ use alife_core::{
 };
 use alife_gpu_backend::GpuLiveTopologyCheckpointV1;
 use serde::{Deserialize, Serialize};
+mod source_projection;
+pub use source_projection::*;
 
 type Result<T> = std::result::Result<T, CpuHostError>;
 
@@ -21,8 +22,9 @@ type Result<T> = std::result::Result<T, CpuHostError>;
 #[serde(deny_unknown_fields)]
 pub struct InterpolationExperimentInputs {
     pub pc_current: Vec<u8>,
+    pub expected_pc_current_sha256: String,
     pub cloud_current: Vec<u8>,
-    pub pc_retained_projection_json: Vec<u8>,
+    pub expected_cloud_current_sha256: String,
     pub cloud_fraction: f64,
 }
 
@@ -36,6 +38,7 @@ pub struct InterpolationExperimentReceipt {
     pub pc_current_sha256: String,
     pub cloud_current_sha256: String,
     pub pc_projection_sha256: String,
+    pub pc_projection_binding: RetainedProjectionBinding,
     pub canonical_coordinates: usize,
     pub acquired_coordinates: usize,
     pub changed_genetic_coordinates: usize,
@@ -79,8 +82,8 @@ impl RetainedInterpolationExperiment {
 }
 
 /// Synthetic-fixture preparation only. The native Current codec checks the
-/// archived heads and metadata; full native private closure, projection source
-/// binding, gameplay parity and skill retention are not qualified by this API.
+/// archived heads and metadata. The PC projection is derived from its selected
+/// private assets; full native recovery, gameplay and skills remain unqualified.
 pub fn prepare_retained_interpolation_experiment(
     inputs: InterpolationExperimentInputs,
 ) -> Result<RetainedInterpolationExperiment> {
@@ -88,8 +91,10 @@ pub fn prepare_retained_interpolation_experiment(
     if !inputs.cloud_fraction.is_finite() || !(0.0..=1.0).contains(&inputs.cloud_fraction) {
         return Err(bad("interpolation fraction must be finite and in [0,1]"));
     }
-    if inputs.pc_retained_projection_json.len() > 50 * 1024 * 1024 {
-        return Err(bad("retained projection exceeds experimental bound"));
+    if sha256(&inputs.pc_current) != inputs.expected_pc_current_sha256
+        || sha256(&inputs.cloud_current) != inputs.expected_cloud_current_sha256
+    {
+        return Err(bad("parent artifact differs from its explicit SHA256 pin"));
     }
     let pc = CurrentTrainingCheckpointV1::decode(&inputs.pc_current)
         .map_err(|_| bad("PC Current codec admission failed"))?;
@@ -120,8 +125,8 @@ pub fn prepare_retained_interpolation_experiment(
             "parent stage masks or curriculum/evaluation contracts differ",
         ));
     }
-    let source: CpuRetainedNeuralInheritance =
-        serde_json::from_slice(&inputs.pc_retained_projection_json)?;
+    let (source, source_binding) =
+        source_projection::extract(&pc, &inputs.expected_pc_current_sha256)?;
     let source_map = source.canonical_to_live(&a.phenotype)?;
     let mut weights = a.actor.weights.clone();
     let mut changed = 0;
@@ -184,13 +189,14 @@ pub fn prepare_retained_interpolation_experiment(
     }
     next.validate_against(&BrainCapacityClass::n2048())?;
     let receipt = InterpolationExperimentReceipt {
-        schema: 1,
+        schema: 2,
         kind: "inference-only-two-parent-interpolation-pc-retained-overlay".into(),
-        qualification: "synthetic-fixture-only; native-private-closure/projection-source-binding/runtime/skills-unqualified; no-common-ancestry-claim".into(),
+        qualification: "synthetic-fixture-qualified-source-projection-binding; full-native-recovery/runtime/skills-unqualified; no-common-ancestry-claim".into(),
         optimizer_semantics: "unresolved; no-candidate-actor-or-critic; both-parent-Adam-archives-unchanged; not-resumable".into(),
         pc_current_sha256: sha256(&inputs.pc_current),
         cloud_current_sha256: sha256(&inputs.cloud_current),
-        pc_projection_sha256: sha256(&inputs.pc_retained_projection_json),
+        pc_projection_sha256: sha256(&serde_json::to_vec(&source)?),
+        pc_projection_binding: source_binding,
         canonical_coordinates: source_map.len(),
         acquired_coordinates: retained.topology.total_synapse_count as usize - source_map.len(),
         changed_genetic_coordinates: changed,

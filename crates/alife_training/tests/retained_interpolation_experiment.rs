@@ -4,6 +4,11 @@ use alife_core::*;
 use alife_gpu_backend::{GpuLiveTopologyCheckpointV1, GpuV11CausalState};
 use alife_training::{cpu::retained_interpolation_experiment::*, cpu::*, *};
 use alife_world::persistence::*;
+#[path = "retained_interpolation_experiment/source_binding.rs"]
+mod source_binding;
+#[path = "retained_interpolation_experiment/source_fixture.rs"]
+mod source_fixture;
+use source_fixture::repin;
 
 fn parent(inputs: PhenotypeCompilerInputs, policy: u64) -> Vec<u8> {
     let p = PhenotypeCompiler::compile_validated(&inputs, &BrainCapacityClass::n2048()).unwrap();
@@ -36,7 +41,7 @@ fn parent(inputs: PhenotypeCompilerInputs, policy: u64) -> Vec<u8> {
             .collect(),
         last_updated_policy_version: Some(policy),
     };
-    CurrentTrainingCheckpointV1 {
+    let mut current = CurrentTrainingCheckpointV1 {
         schema_version: 1,
         seed: policy,
         founder_seed_base: 77,
@@ -58,9 +63,9 @@ fn parent(inputs: PhenotypeCompilerInputs, policy: u64) -> Vec<u8> {
         terminal_disposition: None,
         training_attempt_origin: None,
         new_life_origin: None,
-    }
-    .encode()
-    .unwrap()
+    };
+    source_fixture::attach(&mut current, None);
+    current.encode().unwrap()
 }
 
 fn fixture(active_bank: u8) -> InterpolationExperimentInputs {
@@ -186,12 +191,17 @@ fn fixture(active_bank: u8) -> InterpolationExperimentInputs {
         )
         .unwrap();
     assert!(retained.predictor.has_acquired_state());
-    InterpolationExperimentInputs {
-        pc_current: parent(pc_inputs, 100),
+    let mut pc = CurrentTrainingCheckpointV1::decode(&parent(pc_inputs, 100)).unwrap();
+    source_fixture::attach(&mut pc, Some(&retained));
+    let mut result = InterpolationExperimentInputs {
+        pc_current: pc.encode().unwrap(),
+        expected_pc_current_sha256: String::new(),
         cloud_current: parent(cloud_inputs, 200),
-        pc_retained_projection_json: serde_json::to_vec(&retained).unwrap(),
+        expected_cloud_current_sha256: String::new(),
         cloud_fraction: 0.5,
-    }
+    };
+    repin(&mut result);
+    result
 }
 
 #[test]
@@ -200,8 +210,11 @@ fn both_active_banks_acquired_edges_decoder_offsets_and_complete_parents_survive
         let inputs = fixture(active);
         let pc = CurrentTrainingCheckpointV1::decode(&inputs.pc_current).unwrap();
         let cloud = CurrentTrainingCheckpointV1::decode(&inputs.cloud_current).unwrap();
-        let before: CpuRetainedNeuralInheritance =
-            serde_json::from_slice(&inputs.pc_retained_projection_json).unwrap();
+        let (before, binding) = derive_retained_projection_from_current(
+            &inputs.pc_current,
+            &inputs.expected_pc_current_sha256,
+        )
+        .unwrap();
         let p = pc.handoff.clone().admit().unwrap().phenotype;
         let before_map = before.canonical_to_live(&p).unwrap();
         let candidate = prepare_retained_interpolation_experiment(inputs.clone()).unwrap();
@@ -264,6 +277,8 @@ fn both_active_banks_acquired_edges_decoder_offsets_and_complete_parents_survive
             serde_json::to_vec(&before.predictor).unwrap()
         );
         assert_eq!(candidate.receipt().acquired_coordinates, 1);
+        assert_eq!(candidate.receipt().pc_projection_binding, binding);
+        assert_eq!(binding.selected_asset_sha256.len(), 6);
         assert!(candidate.receipt().changed_genetic_coordinates >= 1);
         let bytes = serde_json::to_vec(&candidate).unwrap();
         let restored: RetainedInterpolationExperiment = serde_json::from_slice(&bytes).unwrap();
@@ -331,6 +346,7 @@ fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
     .unwrap();
     let mut invalid = inputs.clone();
     invalid.cloud_current = parent(changed_inputs, 200);
+    repin(&mut invalid);
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
     let mut changed = cloud.clone();
     changed.handoff.actor.stage_mask = StageTrainableMask::from_synapse_indices(
@@ -340,6 +356,7 @@ fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
     .unwrap();
     let mut invalid = inputs.clone();
     invalid.cloud_current = changed.encode().unwrap();
+    repin(&mut invalid);
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
     // A different sensor/decoder graph is an admitted parent but not a successor.
     let capacity = BrainCapacityClass::n2048();
@@ -366,6 +383,7 @@ fn rejects_frozen_disagreement_masks_and_changed_coordinate_contracts() {
         PhenotypeCompiler::compile_n2048_foundation_candidate(genome, development, asset).unwrap();
     let mut invalid = inputs;
     invalid.cloud_current = parent(other_inputs, 200);
+    repin(&mut invalid);
     assert!(prepare_retained_interpolation_experiment(invalid).is_err());
 }
 
@@ -374,9 +392,12 @@ fn rejects_resealed_layout_or_unrepresentable_added_bank_without_mutating_source
     let inputs = fixture(1);
     let original = serde_json::to_vec(&inputs).unwrap();
     let pc = CurrentTrainingCheckpointV1::decode(&inputs.pc_current).unwrap();
-    let p = pc.handoff.admit().unwrap().phenotype;
-    let source: CpuRetainedNeuralInheritance =
-        serde_json::from_slice(&inputs.pc_retained_projection_json).unwrap();
+    let p = pc.handoff.clone().admit().unwrap().phenotype;
+    let (source, _) = derive_retained_projection_from_current(
+        &inputs.pc_current,
+        &inputs.expected_pc_current_sha256,
+    )
+    .unwrap();
     for variant in 0..3 {
         let mut projection = source.clone();
         if variant == 0 {
@@ -397,7 +418,10 @@ fn rejects_resealed_layout_or_unrepresentable_added_bank_without_mutating_source
                 projection.fast.recompute_canonical_digest().unwrap();
         }
         let mut invalid = inputs.clone();
-        invalid.pc_retained_projection_json = serde_json::to_vec(&projection).unwrap();
+        let mut changed = pc.clone();
+        source_fixture::attach(&mut changed, Some(&projection));
+        invalid.pc_current = changed.encode().unwrap();
+        repin(&mut invalid);
         assert!(prepare_retained_interpolation_experiment(invalid).is_err());
     }
     assert_eq!(serde_json::to_vec(&inputs).unwrap(), original);
