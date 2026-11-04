@@ -324,7 +324,7 @@ fn contact_and_far_focus_compete_without_losing_possession_or_noops() {
             .map(|c| c.observation)
             .collect::<Vec<_>>();
         assert_eq!(slots.len(), 3);
-        if i >= 2 && i < 15 {
+        if (2..15).contains(&i) {
             assert_eq!(
                 slots,
                 vec![
