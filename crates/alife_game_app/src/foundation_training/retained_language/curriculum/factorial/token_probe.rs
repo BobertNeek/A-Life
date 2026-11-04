@@ -83,7 +83,7 @@ fn action_gradient(
 fn trace_paired_token_paths_and_teaching_gradients() {
     let out = std::path::PathBuf::from(std::env::var("ALIFE_TOKEN_PROBE_OUT").unwrap());
     let mut results = vec![];
-    let mut sources = vec![
+    let mut sources = [
         (
             "common_v8",
             "/workspace/language-action-gated-run/recovery-Grounded",
@@ -100,21 +100,21 @@ fn trace_paired_token_paths_and_teaching_gradients() {
             "v11_no_speech",
             "/workspace/language-factorial-hold-run/recovery-NoSpeech",
         ),
-    ];
+    ]
+    .into_iter()
+    .map(|(name, path)| (name, path.to_owned()))
+    .collect::<Vec<_>>();
     if let Ok(root) = std::env::var("ALIFE_TOKEN_PROBE_FINAL") {
         for (name, sub) in [
-            ("v12_grounded", "Grounded"),
-            ("v12_shuffled", "Shuffled"),
-            ("v12_no_speech", "NoSpeech"),
+            ("candidate_grounded", "Grounded"),
+            ("candidate_shuffled", "Shuffled"),
+            ("candidate_no_speech", "NoSpeech"),
         ] {
-            sources.push((
-                name,
-                Box::leak(format!("{root}/recovery-{sub}").into_boxed_str()),
-            ));
+            sources.push((name, format!("{root}/recovery-{sub}")));
         }
     }
     for (name, directory) in sources {
-        let r = read_recovery(Path::new(directory)).unwrap();
+        let r = read_recovery(Path::new(&directory)).unwrap();
         let p =
             PhenotypeCompiler::compile_validated(&r.inputs, &BrainCapacityClass::n2048()).unwrap();
         let asset = FoundationWeightAsset::decode_canonical(&r.foundation).unwrap();

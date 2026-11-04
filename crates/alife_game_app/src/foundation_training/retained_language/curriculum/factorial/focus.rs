@@ -141,7 +141,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(episodes.len(), 6);
-        for e in episodes.chunks_exact(3) {
+        for e in episodes.as_chunks::<3>().0 {
             let masks = e
                 .iter()
                 .map(|e| e.labels[0].representative.unwrap())

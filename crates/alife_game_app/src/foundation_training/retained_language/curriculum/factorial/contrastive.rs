@@ -27,7 +27,7 @@ pub(super) fn gradients(
     let mut records = vec![];
     let mut loss = 0f64;
     let scale = 1. / episodes.len() as f32; // three pairs per real-world triple
-    for triple in episodes.chunks_exact(3) {
+    for triple in episodes.as_chunks::<3>().0 {
         let qs = triple.iter().map(|e| single(actor, e)).collect::<Vec<_>>();
         let evals = qs
             .iter()
