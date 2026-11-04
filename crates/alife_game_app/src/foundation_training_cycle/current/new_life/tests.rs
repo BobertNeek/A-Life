@@ -7,7 +7,11 @@ fn sha(v: &impl serde::Serialize) -> String {
     format!("{:x}", Sha256::digest(serde_json::to_vec(v).unwrap()))
 }
 
-fn game(seed: u64, id: u64, asset: &FoundationWeightAsset) -> alife_world::CanonicalNewGame {
+pub(super) fn game(
+    seed: u64,
+    id: u64,
+    asset: &FoundationWeightAsset,
+) -> alife_world::CanonicalNewGame {
     let mut config = alife_world::CanonicalNewGameConfig::phase3(seed, 1).unwrap();
     config.founder_seed_base = 5124;
     config.brain_class = BrainScaleTier::Standard2048;
@@ -18,7 +22,7 @@ fn game(seed: u64, id: u64, asset: &FoundationWeightAsset) -> alife_world::Canon
 // Deliberately metadata-only private closure: exercises typed lineage/identity
 // admission without a GPU. The native asset loader must reject this fixture.
 // The hardware test below creates the complete actual private asset closure.
-fn metadata_life(
+pub(super) fn metadata_life(
     game: &alife_world::CanonicalNewGame,
     handoff: &FoundationTrainingHandoffV1,
     stream: u32,
@@ -152,7 +156,7 @@ fn metadata_life(
     life
 }
 
-fn terminal() -> CurrentTrainingCheckpointV1 {
+pub(super) fn terminal() -> CurrentTrainingCheckpointV1 {
     let asset =
         FoundationWeightAsset::builtin_n2048_v1(SensorProfile::GroundedObjectSlotsV1).unwrap();
     let first_game = game(5124, 1, &asset);
@@ -601,6 +605,18 @@ fn new_life_gpu_qualification_preserves_absolute_window_through_slow_setup() {
 #[test]
 #[ignore = "requires an admitted native hardware GPU; creates only disposable public fixture state"]
 fn new_life_gpu_initialization_and_continuous_recovery() {
+    gpu_initialization_and_continuous_recovery(false);
+}
+
+#[cfg(feature = "gpu-tests")]
+#[test]
+#[ignore = "requires an admitted native hardware GPU; creates only disposable acquired-neural fixture state"]
+fn retained_neural_gpu_initialization_and_continuous_recovery() {
+    gpu_initialization_and_continuous_recovery(true);
+}
+
+#[cfg(feature = "gpu-tests")]
+fn gpu_initialization_and_continuous_recovery(retained_neural: bool) {
     let started = std::time::Instant::now();
     let now = || {
         std::time::SystemTime::now()
@@ -660,6 +676,14 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
         &source_dir,
     )
     .unwrap();
+    let life = if retained_neural {
+        neural_inheritance::tests::native_learned_fixture(
+            life,
+            &source.handoff.clone().admit().unwrap().phenotype,
+        )
+    } else {
+        life
+    };
     phase("source-native-initialized");
     let save = PortableSaveFile::from_json_str(&life.world_json).unwrap();
     let tag = source.same_individual.as_mut().unwrap();
@@ -681,7 +705,13 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
     write_new(&source_path, &original).unwrap();
     read_current_training_checkpoint(&source_path).unwrap();
     let output = root.join("new-life");
-    begin_new_individual_training_life(&source_path, 8000, 2, &output).unwrap();
+    if retained_neural {
+        check_new_individual_retained_neural(&source_path, 8000, 2).unwrap();
+        begin_new_individual_training_life_with_retained_neural(&source_path, 8000, 2, &output)
+            .unwrap();
+    } else {
+        begin_new_individual_training_life(&source_path, 8000, 2, &output).unwrap();
+    }
     phase("new-individual-native-initialized");
     let checkpoint =
         read_current_training_checkpoint(&output.join("store/current.alife-checkpoint")).unwrap();
@@ -696,6 +726,22 @@ fn new_life_gpu_initialization_and_continuous_recovery() {
     assert_eq!(brain.replay_journal_event_count, 0);
     assert!(brain.pending_eligibility.is_none());
     assert_eq!(brain.checkpoint_tick, Tick::ZERO);
+    if retained_neural {
+        neural_inheritance::verify(
+            &neural_inheritance::RetainedNeural::read(&source).unwrap(),
+            checkpoint.life.as_ref().unwrap(),
+        )
+        .unwrap();
+        assert!(checkpoint
+            .new_life_origin
+            .as_ref()
+            .unwrap()
+            .lives
+            .last()
+            .unwrap()
+            .neural_inheritance
+            .is_some());
+    }
     assert!(begin_new_individual_training_life(&source_path, 8000, 2, &output).is_err());
     crate::validate_resident_continuous_request(&request, now())
         .expect("admitted collection window expired during fixture setup; fixture retained");

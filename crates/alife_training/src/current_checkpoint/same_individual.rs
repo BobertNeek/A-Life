@@ -141,7 +141,7 @@ mod foundation_anchor_tests {
     }
 }
 
-fn private_asset(
+pub(super) fn private_asset(
     life: &CurrentLifeCheckpointV1,
     save: &alife_world::PortableSaveFile,
     asset_id: &str,

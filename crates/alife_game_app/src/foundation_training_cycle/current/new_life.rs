@@ -2,6 +2,7 @@
 use super::*;
 use alife_core::{BrainCapacityClass, N2048LivePolicyTransition, OrganismId, PhenotypeCompiler};
 use std::{fs, io::Write};
+mod neural_inheritance;
 
 /// Preflight through the ordinary newborn constructor and the exact existing
 /// learned-policy overlay. No device, filesystem writes or simulated tick.
@@ -9,6 +10,14 @@ pub(super) fn prepare(
     source: &CurrentTrainingCheckpointV1,
     seed: u64,
     id: u64,
+) -> Result<(alife_world::CanonicalNewGame, N2048LivePolicyTransition)> {
+    prepare_mode(source, seed, id, false)
+}
+fn prepare_mode(
+    source: &CurrentTrainingCheckpointV1,
+    seed: u64,
+    id: u64,
+    retained_neural: bool,
 ) -> Result<(alife_world::CanonicalNewGame, N2048LivePolicyTransition)> {
     source.new_life_seeds(seed, id)?;
     let saved = alife_world::PortableSaveFile::from_json_str(
@@ -73,7 +82,9 @@ pub(super) fn prepare(
     {
         return Err("new-life compiler/topology differs from terminal learned heads".into());
     }
-    if let Some(reference) = saved.creatures[0]
+    if retained_neural {
+        neural_inheritance::RetainedNeural::read(source)?;
+    } else if let Some(reference) = saved.creatures[0]
         .gpu_brain
         .as_ref()
         .and_then(|brain| brain.live_structural_topology.as_ref())
@@ -157,6 +168,44 @@ pub fn begin_new_individual_training_life(
     organism_id: u64,
     output: &Path,
 ) -> Result<serde_json::Value> {
+    begin_mode(source_path, seed, organism_id, output, false)
+}
+pub fn begin_new_individual_training_life_with_retained_neural(
+    source_path: &Path,
+    seed: u64,
+    organism_id: u64,
+    output: &Path,
+) -> Result<serde_json::Value> {
+    begin_mode(source_path, seed, organism_id, output, true)
+}
+pub fn check_new_individual_retained_neural(
+    source_path: &Path,
+    seed: u64,
+    organism_id: u64,
+) -> Result<serde_json::Value> {
+    let original = fs::read(source_path)?;
+    let source = read_current_training_checkpoint(source_path)?;
+    let source_sha = source.admitted_source_sha256(&original)?;
+    prepare_mode(&source, seed, organism_id, true)?;
+    let mut report = neural_inheritance::inspect(&source)?;
+    if fs::read(source_path)? != original {
+        return Err("terminal source changed during retained-neural preflight".into());
+    }
+    report["source_current_sha256"] = source_sha.into();
+    report["organism_id"] = organism_id.into();
+    report["world_seed"] = seed.into();
+    report["policy_version"] = source.handoff.policy_version.into();
+    report["actor_optimizer_step"] = source.handoff.actor.optimizer_step.into();
+    report["value_optimizer_step"] = source.handoff.value.optimizer_step.into();
+    Ok(report)
+}
+fn begin_mode(
+    source_path: &Path,
+    seed: u64,
+    organism_id: u64,
+    output: &Path,
+    retained_neural: bool,
+) -> Result<serde_json::Value> {
     let source = read_current_training_checkpoint(source_path)?;
     let source_path = source_path.canonicalize()?;
     let original = fs::read(&source_path)?;
@@ -165,7 +214,7 @@ pub fn begin_new_individual_training_life(
     if fs::symlink_metadata(&output).is_ok() {
         return Err("new-life output must be a new isolated directory".into());
     }
-    let (game, transition) = prepare(&source, seed, organism_id)?;
+    let (game, transition) = prepare_mode(&source, seed, organism_id, retained_neural)?;
     let source_sampling = source
         .saved_training_sampling()?
         .ok_or("terminal sampler missing")?;
@@ -186,7 +235,15 @@ pub fn begin_new_individual_training_life(
     fs::create_dir(&output)?;
     write_new(&output.join("terminal-source.alife-checkpoint"), &original)?;
     let life = initialize(&source, game, &transition, sampling, backend, &output)?;
-    let next = source.seal_new_life(&original, seed, organism_id, life)?;
+    let next = if retained_neural {
+        let (life, proof) = neural_inheritance::inherit(&source, life)?;
+        let root = output.join("inherited-life");
+        fs::create_dir(&root)?;
+        super::life::materialize(&life, &root)?;
+        source.seal_new_life_with_retained_neural(&original, seed, organism_id, life, proof)?
+    } else {
+        source.seal_new_life(&original, seed, organism_id, life)?
+    };
     let bytes = next.encode()?;
     // Full ordinary native/private admission precedes either published Current.
     admit_current_training_checkpoint(next)?;

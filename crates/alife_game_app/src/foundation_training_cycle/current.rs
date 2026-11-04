@@ -5,7 +5,10 @@ use alife_training::{CheckpointSeedsV1, CurrentTrainingCheckpointV1};
 use sha2::{Digest, Sha256};
 mod actor_export;
 mod new_life;
-pub use new_life::{begin_new_individual_training_life, check_new_individual_training_life};
+pub use new_life::{
+    begin_new_individual_training_life, begin_new_individual_training_life_with_retained_neural,
+    check_new_individual_retained_neural, check_new_individual_training_life,
+};
 mod life;
 pub use actor_export::export_current_actor_asset;
 #[cfg(test)]

@@ -1,7 +1,133 @@
-//! Explicit offline lineage continuation. Only the learned global heads cross
-//! this boundary; the old individual's death and private life remain evidence.
+//! Explicit offline lineage continuation. Learned heads and, when explicitly
+//! selected, exact neural structure cross the boundary. The old individual's
+//! death and private experience remain source evidence.
 use super::same_individual::{private_binding, sha};
 use super::*;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NewLifeNeuralInheritanceV1 {
+    pub schema: u16,
+    pub kind: String,
+    pub canonical_actor_coordinates: usize,
+    pub live_synapse_count: u32,
+    pub live_recurrent_count: u32,
+    pub live_decoder_count: u32,
+    pub source_topology_sha256: String,
+    pub source_lifetime_sha256: String,
+    pub source_fast_sha256: String,
+    pub source_predictor_sha256: String,
+}
+impl NewLifeNeuralInheritanceV1 {
+    fn validate_transfer(
+        &self,
+        source: &CurrentLifeCheckpointV1,
+        target: &CurrentLifeCheckpointV1,
+    ) -> Result<()> {
+        use super::same_individual::private_asset;
+        let old = alife_world::PortableSaveFile::from_json_str(&source.world_json)?;
+        let new = alife_world::PortableSaveFile::from_json_str(&target.world_json)?;
+        if old.creatures.len() != 1 || new.creatures.len() != 1 {
+            return Err("neural transfer requires exact source and target individuals".into());
+        }
+        let old_brain = old.creatures[0]
+            .gpu_brain
+            .as_ref()
+            .ok_or("source neural brain missing")?;
+        let new_brain = new.creatures[0]
+            .gpu_brain
+            .as_ref()
+            .ok_or("target neural brain missing")?;
+        let old_top = old_brain
+            .live_structural_topology
+            .as_ref()
+            .ok_or("source neural topology missing")?;
+        let new_top = new_brain
+            .live_structural_topology
+            .as_ref()
+            .ok_or("target neural topology missing")?;
+        let topology: alife_gpu_backend::GpuLiveTopologyCheckpointV1 =
+            serde_json::from_slice(&private_asset(source, &old, &old_top.asset_id)?)?;
+        if self.live_synapse_count != topology.total_synapse_count
+            || self.live_recurrent_count != topology.recurrent_synapse_count
+            || self.live_decoder_count != topology.decoder_synapse_count
+        {
+            return Err("neural inheritance evidence differs from source coordinates".into());
+        }
+        for (a, b, expected) in [
+            (old_top, new_top, &self.source_topology_sha256),
+            (
+                &old_brain.lifetime_weights,
+                &new_brain.lifetime_weights,
+                &self.source_lifetime_sha256,
+            ),
+            (
+                &old_brain.fast_weights,
+                &new_brain.fast_weights,
+                &self.source_fast_sha256,
+            ),
+        ] {
+            let bytes = private_asset(source, &old, &a.asset_id)?;
+            if &format!("{:x}", Sha256::digest(&bytes)) != expected
+                || bytes != private_asset(target, &new, &b.asset_id)?
+            {
+                return Err(
+                    "new-life inherited neural assets differ from exact terminal source".into(),
+                );
+            }
+        }
+        let source_exact = alife_world::ExactCognitiveCheckpointState::decode(&private_asset(
+            source,
+            &old,
+            &old_brain
+                .exact_cognitive_state
+                .as_ref()
+                .ok_or("source exact cognition missing")?
+                .asset_id,
+        )?)?;
+        let target_exact = alife_world::ExactCognitiveCheckpointState::decode(&private_asset(
+            target,
+            &new,
+            &new_brain
+                .exact_cognitive_state
+                .as_ref()
+                .ok_or("target exact cognition missing")?
+                .asset_id,
+        )?)?;
+        if sha(&source_exact.predictor)? != self.source_predictor_sha256
+            || sha(&source_exact.predictor)? != sha(&target_exact.predictor)?
+            || sha(&source_exact.dendritic_branches)? != sha(&target_exact.dendritic_branches)?
+            || sha(&source_exact.structural_plasticity)?
+                != sha(&target_exact.structural_plasticity)?
+        {
+            return Err("new-life inherited learned cognition differs from terminal source".into());
+        }
+        Ok(())
+    }
+
+    fn validate(&self, actor_coordinates: usize) -> Result<()> {
+        if self.schema != 1
+            || self.kind != "exact-live-order-global-adam-neural-inheritance-v1"
+            || self.canonical_actor_coordinates != actor_coordinates
+            || (self.live_synapse_count as usize) < actor_coordinates
+            || self
+                .live_recurrent_count
+                .checked_add(self.live_decoder_count)
+                != Some(self.live_synapse_count)
+            || [
+                &self.source_topology_sha256,
+                &self.source_lifetime_sha256,
+                &self.source_fast_sha256,
+                &self.source_predictor_sha256,
+            ]
+            .iter()
+            .any(|h| h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            return Err("invalid retained-neural inheritance identity or coordinates".into());
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,6 +147,8 @@ pub struct NewLifeEvidenceV1 {
     pub initialization_nonce: u64,
     pub organism_id: u64,
     pub initial_private_life_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub neural_inheritance: Option<NewLifeNeuralInheritanceV1>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -53,6 +181,9 @@ impl NewLifeOriginV1 {
         let mut seeds = std::collections::BTreeSet::new();
         for life in &self.lives {
             life.source_seeds.validate()?;
+            if let Some(inherited) = &life.neural_inheritance {
+                inherited.validate(current.handoff.actor.weights.len())?;
+            }
             if life.organism_id == 0
                 || life.organism_id <= life.source_terminal.organism_id
                 || !ids.insert(life.organism_id)
@@ -164,6 +295,39 @@ impl CurrentTrainingCheckpointV1 {
         organism_id: u64,
         life: CurrentLifeCheckpointV1,
     ) -> Result<Self> {
+        self.seal_new_life_inner(source_bytes, world_seed, organism_id, life, None)
+    }
+
+    pub fn seal_new_life_with_retained_neural(
+        &self,
+        source_bytes: &[u8],
+        world_seed: u64,
+        organism_id: u64,
+        life: CurrentLifeCheckpointV1,
+        inheritance: NewLifeNeuralInheritanceV1,
+    ) -> Result<Self> {
+        inheritance.validate(self.handoff.actor.weights.len())?;
+        inheritance.validate_transfer(
+            self.life.as_ref().ok_or("source neural life missing")?,
+            &life,
+        )?;
+        self.seal_new_life_inner(
+            source_bytes,
+            world_seed,
+            organism_id,
+            life,
+            Some(inheritance),
+        )
+    }
+
+    fn seal_new_life_inner(
+        &self,
+        source_bytes: &[u8],
+        world_seed: u64,
+        organism_id: u64,
+        life: CurrentLifeCheckpointV1,
+        neural_inheritance: Option<NewLifeNeuralInheritanceV1>,
+    ) -> Result<Self> {
         let seeds = self.new_life_seeds(world_seed, organism_id)?;
         let source_current_sha256 = self.admitted_source_sha256(source_bytes)?;
         let save = alife_world::PortableSaveFile::from_json_str(&life.world_json)?;
@@ -240,6 +404,7 @@ impl CurrentTrainingCheckpointV1 {
             initialization_nonce: world_seed + 1,
             organism_id,
             initial_private_life_sha256: sha(&life)?,
+            neural_inheritance,
         });
         origin.record_sha256 = origin.digest()?;
         let tag = SameIndividualCurrentV1 {

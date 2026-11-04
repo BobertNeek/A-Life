@@ -34,7 +34,44 @@ Never replace the terminal source or original baseline with this child. Retain t
 whole output and existing source/baseline archives. A failed creation leaves its
 partial output for inspection; it cannot be retried into that output. Incompatible
 canonical body/genome/compiler identity, missing assets, changed source bytes,
-reused IDs/seeds and incomplete/tampered source checkpoints are rejected. Acquired structural topology outside the global optimizer coordinates is also rejected rather than silently dropped.
+reused IDs/seeds and incomplete/tampered source checkpoints are rejected. The
+original command rejects acquired structural topology outside global optimizer
+coordinates. It remains available with its existing behavior.
+
+## Explicit retained neural state
+
+`--check-new-life-retained-neural` and `--begin-new-life-retained-neural` select an
+additional, versioned neural inheritance proof. They preserve the exact native
+live topology in its original order, all acquired sparse edges, dendritic branches,
+structural candidates/connections and their ages, learned predictor, and both full
+lifetime and fast weight banks (including inactive banks and generations). The
+native fixed-slot compiler must reproduce the entire source topology exactly.
+Changed coordinates, incompatible compiler identity, missing assets and pending
+outcome/lifetime operations are rejected. No acquired edge is dropped or assigned
+an invented global Adam coordinate. The global actor/value and both complete Adam
+states remain identical to the source.
+
+The body, activation, homeostasis, eligibility, episodic memory, replay, current
+cognitive context and sampling stream are actual newborn state. Inherited neural
+parameters are explicitly recorded as inheritance, never as the newborn's past
+experience. Eligibility arrays have the retained live graph's dimensions and zero
+newborn values. The empty newborn sleep journal is rebound to its exact new save;
+the source journal and terminal checkpoint remain unchanged. `inherited-life/`
+contains the composed native snapshot alongside the original birth construction.
+
+Qualify this mode separately on native hardware in the admitted absolute window:
+
+```powershell
+cargo test -p alife_game_app --features "cpu-training,gpu-tests" --lib retained_neural_gpu_initialization_and_continuous_recovery -- --ignored --nocapture
+& $export --check-new-life-retained-neural $terminal $newWorldSeed $newOrganismId
+& $export --begin-new-life-retained-neural $terminal $newWorldSeed $newOrganismId $newOutput
+```
+
+The ignored test uses a disposable acquired edge and nonzero private banks, then
+requires native birth/restore, real continuous-world PPO, and successful recovery.
+The same deadline environment variables described below are mandatory. Cloud
+codec and next-Adam tests do not establish a hardware pass. Actual checkpoint
+admission remains necessary after the disposable hardware qualification.
 
 ## Owner qualification and continuation
 
