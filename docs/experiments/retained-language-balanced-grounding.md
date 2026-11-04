@@ -62,6 +62,19 @@ All V15 raw traces, exact recoveries, measured executable and negative results
 remain in `/workspace/language-balanced-v15-run`. V15 is diagnostic evidence,
 not an interpretable retained verb-learning test.
 
+V15 audit (each phase uses the same six seed units):
+
+| Arm | Verb pairs pre/post | Noun pairs pre/post | Timely factual declarations pre/post |
+|---|---:|---:|---:|
+| Untreated | 0/0 | 1/1 | 0/0 |
+| Grounded | 0/0 | 3/3 | 3/3 |
+| Shuffled | 0/0 | 0/0 | 0/0 |
+| NoSpeech | 0/0 | 1/1 | 1/0 |
+
+Noun pairs are first actual acquisition under GetFood versus GetToy; speech
+counts are timely matches to actual activity, not command comprehension. Feeding
+geometry invalidates interpretation of the verb comparison.
+
 ## Corrected V16 fixture
 
 V16 moves toys clear of the food carry/mouth line in all four training and six
