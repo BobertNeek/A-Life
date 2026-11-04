@@ -1,8 +1,8 @@
 //! Disposable native CPU pilot. Continuation accepts only its measured public founders.
 use alife_game_app::{
-    continue_embodied_language_curriculum, continue_language_curriculum, refine_language_payload,
-    refine_language_shared_gates, reload_language_pilot_child, run_retained_language_pilot,
-    LanguagePilotConfig,
+    continue_action_gated_language, continue_embodied_language_curriculum,
+    continue_language_curriculum, refine_language_payload, refine_language_shared_gates,
+    reload_language_pilot_child, run_retained_language_pilot, LanguagePilotConfig,
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(key) = args.next() {
         match key.as_str() {
             "--help" | "-h" => {
-                println!("experiment_retained_language --disposable-public-founder --output NEW_DIRECTORY [--seed 847501] [--epochs 16] [--rounds 2] [--decisions 24] [--llamacpp-translation] [--experimental-word-bridge]\n\nExperimental native CPU food/eat versus toy/get teaching with grounded, shuffled-word, and untreated arms. The explicit experimental word bridge broadcasts two raw token bit vectors to native readouts and replaces the untreated arm with an equally trained no-speech arm. Continuation stages additionally accept one of --continue-curriculum SOURCE, --refine-curriculum-payload SOURCE, --refine-shared-gates SOURCE, or --fork-embodied-speech SOURCE. Each validates its matching measured disposable source. The embodied stage creates new founder identities with raw bodily inputs to speech, retains actor/Adam history, and evaluates an untreated profile baseline; it does not migrate a source private life. Reuses ordinary spatial speech and the existing bounded translator. Optional llama.cpp translation uses its existing localhost defaults and must return confirmed translations; it never falls back silently. No semantic prior is injected. Evaluates player requests and silent lives with the teacher absent, reversed positions and visible distractors. Trained arms execute full assessment after fresh-process reload. Writes local experimental recovery data and a source-safe results JSON; does not promote a creature or change live training.");
+                println!("experiment_retained_language --disposable-public-founder --output NEW_DIRECTORY [--seed 847501] [--epochs 16] [--rounds 2] [--decisions 24] [--llamacpp-translation] [--experimental-word-bridge]\n\nExperimental native CPU food/eat versus toy/get teaching with grounded, shuffled-word, and untreated arms. The explicit experimental word bridge broadcasts two raw token bit vectors to native readouts and replaces the untreated arm with an equally trained no-speech arm. Continuation stages additionally accept one of --continue-curriculum SOURCE, --refine-curriculum-payload SOURCE, --refine-shared-gates SOURCE, --fork-embodied-speech SOURCE, or --action-gated-payload SOURCE. Each validates its matching measured disposable source. The embodied stage creates new founder identities with raw bodily inputs to speech, retains actor/Adam history, and evaluates an untreated profile baseline; it does not migrate a source private life. Reuses ordinary spatial speech and the existing bounded translator. Optional llama.cpp translation uses its existing localhost defaults and must return confirmed translations; it never falls back silently. No semantic prior is injected. Evaluates player requests and silent lives with the teacher absent, reversed positions and visible distractors. Trained arms execute full assessment after fresh-process reload. Writes local experimental recovery data and a source-safe results JSON; does not promote a creature or change live training.");
                 return Ok(());
             }
             "--disposable-public-founder" if !disposable => disposable = true,
@@ -36,7 +36,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             | "--continue-curriculum"
             | "--refine-curriculum-payload"
             | "--refine-shared-gates"
-            | "--fork-embodied-speech" => {
+            | "--fork-embodied-speech"
+            | "--action-gated-payload" => {
                 let value = args.next().ok_or("missing argument value")?;
                 if values.insert(key, value).is_some() {
                     return Err("duplicate argument".into());
@@ -74,6 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "--refine-curriculum-payload",
         "--refine-shared-gates",
         "--fork-embodied-speech",
+        "--action-gated-payload",
     ]
     .iter()
     .filter(|key| values.contains_key(**key))
@@ -82,7 +84,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("choose one experimental continuation stage".into());
     }
-    let report = if let Some(source) = values.remove("--fork-embodied-speech") {
+    let report = if let Some(source) = values.remove("--action-gated-payload") {
+        continue_action_gated_language(Path::new(&source), Path::new(&output), config)?
+    } else if let Some(source) = values.remove("--fork-embodied-speech") {
         continue_embodied_language_curriculum(Path::new(&source), Path::new(&output), config)?
     } else if let Some(source) = values.remove("--refine-shared-gates") {
         refine_language_shared_gates(Path::new(&source), Path::new(&output), config)?
