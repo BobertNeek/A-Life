@@ -7,7 +7,7 @@ const ROLES: [&str; 4] = [
     "pc_native_fresh",
     "cloud_native_fresh",
 ];
-fn reset(model: &mut Model, role: &'static str) -> Result<()> {
+pub(super) fn reset(model: &mut Model, role: &'static str) -> Result<()> {
     let source = model
         .retained
         .as_ref()
