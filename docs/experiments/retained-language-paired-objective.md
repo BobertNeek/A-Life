@@ -70,7 +70,7 @@ present, and evaluation never forces actions. Contact, near and induced native
 RecoveryProtocol sleep are assessed. Exact fresh-process restore compares the
 complete native trace, private state and next Adam update.
 
-Results will report first-event discrimination, eventual physical completion,
+Results report first-event discrimination, eventual physical completion,
 paired verb/noun outcomes, actual world utterances and timely factual descriptions
 separately. Loss and utterance count alone establish no competence.
 
@@ -80,8 +80,10 @@ No additional Luna request, health probe, credential modification or alternate
 endpoint is attempted. The earlier official local health diagnostic observed a
 Responses WebSocket HTTP 401 with configured ChatGPT authentication; it did not
 establish the cause. Installed `codex login --help` documents the supported login
-command and device-auth option. The owner must restore valid provider authorization
-through that supported flow before model delivery can be measured. This experiment
+command and device-auth option. The supported next step is an owner-managed authorization check/reconnect through
+that flow; if the WebSocket 401 persists, account/environment access needs owner
+or provider attention. The evidence does not establish expired credentials or
+guarantee that reconnecting resolves it. This experiment
 uses an explicitly scripted spatial teacher and claims no real SLM delivery.
 
 ## First-decision weighting result (V12)
@@ -134,3 +136,84 @@ positive speech labels do reach trainable recurrent weights and all 1,024 speech
 decoder coordinates. Swapping a noun label on the same captured positive row
 changes the native gradient substantially, so the target machinery can distinguish
 nouns even though the measured actor does not.
+
+A narration target describes the **observed completed activity**, not the incoming
+request. If every request causes toy acquisition, correct narration should still
+say `get toy` in every such life; command-sensitive words alone would be a poor
+production metric. The measured constant `get food` is factually wrong after those
+toy events. Existing equal activity-class payload weighting also differs from
+lexical balancing: when all three activity classes are observed, two of the three
+noun targets are `food`. An actor without enough conditional event evidence can
+minimize a large part of this objective with a common noun. The diagnostics show
+available word paths and distinct target gradients; they do not yet isolate the
+remaining production failure among event representation, recurrent persistence
+and optimization. No CFF-level language capability is claimed.
+
+## Paired-margin result (V13)
+
+Source `f8d30124ad782c2eaf08038e5c54f92de7de728b`, executable SHA-256
+`9614c574445b4a87164a7b662d8a3f57df9c9adca2c682ace82d4c58c71efc30`.
+Elapsed native run: 588.295 s (588.317 s external), same 32-update dose (256→288)
+and 2,016 scored decisions plus 864 cold-repeat decisions as V12.
+
+| Arm | First requested outcome / 9 | Eventual requested outcome / 9 | Correct verb pairs / 3 | Correct noun pairs / 3 | Utterances | Timely factual utterances |
+|---|---:|---:|---:|---:|---:|---:|
+| Grounded | 3 | 3 | 0 | 0 | 11 | 0 |
+| Shuffled | 3 | 3 | 0 | 0 | 12 | 0 |
+| No request | 3 | 3 | 0 | 0 | 8 | 0 |
+
+The negative physical and narration result persists. Every emitted phrase is
+`get food`. All six trained actors across V12/V13 pass exact fresh-process native
+trace/private/next-Adam and induced-sleep checks. The common baseline is identical
+between runs. The no-request final actor is **bit-identical** between objectives:
+`27b6a45034df64e7d8ae4369a34016014f79b0744c2becb70ed6d2acb400649c`.
+Every one of its 32 observed added paired-gradient norms is exactly zero.
+
+Grounded final training margins for EatFood/GetFood are 0.312/0.310 and for
+GetFood/GetToy 0.326/0.437 in the two training layouts. The added objective acts on
+the intended conditional readout; those values are not held-out action success.
+Neither optimization attempt establishes retained command comprehension or factual
+narration. Remaining causes need further isolation; increasing weighting or
+observing nonzero gradients alone is inadequate evidence for a stronger creature.
+
+`retained-language-paired-objective-results.json` contains per-trial physical and
+utterance outcomes, both source/binary provenances, actual teaching audits,
+first/last update evidence and cold hashes. The diagnostic companion records every
+microstep and six-step speech effect for the original retained actors; duplicate
+candidate arrays are omitted by explicit reference. Raw complete reports, traces,
+all updates, measured binaries and recoveries remain in
+`/workspace/language-request-focus-run` and `/workspace/language-paired-margin-run`.
+
+Validation includes 13 native language tests, the paired finite-difference/silent
+null test, explicit ignored token diagnostics, strict Clippy including tests,
+formatting and headless build. Historical V11 cold trace/private/next-Adam remains
+exact. Teacher and semantic prior are absent in every scored assessment row;
+no scripted action, fabricated transition or invented biological reward enters
+assessment. Missing controls remain: independent founder histories, spontaneous
+sleep, language-naive untreated production, and shuffled narration labels.
+
+## Action sampling and automatic pickup audit
+
+The additional one-step diagnostic (seed 947839, distance 0.41) verifies exact
+native action resampling from recorded seed/counter/temperature. The V13 grounded
+actor selects food Eat for `eat food` and food Grab for `get food`; shuffled and
+no-request select food Grab for both. **This is not a completed physical verb
+distinction.** The sealed Eat receipt shows automatic food pickup without
+consumption. All three requested lives end holding food, with zero ingestion and
+identical negative energy change. `get toy` still acquires food. That extra fixture
+is exploratory, not an added prespecified success score. It illustrates why a
+sampled action ID, like a changed logit, can overstate achieved behavior.
+
+The original event collector counts acquisition labels after explicit native Grab
+plus ownership change. The companion
+`scripts/audit_retained_language_physical_outcomes.py` separately checks actual
+ownership changes after **any** primitive. It retains same-tick events as a set and
+does not invent an order. The independent audit leaves all six eventual requested
+outcome scores at 3/9. There are three additional implicit food acquisitions in
+V12 shuffled lives; none creates an additional correct request trial. V13 has no
+implicit acquisition in the prespecified assessment. Every first physical event
+there remains toy acquisition; no EatFood request consumes food.
+
+The rebuilt final executable also reproduces the full V13 cold assessment,
+private state and next Adam update exactly. The source-safe results include these
+physical audits, sealed one-step receipt hashes and native sampling diagnostics.

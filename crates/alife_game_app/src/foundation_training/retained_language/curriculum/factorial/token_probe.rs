@@ -124,6 +124,7 @@ fn trace_paired_token_paths_and_teaching_gradients() {
         place(base.world_mut(), s, 3, 0.41, true).unwrap();
         let id = base.world().organism_entity_ids()[0].0;
         let mut rows = vec![];
+        let mut real_outcomes = vec![];
         for lesson in Lesson::ALL {
             let mut h = base.snapshot();
             let pos = speech_position(h.world()).unwrap();
@@ -139,7 +140,11 @@ fn trace_paired_token_paths_and_teaching_gradients() {
                         .unwrap(),
                 )
                 .unwrap();
+            let before = owners(h.world(), s);
             let row = h.step(&actor, 1.).unwrap().decisions.remove(0);
+            let after = owners(h.world(), s);
+            let event = activity(&row, s, before, after).unwrap();
+            real_outcomes.push(json!({"scene":s,"actual_first_completed_activity":event,"sealed_patch_sha256":identity(&row.patch).unwrap(),"biological_reward":row.biological_reward,"energy_delta":row.patch.outcome().energy_delta.raw(),"actual_food_consumption":consequences(&row,s).0,"owned_before":before,"owned_after":after,"teacher_or_prior_present":false}));
             no_teacher_or_prior(&row).unwrap();
             rows.push(row);
         }
@@ -169,13 +174,42 @@ fn trace_paired_token_paths_and_teaching_gradients() {
             let e = actor.evaluate_replay(&q).unwrap();
             let label = action_target(row, s, Lesson::ALL[i], false, true, true, false).unwrap();
             let g = action_gradient(&actor, &q, row, label.clone()).unwrap();
+            let native_resampled = sample_cpu_joint_action(
+                actor.phenotype(),
+                row.patch.pre_action().perception(),
+                &e.candidate_logits[0],
+                947839,
+                row.sampling_counter.unwrap(),
+                row.action.temperature,
+            )
+            .unwrap();
+            assert_eq!(
+                native_resampled, row.action,
+                "native sampled action does not match replay logits"
+            );
+            let logits = &e.candidate_logits[0];
+            let argmax = logits
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                .unwrap()
+                .0;
+            let wanted = label.representative.unwrap().trailing_zeros() as usize;
+            let maximum = logits.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let probability = ((logits[wanted] - maximum) / row.action.temperature).exp()
+                / logits
+                    .iter()
+                    .map(|l| ((l - maximum) / row.action.temperature).exp())
+                    .sum::<f32>();
+            let sampling = json!({"exact_native_resampling_matches_collected_action":true,"seed":947839,"counter":row.sampling_counter,"temperature":row.action.temperature,"argmax_representative":argmax,"label_representative":wanted,"label_representative_probability":probability,"label_margin_to_maximum":logits[wanted]-maximum});
+
             let decoded = decode_cpu_speech(
                 &actor,
                 &e.final_activations[0],
                 &q.ticks[0].effective_weight_offsets,
             )
             .unwrap();
-            records.push(json!({"lesson":Lesson::ALL[i],"heard":row.patch.pre_action().perception().sensory().language_context,"candidates":row.patch.pre_action().perception().candidates(),"first_logits":e.candidate_logits[0],"label":{"representative":label.representative,"motors":label.motors},"gradient_norm":norm(&g),"trainable_gradients":groups(&actor,&g),"speech_logits":speech(&actor,&e.final_activations[0],&q.ticks[0].effective_weight_offsets),"decoded_payload_if_vocal":decoded,"actual_selected_action":row.action,"initial_sha256":identity(&row.initial).unwrap()}));
+            records.push(json!({"lesson":Lesson::ALL[i],"heard":row.patch.pre_action().perception().sensory().language_context,"candidates":row.patch.pre_action().perception().candidates(),"first_logits":e.candidate_logits[0],"label":{"representative":label.representative,"motors":label.motors},"gradient_norm":norm(&g),"trainable_gradients":groups(&actor,&g),"speech_logits":speech(&actor,&e.final_activations[0],&q.ticks[0].effective_weight_offsets),"decoded_payload_if_vocal":decoded,"actual_selected_action":row.action,"actual_one_step_world_outcome":real_outcomes[i],"native_sampling_diagnostic":sampling,"initial_sha256":identity(&row.initial).unwrap()}));
             tapes.push(actor.replay_activation_tape(&q).unwrap());
             evaluations.push(e);
             gradients.push(g);
