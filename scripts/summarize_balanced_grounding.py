@@ -10,10 +10,12 @@ WORDS = {'EatFood': [8, 1], 'GetFood': [9, 1], 'GetToy': [9, 2]}
 
 def audit(path):
     trials = {}
+    protocols = set()
     for line in io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(path.open('rb'))):
         event = json.loads(line)
         if event.get('phase') != 'balanced_readout_evaluation':
             continue
+        protocols.add(event.get('speech_opportunity_protocol', 'quiet-after-cue-v1'))
         row = event['row']
         seed = event['world_seed']
         key = (seed, event['post_sleep'], event['requested'])
@@ -105,8 +107,13 @@ def audit(path):
             full = bool(eat['food_consumption_steps']) and bool(food['food_acquisition_steps']) and (not food['food_consumption_steps'])
             cue = any((x < 8 for x in eat['food_consumption_steps'])) and any((x < 8 for x in food['food_acquisition_steps'])) and (not any((x < 8 for x in food['food_consumption_steps'])))
             noun = food['first_acquisition'] == 'food' and toy['first_acquisition'] == 'toy'
+            eat_first = eat['utterance_events'][0] if eat['utterance_events'] else None
+            food_first = food['utterance_events'][0] if food['utterance_events'] else None
+            toy_first = toy['utterance_events'][0] if toy['utterance_events'] else None
             pairs.append({'world_seed': seed,
                 'physical_verb_full_window': full,
+                'first_spoken_verb_pair_differs': bool(eat_first and food_first and eat_first['tokens'] != food_first['tokens']),
+                'first_spoken_noun_pair_differs': bool(food_first and toy_first and food_first['tokens'] != toy_first['tokens']),
                 'timely_speech_verb_pair': eat['timely_requested_activity_declarations'] > 0 and food['timely_requested_activity_declarations'] > 0,
                 'timely_speech_noun_pair': food['timely_requested_activity_declarations'] > 0 and toy['timely_requested_activity_declarations'] > 0,
                 'physical_verb_cue_window': cue,
@@ -124,8 +131,12 @@ def audit(path):
             'noun_pairs_first_acquisition': sum((p['physical_noun_first_acquisition'] for p in pairs)),
             'noun_pairs_cue_window': sum((p['physical_noun_cue_window'] for p in pairs)),
             'actual_utterances': sum((t['utterances'] for t in phase)),
+            'first_spoken_verb_pairs_differ': sum(p['first_spoken_verb_pair_differs'] for p in pairs),
+            'first_spoken_noun_pairs_differ': sum(p['first_spoken_noun_pair_differs'] for p in pairs),
             'timely_speech_verb_pairs': sum(p['timely_speech_verb_pair'] for p in pairs),
             'timely_speech_noun_pairs': sum(p['timely_speech_noun_pair'] for p in pairs),
+            'joint_physical_speech_verb_pairs': sum(p['physical_verb_full_window'] and p['timely_speech_verb_pair'] for p in pairs),
+            'joint_physical_speech_noun_pairs': sum(p['physical_noun_first_acquisition'] and p['timely_speech_noun_pair'] for p in pairs),
             'recent_actual_activity_declarations': sum(t['recent_actual_activity_declarations'] for t in phase),
             'premature_requested_phrase_declarations': sum(t['premature_requested_phrase_declarations'] for t in phase),
             'timely_factual_declarations': sum((t['timely_factual_declarations'] for t in phase)),
@@ -137,6 +148,7 @@ def audit(path):
             'full_native_row_digests': sum(t['full_native_row_digest_count'] for t in phase),
             'by_seed': pairs}
     return {'kind': 'independent-native-ownership-ingestion-speech-audit',
+        'speech_opportunity_protocols': sorted(protocols),
         'independent_N_counts_seeds_once': len({t['world_seed'] for t in rows}),
         'pre_post_not_independent_replicates': True,
         'summaries': summaries,
