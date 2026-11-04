@@ -3,6 +3,7 @@
 use super::retained::{run_view_trial, saved_source_phenotype, AssessmentCase, AssessmentView};
 use super::*;
 mod ablations;
+mod merge_reset;
 use alife_core::*;
 use alife_training::{cpu::retained_interpolation_experiment::*, AdamWConfig, StageTrainableMask};
 use alife_world::{with_saved_body_rounding_compatibility, SavedBodyRoundingCompatibilityV1};
@@ -28,6 +29,8 @@ struct Request {
     output: PathBuf,
     #[serde(default)]
     ablation_variant: Option<String>,
+    #[serde(default)]
+    previous_assessment: Option<PathBuf>,
 }
 struct Model {
     role: &'static str,
@@ -172,14 +175,21 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             .ablation_variant
             .as_deref()
             .is_some_and(|v| v != "lifetime_refine")
-        || !matches!(request.phase.as_str(), "ablations" | "fresh_battery")
-            && request.ablation_variant.is_some()
+        || !matches!(
+            request.phase.as_str(),
+            "ablations" | "fresh_battery" | "merge_reset_battery"
+        ) && request.ablation_variant.is_some()
     {
         return Err("unexpected state-variant selector for this phase".into());
     }
     if !matches!(
         request.phase.as_str(),
-        "controls" | "candidates" | "ablations" | "fresh_battery"
+        "controls"
+            | "candidates"
+            | "ablations"
+            | "fresh_battery"
+            | "merge_reset_pilot"
+            | "merge_reset_battery"
     ) {
         return Err(
             "explicit controls, candidates, ablations or fresh_battery phase required".into(),
@@ -193,6 +203,12 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
                 || request.candidates[1].fraction != 1.)
         || matches!(request.phase.as_str(), "ablations" | "fresh_battery")
             && !request.candidates.is_empty()
+        || matches!(
+            request.phase.as_str(),
+            "merge_reset_pilot" | "merge_reset_battery"
+        ) && (request.candidates.len() != 2
+            || request.candidates[0].fraction != 0.
+            || request.candidates[1].fraction != 0.5)
     {
         return Err("unexpected bounded candidate set".into());
     }
@@ -204,6 +220,9 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     protected.extend(request.candidates.iter().map(|c| c.directory.as_path()));
     if let Some(controls) = &request.qualified_controls {
         protected.push(controls.as_path());
+    }
+    if let Some(previous) = &request.previous_assessment {
+        protected.push(previous.as_path());
     }
     let output = alife_training::resolve_isolated_training_output(&request.output, protected)?;
     if output.exists() {
@@ -241,7 +260,10 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let cloud_seed_evidence: Value = serde_json::from_slice(&fs::read(
         request.cloud_native_root.join("care-seed-admission.json"),
     )?)?;
-    let seeds = if request.phase == "fresh_battery" {
+    let seeds = if matches!(
+        request.phase.as_str(),
+        "fresh_battery" | "merge_reset_battery"
+    ) {
         202611185878..=202611185897
     } else {
         202611185878..=202611185879
@@ -267,6 +289,9 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let executable_sha = hash(&fs::read(std::env::current_exe()?)?);
     if request.phase == "fresh_battery" {
         ablations::qualify_battery_request(&request, &executable_sha)?;
+    }
+    if request.phase == "merge_reset_battery" {
+        merge_reset::qualify_battery(&request, &executable_sha)?;
     }
     if request.phase == "candidates" {
         let controls = request
@@ -316,6 +341,11 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
         )?);
         models.push(model_parent("pc_native_fresh", &pc.handoff, None)?);
         models.push(model_parent("cloud_native_fresh", &cloud.handoff, None)?);
+    } else if matches!(
+        request.phase.as_str(),
+        "merge_reset_pilot" | "merge_reset_battery"
+    ) {
+        models = merge_reset::models(&request, &pc, &cloud.handoff, &pc_bytes, &proof)?;
     } else if matches!(request.phase.as_str(), "ablations" | "fresh_battery") {
         let (retained, _) = scope(&proof, || {
             Ok(derive_retained_projection_from_current(
@@ -344,7 +374,10 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     let mut results = Vec::new();
     let mut parity = true;
     let mut trace_pins = BTreeMap::new();
-    let conditions = if request.phase == "fresh_battery" {
+    let mut conditions = if matches!(
+        request.phase.as_str(),
+        "fresh_battery" | "merge_reset_battery"
+    ) {
         vec![
             (
                 "held",
@@ -391,6 +424,16 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
             ),
         ]
     };
+    if request.phase == "merge_reset_pilot" {
+        conditions.insert(
+            1,
+            (
+                "feeding_newborn",
+                FoundationTeacherLesson::Feeding,
+                FoundationFoodNeedCondition::NewbornV1,
+            ),
+        );
+    }
     for (condition_label, lesson, condition) in conditions {
         for seed in seeds.clone() {
             for model in &mut models {
@@ -469,6 +512,9 @@ pub fn run_actual_interpolation_assessment(spec_path: &Path) -> Result<Value> {
     }
     let result = json!({"pc_sha256":request.expected_pc_sha256,"cloud_tree_sha256":request.expected_cloud_tree_sha256,"executable_sha256":executable_sha,"phase":request.phase,"trials":results,"parents_unchanged":true,"global_optimizer_updates":0,"candidate_adoption":"unresolved; no promotion","hardware_gpu_parity":false,"historical_freshness":"unknown"});
     write(output.join("comparison.json"), &result)?;
+    if request.phase == "merge_reset_pilot" {
+        merge_reset::finish_pilot(&request, &output, &executable_sha, &results)?;
+    }
     if request.phase == "controls" {
         parity &= results
             .iter()

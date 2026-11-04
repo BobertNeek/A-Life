@@ -95,7 +95,7 @@ fn edge_ablation(
     }
     Ok(result)
 }
-fn modify(
+pub(super) fn modify(
     role: &str,
     source: &CpuRetainedNeuralInheritance,
     p: &BrainPhenotype,
